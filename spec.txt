@@ -1,0 +1,246 @@
+
+AI Outbound Call Orchestrator for Scheduling
+
+
+Goal
+Build an AI Outbound Call Orchestrator that:
+Monitors all scheduling queues in FreePBX/Asterisk every 10 seconds and reduces them to a single “queue pressure” view.
+Places exactly one outbound call at a time only when queue pressure is low enough and at least one agent is available.
+Uses a prioritized call list (your 4 categories) and executes the call outcomes (VM+text, transfer, reschedule later, wrong/disconnected reporting via email).
+Ensures each outbound call is connected to a live scheduler agent by transferring into the scheduling queue when appropriate.
+Horizontal Rule
+
+Hard Rule:  Only perform outbound calls during specified business hours.  Set on UI dashboard with ability to turn on/off, add business hour rules and see full log.
+ There should be a dashboard to view all calls made by this agent.  This dashboard is where all of our AI agents should be so we can select the AI agent and then view the logs, settings, etc for that agent.
+1) Containerized Architecture
+Containers / services
+ai-queue-orchestrator (new)
+Owns: queue polling, outbound gating, candidate selection, call execution, outcome logging
+Exposes: /health, /metrics, /admin/config (optional)
+temporal (existing)
+Runs the state machine for:
+“poll queues every 10s”
+“when outbound allowed, run one-call workflow”
+retries, timeouts, idempotency
+reverse-proxy (existing)
+Routes inbound webhooks from Twilio → orchestrator
+Terminate TLS
+KB training for AI (existing
+Stores scripts/FAQs/versioning
+Horizontal Rule
+
+2) FreePBX Monitoring Requirements (Every 10 seconds)
+How to monitor
+Use Asterisk AMI from the orchestrator container to poll all scheduling queues every 10 seconds.
+Data to capture per queue (minimum):
+calls_waiting
+oldest_wait_seconds
+agents_available (logged in + not paused + not in-use if you can derive)
+agents_logged_in (optional)
+Aggregate into global totals:
+GlobalCallsWaiting = SUM(calls_waiting)
+GlobalOldestWaitSeconds = MAX(oldest_wait_seconds)
+GlobalAgentsAvailable = SUM(agents_available)
+Fail-closed rule
+If AMI fails, outbound is disabled.
+Horizontal Rule
+
+3) Outbound Gating Logic (Never steal capacity from inbound)
+Outbound call starts only when all are true:
+GlobalAgentsAvailable >= 1
+GlobalCallsWaiting <= CALLS_WAITING_THRESHOLD
+GlobalOldestWaitSeconds <= OLDEST_WAIT_THRESHOLD_SECONDS
+Must be stable for OUTBOUND_STABLE_POLLS (hysteresis)
+Config defaults (make env/configurable)
+CALLS_WAITING_THRESHOLD: 0 or 1
+OLDEST_WAIT_THRESHOLD_SECONDS: 20–45
+OUTBOUND_STABLE_POLLS: 3 (30 seconds if polling every 10s)
+Hard concurrency rule
+One outbound call at a time globally (use Temporal workflow lock / mutex).
+Horizontal Rule
+
+4) Candidate Selection + Priorities (Your 4 buckets)
+Each outbound “pick” chooses the highest non-empty priority bucket:
+Abandoned queue + never AI-called
+Abandoned queue + AI-called before
+Never AI-called + called in before
+Never AI-called + never called in
+Within-bucket ordering
+oldest due date first (2-business-day SLA)
+then oldest order_created
+then lowest attempt_count
+Retry controls
+MAX_ATTEMPTS_TOTAL (ex: 3)
+MIN_HOURS_BETWEEN_ATTEMPTS (ex: 6–8)
+Do-not-call windows + business hours
+Horizontal Rule
+
+5) Data Model (Minimal fields your dev must persist)
+You can store these in your SQL DB (recommended) or a dedicated table.
+Table: OutboundCallState
+OrderId
+PatientId
+Phone
+LanguageCode (from PatientModule; cached)
+HasCalledInBefore (derived from FreePBX queue_log/CDR)
+HasAbandonedBefore (derived)
+AICalledBefore (derived)
+AttemptCount
+LastAttemptAt
+LastOutcome
+DueBy (OrderCreated + 2 business days unless HasCalledInBefore)
+LockedUntil (for concurrency / in-progress)
+Table: OutboundCallLog (append-only)
+CallSid (Twilio)
+timestamps, bucket, queue snapshot at dial time
+outcome, transfer attempted/success, VM sent, SMS sent
+error codes
+Horizontal Rule
+
+6) Language-Based Transfer Routing (From PatientModule)
+You said: transfer to the respective FreePBX for that person’s language from the patientmodule table.
+Implement this explicitly:
+Inputs
+PatientModule.Language (or equivalent field)
+PatientModule.PatientId
+Phone
+Mapping config
+Create a config map:
+en → FreePBX Queue/Extension: QUEUE_EN
+es → QUEUE_ES
+zh → QUEUE_ZH
+(whatever you actually have)
+Rule
+If language is null/unknown → default QUEUE_EN (or your default)
+Enforcement
+When the call reaches “transfer” step, route to the queue for that language, not a global queue.
+Horizontal Rule
+
+7) Twilio + ChatGPT Realtime Audio Call Flow
+7.1 Twilio Voice flow
+Orchestrator initiates outbound via Twilio Calls.create
+Twilio connects the call to your webhook (reverse proxy → orchestrator)
+Orchestrator attaches ChatGPT Realtime Audio to handle the conversation
+The agent can:
+gather availability / answer questions
+decide whether to transfer now
+or end politely + SMS
+7.2 Transfer mechanics
+When transferring to FreePBX, do it in a way that does not strand the patient:
+Before transfer, confirm:
+queue still “low” AND
+GlobalAgentsAvailable >= 1 AND
+correct language queue exists
+Transfer method
+Twilio <Dial> to your FreePBX DID/SIP trunk target that lands directly in that language queue (or a queue entry extension).
+If you have multiple FreePBX instances per language, map to the correct endpoint/DID.
+If transfer not safe
+Don’t transfer.
+The AI says scheduling team is tied up and offers callback window + sends SMS.
+Horizontal Rule
+
+8) The 5 Call Outcomes (Implement exactly, with Twilio specifics)
+Every outbound call and the outcome should go into the already existing Radflow call log so it can be viewed and tracked.
+
+Outcome 1: No answer
+Detect via Twilio status (no-answer, busy, failed)
+If voicemail detected / answered by VM:
+play VM script (no PHI)
+Send SMS (no PHI)
+Log: no_answer_vm_text
+Outcome 2: Answer and transferred
+AI confirms readiness, then transfers to language queue
+Log: transferred_success
+Outcome 3: Answer but can’t do it now
+AI offers:
+“Anything else I can help with?”
+“Reply with a good time”
+Send SMS with callback info + main number
+Log: cant_now
+Outcome 4: Wrong number
+AI apologizes, ends quickly
+Send email to scheduling@precisemri.com with patient/order/phone
+Log: wrong_number
+Outcome 5: Invalid/disconnected
+Detect via Twilio carrier failure codes / failed
+Send email to scheduling@precisemri.com
+Log: disconnected_invalid
+Horizontal Rule
+
+9) Knowledge + Q&A (Scheduling-safe only)
+The agent should be trained to answer only operational scheduling questions:
+hours, locations, what to bring, how to upload ID, how to reschedule, where to find portal, what happens next
+If asked anything outside scope:
+“I can connect you to scheduling” (if safe to transfer)
+otherwise: “I’ll text you the number and a scheduler will follow up.”
+Hard rule: no medical discussion, no diagnosis, no exam results.
+Horizontal Rule
+
+10) Temporal Workflows (Concrete)
+Workflow A: QueuePollingWorkflow
+Runs forever
+Every 10 seconds:
+Activity: PollQueuesViaAMI
+Activity: ComputeGlobalPressure
+Activity: PublishSnapshot
+Activity: UpdateOutboundAllowedFlag
+Workflow B: OutboundDispatcherWorkflow
+Runs forever
+Every 10 seconds:
+If outbound allowed AND no active outbound call:
+Activity: SelectNextCandidate
+Start child workflow OutboundCallWorkflow(candidate)
+Workflow C: OutboundCallWorkflow
+Steps:
+Lock candidate
+Initiate Twilio call
+Handle Twilio webhooks + Realtime audio session events
+Execute one of the 5 outcomes
+Unlock candidate, persist logs
+Exit
+Idempotency
+Use CallSid + OrderId as a dedupe key for webhook handling.
+Horizontal Rule
+
+11) Emails for outcomes for 4 and 5
+To: scheduling@precisemri.com
+Wrong number
+Subject: Scheduling Call Issue – Wrong Number (Patient ID: {PATIENT_ID})
+Body:
+Hi Scheduling Team,
+Our AI outbound scheduling call reached someone who stated this is the wrong number.
+Patient ID: {PATIENT_ID}
+Order ID: {ORDER_ID}
+Phone on file: {PHONE_NUMBER}
+Timestamp: {LOCAL_TIMESTAMP}
+Twilio CallSid: {CALL_SID}
+Please review and update the contact info as needed.
+Thanks.
+Invalid/disconnected
+Subject: Scheduling Call Issue – Invalid/Disconnected Number (Patient ID: {PATIENT_ID})
+Body:
+Hi Scheduling Team,
+Our AI outbound scheduling call failed due to an invalid or disconnected number.
+Patient ID: {PATIENT_ID}
+Order ID: {ORDER_ID}
+Phone on file: {PHONE_NUMBER}
+Timestamp: {LOCAL_TIMESTAMP}
+Twilio CallSid: {CALL_SID}
+Error/Status: {TWILIO_STATUS_OR_ERROR_CODE}
+Please review and update the contact info as needed.
+Thanks.
+Horizontal Rule
+
+12) Required Configurationlo
+FreePBX AMI host/port/user/pass (internal network)
+List of scheduling queues to monitor
+Language → FreePBX transfer target mapping
+Twilio creds + webhook base URL
+Main callback number for SMS/VM scripts
+Business hours + holidays calendar
+Thresholds + retry limits
+Horizontal Rule
+
+
+Precise Imaging manages this canvas.
+

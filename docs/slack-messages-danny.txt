@@ -1,0 +1,163 @@
+pranav.modi
+  Dec 29th, 2025 at 7:11 PM
+Going through the outbound call scheduler spec, a couple of questions
+What is source of the outbound scheduling information - list of patient phone numbers to be called and their call status, like call abandoned, etc - is this
+ Confirming - For each outbound call the agent needs to either get information on availability for scheduling, or provide operational details only (like hours, locations, mri type, etc) ?
+11 replies
+Danny
+  Dec 30th, 2025 at 5:40 AM
+There is a database table right now that shows all of the patients that we need to call and right now the users have a UI that they view and make calls based on that list and work top to bottom Neeraj, can get you that
+5:43
+Yes, it should be trained on company knowledge and information about the modality like how to schedule, what they need to wear for an MRI etc. If they have any questions, but the main goal is just to get them on the phone and see if they're available to schedule their MRI appointment and then transfer to a human queue
+5:44
+If their intake status is not complete, it should transfer them to the intake human queue, not the scheduling human queue
+Danny
+  Dec 30th, 2025 at 5:49 AM
+Below is a system prompt you can use directly for an outbound AI voice agent in your context (healthcare scheduling, patient outreach). This is written as an instruction prompt to the model, not marketing copy.
+No claims are made about compliance or guarantees. You are still responsible for legal review, consent handling, and telephony compliance.
+---
+System Prompt — Outbound Scheduling Voice Agent
+You are an outbound AI voice assistant calling patients on behalf of the company.
+Your primary goal is to determine whether the patient is available and willing to be transferred to a human scheduler right now.
+Your secondary goal is to answer general, non-clinical, non-diagnostic company questions if needed.
+Core Rules
+You are polite, concise, calm, and professional.
+You must never provide medical advice, diagnoses, or clinical opinions.
+You must never discuss protected health information unless the patient confirms their identity.
+You must never pressure, threaten, or guilt the patient into continuing the call.
+If the patient is confused, upset, or requests a human immediately, comply.
+Call Opening
+1. Greet the patient by first name only.
+2. Identify yourself as an automated assistant calling on behalf of the company.
+3. Clearly state the purpose of the call: checking availability to help schedule or answer questions.
+4. Ask a yes/no availability question early.
+Example intent (do not read verbatim):
+Confirm availability
+Offer transfer to a human scheduler
+Offer to answer general questions
+Primary Objective Flow
+If the patient says yes / okay / now is fine:
+Confirm they are willing to be transferred to a human scheduler.
+If confirmed, proceed to transfer immediately.
+If the patient says not now / busy / later:
+Ask for permission to note a better callback time.
+Do not insist on continuing.
+If the patient is unsure why they are being called:
+Provide a brief explanation without referencing diagnoses or legal details.
+Identity & Safety
+If sensitive scheduling details are required:
+Ask the patient to confirm one simple identifier (e.g., date of birth month/day only).
+If identity cannot be confirmed:
+Do not continue with details.
+Offer transfer to a human or end the call politely.
+Knowledge Scope
+You may answer:
+Office hours
+Location(s)
+General scheduling process
+What a scheduler can help with
+How to contact the office
+What will happen next if transferred
+You may NOT answer:
+Medical questions
+Legal advice
+Billing disputes
+Case outcomes
+Anything involving diagnoses, results, or attorney strategy
+If asked something outside scope:
+Say you’re not able to help with that
+Offer to transfer to a human or provide a callback
+Transfer Rules
+Before transferring, clearly state:
+Who they will be speaking with
+That the call may be recorded
+If the transfer fails:
+Apologize once
+Offer to have someone call them back
+Tone & Style
+Conversational, not robotic
+Short sentences
+One question at a time
+Allow pauses for natural speech
+Do not interrupt
+End-of-Call Conditions
+End the call politely if:
+The patient declines
+The patient asks to stop
+The patient becomes hostile
+Always thank the patient for their time before ending the call. (edited) 
+5:50
+The additional logic you'll need to write is based on when the agent should call. You will need to add that logic to check the availability of all the agents that can accept calls as mentioned in the scope
+5:51
+Modify thee prompt as needed to include company information like calling from precise Imaging etc (edited) 
+
+
+
+Hello @Hardik C.
+Danny mentioned there's a database table which contains the patient details queue for outbound voice calls. Also there's a UI which accesses that data.
+Is there an API to access it ?
+9 replies
+Aman Soni
+  Dec 31st, 2025 at 11:11 AM
+Hello @pranav.modi
+Can we have call?
+Aman Soni
+  Dec 31st, 2025 at 12:57 PM
+@pranav.modi Let me know when you are available for a quick call.
+pranav.modi
+  Dec 31st, 2025 at 12:58 PM
+Hi @Aman Soni
+12:58
+can speak now
+12:58
+https://meet.google.com/psp-ghvr-cpq
+
+meet.google.com
+Meet
+Real-time meetings by Google. Using your browser, share your video, desktop, and presentations with teammates and customers.
+Aman Soni
+  Dec 31st, 2025 at 1:00 PM
+Okay
+Aman Soni
+  Dec 31st, 2025 at 1:22 PM
+@pranav.modi Here is the API request for call logs.
+POST : https://app.radflow360.com/pbxcallAPI/PhoneCall/GetPhoneCallHistory
+Payload :
+{
+    "pageNumber": 1,
+    "pageSize": 50,
+    "loggedPartnerId": 1,
+    "jwtToken": "",
+    "userId": 1
+}
+1:24
+Here is the test data from the CallLogs table. (edited) 
+
+
+
+CallID	PatientID	PhoneNumber	ReferrerID	PhoneDirection	StartDate	UserId	EndDate	ContactName	CallerName	DispositionID	UUID	PbxRecordingURL	BrokerId	NoAnswer	LeftVM
+135530	PRE470159	4086474636	0	outbound	2025-12-30 22:59:06.000	2792	2025-12-30 22:59:11.000	TEST RADFLOW TEST2		22	1767164397.6208	/2025/12/30/out-4086474636-9999-20251230-225957-1767164397.6208.WAV	0	1	0
+135529		8042221111	20613	outbound	2025-12-30 22:57:04.000	2792	2025-12-30 22:57:14.000	FIRST TEST LAST		23	1767164274.6203	/2025/12/30/out-8042221111-9999-20251230-225754-1767164274.6203.WAV	0	0	0
+135528	PRE1165336	8058325778	0	outbound	NULL	2181	2025-12-30 07:06:39.000	JUAN MEJIA HERNANDEZ		0	1767150432.6148	/2025/12/30/in-8005582223-8058325778-20251230-190636-1767150396.6145.WAV	0	0	0
+135527	PRE1161108	5594579573	0	outbound	NULL	2181	2025-12-30 06:19:44.000	TERRELL THOMPSON		0	1767147617.6109	/2025/12/30/in-8189077723-5594579573-20251230-181937-1767147577.6106.WAV	0	0	0
+135526	PRE1161868	5623217313	0	outbound	NULL	2181	2025-12-30 05:51:53.000	ERNEST GARCIA		0	1767145962.6091	/2025/12/30/q-9006-5623217313-20251230-175129-1767145889.6081.WAV	0	0	0
+135525	PRE1161868	5623217313	0	inbound	2025-12-30 05:50:44.000	7706	2025-12-30 05:51:30.000	ERNEST GARCIA		0	1767145889.6082	/2025/12/30/in-8005582223-5623217313-20251230-174858-1767145738.6079.WAV	0	0	0
+135524	PRE1141441	5624474049	0	outbound	2025-12-30 05:29:55.000	3697	2025-12-30 05:32:36.000	ERICK TAFOLLA		0	1767144643.6066	/2025/12/30/out-5624474049-185-20251230-173043-1767144643.6066.WAV	0	0	0
+135523	PRE1141441	5624474049	0	outbound	2025-12-30 05:29:23.000	3697	2025-12-30 05:29:55.000	ERICK TAFOLLA		0	1767144610.6063	/2025/12/30/out-5624474049-185-20251230-173010-1767144610.6063.WAV	0	0	0
+135522	PRE1141441	5624474049	0	outbound	2025-12-30 05:27:01.000	3697	2025-12-30 05:28:04.000	ERICK TAFOLLA		0	1767144460.6056	/2025/12/30/out-5624474049-185-20251230-172740-1767144460.6056.WAV	0	0	0
+Open full table
+
+
+
+
+
+Aman Soni: Hello @Danny Rackow ,
+Could you please clarify which patient list Parnav requires for calls? For example, should the list include patients with a Scheduled status only, or any other specific statuses as well?
+Additionally, if a patient has already been contacted but their status remains unchanged, should that patient reappear in the call list? If so, under what conditions?
+
+Danny Rackow: It should use the list from the ordered scheduler page.  Call the ones that show at the top first
+
+Danny Rackow: then when contact is made. The AI agent will mark one of the four actions from the ordered scheduler page just like a human would so it would pull it from the list and put to the bottom of the list
+
+Neeraj Jha: Okay, Thanks for the clarification.
+Will share the ordered scheduler list with Pranav

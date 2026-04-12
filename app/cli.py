@@ -1,0 +1,657 @@
+"""Autocaller CLI — headless ops over the FastAPI backend + DB.
+
+The CLI is a thin client: call-related commands talk to the running FastAPI
+daemon on loopback, while bulk-lead and config commands touch the DB / .env
+directly. Uses Typer for arg parsing + Rich for tabular output.
+
+Entry point: `python -m app.cli <command>` or `bin/autocaller <command>`.
+"""
+from __future__ import annotations
+
+import asyncio
+import csv
+import json
+import os
+import re
+import sys
+from pathlib import Path
+from typing import Optional
+
+import httpx
+import typer
+from rich.console import Console
+from rich.table import Table
+
+app = typer.Typer(
+    help="Headless autocaller CLI — cold-call PI attorneys via Twilio + OpenAI + Cal.com.",
+    add_completion=False,
+    no_args_is_help=True,
+)
+
+leads_app = typer.Typer(help="Manage leads (import, list, show, add, remove)", no_args_is_help=True)
+calls_app = typer.Typer(help="Inspect call history + transcripts", no_args_is_help=True)
+dispatcher_app = typer.Typer(help="Control the auto-dispatcher", no_args_is_help=True)
+config_app = typer.Typer(help="Config / .env wizard + inspection", no_args_is_help=True)
+
+app.add_typer(leads_app, name="leads")
+app.add_typer(calls_app, name="calls")
+app.add_typer(dispatcher_app, name="dispatcher")
+app.add_typer(config_app, name="config")
+
+console = Console()
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _api_base() -> str:
+    """Base URL of the FastAPI daemon (loopback by default)."""
+    port = os.getenv("BACKEND_PORT", "8000").strip() or "8000"
+    return os.getenv("AUTOCALLER_API_BASE", f"http://127.0.0.1:{port}").rstrip("/")
+
+
+def _get(path: str, **params) -> dict:
+    try:
+        resp = httpx.get(f"{_api_base()}{path}", params=params or None, timeout=15.0)
+        resp.raise_for_status()
+    except httpx.HTTPError as e:
+        console.print(f"[red]API request failed: {e}[/red]")
+        raise typer.Exit(code=1) from e
+    return resp.json()
+
+
+def _post(path: str, json_body: Optional[dict] = None) -> dict:
+    try:
+        resp = httpx.post(f"{_api_base()}{path}", json=json_body or {}, timeout=30.0)
+        resp.raise_for_status()
+    except httpx.HTTPError as e:
+        console.print(f"[red]API request failed: {e}[/red]")
+        raise typer.Exit(code=1) from e
+    return resp.json() if resp.content else {}
+
+
+def _run(coro):
+    """Run an async coroutine to completion for DB-direct CLI commands."""
+    return asyncio.run(coro)
+
+
+def _phone_normalize(raw: str) -> str:
+    digits = re.sub(r"\D", "", raw or "")
+    if len(digits) == 10:
+        return f"+1{digits}"
+    if len(digits) == 11 and digits.startswith("1"):
+        return f"+{digits}"
+    if raw.startswith("+"):
+        return raw.strip()
+    return digits and f"+{digits}" or ""
+
+
+# ---------------------------------------------------------------------------
+# serve
+# ---------------------------------------------------------------------------
+
+@app.command()
+def serve(
+    host: str = typer.Option("0.0.0.0", help="Host to bind to"),
+    port: int = typer.Option(lambda: int(os.getenv("BACKEND_PORT", "8000")), help="Port to bind to"),
+    reload: bool = typer.Option(False, help="Dev auto-reload"),
+):
+    """Start the FastAPI daemon (foreground)."""
+    import uvicorn
+    log_level = "warning" if not reload else "info"
+    uvicorn.run("app.main:app", host=host, port=port, reload=reload, log_level=log_level)
+
+
+# ---------------------------------------------------------------------------
+# leads
+# ---------------------------------------------------------------------------
+
+_REQUIRED_LEAD_COLS = {"phone", "name"}
+
+
+@leads_app.command("import")
+def leads_import(
+    csv_path: Path = typer.Argument(..., exists=True, readable=True, help="CSV file with leads"),
+    source: str = typer.Option("csv", help="Source tag stored on each imported row"),
+    dry_run: bool = typer.Option(False, help="Parse + validate, don't write to DB"),
+):
+    """Bulk-import leads from CSV. Required columns: phone, name. Optional: firm, state,
+    practice_area, email, title, website, tags (pipe-separated), notes."""
+    rows = list(csv.DictReader(csv_path.open(newline="", encoding="utf-8")))
+    if not rows:
+        console.print("[yellow]CSV is empty[/yellow]")
+        raise typer.Exit(code=1)
+
+    headers_lower = {(h or "").strip().lower() for h in rows[0].keys()}
+    missing = _REQUIRED_LEAD_COLS - headers_lower
+    if missing:
+        console.print(f"[red]Missing required columns: {sorted(missing)}[/red]")
+        raise typer.Exit(code=1)
+
+    parsed: list[dict] = []
+    skipped = 0
+    for i, raw in enumerate(rows, start=1):
+        row = {(k or "").strip().lower(): (v or "").strip() for k, v in raw.items()}
+        phone = _phone_normalize(row.get("phone", ""))
+        name = row.get("name", "")
+        if not phone or not name:
+            skipped += 1
+            continue
+        tags_field = row.get("tags", "")
+        tags = [t.strip() for t in tags_field.split("|") if t.strip()] if tags_field else []
+        parsed.append({
+            "patient_id": row.get("id") or row.get("lead_id") or f"LEAD-{i:06d}",
+            "name": name,
+            "phone": phone,
+            "firm_name": row.get("firm") or row.get("firm_name") or None,
+            "state": (row.get("state") or "").upper()[:2] or None,
+            "practice_area": row.get("practice_area") or None,
+            "email": row.get("email") or None,
+            "title": row.get("title") or None,
+            "website": row.get("website") or None,
+            "source": row.get("source") or source,
+            "tags": tags,
+            "notes": row.get("notes") or None,
+        })
+
+    console.print(f"Parsed {len(parsed)} valid rows, skipped {skipped}.")
+    if dry_run:
+        console.print("[cyan]--dry-run: no DB writes performed[/cyan]")
+        return
+
+    async def _insert():
+        from app.db import AsyncSessionLocal
+        from app.db.models import PatientRow
+        from sqlalchemy import select
+        inserted = 0
+        updated = 0
+        async with AsyncSessionLocal() as session:
+            for r in parsed:
+                existing = await session.execute(
+                    select(PatientRow).where(PatientRow.patient_id == r["patient_id"])
+                )
+                row_obj = existing.scalar_one_or_none()
+                if row_obj:
+                    for k, v in r.items():
+                        if k == "patient_id":
+                            continue
+                        setattr(row_obj, k, v)
+                    updated += 1
+                else:
+                    session.add(PatientRow(**r))
+                    inserted += 1
+            await session.commit()
+        return inserted, updated
+
+    inserted, updated = _run(_insert())
+    console.print(f"[green]Imported {inserted} new, updated {updated}.[/green]")
+
+
+@leads_app.command("list")
+def leads_list(
+    state: Optional[str] = typer.Option(None, help="Filter by 2-letter state"),
+    limit: int = typer.Option(50, help="Max rows to display"),
+):
+    """List leads."""
+    async def _query():
+        from app.db import AsyncSessionLocal
+        from app.db.models import PatientRow
+        from sqlalchemy import select
+        async with AsyncSessionLocal() as session:
+            stmt = select(PatientRow)
+            if state:
+                stmt = stmt.where(PatientRow.state == state.upper())
+            stmt = stmt.order_by(PatientRow.priority_bucket, PatientRow.updated_at.desc()).limit(limit)
+            res = await session.execute(stmt)
+            return list(res.scalars().all())
+
+    leads = _run(_query())
+    table = Table(title=f"Leads ({len(leads)})")
+    for col in ["id", "name", "firm", "state", "phone", "title", "attempts", "last_outcome"]:
+        table.add_column(col, overflow="fold")
+    for l in leads:
+        table.add_row(
+            str(l.patient_id),
+            l.name or "",
+            l.firm_name or "",
+            l.state or "",
+            l.phone or "",
+            l.title or "",
+            str(l.attempt_count),
+            l.last_outcome or "",
+        )
+    console.print(table)
+
+
+@leads_app.command("show")
+def leads_show(lead_id: str = typer.Argument(...)):
+    """Show full detail on a single lead."""
+    async def _q():
+        from app.db import AsyncSessionLocal
+        from app.db.models import PatientRow
+        from sqlalchemy import select
+        async with AsyncSessionLocal() as session:
+            res = await session.execute(select(PatientRow).where(PatientRow.patient_id == lead_id))
+            return res.scalar_one_or_none()
+
+    lead = _run(_q())
+    if not lead:
+        console.print(f"[red]Lead not found: {lead_id}[/red]")
+        raise typer.Exit(code=1)
+    data = {
+        "id": lead.patient_id,
+        "name": lead.name,
+        "firm": lead.firm_name,
+        "state": lead.state,
+        "phone": lead.phone,
+        "email": lead.email,
+        "title": lead.title,
+        "practice_area": lead.practice_area,
+        "website": lead.website,
+        "tags": lead.tags,
+        "notes": lead.notes,
+        "attempt_count": lead.attempt_count,
+        "last_outcome": lead.last_outcome,
+        "last_attempt_at": lead.last_attempt_at.isoformat() if lead.last_attempt_at else None,
+        "priority_bucket": lead.priority_bucket,
+    }
+    console.print_json(data=data)
+
+
+@leads_app.command("add")
+def leads_add(
+    name: str = typer.Option(...),
+    phone: str = typer.Option(...),
+    firm: Optional[str] = typer.Option(None),
+    state: Optional[str] = typer.Option(None),
+    email: Optional[str] = typer.Option(None),
+    title: Optional[str] = typer.Option(None),
+    practice_area: str = typer.Option("personal injury"),
+):
+    """Add a single lead."""
+    phone_norm = _phone_normalize(phone)
+    if not phone_norm:
+        console.print("[red]Invalid phone[/red]")
+        raise typer.Exit(code=1)
+
+    async def _add():
+        from app.db import AsyncSessionLocal
+        from app.db.models import PatientRow
+        import uuid
+        lead_id = f"LEAD-{uuid.uuid4().hex[:10].upper()}"
+        async with AsyncSessionLocal() as session:
+            session.add(PatientRow(
+                patient_id=lead_id,
+                name=name,
+                phone=phone_norm,
+                firm_name=firm,
+                state=(state or "").upper()[:2] or None,
+                email=email,
+                title=title,
+                practice_area=practice_area,
+                source="cli",
+                tags=[],
+            ))
+            await session.commit()
+        return lead_id
+
+    lead_id = _run(_add())
+    console.print(f"[green]Added lead {lead_id}[/green]")
+
+
+@leads_app.command("remove")
+def leads_remove(lead_id: str = typer.Argument(...)):
+    """Delete a lead."""
+    async def _del():
+        from app.db import AsyncSessionLocal
+        from app.db.models import PatientRow
+        from sqlalchemy import delete
+        async with AsyncSessionLocal() as session:
+            await session.execute(delete(PatientRow).where(PatientRow.patient_id == lead_id))
+            await session.commit()
+
+    _run(_del())
+    console.print(f"[green]Removed {lead_id}[/green]")
+
+
+# ---------------------------------------------------------------------------
+# call (manual, single-shot)
+# ---------------------------------------------------------------------------
+
+@app.command()
+def call(
+    lead_id: str = typer.Argument(..., help="Lead ID to call now"),
+    mode: str = typer.Option("twilio", help="'twilio' (real PSTN) or 'web'"),
+):
+    """Place a call immediately to a lead (bypasses dispatcher)."""
+    resp = _post("/api/call/start", {"patient_id": lead_id, "mode": mode})
+    console.print_json(data=resp)
+
+
+# ---------------------------------------------------------------------------
+# dispatcher
+# ---------------------------------------------------------------------------
+
+@dispatcher_app.command("start")
+def dispatcher_start():
+    resp = _post("/api/dispatcher/toggle", {"enabled": True})
+    console.print_json(data=resp)
+
+
+@dispatcher_app.command("stop")
+def dispatcher_stop():
+    resp = _post("/api/dispatcher/toggle", {"enabled": False})
+    console.print_json(data=resp)
+
+
+@dispatcher_app.command("status")
+def dispatcher_status():
+    resp = _get("/api/dispatcher/status")
+    console.print_json(data=resp)
+
+
+# ---------------------------------------------------------------------------
+# calls (history + transcript + export)
+# ---------------------------------------------------------------------------
+
+@calls_app.command("list")
+def calls_list(
+    limit: int = typer.Option(25, help="Max rows"),
+    outcome: Optional[str] = typer.Option(None, help="Filter by outcome"),
+):
+    """List recent calls."""
+    async def _q():
+        from app.db import AsyncSessionLocal
+        from app.db.models import CallLogRow
+        from sqlalchemy import select, desc
+        async with AsyncSessionLocal() as session:
+            stmt = select(CallLogRow).order_by(desc(CallLogRow.started_at)).limit(limit)
+            if outcome:
+                stmt = stmt.where(CallLogRow.outcome == outcome)
+            res = await session.execute(stmt)
+            return list(res.scalars().all())
+
+    rows = _run(_q())
+    table = Table(title=f"Recent calls ({len(rows)})")
+    for col in ["call_id", "lead", "firm", "state", "outcome", "duration_s", "interest", "demo_id", "started"]:
+        table.add_column(col, overflow="fold")
+    for r in rows:
+        table.add_row(
+            r.call_id[:10],
+            (r.patient_name or "")[:28],
+            (r.firm_name or "")[:28],
+            r.lead_state or "",
+            r.outcome,
+            str(r.duration_seconds),
+            str(r.interest_level or ""),
+            (r.demo_booking_id or "")[:12],
+            r.started_at.strftime("%Y-%m-%d %H:%M") if r.started_at else "",
+        )
+    console.print(table)
+
+
+@calls_app.command("show")
+def calls_show(call_id: str = typer.Argument(...)):
+    """Show full detail on a single call."""
+    async def _q():
+        from app.db import AsyncSessionLocal
+        from app.db.models import CallLogRow
+        from sqlalchemy import select
+        async with AsyncSessionLocal() as session:
+            res = await session.execute(select(CallLogRow).where(CallLogRow.call_id == call_id))
+            return res.scalar_one_or_none()
+
+    row = _run(_q())
+    if not row:
+        console.print(f"[red]Call not found: {call_id}[/red]")
+        raise typer.Exit(code=1)
+    data = {
+        "call_id": row.call_id,
+        "patient_id": row.patient_id,
+        "patient_name": row.patient_name,
+        "firm_name": row.firm_name,
+        "state": row.lead_state,
+        "outcome": row.outcome,
+        "call_status": row.call_status,
+        "call_disposition": row.call_disposition,
+        "duration_seconds": row.duration_seconds,
+        "started_at": row.started_at.isoformat() if row.started_at else None,
+        "ended_at": row.ended_at.isoformat() if row.ended_at else None,
+        "interest_level": row.interest_level,
+        "is_decision_maker": row.is_decision_maker,
+        "was_gatekeeper": row.was_gatekeeper,
+        "gatekeeper_contact": row.gatekeeper_contact,
+        "pain_point_summary": row.pain_point_summary,
+        "demo_booking_id": row.demo_booking_id,
+        "demo_scheduled_at": row.demo_scheduled_at.isoformat() if row.demo_scheduled_at else None,
+        "demo_meeting_url": row.demo_meeting_url,
+        "followup_email_sent": row.followup_email_sent,
+        "recording_path": row.recording_path,
+        "error_code": row.error_code,
+        "error_message": row.error_message,
+    }
+    console.print_json(data=data)
+
+
+@calls_app.command("transcript")
+def calls_transcript(call_id: str = typer.Argument(...)):
+    """Print the conversation transcript."""
+    async def _q():
+        from app.db import AsyncSessionLocal
+        from app.db.models import CallLogRow
+        from sqlalchemy import select
+        async with AsyncSessionLocal() as session:
+            res = await session.execute(select(CallLogRow).where(CallLogRow.call_id == call_id))
+            return res.scalar_one_or_none()
+
+    row = _run(_q())
+    if not row:
+        console.print(f"[red]Call not found[/red]")
+        raise typer.Exit(code=1)
+    for t in row.transcript or []:
+        speaker = t.get("speaker", "?")
+        text = t.get("text", "")
+        console.print(f"[bold]{speaker}[/bold]: {text}")
+
+
+@calls_app.command("export")
+def calls_export(
+    output: Path = typer.Option(Path("calls_export.csv"), "--output", "-o"),
+    outcome: Optional[str] = typer.Option(None),
+    limit: int = typer.Option(1000),
+):
+    """Export calls to CSV for CRM import."""
+    async def _q():
+        from app.db import AsyncSessionLocal
+        from app.db.models import CallLogRow
+        from sqlalchemy import select, desc
+        async with AsyncSessionLocal() as session:
+            stmt = select(CallLogRow).order_by(desc(CallLogRow.started_at)).limit(limit)
+            if outcome:
+                stmt = stmt.where(CallLogRow.outcome == outcome)
+            res = await session.execute(stmt)
+            return list(res.scalars().all())
+
+    rows = _run(_q())
+    cols = [
+        "call_id", "patient_id", "patient_name", "firm_name", "lead_state",
+        "outcome", "call_status", "call_disposition", "interest_level",
+        "is_decision_maker", "was_gatekeeper", "pain_point_summary",
+        "demo_booking_id", "demo_scheduled_at", "demo_meeting_url",
+        "followup_email_sent", "duration_seconds", "started_at",
+    ]
+    with output.open("w", newline="", encoding="utf-8") as f:
+        w = csv.writer(f)
+        w.writerow(cols)
+        for r in rows:
+            w.writerow([
+                r.call_id, r.patient_id, r.patient_name, r.firm_name, r.lead_state,
+                r.outcome, r.call_status, r.call_disposition, r.interest_level,
+                r.is_decision_maker, r.was_gatekeeper, r.pain_point_summary,
+                r.demo_booking_id,
+                r.demo_scheduled_at.isoformat() if r.demo_scheduled_at else "",
+                r.demo_meeting_url, r.followup_email_sent,
+                r.duration_seconds,
+                r.started_at.isoformat() if r.started_at else "",
+            ])
+    console.print(f"[green]Exported {len(rows)} calls → {output}[/green]")
+
+
+# ---------------------------------------------------------------------------
+# config
+# ---------------------------------------------------------------------------
+
+_ENV_KEYS_PROMPTED = [
+    ("OPENAI_API_KEY", True, "OpenAI API key (Realtime-enabled)"),
+    ("TWILIO_ACCOUNT_SID", True, "Twilio Account SID"),
+    ("TWILIO_AUTH_TOKEN", True, "Twilio Auth Token"),
+    ("TWILIO_FROM_NUMBER", True, "Twilio from-number (E.164, e.g. +15551234567)"),
+    ("PUBLIC_BASE_URL", True, "Public HTTPS base URL for Twilio callbacks"),
+    ("ALLOW_TWILIO_CALLS", False, "Allow real Twilio calls? 'true' or 'false'"),
+    ("CALCOM_API_KEY", True, "Cal.com API key"),
+    ("CALCOM_EVENT_TYPE_ID", False, "Cal.com event-type ID (integer)"),
+    ("SALES_REP_NAME", False, "Sales rep first name (spoken by AI)"),
+    ("SALES_REP_COMPANY", False, "Sales rep company name"),
+    ("SALES_REP_EMAIL", False, "Sales rep reply-to email"),
+    ("PRODUCT_CONTEXT", False, "One-paragraph product context for the AI"),
+    ("DATABASE_URL", True, "Postgres URL (postgresql://user:pw@host:5432/db)"),
+]
+
+
+@config_app.command("show")
+def config_show():
+    """Print current env-based config (masks secrets)."""
+    for key, _, _ in _ENV_KEYS_PROMPTED:
+        v = os.getenv(key, "")
+        if any(s in key for s in ("KEY", "TOKEN", "PASSWORD")) and v:
+            v = v[:4] + "…" + v[-2:] if len(v) > 8 else "set"
+        console.print(f"{key}={v or '(unset)'}")
+
+
+@config_app.command("init")
+def config_init(env_path: Path = typer.Option(Path(".env"), help="Path to .env file")):
+    """Interactive wizard — writes .env in the project root."""
+    existing = {}
+    if env_path.exists():
+        for line in env_path.read_text().splitlines():
+            if "=" in line and not line.strip().startswith("#"):
+                k, _, v = line.partition("=")
+                existing[k.strip()] = v.strip()
+
+    answers: dict[str, str] = {}
+    for key, required, desc in _ENV_KEYS_PROMPTED:
+        default = existing.get(key, "")
+        prompt = f"{desc} [{key}]"
+        val = typer.prompt(prompt, default=default or "", show_default=bool(default)).strip()
+        if required and not val:
+            console.print(f"[red]{key} is required — skipping write[/red]")
+            raise typer.Exit(code=1)
+        answers[key] = val
+
+    lines = [f"{k}={v}" for k, v in answers.items() if v != ""]
+    env_path.write_text("\n".join(lines) + "\n")
+    console.print(f"[green]Wrote {env_path} ({len(lines)} vars)[/green]")
+
+
+# ---------------------------------------------------------------------------
+# status + doctor
+# ---------------------------------------------------------------------------
+
+@app.command()
+def status():
+    """One-shot system status summary."""
+    try:
+        s = _get("/api/status")
+        console.print_json(data=s)
+    except typer.Exit:
+        console.print("[yellow]Daemon unreachable — run `autocaller serve`.[/yellow]")
+
+
+@app.command()
+def doctor():
+    """Validate env + connectivity to Twilio, OpenAI, Cal.com, and DB."""
+    import urllib.parse as _urlparse
+
+    checks: list[tuple[str, bool, str]] = []
+
+    # Env
+    for key in ("OPENAI_API_KEY", "TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN",
+                "TWILIO_FROM_NUMBER", "DATABASE_URL"):
+        ok = bool(os.getenv(key, "").strip())
+        checks.append((f"env:{key}", ok, "set" if ok else "missing"))
+
+    # DB
+    async def _ping_db():
+        from app.db import async_engine
+        from sqlalchemy import text
+        try:
+            async with async_engine.connect() as conn:
+                await conn.execute(text("select 1"))
+            return True, "ok"
+        except Exception as e:
+            return False, str(e)[:80]
+
+    ok, detail = _run(_ping_db())
+    checks.append(("db", ok, detail))
+
+    # Cal.com
+    key = os.getenv("CALCOM_API_KEY", "").strip()
+    if key:
+        async def _ping_calcom():
+            async with httpx.AsyncClient(timeout=8.0) as cli:
+                try:
+                    r = await cli.get("https://api.cal.com/v2/me",
+                                      headers={"Authorization": f"Bearer {key}"})
+                    return r.status_code < 500, f"HTTP {r.status_code}"
+                except Exception as e:
+                    return False, str(e)[:80]
+        ok, detail = _run(_ping_calcom())
+        checks.append(("calcom", ok, detail))
+    else:
+        checks.append(("calcom", False, "no CALCOM_API_KEY"))
+
+    # OpenAI — we only check the HTTP-side `/v1/models` to avoid hitting quota
+    key = os.getenv("OPENAI_API_KEY", "").strip()
+    if key:
+        async def _ping_openai():
+            async with httpx.AsyncClient(timeout=8.0) as cli:
+                try:
+                    r = await cli.get("https://api.openai.com/v1/models",
+                                      headers={"Authorization": f"Bearer {key}"})
+                    return r.status_code < 500, f"HTTP {r.status_code}"
+                except Exception as e:
+                    return False, str(e)[:80]
+        ok, detail = _run(_ping_openai())
+        checks.append(("openai", ok, detail))
+    else:
+        checks.append(("openai", False, "no OPENAI_API_KEY"))
+
+    # Public base URL reachable?
+    pub = os.getenv("PUBLIC_BASE_URL", "").strip()
+    if pub:
+        try:
+            parsed = _urlparse.urlparse(pub)
+            reachable = parsed.scheme in ("http", "https") and bool(parsed.netloc)
+            checks.append(("public_base_url", reachable, pub))
+        except Exception as e:
+            checks.append(("public_base_url", False, str(e)[:80]))
+    else:
+        checks.append(("public_base_url", False, "unset — Twilio callbacks will fail"))
+
+    table = Table(title="autocaller doctor")
+    table.add_column("check")
+    table.add_column("ok")
+    table.add_column("detail", overflow="fold")
+    any_bad = False
+    for name, ok, detail in checks:
+        table.add_row(name, "[green]✓[/green]" if ok else "[red]✗[/red]", detail)
+        if not ok:
+            any_bad = True
+    console.print(table)
+    if any_bad:
+        raise typer.Exit(code=1)
+
+
+if __name__ == "__main__":
+    app()

@@ -1,0 +1,58 @@
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+voiceai/
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Node.js / Next.js
+node_modules/
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/.vercel
+.npm
+*.tsbuildinfo
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Generated audio
+app/audio/*.mp3
+app/audio/*.wav
+app/audio/recordings/
+static/audio/*.mp3
+static/audio/*.wav
+static/
+
+# Logs
+*.log
+logs/
+
+# Claude
+.claude/
+
+# Testing
+.coverage
+htmlcov/
+.pytest_cache/
