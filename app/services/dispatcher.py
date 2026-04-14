@@ -25,7 +25,7 @@ DEFAULT_POLL_INTERVAL_SECONDS = 10
 DEFAULT_DISPATCH_TIMEOUT_SECONDS = 30
 DEFAULT_MAX_ATTEMPTS = 3
 DEFAULT_MIN_HOURS_BETWEEN = 168  # 1 week — don't re-call the same firm within 7 days
-DEFAULT_COOLDOWN_SECONDS = 120  # wait between consecutive calls to different patients
+DEFAULT_COOLDOWN_SECONDS = 0  # No inter-call cooldown; dispatcher picks next lead on next 10s tick
 DECISION_LOG_MAX = 100
 
 

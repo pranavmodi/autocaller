@@ -84,14 +84,33 @@ Commands
   call           Place a call immediately (bypass dispatcher).
   status         One-shot system status summary (dispatcher + current call).
   doctor         Validate env + connectivity (db, Twilio, OpenAI, Cal.com).
-  leads          Manage leads (import, list, show, add, remove).
-  calls          Inspect call history + transcripts.
-  dispatcher     Control the auto-dispatcher (start, stop, status).
-  config         Config/.env wizard + inspection.
+  leads          Manage leads (import, list, show, add, remove, sync-mission).
+  calls          Inspect call history + transcripts + judge.
+  dispatcher     Control the auto-dispatcher (start, stop, batch, status, clear-active).
+  config         Config / .env wizard + inspection.
+  system         Global on/off — master kill switch.
+  mock           Mock-mode toggle (redirect all Twilio calls to a mock phone).
+  allowlist      Manage allowed_phones (phone allowlist).
+  followups      GTM follow-up queue — calls awaiting action.
 ```
 
 Every command accepts `--help`. Exit code is `0` on success, `1` on any error
 (network, validation, missing resource).
+
+### New-command reference (v1.1)
+
+| command | purpose |
+|---|---|
+| `system on \| off \| status` | Master kill switch. `off` blocks all calls regardless of dispatcher state. |
+| `mock on <phone> \| off \| status` | Redirect every Twilio call to `<phone>` for safe testing. |
+| `allowlist list \| add <phone> \| remove <phone> \| clear \| set-from-leads [--state=CA --dm-only --limit=20]` | Manage `allowed_phones`. `set-from-leads` populates it from the top-N priority-sorted leads in the DB. |
+| `dispatcher batch <N>` | Start the dispatcher with an auto-stop after N calls placed. |
+| `dispatcher clear-active` | Clear the in-memory active-call marker (if it got stuck). Does NOT hang up an actual Twilio call. |
+| `calls judge <call_id>` | Run the LLM judge on one call (scores 0-10, assigns GTM disposition). |
+| `calls judge --all-pending` | Backfill-judge every un-judged completed call. ~$0.02 each with gpt-4o-mini. |
+| `followups list [--action=... --owner=... --disposition=... --within=14]` | Show calls that need human or automated follow-up, sorted by due date. |
+| `followups show <call_id>` | JSON focus view for a single follow-up. |
+| `leads sync-mission [--tiers=A,B --dm-threshold=5]` | LLM-driven import of PI-firm contacts from Mission Control. |
 
 ---
 

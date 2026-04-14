@@ -28,15 +28,23 @@ app = typer.Typer(
     no_args_is_help=True,
 )
 
-leads_app = typer.Typer(help="Manage leads (import, list, show, add, remove)", no_args_is_help=True)
-calls_app = typer.Typer(help="Inspect call history + transcripts", no_args_is_help=True)
+leads_app = typer.Typer(help="Manage leads (import, list, show, add, remove, sync-mission)", no_args_is_help=True)
+calls_app = typer.Typer(help="Inspect call history + transcripts + judge", no_args_is_help=True)
 dispatcher_app = typer.Typer(help="Control the auto-dispatcher", no_args_is_help=True)
 config_app = typer.Typer(help="Config / .env wizard + inspection", no_args_is_help=True)
+system_app = typer.Typer(help="Global on/off — master kill switch", no_args_is_help=True)
+mock_app = typer.Typer(help="Mock-mode toggle (redirect all Twilio calls to a mock phone)", no_args_is_help=True)
+allowlist_app = typer.Typer(help="Manage allowed_phones (phone allowlist)", no_args_is_help=True)
+followups_app = typer.Typer(help="GTM follow-up queue — calls awaiting action", no_args_is_help=True)
 
 app.add_typer(leads_app, name="leads")
 app.add_typer(calls_app, name="calls")
 app.add_typer(dispatcher_app, name="dispatcher")
 app.add_typer(config_app, name="config")
+app.add_typer(system_app, name="system")
+app.add_typer(mock_app, name="mock")
+app.add_typer(allowlist_app, name="allowlist")
+app.add_typer(followups_app, name="followups")
 
 console = Console()
 
@@ -555,6 +563,25 @@ def dispatcher_status():
     console.print_json(data=resp)
 
 
+@dispatcher_app.command("batch")
+def dispatcher_batch(
+    count: int = typer.Argument(..., help="Number of calls to place before auto-stop"),
+):
+    """Start the dispatcher with a hard stop after N calls."""
+    if count <= 0:
+        console.print("[red]count must be a positive integer[/red]")
+        raise typer.Exit(code=2)
+    resp = _post("/api/dispatcher/start-batch", {"count": count})
+    console.print_json(data=resp)
+
+
+@dispatcher_app.command("clear-active")
+def dispatcher_clear_active():
+    """Clear the in-memory active-call marker (does NOT end an active Twilio call)."""
+    resp = _post("/api/calls/clear-active")
+    console.print_json(data=resp)
+
+
 # ---------------------------------------------------------------------------
 # calls (history + transcript + export)
 # ---------------------------------------------------------------------------
@@ -659,6 +686,43 @@ def calls_transcript(call_id: str = typer.Argument(...)):
         console.print(f"[bold]{speaker}[/bold]: {text}")
 
 
+@calls_app.command("judge")
+def calls_judge(
+    call_id: Optional[str] = typer.Argument(None, help="Call to judge, or omit + use --all-pending"),
+    all_pending: bool = typer.Option(False, "--all-pending", help="Backfill every un-judged completed call"),
+):
+    """Run (or re-run) the LLM judge on a call. Scores it 0-10 and assigns a GTM disposition."""
+    if all_pending:
+        async def _pending():
+            from app.db import AsyncSessionLocal
+            from app.db.models import CallLogRow
+            from sqlalchemy import select
+            async with AsyncSessionLocal() as s:
+                r = await s.execute(
+                    select(CallLogRow.call_id)
+                    .where(CallLogRow.ended_at.is_not(None))
+                    .where(CallLogRow.judged_at.is_(None))
+                )
+                return [row[0] for row in r.all()]
+        ids = _run(_pending())
+        if not ids:
+            console.print("[green]Nothing to judge.[/green]")
+            return
+        console.print(f"Judging {len(ids)} pending calls (est. cost ~${len(ids) * 0.02:.2f})…")
+        for i, cid in enumerate(ids, 1):
+            try:
+                r = _post(f"/api/calls/{cid}/judge")
+                console.print(f"  [{i}/{len(ids)}] {cid[:8]} → score={r.get('judge_score')} disposition={r.get('gtm_disposition')}")
+            except typer.Exit:
+                console.print(f"  [{i}/{len(ids)}] {cid[:8]} — failed")
+        return
+    if not call_id:
+        console.print("[red]pass either <call_id> or --all-pending[/red]")
+        raise typer.Exit(code=2)
+    r = _post(f"/api/calls/{call_id}/judge")
+    console.print_json(data=r)
+
+
 @calls_app.command("export")
 def calls_export(
     output: Path = typer.Option(Path("calls_export.csv"), "--output", "-o"),
@@ -756,6 +820,237 @@ def config_init(env_path: Path = typer.Option(Path(".env"), help="Path to .env f
     lines = [f"{k}={v}" for k, v in answers.items() if v != ""]
     env_path.write_text("\n".join(lines) + "\n")
     console.print(f"[green]Wrote {env_path} ({len(lines)} vars)[/green]")
+
+
+# ---------------------------------------------------------------------------
+# system (master kill switch)
+# ---------------------------------------------------------------------------
+
+def _put(path: str, body: dict) -> dict:
+    import httpx
+    r = httpx.put(f"{_api_base()}{path}", json=body, timeout=15.0)
+    try:
+        r.raise_for_status()
+    except httpx.HTTPError as e:
+        console.print(f"[red]{path} {r.status_code}: {r.text[:200]}[/red]")
+        raise typer.Exit(code=1) from e
+    return r.json() if r.content else {}
+
+
+@system_app.command("on")
+def system_on():
+    """Enable the system — dispatcher can now place calls."""
+    _put("/api/settings/system-enabled", {"enabled": True})
+    console.print("[green]system enabled[/green]")
+
+
+@system_app.command("off")
+def system_off():
+    """Disable the system — hard stop. Dispatcher's gate blocks all calls."""
+    _put("/api/settings/system-enabled", {"enabled": False})
+    console.print("[red]system disabled — no calls will be placed[/red]")
+
+
+@system_app.command("status")
+def system_status():
+    """Show the system_enabled flag + related gates."""
+    s = _get("/api/settings")
+    console.print(f"system_enabled: [{'green' if s.get('system_enabled') else 'red'}]"
+                  f"{s.get('system_enabled')}[/]")
+    console.print(f"mock_mode:       {s.get('mock_mode')} → {s.get('mock_phone') or '—'}")
+    console.print(f"allow_live_calls: {s.get('allow_live_calls')}")
+    console.print(f"allowed_phones:   {len(s.get('allowed_phones') or [])} entries")
+
+
+# ---------------------------------------------------------------------------
+# mock mode
+# ---------------------------------------------------------------------------
+
+@mock_app.command("on")
+def mock_on(phone: str = typer.Argument(..., help="E.164 phone to redirect all calls to (e.g. +1415...)")):
+    """Turn mock mode ON — all calls redirect to the given phone."""
+    _put("/api/settings/mock-mode", {"enabled": True, "mock_phone": phone})
+    console.print(f"[yellow]mock mode ON — redirecting to {phone}[/yellow]")
+
+
+@mock_app.command("off")
+def mock_off():
+    """Turn mock mode OFF — calls go to the lead's real phone."""
+    _put("/api/settings/mock-mode", {"enabled": False, "mock_phone": ""})
+    console.print("[green]mock mode OFF — real outbound active[/green]")
+
+
+@mock_app.command("status")
+def mock_status():
+    s = _get("/api/settings")
+    mode = "ON" if s.get("mock_mode") else "OFF"
+    console.print(f"mock_mode: {mode}  phone: {s.get('mock_phone') or '—'}")
+
+
+# ---------------------------------------------------------------------------
+# allowlist (allowed_phones)
+# ---------------------------------------------------------------------------
+
+@allowlist_app.command("list")
+def allowlist_list():
+    """Show the current phone allowlist."""
+    s = _get("/api/settings")
+    phones = s.get("allowed_phones") or []
+    if not phones:
+        console.print("[yellow](empty — no per-phone gating)[/yellow]")
+        return
+    for p in phones:
+        console.print(f"  {p}")
+
+
+@allowlist_app.command("add")
+def allowlist_add(phone: str = typer.Argument(..., help="E.164 phone to add")):
+    """Add a phone to allowed_phones."""
+    s = _get("/api/settings")
+    phones = list(s.get("allowed_phones") or [])
+    if phone in phones:
+        console.print("(already present)")
+        return
+    phones.append(phone)
+    _put("/api/settings/allowed-phones", {"phones": phones})
+    console.print(f"[green]added[/green] {phone} — {len(phones)} total")
+
+
+@allowlist_app.command("remove")
+def allowlist_remove(phone: str = typer.Argument(..., help="E.164 phone to remove")):
+    """Remove a phone from allowed_phones."""
+    s = _get("/api/settings")
+    phones = [p for p in (s.get("allowed_phones") or []) if p != phone]
+    _put("/api/settings/allowed-phones", {"phones": phones})
+    console.print(f"[green]removed[/green] {phone} — {len(phones)} remaining")
+
+
+@allowlist_app.command("clear")
+def allowlist_clear():
+    """Clear the entire allowlist."""
+    _put("/api/settings/allowed-phones", {"phones": []})
+    console.print("[green]cleared[/green]")
+
+
+@allowlist_app.command("set-from-leads")
+def allowlist_set_from_leads(
+    state: Optional[str] = typer.Option(None, help="Filter by 2-letter state"),
+    dm_only: bool = typer.Option(True, "--dm-only/--any", help="Only decision-makers"),
+    limit: int = typer.Option(20, help="Max leads to add to allowlist"),
+):
+    """Populate the allowlist from the top N eligible leads (priority-ordered)."""
+    async def _q():
+        from app.db import AsyncSessionLocal
+        from app.db.models import PatientRow
+        from sqlalchemy import select
+        async with AsyncSessionLocal() as s:
+            stmt = select(PatientRow).where(PatientRow.attempt_count == 0).order_by(PatientRow.priority_bucket)
+            if state:
+                stmt = stmt.where(PatientRow.state == state.upper())
+            stmt = stmt.limit(limit * 3)  # oversample then filter DM
+            res = await s.execute(stmt)
+            rows = list(res.scalars().all())
+            if dm_only:
+                rows = [r for r in rows if "decision-maker" in (r.tags or [])]
+            return [r.phone for r in rows[:limit] if r.phone]
+    phones = _run(_q())
+    _put("/api/settings/allowed-phones", {"phones": phones})
+    console.print(f"[green]allowlist set to {len(phones)} phones[/green]"
+                  f"{' (state=' + state.upper() + ')' if state else ''}"
+                  f"{' (DM only)' if dm_only else ''}")
+
+
+# ---------------------------------------------------------------------------
+# followups (GTM action queue)
+# ---------------------------------------------------------------------------
+
+@followups_app.command("list")
+def followups_list(
+    action: Optional[str] = typer.Option(None, "--action", help="Filter by follow_up_action"),
+    owner: Optional[str] = typer.Option(None, "--owner", help="Filter by follow_up_owner (autocaller|sales_human|none)"),
+    disposition: Optional[str] = typer.Option(None, "--disposition"),
+    due_within_days: int = typer.Option(14, "--within", help="Only show items due within N days"),
+    limit: int = typer.Option(50, "--limit"),
+):
+    """List calls awaiting follow-up action. See docs/DISPOSITIONS.md."""
+    async def _q():
+        from app.db import AsyncSessionLocal
+        from app.db.models import CallLogRow
+        from sqlalchemy import select, and_, or_
+        from datetime import datetime, timezone, timedelta
+        now = datetime.now(timezone.utc)
+        horizon = now + timedelta(days=due_within_days)
+        async with AsyncSessionLocal() as s:
+            stmt = (
+                select(CallLogRow)
+                .where(CallLogRow.gtm_disposition.is_not(None))
+                .where(CallLogRow.follow_up_action.is_not(None))
+                .where(CallLogRow.follow_up_action != "discard")
+                .where(CallLogRow.follow_up_action != "mark_dnc")
+                .where(CallLogRow.follow_up_action != "mark_bad_number")
+                .where(
+                    or_(
+                        CallLogRow.follow_up_when.is_(None),
+                        CallLogRow.follow_up_when <= horizon,
+                    )
+                )
+                .order_by(CallLogRow.follow_up_when.asc().nulls_first())
+                .limit(limit)
+            )
+            if action:
+                stmt = stmt.where(CallLogRow.follow_up_action == action)
+            if owner:
+                stmt = stmt.where(CallLogRow.follow_up_owner == owner)
+            if disposition:
+                stmt = stmt.where(CallLogRow.gtm_disposition == disposition)
+            res = await s.execute(stmt)
+            return list(res.scalars().all())
+    rows = _run(_q())
+    if not rows:
+        console.print("[yellow]No follow-ups match the filter.[/yellow]")
+        return
+    table = Table(title=f"Follow-ups ({len(rows)})")
+    for col in ["when", "action", "owner", "disposition", "firm", "lead", "note"]:
+        table.add_column(col, overflow="fold")
+    for r in rows:
+        table.add_row(
+            r.follow_up_when.strftime("%Y-%m-%d") if r.follow_up_when else "—",
+            r.follow_up_action or "—",
+            r.follow_up_owner or "—",
+            r.gtm_disposition or "—",
+            (r.firm_name or "—")[:25],
+            (r.patient_name or "—")[:20],
+            (r.follow_up_note or "—")[:50],
+        )
+    console.print(table)
+
+
+@followups_app.command("show")
+def followups_show(call_id: str = typer.Argument(...)):
+    """Full follow-up detail for one call (alias for `calls show` with a focus)."""
+    async def _q():
+        from app.db import AsyncSessionLocal
+        from app.db.models import CallLogRow
+        from sqlalchemy import select
+        async with AsyncSessionLocal() as s:
+            r = await s.execute(select(CallLogRow).where(CallLogRow.call_id == call_id))
+            return r.scalar_one_or_none()
+    row = _run(_q())
+    if not row:
+        console.print(f"[red]Not found: {call_id}[/red]")
+        raise typer.Exit(code=1)
+    console.print_json(data={
+        "call_id": row.call_id,
+        "lead": row.patient_name, "firm": row.firm_name, "state": row.lead_state,
+        "disposition": row.gtm_disposition,
+        "follow_up_action": row.follow_up_action,
+        "follow_up_when": row.follow_up_when.isoformat() if row.follow_up_when else None,
+        "follow_up_owner": row.follow_up_owner,
+        "follow_up_note": row.follow_up_note,
+        "captured_contacts": row.captured_contacts,
+        "pain_points_discussed": row.pain_points_discussed,
+        "signal_flags": row.signal_flags,
+    })
 
 
 # ---------------------------------------------------------------------------

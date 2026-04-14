@@ -407,7 +407,14 @@ class CallOrchestrator:
                 print(f"[CallOrchestrator] Skipping SMS for call {call.call_id} — outcome={outcome.value}")
 
             # Hang up the Twilio phone call (skip for transfers/voicemail which handle it themselves)
-            if call_mode == "twilio" and twilio_call_sid and outcome not in (CallOutcome.TRANSFERRED, CallOutcome.VOICEMAIL):
+            # Always hang up Twilio on call end EXCEPT for TRANSFERRED (the
+            # transfer logic manages the SIP transition itself). VOICEMAIL
+            # used to be excluded because AMD+play-voicemail needed Twilio
+            # to keep the line open; we now detect IVRs via transcript
+            # BEFORE any message plays, so we should immediately hang up.
+            # Keeping the line open would waste billing + delay recording
+            # finalization for 30+ seconds.
+            if call_mode == "twilio" and twilio_call_sid and outcome != CallOutcome.TRANSFERRED:
                 try:
                     from app.services.twilio_voice_service import hangup_twilio_call
                     if self._verbose:
