@@ -1,24 +1,28 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import { TooltipProvider } from "@/components/ui/tooltip";
+import { Providers } from "@/lib/providers";
+import { Nav } from "@/components/Nav";
 
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "AI Outbound Voice Orchestrator",
-  description: "Dashboard for managing AI-powered outbound scheduling calls",
+  title: "Autocaller — Possible Minds",
+  description: "Headless outbound BD agent",
 };
 
 export default function RootLayout({
   children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+}: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en">
-      <body className={inter.className}>
-        <TooltipProvider>{children}</TooltipProvider>
+    <html lang="en" className="h-full">
+      <body className={`${inter.className} h-full bg-neutral-50 text-neutral-900`}>
+        <Providers>
+          <div className="min-h-full pb-20 md:pb-0 md:pl-56">
+            <Nav />
+            <main className="mx-auto max-w-6xl px-4 py-6 md:px-8">{children}</main>
+          </div>
+        </Providers>
       </body>
     </html>
   );

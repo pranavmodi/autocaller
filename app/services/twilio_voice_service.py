@@ -46,7 +46,13 @@ def pop_bridge(stream_id: str) -> Optional["TwilioMediaBridge"]:
 
 
 class TwilioMediaBridge:
-    """Bridges a Twilio media stream WebSocket with an OpenAI RealtimeVoiceService."""
+    """Bridges a Twilio media stream WebSocket with an OpenAI RealtimeVoiceService.
+
+    Also fans out both audio streams (caller + AI) to any "listener" clients
+    that have connected via /ws/listen/{call_id}. Listeners receive 16-bit
+    PCM little-endian mono @ 8kHz (mulaw → PCM16 via audioop.ulaw2lin), so
+    the browser can play it with a plain AudioContext.
+    """
 
     def __init__(self, voice_service: RealtimeVoiceService, verbose: bool = False):
         self.voice_service = voice_service
@@ -56,12 +62,53 @@ class TwilioMediaBridge:
         self._call_sid: Optional[str] = None
         self._connected = asyncio.Event()
 
+        # Listener sockets for live monitoring (listen-only, no push-to-talk).
+        self._listeners: set[WebSocket] = set()
+
         # Wire OpenAI audio output → Twilio
         self._original_on_audio = voice_service.on_audio
         voice_service.on_audio = self._forward_audio_to_twilio
 
+    # ------------------------------------------------------------------
+    # Listener fan-out
+    # ------------------------------------------------------------------
+
+    def add_listener(self, ws: WebSocket):
+        self._listeners.add(ws)
+
+    def remove_listener(self, ws: WebSocket):
+        self._listeners.discard(ws)
+
+    @property
+    def listener_count(self) -> int:
+        return len(self._listeners)
+
+    async def _broadcast_audio(self, mulaw: bytes):
+        """Decode mulaw → PCM16 and send to every listener. Safe if none."""
+        if not self._listeners:
+            return
+        try:
+            import audioop
+            pcm16 = audioop.ulaw2lin(mulaw, 2)  # width=2 → int16
+        except Exception as e:
+            logger.debug("audioop.ulaw2lin failed: %s", e)
+            return
+
+        dead: list[WebSocket] = []
+        for ws in list(self._listeners):
+            try:
+                await ws.send_bytes(pcm16)
+            except Exception:
+                dead.append(ws)
+        for ws in dead:
+            self._listeners.discard(ws)
+
+    # ------------------------------------------------------------------
+    # Audio paths
+    # ------------------------------------------------------------------
+
     async def _forward_audio_to_twilio(self, audio_data: bytes):
-        """Send OpenAI audio to Twilio media stream."""
+        """Send OpenAI audio to Twilio media stream + listeners."""
         if self._twilio_ws and self._stream_sid:
             payload = base64.b64encode(audio_data).decode("utf-8")
             msg = {
@@ -74,8 +121,9 @@ class TwilioMediaBridge:
             except Exception as e:
                 logger.error(f"Error sending audio to Twilio: {e}")
 
-        # Also forward to original callback (browser gets transcripts, not audio in twilio mode,
-        # but keep the chain intact in case it's used for logging)
+        # Fan out to listeners (AI-side audio)
+        await self._broadcast_audio(audio_data)
+
         if self._original_on_audio:
             await self._original_on_audio(audio_data)
 
@@ -107,6 +155,8 @@ class TwilioMediaBridge:
                     audio_bytes = base64.b64decode(payload)
                     if self.voice_service.is_connected:
                         await self.voice_service.send_audio(audio_bytes)
+                    # Fan out to listeners (caller-side audio)
+                    await self._broadcast_audio(audio_bytes)
 
                 elif event == "stop":
                     reason = msg.get("stop", {}).get("reason", "unknown")
@@ -121,6 +171,13 @@ class TwilioMediaBridge:
         finally:
             self._twilio_ws = None
             self._connected.clear()
+            # Close any remaining listener sockets
+            for ws in list(self._listeners):
+                try:
+                    await ws.close(code=1000, reason="call ended")
+                except Exception:
+                    pass
+            self._listeners.clear()
 
     async def wait_for_connection(self, timeout: float = 30.0) -> bool:
         """Wait for Twilio to connect the media stream."""
@@ -136,15 +193,25 @@ def place_twilio_call(
     twiml_url: str,
     status_callback_url: Optional[str] = None,
     recording_status_callback_url: Optional[str] = None,
+    enable_amd: bool = True,
 ) -> str:
     """Place an outbound call via Twilio REST API. Returns Call SID.
 
     Raises RuntimeError if ALLOW_TWILIO_CALLS env var is not set to 'true'.
+
+    AMD (answering-machine detection) is on by default for real production
+    calls so we can detect voicemail. It MUST be disabled when:
+    - mock_mode is on (our own phone will always be human; AMD adds latency
+      and can abort calls if classification times out),
+    - TWILIO_DISABLE_AMD=true in env (escape hatch).
     """
     if os.getenv("ALLOW_TWILIO_CALLS", "false").lower() != "true":
         raise RuntimeError(
             "Twilio calls are disabled. Set ALLOW_TWILIO_CALLS=true to enable."
         )
+
+    env_disable = os.getenv("TWILIO_DISABLE_AMD", "false").lower() in ("1", "true", "yes")
+    use_amd = enable_amd and not env_disable
 
     from_number = os.getenv("TWILIO_FROM_NUMBER", "")
 
@@ -153,9 +220,9 @@ def place_twilio_call(
         "to": to_number,
         "from_": from_number,
         "url": twiml_url,
-        # Requirement: enable AMD for voicemail detection.
-        "machine_detection": "DetectMessageEnd",
     }
+    if use_amd:
+        create_kwargs["machine_detection"] = "DetectMessageEnd"
     if status_callback_url:
         create_kwargs["status_callback"] = status_callback_url
         create_kwargs["status_callback_method"] = "POST"

@@ -77,14 +77,19 @@ def _run(coro):
 
 
 def _phone_normalize(raw: str) -> str:
-    digits = re.sub(r"\D", "", raw or "")
+    """Normalize to E.164. Drops extensions, rejects malformed lengths."""
+    s = (raw or "").strip()
+    # Split off extension markers so 'x', 'ext', ',' don't contaminate digits.
+    s = re.split(r"(?i)\s*(?:x|ext\.?|,|;)\s*", s, maxsplit=1)[0]
+    digits = re.sub(r"\D", "", s)
     if len(digits) == 10:
         return f"+1{digits}"
     if len(digits) == 11 and digits.startswith("1"):
         return f"+{digits}"
-    if raw.startswith("+"):
-        return raw.strip()
-    return digits and f"+{digits}" or ""
+    # Non-US international, already in E.164-ish form
+    if s.startswith("+") and 8 <= len(digits) <= 15:
+        return f"+{digits}"
+    return ""
 
 
 # ---------------------------------------------------------------------------
@@ -298,6 +303,205 @@ def leads_add(
 
     lead_id = _run(_add())
     console.print(f"[green]Added lead {lead_id}[/green]")
+
+
+_MISSION_API = os.getenv(
+    "MISSION_CONTROL_API",
+    "https://mission.getpossibleminds.com",
+).rstrip("/")
+
+# Titles that typically indicate a gatekeeper / non-decision-maker. We skip these
+# by default so the autocaller starts on actual partners/owners.
+def _best_phone(firm: dict, contact: Optional[dict]) -> str:
+    """Fallback phone picker used when the LLM extraction fails."""
+    if contact and contact.get("phone"):
+        return _phone_normalize(contact["phone"])
+    phones = firm.get("phones") or []
+    for p in phones:
+        norm = _phone_normalize(p)
+        if norm:
+            return norm
+    return ""
+
+
+def _best_email(firm: dict, contact: Optional[dict]) -> str:
+    if contact and contact.get("email"):
+        return str(contact["email"]).strip().lower()
+    emails = firm.get("emails") or []
+    return str(emails[0]).strip().lower() if emails else ""
+
+
+@leads_app.command("sync-mission")
+def leads_sync_mission(
+    tiers: str = typer.Option("A,B", "--tiers", help="Comma-sep ICP tiers (A, B, C, or 'all')"),
+    dm_threshold: int = typer.Option(
+        5,
+        "--dm-threshold",
+        help="Minimum decision_maker_confidence (0-10) to keep. Default 5 = at least associate attorney.",
+    ),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Extract + report only, no DB writes"),
+    limit: int = typer.Option(500, "--limit", help="Stop after N firms"),
+    page_size: int = typer.Option(100, "--page-size"),
+    concurrency: int = typer.Option(10, "--concurrency", help="Parallel LLM calls"),
+    extractor_model: str = typer.Option(
+        None,
+        "--extractor-model",
+        help="LLM for lead extraction (default: LEAD_EXTRACTOR_MODEL env or gpt-4o-mini)",
+    ),
+):
+    """Pull PI firm contacts from Mission Control and upsert them as leads.
+
+    An LLM (gpt-4o-mini by default) reads each raw firm record, picks the
+    best contact to call, normalizes the phone to E.164, extracts the state,
+    and scores decision-maker likelihood. No regex — the LLM handles messy
+    titles, extensions, and address formats.
+
+    Leads are keyed by `mc-{pif_id}` for idempotent re-sync.
+    """
+    from app.services.lead_extractor import extract_leads_batch, DEFAULT_MODEL
+
+    wanted_tiers = None if tiers.lower() == "all" else [
+        t.strip().upper() for t in tiers.split(",") if t.strip()
+    ]
+    model = extractor_model or DEFAULT_MODEL
+
+    # Step 1: fetch raw firms from Mission Control
+    async def _fetch_all() -> list[dict]:
+        import httpx
+        out: list[dict] = []
+        async with httpx.AsyncClient(timeout=30.0) as cli:
+            tier_list = wanted_tiers or [None]
+            for tier in tier_list:
+                page = 1
+                while len(out) < limit:
+                    params = {"page": page, "page_size": page_size}
+                    if tier:
+                        params["tier"] = tier
+                    r = await cli.get(f"{_MISSION_API}/api/pif-local/firms", params=params)
+                    r.raise_for_status()
+                    data = r.json()
+                    items = data.get("items") or []
+                    if not items:
+                        break
+                    out.extend(items)
+                    if page >= data.get("total_pages", 1):
+                        break
+                    page += 1
+                    if len(out) >= limit:
+                        break
+        return out[:limit]
+
+    firms = _run(_fetch_all())
+    console.print(f"Fetched {len(firms)} firms from Mission Control (tiers={tiers!r}).")
+
+    if not firms:
+        console.print("[yellow]No firms matched.[/yellow]")
+        return
+
+    # Step 2: LLM extraction, batched with bounded concurrency
+    console.print(
+        f"Running LLM extractor ([bold]{model}[/bold], concurrency={concurrency}) "
+        f"— estimated cost ≈ ${len(firms) * 0.0008:.2f}"
+    )
+
+    progress_state = {"done": 0, "total": len(firms)}
+
+    def _on_progress(done: int, total: int):
+        # Only print every 25 items to avoid log noise in large syncs.
+        if done % 25 == 0 or done == total:
+            console.print(f"  extracted {done}/{total}")
+
+    extracted = _run(extract_leads_batch(
+        firms,
+        model=model,
+        concurrency=concurrency,
+        on_progress=_on_progress,
+    ))
+
+    # Step 3: filter + shape into PatientRow fields
+    by_firm = {f.get("id"): f for f in firms}
+    rows: list[dict] = []
+    skipped_unusable = 0
+    skipped_dm = 0
+
+    for firm, lead in zip(firms, extracted):
+        if not lead.usable or not lead.phone_e164:
+            skipped_unusable += 1
+            continue
+        if lead.decision_maker_confidence < dm_threshold:
+            skipped_dm += 1
+            continue
+
+        pif_id = firm.get("id") or ""
+        icp_tier = firm.get("icp_tier")
+        tags = [f"tier:{icp_tier}"] if icp_tier else []
+        tags.append(f"dm:{lead.decision_maker_confidence}")
+        if lead.is_decision_maker:
+            tags.append("decision-maker")
+
+        rows.append({
+            "patient_id": f"mc-{pif_id}",
+            "name": lead.name,
+            "phone": lead.phone_e164,
+            "firm_name": lead.firm_name or None,
+            "state": lead.state,
+            "practice_area": lead.practice_area,
+            "email": lead.email,
+            "title": lead.title,
+            "website": lead.website,
+            "source": "mission-control",
+            "tags": tags,
+            "notes": lead.notes,
+            "_dm_confidence": lead.decision_maker_confidence,  # dropped before insert
+        })
+
+    console.print(
+        f"Extractor results: [green]{len(rows)} kept[/green]  "
+        f"(skipped: {skipped_unusable} unreachable, {skipped_dm} below DM threshold={dm_threshold})"
+    )
+
+    if dry_run:
+        for r in rows[:15]:
+            conf = r["_dm_confidence"]
+            color = "green" if conf >= 8 else "yellow" if conf >= 5 else "red"
+            console.print(
+                f"  [{color}]dm={conf:>2}[/{color}]  {r['name'][:24]:24s}  "
+                f"{(r.get('title') or '—')[:28]:28s}  "
+                f"{(r['firm_name'] or '—')[:30]:30s}  "
+                f"{r['state'] or '  ':2s}  {r['phone']}"
+            )
+        if len(rows) > 15:
+            console.print(f"  … and {len(rows) - 15} more")
+        console.print("[cyan]--dry-run: no DB writes[/cyan]")
+        return
+
+    # Step 4: upsert
+    async def _upsert():
+        from app.db import AsyncSessionLocal
+        from app.db.models import PatientRow
+        from sqlalchemy import select
+        ins, upd = 0, 0
+        async with AsyncSessionLocal() as session:
+            for lead in rows:
+                persistable = {k: v for k, v in lead.items() if not k.startswith("_")}
+                existing = await session.execute(
+                    select(PatientRow).where(PatientRow.patient_id == persistable["patient_id"])
+                )
+                row_obj = existing.scalar_one_or_none()
+                if row_obj:
+                    for k, v in persistable.items():
+                        if k == "patient_id":
+                            continue
+                        setattr(row_obj, k, v)
+                    upd += 1
+                else:
+                    session.add(PatientRow(**persistable))
+                    ins += 1
+            await session.commit()
+        return ins, upd
+
+    ins, upd = _run(_upsert())
+    console.print(f"[green]Inserted {ins}, updated {upd}.[/green]")
 
 
 @leads_app.command("remove")

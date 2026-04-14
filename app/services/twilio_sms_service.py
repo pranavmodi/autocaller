@@ -57,31 +57,66 @@ def is_twilio_opt_out_error(error: Exception) -> bool:
 
 
 def get_callback_number() -> str:
-    """Return callback number shown in SMS messages."""
-    return os.getenv("PRECISE_CALLBACK_NUMBER", "").strip()
+    """Return callback number shown in SMS messages (from the Twilio from-number)."""
+    return os.getenv("SMS_CALLBACK_NUMBER", "").strip() or os.getenv("TWILIO_FROM_NUMBER", "").strip()
 
 
 def get_main_number() -> str:
-    """Return main office number shown in SMS messages."""
-    return os.getenv("PRECISE_MAIN_NUMBER", "").strip()
+    """Kept for backward-compat — returns the callback number."""
+    return get_callback_number()
 
 
-def build_sms_message(message_type: str) -> str:
-    """Build a non-PHI SMS message body."""
-    callback_number = get_callback_number() or "800-558-2223"
+def _rep_name() -> str:
+    return os.getenv("SALES_REP_NAME", "").strip() or "our team"
 
-    if message_type == "appointment_reminder":
+
+def _rep_company() -> str:
+    return os.getenv("SALES_REP_COMPANY", "").strip() or "our team"
+
+
+def _booking_link() -> str:
+    """Public self-serve booking link shown in SMS when Cal.com event is public."""
+    return os.getenv("CALCOM_PUBLIC_BOOKING_URL", "").strip()
+
+
+def build_sms_message(message_type: str, **context) -> str:
+    """Build an SMS body for the attorney cold-call autocaller.
+
+    Context:
+      - demo_meeting_url: optional URL returned by Cal.com after booking.
+      - lead_first_name: optional first-name override.
+    """
+    rep = _rep_name()
+    company = _rep_company()
+    callback = get_callback_number() or ""
+    first_name = str(context.get("lead_first_name") or "").strip()
+    salutation = f"Hi {first_name}," if first_name else "Hi,"
+
+    if message_type == "demo_confirmation":
+        url = str(context.get("demo_meeting_url") or "").strip()
+        tail = f" Meeting link: {url}" if url else ""
         return (
-            f"Precise Imaging reminder: please contact us to review scheduling details. "
-            f"Please call us back at {callback_number}."
+            f"{salutation} thanks for booking time with {rep} at {company}.{tail} "
+            f"Reply STOP to opt out."
         )
 
-    # Default and callback_info
+    if message_type == "appointment_reminder":
+        url = str(context.get("demo_meeting_url") or "").strip()
+        tail = f" Meeting link: {url}" if url else ""
+        return (
+            f"{salutation} quick reminder about your meeting with {rep} at {company}.{tail} "
+            f"Reply STOP to opt out."
+        )
+
+    # Default / callback_info — used when a call didn't complete. Keep it
+    # short and B2B; no product pitch, no false urgency.
+    booking = _booking_link()
+    booking_line = f" If easier, you can book a time here: {booking}." if booking else ""
+    contact = f" Or reach me at {callback}." if callback else ""
     return (
-        f"Precise Imaging: We received your doctor's imaging order. "
-        f"Call us at {callback_number} M-F 8 AM to 5PM PST, or go to "
-        f"https://app.radflow360.com/patient-portal to answer your pre-screening "
-        f"questions, sign your pending documents and schedule your exam on the portal."
+        f"{salutation} this is {rep} from {company}. I tried reaching you about how we help "
+        f"personal injury firms automate intake, medical-records retrieval, and demand letters."
+        f"{booking_line}{contact} Reply STOP to opt out."
     )
 
 

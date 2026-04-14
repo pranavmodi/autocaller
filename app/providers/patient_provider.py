@@ -34,6 +34,17 @@ def _row_to_patient(row: PatientRow) -> Patient:
     p.patient_id = row.patient_id
     p.name = row.name
     p.phone = row.phone
+    # Attorney / lead fields (added in autocaller migration)
+    p.firm_name = getattr(row, "firm_name", None)
+    p.state = getattr(row, "state", None)
+    p.practice_area = getattr(row, "practice_area", None)
+    p.website = getattr(row, "website", None)
+    p.email = getattr(row, "email", None)
+    p.title = getattr(row, "title", None)
+    p.source = getattr(row, "source", None)
+    p.tags = list(getattr(row, "tags", None) or [])
+    p.notes = getattr(row, "notes", None)
+    # Legacy medical fields
     p.language = lang
     p.order_id = row.order_id
     p.order_created = row.order_created

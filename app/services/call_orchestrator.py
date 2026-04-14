@@ -88,12 +88,14 @@ class CallOrchestrator:
             if self.on_status_update:
                 await self.on_status_update(f"Twilio AMD: voicemail detected ({answered_by})")
 
-            callback_number = get_callback_number().strip() or "800-558-2223"
+            callback_number = get_callback_number().strip()
+            rep_name = os.getenv("SALES_REP_NAME", "").strip() or "our team"
+            rep_company = os.getenv("SALES_REP_COMPANY", "").strip() or "our team"
+            contact = f" Give us a call back at {callback_number}." if callback_number else ""
             message = (
-                "Hi, this is Ashley with Precise Imaging. We received your doctor's imaging order "
-                "and need to schedule your appointment. "
-                f"Please call us back at {callback_number}, Monday through Friday, 8 AM to 5 PM Pacific. "
-                "Thank you and have a good day."
+                f"Hi, this is {rep_name} from {rep_company}. We help personal injury firms with "
+                f"custom software and AI tooling. I was hoping to catch you for a quick chat.{contact} "
+                "Thanks, and have a good day."
             )
 
             try:
@@ -180,12 +182,17 @@ class CallOrchestrator:
 
         # Autocaller path: render attorney cold-call prompt + tools for this lead.
         from app.prompts.attorney_cold_call import render_system_prompt, TOOLS as AUTOCALLER_TOOLS
-        sales = (settings.sales_context or {}) if hasattr(settings, "sales_context") else {}
+        sales = getattr(settings, "sales_context", None)
+
+        def _sales_or_env(attr: str, env: str, default: str = "") -> str:
+            val = getattr(sales, attr, "") if sales is not None else ""
+            return val or os.getenv(env, default)
+
         system_prompt = render_system_prompt(
             lead=patient,
-            rep_name=sales.get("rep_name") or os.getenv("SALES_REP_NAME", "Alex"),
-            rep_company=sales.get("rep_company") or os.getenv("SALES_REP_COMPANY", "our team"),
-            product_context=sales.get("product_context") or os.getenv("PRODUCT_CONTEXT", ""),
+            rep_name=_sales_or_env("rep_name", "SALES_REP_NAME", "Alex"),
+            rep_company=_sales_or_env("rep_company", "SALES_REP_COMPANY", "our team"),
+            product_context=_sales_or_env("product_context", "PRODUCT_CONTEXT", ""),
         )
 
         success = await self._voice_service.connect(
@@ -254,6 +261,7 @@ class CallOrchestrator:
                     twiml_url=twiml_url,
                     status_callback_url=status_callback_url,
                     recording_status_callback_url=recording_callback_url,
+                    enable_amd=not settings.mock_mode,
                 )
                 self._twilio_call_sid = call_sid
                 self._voicemail_handled = False
@@ -296,7 +304,7 @@ class CallOrchestrator:
                 await self.on_status_update("Waiting for call to connect...")
             if self._verbose:
                 print(f"[CallOrchestrator] Waiting for Twilio media stream to connect for call {call.call_id}...")
-            connected = await self._twilio_bridge.wait_for_connection(timeout=30)
+            connected = await self._twilio_bridge.wait_for_connection(timeout=90)
             if not connected:
                 print(f"[CallOrchestrator] Twilio media stream timed out for call {call.call_id}")
                 self._last_start_error = "Twilio media stream did not connect within 30 seconds (call may not have been answered)"
@@ -594,11 +602,9 @@ class CallOrchestrator:
         # Autocaller (attorney cold-call) tools
         # ------------------------------------------------------------------
         elif name == "check_availability":
-            slots = await self._autocaller_check_availability(args)
+            result = await self._autocaller_check_availability(args)
             if self._voice_service and fn_call_id:
-                await self._voice_service.send_function_result(
-                    fn_call_id, {"slots": slots}
-                )
+                await self._voice_service.send_function_result(fn_call_id, result)
 
         elif name == "book_demo":
             result = await self._autocaller_book_demo(args)
@@ -626,18 +632,32 @@ class CallOrchestrator:
     # ---------------------------------------------------------------------
     # Autocaller tool implementations
     # ---------------------------------------------------------------------
-    async def _autocaller_check_availability(self, args: dict) -> list[dict]:
-        """Fetch upcoming demo slots from Cal.com for the current lead."""
+    async def _autocaller_check_availability(self, args: dict) -> dict:
+        """Fetch upcoming demo slots from Cal.com for the current lead.
+
+        Returns a dict with `slots` (possibly empty) and `error` (non-empty
+        string on failure). The AI uses `error` to decide whether to offer the
+        email-follow-up fallback instead of promising a live booking.
+        """
         from app.services.calcom_service import get_calcom_service, CalComError
         from app.prompts.attorney_cold_call import _default_timezone_for_state
 
         settings_provider = get_settings_provider()
         settings = await settings_provider.get_settings()
         cfg = getattr(settings, "calcom_config", {}) or {}
-        event_type_id = cfg.get("event_type_id")
-        if not event_type_id:
-            logger.warning("check_availability called but CALCOM event_type_id is not configured")
-            return []
+        cfg_event_type_id = cfg.get("event_type_id")
+        env_event_type_id = os.getenv("CALCOM_EVENT_TYPE_ID", "").strip()
+        event_type_id = cfg_event_type_id or (int(env_event_type_id) if env_event_type_id.isdigit() else None)
+        api_key_present = bool(os.getenv("CALCOM_API_KEY", "").strip())
+
+        if not event_type_id or not api_key_present:
+            logger.warning("check_availability: calendar not configured (api_key=%s event_type_id=%s)",
+                           api_key_present, event_type_id)
+            return {
+                "slots": [],
+                "error": "calendar_not_configured",
+                "fallback": "offer_email_followup",
+            }
 
         tz = (
             _default_timezone_for_state(self._current_patient.state if self._current_patient else None)
@@ -654,15 +674,23 @@ class CallOrchestrator:
             )
         except CalComError as e:
             logger.warning("Cal.com get_availability failed: %s", e)
-            return []
-
-        return [
-            {
-                "start_iso": s.start_iso,
-                "label": s.label(),
+            return {
+                "slots": [],
+                "error": f"calendar_unreachable: {e}",
+                "fallback": "offer_email_followup",
             }
-            for s in slots
-        ]
+
+        if not slots:
+            return {
+                "slots": [],
+                "error": "no_slots_available",
+                "fallback": "offer_email_followup",
+            }
+
+        return {
+            "slots": [{"start_iso": s.start_iso, "label": s.label()} for s in slots],
+            "timezone": tz,
+        }
 
     async def _autocaller_book_demo(self, args: dict) -> dict:
         """Book a demo slot on Cal.com and stamp it on the call log."""

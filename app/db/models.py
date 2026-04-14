@@ -103,6 +103,12 @@ class CallLogRow(Base):
     followup_email_sent: Mapped[bool] = mapped_column(Boolean, default=False)
     firm_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     lead_state: Mapped[str | None] = mapped_column(String(2), nullable=True)
+    # -- Phase A: judge scoring --
+    judge_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    judge_scores: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    judge_notes: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    judged_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    prompt_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     __table_args__ = (
         Index("ix_call_logs_patient_id", "patient_id"),

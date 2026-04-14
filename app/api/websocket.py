@@ -274,3 +274,64 @@ async def twilio_media_websocket(websocket: WebSocket, stream_id: str):
             await orchestrator.end_call(CallOutcome.DISCONNECTED)
         else:
             print(f"[TwilioMedia] Stream closed (call already ended) — reason={disconnect_reason}, stream_id={stream_id}")
+
+
+@router.websocket("/ws/listen/{call_id}")
+async def listen_websocket(websocket: WebSocket, call_id: str):
+    """Listen-only stream of the current live call's audio.
+
+    Sends 16-bit PCM little-endian mono @ 8kHz as binary frames. The browser
+    decodes with AudioContext and plays through the speakers. Closes as soon
+    as the call ends or a different call_id is active.
+    """
+    from app.services.call_orchestrator import get_orchestrator
+
+    await websocket.accept()
+
+    orchestrator = get_orchestrator()
+    current_call = orchestrator.current_call
+    bridge = orchestrator._twilio_bridge  # type: ignore[attr-defined]
+
+    if not current_call or not bridge or current_call.call_id != call_id:
+        await websocket.send_json({
+            "type": "error",
+            "error": "no_active_call",
+            "message": "No active call with that ID right now.",
+        })
+        await websocket.close(code=4004, reason="no active call")
+        return
+
+    await websocket.send_json({
+        "type": "ready",
+        "call_id": call_id,
+        "sample_rate": 8000,
+        "encoding": "pcm_s16le",
+        "channels": 1,
+        "note": "Binary frames follow. Each frame is raw PCM16 little-endian mono @ 8kHz.",
+    })
+
+    bridge.add_listener(websocket)
+    logger.info(f"Listener attached to call {call_id} (total={bridge.listener_count})")
+
+    try:
+        # Keep the connection open. We don't expect client messages, but
+        # receive() lets us detect disconnects promptly.
+        while True:
+            try:
+                msg = await asyncio.wait_for(websocket.receive_text(), timeout=30)
+                # Ignore whatever the client sends (keepalives allowed).
+                if msg == "ping":
+                    await websocket.send_text("pong")
+            except asyncio.TimeoutError:
+                # Idle. Send a text ping so the socket stays warm.
+                try:
+                    await websocket.send_text("ping")
+                except Exception:
+                    break
+    except WebSocketDisconnect:
+        pass
+    except Exception as e:
+        logger.warning(f"Listener error on call {call_id}: {type(e).__name__}: {e}")
+    finally:
+        bridge.remove_listener(websocket)
+        logger.info(f"Listener detached from call {call_id} (remaining={bridge.listener_count})")

@@ -49,7 +49,7 @@ def _format_slack_message(stats: dict) -> dict:
     transfer_rate = f"{round(100 * transferred / total)}%" if total else "—"
 
     lines = [
-        f"*Precise Imaging — AI Call Summary for {stats.get('date', 'unknown')}*",
+        f"*{os.getenv('SALES_REP_COMPANY', 'Autocaller')} — AI Call Summary for {stats.get('date', 'unknown')}*",
         "",
         f"• Calls placed: *{total}*",
         f"• Transferred to scheduler: *{transferred}* ({transfer_rate})",

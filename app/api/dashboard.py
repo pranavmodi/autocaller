@@ -647,11 +647,134 @@ async def twilio_dial_status(request: Request):
 
 
 @router.delete("/calls")
-async def delete_all_calls():
-    """Delete all call logs and transcripts."""
+async def delete_all_calls(confirm: str = ""):
+    """Clear the active-call marker. With `?confirm=wipe` also wipes ALL call
+    history + recordings metadata from the DB. Default is the safe form so an
+    operator never accidentally nukes the pipeline."""
     call_log_provider = get_call_log_provider()
-    await call_log_provider.reset()
+    if confirm == "wipe":
+        await call_log_provider.reset()
+        return {"status": "ok", "wiped": True}
+    call_log_provider.clear_active_call()
+    return {"status": "ok", "wiped": False, "note": "active-call marker cleared; logs preserved. pass ?confirm=wipe to delete all history."}
+
+
+@router.post("/calls/clear-active")
+async def clear_active_call_marker():
+    """Explicit endpoint: clear the in-memory active-call marker only."""
+    get_call_log_provider().clear_active_call()
     return {"status": "ok"}
+
+
+@router.get("/health/checks")
+async def health_checks():
+    """Run the same checks as the CLI doctor and return a list of rows.
+
+    Each row is {name, ok, detail}. Used by the frontend Health page.
+    """
+    import httpx
+    from sqlalchemy import text
+    from app.db import async_engine
+
+    checks: list[dict] = []
+
+    # Env presence (cheap)
+    for key in (
+        "OPENAI_API_KEY",
+        "TWILIO_ACCOUNT_SID",
+        "TWILIO_AUTH_TOKEN",
+        "TWILIO_FROM_NUMBER",
+        "DATABASE_URL",
+        "PUBLIC_BASE_URL",
+        "CALCOM_API_KEY",
+    ):
+        present = bool(os.getenv(key, "").strip())
+        checks.append({"name": f"env:{key}", "ok": present, "detail": "set" if present else "missing"})
+
+    # DB
+    try:
+        async with async_engine.connect() as conn:
+            await conn.execute(text("select 1"))
+        checks.append({"name": "db", "ok": True, "detail": "ok"})
+    except Exception as e:
+        checks.append({"name": "db", "ok": False, "detail": str(e)[:120]})
+
+    # OpenAI ping (HEAD on /v1/models)
+    if (key := os.getenv("OPENAI_API_KEY", "").strip()):
+        try:
+            async with httpx.AsyncClient(timeout=8.0) as cli:
+                r = await cli.get("https://api.openai.com/v1/models",
+                                  headers={"Authorization": f"Bearer {key}"})
+                ok = r.status_code < 500
+                checks.append({"name": "openai", "ok": ok, "detail": f"HTTP {r.status_code}"})
+        except Exception as e:
+            checks.append({"name": "openai", "ok": False, "detail": str(e)[:120]})
+    else:
+        checks.append({"name": "openai", "ok": False, "detail": "no API key"})
+
+    # Cal.com ping
+    if (key := os.getenv("CALCOM_API_KEY", "").strip()):
+        try:
+            async with httpx.AsyncClient(timeout=8.0) as cli:
+                r = await cli.get("https://api.cal.com/v2/me",
+                                  headers={"Authorization": f"Bearer {key}"})
+                ok = r.status_code < 500
+                checks.append({"name": "calcom", "ok": ok, "detail": f"HTTP {r.status_code}"})
+        except Exception as e:
+            checks.append({"name": "calcom", "ok": False, "detail": str(e)[:120]})
+    else:
+        checks.append({"name": "calcom", "ok": False, "detail": "no API key"})
+
+    # Public URL parseable
+    pub = os.getenv("PUBLIC_BASE_URL", "").strip()
+    checks.append({
+        "name": "public_base_url",
+        "ok": pub.startswith("https://"),
+        "detail": pub or "unset",
+    })
+
+    return {"checks": checks}
+
+
+@router.get("/health/funnel")
+async def health_funnel(days: int = 7):
+    """Compute a simple funnel for the last N days from call_logs."""
+    from datetime import datetime, timezone, timedelta
+    from sqlalchemy import select, func
+    from app.db import AsyncSessionLocal
+    from app.db.models import CallLogRow
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+
+    async with AsyncSessionLocal() as session:
+        total = (await session.execute(
+            select(func.count()).select_from(CallLogRow).where(CallLogRow.started_at >= cutoff)
+        )).scalar_one() or 0
+        connected = (await session.execute(
+            select(func.count()).select_from(CallLogRow)
+            .where(CallLogRow.started_at >= cutoff)
+            .where(CallLogRow.call_status == "called")
+        )).scalar_one() or 0
+        conversations = (await session.execute(
+            select(func.count()).select_from(CallLogRow)
+            .where(CallLogRow.started_at >= cutoff)
+            .where(CallLogRow.duration_seconds >= 30)
+        )).scalar_one() or 0
+        demos = (await session.execute(
+            select(func.count()).select_from(CallLogRow)
+            .where(CallLogRow.started_at >= cutoff)
+            .where(CallLogRow.outcome == "demo_scheduled")
+        )).scalar_one() or 0
+
+    return {
+        "days": days,
+        "stages": [
+            {"name": "Dialed", "count": int(total)},
+            {"name": "Connected", "count": int(connected)},
+            {"name": "Conversations (≥30s)", "count": int(conversations)},
+            {"name": "Demos booked", "count": int(demos)},
+        ],
+    }
 
 
 @router.get("/config/check")
