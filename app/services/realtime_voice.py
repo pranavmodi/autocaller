@@ -465,13 +465,20 @@ class RealtimeVoiceService:
             await self._send({"type": "response.create"})
 
     async def start_conversation(self):
-        """Start the conversation with AI greeting."""
+        """Open the call with a single 'Hello?' and then wait for the caller.
+
+        Cold-call flow: answering party usually speaks first ('Hello?' /
+        'Chen.' / an IVR greeting). If we barrel in with our full opener
+        the instant Twilio's media stream connects, we often talk over them
+        or blurt a pitch at a phone tree. Instead: say only 'Hello?',
+        then server-side VAD on OpenAI waits for their reply and triggers
+        the AI's next turn (the real introduction). If an IVR/voicemail
+        picks up, its scripted prompt hits our transcript-based IVR
+        detector in call_orchestrator._handle_transcript and force-ends
+        the call silently.
+        """
         if not self._ws:
             return
-
-        # Send initial user context as a text message
-        patient_name = self._session.patient_name if self._session else "there"
-        first_name = patient_name.split()[0] if patient_name else "there"
 
         await self._send({
             "type": "conversation.item.create",
@@ -481,7 +488,14 @@ class RealtimeVoiceService:
                 "content": [
                     {
                         "type": "input_text",
-                        "text": f"[System: The call has just connected. The patient's name is {first_name}. Please greet them and begin the call.]",
+                        "text": (
+                            "[System: The call just connected. Say ONLY the single "
+                            "word 'Hello?' in a warm, casual tone — nothing else. "
+                            "Do NOT introduce yourself yet. Do NOT pitch. Wait for "
+                            "the other party to speak before continuing. When they "
+                            "respond, follow your full system instructions "
+                            "(identify who's on the line, then the opener)."
+                        ),
                     }
                 ],
             },
