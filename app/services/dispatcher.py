@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 DEFAULT_POLL_INTERVAL_SECONDS = 10
 DEFAULT_DISPATCH_TIMEOUT_SECONDS = 30
 DEFAULT_MAX_ATTEMPTS = 3
-DEFAULT_MIN_HOURS_BETWEEN = 6
+DEFAULT_MIN_HOURS_BETWEEN = 168  # 1 week — don't re-call the same firm within 7 days
 DEFAULT_COOLDOWN_SECONDS = 120  # wait between consecutive calls to different patients
 DECISION_LOG_MAX = 100
 
@@ -47,6 +47,10 @@ class AutoCallDispatcher:
         self._dispatched_patient_id: Optional[str] = None
         self._decision_log: deque = deque(maxlen=DECISION_LOG_MAX)
         self._last_call_ended_at: Optional[float] = None
+        # Batch tracking — stop after N calls placed in a single run
+        self._batch_target: Optional[int] = None
+        self._batch_placed: int = 0
+        self._batch_started_at: Optional[datetime] = None
         # Configurable parameters
         self.poll_interval: int = DEFAULT_POLL_INTERVAL_SECONDS
         self.dispatch_timeout: int = DEFAULT_DISPATCH_TIMEOUT_SECONDS
@@ -59,14 +63,24 @@ class AutoCallDispatcher:
     def state(self) -> DispatcherState:
         return self._state
 
-    def start(self):
-        """Start the dispatcher polling loop."""
+    def start(self, target_calls: Optional[int] = None):
+        """Start the dispatcher polling loop.
+
+        If `target_calls` is set, the dispatcher auto-stops after that many
+        calls have been placed in this run (useful for batch-testing).
+        Pass None for unlimited (default behavior).
+        """
         if self._task and not self._task.done():
             return
+        # Reset batch counter on every start so each run is a fresh batch.
+        self._batch_target = int(target_calls) if target_calls else None
+        self._batch_placed = 0
+        self._batch_started_at = datetime.now(timezone.utc)
         self._state = DispatcherState.IDLE
         self._task = asyncio.create_task(self._run_loop())
-        logger.info("Dispatcher started")
-        self._log_decision("started", "Dispatcher started")
+        label = f"batch of {self._batch_target}" if self._batch_target else "unlimited"
+        logger.info("Dispatcher started (%s)", label)
+        self._log_decision("started", f"Dispatcher started ({label})")
 
     def stop(self):
         """Stop the dispatcher polling loop."""
@@ -77,7 +91,12 @@ class AutoCallDispatcher:
         self._dispatched_at = None
         self._dispatched_patient_id = None
         logger.info("Dispatcher stopped")
-        self._log_decision("stopped", "Dispatcher stopped")
+        self._log_decision(
+            "stopped",
+            f"Dispatcher stopped ({self._batch_placed}/{self._batch_target} placed)"
+            if self._batch_target
+            else "Dispatcher stopped",
+        )
 
     def update_config(self, poll_interval: int, dispatch_timeout: int,
                        max_attempts: int, min_hours_between: int,
@@ -193,7 +212,23 @@ class AutoCallDispatcher:
             pass
 
         else:
-            # 6. Evaluate all gating conditions
+            # 6. Evaluate all gating conditions.
+            # Batch target: if hit, stop the dispatcher cleanly before doing anything else.
+            if self._batch_exhausted():
+                tick_decision = self._log_decision(
+                    "batch_complete",
+                    f"Target reached ({self._batch_placed}/{self._batch_target}), stopping dispatcher",
+                )
+                # Defer the stop so we finish broadcasting this tick first.
+                asyncio.get_event_loop().call_soon(self.stop)
+                # Broadcast queue_update + decision, then return.
+                await broadcast_to_dashboards({
+                    "type": "queue_update",
+                    "queue_state": queue_state.to_dict(),
+                    "decision": tick_decision,
+                })
+                return
+
             settings_provider = get_settings_provider()
             settings = await settings_provider.get_settings()
             call_log_provider = get_call_log_provider()
@@ -377,10 +412,17 @@ class AutoCallDispatcher:
             "decision": tick_decision,
         })
 
+    def _batch_exhausted(self) -> bool:
+        """True iff we've placed the configured number of calls in this run."""
+        return self._batch_target is not None and self._batch_placed >= self._batch_target
+
     def notify_call_started(self, patient_id: str):
         """Transition DISPATCHED → CALL_ACTIVE when the frontend starts the call."""
+        # Count every placed call against the batch target, regardless of
+        # whether it was dispatched or manually fired.
+        self._batch_placed += 1
         if self._state == DispatcherState.DISPATCHED:
-            print(f"[Dispatcher] State transition: DISPATCHED → CALL_ACTIVE (patient={patient_id})")
+            print(f"[Dispatcher] State transition: DISPATCHED → CALL_ACTIVE (patient={patient_id}) [{self._batch_placed}/{self._batch_target or '∞'}]")
             self._state = DispatcherState.CALL_ACTIVE
             self._dispatched_at = None
             self._log_decision("call_started",
@@ -452,6 +494,12 @@ class AutoCallDispatcher:
             "dispatched_patient_id": self._dispatched_patient_id,
             "running": self._task is not None and not self._task.done(),
             "recent_decisions": list(self._decision_log)[-5:],
+            "batch": {
+                "target": self._batch_target,
+                "placed": self._batch_placed,
+                "started_at": self._batch_started_at.isoformat() if self._batch_started_at else None,
+                "remaining": (self._batch_target - self._batch_placed) if self._batch_target is not None else None,
+            },
             "config": {
                 "poll_interval": self.poll_interval,
                 "dispatch_timeout": self.dispatch_timeout,

@@ -164,11 +164,18 @@ export interface DispatcherStatus {
   dispatched_patient_id: string | null;
   running: boolean;
   recent_decisions: DispatcherDecision[];
+  batch: {
+    target: number | null;
+    placed: number;
+    started_at: string | null;
+    remaining: number | null;
+  };
   config: {
     poll_interval: number;
     dispatch_timeout: number;
     max_attempts: number;
     min_hours_between: number;
+    cooldown_seconds?: number;
   };
 }
 

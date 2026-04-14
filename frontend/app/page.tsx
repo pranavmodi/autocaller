@@ -1,11 +1,13 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import { formatDistanceToNow } from "date-fns";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   getDispatcherStatus,
   toggleDispatcher,
+  startDispatcherBatch,
   listCalls,
   listLeads,
   clearActiveCall,
@@ -35,6 +37,11 @@ export default function NowPage() {
 
   const toggle = useMutation({
     mutationFn: (enabled: boolean) => toggleDispatcher(enabled),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["dispatcher-status"] }),
+  });
+
+  const startBatch = useMutation({
+    mutationFn: (count: number) => startDispatcherBatch(count),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["dispatcher-status"] }),
   });
 
@@ -74,6 +81,8 @@ export default function NowPage() {
 
   const listener = useLiveListener(activeCall?.call_id ?? null);
 
+  const [batchCount, setBatchCount] = useState<number>(5);
+
   const latestReason = lastDecision?.detail ?? dispatcher.data?.recent_decisions?.[0]?.detail ?? "—";
 
   return (
@@ -103,7 +112,7 @@ export default function NowPage() {
         </div>
       </section>
 
-      {/* Dispatcher + toggle */}
+      {/* Dispatcher + batch */}
       <section className="rounded-lg border border-neutral-200 bg-white p-5">
         <div className="flex items-start justify-between gap-4">
           <div>
@@ -130,6 +139,11 @@ export default function NowPage() {
               <span className="text-sm text-neutral-700">
                 {dispatcher.data?.state ?? "—"}
               </span>
+              {dispatcher.data?.batch?.target && (
+                <span className="rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-semibold text-blue-700">
+                  batch {dispatcher.data.batch.placed}/{dispatcher.data.batch.target}
+                </span>
+              )}
             </div>
             <p className="mt-2 text-xs text-neutral-500 line-clamp-2">
               latest: <span className="text-neutral-700">{latestReason}</span>
@@ -143,6 +157,45 @@ export default function NowPage() {
               onCheckedChange={(v) => toggle.mutate(v)}
             />
           </div>
+        </div>
+
+        {/* Batch launcher */}
+        <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-neutral-100 pt-3">
+          <label className="text-xs text-neutral-600">
+            Batch size:{" "}
+            <input
+              type="number"
+              min={1}
+              max={200}
+              value={batchCount}
+              onChange={(e) => setBatchCount(Math.max(1, parseInt(e.target.value || "1", 10)))}
+              className="w-16 rounded border border-neutral-300 px-1.5 py-0.5 text-sm"
+              disabled={running}
+            />
+          </label>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => startBatch.mutate(batchCount)}
+            disabled={running || startBatch.isPending}
+            className="gap-1.5"
+          >
+            Start batch of {batchCount}
+          </Button>
+          {dispatcher.data?.batch?.target && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => toggle.mutate(false)}
+              disabled={!running}
+              className="gap-1.5 text-rose-700"
+            >
+              Stop batch
+            </Button>
+          )}
+          <span className="ml-auto text-[11px] text-neutral-400">
+            auto-stops after N calls placed
+          </span>
         </div>
       </section>
 

@@ -36,7 +36,7 @@ class DispatcherSettings:
     poll_interval: int = 10
     dispatch_timeout: int = 30
     max_attempts: int = 3
-    min_hours_between: int = 6
+    min_hours_between: int = 168  # 1 week — avoid re-calling a firm within 7 days
     verbose_logging: bool = False
 
 

@@ -64,8 +64,14 @@ async function put<T>(path: string, body: unknown): Promise<T> {
 export const getDispatcherStatus = () =>
   get<DispatcherStatus>("/api/dispatcher/status");
 
-export const toggleDispatcher = (enabled: boolean) =>
-  post<DispatcherStatus>("/api/dispatcher/toggle", { enabled });
+export const toggleDispatcher = (enabled: boolean, target_calls?: number) =>
+  post<DispatcherStatus>("/api/dispatcher/toggle", {
+    enabled,
+    target_calls: target_calls ?? null,
+  });
+
+export const startDispatcherBatch = (count: number) =>
+  post<DispatcherStatus>("/api/dispatcher/start-batch", { count });
 
 // ---- Calls ----
 export interface CallsResponse {
