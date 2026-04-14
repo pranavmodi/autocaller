@@ -268,12 +268,21 @@ class CallOrchestrator:
 
                 status_callback_url = f"{backend_host}/api/twilio/status"
                 recording_callback_url = f"{backend_host}/api/twilio/recording-status/{call.call_id}"
+                # AMD is DISABLED. Twilio's "DetectMessageEnd" runs BEFORE
+                # fetching TwiML; on PI firms with IVR + hold + human
+                # transfer, AMD misclassifies the IVR as a machine and
+                # aborts the call before our bot can connect. We instead
+                # detect IVR via transcript phrases in the first 20s of
+                # audio (transfer_service.looks_like_voicemail_signal),
+                # which is triggered from call_orchestrator._handle_transcript.
+                # Re-enable AMD only after we have a solid
+                # AsyncAmdStatusCallback flow that doesn't gate TwiML fetch.
                 call_sid = place_twilio_call(
                     to_number=dial_number,
                     twiml_url=twiml_url,
                     status_callback_url=status_callback_url,
                     recording_status_callback_url=recording_callback_url,
-                    enable_amd=not settings.mock_mode,
+                    enable_amd=False,
                 )
                 self._twilio_call_sid = call_sid
                 self._voicemail_handled = False
