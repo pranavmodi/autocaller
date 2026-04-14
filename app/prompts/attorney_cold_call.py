@@ -54,7 +54,7 @@ If yes → proceed to the pitch below.
 case manager, or non-decision-maker staff
 Do NOT pitch them. Politely try to get to the decision-maker:
 
-"Thanks {their name}. Quick one — is {lead_first_name} available, or is \
+"Thanks {{their name}}. Quick one — is {lead_first_name} available, or is \
 there a better number or time to catch them?"
 
 Branch:
