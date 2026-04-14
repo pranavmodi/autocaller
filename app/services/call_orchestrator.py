@@ -327,17 +327,11 @@ class CallOrchestrator:
                     error_code="media_stream_timeout",
                     error_message=self._last_start_error,
                 )
-                # Send callback SMS for no-answer (per spec: no-answer should get SMS)
-                print(f"[CallOrchestrator] Sending SMS (no answer) for call {call.call_id} to {patient.phone if patient else 'unknown'}")
-                await self._notifications.send_sms_for_call(
-                    call=call,
-                    patient=patient,
-                    message_type="callback_info",
-                    reason="no_answer",
-                    call_mode=call_mode,
-                    mock_mode=self._mock_mode,
-                    mock_phone=self._mock_phone,
-                )
+                # No auto-SMS on media-stream timeout. Real cold calls that
+                # no-answer should NOT trigger an outbound SMS — avoids
+                # spam when the dialed number was actually an IVR / main
+                # line rather than the target's direct cell.
+                print(f"[CallOrchestrator] Media-stream timeout for call {call.call_id} — no SMS (auto-suppressed)")
                 await call_log_provider.end_call(call.call_id, CallOutcome.FAILED)
                 await self._mark_patient_attempt(patient, "failed")
                 voice = self._voice_service
@@ -384,17 +378,18 @@ class CallOrchestrator:
         try:
             await self._notifications.maybe_send_issue_email(call, outcome)
 
-            # Skip SMS only when the number is known-bad or the patient is already
-            # talking to a human.  All other outcomes (no answer, hung up, voicemail,
-            # callback, technical error) should get a callback SMS.
-            sms_skip_outcomes = (CallOutcome.TRANSFERRED, CallOutcome.WRONG_NUMBER)
-            if outcome not in sms_skip_outcomes:
+            # Whitelist: auto-SMS ONLY when the lead explicitly asked for a
+            # callback. No spam after no_answer / failed / voicemail / wrong
+            # number / IVR / technical error. For demo_scheduled, Cal.com
+            # already emails the confirmation — we don't double-send.
+            sms_send_outcomes = (CallOutcome.CALLBACK_REQUESTED,)
+            if outcome in sms_send_outcomes:
                 print(f"[CallOrchestrator] Sending SMS (callback_info) for call {call.call_id} to {patient.phone if patient else 'unknown'}")
                 await self._notifications.send_sms_for_call(
                     call=call,
                     patient=patient,
                     message_type="callback_info",
-                    reason="auto_end_not_transferred",
+                    reason=f"outcome={outcome.value}",
                     call_mode=call_mode,
                     mock_mode=self._mock_mode,
                     mock_phone=self._mock_phone,
@@ -498,17 +493,31 @@ class CallOrchestrator:
             await call_log_provider.add_transcript(self._current_call.call_id, "patient", text)
             if self.on_transcript_update:
                 await self.on_transcript_update("patient", text)
-            if (
-                self._call_mode == "web"
-                and not self._web_voicemail_simulated
-                and looks_like_voicemail_signal(text)
-            ):
-                self._web_voicemail_simulated = True
-                await call_log_provider.update_call(self._current_call.call_id, voicemail_left=True)
-                self._current_call.voicemail_left = True
-                if self.on_status_update:
-                    await self.on_status_update("Web simulation: voicemail detected from transcript")
-                await self.end_call(CallOutcome.VOICEMAIL)
+
+            # Aggressive IVR / voicemail detection — fires in BOTH web and
+            # twilio modes, in the first ~20 seconds of caller audio. If we
+            # hear phone-tree phrasing ("press 1", "para español", "leave a
+            # message", etc.) we force end_call(voicemail) instead of
+            # letting the AI try to converse with an auto-attendant.
+            if not self._web_voicemail_simulated and looks_like_voicemail_signal(text):
+                elapsed = 0.0
+                if self._current_call.started_at:
+                    try:
+                        from datetime import datetime, timezone
+                        elapsed = (datetime.now(timezone.utc) - self._current_call.started_at).total_seconds()
+                    except Exception:
+                        elapsed = 0.0
+                # Only short-circuit early. After ~20s the caller is clearly
+                # a human and phrases like "press 1 to confirm" might be
+                # legitimate speech (unlikely but possible).
+                if elapsed <= 20.0:
+                    self._web_voicemail_simulated = True
+                    await call_log_provider.update_call(self._current_call.call_id, voicemail_left=True)
+                    self._current_call.voicemail_left = True
+                    print(f"[CallOrchestrator] IVR/voicemail detected in transcript at {elapsed:.1f}s — forcing end_call(voicemail) (phrase: {text[:100]!r})")
+                    if self.on_status_update:
+                        await self.on_status_update(f"IVR/voicemail detected — hanging up")
+                    await self.end_call(CallOutcome.VOICEMAIL)
         elif speaker == "ai":
             if self.on_transcript_update:
                 await self.on_transcript_update("ai_delta", text)

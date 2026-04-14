@@ -69,9 +69,15 @@ def find_queue_by_name(queue_state, queue_name: str):
 
 
 def looks_like_voicemail_signal(text: str) -> bool:
-    """Detect voicemail-like phrases in web-mode simulated patient speech."""
+    """Detect voicemail / IVR / auto-attendant phrases in caller-side audio.
+
+    Matches generously — false positives here (hanging up on a confused
+    human early) are far cheaper than false negatives (the AI rambling
+    to a phone tree for 3 minutes).
+    """
     lowered = (text or "").lower()
     phrases = (
+        # Classic voicemail
         "leave a message",
         "at the tone",
         "after the beep",
@@ -85,6 +91,42 @@ def looks_like_voicemail_signal(text: str) -> bool:
         "leave your name and number",
         "voice mail",
         "voicemail",
+        "record your message",
+        "the mailbox",
+        "mailbox is full",
+        "mailbox belonging",
+        # Phone-tree / IVR
+        "press 1",
+        "press 2",
+        "press 3",
+        "press 0",
+        "press zero",
+        "press one",
+        "press two",
+        "press three",
+        "press nine",
+        "for the operator",
+        "dial by name",
+        "directory, press",
+        "know your party",
+        "your party's extension",
+        "your call is very important",
+        "this call may be monitored",
+        "this call may be recorded",
+        "please wait while we connect",
+        "have not received a valid response",
+        "currently closed",
+        "our office hours",
+        "please call back during",
+        # Spanish IVR prompts — stay in English
+        "para español",
+        "oprima",
+        "marque uno",
+        "marque dos",
+        "marque tres",
+        "marque cinco",
+        # Scripted firm greeting
+        "thank you for calling",
     )
     if any(p in lowered for p in phrases):
         return True

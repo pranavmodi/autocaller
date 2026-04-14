@@ -1,6 +1,9 @@
 import asyncio
+import logging
 import os
 from contextlib import asynccontextmanager
+
+logger = logging.getLogger(__name__)
 from fastapi import FastAPI
 from fastapi.responses import PlainTextResponse
 from fastapi.staticfiles import StaticFiles
@@ -49,7 +52,11 @@ async def lifespan(app: FastAPI):
             await activate_scenario(settings.active_scenario_id)
         except ValueError:
             pass  # Scenario not found, skip activation
-    get_dispatcher().start()
+    # Intentionally do NOT auto-start the dispatcher on boot.
+    # A daemon restart must never trigger outbound cold calls without
+    # explicit operator action. Start via the Now-page toggle or
+    # POST /api/dispatcher/toggle or /api/dispatcher/start-batch.
+    logger.info("Dispatcher NOT auto-started on boot — operator must trigger explicitly")
     # Start the daily Slack report loop (no-op if disabled via env var)
     daily_report_task = asyncio.create_task(daily_report_loop())
     # Start the background judge — every 60s, score unjudged ended calls
