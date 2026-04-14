@@ -146,6 +146,26 @@ class CallOrchestrator:
         settings_provider = get_settings_provider()
         settings = await settings_provider.get_settings()
 
+        # Render the system prompt + resolve tools BEFORE creating the call
+        # log so we can store both on the row for post-hoc debugging.
+        from app.prompts.attorney_cold_call import (
+            render_system_prompt,
+            TOOLS as AUTOCALLER_TOOLS,
+            PROMPT_VERSION,
+        )
+        sales = getattr(settings, "sales_context", None)
+
+        def _sales_or_env(attr: str, env: str, default: str = "") -> str:
+            val = getattr(sales, attr, "") if sales is not None else ""
+            return val or os.getenv(env, default)
+
+        system_prompt = render_system_prompt(
+            lead=patient,
+            rep_name=_sales_or_env("rep_name", "SALES_REP_NAME", "Alex"),
+            rep_company=_sales_or_env("rep_company", "SALES_REP_COMPANY", "our team"),
+            product_context=_sales_or_env("product_context", "PRODUCT_CONTEXT", ""),
+        )
+
         call = await call_log_provider.create_call(
             patient_id=patient.patient_id,
             patient_name=patient.name,
@@ -154,6 +174,11 @@ class CallOrchestrator:
             priority_bucket=patient.priority_bucket,
             queue_snapshot=queue_state.to_dict(),
             mock_mode=bool(settings.mock_mode),
+            firm_name=getattr(patient, "firm_name", None),
+            lead_state=getattr(patient, "state", None),
+            prompt_text=system_prompt,
+            prompt_version=PROMPT_VERSION,
+            tools_snapshot=list(AUTOCALLER_TOOLS),
         )
 
         self._current_call = call
@@ -180,21 +205,8 @@ class CallOrchestrator:
         if self._verbose:
             print(f"[CallOrchestrator] Connecting to OpenAI Realtime for call {call.call_id}...")
 
-        # Autocaller path: render attorney cold-call prompt + tools for this lead.
-        from app.prompts.attorney_cold_call import render_system_prompt, TOOLS as AUTOCALLER_TOOLS
-        sales = getattr(settings, "sales_context", None)
-
-        def _sales_or_env(attr: str, env: str, default: str = "") -> str:
-            val = getattr(sales, attr, "") if sales is not None else ""
-            return val or os.getenv(env, default)
-
-        system_prompt = render_system_prompt(
-            lead=patient,
-            rep_name=_sales_or_env("rep_name", "SALES_REP_NAME", "Alex"),
-            rep_company=_sales_or_env("rep_company", "SALES_REP_COMPANY", "our team"),
-            product_context=_sales_or_env("product_context", "PRODUCT_CONTEXT", ""),
-        )
-
+        # system_prompt + AUTOCALLER_TOOLS were rendered above (before
+        # create_call) so they could be persisted on the call_log row.
         success = await self._voice_service.connect(
             call.call_id,
             patient.name,

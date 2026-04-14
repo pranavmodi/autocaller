@@ -736,6 +736,82 @@ async def health_checks():
     return {"checks": checks}
 
 
+@router.post("/calls/{call_id}/judge")
+async def judge_call_now(call_id: str):
+    """Manually trigger (or re-run) the judge for one call."""
+    from app.services.judge import review_call, persist_review
+    from app.db import AsyncSessionLocal
+    from app.db.models import CallLogRow
+    from sqlalchemy import select
+
+    async with AsyncSessionLocal() as session:
+        row = (await session.execute(
+            select(CallLogRow).where(CallLogRow.call_id == call_id)
+        )).scalar_one_or_none()
+        if not row:
+            raise HTTPException(404, "call not found")
+        if not row.ended_at:
+            raise HTTPException(409, "call is still in progress")
+
+    review = await review_call(row)
+    await persist_review(call_id, review)
+    return {
+        "call_id": call_id,
+        "judge_score": review.overall,
+        "gtm_disposition": review.gtm_disposition,
+        "follow_up_action": review.follow_up_action,
+    }
+
+
+@router.get("/health/judge")
+async def health_judge():
+    """Aggregate judge metrics for the Health page."""
+    from sqlalchemy import select, func
+    from app.db import AsyncSessionLocal
+    from app.db.models import CallLogRow
+    from datetime import datetime, timezone, timedelta
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=7)
+    async with AsyncSessionLocal() as session:
+        # Pending count
+        pending = (await session.execute(
+            select(func.count()).select_from(CallLogRow)
+            .where(CallLogRow.ended_at.is_not(None))
+            .where(CallLogRow.judged_at.is_(None))
+        )).scalar_one() or 0
+        # Judged in last 7d with score
+        rows = (await session.execute(
+            select(CallLogRow.judge_score, CallLogRow.gtm_disposition)
+            .where(CallLogRow.judged_at.is_not(None))
+            .where(CallLogRow.judged_at >= cutoff)
+        )).all()
+
+    scores = sorted([r[0] for r in rows if r[0] is not None])
+    by_disposition: dict = {}
+    for _, disp in rows:
+        if disp:
+            by_disposition[disp] = by_disposition.get(disp, 0) + 1
+
+    def pct(arr, p):
+        if not arr:
+            return None
+        i = min(len(arr) - 1, max(0, int(round((p / 100) * (len(arr) - 1)))))
+        return arr[i]
+
+    return {
+        "pending": int(pending),
+        "judged_7d": len(scores),
+        "score_p25": pct(scores, 25),
+        "score_p50": pct(scores, 50),
+        "score_p75": pct(scores, 75),
+        "score_mean": (sum(scores) / len(scores)) if scores else None,
+        "by_disposition": sorted(
+            [{"disposition": k, "count": v} for k, v in by_disposition.items()],
+            key=lambda x: -x["count"],
+        ),
+    }
+
+
 @router.get("/health/funnel")
 async def health_funnel(days: int = 7):
     """Compute a simple funnel for the last N days from call_logs."""

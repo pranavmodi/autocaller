@@ -54,6 +54,40 @@ def _row_to_call_log(row: CallLogRow) -> CallLog:
     cl.recording_duration_seconds = row.recording_duration_seconds
     cl.recording_format = row.recording_format
 
+    # Attorney-era fields
+    cl.pain_point_summary = getattr(row, "pain_point_summary", None)
+    cl.interest_level = getattr(row, "interest_level", None)
+    cl.is_decision_maker = getattr(row, "is_decision_maker", None)
+    cl.was_gatekeeper = bool(getattr(row, "was_gatekeeper", False))
+    cl.gatekeeper_contact = getattr(row, "gatekeeper_contact", None)
+    cl.demo_booking_id = getattr(row, "demo_booking_id", None)
+    cl.demo_scheduled_at = getattr(row, "demo_scheduled_at", None)
+    cl.demo_meeting_url = getattr(row, "demo_meeting_url", None)
+    cl.followup_email_sent = bool(getattr(row, "followup_email_sent", False))
+    cl.firm_name = getattr(row, "firm_name", None)
+    cl.lead_state = getattr(row, "lead_state", None)
+
+    # Phase A: judge + GTM
+    cl.judge_score = getattr(row, "judge_score", None)
+    cl.judge_scores = getattr(row, "judge_scores", None)
+    cl.judge_notes = getattr(row, "judge_notes", None)
+    cl.judged_at = getattr(row, "judged_at", None)
+    cl.prompt_version = getattr(row, "prompt_version", None)
+    cl.prompt_text = getattr(row, "prompt_text", None)
+    cl.tools_snapshot = getattr(row, "tools_snapshot", None)
+    cl.gtm_disposition = getattr(row, "gtm_disposition", None)
+    cl.follow_up_action = getattr(row, "follow_up_action", None)
+    cl.follow_up_when = getattr(row, "follow_up_when", None)
+    cl.follow_up_owner = getattr(row, "follow_up_owner", None)
+    cl.follow_up_note = getattr(row, "follow_up_note", None)
+    cl.call_summary = getattr(row, "call_summary", None)
+    cl.signal_flags = getattr(row, "signal_flags", None)
+    cl.pain_points_discussed = getattr(row, "pain_points_discussed", None)
+    cl.objections_raised = getattr(row, "objections_raised", None)
+    cl.captured_contacts = getattr(row, "captured_contacts", None)
+    cl.dm_reachability = getattr(row, "dm_reachability", None)
+    cl.dnc_reason = getattr(row, "dnc_reason", None)
+
     # Convert JSONB transcript list to TranscriptEntry objects
     raw = row.transcript or []
     cl.transcript = []
@@ -89,6 +123,11 @@ class CallLogProvider:
         priority_bucket: int = 0,
         queue_snapshot: Optional[dict] = None,
         mock_mode: bool = False,
+        firm_name: Optional[str] = None,
+        lead_state: Optional[str] = None,
+        prompt_text: Optional[str] = None,
+        prompt_version: Optional[str] = None,
+        tools_snapshot: Optional[list] = None,
     ) -> CallLog:
         call_id = str(uuid.uuid4())
         now = datetime.now(timezone.utc)
@@ -105,6 +144,11 @@ class CallLogProvider:
                 queue_snapshot=queue_snapshot,
                 mock_mode=mock_mode,
                 transcript=[],
+                firm_name=firm_name,
+                lead_state=lead_state,
+                prompt_text=prompt_text,
+                prompt_version=prompt_version,
+                tools_snapshot=tools_snapshot,
             )
             session.add(row)
             await session.commit()

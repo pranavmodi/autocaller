@@ -103,12 +103,28 @@ class CallLogRow(Base):
     followup_email_sent: Mapped[bool] = mapped_column(Boolean, default=False)
     firm_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     lead_state: Mapped[str | None] = mapped_column(String(2), nullable=True)
-    # -- Phase A: judge scoring --
+    # -- Phase A: judge scoring + GTM disposition --
     judge_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
     judge_scores: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     judge_notes: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     judged_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
     prompt_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # GTM disposition (see docs/DISPOSITIONS.md)
+    gtm_disposition: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    follow_up_action: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    follow_up_when: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    follow_up_owner: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    follow_up_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    call_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    signal_flags: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    pain_points_discussed: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    objections_raised: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    captured_contacts: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    dm_reachability: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    dnc_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Raw prompt + tools sent to OpenAI for this call — for debugging AI behavior
+    prompt_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    tools_snapshot: Mapped[list | None] = mapped_column(JSONB, nullable=True)
 
     __table_args__ = (
         Index("ix_call_logs_patient_id", "patient_id"),

@@ -38,6 +38,50 @@ export interface TranscriptEntry {
   timestamp: string;
 }
 
+export interface JudgeScores {
+  opening_quality: number;
+  discovery_quality: number;
+  tool_use_correctness: number;
+  objection_handling: number;
+  closing_quality: number;
+  overall: number;
+}
+
+export interface JudgeNotes {
+  missed_opportunities: string[];
+  ai_errors: string[];
+  recommended_prompt_edits: string[];
+}
+
+export interface CapturedContact {
+  name: string | null;
+  title: string | null;
+  email: string | null;
+  phone: string | null;
+}
+
+export interface ObjectionEntry {
+  objection: string;
+  ai_response_quality: number;
+}
+
+export type GtmDisposition =
+  | "meeting_booked"
+  | "hot_lead_no_booking"
+  | "warm_interest"
+  | "qualifying_signal_no_commitment"
+  | "not_now_try_later"
+  | "budget_cycle_gate"
+  | "wrong_target_path_captured"
+  | "dead_end_at_firm"
+  | "not_interested_polite"
+  | "competing_solution_satisfied"
+  | "do_not_recontact"
+  | "bad_data"
+  | "no_conversation"
+  | "technical_failure"
+  | "needs_human_review";
+
 export interface CallLog {
   call_id: string;
   patient_id: string;
@@ -51,6 +95,7 @@ export interface CallLog {
   outcome: CallOutcome;
   call_status: CallStatus;
   call_disposition: CallDisposition;
+  mock_mode: boolean;
   transcript: TranscriptEntry[];
   // Autocaller capture
   pain_point_summary: string | null;
@@ -69,6 +114,26 @@ export interface CallLog {
   // Error
   error_code: string | null;
   error_message: string | null;
+  // Phase A: judge + GTM
+  judge_score: number | null;
+  judge_scores: JudgeScores | null;
+  judge_notes: JudgeNotes | null;
+  judged_at: string | null;
+  prompt_version: string | null;
+  prompt_text: string | null;
+  tools_snapshot: unknown[] | null;
+  gtm_disposition: GtmDisposition | null;
+  follow_up_action: string | null;
+  follow_up_when: string | null;
+  follow_up_owner: string | null;
+  follow_up_note: string | null;
+  call_summary: string | null;
+  signal_flags: string[] | null;
+  pain_points_discussed: string[] | null;
+  objections_raised: ObjectionEntry[] | null;
+  captured_contacts: CapturedContact[] | null;
+  dm_reachability: string | null;
+  dnc_reason: string | null;
 }
 
 export interface Lead {

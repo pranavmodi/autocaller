@@ -135,3 +135,16 @@ export interface FunnelStage {
 
 export const getFunnel = (days = 7) =>
   get<{ days: number; stages: FunnelStage[] }>(`/api/health/funnel?days=${days}`);
+
+export interface JudgeAggregate {
+  pending: number;
+  judged_7d: number;
+  score_p25: number | null;
+  score_p50: number | null;
+  score_p75: number | null;
+  score_mean: number | null;
+  by_disposition: { disposition: string; count: number }[];
+}
+
+export const getJudgeAggregate = () =>
+  get<JudgeAggregate>("/api/health/judge");

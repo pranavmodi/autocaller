@@ -179,6 +179,27 @@ class CallLog:
     firm_name: Optional[str] = None
     lead_state: Optional[str] = None
 
+    # Phase A: judge + GTM disposition (populated post-call by judge.py)
+    judge_score: Optional[int] = None
+    judge_scores: Optional[dict] = None
+    judge_notes: Optional[dict] = None
+    judged_at: Optional[datetime] = None
+    prompt_version: Optional[str] = None
+    prompt_text: Optional[str] = None
+    tools_snapshot: Optional[list] = None
+    gtm_disposition: Optional[str] = None
+    follow_up_action: Optional[str] = None
+    follow_up_when: Optional[datetime] = None
+    follow_up_owner: Optional[str] = None
+    follow_up_note: Optional[str] = None
+    call_summary: Optional[str] = None
+    signal_flags: Optional[list] = None
+    pain_points_discussed: Optional[list] = None
+    objections_raised: Optional[list] = None
+    captured_contacts: Optional[list] = None
+    dm_reachability: Optional[str] = None
+    dnc_reason: Optional[str] = None
+
     def add_transcript(self, speaker: str, text: str):
         """Add a transcript entry."""
         self.transcript.append(TranscriptEntry(speaker=speaker, text=text))
@@ -231,4 +252,23 @@ class CallLog:
             "followup_email_sent": self.followup_email_sent,
             "firm_name": self.firm_name,
             "lead_state": self.lead_state,
+            "judge_score": self.judge_score,
+            "judge_scores": self.judge_scores,
+            "judge_notes": self.judge_notes,
+            "judged_at": self.judged_at.isoformat() if self.judged_at else None,
+            "prompt_version": self.prompt_version,
+            "prompt_text": self.prompt_text,
+            "tools_snapshot": self.tools_snapshot,
+            "gtm_disposition": self.gtm_disposition,
+            "follow_up_action": self.follow_up_action,
+            "follow_up_when": self.follow_up_when.isoformat() if self.follow_up_when else None,
+            "follow_up_owner": self.follow_up_owner,
+            "follow_up_note": self.follow_up_note,
+            "call_summary": self.call_summary,
+            "signal_flags": self.signal_flags,
+            "pain_points_discussed": self.pain_points_discussed,
+            "objections_raised": self.objections_raised,
+            "captured_contacts": self.captured_contacts,
+            "dm_reachability": self.dm_reachability,
+            "dnc_reason": self.dnc_reason,
         }
