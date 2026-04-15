@@ -87,12 +87,14 @@ class RealtimeVoiceBackend(Protocol):
 
 
 def openai_tools_to_gemini(tools: list[dict]) -> list[dict]:
-    """Convert canonical OpenAI-style tool list to Gemini Live function_declarations.
+    """Convert canonical OpenAI-style tool list to Gemini Live functionDeclarations.
 
-    Gemini wires tools into `setup.tools = [{"function_declarations": [...]}]`.
-    Each declaration is `{"name", "description", "parameters"}` with a JSON
-    Schema subset (mostly aligned with OpenAI's format — no `$ref`, limited
-    types, no `anyOf`).
+    Gemini wires tools into `setup.tools = [{"functionDeclarations": [...]}]`
+    (camelCase — JSON field names on the Live WebSocket are camelCase even
+    though the proto uses snake_case internally). Each declaration is
+    `{"name", "description", "parameters"}` with a JSON Schema subset
+    (mostly aligned with OpenAI's format — no `$ref`, limited types, no
+    `anyOf`).
 
     We pass `parameters` through verbatim; the canonical schemas in the
     autocaller use only the supported subset (type, properties, enum,
@@ -110,4 +112,8 @@ def openai_tools_to_gemini(tools: list[dict]) -> list[dict]:
             "description": t.get("description", ""),
             "parameters": t.get("parameters") or {"type": "object", "properties": {}},
         })
-    return [{"function_declarations": decls}] if decls else []
+    return [{"functionDeclarations": decls}] if decls else []
+
+
+# Alias used by gemini_live.py to signal this returns camelCase shape.
+_canonical_tools_to_gemini_camel = openai_tools_to_gemini

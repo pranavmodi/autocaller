@@ -735,8 +735,9 @@ class CallOrchestrator:
 
         settings_provider = get_settings_provider()
         settings = await settings_provider.get_settings()
-        cfg = getattr(settings, "calcom_config", {}) or {}
-        cfg_event_type_id = cfg.get("event_type_id")
+        cfg = getattr(settings, "calcom_config", None)
+        cfg_event_type_id = getattr(cfg, "event_type_id", None) if cfg else None
+        cfg_default_tz = getattr(cfg, "default_timezone", None) if cfg else None
         env_event_type_id = os.getenv("CALCOM_EVENT_TYPE_ID", "").strip()
         event_type_id = cfg_event_type_id or (int(env_event_type_id) if env_event_type_id.isdigit() else None)
         api_key_present = bool(os.getenv("CALCOM_API_KEY", "").strip())
@@ -752,7 +753,7 @@ class CallOrchestrator:
 
         tz = (
             _default_timezone_for_state(self._current_patient.state if self._current_patient else None)
-            or cfg.get("default_timezone")
+            or cfg_default_tz
             or "America/New_York"
         )
         days = int(args.get("days_ahead", 7) or 7)
@@ -801,14 +802,15 @@ class CallOrchestrator:
 
         settings_provider = get_settings_provider()
         settings = await settings_provider.get_settings()
-        cfg = getattr(settings, "calcom_config", {}) or {}
-        event_type_id = cfg.get("event_type_id")
+        cfg = getattr(settings, "calcom_config", None)
+        event_type_id = getattr(cfg, "event_type_id", None) if cfg else None
+        cfg_default_tz = getattr(cfg, "default_timezone", None) if cfg else None
         if not event_type_id:
             return {"booked": False, "error": "calcom_not_configured"}
 
         tz = (
             _default_timezone_for_state(self._current_patient.state)
-            or cfg.get("default_timezone")
+            or cfg_default_tz
             or "America/New_York"
         )
 

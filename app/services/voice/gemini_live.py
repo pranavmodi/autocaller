@@ -24,7 +24,7 @@ import websockets
 from dotenv import load_dotenv
 
 from .audio import AudioTranscoder
-from .base import openai_tools_to_gemini
+from .base import openai_tools_to_gemini as _canonical_tools_to_gemini_camel
 
 
 _project_root = Path(__file__).resolve().parent.parent.parent.parent
@@ -37,7 +37,7 @@ GEMINI_LIVE_HOST = "generativelanguage.googleapis.com"
 GEMINI_LIVE_PATH = (
     "/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent"
 )
-DEFAULT_MODEL = os.getenv("GEMINI_LIVE_MODEL", "gemini-3.1-flash-live")
+DEFAULT_MODEL = os.getenv("GEMINI_LIVE_MODEL", "gemini-3.1-flash-live-preview")
 DEFAULT_VOICE = os.getenv("GEMINI_VOICE", "Aoede")
 
 
@@ -125,27 +125,30 @@ class GeminiLiveBackend:
             return False
 
     async def _send_setup(self, system_prompt: str, tools: list[dict]):
-        gemini_tools = openai_tools_to_gemini(tools)
+        # JSON uses camelCase over the wire for Gemini Live.
+        # https://ai.google.dev/api/live
+        gemini_tools = _canonical_tools_to_gemini_camel(tools)
         setup = {
             "setup": {
                 "model": f"models/{self.model}",
-                "generation_config": {
-                    "response_modalities": ["AUDIO"],
-                    "speech_config": {
-                        "voice_config": {
-                            "prebuilt_voice_config": {
-                                "voice_name": DEFAULT_VOICE,
+                "generationConfig": {
+                    "responseModalities": ["AUDIO"],
+                    "speechConfig": {
+                        "voiceConfig": {
+                            "prebuiltVoiceConfig": {
+                                "voiceName": DEFAULT_VOICE,
                             }
                         }
                     },
                 },
-                "system_instruction": {
+                # systemInstruction accepts a Content struct with parts.
+                "systemInstruction": {
                     "parts": [{"text": system_prompt}],
                 },
                 # Transcription for both sides so we can populate the
                 # transcript stream / CallLog.transcript just like OpenAI.
-                "input_audio_transcription": {},
-                "output_audio_transcription": {},
+                "inputAudioTranscription": {},
+                "outputAudioTranscription": {},
             }
         }
         if gemini_tools:
@@ -277,12 +280,14 @@ class GeminiLiveBackend:
             pcm16k = audio_data
         if not pcm16k:
             return
+        # Gemini Live: realtimeInput.audio (singular, camelCase).
+        # mimeType must be "audio/pcm;rate=16000".
         payload = {
-            "realtime_input": {
-                "media_chunks": [{
-                    "mime_type": "audio/pcm;rate=16000",
+            "realtimeInput": {
+                "audio": {
+                    "mimeType": "audio/pcm;rate=16000",
                     "data": base64.b64encode(pcm16k).decode("utf-8"),
-                }],
+                },
             }
         }
         await self._send(payload)
@@ -306,9 +311,11 @@ class GeminiLiveBackend:
     async def start_conversation(self):
         """Seed the same "Hello? then wait for VAD" opener we use on OpenAI.
 
-        Gemini accepts a leading client_content turn as the first user
-        message; the model's response to it is audio, which the Twilio
-        bridge will forward on the wire."""
+        Gemini Live accepts a text-only kick-off via `realtimeInput.text`.
+        (The `clientContent.turns[]` shape exists in the proto but the
+        v1beta gateway + gemini-3.1-flash-live-preview rejects it with
+        'invalid argument' — `realtimeInput.text` is what actually works.)
+        """
         if not self._ws:
             return
         seed_text = (
@@ -318,26 +325,16 @@ class GeminiLiveBackend:
             "before continuing. When they respond, follow your full system "
             "instructions (identify who's on the line, then the opener)."
         )
-        await self._send({
-            "client_content": {
-                "turns": [{
-                    "role": "user",
-                    "parts": [{"text": seed_text}],
-                }],
-                "turn_complete": True,
-            }
-        })
+        await self._send({"realtimeInput": {"text": seed_text}})
 
     async def send_function_result(self, call_id: str, result: dict):
         if not self._ws:
             return
-        # Gemini expects {tool_response: {function_responses: [...]}}
-        # The tool's return payload goes under `response.output`.
+        # Gemini expects toolResponse.functionResponses[].response.output.
         await self._send({
-            "tool_response": {
-                "function_responses": [{
+            "toolResponse": {
+                "functionResponses": [{
                     "id": call_id,
-                    "name": "",
                     "response": {"output": json.dumps(result)},
                 }],
             }
