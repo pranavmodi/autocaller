@@ -811,6 +811,35 @@ class CallOrchestrator:
                     await self.on_status_update("On hold for a live agent — staying on the line")
                 return  # conversation continues; no hang-up, no reseed
 
+            # NOT_IVR false-positive: navigator's first classification was
+            # "human" — the pre-filter triggered on a phrase that turned out
+            # to be a human talking ("take a message", "please hold, this is
+            # Taylor"), not a voicemail or menu. Don't hang up — resume the
+            # conversation. Distinguishable from the "first classification
+            # was voicemail" case by inspecting the first step's result.
+            first_step_result = (
+                result.steps[0].result if result.steps else ""
+            )
+            if result.outcome == OUTCOME_NOT_IVR and first_step_result == "reached_human":
+                await self._add_system_note(
+                    "Navigator classified as human (no navigation needed) — "
+                    "resuming conversation without reseeding."
+                )
+                try:
+                    if self._voice_service is not None:
+                        # Cancel any queued AI audio from the muted period,
+                        # then trigger a new response based on the existing
+                        # conversation state. The AI's next turn will
+                        # naturally pick up the opener since it still has
+                        # the caller's first utterance in its history.
+                        await self._voice_service.cancel_response()
+                        await self._voice_service.start_response()
+                except Exception as e:
+                    logger.warning("Could not resume after false-positive IVR: %s", e)
+                if self.on_status_update:
+                    await self.on_status_update("False IVR alarm — resuming conversation")
+                return  # no hang-up, no reseed greeting
+
             # Dead-end / timed-out / not_ivr(voicemail) → hang up with voicemail outcome.
             # The derive_* helper will turn this into IVR_UNREACHED now that
             # ivr_detected=True + ivr_outcome is stamped.
