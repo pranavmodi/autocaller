@@ -623,6 +623,26 @@ class CallOrchestrator:
                         and self._twilio_bridge is not None
                     ):
                         self._ivr_handled = True
+                        # Claim navigation SYNCHRONOUSLY so any AI tool_call
+                        # that arrives in the same event-loop slice (most
+                        # commonly end_call(voicemail) per the v1.11 prompt's
+                        # IVR rule) is suppressed by _handle_function_call
+                        # before it can tear the call down.
+                        self._ivr_navigating = True
+                        # Also mute AI audio right now so the bridge drops
+                        # any queued audio while navigator spins up.
+                        if self._twilio_bridge is not None:
+                            try:
+                                self._twilio_bridge.mute_ai_audio()
+                            except Exception:
+                                pass
+                        # And cancel whatever response the AI is currently
+                        # generating (may be mid-token on end_call).
+                        if self._voice_service is not None:
+                            try:
+                                await self._voice_service.cancel_response()
+                            except Exception:
+                                pass
                         print(f"[CallOrchestrator] IVR detected at {elapsed_caller:.1f}s (caller-audio) — handing to IVRNavigator (phrase: {text[:100]!r})")
                         await self._add_system_note(
                             f"IVR detected at {elapsed_caller:.1f}s of caller audio — "
@@ -839,6 +859,24 @@ class CallOrchestrator:
             return
 
         self._sync_status_callback()
+
+        # Suppress AI tool calls while the IVR navigator has the wheel.
+        # The v1.11 prompt tells the model to silently end_call on IVR
+        # detection — but we've already handed that decision to
+        # IVRNavigator. If both race, the AI's end_call wins and the
+        # navigator never gets to classify/press. Block until nav
+        # returns (at which point _ivr_navigating flips false).
+        if self._ivr_navigating and name != "send_function_result":
+            await self._add_system_note(
+                f"Suppressed AI tool call `{name}` — IVR navigator is active."
+            )
+            if self._voice_service and fn_call_id:
+                # Return an empty success so the model's turn completes
+                # without further action.
+                await self._voice_service.send_function_result(
+                    fn_call_id, {"status": "deferred_to_navigator"}
+                )
+            return
 
         if name == "check_transfer_availability":
             available = await self._check_transfer_availability()
