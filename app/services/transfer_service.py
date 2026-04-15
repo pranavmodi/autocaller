@@ -113,7 +113,12 @@ def looks_like_voicemail_signal(text: str) -> bool:
         "your call is very important",
         "this call may be monitored",
         "this call may be recorded",
-        "please wait while we connect",
+        # NOTE: "please wait/hold while we connect" is deliberately NOT in
+        # this list. Those phrases mean "a human is about to pick up" —
+        # hanging up on them was costing us real connections. If we hear
+        # them and then the line actually goes to voicemail, the other
+        # phrases below ("leave a message", "record your message", etc.)
+        # will fire once the real voicemail greeting starts.
         "have not received a valid response",
         "currently closed",
         "our office hours",
