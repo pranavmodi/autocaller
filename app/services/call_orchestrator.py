@@ -47,6 +47,11 @@ class CallOrchestrator:
         self._ivr_navigate_enabled: bool = False
         self._ivr_navigating: bool = False
         self._ivr_handled: bool = False
+        # Wall-clock of the first caller-side transcript entry. Used to gate
+        # IVR-detection actions to an early window that is measured from
+        # when the caller actually SPEAKS — not from Twilio dial time, which
+        # also counts ringing (15-25s) before anyone picks up.
+        self._first_caller_audio_at: Optional[float] = None
 
         # Callbacks for UI updates
         self.on_call_started: Optional[Callable[[CallLog], Any]] = None
@@ -232,6 +237,7 @@ class CallOrchestrator:
         self._ivr_navigate_enabled = bool(getattr(settings, "ivr_navigate_enabled", False))
         self._ivr_navigating = False
         self._ivr_handled = False
+        self._first_caller_audio_at = None
 
         mode_label = "Twilio" if call_mode == "twilio" else "Web"
         print(f"[CallOrchestrator] Starting call to {patient.name} ({patient.phone}) in {mode_label} mode")
@@ -572,65 +578,72 @@ class CallOrchestrator:
             if self.on_transcript_update:
                 await self.on_transcript_update("ai", text)
         elif speaker == "patient":
+            import time
             await call_log_provider.add_transcript(self._current_call.call_id, "patient", text)
             if self.on_transcript_update:
                 await self.on_transcript_update("patient", text)
 
-            # Aggressive IVR / voicemail detection — fires in BOTH web and
-            # twilio modes, in the first ~20 seconds of caller audio.
+            # Track when the caller first spoke. The IVR-action window is
+            # measured from HERE, not from Twilio dial — because ringing
+            # eats 15-25s before any caller audio arrives, and the old
+            # 20-seconds-from-dial cap was excluding real IVR greetings.
+            if self._first_caller_audio_at is None:
+                self._first_caller_audio_at = time.monotonic()
+
+            # Aggressive IVR / voicemail detection.
             if (
                 not self._web_voicemail_simulated
                 and not self._ivr_navigating
                 and not self._ivr_handled
                 and looks_like_voicemail_signal(text)
             ):
-                elapsed = 0.0
-                if self._current_call.started_at:
-                    try:
-                        from datetime import datetime, timezone
-                        elapsed = (datetime.now(timezone.utc) - self._current_call.started_at).total_seconds()
-                    except Exception:
-                        elapsed = 0.0
-                if elapsed <= 20.0:
+                elapsed_caller = time.monotonic() - (self._first_caller_audio_at or time.monotonic())
+                # Always STAMP the signal — even outside the action window,
+                # it's useful for post-hoc routing ("this firm's main line
+                # is a gatekeeper tree; find a direct dial").
+                if not self._current_call.ivr_detected:
+                    await call_log_provider.update_call(
+                        self._current_call.call_id, ivr_detected=True
+                    )
+                    self._current_call.ivr_detected = True
+
+                # Only ACT if we're early in the caller-audio window. After
+                # 45s of caller audio, any "press N" or "leave a message"
+                # phrase is almost certainly legitimate speech in a human
+                # conversation, and hanging up mid-call would be a false
+                # positive.
+                IVR_ACTION_WINDOW_SECS = 45.0
+                if elapsed_caller <= IVR_ACTION_WINDOW_SECS:
                     # Two branches:
-                    #   (a) IVR nav enabled + we're on Twilio + bridge ready:
-                    #       hand to IVRNavigator to press digits.
-                    #   (b) otherwise: fall back to the legacy hang-up path
-                    #       (unchanged behavior).
+                    #   (a) IVR nav enabled + Twilio bridge ready → navigator
+                    #   (b) otherwise → legacy hang-up
                     if (
                         self._ivr_navigate_enabled
                         and self._call_mode == "twilio"
                         and self._twilio_bridge is not None
                     ):
                         self._ivr_handled = True
-                        await call_log_provider.update_call(
-                            self._current_call.call_id, ivr_detected=True
-                        )
-                        self._current_call.ivr_detected = True
-                        print(f"[CallOrchestrator] IVR detected at {elapsed:.1f}s — handing to IVRNavigator (phrase: {text[:100]!r})")
+                        print(f"[CallOrchestrator] IVR detected at {elapsed_caller:.1f}s (caller-audio) — handing to IVRNavigator (phrase: {text[:100]!r})")
                         await self._add_system_note(
-                            f"IVR detected at {elapsed:.1f}s — handing to navigator. "
-                            f"Heard: {text[:160]!r}"
+                            f"IVR detected at {elapsed_caller:.1f}s of caller audio — "
+                            f"handing to navigator. Heard: {text[:160]!r}"
                         )
                         if self.on_status_update:
                             await self.on_status_update("IVR detected — navigating phone tree")
-                        # Fire-and-forget so we don't block the transcript handler.
                         asyncio.create_task(self._run_ivr_navigation(initial_snippet=text))
                     else:
                         self._web_voicemail_simulated = True
                         await call_log_provider.update_call(
                             self._current_call.call_id,
                             voicemail_left=True,
-                            ivr_detected=True,
                             ivr_outcome="skipped",
                         )
                         self._current_call.voicemail_left = True
-                        self._current_call.ivr_detected = True
                         self._current_call.ivr_outcome = "skipped"
-                        print(f"[CallOrchestrator] IVR/voicemail detected at {elapsed:.1f}s — hanging up (navigation disabled) (phrase: {text[:100]!r})")
+                        print(f"[CallOrchestrator] IVR/voicemail detected at {elapsed_caller:.1f}s (caller-audio) — hanging up (navigation disabled) (phrase: {text[:100]!r})")
                         await self._add_system_note(
-                            f"IVR/voicemail detected at {elapsed:.1f}s — hanging up "
-                            f"(navigation disabled). Heard: {text[:160]!r}"
+                            f"IVR/voicemail detected at {elapsed_caller:.1f}s of caller audio — "
+                            f"hanging up (navigation disabled). Heard: {text[:160]!r}"
                         )
                         if self.on_status_update:
                             await self.on_status_update("IVR/voicemail detected — hanging up")
