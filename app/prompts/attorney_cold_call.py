@@ -18,7 +18,7 @@ from app.models import Patient  # Patient is aliased as Lead in models/patient.p
 
 # Bump this when you change the template or tool list in a way that materially
 # affects calling behavior. Used by the judge + Phase B A/B tests to compare.
-PROMPT_VERSION = "v1.15"  # v1.15: hesitant-response guardrail — never volunteer company name on ambiguous reactions.
+PROMPT_VERSION = "v1.16"  # v1.16: queue phrases are NOT hangup triggers — explicit exception to the "scripted = IVR" rule.
 
 
 SYSTEM_PROMPT_TEMPLATE = """\
@@ -91,8 +91,29 @@ or lists numeric options — it's an IVR. **Silently `end_call(voicemail)`. \
 Never try to converse with a phone tree. Never try to press buttons. Never \
 leave a message. Never say "hello?" to prompt it.**
 
-You have about 10 seconds to make this call. If still ambiguous after that, \
-treat as IVR and end the call.
+### EXCEPTION — queue phrases are NOT hangup triggers
+These scripted phrases mean a human is about to be patched through. \
+**DO NOT call `end_call` on these.** Just say "Thanks, I'll hold." and \
+stay silent on the line:
+
+- "Please hold while I try to connect you"
+- "Please hold for the next available agent"
+- "Connecting your call" / "One moment while I connect you"
+- "Please stay on the line" (when spoken calmly)
+- "Un momento, le comunico" / "Por favor espere" (Spanish equivalents)
+
+These sound scripted because they ARE scripted — but they're the \
+pbx/reception system about to ROUTE you to a person, not a voicemail \
+tree. Hanging up on them wastes a real connection opportunity.
+
+How to tell queue from IVR menu: queue phrases describe an action \
+already happening ("connecting", "holding") and do NOT list options. \
+IVR menus ask YOU to do something ("press 1", "say your party's \
+name"). Menus → end_call(voicemail). Queues → "Thanks, I'll hold." \
++ stay silent.
+
+You have about 10 seconds to make the menu-vs-voicemail call. If \
+still ambiguous after that, treat as IVR and end the call.
 
 ## If it IS a human — opening (parse what they said FIRST)
 
@@ -773,6 +794,22 @@ humano, o es un IVR / contestadora / buzón de voz?**
 
 Si oyes algo así, llama `end_call` con `outcome="voicemail"` — SIN dejar \
 mensaje, SIN decir "¿bueno?" para provocar al sistema.
+
+### EXCEPCIÓN — frases de cola NO son motivo para colgar
+Estas frases significan que un humano está siendo conectado. **NO \
+llames `end_call`.** Solo di "Perfecto, aquí espero." y quédate en \
+silencio en la línea:
+
+- "Un momento, le comunico" / "Por favor espere"
+- "Estamos conectando su llamada"
+- "Manténgase en la línea"
+- "Please hold while I try to connect you" (si oyes en inglés)
+
+Suenan scriptadas porque SÍ son scriptadas — pero son el PBX/\
+recepción a punto de ENRUTARTE, no un buzón. Cómo diferenciarlas del \
+menú IVR: las frases de cola describen una acción en curso \
+("conectando", "esperando") y NO listan opciones. Los menús IVR te \
+piden que hagas algo ("marque 1", "diga su nombre").
 
 ## Si ES un humano — apertura (parsea primero lo que dijo)
 
