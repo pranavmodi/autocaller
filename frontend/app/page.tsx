@@ -14,6 +14,7 @@ import {
   getSettings,
   setSystemEnabled,
   setMockMode,
+  setVoiceProvider,
 } from "@/lib/api";
 import { useDashboardEvents } from "@/hooks/useDashboardEvents";
 import { OutcomePill } from "@/components/OutcomePill";
@@ -53,6 +54,9 @@ export default function NowPage() {
   const systemEnabled = Boolean(settings.data?.system_enabled);
   const mockOn = Boolean(settings.data?.mock_mode);
   const mockPhone = String(settings.data?.mock_phone ?? "");
+  const voiceProvider =
+    (settings.data?.voice_provider as "openai" | "gemini" | undefined) ?? "openai";
+  const voiceModel = String(settings.data?.voice_model ?? "");
 
   const toggleSystem = useMutation({
     mutationFn: (enabled: boolean) => setSystemEnabled(enabled),
@@ -60,6 +64,10 @@ export default function NowPage() {
   });
   const toggleMock = useMutation({
     mutationFn: (enabled: boolean) => setMockMode(enabled, mockPhone),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["settings"] }),
+  });
+  const switchVoice = useMutation({
+    mutationFn: (next: "openai" | "gemini") => setVoiceProvider(next),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["settings"] }),
   });
 
@@ -130,6 +138,60 @@ export default function NowPage() {
             onToggle={(v) => toggleMock.mutate(v)}
             accent={mockOn ? "amber" : "neutral"}
           />
+        </div>
+        <div className="mt-3 flex items-center justify-between gap-3 rounded-md border border-neutral-100 p-3">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium text-neutral-900">Voice backend</span>
+              <span
+                className={cn(
+                  "rounded-full px-2 py-0.5 text-[10px] font-semibold",
+                  voiceProvider === "gemini"
+                    ? "bg-violet-50 text-violet-700"
+                    : "bg-sky-50 text-sky-700",
+                )}
+              >
+                {voiceProvider}
+              </span>
+              {voiceModel && (
+                <span className="truncate text-[10px] text-neutral-500">
+                  {voiceModel}
+                </span>
+              )}
+            </div>
+            <p className="mt-0.5 text-xs text-neutral-500">
+              Realtime voice provider for the next call. OpenAI Realtime vs Gemini Live.
+              Overridden per-call by the dispatcher or CLI --voice flag.
+            </p>
+          </div>
+          <div className="flex overflow-hidden rounded-md border border-neutral-200 text-xs">
+            <button
+              type="button"
+              disabled={switchVoice.isPending || settings.isLoading}
+              onClick={() => switchVoice.mutate("openai")}
+              className={cn(
+                "px-3 py-1.5 font-medium transition",
+                voiceProvider === "openai"
+                  ? "bg-sky-600 text-white"
+                  : "bg-white text-neutral-700 hover:bg-neutral-50",
+              )}
+            >
+              OpenAI
+            </button>
+            <button
+              type="button"
+              disabled={switchVoice.isPending || settings.isLoading}
+              onClick={() => switchVoice.mutate("gemini")}
+              className={cn(
+                "border-l border-neutral-200 px-3 py-1.5 font-medium transition",
+                voiceProvider === "gemini"
+                  ? "bg-violet-600 text-white"
+                  : "bg-white text-neutral-700 hover:bg-neutral-50",
+              )}
+            >
+              Gemini
+            </button>
+          </div>
         </div>
       </section>
 

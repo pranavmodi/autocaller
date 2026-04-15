@@ -36,6 +36,7 @@ system_app = typer.Typer(help="Global on/off — master kill switch", no_args_is
 mock_app = typer.Typer(help="Mock-mode toggle (redirect all Twilio calls to a mock phone)", no_args_is_help=True)
 allowlist_app = typer.Typer(help="Manage allowed_phones (phone allowlist)", no_args_is_help=True)
 followups_app = typer.Typer(help="GTM follow-up queue — calls awaiting action", no_args_is_help=True)
+voice_app = typer.Typer(help="Switch between realtime voice backends (openai | gemini)", no_args_is_help=True)
 
 app.add_typer(leads_app, name="leads")
 app.add_typer(calls_app, name="calls")
@@ -45,6 +46,7 @@ app.add_typer(system_app, name="system")
 app.add_typer(mock_app, name="mock")
 app.add_typer(allowlist_app, name="allowlist")
 app.add_typer(followups_app, name="followups")
+app.add_typer(voice_app, name="voice")
 
 console = Console()
 
@@ -535,9 +537,21 @@ def leads_remove(lead_id: str = typer.Argument(...)):
 def call(
     lead_id: str = typer.Argument(..., help="Lead ID to call now"),
     mode: str = typer.Option("twilio", help="'twilio' (real PSTN) or 'web'"),
+    voice: str = typer.Option(
+        "", "--voice",
+        help="Override voice backend for this call: 'openai' | 'gemini'. "
+             "Default uses the DB setting or VOICE_PROVIDER env.",
+    ),
 ):
     """Place a call immediately to a lead (bypasses dispatcher)."""
-    resp = _post("/api/call/start", {"patient_id": lead_id, "mode": mode})
+    body: dict = {"patient_id": lead_id, "mode": mode}
+    v = (voice or "").strip().lower()
+    if v:
+        if v not in ("openai", "gemini"):
+            console.print(f"[red]--voice must be 'openai' or 'gemini' (got {voice!r})[/red]")
+            raise typer.Exit(code=2)
+        body["voice_provider"] = v
+    resp = _post("/api/call/start", body)
     console.print_json(data=resp)
 
 
@@ -590,6 +604,10 @@ def dispatcher_clear_active():
 def calls_list(
     limit: int = typer.Option(25, help="Max rows"),
     outcome: Optional[str] = typer.Option(None, help="Filter by outcome"),
+    provider: Optional[str] = typer.Option(
+        None, "--provider",
+        help="Filter by voice backend: 'openai' | 'gemini'",
+    ),
 ):
     """List recent calls."""
     async def _q():
@@ -600,12 +618,14 @@ def calls_list(
             stmt = select(CallLogRow).order_by(desc(CallLogRow.started_at)).limit(limit)
             if outcome:
                 stmt = stmt.where(CallLogRow.outcome == outcome)
+            if provider:
+                stmt = stmt.where(CallLogRow.voice_provider == provider.strip().lower())
             res = await session.execute(stmt)
             return list(res.scalars().all())
 
     rows = _run(_q())
     table = Table(title=f"Recent calls ({len(rows)})")
-    for col in ["call_id", "lead", "firm", "state", "outcome", "duration_s", "interest", "demo_id", "started"]:
+    for col in ["call_id", "lead", "firm", "state", "outcome", "dur_s", "voice", "model", "interest", "demo_id", "started"]:
         table.add_column(col, overflow="fold")
     for r in rows:
         table.add_row(
@@ -615,6 +635,8 @@ def calls_list(
             r.lead_state or "",
             r.outcome,
             str(r.duration_seconds),
+            r.voice_provider or "",
+            (r.voice_model or "")[:24],
             str(r.interest_level or ""),
             (r.demo_booking_id or "")[:12],
             r.started_at.strftime("%Y-%m-%d %H:%M") if r.started_at else "",
@@ -1150,6 +1172,55 @@ def doctor():
     console.print(table)
     if any_bad:
         raise typer.Exit(code=1)
+
+
+# ---------------------------------------------------------------------------
+# voice provider (openai | gemini)
+# ---------------------------------------------------------------------------
+
+def _voice_status_line(s: dict) -> str:
+    provider = s.get("voice_provider") or "openai"
+    model = s.get("voice_model") or "<backend default>"
+    return f"provider={provider}  model={model}"
+
+
+@voice_app.command("status")
+def voice_status():
+    """Show the current default voice backend (applies to future calls)."""
+    s = _get("/api/settings")
+    console.print(_voice_status_line(s))
+
+
+@voice_app.command("openai")
+def voice_openai(
+    model: str = typer.Option("", "--model", help="Override OPENAI_REALTIME_MODEL for this setting"),
+):
+    """Switch default voice backend to OpenAI Realtime."""
+    s = _put("/api/settings/voice", {"provider": "openai", "model": model})
+    console.print(f"[green]✓[/green] {_voice_status_line(s)}")
+
+
+@voice_app.command("gemini")
+def voice_gemini(
+    model: str = typer.Option("", "--model", help="Override GEMINI_LIVE_MODEL for this setting"),
+):
+    """Switch default voice backend to Gemini Live."""
+    s = _put("/api/settings/voice", {"provider": "gemini", "model": model})
+    console.print(f"[green]✓[/green] {_voice_status_line(s)}")
+
+
+@voice_app.command("set")
+def voice_set(
+    provider: str = typer.Argument(..., help="'openai' or 'gemini'"),
+    model: str = typer.Option("", "--model", help="Exact model ID (empty → backend env default)"),
+):
+    """Set default voice backend + optional model override."""
+    p = provider.strip().lower()
+    if p not in ("openai", "gemini"):
+        console.print(f"[red]provider must be 'openai' or 'gemini' (got {provider!r})[/red]")
+        raise typer.Exit(code=2)
+    s = _put("/api/settings/voice", {"provider": p, "model": model})
+    console.print(f"[green]✓[/green] {_voice_status_line(s)}")
 
 
 if __name__ == "__main__":

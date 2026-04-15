@@ -200,6 +200,10 @@ class CallLog:
     dm_reachability: Optional[str] = None
     dnc_reason: Optional[str] = None
 
+    # Which realtime voice backend + model handled this call.
+    voice_provider: Optional[str] = None  # "openai" | "gemini"
+    voice_model: Optional[str] = None     # exact model ID
+
     def add_transcript(self, speaker: str, text: str):
         """Add a transcript entry."""
         self.transcript.append(TranscriptEntry(speaker=speaker, text=text))
@@ -271,4 +275,6 @@ class CallLog:
             "captured_contacts": self.captured_contacts,
             "dm_reachability": self.dm_reachability,
             "dnc_reason": self.dnc_reason,
+            "voice_provider": self.voice_provider,
+            "voice_model": self.voice_model,
         }

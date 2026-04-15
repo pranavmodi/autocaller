@@ -93,3 +93,7 @@ class SystemSettings:
     calcom_config: CalComConfig = field(default_factory=CalComConfig)
     sales_context: SalesContext = field(default_factory=SalesContext)
     per_state_hours: PerStateHours = field(default_factory=PerStateHours)
+    # Default realtime voice backend ("openai" or "gemini"). Override per-call
+    # via CLI --voice flag or API body voice_provider field.
+    voice_provider: str = "openai"
+    voice_model: str = ""

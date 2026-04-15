@@ -87,6 +87,8 @@ def _row_to_call_log(row: CallLogRow) -> CallLog:
     cl.captured_contacts = getattr(row, "captured_contacts", None)
     cl.dm_reachability = getattr(row, "dm_reachability", None)
     cl.dnc_reason = getattr(row, "dnc_reason", None)
+    cl.voice_provider = getattr(row, "voice_provider", None)
+    cl.voice_model = getattr(row, "voice_model", None)
 
     # Convert JSONB transcript list to TranscriptEntry objects
     raw = row.transcript or []
@@ -128,6 +130,8 @@ class CallLogProvider:
         prompt_text: Optional[str] = None,
         prompt_version: Optional[str] = None,
         tools_snapshot: Optional[list] = None,
+        voice_provider: Optional[str] = None,
+        voice_model: Optional[str] = None,
     ) -> CallLog:
         call_id = str(uuid.uuid4())
         now = datetime.now(timezone.utc)
@@ -149,6 +153,8 @@ class CallLogProvider:
                 prompt_text=prompt_text,
                 prompt_version=prompt_version,
                 tools_snapshot=tools_snapshot,
+                voice_provider=voice_provider,
+                voice_model=voice_model,
             )
             session.add(row)
             await session.commit()
@@ -183,6 +189,8 @@ class CallLogProvider:
         cl.recording_size_bytes = None
         cl.recording_duration_seconds = None
         cl.recording_format = None
+        cl.voice_provider = voice_provider
+        cl.voice_model = voice_model
         return cl
 
     async def get_call(self, call_id: str) -> Optional[CallLog]:
@@ -280,6 +288,7 @@ class CallLogProvider:
         "was_gatekeeper", "gatekeeper_contact",
         "demo_booking_id", "demo_scheduled_at", "demo_meeting_url",
         "followup_email_sent", "firm_name", "lead_state",
+        "voice_provider", "voice_model",
     }
 
     async def update_call(self, call_id: str, **fields):

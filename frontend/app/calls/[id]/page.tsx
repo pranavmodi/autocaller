@@ -111,6 +111,8 @@ export default function CallDetailPage({ params }: Props) {
             <p className="mt-1 text-xs text-neutral-400">
               {startedAt ? format(startedAt, "PPp") : "—"} · {call.duration_seconds}s
               {call.prompt_version ? ` · prompt ${call.prompt_version}` : ""}
+              {call.voice_provider ? ` · voice ${call.voice_provider}` : ""}
+              {call.voice_model ? ` (${call.voice_model})` : ""}
             </p>
           </div>
           <OutcomePill outcome={call.outcome} />

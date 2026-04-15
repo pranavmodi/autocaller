@@ -138,6 +138,8 @@ def _row_to_settings(row: SystemSettingsRow) -> SystemSettings:
         end=str(psh.get("end", "17:00")),
         days=list(psh.get("days", [0, 1, 2, 3, 4])),
     )
+    settings.voice_provider = str(getattr(row, "voice_provider", None) or "openai")
+    settings.voice_model = str(getattr(row, "voice_model", None) or "")
     return settings
 
 
@@ -423,6 +425,27 @@ class SettingsProvider:
                 session.add(row)
             row.mock_mode = enabled
             row.mock_phone = mock_phone
+            await session.commit()
+            return _row_to_settings(row)
+
+    async def set_voice_provider(
+        self, provider: str, model: str = ""
+    ) -> SystemSettings:
+        """Set the default realtime voice backend.
+
+        `provider` must be one of 'openai' | 'gemini'. Empty `model` means
+        the backend should fall back to its env-var default at call time.
+        """
+        if provider not in ("openai", "gemini"):
+            raise ValueError(f"unsupported voice_provider: {provider!r}")
+        async with AsyncSessionLocal() as session:
+            result = await session.execute(select(SystemSettingsRow).where(SystemSettingsRow.id == 1))
+            row = result.scalar_one_or_none()
+            if row is None:
+                row = SystemSettingsRow(id=1, business_hours={}, queue_thresholds={})
+                session.add(row)
+            row.voice_provider = provider
+            row.voice_model = model or ""
             await session.commit()
             return _row_to_settings(row)
 

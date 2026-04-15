@@ -381,14 +381,19 @@ async def get_calls(limit: int = 25, offset: int = 0):
 async def start_call_api(body: dict):
     """Trigger a manual call from the CLI / API.
 
-    Body: {"patient_id": "...", "mode": "twilio"|"web"}
+    Body: {"patient_id": "...", "mode": "twilio"|"web", "voice_provider": "openai"|"gemini"}
+
+    `voice_provider` is optional; when omitted the DB / env default is used.
     """
     from app.services.call_orchestrator import get_orchestrator
     patient_id = str(body.get("patient_id", "") or body.get("lead_id", "")).strip()
     mode = str(body.get("mode", "twilio")).strip().lower() or "twilio"
+    voice_provider = str(body.get("voice_provider", "") or "").strip().lower() or None
     if not patient_id:
         raise HTTPException(status_code=400, detail="patient_id is required")
-    call = await get_orchestrator().start_call(patient_id, call_mode=mode)
+    call = await get_orchestrator().start_call(
+        patient_id, call_mode=mode, voice_provider=voice_provider
+    )
     if call is None:
         raise HTTPException(status_code=409, detail="Call could not be started")
     return {"call": call.to_dict()}

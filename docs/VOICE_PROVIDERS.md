@@ -1,6 +1,8 @@
 # Voice Provider Abstraction (OpenAI Realtime ↔ Gemini Live)
 
-Design note for making the voice backend swappable per-call, per-environment, or at runtime. Not yet implemented — this is the plan.
+**Status (2026-04-15): Phases 1-5 shipped.** Abstraction is live, both backends implemented, DB columns record per-call attribution, CLI/API/UI toggles all work. Phase 6 (real A/B measurement against booked demos) is pending — fire a mixed batch once you have a handful of each on both providers.
+
+See `app/services/voice/` for the implementation. Migration `u2v3w4x5y6z7` added `call_logs.voice_provider` + `call_logs.voice_model` + `system_settings.voice_provider` + `system_settings.voice_model`.
 
 ---
 

@@ -111,6 +111,10 @@ Every command accepts `--help`. Exit code is `0` on success, `1` on any error
 | `followups list [--action=... --owner=... --disposition=... --within=14]` | Show calls that need human or automated follow-up, sorted by due date. |
 | `followups show <call_id>` | JSON focus view for a single follow-up. |
 | `leads sync-mission [--tiers=A,B --dm-threshold=5]` | LLM-driven import of PI-firm contacts from Mission Control. |
+| `voice status` | Show the current default realtime voice backend (openai or gemini) + model. |
+| `voice openai [--model=…]` / `voice gemini [--model=…]` / `voice set <p> [--model=…]` | Switch the default backend for subsequent calls. Stored in DB. |
+| `call <lead_id> --voice=openai\|gemini` | Per-call override: pin this specific call to a provider regardless of the default. |
+| `calls list --provider=openai\|gemini` | Filter history by which backend handled each call. |
 
 ---
 

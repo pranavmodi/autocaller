@@ -94,6 +94,13 @@ class SystemSettingsResponse(BaseModel):
     daily_report: DailyReportRequest
     can_make_calls: bool
     is_within_business_hours: bool
+    voice_provider: str = "openai"
+    voice_model: str = ""
+
+
+class VoiceProviderRequest(BaseModel):
+    provider: str  # "openai" | "gemini"
+    model: str = ""
 
 
 class ActiveScenarioRequest(BaseModel):
@@ -179,6 +186,8 @@ async def settings_to_response(provider) -> SystemSettingsResponse:
         ),
         can_make_calls=await provider.can_make_outbound_call(),
         is_within_business_hours=await provider.is_within_business_hours(),
+        voice_provider=getattr(settings, "voice_provider", "openai") or "openai",
+        voice_model=getattr(settings, "voice_model", "") or "",
     )
 
 
@@ -498,6 +507,24 @@ async def set_mock_mode(request: MockModeRequest):
     await provider.set_mock_mode(request.enabled, request.mock_phone)
     label = f"ON (redirect to {request.mock_phone})" if request.enabled else "OFF"
     print(f"[SETTINGS] mock_mode → {label}")
+    return await settings_response_and_broadcast(provider)
+
+
+@router.put("/voice", response_model=SystemSettingsResponse)
+async def set_voice_provider(request: VoiceProviderRequest):
+    """Select the default realtime voice backend for subsequent calls.
+
+    Overridden per-call by `CallOrchestrator.start_call(voice_provider=...)`
+    (CLI --voice flag or API body). Body:
+        {"provider": "openai"|"gemini", "model": "<model id or empty>"}
+    """
+    from fastapi import HTTPException
+    provider = get_settings_provider()
+    try:
+        await provider.set_voice_provider(request.provider, request.model)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    print(f"[SETTINGS] voice_provider → {request.provider} model={request.model or '<default>'}")
     return await settings_response_and_broadcast(provider)
 
 

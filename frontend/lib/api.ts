@@ -121,6 +121,9 @@ export const setSystemEnabled = (enabled: boolean) =>
 export const setMockMode = (enabled: boolean, mock_phone = "") =>
   put<Record<string, unknown>>("/api/settings/mock-mode", { enabled, mock_phone });
 
+export const setVoiceProvider = (provider: "openai" | "gemini", model = "") =>
+  put<Record<string, unknown>>("/api/settings/voice", { provider, model });
+
 // ---- Health ----
 export const checkHealth = () =>
   fetch(apiUrl("/health")).then((r) => r.ok);

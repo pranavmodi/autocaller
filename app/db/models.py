@@ -125,6 +125,11 @@ class CallLogRow(Base):
     # Raw prompt + tools sent to OpenAI for this call — for debugging AI behavior
     prompt_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     tools_snapshot: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    # Which realtime voice backend handled this call.
+    # voice_provider = "openai" | "gemini"; voice_model is the exact model ID
+    # (e.g. "gpt-realtime-2025-08-28" or "gemini-3.1-flash-live").
+    voice_provider: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    voice_model: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     __table_args__ = (
         Index("ix_call_logs_patient_id", "patient_id"),
@@ -132,6 +137,7 @@ class CallLogRow(Base):
         Index("ix_call_logs_outcome", "outcome"),
         Index("ix_call_logs_call_status", "call_status"),
         Index("ix_call_logs_call_disposition", "call_disposition"),
+        Index("ix_call_logs_voice_provider", "voice_provider"),
     )
 
 
@@ -159,6 +165,9 @@ class SystemSettingsRow(Base):
     calcom_config: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     sales_context: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     per_state_hours: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    # Default realtime voice backend. Overridden per call via CLI flag or API body.
+    voice_provider: Mapped[str] = mapped_column(String(32), default="openai")
+    voice_model: Mapped[str] = mapped_column(String(64), default="")
 
     updated_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow, onupdate=_utcnow)
 

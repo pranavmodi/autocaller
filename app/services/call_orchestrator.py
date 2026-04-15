@@ -6,7 +6,13 @@ from typing import Optional, Callable, Any
 
 from app.models import CallLog, CallOutcome, Patient
 from app.providers import get_queue_provider, get_patient_provider, get_call_log_provider, get_settings_provider
-from app.services.realtime_voice import RealtimeVoiceService
+from app.services.voice import (
+    RealtimeVoiceBackend,
+    get_voice_backend,
+    BACKEND_OPENAI,
+    BACKEND_GEMINI,
+)
+from app.services.voice.factory import resolve_default_provider
 from app.services.notification_service import CallNotificationService
 from app.services.carrier_failure_service import CarrierFailureHandler
 from app.services.transfer_service import (
@@ -23,7 +29,7 @@ class CallOrchestrator:
     """Orchestrates outbound calls with OpenAI Realtime voice."""
 
     def __init__(self):
-        self._voice_service: Optional[RealtimeVoiceService] = None
+        self._voice_service: Optional[RealtimeVoiceBackend] = None
         self._current_call: Optional[CallLog] = None
         self._current_patient: Optional[Patient] = None
         self._twilio_bridge = None  # TwilioMediaBridge when in twilio mode
@@ -121,8 +127,18 @@ class CallOrchestrator:
             call_sid, call_status, error_code_raw, sip_response_code_raw,
         )
 
-    async def start_call(self, patient_id: str, call_mode: str = "web") -> Optional[CallLog]:
-        """Start an outbound call to a patient."""
+    async def start_call(
+        self,
+        patient_id: str,
+        call_mode: str = "web",
+        voice_provider: Optional[str] = None,
+    ) -> Optional[CallLog]:
+        """Start an outbound call to a patient.
+
+        `voice_provider` overrides the default realtime backend for this
+        call only (highest precedence). If None, we fall back to the DB
+        setting, then the `VOICE_PROVIDER` env var, then 'openai'.
+        """
         self._last_start_error = None
         call_log_provider = get_call_log_provider()
         if call_log_provider.has_active_call():
@@ -166,6 +182,22 @@ class CallOrchestrator:
             product_context=_sales_or_env("product_context", "PRODUCT_CONTEXT", ""),
         )
 
+        # Resolve which voice backend this call will use.
+        # precedence: per-call arg > DB setting > env > 'openai'.
+        resolved_provider = (
+            (voice_provider or "").strip().lower()
+            or (getattr(settings, "voice_provider", "") or "").strip().lower()
+            or resolve_default_provider()
+        )
+        if resolved_provider not in (BACKEND_OPENAI, BACKEND_GEMINI):
+            self._last_start_error = f"Unknown voice_provider: {resolved_provider!r}"
+            if self.on_error:
+                await self.on_error(self._last_start_error)
+            return None
+        # If the DB setting is set explicitly, honor its custom model; else
+        # let the backend pick its own default from its env var.
+        resolved_model = (getattr(settings, "voice_model", "") or "").strip() or None
+
         call = await call_log_provider.create_call(
             patient_id=patient.patient_id,
             patient_name=patient.name,
@@ -179,6 +211,8 @@ class CallOrchestrator:
             prompt_text=system_prompt,
             prompt_version=PROMPT_VERSION,
             tools_snapshot=list(AUTOCALLER_TOOLS),
+            voice_provider=resolved_provider,
+            voice_model=resolved_model or "",
         )
 
         self._current_call = call
@@ -195,15 +229,32 @@ class CallOrchestrator:
 
         audio_format = "g711_ulaw" if call_mode == "twilio" else "pcm16"
 
-        self._voice_service = RealtimeVoiceService(audio_format=audio_format, verbose=self._verbose)
+        self._voice_service = get_voice_backend(
+            resolved_provider,
+            audio_format=audio_format,
+            verbose=self._verbose,
+            model=resolved_model,
+        )
         self._voice_service.on_transcript = self._handle_transcript
         self._voice_service.on_audio = self._handle_audio
         self._voice_service.on_function_call = self._handle_function_call
         self._voice_service.on_error = self._handle_voice_error
         self._voice_service.on_session_ended = self._handle_session_ended
 
+        # Persist the actual model the backend chose (may differ from the
+        # DB setting when that was empty — e.g. backend default from env).
+        try:
+            await call_log_provider.update_call(
+                call.call_id,
+                voice_model=self._voice_service.model,
+            )
+        except Exception:
+            pass
+
         if self._verbose:
-            print(f"[CallOrchestrator] Connecting to OpenAI Realtime for call {call.call_id}...")
+            print(f"[CallOrchestrator] Connecting voice backend "
+                  f"provider={resolved_provider} model={self._voice_service.model} "
+                  f"for call {call.call_id}...")
 
         # system_prompt + AUTOCALLER_TOOLS were rendered above (before
         # create_call) so they could be persisted on the call_log row.
@@ -215,11 +266,14 @@ class CallOrchestrator:
             tools=AUTOCALLER_TOOLS,
         )
         if not success:
-            print(f"[CallOrchestrator] OpenAI Realtime connection FAILED for call {call.call_id}")
-            self._last_start_error = "Failed to connect to OpenAI Realtime API"
+            print(
+                f"[CallOrchestrator] {resolved_provider} voice connection FAILED "
+                f"for call {call.call_id}"
+            )
+            self._last_start_error = f"Failed to connect to {resolved_provider} voice backend"
             await call_log_provider.update_call(
                 call.call_id,
-                error_code="openai_connect_failed",
+                error_code=f"{resolved_provider}_connect_failed",
                 error_message=self._last_start_error,
             )
             await call_log_provider.end_call(call.call_id, CallOutcome.FAILED)
@@ -229,7 +283,7 @@ class CallOrchestrator:
             self._current_patient = None
             return None
         if self._verbose:
-            print(f"[CallOrchestrator] OpenAI Realtime connected for call {call.call_id}")
+            print(f"[CallOrchestrator] voice backend {resolved_provider} connected for call {call.call_id}")
 
         if call_mode == "twilio":
             self._mock_mode = settings.mock_mode

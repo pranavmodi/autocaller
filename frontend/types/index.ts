@@ -134,6 +134,8 @@ export interface CallLog {
   captured_contacts: CapturedContact[] | null;
   dm_reachability: string | null;
   dnc_reason: string | null;
+  voice_provider: string | null;
+  voice_model: string | null;
 }
 
 export interface Lead {
