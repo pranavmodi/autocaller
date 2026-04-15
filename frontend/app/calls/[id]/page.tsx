@@ -113,6 +113,9 @@ export default function CallDetailPage({ params }: Props) {
               {call.prompt_version ? ` · prompt ${call.prompt_version}` : ""}
               {call.voice_provider ? ` · voice ${call.voice_provider}` : ""}
               {call.voice_model ? ` (${call.voice_model})` : ""}
+              {call.ivr_detected
+                ? ` · IVR ${call.ivr_outcome ?? "detected"}`
+                : ""}
             </p>
           </div>
           <OutcomePill outcome={call.outcome} />

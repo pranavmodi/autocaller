@@ -16,6 +16,7 @@ import {
   setMockMode,
   setVoiceProvider,
   setDispatcherCooldown,
+  setIVRNavigate,
 } from "@/lib/api";
 import { useDashboardEvents } from "@/hooks/useDashboardEvents";
 import { OutcomePill } from "@/components/OutcomePill";
@@ -55,6 +56,7 @@ export default function NowPage() {
   const systemEnabled = Boolean(settings.data?.system_enabled);
   const mockOn = Boolean(settings.data?.mock_mode);
   const mockPhone = String(settings.data?.mock_phone ?? "");
+  const ivrNavigateOn = Boolean(settings.data?.ivr_navigate_enabled);
   const voiceProvider =
     (settings.data?.voice_provider as "openai" | "gemini" | undefined) ?? "openai";
   const voiceModel = String(settings.data?.voice_model ?? "");
@@ -65,6 +67,10 @@ export default function NowPage() {
   });
   const toggleMock = useMutation({
     mutationFn: (enabled: boolean) => setMockMode(enabled, mockPhone),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["settings"] }),
+  });
+  const toggleIVR = useMutation({
+    mutationFn: (enabled: boolean) => setIVRNavigate(enabled),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["settings"] }),
   });
   const switchVoice = useMutation({
@@ -152,6 +158,14 @@ export default function NowPage() {
             disabled={toggleMock.isPending || settings.isLoading}
             onToggle={(v) => toggleMock.mutate(v)}
             accent={mockOn ? "amber" : "neutral"}
+          />
+          <ControlRow
+            label="IVR navigation"
+            description="When a phone tree is detected, press digits with an LLM to reach a human instead of hanging up. Respects identity-claim rules; caps at 3 menu hops / 60 s."
+            checked={ivrNavigateOn}
+            disabled={toggleIVR.isPending || settings.isLoading}
+            onToggle={(v) => toggleIVR.mutate(v)}
+            accent={ivrNavigateOn ? "green" : "neutral"}
           />
         </div>
         <div className="mt-3 flex items-center justify-between gap-3 rounded-md border border-neutral-100 p-3">

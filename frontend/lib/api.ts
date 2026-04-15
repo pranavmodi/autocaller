@@ -127,6 +127,9 @@ export const setVoiceProvider = (provider: "openai" | "gemini", model = "") =>
 export const setDispatcherCooldown = (cooldown_seconds: number) =>
   put<Record<string, unknown>>("/api/settings/dispatcher/cooldown", { cooldown_seconds });
 
+export const setIVRNavigate = (enabled: boolean) =>
+  put<Record<string, unknown>>("/api/settings/ivr-navigate", { enabled });
+
 // ---- Health ----
 export const checkHealth = () =>
   fetch(apiUrl("/health")).then((r) => r.ok);

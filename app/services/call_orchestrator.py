@@ -43,6 +43,10 @@ class CallOrchestrator:
         self._transfer_in_progress: bool = False  # set during SIP transfer to prevent DISCONNECTED override
         self._last_start_error: Optional[str] = None  # last error from failed start_call, for dispatcher visibility
         self._verbose: bool = False
+        # IVR navigation state for the current call.
+        self._ivr_navigate_enabled: bool = False
+        self._ivr_navigating: bool = False
+        self._ivr_handled: bool = False
 
         # Callbacks for UI updates
         self.on_call_started: Optional[Callable[[CallLog], Any]] = None
@@ -220,6 +224,10 @@ class CallOrchestrator:
         self._call_mode = call_mode
         self._web_voicemail_simulated = False
         self._verbose = settings.dispatcher_settings.verbose_logging
+        # Decide whether this call is allowed to navigate phone trees.
+        self._ivr_navigate_enabled = bool(getattr(settings, "ivr_navigate_enabled", False))
+        self._ivr_navigating = False
+        self._ivr_handled = False
 
         mode_label = "Twilio" if call_mode == "twilio" else "Web"
         print(f"[CallOrchestrator] Starting call to {patient.name} ({patient.phone}) in {mode_label} mode")
@@ -565,11 +573,13 @@ class CallOrchestrator:
                 await self.on_transcript_update("patient", text)
 
             # Aggressive IVR / voicemail detection — fires in BOTH web and
-            # twilio modes, in the first ~20 seconds of caller audio. If we
-            # hear phone-tree phrasing ("press 1", "para español", "leave a
-            # message", etc.) we force end_call(voicemail) instead of
-            # letting the AI try to converse with an auto-attendant.
-            if not self._web_voicemail_simulated and looks_like_voicemail_signal(text):
+            # twilio modes, in the first ~20 seconds of caller audio.
+            if (
+                not self._web_voicemail_simulated
+                and not self._ivr_navigating
+                and not self._ivr_handled
+                and looks_like_voicemail_signal(text)
+            ):
                 elapsed = 0.0
                 if self._current_call.started_at:
                     try:
@@ -577,17 +587,50 @@ class CallOrchestrator:
                         elapsed = (datetime.now(timezone.utc) - self._current_call.started_at).total_seconds()
                     except Exception:
                         elapsed = 0.0
-                # Only short-circuit early. After ~20s the caller is clearly
-                # a human and phrases like "press 1 to confirm" might be
-                # legitimate speech (unlikely but possible).
                 if elapsed <= 20.0:
-                    self._web_voicemail_simulated = True
-                    await call_log_provider.update_call(self._current_call.call_id, voicemail_left=True)
-                    self._current_call.voicemail_left = True
-                    print(f"[CallOrchestrator] IVR/voicemail detected in transcript at {elapsed:.1f}s — forcing end_call(voicemail) (phrase: {text[:100]!r})")
-                    if self.on_status_update:
-                        await self.on_status_update(f"IVR/voicemail detected — hanging up")
-                    await self.end_call(CallOutcome.VOICEMAIL)
+                    # Two branches:
+                    #   (a) IVR nav enabled + we're on Twilio + bridge ready:
+                    #       hand to IVRNavigator to press digits.
+                    #   (b) otherwise: fall back to the legacy hang-up path
+                    #       (unchanged behavior).
+                    if (
+                        self._ivr_navigate_enabled
+                        and self._call_mode == "twilio"
+                        and self._twilio_bridge is not None
+                    ):
+                        self._ivr_handled = True
+                        await call_log_provider.update_call(
+                            self._current_call.call_id, ivr_detected=True
+                        )
+                        self._current_call.ivr_detected = True
+                        print(f"[CallOrchestrator] IVR detected at {elapsed:.1f}s — handing to IVRNavigator (phrase: {text[:100]!r})")
+                        await self._add_system_note(
+                            f"IVR detected at {elapsed:.1f}s — handing to navigator. "
+                            f"Heard: {text[:160]!r}"
+                        )
+                        if self.on_status_update:
+                            await self.on_status_update("IVR detected — navigating phone tree")
+                        # Fire-and-forget so we don't block the transcript handler.
+                        asyncio.create_task(self._run_ivr_navigation(initial_snippet=text))
+                    else:
+                        self._web_voicemail_simulated = True
+                        await call_log_provider.update_call(
+                            self._current_call.call_id,
+                            voicemail_left=True,
+                            ivr_detected=True,
+                            ivr_outcome="skipped",
+                        )
+                        self._current_call.voicemail_left = True
+                        self._current_call.ivr_detected = True
+                        self._current_call.ivr_outcome = "skipped"
+                        print(f"[CallOrchestrator] IVR/voicemail detected at {elapsed:.1f}s — hanging up (navigation disabled) (phrase: {text[:100]!r})")
+                        await self._add_system_note(
+                            f"IVR/voicemail detected at {elapsed:.1f}s — hanging up "
+                            f"(navigation disabled). Heard: {text[:160]!r}"
+                        )
+                        if self.on_status_update:
+                            await self.on_status_update("IVR/voicemail detected — hanging up")
+                        await self.end_call(CallOutcome.VOICEMAIL)
         elif speaker == "ai":
             if self.on_transcript_update:
                 await self.on_transcript_update("ai_delta", text)
@@ -598,6 +641,130 @@ class CallOrchestrator:
         self._last_audio_out_at = time.monotonic()
         if self.on_audio_output:
             await self.on_audio_output(audio_data)
+
+    async def _add_system_note(self, text: str) -> None:
+        """Append an annotated event into the call's transcript stream.
+
+        Used for IVR navigation steps, voicemail hangups, tool short-circuits
+        — anything that's not a direct AI or caller utterance but that a
+        reviewer will want to see inline to understand what happened.
+        speaker="system" keeps these distinct from AI/patient turns so the
+        UI can style them differently.
+        """
+        if not self._current_call or not text:
+            return
+        try:
+            await get_call_log_provider().add_transcript(
+                self._current_call.call_id, "system", text
+            )
+        except Exception as e:
+            logger.warning("add system note failed: %s", e)
+        if self.on_transcript_update:
+            try:
+                await self.on_transcript_update("system", text)
+            except Exception:
+                pass
+
+    def _recent_caller_transcript(self, max_entries: int = 6) -> str:
+        """Return the most recent caller-side transcript entries joined.
+
+        IVRNavigator uses this to see what the phone tree just said after a
+        digit press. We only pull patient-side text — the AI is muted
+        during navigation so AI deltas are irrelevant.
+        """
+        if not self._current_call or not self._current_call.transcript:
+            return ""
+        caller = [
+            (t.text or "").strip()
+            for t in self._current_call.transcript
+            if getattr(t, "speaker", "") == "patient" and (t.text or "").strip()
+        ]
+        return " ".join(caller[-max_entries:])
+
+    async def _run_ivr_navigation(self, *, initial_snippet: str) -> None:
+        """Run the IVR navigator end-to-end, then decide what to do next.
+
+        On reached_human: unmute the AI and seed a fresh "Hello?" so the
+        conversation can begin with the human who just picked up.
+        On dead_end/timed_out: stamp ivr_outcome + end the call as voicemail.
+        """
+        from app.services.ivr_navigator import (
+            get_ivr_navigator,
+            OUTCOME_REACHED_HUMAN,
+            OUTCOME_DEAD_END,
+            OUTCOME_TIMED_OUT,
+            OUTCOME_NOT_IVR,
+        )
+
+        if self._ivr_navigating or not self._current_call or not self._twilio_bridge:
+            return
+        self._ivr_navigating = True
+        try:
+            bridge = self._twilio_bridge
+            navigator = get_ivr_navigator()
+
+            async def _dtmf(digit: str) -> None:
+                await bridge.send_dtmf(digit)
+
+            def _recent() -> str:
+                # Combine whatever just landed with the most-recent patient
+                # transcript so the LLM has context from BEFORE the DTMF too.
+                return self._recent_caller_transcript()
+
+            async def _note(msg: str) -> None:
+                await self._add_system_note(msg)
+
+            result = await navigator.navigate(
+                get_recent_transcript=_recent,
+                send_dtmf=_dtmf,
+                mute_ai_audio=bridge.mute_ai_audio,
+                unmute_ai_audio=bridge.unmute_ai_audio,
+                initial_transcript=initial_snippet or _recent(),
+                on_note=_note,
+            )
+
+            call_log_provider = get_call_log_provider()
+            menu_log = result.to_log()
+            await call_log_provider.update_call(
+                self._current_call.call_id,
+                ivr_outcome=result.outcome,
+                ivr_menu_log=menu_log,
+            )
+            self._current_call.ivr_outcome = result.outcome
+            self._current_call.ivr_menu_log = menu_log
+            print(f"[CallOrchestrator] IVR nav done: outcome={result.outcome} steps={len(menu_log)}")
+
+            if result.outcome == OUTCOME_REACHED_HUMAN:
+                # Human on the line — unmute + prompt the voice backend to
+                # open a fresh greeting so our pitch starts cleanly.
+                await self._add_system_note(
+                    "Reached a human via IVR navigation — resuming cold-call greeting."
+                )
+                if self.on_status_update:
+                    await self.on_status_update("Reached a human via IVR navigation")
+                try:
+                    if self._voice_service is not None:
+                        await self._voice_service.start_conversation()
+                except Exception as e:
+                    logger.warning("Could not seed post-IVR greeting: %s", e)
+                return  # leave conversation to the normal flow
+
+            # Dead-end / timed-out / not_ivr → hang up with voicemail outcome.
+            # The derive_* helper will turn this into IVR_UNREACHED now that
+            # ivr_detected=True + ivr_outcome is stamped.
+            self._web_voicemail_simulated = True
+            await call_log_provider.update_call(
+                self._current_call.call_id, voicemail_left=True,
+            )
+            self._current_call.voicemail_left = True
+            await self._add_system_note(
+                f"IVR navigation ended: {result.outcome} after {len(menu_log)} hop(s) — hanging up."
+            )
+            if self.on_status_update:
+                await self.on_status_update(f"IVR navigation {result.outcome} — hanging up")
+            await self.end_call(CallOutcome.VOICEMAIL)
+        finally:
+            self._ivr_navigating = False
 
     async def _wait_for_audio_drain(
         self,

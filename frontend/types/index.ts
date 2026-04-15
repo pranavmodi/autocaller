@@ -136,6 +136,9 @@ export interface CallLog {
   dnc_reason: string | null;
   voice_provider: string | null;
   voice_model: string | null;
+  ivr_detected: boolean;
+  ivr_outcome: string | null;
+  ivr_menu_log: unknown[] | null;
 }
 
 export interface Lead {

@@ -45,6 +45,15 @@ class CallDisposition(str, Enum):
     DEMO_SCHEDULED = "demo_scheduled"
     NOT_INTERESTED = "not_interested"
     GATEKEEPER_ONLY = "gatekeeper_only"
+    # -- IVR-specific --
+    # Main line routed to a phone tree and we gave up (navigation off, or
+    # navigator hit dead_end / timed_out). Actionable: operator should find
+    # the lead's direct line or enable IVR navigation.
+    IVR_UNREACHED = "ivr_unreached"
+    # Hit a phone tree and successfully navigated it to a human. Combined
+    # with the outcome (completed, demo_scheduled, not_interested, …) to
+    # distinguish "first-contact-via-IVR" calls from direct dials.
+    IVR_NAVIGATED = "ivr_navigated"
 
 
 def derive_status_and_disposition(
@@ -52,15 +61,31 @@ def derive_status_and_disposition(
     error_code: Optional[str] = None,
     had_patient_speech: bool = False,
     duration_seconds: int = 0,
+    ivr_detected: bool = False,
+    ivr_outcome: Optional[str] = None,
 ) -> tuple["CallStatus", "CallDisposition"]:
-    """Derive CallStatus + CallDisposition from the legacy outcome + context.
+    """Derive CallStatus + CallDisposition from the outcome + IVR state + context.
 
-    Rules (from Danny's feedback):
-    - No answer is NOT a fail — it's Called + NoAnswer
-    - Hang-up after answering is NOT a fail — it's Called + HungUp
+    Rules:
+    - No answer is NOT a fail — Called + NoAnswer.
+    - Hang-up after answering is NOT a fail — Called + HungUp.
     - Only real carrier/technical failures (couldn't reach the phone at all)
-      should be Failed.
+      are Failed.
+    - IVR overlay: if we hit a phone tree and didn't reach a human, the
+      disposition is IVR_UNREACHED (not voicemail_left — that would confuse
+      retry logic). If we DID reach a human via navigation, the disposition
+      is IVR_NAVIGATED regardless of what happened in the downstream convo
+      (the outcome enum carries the conversational result separately).
     """
+    # IVR-first overrides — these are the most actionable signal for
+    # follow-up routing so we short-circuit the rest.
+    if ivr_detected:
+        if ivr_outcome == "reached_human":
+            return CallStatus.CALLED, CallDisposition.IVR_NAVIGATED
+        # skipped / dead_end / timed_out / not_ivr all collapse to
+        # "we hit a tree and didn't get through".
+        if ivr_outcome in ("skipped", "dead_end", "timed_out"):
+            return CallStatus.CALLED, CallDisposition.IVR_UNREACHED
     # Pre-connect failures
     if outcome == CallOutcome.FAILED:
         if error_code == "media_stream_timeout":
@@ -203,6 +228,10 @@ class CallLog:
     # Which realtime voice backend + model handled this call.
     voice_provider: Optional[str] = None  # "openai" | "gemini"
     voice_model: Optional[str] = None     # exact model ID
+    # IVR navigation record (populated if the phone tree was hit).
+    ivr_detected: bool = False
+    ivr_outcome: Optional[str] = None     # reached_human | dead_end | timed_out | skipped | not_ivr
+    ivr_menu_log: Optional[list] = None
 
     def add_transcript(self, speaker: str, text: str):
         """Add a transcript entry."""
@@ -277,4 +306,7 @@ class CallLog:
             "dnc_reason": self.dnc_reason,
             "voice_provider": self.voice_provider,
             "voice_model": self.voice_model,
+            "ivr_detected": self.ivr_detected,
+            "ivr_outcome": self.ivr_outcome,
+            "ivr_menu_log": self.ivr_menu_log,
         }

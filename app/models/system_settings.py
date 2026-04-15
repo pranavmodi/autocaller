@@ -98,3 +98,6 @@ class SystemSettings:
     # via CLI --voice flag or API body voice_provider field.
     voice_provider: str = "openai"
     voice_model: str = ""
+    # When True, the orchestrator invokes IVRNavigator on IVR detection
+    # (tries to press digits to reach a human) instead of hanging up.
+    ivr_navigate_enabled: bool = False

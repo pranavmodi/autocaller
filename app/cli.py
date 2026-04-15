@@ -37,6 +37,7 @@ mock_app = typer.Typer(help="Mock-mode toggle (redirect all Twilio calls to a mo
 allowlist_app = typer.Typer(help="Manage allowed_phones (phone allowlist)", no_args_is_help=True)
 followups_app = typer.Typer(help="GTM follow-up queue — calls awaiting action", no_args_is_help=True)
 voice_app = typer.Typer(help="Switch between realtime voice backends (openai | gemini)", no_args_is_help=True)
+ivr_app = typer.Typer(help="Phone-tree (IVR) navigation — press digits to reach a human", no_args_is_help=True)
 
 app.add_typer(leads_app, name="leads")
 app.add_typer(calls_app, name="calls")
@@ -47,6 +48,7 @@ app.add_typer(mock_app, name="mock")
 app.add_typer(allowlist_app, name="allowlist")
 app.add_typer(followups_app, name="followups")
 app.add_typer(voice_app, name="voice")
+app.add_typer(ivr_app, name="ivr")
 
 console = Console()
 
@@ -1242,6 +1244,32 @@ def voice_set(
         raise typer.Exit(code=2)
     s = _put("/api/settings/voice", {"provider": p, "model": model})
     console.print(f"[green]✓[/green] {_voice_status_line(s)}")
+
+
+# ---------------------------------------------------------------------------
+# ivr (phone-tree navigation)
+# ---------------------------------------------------------------------------
+
+@ivr_app.command("status")
+def ivr_status():
+    """Show whether phone-tree navigation is enabled."""
+    s = _get("/api/settings")
+    enabled = bool(s.get("ivr_navigate_enabled", False))
+    console.print(f"ivr_navigate_enabled = {enabled}")
+
+
+@ivr_app.command("on")
+def ivr_on():
+    """Enable phone-tree navigation for subsequent calls."""
+    s = _put("/api/settings/ivr-navigate", {"enabled": True})
+    console.print(f"[green]✓[/green] ivr_navigate_enabled = {s.get('ivr_navigate_enabled')}")
+
+
+@ivr_app.command("off")
+def ivr_off():
+    """Disable phone-tree navigation — hang up on first menu prompt (legacy behavior)."""
+    s = _put("/api/settings/ivr-navigate", {"enabled": False})
+    console.print(f"[green]✓[/green] ivr_navigate_enabled = {s.get('ivr_navigate_enabled')}")
 
 
 if __name__ == "__main__":

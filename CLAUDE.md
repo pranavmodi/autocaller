@@ -21,6 +21,7 @@ Concrete examples of features that **must** have CLI commands, not just REST:
 - Lead ingestion (`leads sync-mission`, `leads import`)
 - Configuration (`config show`, `config init`)
 - Voice-backend selection (`voice openai|gemini|status`, per-call `call <id> --voice=…`, `calls list --provider=…`)
+- IVR phone-tree navigation (`ivr on|off|status`)
 
 If the functionality is genuinely UI-only (e.g. in-browser audio playback of a live call), document that exception in both `docs/cli.md` §11 and `SKILL.md`.
 

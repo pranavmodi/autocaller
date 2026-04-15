@@ -101,11 +101,16 @@ class SystemSettingsResponse(BaseModel):
     is_within_business_hours: bool
     voice_provider: str = "openai"
     voice_model: str = ""
+    ivr_navigate_enabled: bool = False
 
 
 class VoiceProviderRequest(BaseModel):
     provider: str  # "openai" | "gemini"
     model: str = ""
+
+
+class IVRNavigateRequest(BaseModel):
+    enabled: bool
 
 
 class ActiveScenarioRequest(BaseModel):
@@ -194,6 +199,7 @@ async def settings_to_response(provider) -> SystemSettingsResponse:
         is_within_business_hours=await provider.is_within_business_hours(),
         voice_provider=getattr(settings, "voice_provider", "openai") or "openai",
         voice_model=getattr(settings, "voice_model", "") or "",
+        ivr_navigate_enabled=bool(getattr(settings, "ivr_navigate_enabled", False)),
     )
 
 
@@ -547,6 +553,20 @@ async def set_mock_mode(request: MockModeRequest):
     await provider.set_mock_mode(request.enabled, request.mock_phone)
     label = f"ON (redirect to {request.mock_phone})" if request.enabled else "OFF"
     print(f"[SETTINGS] mock_mode → {label}")
+    return await settings_response_and_broadcast(provider)
+
+
+@router.put("/ivr-navigate", response_model=SystemSettingsResponse)
+async def set_ivr_navigate(request: IVRNavigateRequest):
+    """Toggle automatic phone-tree navigation.
+
+    When ON, the orchestrator hands control to the IVR navigator on IVR
+    detection (LLM-driven DTMF presses to reach a human). When OFF, we
+    keep the legacy 'hang up on first menu prompt' behavior.
+    """
+    provider = get_settings_provider()
+    await provider.set_ivr_navigate_enabled(request.enabled)
+    print(f"[SETTINGS] ivr_navigate_enabled → {request.enabled}")
     return await settings_response_and_broadcast(provider)
 
 

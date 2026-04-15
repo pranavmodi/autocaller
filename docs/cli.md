@@ -107,6 +107,7 @@ Every command accepts `--help`. Exit code is `0` on success, `1` on any error
 | `dispatcher batch <N>` | Start the dispatcher with an auto-stop after N calls placed. |
 | `dispatcher clear-active` | Hang up the live Twilio call (if any) and clear the active-call marker. Used by the UI "End call" button. |
 | `dispatcher cooldown [<seconds>]` | Get (no arg) or set the wait applied after a call ends before the dispatcher places the next one. Persisted in `system_settings.dispatcher_settings.cooldown_seconds`. |
+| `ivr status\|on\|off` | Toggle LLM-driven phone-tree navigation. When ON, hitting an IVR hands control to `IVRNavigator` (classifies voicemail-vs-menu, picks a digit, presses via Twilio DTMF, repeats up to 3 hops / 60 s). When OFF, legacy behavior (hang up on first menu prompt) stays. Per-call state lives on `call_logs.ivr_detected` / `ivr_outcome` / `ivr_menu_log`. |
 | `calls judge <call_id>` | Run the LLM judge on one call (scores 0-10, assigns GTM disposition). |
 | `calls judge --all-pending` | Backfill-judge every un-judged completed call. ~$0.02 each with gpt-4o-mini. |
 | `followups list [--action=... --owner=... --disposition=... --within=14]` | Show calls that need human or automated follow-up, sorted by due date. |

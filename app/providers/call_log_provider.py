@@ -89,6 +89,9 @@ def _row_to_call_log(row: CallLogRow) -> CallLog:
     cl.dnc_reason = getattr(row, "dnc_reason", None)
     cl.voice_provider = getattr(row, "voice_provider", None)
     cl.voice_model = getattr(row, "voice_model", None)
+    cl.ivr_detected = bool(getattr(row, "ivr_detected", False))
+    cl.ivr_outcome = getattr(row, "ivr_outcome", None)
+    cl.ivr_menu_log = getattr(row, "ivr_menu_log", None)
 
     # Convert JSONB transcript list to TranscriptEntry objects
     raw = row.transcript or []
@@ -270,6 +273,8 @@ class CallLogProvider:
                     error_code=row.error_code,
                     had_patient_speech=had_patient_speech,
                     duration_seconds=row.duration_seconds,
+                    ivr_detected=bool(getattr(row, "ivr_detected", False)),
+                    ivr_outcome=getattr(row, "ivr_outcome", None),
                 )
                 row.call_status = status.value
                 row.call_disposition = disposition.value
@@ -289,6 +294,7 @@ class CallLogProvider:
         "demo_booking_id", "demo_scheduled_at", "demo_meeting_url",
         "followup_email_sent", "firm_name", "lead_state",
         "voice_provider", "voice_model",
+        "ivr_detected", "ivr_outcome", "ivr_menu_log",
     }
 
     async def update_call(self, call_id: str, **fields):

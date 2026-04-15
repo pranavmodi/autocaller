@@ -46,10 +46,18 @@ export function TranscriptStream({
               "max-w-[80%] rounded-lg px-3 py-1.5 text-sm",
               e.speaker === "ai" && "bg-white text-neutral-800 ring-1 ring-neutral-200",
               e.speaker === "patient" && "bg-emerald-600 text-white",
-              e.speaker === "system" && "bg-neutral-200 text-neutral-600 text-[11px]",
+              e.speaker === "system" &&
+                "border border-dashed border-amber-300 bg-amber-50 px-2 py-1 text-[11px] uppercase tracking-wide text-amber-900 normal-case",
             )}
           >
-            {e.text}
+            {e.speaker === "system" ? (
+              <>
+                <span className="mr-1 font-semibold">system</span>
+                <span className="font-normal tracking-normal">{e.text}</span>
+              </>
+            ) : (
+              e.text
+            )}
           </div>
         </div>
       ))}

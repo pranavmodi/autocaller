@@ -130,6 +130,11 @@ class CallLogRow(Base):
     # (e.g. "gpt-realtime-2025-08-28" or "gemini-3.1-flash-live").
     voice_provider: Mapped[str | None] = mapped_column(String(32), nullable=True)
     voice_model: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # IVR navigation (populated only when the phone tree was hit).
+    # ivr_outcome values: reached_human | dead_end | timed_out | skipped | not_ivr
+    ivr_detected: Mapped[bool] = mapped_column(Boolean, default=False)
+    ivr_outcome: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    ivr_menu_log: Mapped[list | None] = mapped_column(JSONB, nullable=True)
 
     __table_args__ = (
         Index("ix_call_logs_patient_id", "patient_id"),
@@ -138,6 +143,7 @@ class CallLogRow(Base):
         Index("ix_call_logs_call_status", "call_status"),
         Index("ix_call_logs_call_disposition", "call_disposition"),
         Index("ix_call_logs_voice_provider", "voice_provider"),
+        Index("ix_call_logs_ivr_outcome", "ivr_outcome"),
     )
 
 
@@ -168,6 +174,9 @@ class SystemSettingsRow(Base):
     # Default realtime voice backend. Overridden per call via CLI flag or API body.
     voice_provider: Mapped[str] = mapped_column(String(32), default="openai")
     voice_model: Mapped[str] = mapped_column(String(64), default="")
+    # Whether the AI should try to navigate phone trees (press digits to reach
+    # a human) instead of hanging up as soon as an IVR is detected.
+    ivr_navigate_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
 
     updated_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow, onupdate=_utcnow)
 

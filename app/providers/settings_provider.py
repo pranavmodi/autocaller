@@ -141,6 +141,7 @@ def _row_to_settings(row: SystemSettingsRow) -> SystemSettings:
     )
     settings.voice_provider = str(getattr(row, "voice_provider", None) or "openai")
     settings.voice_model = str(getattr(row, "voice_model", None) or "")
+    settings.ivr_navigate_enabled = bool(getattr(row, "ivr_navigate_enabled", False))
     return settings
 
 
@@ -428,6 +429,17 @@ class SettingsProvider:
                 session.add(row)
             row.mock_mode = enabled
             row.mock_phone = mock_phone
+            await session.commit()
+            return _row_to_settings(row)
+
+    async def set_ivr_navigate_enabled(self, enabled: bool) -> SystemSettings:
+        async with AsyncSessionLocal() as session:
+            result = await session.execute(select(SystemSettingsRow).where(SystemSettingsRow.id == 1))
+            row = result.scalar_one_or_none()
+            if row is None:
+                row = SystemSettingsRow(id=1, business_hours={}, queue_thresholds={})
+                session.add(row)
+            row.ivr_navigate_enabled = bool(enabled)
             await session.commit()
             return _row_to_settings(row)
 

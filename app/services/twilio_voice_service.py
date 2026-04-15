@@ -62,6 +62,10 @@ class TwilioMediaBridge:
         self._call_sid: Optional[str] = None
         self._connected = asyncio.Event()
 
+        # When True, drop AI-generated audio instead of sending it to Twilio.
+        # Set during IVR navigation so the AI doesn't pitch a phone tree.
+        self._ai_audio_muted: bool = False
+
         # Listener sockets for live monitoring (listen-only, no push-to-talk).
         self._listeners: set[WebSocket] = set()
 
@@ -108,8 +112,13 @@ class TwilioMediaBridge:
     # ------------------------------------------------------------------
 
     async def _forward_audio_to_twilio(self, audio_data: bytes):
-        """Send OpenAI audio to Twilio media stream + listeners."""
-        if self._twilio_ws and self._stream_sid:
+        """Send OpenAI audio to Twilio media stream + listeners.
+
+        If `_ai_audio_muted` is set (e.g. during IVR navigation), the audio
+        is dropped on the Twilio side — the caller still sees it in the
+        listener feed for debugging but the phone line stays silent.
+        """
+        if not self._ai_audio_muted and self._twilio_ws and self._stream_sid:
             payload = base64.b64encode(audio_data).decode("utf-8")
             msg = {
                 "event": "media",
@@ -121,11 +130,54 @@ class TwilioMediaBridge:
             except Exception as e:
                 logger.error(f"Error sending audio to Twilio: {e}")
 
-        # Fan out to listeners (AI-side audio)
+        # Fan out to listeners (AI-side audio) regardless of mute, so the
+        # operator can hear what the model WOULD say in the browser even when
+        # we've silenced the phone line.
         await self._broadcast_audio(audio_data)
 
         if self._original_on_audio:
             await self._original_on_audio(audio_data)
+
+    # ------------------------------------------------------------------
+    # Control — used by IVRNavigator
+    # ------------------------------------------------------------------
+
+    def mute_ai_audio(self) -> None:
+        """Stop forwarding AI audio to the phone line."""
+        self._ai_audio_muted = True
+        if self._verbose:
+            logger.info("[TwilioMedia] AI audio MUTED (IVR nav active)")
+
+    def unmute_ai_audio(self) -> None:
+        """Resume forwarding AI audio to the phone line."""
+        self._ai_audio_muted = False
+        if self._verbose:
+            logger.info("[TwilioMedia] AI audio UNMUTED")
+
+    async def send_dtmf(self, digit: str) -> None:
+        """Send a single DTMF tone to the phone tree over the Twilio media
+        stream. Accepts 0-9, *, #. No-op if the stream isn't live yet.
+
+        Twilio MS protocol: {"event":"dtmf","streamSid":...,"dtmf":{"digit":"N"}}.
+        """
+        d = (digit or "").strip()[:1]
+        if d not in "0123456789*#":
+            logger.warning("[TwilioMedia] refusing DTMF digit %r (invalid)", digit)
+            return
+        if not self._twilio_ws or not self._stream_sid:
+            logger.warning("[TwilioMedia] DTMF %s dropped — stream not live", d)
+            return
+        msg = {
+            "event": "dtmf",
+            "streamSid": self._stream_sid,
+            "dtmf": {"digit": d},
+        }
+        try:
+            await self._twilio_ws.send_json(msg)
+            if self._verbose:
+                logger.info(f"[TwilioMedia] DTMF sent: {d}")
+        except Exception as e:
+            logger.error("DTMF send failed: %s", e)
 
     async def handle_twilio_ws(self, websocket: WebSocket):
         """Handle an incoming Twilio media stream WebSocket."""
