@@ -77,6 +77,7 @@ JUDGE_SCHEMA = {
                 "tool_use_correctness": {"type": "integer", "minimum": 0, "maximum": 10},
                 "objection_handling": {"type": "integer", "minimum": 0, "maximum": 10},
                 "closing_quality": {"type": "integer", "minimum": 0, "maximum": 10},
+                "secondary_objective_achieved": {"type": "integer", "minimum": 0, "maximum": 10},
                 "overall": {"type": "integer", "minimum": 0, "maximum": 10},
                 "missed_opportunities": {"type": "array", "items": {"type": "string"}},
                 "ai_errors": {"type": "array", "items": {"type": "string"}},
@@ -142,7 +143,8 @@ JUDGE_SCHEMA = {
             },
             "required": [
                 "opening_quality", "discovery_quality", "tool_use_correctness",
-                "objection_handling", "closing_quality", "overall",
+                "objection_handling", "closing_quality",
+                "secondary_objective_achieved", "overall",
                 "missed_opportunities", "ai_errors", "recommended_prompt_edits",
                 "gtm_disposition", "follow_up_action", "follow_up_when",
                 "follow_up_owner", "follow_up_note", "call_summary",
@@ -171,13 +173,32 @@ Judge both languages on equal terms — same rubric, same bar.
 Be rigorous. Favor precision over generosity. Cite the transcript when \
 recommending prompt edits or flagging DNC.
 
-## Judge rubric
-- opening_quality: permission-based, concise, honest; no dead-air; no lies.
-- discovery_quality: asked ONE quantifying follow-up; didn't barrel into pitch.
-- tool_use_correctness: right tool at right time; never promised a booking \
-  that didn't actually succeed.
-- objection_handling: sensible responses; never invented features/references.
-- closing_quality: graceful exit on both yes and no; captured capture fields.
+## Judge rubric (0-10 each)
+- opening_quality: followed the Sobczak 4-step (identify → smart-intel →
+  PVP in their language, weasel-worded → contingent-question invitation).
+  NO banned phrases ("bad time?", "do you have a minute", "just calling",
+  "touching base", "reaching out"). Specific intel about the firm, not
+  generic filler. No fabricated personalization.
+- discovery_quality: used ASSUMPTIVE problem questions ("what happens
+  when…") not "do you have problems with…". Loaded-benefit third-party
+  framings where appropriate ("most PI firms find…"). At least one
+  quantifying follow-up ("how many hours / dollars / leads"). Mirrored
+  prospect's exact words before recommending.
+- tool_use_correctness: right tool at right time; never promised a
+  booking that didn't actually succeed.
+- objection_handling: EVERY objection met with softener + redirecting
+  question, never counter-argument. No feature-listing to "overcome".
+  Used the verbatim Sobczak responses where they fit.
+- closing_quality: non-closing calls ended with EXPLICIT next step — why
+  a follow-up is needed, what YOU'll do, what THEY'll do (assignment),
+  and a SPECIFIC time ("Thursday 11:15"), not "a couple weeks". If the
+  prospect refused an assignment, the seed-planting close was used.
+  Capture fields populated.
+- secondary_objective_achieved: did the call leave with at least ONE of
+  {direct line, direct email, DM's real name, current-vendor/workflow
+  info, permission to recontact at a named trigger, callback window}?
+  This is the difference between a "nothing call" and a data-gathering
+  call. A demo booking automatically counts.
 - overall: would you let this AI represent your company?
 
 ## GTM disposition (pick exactly one — see DISPOSITIONS.md style)
@@ -213,6 +234,7 @@ class CallReview:
     tool_use_correctness: int
     objection_handling: int
     closing_quality: int
+    secondary_objective_achieved: int
     overall: int
     missed_opportunities: list[str]
     ai_errors: list[str]
@@ -294,6 +316,7 @@ async def review_call(
         tool_use_correctness=int(data["tool_use_correctness"]),
         objection_handling=int(data["objection_handling"]),
         closing_quality=int(data["closing_quality"]),
+        secondary_objective_achieved=int(data.get("secondary_objective_achieved", 0)),
         overall=int(data["overall"]),
         missed_opportunities=list(data["missed_opportunities"] or []),
         ai_errors=list(data["ai_errors"] or []),
@@ -332,6 +355,7 @@ async def persist_review(call_id: str, review: CallReview) -> None:
         "tool_use_correctness": review.tool_use_correctness,
         "objection_handling": review.objection_handling,
         "closing_quality": review.closing_quality,
+        "secondary_objective_achieved": review.secondary_objective_achieved,
         "overall": review.overall,
     }
     notes = {
