@@ -577,7 +577,7 @@ def dispatcher_batch(
 
 @dispatcher_app.command("clear-active")
 def dispatcher_clear_active():
-    """Clear the in-memory active-call marker (does NOT end an active Twilio call)."""
+    """Hang up the live Twilio call (if any) and clear the active-call marker."""
     resp = _post("/api/calls/clear-active")
     console.print_json(data=resp)
 

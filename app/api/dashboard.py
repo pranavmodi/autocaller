@@ -661,9 +661,24 @@ async def delete_all_calls(confirm: str = ""):
 
 @router.post("/calls/clear-active")
 async def clear_active_call_marker():
-    """Explicit endpoint: clear the in-memory active-call marker only."""
+    """Hang up the live Twilio call (if any), then clear the in-memory marker.
+
+    Used by the "End call" button in the Now page — operators expect this to
+    actually terminate the call, not just scrub the UI marker. If the
+    orchestrator has no active call, we still clear any stale marker so the
+    UI unsticks.
+    """
+    from app.models.call_log import CallOutcome
+    orchestrator = get_orchestrator()
+    hung_up = False
+    try:
+        if orchestrator._current_call is not None:
+            await orchestrator.end_call(CallOutcome.COMPLETED)
+            hung_up = True
+    except Exception as e:
+        logger.warning("orchestrator.end_call failed during clear-active: %s", e)
     get_call_log_provider().clear_active_call()
-    return {"status": "ok"}
+    return {"status": "ok", "hung_up": hung_up}
 
 
 @router.get("/health/checks")

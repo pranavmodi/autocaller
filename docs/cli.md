@@ -105,7 +105,7 @@ Every command accepts `--help`. Exit code is `0` on success, `1` on any error
 | `mock on <phone> \| off \| status` | Redirect every Twilio call to `<phone>` for safe testing. |
 | `allowlist list \| add <phone> \| remove <phone> \| clear \| set-from-leads [--state=CA --dm-only --limit=20]` | Manage `allowed_phones`. `set-from-leads` populates it from the top-N priority-sorted leads in the DB. |
 | `dispatcher batch <N>` | Start the dispatcher with an auto-stop after N calls placed. |
-| `dispatcher clear-active` | Clear the in-memory active-call marker (if it got stuck). Does NOT hang up an actual Twilio call. |
+| `dispatcher clear-active` | Hang up the live Twilio call (if any) and clear the active-call marker. Used by the UI "End call" button. |
 | `calls judge <call_id>` | Run the LLM judge on one call (scores 0-10, assigns GTM disposition). |
 | `calls judge --all-pending` | Backfill-judge every un-judged completed call. ~$0.02 each with gpt-4o-mini. |
 | `followups list [--action=... --owner=... --disposition=... --within=14]` | Show calls that need human or automated follow-up, sorted by due date. |
