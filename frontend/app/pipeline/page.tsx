@@ -34,6 +34,7 @@ export default function PipelinePage() {
   const qc = useQueryClient();
   const [filterState, setFilterState] = useState<string>("");
   const [dmOnly, setDmOnly] = useState(false);
+  const [search, setSearch] = useState<string>("");
 
   const { data, isLoading } = useQuery({
     queryKey: ["leads"],
@@ -51,9 +52,25 @@ export default function PipelinePage() {
     const states = Array.from(
       new Set(leads.map((l) => l.state).filter((s): s is string => Boolean(s))),
     ).sort();
+    const needle = search.trim().toLowerCase();
     const filtered = leads.filter((l) => {
       if (filterState && l.state !== filterState) return false;
       if (dmOnly && !l.tags?.includes("decision-maker")) return false;
+      if (needle) {
+        const hay = [
+          l.name,
+          l.firm_name,
+          l.phone,
+          l.email,
+          l.title,
+          l.state,
+          l.patient_id,
+        ]
+          .filter(Boolean)
+          .map((x) => String(x).toLowerCase())
+          .join(" ");
+        if (!hay.includes(needle)) return false;
+      }
       return true;
     });
     const columns: Record<Column, Lead[]> = {
@@ -67,7 +84,7 @@ export default function PipelinePage() {
       (a, b) => a.priority_bucket - b.priority_bucket || a.name.localeCompare(b.name),
     );
     return { columns, states };
-  }, [data, filterState, dmOnly]);
+  }, [data, filterState, dmOnly, search]);
 
   return (
     <div className="space-y-6">
@@ -79,6 +96,13 @@ export default function PipelinePage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search name, firm, phone, email…"
+            className="w-56 rounded-md border border-neutral-300 bg-white px-2 py-1 text-sm placeholder:text-neutral-400"
+          />
           <select
             value={filterState}
             onChange={(e) => setFilterState(e.target.value)}

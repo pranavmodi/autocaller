@@ -4,8 +4,8 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format, formatDistanceToNow } from "date-fns";
-import { ArrowLeft, Calendar, Mail, ExternalLink, RefreshCw } from "lucide-react";
-import { getCall, recordingUrl, apiUrl, retryLead } from "@/lib/api";
+import { ArrowLeft, Calendar, Mail, ExternalLink, RefreshCw, Phone } from "lucide-react";
+import { getCall, recordingUrl, apiUrl, retryLead, startCall } from "@/lib/api";
 import { OutcomePill } from "@/components/OutcomePill";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -38,6 +38,11 @@ export default function CallDetailPage({ params }: Props) {
 
   const retry = useMutation({
     mutationFn: () => retryLead((call as any)?.patient_id as string),
+  });
+
+  const callNow = useMutation({
+    mutationFn: () => startCall((call as any)?.patient_id as string, "twilio"),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["call", callId] }),
   });
 
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -160,6 +165,16 @@ export default function CallDetailPage({ params }: Props) {
             )}
           </div>
           <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              onClick={() => callNow.mutate()}
+              disabled={callNow.isPending || !call.patient_id}
+              title="Place a Twilio call to this lead immediately. Requires no active call + safety gates passing."
+              className="gap-1.5 bg-emerald-600 text-white hover:bg-emerald-700"
+            >
+              <Phone className={cn("h-3.5 w-3.5", callNow.isPending && "animate-pulse")} />
+              {callNow.isSuccess ? "Dialing…" : callNow.isError ? "Call failed" : "Call now"}
+            </Button>
             <Button
               size="sm"
               variant="outline"
