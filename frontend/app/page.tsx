@@ -10,7 +10,6 @@ import {
   startDispatcherBatch,
   listCalls,
   listLeads,
-  clearActiveCall,
   getSettings,
   setSystemEnabled,
   setMockMode,
@@ -20,16 +19,13 @@ import {
 } from "@/lib/api";
 import { useDashboardEvents } from "@/hooks/useDashboardEvents";
 import { OutcomePill } from "@/components/OutcomePill";
-import { TranscriptStream } from "@/components/TranscriptStream";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { PhoneOff, Headphones, HeadphoneOff } from "lucide-react";
-import { useLiveListener } from "@/hooks/useLiveListener";
 
 export default function NowPage() {
   const qc = useQueryClient();
-  const { activeCall, lastDecision, lastStatus, transcript } = useDashboardEvents();
+  const { lastDecision } = useDashboardEvents();
 
   const dispatcher = useQuery({
     queryKey: ["dispatcher-status"],
@@ -104,38 +100,15 @@ export default function NowPage() {
     refetchInterval: 10_000,
   });
 
-  const hangup = useMutation({
-    mutationFn: clearActiveCall,
-  });
-
-  const listener = useLiveListener(activeCall?.call_id ?? null);
-
   const [batchCount, setBatchCount] = useState<number>(5);
 
   const latestReason = lastDecision?.detail ?? dispatcher.data?.recent_decisions?.[0]?.detail ?? "—";
 
   return (
     <div className="space-y-6">
-      {/* Auto-follow listener pill — persistent across calls */}
-      {listener.autoReconnect && !activeCall && (
-        <div className="flex items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm">
-          <span className="flex items-center gap-2 text-amber-900">
-            <Headphones className="h-4 w-4" />
-            <span className="font-medium">
-              Auto-listen is on — waiting for the next call…
-            </span>
-            {listener.error && (
-              <span className="text-xs text-rose-700">({listener.error})</span>
-            )}
-          </span>
-          <button
-            onClick={listener.stop}
-            className="text-xs font-medium text-neutral-600 underline-offset-2 hover:underline"
-          >
-            turn off
-          </button>
-        </div>
-      )}
+      {/* Note: active-call UI + auto-listen pill live in the global
+          ActiveCallOverlay (root layout), so they appear on every page
+          — not just here. */}
 
       {/* Global controls */}
       <section className="rounded-lg border border-neutral-200 bg-white p-5">
@@ -348,75 +321,8 @@ export default function NowPage() {
         </div>
       </section>
 
-      {/* Active call */}
-      {activeCall && (
-        <section className="rounded-lg border border-emerald-200 bg-white p-5 shadow-sm">
-          <div className="mb-3 flex items-start justify-between gap-4">
-            <div>
-              <h2 className="flex items-center gap-2 text-sm font-medium uppercase tracking-wide text-emerald-700">
-                <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500" />
-                Active call
-              </h2>
-              <div className="mt-1 text-lg font-semibold">
-                {activeCall.patient_name}
-                {activeCall.firm_name && (
-                  <span className="ml-2 text-sm font-normal text-neutral-500">
-                    · {activeCall.firm_name}
-                  </span>
-                )}
-              </div>
-              <div className="mt-0.5 text-xs text-neutral-500">
-                {activeCall.lead_state ?? "—"} · {activeCall.phone}
-              </div>
-              {lastStatus && (
-                <div className="mt-1 text-xs text-neutral-600">{lastStatus}</div>
-              )}
-            </div>
-            <div className="flex gap-2">
-              {listener.autoReconnect ? (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={listener.stop}
-                  className="gap-1.5"
-                >
-                  <HeadphoneOff className="h-3.5 w-3.5" />
-                  {listener.listening
-                    ? "Stop listening"
-                    : listener.connecting
-                      ? "Connecting…"
-                      : "Listening (waiting for next call)"}
-                </Button>
-              ) : (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={listener.start}
-                  disabled={listener.connecting}
-                  className="gap-1.5"
-                >
-                  <Headphones className="h-3.5 w-3.5" />
-                  {listener.connecting ? "Connecting…" : "Listen (auto-follow)"}
-                </Button>
-              )}
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => hangup.mutate()}
-                disabled={hangup.isPending}
-                className="gap-1.5"
-              >
-                <PhoneOff className="h-3.5 w-3.5" />
-                End
-              </Button>
-            </div>
-          </div>
-          {listener.error && (
-            <p className="mb-2 text-xs text-rose-600">⚠ {listener.error}</p>
-          )}
-          <TranscriptStream entries={transcript} />
-        </section>
-      )}
+      {/* Active call UI lives in the global ActiveCallOverlay — floats
+          on every page with minimize/expand. */}
 
       {/* Next up + Recent calls, two-column on desktop */}
       <div className="grid gap-6 md:grid-cols-2">
