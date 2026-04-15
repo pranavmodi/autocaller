@@ -734,9 +734,12 @@ class CallOrchestrator:
             OUTCOME_QUEUE_WAIT,
         )
 
-        if self._ivr_navigating or not self._current_call or not self._twilio_bridge:
+        # _ivr_navigating is set synchronously by _handle_transcript BEFORE
+        # this task is scheduled, so we skip the usual "already navigating"
+        # guard here. Just bail if the call has already torn down.
+        if not self._current_call or not self._twilio_bridge:
+            self._ivr_navigating = False
             return
-        self._ivr_navigating = True
         try:
             bridge = self._twilio_bridge
             navigator = get_ivr_navigator()
