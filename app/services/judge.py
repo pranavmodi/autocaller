@@ -163,6 +163,11 @@ Your job is to review one completed call and produce:
 1. Judge scores on six dimensions (0-10 each).
 2. A GTM disposition that tells a sales specialist EXACTLY what to do next.
 
+The transcript may be in English OR Spanish (some leads are marked
+language=es in the DB — the AI opened with "¿Bueno?" and ran the Spanish
+prompt). Your ANALYSIS and all JSON fields MUST be in English regardless.
+Judge both languages on equal terms — same rubric, same bar.
+
 Be rigorous. Favor precision over generosity. Cite the transcript when \
 recommending prompt edits or flagging DNC.
 

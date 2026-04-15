@@ -170,6 +170,7 @@ class CallOrchestrator:
         # log so we can store both on the row for post-hoc debugging.
         from app.prompts.attorney_cold_call import (
             render_system_prompt,
+            prompt_language_for,
             TOOLS as AUTOCALLER_TOOLS,
             PROMPT_VERSION,
         )
@@ -179,12 +180,15 @@ class CallOrchestrator:
             val = getattr(sales, attr, "") if sales is not None else ""
             return val or os.getenv(env, default)
 
+        prompt_lang = prompt_language_for(patient)
         system_prompt = render_system_prompt(
             lead=patient,
             rep_name=_sales_or_env("rep_name", "SALES_REP_NAME", "Alex"),
             rep_company=_sales_or_env("rep_company", "SALES_REP_COMPANY", "our team"),
             product_context=_sales_or_env("product_context", "PRODUCT_CONTEXT", ""),
+            language=prompt_lang,
         )
+        prompt_version_tagged = f"{PROMPT_VERSION}-{prompt_lang}"
 
         # Resolve which voice backend this call will use.
         # precedence: per-call arg > DB setting > env > 'openai'.
@@ -213,7 +217,7 @@ class CallOrchestrator:
             firm_name=getattr(patient, "firm_name", None),
             lead_state=getattr(patient, "state", None),
             prompt_text=system_prompt,
-            prompt_version=PROMPT_VERSION,
+            prompt_version=prompt_version_tagged,
             tools_snapshot=list(AUTOCALLER_TOOLS),
             voice_provider=resolved_provider,
             voice_model=resolved_model or "",
@@ -418,9 +422,9 @@ class CallOrchestrator:
             if self.on_status_update:
                 await self.on_status_update("Connected - AI Speaking")
 
-        await self._voice_service.start_conversation()
+        await self._voice_service.start_conversation(language=prompt_lang)
         if self._verbose:
-            print(f"[CallOrchestrator] Conversation started for call {call.call_id}")
+            print(f"[CallOrchestrator] Conversation started for call {call.call_id} (language={prompt_lang})")
 
         return call
 
@@ -745,7 +749,9 @@ class CallOrchestrator:
                     await self.on_status_update("Reached a human via IVR navigation")
                 try:
                     if self._voice_service is not None:
-                        await self._voice_service.start_conversation()
+                        from app.prompts.attorney_cold_call import prompt_language_for
+                        lang = prompt_language_for(self._current_patient) if self._current_patient else "en"
+                        await self._voice_service.start_conversation(language=lang)
                 except Exception as e:
                     logger.warning("Could not seed post-IVR greeting: %s", e)
                 return  # leave conversation to the normal flow

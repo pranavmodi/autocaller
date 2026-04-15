@@ -262,26 +262,33 @@ class OpenAIRealtimeBackend:
             })
             await self._send({"type": "response.create"})
 
-    async def start_conversation(self):
-        """Seed the "Hello? then wait for VAD" cold-call opener."""
+    async def start_conversation(self, language: str = "en"):
+        """Seed the single-word opener and wait for VAD."""
         if not self._ws:
             return
+        lang = (language or "en").strip().lower()[:2]
+        if lang == "es":
+            seed_text = (
+                "[System: La llamada se acaba de conectar. Di SOLO la única "
+                "palabra '¿Bueno?' en tono cálido y casual — nada más. NO te "
+                "presentes todavía. NO pitchees. Espera a que la otra persona "
+                "hable antes de continuar. Cuando respondan, sigue las "
+                "instrucciones completas del sistema."
+            )
+        else:
+            seed_text = (
+                "[System: The call just connected. Say ONLY the single word "
+                "'Hello?' in a warm, casual tone — nothing else. Do NOT "
+                "introduce yourself yet. Do NOT pitch. Wait for the other "
+                "party to speak before continuing. When they respond, follow "
+                "your full system instructions."
+            )
         await self._send({
             "type": "conversation.item.create",
             "item": {
                 "type": "message",
                 "role": "user",
-                "content": [{
-                    "type": "input_text",
-                    "text": (
-                        "[System: The call just connected. Say ONLY the single "
-                        "word 'Hello?' in a warm, casual tone — nothing else. "
-                        "Do NOT introduce yourself yet. Do NOT pitch. Wait for "
-                        "the other party to speak before continuing. When they "
-                        "respond, follow your full system instructions "
-                        "(identify who's on the line, then the opener)."
-                    ),
-                }],
+                "content": [{"type": "input_text", "text": seed_text}],
             },
         })
         await self._send({"type": "response.create"})

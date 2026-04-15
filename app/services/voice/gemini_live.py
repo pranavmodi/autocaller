@@ -308,23 +308,32 @@ class GeminiLiveBackend:
         is rarely needed."""
         return
 
-    async def start_conversation(self):
-        """Seed the same "Hello? then wait for VAD" opener we use on OpenAI.
+    async def start_conversation(self, language: str = "en"):
+        """Seed the single-word opener and wait for VAD.
 
         Gemini Live accepts a text-only kick-off via `realtimeInput.text`.
-        (The `clientContent.turns[]` shape exists in the proto but the
-        v1beta gateway + gemini-3.1-flash-live-preview rejects it with
-        'invalid argument' — `realtimeInput.text` is what actually works.)
+        `clientContent.turns[]` is rejected by the 3.1-flash-live-preview
+        gateway with 'invalid argument'.
         """
         if not self._ws:
             return
-        seed_text = (
-            "[System: The call just connected. Say ONLY the single word "
-            "'Hello?' in a warm, casual tone — nothing else. Do NOT introduce "
-            "yourself yet. Do NOT pitch. Wait for the other party to speak "
-            "before continuing. When they respond, follow your full system "
-            "instructions (identify who's on the line, then the opener)."
-        )
+        lang = (language or "en").strip().lower()[:2]
+        if lang == "es":
+            seed_text = (
+                "[System: La llamada se acaba de conectar. Di SOLO la única "
+                "palabra '¿Bueno?' en tono cálido y casual — nada más. NO te "
+                "presentes todavía. NO pitchees. Espera a que la otra persona "
+                "hable antes de continuar. Cuando respondan, sigue las "
+                "instrucciones completas del sistema."
+            )
+        else:
+            seed_text = (
+                "[System: The call just connected. Say ONLY the single word "
+                "'Hello?' in a warm, casual tone — nothing else. Do NOT "
+                "introduce yourself yet. Do NOT pitch. Wait for the other "
+                "party to speak before continuing. When they respond, follow "
+                "your full system instructions."
+            )
         await self._send({"realtimeInput": {"text": seed_text}})
 
     async def send_function_result(self, call_id: str, result: dict):

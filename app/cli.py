@@ -208,6 +208,7 @@ def leads_import(
 @leads_app.command("list")
 def leads_list(
     state: Optional[str] = typer.Option(None, help="Filter by 2-letter state"),
+    language: Optional[str] = typer.Option(None, "--language", help="Filter by language (en|es)"),
     limit: int = typer.Option(50, help="Max rows to display"),
 ):
     """List leads."""
@@ -219,13 +220,15 @@ def leads_list(
             stmt = select(PatientRow)
             if state:
                 stmt = stmt.where(PatientRow.state == state.upper())
+            if language:
+                stmt = stmt.where(PatientRow.language == language.strip().lower())
             stmt = stmt.order_by(PatientRow.priority_bucket, PatientRow.updated_at.desc()).limit(limit)
             res = await session.execute(stmt)
             return list(res.scalars().all())
 
     leads = _run(_query())
     table = Table(title=f"Leads ({len(leads)})")
-    for col in ["id", "name", "firm", "state", "phone", "title", "attempts", "last_outcome"]:
+    for col in ["id", "name", "firm", "state", "lang", "phone", "title", "attempts", "last_outcome"]:
         table.add_column(col, overflow="fold")
     for l in leads:
         table.add_row(
@@ -233,12 +236,45 @@ def leads_list(
             l.name or "",
             l.firm_name or "",
             l.state or "",
+            l.language or "",
             l.phone or "",
             l.title or "",
             str(l.attempt_count),
             l.last_outcome or "",
         )
     console.print(table)
+
+
+@leads_app.command("set-language")
+def leads_set_language(
+    lead_id: str = typer.Argument(..., help="Lead / patient_id"),
+    language: str = typer.Argument(..., help="'en' or 'es'"),
+):
+    """Set the outbound-call language for a lead (controls which prompt
+    template + first-word seed the AI uses)."""
+    lang = language.strip().lower()
+    if lang not in ("en", "es"):
+        console.print("[red]language must be 'en' or 'es'[/red]")
+        raise typer.Exit(code=2)
+    async def _update():
+        from app.db import AsyncSessionLocal
+        from app.db.models import PatientRow
+        from sqlalchemy import select
+        async with AsyncSessionLocal() as session:
+            res = await session.execute(
+                select(PatientRow).where(PatientRow.patient_id == lead_id)
+            )
+            row = res.scalar_one_or_none()
+            if not row:
+                return None
+            row.language = lang
+            await session.commit()
+            return row
+    row = _run(_update())
+    if not row:
+        console.print(f"[red]lead not found: {lead_id}[/red]")
+        raise typer.Exit(code=1)
+    console.print(f"[green]✓[/green] {lead_id} language → {lang} ({row.name})")
 
 
 @leads_app.command("show")
