@@ -15,6 +15,7 @@ import {
   setSystemEnabled,
   setMockMode,
   setVoiceProvider,
+  setDispatcherCooldown,
 } from "@/lib/api";
 import { useDashboardEvents } from "@/hooks/useDashboardEvents";
 import { OutcomePill } from "@/components/OutcomePill";
@@ -69,6 +70,20 @@ export default function NowPage() {
   const switchVoice = useMutation({
     mutationFn: (next: "openai" | "gemini") => setVoiceProvider(next),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["settings"] }),
+  });
+  const cooldownServer =
+    Number(
+      (settings.data?.dispatcher_settings as Record<string, unknown> | undefined)
+        ?.cooldown_seconds ?? 0,
+    ) || 0;
+  const [cooldownDraft, setCooldownDraft] = useState<number | null>(null);
+  const effectiveCooldown = cooldownDraft ?? cooldownServer;
+  const saveCooldown = useMutation({
+    mutationFn: (secs: number) => setDispatcherCooldown(secs),
+    onSuccess: () => {
+      setCooldownDraft(null);
+      qc.invalidateQueries({ queryKey: ["settings"] });
+    },
   });
 
   const recentCalls = useQuery({
@@ -256,6 +271,43 @@ export default function NowPage() {
               disabled={running}
             />
           </label>
+          <label
+            className="text-xs text-neutral-600"
+            title="Seconds to wait after a call ends before the next one is placed"
+          >
+            Cooldown (s):{" "}
+            <input
+              type="number"
+              min={0}
+              max={3600}
+              value={effectiveCooldown}
+              onChange={(e) =>
+                setCooldownDraft(Math.max(0, parseInt(e.target.value || "0", 10)))
+              }
+              className="w-16 rounded border border-neutral-300 px-1.5 py-0.5 text-sm"
+              disabled={saveCooldown.isPending}
+            />
+          </label>
+          {cooldownDraft !== null && cooldownDraft !== cooldownServer && (
+            <>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => saveCooldown.mutate(cooldownDraft)}
+                disabled={saveCooldown.isPending}
+                className="gap-1.5"
+              >
+                Save cooldown
+              </Button>
+              <button
+                type="button"
+                onClick={() => setCooldownDraft(null)}
+                className="text-[11px] text-neutral-500 underline-offset-2 hover:underline"
+              >
+                cancel
+              </button>
+            </>
+          )}
           <Button
             size="sm"
             variant="outline"
@@ -277,7 +329,7 @@ export default function NowPage() {
             </Button>
           )}
           <span className="ml-auto text-[11px] text-neutral-400">
-            auto-stops after N calls placed
+            auto-stops after N calls placed · cooldown applies between each call
           </span>
         </div>
       </section>

@@ -37,6 +37,7 @@ class DispatcherSettings:
     dispatch_timeout: int = 30
     max_attempts: int = 3
     min_hours_between: int = 168  # 1 week — avoid re-calling a firm within 7 days
+    cooldown_seconds: int = 0     # inter-call wait after a call ends before the next is placed
     verbose_logging: bool = False
 
 

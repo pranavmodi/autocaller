@@ -101,6 +101,7 @@ def _row_to_settings(row: SystemSettingsRow) -> SystemSettings:
         dispatch_timeout=ds.get("dispatch_timeout", 30),
         max_attempts=ds.get("max_attempts", 3),
         min_hours_between=ds.get("min_hours_between", 6),
+        cooldown_seconds=int(ds.get("cooldown_seconds", 0) or 0),
         verbose_logging=ds.get("verbose_logging", False),
     )
     settings.allow_live_calls = row.allow_live_calls if row.allow_live_calls is not None else False
@@ -187,6 +188,7 @@ class SettingsProvider:
                 "dispatch_timeout": settings.dispatcher_settings.dispatch_timeout,
                 "max_attempts": settings.dispatcher_settings.max_attempts,
                 "min_hours_between": settings.dispatcher_settings.min_hours_between,
+                "cooldown_seconds": settings.dispatcher_settings.cooldown_seconds,
                 "verbose_logging": settings.dispatcher_settings.verbose_logging,
             }
             row.allow_live_calls = settings.allow_live_calls
@@ -298,6 +300,7 @@ class SettingsProvider:
                 "dispatch_timeout": dispatcher_settings.dispatch_timeout,
                 "max_attempts": dispatcher_settings.max_attempts,
                 "min_hours_between": dispatcher_settings.min_hours_between,
+                "cooldown_seconds": dispatcher_settings.cooldown_seconds,
                 "verbose_logging": dispatcher_settings.verbose_logging,
             }
             await session.commit()

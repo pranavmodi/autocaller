@@ -124,6 +124,9 @@ export const setMockMode = (enabled: boolean, mock_phone = "") =>
 export const setVoiceProvider = (provider: "openai" | "gemini", model = "") =>
   put<Record<string, unknown>>("/api/settings/voice", { provider, model });
 
+export const setDispatcherCooldown = (cooldown_seconds: number) =>
+  put<Record<string, unknown>>("/api/settings/dispatcher/cooldown", { cooldown_seconds });
+
 // ---- Health ----
 export const checkHealth = () =>
   fetch(apiUrl("/health")).then((r) => r.ok);

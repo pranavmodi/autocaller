@@ -42,7 +42,12 @@ class DispatcherSettingsRequest(BaseModel):
     dispatch_timeout: int = 30
     max_attempts: int = 3
     min_hours_between: int = 6
+    cooldown_seconds: int = 0
     verbose_logging: bool = False
+
+
+class CooldownRequest(BaseModel):
+    cooldown_seconds: int
 
 
 class SourceRequest(BaseModel):
@@ -168,6 +173,7 @@ async def settings_to_response(provider) -> SystemSettingsResponse:
             dispatch_timeout=settings.dispatcher_settings.dispatch_timeout,
             max_attempts=settings.dispatcher_settings.max_attempts,
             min_hours_between=settings.dispatcher_settings.min_hours_between,
+            cooldown_seconds=settings.dispatcher_settings.cooldown_seconds,
             verbose_logging=settings.dispatcher_settings.verbose_logging,
         ),
         allow_live_calls=settings.allow_live_calls,
@@ -364,6 +370,7 @@ async def update_dispatcher_settings(request: DispatcherSettingsRequest):
         dispatch_timeout=request.dispatch_timeout,
         max_attempts=request.max_attempts,
         min_hours_between=request.min_hours_between,
+        cooldown_seconds=request.cooldown_seconds,
         verbose_logging=request.verbose_logging,
     )
 
@@ -375,9 +382,42 @@ async def update_dispatcher_settings(request: DispatcherSettingsRequest):
         dispatch_timeout=request.dispatch_timeout,
         max_attempts=request.max_attempts,
         min_hours_between=request.min_hours_between,
+        cooldown_seconds=request.cooldown_seconds,
         verbose_logging=request.verbose_logging,
     )
 
+    return await settings_response_and_broadcast(provider)
+
+
+@router.put("/dispatcher/cooldown", response_model=SystemSettingsResponse)
+async def set_cooldown(request: CooldownRequest):
+    """Set just the inter-call cooldown (seconds). Shortcut over
+    /dispatcher which requires the full payload."""
+    from app.services.dispatcher import get_dispatcher
+    if request.cooldown_seconds < 0:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail="cooldown_seconds must be >= 0")
+    provider = get_settings_provider()
+    current = await provider.get_settings()
+    ds = current.dispatcher_settings
+    merged = DispatcherSettings(
+        poll_interval=ds.poll_interval,
+        dispatch_timeout=ds.dispatch_timeout,
+        max_attempts=ds.max_attempts,
+        min_hours_between=ds.min_hours_between,
+        cooldown_seconds=request.cooldown_seconds,
+        verbose_logging=ds.verbose_logging,
+    )
+    await provider.update_dispatcher_settings(merged)
+    get_dispatcher().update_config(
+        poll_interval=merged.poll_interval,
+        dispatch_timeout=merged.dispatch_timeout,
+        max_attempts=merged.max_attempts,
+        min_hours_between=merged.min_hours_between,
+        cooldown_seconds=merged.cooldown_seconds,
+        verbose_logging=merged.verbose_logging,
+    )
+    print(f"[SETTINGS] dispatcher cooldown_seconds → {request.cooldown_seconds}")
     return await settings_response_and_broadcast(provider)
 
 

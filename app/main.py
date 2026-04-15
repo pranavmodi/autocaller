@@ -43,6 +43,7 @@ async def lifespan(app: FastAPI):
         dispatch_timeout=ds.dispatch_timeout,
         max_attempts=ds.max_attempts,
         min_hours_between=ds.min_hours_between,
+        cooldown_seconds=ds.cooldown_seconds,
         verbose_logging=verbose,
     )
     # If sources are "simulation" and active_scenario_id is set, activate the scenario

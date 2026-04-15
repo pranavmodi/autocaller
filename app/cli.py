@@ -596,6 +596,27 @@ def dispatcher_clear_active():
     console.print_json(data=resp)
 
 
+@dispatcher_app.command("cooldown")
+def dispatcher_cooldown(
+    seconds: Optional[int] = typer.Argument(
+        None,
+        help="Inter-call cooldown in seconds. Omit to just show the current value.",
+    ),
+):
+    """Get or set the wait time the dispatcher enforces between consecutive calls."""
+    if seconds is None:
+        s = _get("/api/settings")
+        current = int((s.get("dispatcher_settings") or {}).get("cooldown_seconds", 0))
+        console.print(f"cooldown_seconds = {current}")
+        return
+    if seconds < 0:
+        console.print("[red]seconds must be >= 0[/red]")
+        raise typer.Exit(code=2)
+    s = _put("/api/settings/dispatcher/cooldown", {"cooldown_seconds": seconds})
+    new_val = int((s.get("dispatcher_settings") or {}).get("cooldown_seconds", 0))
+    console.print(f"[green]✓[/green] cooldown_seconds = {new_val}")
+
+
 # ---------------------------------------------------------------------------
 # calls (history + transcript + export)
 # ---------------------------------------------------------------------------
