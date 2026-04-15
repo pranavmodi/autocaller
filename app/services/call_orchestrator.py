@@ -594,8 +594,38 @@ class CallOrchestrator:
 
     async def _handle_audio(self, audio_data: bytes):
         """Handle audio output from voice service."""
+        import time
+        self._last_audio_out_at = time.monotonic()
         if self.on_audio_output:
             await self.on_audio_output(audio_data)
+
+    async def _wait_for_audio_drain(
+        self,
+        *,
+        silence_needed: float = 1.2,
+        max_wait: float = 5.0,
+    ) -> None:
+        """Block until the AI's speech has stopped for `silence_needed` seconds,
+        up to `max_wait`. Called before tearing down a call so we don't clip
+        the model's sign-off.
+
+        Models frequently call `end_call` mid-goodbye; without this wait, the
+        Twilio hangup fires while "…have a great day!" is still streaming.
+        """
+        import time
+        deadline = time.monotonic() + max_wait
+        last_seen = getattr(self, "_last_audio_out_at", 0.0) or 0.0
+        # If the model hasn't emitted any audio at all since connect, don't wait.
+        if last_seen == 0.0:
+            return
+        while True:
+            now = time.monotonic()
+            if now - last_seen >= silence_needed:
+                return
+            if now >= deadline:
+                return
+            await asyncio.sleep(0.1)
+            last_seen = getattr(self, "_last_audio_out_at", last_seen)
 
     async def _handle_function_call(self, name: str, args: dict, fn_call_id: str = ""):
         """Handle function calls from AI."""
@@ -676,6 +706,8 @@ class CallOrchestrator:
                 for k, v in capture_update.items():
                     setattr(self._current_call, k, v)
 
+            # Let any in-flight goodbye audio drain before we hang up.
+            await self._wait_for_audio_drain()
             await self.end_call(outcome)
 
         elif name == "send_sms":
