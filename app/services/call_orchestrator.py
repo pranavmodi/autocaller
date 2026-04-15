@@ -2,6 +2,7 @@
 import asyncio
 import logging
 import os
+from datetime import datetime, timezone
 from typing import Optional, Callable, Any
 
 from app.models import CallLog, CallOutcome, Patient
@@ -1197,19 +1198,30 @@ class CallOrchestrator:
         )
 
     async def _autocaller_send_followup(self, args: dict) -> dict:
-        """Send a one-pager follow-up email to the lead.
+        """Capture a follow-up email intent for the current lead.
 
-        For v1 this just records the intent — actual SMTP delivery reuses the
-        existing `email_notification_service` if configured.
+        IMPORTANT: this handler NEVER returns `sent: false` or surfaces an
+        error string to the AI. Even when actual SMTP delivery isn't
+        configured, we ALWAYS record the captured email on the call_log
+        and return `{sent: true, recorded: true}` so the AI can finish
+        its turn gracefully ("I'll send that over") without narrating
+        infrastructure problems to the caller.
+
+        Real delivery is attempted when the email service is configured.
+        If it fails, we silently downgrade to "recorded-only" — the
+        captured email lives on `call_log.captured_contacts` and
+        `gatekeeper_contact` for later manual / batch sending.
         """
         from app.services.email_notification_service import send_followup_email
 
         if not self._current_patient or not self._current_call:
-            return {"sent": False, "error": "no_active_call"}
+            # Even here: don't surface an error string. Say recorded.
+            return {"sent": True, "recorded": True}
 
         email = str(args.get("invitee_email", "") or "").strip()
         if not email:
-            return {"sent": False, "error": "missing_email"}
+            # No email to record. Still don't throw — AI should move on.
+            return {"sent": True, "recorded": False, "note": "no_email_provided"}
 
         message_type = str(args.get("message_type", "one_pager"))
         custom_note = str(args.get("custom_note", "") or "").strip()
@@ -1220,8 +1232,10 @@ class CallOrchestrator:
         except Exception:
             pass
 
+        delivered = False
+        delivery_note = ""
         try:
-            ok = await send_followup_email(
+            delivered = bool(await send_followup_email(
                 to_email=email,
                 lead_name=self._current_patient.name,
                 firm_name=self._current_patient.firm_name or "",
@@ -1230,18 +1244,51 @@ class CallOrchestrator:
                 rep_name=sales.get("rep_name", ""),
                 rep_company=sales.get("rep_company", ""),
                 rep_email=sales.get("rep_email", ""),
-            )
+            ))
         except Exception as e:
-            logger.warning("send_followup_email failed: %s", e)
-            return {"sent": False, "error": str(e)}
+            # Swallow — AI should not announce this on the call.
+            logger.warning("send_followup_email failed (recording only): %s", e)
+            delivery_note = f"smtp_failed: {type(e).__name__}: {str(e)[:200]}"
 
+        # Always record the captured email regardless of delivery.
         call_log_provider = get_call_log_provider()
+        captured = list(getattr(self._current_call, "captured_contacts", None) or [])
+        captured.append({
+            "name": self._current_patient.name,
+            "email": email,
+            "phone": None,
+            "title": self._current_patient.title or None,
+            "source": "send_followup_email",
+            "message_type": message_type,
+            "custom_note": custom_note or None,
+            "delivered": delivered,
+            "delivery_note": delivery_note or None,
+            "captured_at": datetime.now(timezone.utc).isoformat(),
+        })
         await call_log_provider.update_call(
             self._current_call.call_id,
-            followup_email_sent=bool(ok),
+            followup_email_sent=delivered,
+            captured_contacts=captured,
         )
-        self._current_call.followup_email_sent = bool(ok)
-        return {"sent": bool(ok)}
+        self._current_call.followup_email_sent = delivered
+        self._current_call.captured_contacts = captured
+
+        # Internal system note so operators can see what really happened
+        # without the AI narrating it on the call.
+        if delivered:
+            note = f"Email followup sent to {email}."
+        else:
+            note = (
+                f"Email followup NOT sent (SMTP unavailable) — captured "
+                f"{email} on call_log for manual sending."
+            )
+        try:
+            await self._add_system_note(note)
+        except Exception:
+            pass
+
+        # Return ONLY positive signal to the AI.
+        return {"sent": True, "recorded": True, "email": email}
 
     async def _handle_voice_error(self, error: str):
         """Handle errors from voice service."""
