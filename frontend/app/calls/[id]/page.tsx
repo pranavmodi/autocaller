@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format, formatDistanceToNow } from "date-fns";
 import { ArrowLeft, Calendar, Mail, ExternalLink, RefreshCw } from "lucide-react";
-import { getCall, recordingUrl, apiUrl } from "@/lib/api";
+import { getCall, recordingUrl, apiUrl, retryLead } from "@/lib/api";
 import { OutcomePill } from "@/components/OutcomePill";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -34,6 +34,10 @@ export default function CallDetailPage({ params }: Props) {
       return res.json();
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["call", callId] }),
+  });
+
+  const retry = useMutation({
+    mutationFn: () => retryLead((call as any)?.patient_id as string),
   });
 
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -155,16 +159,29 @@ export default function CallDetailPage({ params }: Props) {
               <p className="text-[11px] text-neutral-400">not yet judged</p>
             )}
           </div>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => judgeNow.mutate()}
-            disabled={judgeNow.isPending || !call.ended_at}
-            className="gap-1.5"
-          >
-            <RefreshCw className={cn("h-3.5 w-3.5", judgeNow.isPending && "animate-spin")} />
-            {call.judged_at ? "Re-judge" : "Judge now"}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => retry.mutate()}
+              disabled={retry.isPending || !call.patient_id}
+              title="Clear cooldown on this lead so the dispatcher re-picks it on its next tick"
+              className="gap-1.5"
+            >
+              <RefreshCw className={cn("h-3.5 w-3.5", retry.isPending && "animate-spin")} />
+              {retry.isSuccess ? "Queued for retry" : "Retry this lead"}
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => judgeNow.mutate()}
+              disabled={judgeNow.isPending || !call.ended_at}
+              className="gap-1.5"
+            >
+              <RefreshCw className={cn("h-3.5 w-3.5", judgeNow.isPending && "animate-spin")} />
+              {call.judged_at ? "Re-judge" : "Judge now"}
+            </Button>
+          </div>
         </div>
 
         {call.judged_at ? (

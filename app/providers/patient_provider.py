@@ -212,6 +212,24 @@ class SimulationPatientProvider(BasePatientProvider):
                 )
                 await session.commit()
 
+    async def reset_for_retry(self, patient_id: str) -> bool:
+        """Clear the 'recently attempted' gate so the dispatcher re-picks
+        this lead on its next tick. `attempt_count` is preserved (so the
+        max-attempts cap still protects). Returns True if the lead was
+        updated, False if not found.
+        """
+        async with AsyncSessionLocal() as session:
+            result = await session.execute(
+                select(PatientRow).where(PatientRow.patient_id == patient_id)
+            )
+            row = result.scalar_one_or_none()
+            if not row:
+                return False
+            row.last_attempt_at = None
+            row.due_by = None
+            await session.commit()
+            return True
+
     async def mark_patient_invalid_number(self, patient_id: str, reason: str):
         """Flag patient as invalid number to prevent retries."""
         async with AsyncSessionLocal() as session:

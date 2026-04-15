@@ -130,6 +130,9 @@ export const setDispatcherCooldown = (cooldown_seconds: number) =>
 export const setIVRNavigate = (enabled: boolean) =>
   put<Record<string, unknown>>("/api/settings/ivr-navigate", { enabled });
 
+export const retryLead = (leadId: string) =>
+  post<{ status: string; patient_id: string }>(`/api/patients/${leadId}/retry`);
+
 // ---- Health ----
 export const checkHealth = () =>
   fetch(apiUrl("/health")).then((r) => r.ok);

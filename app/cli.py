@@ -245,6 +245,17 @@ def leads_list(
     console.print(table)
 
 
+@leads_app.command("retry")
+def leads_retry(
+    lead_id: str = typer.Argument(..., help="Lead / patient_id to queue for immediate retry"),
+):
+    """Clear the cooldown on a lead so the dispatcher picks it up on its
+    next tick. Use after a call you want to redial without waiting for
+    `min_hours_between` to elapse (default is 1 week)."""
+    resp = _post(f"/api/patients/{lead_id}/retry")
+    console.print_json(data=resp)
+
+
 @leads_app.command("set-language")
 def leads_set_language(
     lead_id: str = typer.Argument(..., help="Lead / patient_id"),

@@ -368,6 +368,22 @@ async def reset_patients():
     return {"status": "ok", "count": len(patients)}
 
 
+@router.post("/patients/{patient_id}/retry")
+async def retry_lead(patient_id: str):
+    """Clear the 'recently attempted' cooldown on this lead so the
+    dispatcher re-picks it on its next tick. Preserves attempt_count.
+
+    Used from the UI's "Retry this lead" button and the CLI
+    `autocaller leads retry <id>`.
+    """
+    patient_provider = get_patient_provider()
+    ok = await patient_provider.reset_for_retry(patient_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail=f"lead {patient_id} not found")
+    print(f"[RETRY] cleared cooldown for lead {patient_id}")
+    return {"status": "ok", "patient_id": patient_id}
+
+
 @router.get("/calls")
 async def get_calls(limit: int = 25, offset: int = 0):
     """Get call history with pagination."""
