@@ -694,6 +694,7 @@ class CallOrchestrator:
             OUTCOME_DEAD_END,
             OUTCOME_TIMED_OUT,
             OUTCOME_NOT_IVR,
+            OUTCOME_QUEUE_WAIT,
         )
 
         if self._ivr_navigating or not self._current_call or not self._twilio_bridge:
@@ -749,7 +750,26 @@ class CallOrchestrator:
                     logger.warning("Could not seed post-IVR greeting: %s", e)
                 return  # leave conversation to the normal flow
 
-            # Dead-end / timed-out / not_ivr → hang up with voicemail outcome.
+            if result.outcome == OUTCOME_QUEUE_WAIT:
+                # Classic "please hold / next available agent" queue. A human
+                # is about to be patched through — stay on the line, keep
+                # audio unmuted (the navigator already unmuted), and let the
+                # existing VAD flow kick in when they speak. Cancel any
+                # queued AI audio that may have been generated while muted.
+                await self._add_system_note(
+                    "Queue detected — staying on the line silently. "
+                    "AI will greet whoever picks up."
+                )
+                try:
+                    if self._voice_service is not None:
+                        await self._voice_service.cancel_response()
+                except Exception as e:
+                    logger.debug("cancel_response during queue-wait failed: %s", e)
+                if self.on_status_update:
+                    await self.on_status_update("On hold for a live agent — staying on the line")
+                return  # conversation continues; no hang-up, no reseed
+
+            # Dead-end / timed-out / not_ivr(voicemail) → hang up with voicemail outcome.
             # The derive_* helper will turn this into IVR_UNREACHED now that
             # ivr_detected=True + ivr_outcome is stamped.
             self._web_voicemail_simulated = True

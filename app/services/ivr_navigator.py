@@ -45,6 +45,10 @@ OUTCOME_DEAD_END = "dead_end"
 OUTCOME_TIMED_OUT = "timed_out"
 OUTCOME_SKIPPED = "skipped"
 OUTCOME_NOT_IVR = "not_ivr"
+# A scripted "please hold / next available agent" queue. Not navigable,
+# not a dead end — a human is about to be patched through. Orchestrator
+# should keep the line open (and stay muted) instead of hanging up.
+OUTCOME_QUEUE_WAIT = "queue_wait"
 
 
 # ---------------------------------------------------------------------------
@@ -54,7 +58,7 @@ OUTCOME_NOT_IVR = "not_ivr"
 _CLASSIFY_PROMPT = (
     "You are analysing audio transcript from the start of a US business "
     "phone call. Classify what the other side is. Output JSON only:\n"
-    '  {"kind": "human"|"ivr_menu"|"voicemail"|"ambiguous", '
+    '  {"kind": "human"|"ivr_menu"|"voicemail"|"queue"|"ambiguous", '
     '   "confidence": 0.0-1.0, "reason": "<short>"}\n\n'
     "Definitions:\n"
     "- human: a live person speaking informally (e.g. 'Hello?', 'Law office of X, this is Y').\n"
@@ -62,9 +66,16 @@ _CLASSIFY_PROMPT = (
     "(e.g. 'press 1 for new clients, press 2 for existing'). This is NAVIGABLE.\n"
     "- voicemail: an answering machine / voicemail greeting that asks to leave a message. "
     "Not navigable.\n"
+    "- queue: a scripted greeting where a human is ABOUT to join the line — "
+    "'please hold', 'next available agent', 'connecting your call', 'one moment'. "
+    "NOT navigable, NOT a dead end — the right action is to stay silent and wait.\n"
     "- ambiguous: cannot tell yet (too little audio, music, etc.).\n\n"
-    "Key distinction: if you hear 'press N' / 'dial N' / 'for X, press N', it's ivr_menu. "
-    "If you hear 'leave a message' / 'record after the tone' / 'mailbox is full', it's voicemail."
+    "Key distinctions:\n"
+    "- 'press N' / 'dial N' / 'for X, press N' → ivr_menu\n"
+    "- 'leave a message' / 'record after the tone' / 'mailbox is full' → voicemail\n"
+    "- 'please hold' / 'next available agent' / 'connecting you' / 'one moment' → queue\n"
+    "- 'You have reached [firm]' with no option to press → voicemail (default)\n"
+    "- 'Thank you for calling [firm]' alone is AMBIGUOUS — wait for more."
 )
 
 
@@ -272,6 +283,14 @@ class IVRNavigator:
             if step.kind == "voicemail":
                 result.outcome = OUTCOME_NOT_IVR  # handled by existing voicemail path
                 step.result = "voicemail"
+                return result
+            if step.kind == "queue":
+                # A human is incoming; stay on the line silently.
+                result.outcome = OUTCOME_QUEUE_WAIT
+                step.result = "queue_wait"
+                await _note(
+                    "Queue detected ('please hold' / 'next available agent') — staying on the line, AI will greet when a human picks up."
+                )
                 return result
             if step.kind not in ("ivr_menu", "ambiguous"):
                 result.outcome = OUTCOME_SKIPPED

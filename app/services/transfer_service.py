@@ -95,6 +95,11 @@ def looks_like_voicemail_signal(text: str) -> bool:
         "the mailbox",
         "mailbox is full",
         "mailbox belonging",
+        # Voicemail intros — "You have reached [Firm]..." is almost never a
+        # live receptionist. Receptionists say "Law Offices of X, how may
+        # I help you?" — not "you have reached the Law Offices of X".
+        "you have reached",
+        "you've reached",
         # Phone-tree / IVR
         "press 1",
         "press 2",
@@ -114,11 +119,11 @@ def looks_like_voicemail_signal(text: str) -> bool:
         "this call may be monitored",
         "this call may be recorded",
         # NOTE: "please wait/hold while we connect" is deliberately NOT in
-        # this list. Those phrases mean "a human is about to pick up" —
-        # hanging up on them was costing us real connections. If we hear
-        # them and then the line actually goes to voicemail, the other
-        # phrases below ("leave a message", "record your message", etc.)
-        # will fire once the real voicemail greeting starts.
+        # this list — same reason below applies. Also removed "thank you
+        # for calling": too ambiguous. Real receptionists say it too ("Thank
+        # you for calling Smith Law, this is Jane speaking"). The LLM
+        # navigator (when enabled) disambiguates; when nav is off, the other
+        # concrete phrases above catch real voicemails/IVRs.
         "have not received a valid response",
         "currently closed",
         "our office hours",
@@ -130,8 +135,6 @@ def looks_like_voicemail_signal(text: str) -> bool:
         "marque dos",
         "marque tres",
         "marque cinco",
-        # Scripted firm greeting
-        "thank you for calling",
     )
     if any(p in lowered for p in phrases):
         return True

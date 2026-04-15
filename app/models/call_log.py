@@ -80,10 +80,12 @@ def derive_status_and_disposition(
     # IVR-first overrides — these are the most actionable signal for
     # follow-up routing so we short-circuit the rest.
     if ivr_detected:
-        if ivr_outcome == "reached_human":
+        if ivr_outcome in ("reached_human", "queue_wait"):
+            # queue_wait = navigator bridged us through a "please hold"
+            # tree to a human pickup. Count as navigated.
             return CallStatus.CALLED, CallDisposition.IVR_NAVIGATED
-        # skipped / dead_end / timed_out / not_ivr all collapse to
-        # "we hit a tree and didn't get through".
+        # skipped / dead_end / timed_out all collapse to "we hit a tree
+        # and didn't get through".
         if ivr_outcome in ("skipped", "dead_end", "timed_out"):
             return CallStatus.CALLED, CallDisposition.IVR_UNREACHED
     # Pre-connect failures
