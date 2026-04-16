@@ -98,16 +98,18 @@ export function useLiveListener(callId: string | null) {
       ws.onclose = (ev) => {
         socketRef.current = null;
         socketCallIdRef.current = null;
+        // Close codes we treat as "normal" (no error to surface):
+        //   1000 — normal closure
+        //   1005 — no status received (client-initiated unload)
+        //   1006 — abnormal closure (network); noisy, don't show
+        //   1012 — server restart (daemon deploy) — we'll reconnect
+        //   4004 — our backend's "no active call" signal during auto mode
+        const silentCodes = new Set([1000, 1005, 1006, 1012, 4004]);
         setState((s) => ({
           ...s,
           listening: false,
           connecting: false,
-          error:
-            ev.code === 4004
-              ? null // "no active call" while in auto mode is expected between calls
-              : ev.code === 1000 || ev.code === 1005
-                ? null
-                : `closed (${ev.code})`,
+          error: silentCodes.has(ev.code) ? null : `closed (${ev.code})`,
         }));
         // Don't close the AudioContext — we may reconnect on next call.
       };
@@ -188,8 +190,14 @@ export function useLiveListener(callId: string | null) {
 
   /** When the active call changes, auto-connect if the user opted in. */
   useEffect(() => {
+    if (!callId) {
+      // Between calls — clear any stale error text from the previous
+      // session (e.g. "closed (1012)" from a daemon restart) so the
+      // "waiting for next call" pill doesn't surface zombie errors.
+      setState((s) => (s.error ? { ...s, error: null } : s));
+      return;
+    }
     if (!autoReconnectRef.current) return;
-    if (!callId) return;
     openSocket(callId);
   }, [callId, openSocket]);
 
