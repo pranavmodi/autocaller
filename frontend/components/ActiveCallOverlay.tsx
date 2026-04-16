@@ -18,7 +18,9 @@ import { clearActiveCall } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { TranscriptStream } from "@/components/TranscriptStream";
 
-const LS_OPEN_KEY = "autocaller_active_call_overlay_expanded";
+// Note: expanded/collapsed is per-call state (keyed by call_id in the
+// effect below), not persisted to localStorage. Each new call re-opens
+// the modal so you can never miss one due to stale UI prefs.
 
 /**
  * Floating overlay that shows the live call on every page.
@@ -37,39 +39,30 @@ export function ActiveCallOverlay() {
   const listener = useLiveListener(activeCall?.call_id ?? null);
 
   // Remember whether the user wants the overlay expanded or collapsed.
-  const [expanded, setExpanded] = useState<boolean>(false);
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const saved = window.localStorage.getItem(LS_OPEN_KEY);
-    if (saved === "true") setExpanded(true);
-    if (saved === "false") setExpanded(false);
-  }, []);
+  // Expanded/collapsed is per-call, not session-global. Each new call_id
+  // resets the modal to expanded; the user's minimize only sticks within
+  // that same call. This prevents the failure mode where you minimized
+  // call 1 and then call 2 silently opens as a collapsed pill (or worse,
+  // doesn't render at all if the pill itself stalls).
+  const [expanded, setExpanded] = useState<boolean>(true);
+  const [autoExpandedFor, setAutoExpandedFor] = useState<string | null>(null);
 
-  // Auto-expand the first time a call appears after being idle.
-  const [hasAutoExpanded, setHasAutoExpanded] = useState<boolean>(false);
   useEffect(() => {
     if (!activeCall) {
-      setHasAutoExpanded(false);
+      // Call ended — reset so the next call auto-expands cleanly.
+      setAutoExpandedFor(null);
       return;
     }
-    if (activeCall && !hasAutoExpanded) {
-      setHasAutoExpanded(true);
-      if (typeof window !== "undefined") {
-        const saved = window.localStorage.getItem(LS_OPEN_KEY);
-        // If the user hasn't explicitly chosen, expand by default.
-        if (saved !== "false") setExpanded(true);
-      } else {
-        setExpanded(true);
-      }
+    if (autoExpandedFor !== activeCall.call_id) {
+      // New call (or first call after a gap). Force expanded view and
+      // remember which call_id we auto-expanded for.
+      setExpanded(true);
+      setAutoExpandedFor(activeCall.call_id);
     }
-  }, [activeCall, hasAutoExpanded]);
+  }, [activeCall, autoExpandedFor]);
 
   const toggleExpanded = () => {
-    const next = !expanded;
-    setExpanded(next);
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem(LS_OPEN_KEY, next ? "true" : "false");
-    }
+    setExpanded((v) => !v);
   };
 
   const hangup = useMutation({

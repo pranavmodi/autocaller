@@ -34,10 +34,12 @@ logger = logging.getLogger(__name__)
 DEFAULT_MODEL = os.getenv("IVR_NAV_MODEL", "gpt-4o-mini")
 
 # Max menu hops + total wall-clock budget for navigation.
-MAX_HOPS = 3
+MAX_HOPS = 4
 MAX_NAVIGATION_SECONDS = 60.0
 # How long to wait after pressing a digit before re-reading the transcript.
-POST_DTMF_LISTEN_SECONDS = 3.5
+# Operator transfers often take 5–8 s of ring/silence before the next
+# classifiable audio, so keep this generous.
+POST_DTMF_LISTEN_SECONDS = 6.0
 
 # Outcome values stamped onto CallLog.ivr_outcome.
 OUTCOME_REACHED_HUMAN = "reached_human"
@@ -75,7 +77,10 @@ _CLASSIFY_PROMPT = (
     "- 'leave a message' / 'record after the tone' / 'mailbox is full' → voicemail\n"
     "- 'please hold' / 'next available agent' / 'connecting you' / 'one moment' → queue\n"
     "- 'You have reached [firm]' with no option to press → voicemail (default)\n"
-    "- 'Thank you for calling [firm]' alone is AMBIGUOUS — wait for more."
+    "- 'Thank you for calling [firm]' alone is AMBIGUOUS — wait for more.\n"
+    "- Silence, ringback tone, brief hold music, or 'one moment' immediately "
+    "AFTER a DTMF press usually means a transfer is in progress — lean queue, "
+    "not ambiguous."
 )
 
 
@@ -318,6 +323,25 @@ class IVRNavigator:
                 pick = await self.parse_and_pick(menu_transcript, prior_choices)
                 digit = pick["chosen_digit"]
 
+                # Did we just pick an operator-intent option? Used below to
+                # decide whether a subsequent "ambiguous" classification is
+                # really a transfer-in-progress (stay on the line) vs. a
+                # genuine dead end (press again).
+                rationale_lc = str(pick.get("rationale", "")).lower()
+                parsed_menu = pick.get("parsed_menu", []) or []
+                chosen_entry = next(
+                    (e for e in parsed_menu if isinstance(e, dict) and str(e.get("digit", "")) == digit),
+                    {},
+                )
+                operator_intent = (
+                    digit == "0"
+                    or str(chosen_entry.get("route_type", "")).lower() == "operator"
+                    or any(kw in rationale_lc for kw in (
+                        "operator", "representative", "receptionist",
+                        "front desk", "main", "speak to",
+                    ))
+                )
+
                 hop_step = NavigationStep(
                     step=hop,
                     transcript_snippet=menu_transcript[-600:],
@@ -363,7 +387,26 @@ class IVRNavigator:
                     result.outcome = OUTCOME_DEAD_END
                     hop_step.result = "hit_voicemail"
                     return result
-                # else: likely another menu (or ambiguous) — loop again.
+                if kind == "queue":
+                    result.outcome = OUTCOME_QUEUE_WAIT
+                    hop_step.result = "queue_wait"
+                    await _note(
+                        "Queue detected after DTMF — staying on the line silently."
+                    )
+                    return result
+                # Ambiguous after an operator-intent press is almost always a
+                # transfer in progress (ring, silence, hold music). Pressing
+                # again will either restart the menu or send DTMF into the
+                # human's ear. Treat as a queue and wait.
+                if kind == "ambiguous" and operator_intent:
+                    result.outcome = OUTCOME_QUEUE_WAIT
+                    hop_step.result = "queue_wait_after_operator_press"
+                    await _note(
+                        f"Ambiguous audio after pressing {digit} (operator intent) — "
+                        "treating as transfer-in-progress, staying on the line."
+                    )
+                    return result
+                # else: likely another menu — loop again.
 
             # Hit hop cap without reaching human.
             result.outcome = OUTCOME_DEAD_END

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import { wsUrl } from "@/lib/api";
+import { wsUrl, getActiveCall } from "@/lib/api";
 import type { CallLog, DashboardEvent, DispatcherDecision, TranscriptEntry } from "@/types";
 
 interface State {
@@ -80,16 +80,74 @@ function scheduleReconnect() {
   }, delay);
 }
 
+/**
+ * Reconcile active-call state from a server-side source (WS initial_state,
+ * WS call_started, or REST poll). Only replace our state when the incoming
+ * call's call_id differs from what we already have — otherwise we'd clobber
+ * locally-accumulated transcript events with a stale snapshot from the poll.
+ */
+function applyActiveCallFromServer(incoming: CallLog | null) {
+  if (!incoming) {
+    // Server says no active call — clear.
+    if (state.activeCall !== null) {
+      setState({ activeCall: null, transcript: [] });
+    }
+    return;
+  }
+  const currentId = state.activeCall?.call_id ?? null;
+  if (currentId === incoming.call_id) {
+    // Same call; do NOT overwrite transcript (we may have newer deltas).
+    // Just refresh non-transcript metadata if needed.
+    if (state.activeCall !== incoming) {
+      setState({ activeCall: incoming });
+    }
+    return;
+  }
+  // New call (or we were idle). Seed from server snapshot.
+  setState({
+    activeCall: incoming,
+    transcript: incoming.transcript ?? [],
+  });
+}
+
+/**
+ * REST-poll fallback. Every 3 seconds, hit /api/calls/active and reconcile.
+ * This is belt-and-suspenders for cases where a WS call_started event is
+ * lost (reconnect, tab-backgrounding, proxy buffering). When WS is healthy,
+ * the poll just confirms what we already know.
+ */
+let pollTimer: ReturnType<typeof setInterval> | null = null;
+
+function startActiveCallPolling() {
+  if (pollTimer) return;
+  pollTimer = setInterval(async () => {
+    if (typeof document !== "undefined" && document.hidden) {
+      // Tab is in background — skip this tick; we'll catch up on focus.
+      return;
+    }
+    try {
+      const res = await getActiveCall();
+      applyActiveCallFromServer(res.active ? res.call : null);
+    } catch {
+      // Network blip — ignore, try again next tick.
+    }
+  }, 3000);
+}
+
+function stopActiveCallPolling() {
+  if (pollTimer) {
+    clearInterval(pollTimer);
+    pollTimer = null;
+  }
+}
+
 function handleEvent(msg: DashboardEvent) {
   switch (msg.type) {
     case "initial_state":
-      setState({
-        activeCall: msg.active_call,
-        transcript: msg.active_call?.transcript ?? [],
-      });
+      applyActiveCallFromServer(msg.active_call);
       break;
     case "call_started":
-      setState({ activeCall: msg.call, transcript: msg.call.transcript ?? [] });
+      applyActiveCallFromServer(msg.call);
       break;
     case "call_ended":
       setState({ activeCall: null, transcript: [] });
@@ -125,8 +183,37 @@ export function useDashboardEvents(): State {
   useEffect(() => {
     listeners.add(setSnap);
     connect();
+    startActiveCallPolling();
+
+    // Catch-up on tab focus: if the tab was backgrounded and we missed
+    // events, fire one immediate reconcile.
+    const onVisibilityChange = async () => {
+      if (typeof document !== "undefined" && !document.hidden) {
+        try {
+          const res = await getActiveCall();
+          applyActiveCallFromServer(res.active ? res.call : null);
+        } catch {
+          /* ignore */
+        }
+        // Also nudge the WS to reconnect if it's dead.
+        if (!socket || socket.readyState === WebSocket.CLOSED) {
+          connect();
+        }
+      }
+    };
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", onVisibilityChange);
+    }
+
     return () => {
       listeners.delete(setSnap);
+      if (typeof document !== "undefined") {
+        document.removeEventListener("visibilitychange", onVisibilityChange);
+      }
+      // Stop polling only when the last listener unmounts.
+      if (listeners.size === 0) {
+        stopActiveCallPolling();
+      }
     };
   }, []);
 
