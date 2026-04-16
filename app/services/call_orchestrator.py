@@ -53,6 +53,13 @@ class CallOrchestrator:
         # when the caller actually SPEAKS — not from Twilio dial time, which
         # also counts ringing (15-25s) before anyone picks up.
         self._first_caller_audio_at: Optional[float] = None
+        # Hold-state tracking. When the AI says "I'll hold" / "I'm holding",
+        # we mute outbound audio to Twilio until the caller speaks again.
+        # Gemini's server-VAD treats long silences as "your turn" and
+        # auto-generates filler ("Thanks. Bye. Thanks.") that the receptionist
+        # hears when she comes back. Heard on the Aaron Boudaie call
+        # (43fdb418) — whisper transcript of the real audio caught the loop.
+        self._on_hold: bool = False
 
         # Callbacks for UI updates
         self.on_call_started: Optional[Callable[[CallLog], Any]] = None
@@ -239,6 +246,7 @@ class CallOrchestrator:
         self._ivr_navigating = False
         self._ivr_handled = False
         self._first_caller_audio_at = None
+        self._on_hold = False
 
         mode_label = "Twilio" if call_mode == "twilio" else "Web"
         print(f"[CallOrchestrator] Starting call to {patient.name} ({patient.phone}) in {mode_label} mode")
@@ -578,11 +586,46 @@ class CallOrchestrator:
             await call_log_provider.add_transcript(self._current_call.call_id, "ai", text)
             if self.on_transcript_update:
                 await self.on_transcript_update("ai", text)
+
+            # Did the AI just enter a hold state? If so, mute outbound
+            # audio to Twilio so Gemini's VAD-triggered filler ("Thanks.
+            # Bye. Thanks.") stays off the phone line. We'll unmute when
+            # the caller speaks again (patient transcript arrives).
+            if self._should_enter_hold_state(text) and self._twilio_bridge is not None:
+                if not self._on_hold:
+                    self._on_hold = True
+                    try:
+                        self._twilio_bridge.mute_ai_audio()
+                    except Exception as e:
+                        logger.debug("mute_ai_audio on hold entry failed: %s", e)
+                    await self._add_system_note(
+                        "Entered hold state — muting AI output to Twilio "
+                        "until caller speaks again (prevents filler-loop)."
+                    )
         elif speaker == "patient":
             import time
             await call_log_provider.add_transcript(self._current_call.call_id, "patient", text)
             if self.on_transcript_update:
                 await self.on_transcript_update("patient", text)
+
+            # Caller spoke — if we were on hold, exit hold state and
+            # unmute. Cancel any Gemini-queued filler so the AI's next
+            # turn is a fresh response to the caller's actual words.
+            if self._on_hold and text.strip() and self._twilio_bridge is not None:
+                self._on_hold = False
+                try:
+                    self._twilio_bridge.unmute_ai_audio()
+                except Exception as e:
+                    logger.debug("unmute_ai_audio on hold exit failed: %s", e)
+                try:
+                    if self._voice_service is not None:
+                        await self._voice_service.cancel_response()
+                except Exception as e:
+                    logger.debug("cancel_response on hold exit failed: %s", e)
+                await self._add_system_note(
+                    "Caller returned from hold — unmuting AI + cancelling "
+                    "any queued filler."
+                )
 
             # Track when the caller first spoke. The IVR-action window is
             # measured from HERE, not from Twilio dial — because ringing
@@ -679,6 +722,35 @@ class CallOrchestrator:
         self._last_audio_out_at = time.monotonic()
         if self.on_audio_output:
             await self.on_audio_output(audio_data)
+
+    @staticmethod
+    def _should_enter_hold_state(ai_utterance: str) -> bool:
+        """Detect whether the AI just acknowledged being put on hold.
+
+        Covers English + Spanish variants of the "Thanks, I'll hold" /
+        "Perfect, I'll hold" / "Aquí espero" patterns. We're generous in
+        matching because the cost of a false positive (brief unintended
+        mute) is low — the mute lifts as soon as the caller speaks. The
+        cost of a miss (Gemini filler-loop hits the phone line) is high.
+        """
+        if not ai_utterance:
+            return False
+        low = ai_utterance.lower()
+        phrases = (
+            "i'll hold",
+            "i will hold",
+            "i'm holding",
+            "i am holding",
+            "happy to hold",
+            "aquí espero",
+            "aqui espero",
+            "perfecto, espero",
+            "perfecto espero",
+            "claro, espero",
+            "sí, espero",
+            "si espero",
+        )
+        return any(p in low for p in phrases)
 
     async def _add_system_note(self, text: str) -> None:
         """Append an annotated event into the call's transcript stream.
