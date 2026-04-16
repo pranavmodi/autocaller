@@ -32,8 +32,25 @@ export function wsUrl(path: string): string {
   return base.replace(/^http/, "ws").replace(/\/$/, "") + path;
 }
 
+function _handle401(path: string) {
+  // Session expired or unauthenticated. Bounce to /login unless we're
+  // already there (avoid a loop on the login page itself or on auth
+  // endpoints that legitimately return 401 for bad password).
+  if (typeof window === "undefined") return;
+  if (path.startsWith("/api/auth/")) return;
+  if (window.location.pathname === "/login") return;
+  const next = window.location.pathname + window.location.search;
+  const url = new URL("/login", window.location.origin);
+  if (next && next !== "/") url.searchParams.set("next", next);
+  window.location.replace(url.toString());
+}
+
 async function get<T>(path: string): Promise<T> {
   const res = await fetch(apiUrl(path), { credentials: "include" });
+  if (res.status === 401) {
+    _handle401(path);
+    throw new Error(`GET ${path} 401`);
+  }
   if (!res.ok) throw new Error(`GET ${path} ${res.status}`);
   return res.json();
 }
@@ -45,6 +62,10 @@ async function post<T>(path: string, body?: unknown): Promise<T> {
     body: body ? JSON.stringify(body) : undefined,
     credentials: "include",
   });
+  if (res.status === 401) {
+    _handle401(path);
+    throw new Error(`POST ${path} 401`);
+  }
   if (!res.ok) throw new Error(`POST ${path} ${res.status}`);
   return res.json();
 }
@@ -56,6 +77,10 @@ async function put<T>(path: string, body: unknown): Promise<T> {
     body: JSON.stringify(body),
     credentials: "include",
   });
+  if (res.status === 401) {
+    _handle401(path);
+    throw new Error(`PUT ${path} 401`);
+  }
   if (!res.ok) throw new Error(`PUT ${path} ${res.status}`);
   return res.json();
 }

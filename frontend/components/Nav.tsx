@@ -2,9 +2,22 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Activity, PhoneCall, Users, Stethoscope } from "lucide-react";
+import { Activity, PhoneCall, Users, Stethoscope, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ConnectionBadge } from "@/components/ConnectionBadge";
+import { apiUrl } from "@/lib/api";
+
+async function signOut() {
+  try {
+    await fetch(apiUrl("/api/auth/logout"), {
+      method: "POST",
+      credentials: "include",
+    });
+  } catch {
+    /* ignore — we'll bounce to /login anyway */
+  }
+  window.location.href = "/login";
+}
 
 const items = [
   { href: "/", label: "Now", icon: Activity },
@@ -46,6 +59,14 @@ export function Nav() {
             </Link>
           ))}
         </nav>
+        <button
+          type="button"
+          onClick={signOut}
+          className="mx-3 mb-2 flex items-center gap-2 rounded-md px-3 py-2 text-xs font-medium text-neutral-600 hover:bg-neutral-100"
+        >
+          <LogOut className="h-3.5 w-3.5" />
+          Sign out
+        </button>
         <div className="border-t border-neutral-200 px-5 py-3 text-xs text-neutral-500">
           Possible Minds
         </div>

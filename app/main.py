@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pathlib import Path
 
 from .api import dashboard_router, websocket_router, settings_router, dispatcher_router, scenarios_router
+from .api.auth import router as auth_router, SESSION_COOKIE, verify_session_token, auth_configured
 from .services.dispatcher import get_dispatcher
 from .services.daily_report_service import daily_report_loop
 from .services.judge import judge_loop
@@ -98,7 +99,88 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+# Password auth middleware. Enforced only when AUTH_PASSWORD +
+# AUTH_SESSION_SECRET are both set. Exempt paths: /api/auth/* (login),
+# /api/twilio/* (Twilio webhooks — validated separately by signature),
+# /ws/twilio/* (Twilio media stream — same reason), /health, /static,
+# /audio, and loopback-origin traffic (the CLI hits 127.0.0.1 directly).
+_AUTH_EXEMPT_PREFIXES = (
+    "/api/auth/",
+    "/api/twilio/",   # inbound Twilio webhooks
+    "/ws/twilio/",    # Twilio media-stream websocket
+    "/health",
+    "/static/",
+    "/audio/",
+)
+
+class _AuthMiddleware:
+    """Cookie-gated access to /api/* and /ws/dashboard.
+
+    ASGI middleware (rather than BaseHTTPMiddleware) so we can gate
+    WebSocket upgrades — those don't go through the HTTP base class.
+    """
+
+    def __init__(self, app_):
+        self._app = app_
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] not in ("http", "websocket"):
+            return await self._app(scope, receive, send)
+        if not auth_configured():
+            return await self._app(scope, receive, send)
+
+        path = scope.get("path", "")
+        # Allow the health probe, auth routes, Twilio webhooks, static.
+        if any(path.startswith(p) for p in _AUTH_EXEMPT_PREFIXES):
+            return await self._app(scope, receive, send)
+        # Only gate /api/* and /ws/* — everything else Next.js serves.
+        if not (path.startswith("/api/") or path.startswith("/ws/")):
+            return await self._app(scope, receive, send)
+
+        # Loopback bypass for CLI and local tooling.
+        client = scope.get("client") or ()
+        client_host = client[0] if client else ""
+        if client_host in ("127.0.0.1", "::1", "localhost", ""):
+            return await self._app(scope, receive, send)
+
+        # Extract cookie and verify the session token.
+        cookies_header = ""
+        for k, v in scope.get("headers", []):
+            if k == b"cookie":
+                cookies_header = v.decode("latin-1", errors="replace")
+                break
+        session_value = ""
+        for part in cookies_header.split(";"):
+            part = part.strip()
+            if part.startswith(f"{SESSION_COOKIE}="):
+                session_value = part[len(SESSION_COOKIE) + 1:]
+                break
+        if verify_session_token(session_value):
+            return await self._app(scope, receive, send)
+
+        # Reject.
+        if scope["type"] == "http":
+            import json as _json
+            body = _json.dumps({"detail": "Unauthorized"}).encode("utf-8")
+            await send({
+                "type": "http.response.start",
+                "status": 401,
+                "headers": [
+                    (b"content-type", b"application/json"),
+                    (b"content-length", str(len(body)).encode("ascii")),
+                ],
+            })
+            await send({"type": "http.response.body", "body": body})
+        else:
+            # WebSocket — close with 1008 Policy Violation.
+            await send({"type": "websocket.close", "code": 1008})
+
+
+app.add_middleware(_AuthMiddleware)
+
 # Include API routers
+app.include_router(auth_router)
 app.include_router(dashboard_router)
 app.include_router(websocket_router)
 app.include_router(settings_router)
