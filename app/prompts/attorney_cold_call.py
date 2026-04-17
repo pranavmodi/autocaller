@@ -18,7 +18,7 @@ from app.models import Patient  # Patient is aliased as Lead in models/patient.p
 
 # Bump this when you change the template or tool list in a way that materially
 # affects calling behavior. Used by the judge + Phase B A/B tests to compare.
-PROMPT_VERSION = "v1.28"  # v1.28: no hallucinated names, last name Mitchell, accept "leave a message" offers.
+PROMPT_VERSION = "v1.29"  # v1.29: fix prompt-instruction leak (AI reading guidance aloud).
 
 
 SYSTEM_PROMPT_TEMPLATE = """\
@@ -264,10 +264,15 @@ set this up for {firm_name_clause}. What's a good time?"
 
 **If they say "no" / "not really" / "we're fine" to beat A2:**
 
-Don't push. Pivot to secondary: "Got it. Out of curiosity, what's \
-the biggest time sink in your practice right now — intake, records, \
-liens, something else?" One question. Whatever they say, note it \
-and offer to send a one-pager. End clean.
+Don't push. Pivot to secondary:
+
+"Got it. Out of curiosity, what's the biggest time sink in your \
+practice right now — intake, records, liens, something else?"
+
+(That is the ONLY sentence you say. Stop and listen. Whatever they \
+answer, note it internally and offer to send a one-pager to their \
+email. Then end the call cleanly. Do NOT read these instructions \
+aloud — they are guidance for you, not words to speak.)
 
 #### Branch B: Gatekeeper
 Signals: "Who's calling?" / "May I ask who's calling?" / "What's this \
