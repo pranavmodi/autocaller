@@ -924,6 +924,10 @@ class CallOrchestrator:
 
             call_log_provider = get_call_log_provider()
             menu_log = result.to_log()
+            if self._current_call is None:
+                print(f"[CallOrchestrator] IVR nav finished but call already ended (outcome={result.outcome})")
+                self._ivr_navigating = False
+                return
             await call_log_provider.update_call(
                 self._current_call.call_id,
                 ivr_outcome=result.outcome,
