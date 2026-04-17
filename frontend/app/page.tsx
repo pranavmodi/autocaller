@@ -15,6 +15,7 @@ import {
   setMockMode,
   setVoiceProvider,
   setDispatcherCooldown,
+  setDispatcherBatchSize,
   setIVRNavigate,
 } from "@/lib/api";
 import { useDashboardEvents } from "@/hooks/useDashboardEvents";
@@ -100,7 +101,14 @@ export default function NowPage() {
     refetchInterval: 10_000,
   });
 
-  const [batchCount, setBatchCount] = useState<number>(5);
+  const defaultBatch = (settings.data as any)?.dispatcher_settings?.default_batch_size ?? 5;
+  const [batchCount, setBatchCount] = useState<number | null>(null);
+  const effectiveBatch = batchCount ?? defaultBatch;
+
+  const saveBatchSize = useMutation({
+    mutationFn: (size: number) => setDispatcherBatchSize(size),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["settings"] }),
+  });
 
   const latestReason = lastDecision?.detail ?? dispatcher.data?.recent_decisions?.[0]?.detail ?? "—";
 
@@ -252,8 +260,13 @@ export default function NowPage() {
               type="number"
               min={1}
               max={200}
-              value={batchCount}
+              value={effectiveBatch}
               onChange={(e) => setBatchCount(Math.max(1, parseInt(e.target.value || "1", 10)))}
+              onBlur={() => {
+                if (batchCount !== null && batchCount !== defaultBatch) {
+                  saveBatchSize.mutate(batchCount);
+                }
+              }}
               className="w-16 rounded border border-neutral-300 px-1.5 py-0.5 text-sm"
               disabled={running}
             />
@@ -298,11 +311,11 @@ export default function NowPage() {
           <Button
             size="sm"
             variant="outline"
-            onClick={() => startBatch.mutate(batchCount)}
+            onClick={() => startBatch.mutate(effectiveBatch)}
             disabled={running || startBatch.isPending}
             className="gap-1.5"
           >
-            Start batch of {batchCount}
+            Start batch of {effectiveBatch}
           </Button>
           {dispatcher.data?.batch?.target && (
             <Button

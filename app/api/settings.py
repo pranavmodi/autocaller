@@ -50,6 +50,10 @@ class CooldownRequest(BaseModel):
     cooldown_seconds: int
 
 
+class BatchSizeRequest(BaseModel):
+    batch_size: int
+
+
 class SourceRequest(BaseModel):
     source: str
 
@@ -424,6 +428,30 @@ async def set_cooldown(request: CooldownRequest):
         verbose_logging=merged.verbose_logging,
     )
     print(f"[SETTINGS] dispatcher cooldown_seconds → {request.cooldown_seconds}")
+    return await settings_response_and_broadcast(provider)
+
+
+@router.put("/dispatcher/batch-size", response_model=SystemSettingsResponse)
+async def set_batch_size(request: BatchSizeRequest):
+    """Set the default batch size for dispatcher batches."""
+    from app.services.dispatcher import get_dispatcher
+    if request.batch_size < 1:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail="batch_size must be >= 1")
+    provider = get_settings_provider()
+    current = await provider.get_settings()
+    ds = current.dispatcher_settings
+    merged = DispatcherSettings(
+        poll_interval=ds.poll_interval,
+        dispatch_timeout=ds.dispatch_timeout,
+        max_attempts=ds.max_attempts,
+        min_hours_between=ds.min_hours_between,
+        cooldown_seconds=ds.cooldown_seconds,
+        default_batch_size=request.batch_size,
+        verbose_logging=ds.verbose_logging,
+    )
+    await provider.update_dispatcher_settings(merged)
+    print(f"[SETTINGS] dispatcher default_batch_size → {request.batch_size}")
     return await settings_response_and_broadcast(provider)
 
 

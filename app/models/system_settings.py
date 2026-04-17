@@ -38,6 +38,7 @@ class DispatcherSettings:
     max_attempts: int = 3
     min_hours_between: int = 168  # 1 week — avoid re-calling a firm within 7 days
     cooldown_seconds: int = 0     # inter-call wait after a call ends before the next is placed
+    default_batch_size: int = 5   # default count for "start batch" when no explicit count given
     verbose_logging: bool = False
 
 

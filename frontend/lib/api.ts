@@ -152,6 +152,9 @@ export const setVoiceProvider = (provider: "openai" | "gemini", model = "") =>
 export const setDispatcherCooldown = (cooldown_seconds: number) =>
   put<Record<string, unknown>>("/api/settings/dispatcher/cooldown", { cooldown_seconds });
 
+export const setDispatcherBatchSize = (batch_size: number) =>
+  put<Record<string, unknown>>("/api/settings/dispatcher/batch-size", { batch_size });
+
 export const setIVRNavigate = (enabled: boolean) =>
   put<Record<string, unknown>>("/api/settings/ivr-navigate", { enabled });
 

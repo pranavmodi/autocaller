@@ -765,6 +765,27 @@ def dispatcher_cooldown(
     console.print(f"[green]✓[/green] cooldown_seconds = {new_val}")
 
 
+@dispatcher_app.command("batch-size")
+def dispatcher_batch_size(
+    size: Optional[int] = typer.Argument(
+        None,
+        help="Default batch size. Omit to show the current value.",
+    ),
+):
+    """Get or set the default batch size for dispatcher batches."""
+    if size is None:
+        s = _get("/api/settings")
+        current = int((s.get("dispatcher_settings") or {}).get("default_batch_size", 5))
+        console.print(f"default_batch_size = {current}")
+        return
+    if size < 1:
+        console.print("[red]size must be >= 1[/red]")
+        raise typer.Exit(code=2)
+    s = _put("/api/settings/dispatcher/batch-size", {"batch_size": size})
+    new_val = int((s.get("dispatcher_settings") or {}).get("default_batch_size", 5))
+    console.print(f"[green]✓[/green] default_batch_size = {new_val}")
+
+
 # ---------------------------------------------------------------------------
 # calls (history + transcript + export)
 # ---------------------------------------------------------------------------
