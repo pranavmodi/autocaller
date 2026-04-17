@@ -295,6 +295,7 @@ async def review_call(
             "error_message": call_row.error_message,
         },
         "transcript": _compact_transcript(call_row.transcript or []),
+        "whisper_transcript": getattr(call_row, "whisper_transcript", None) or None,
         "system_prompt_used": (call_row.prompt_text or "")[:4000],
     }
 
@@ -414,6 +415,15 @@ async def judge_loop(interval_seconds: int = 60):
     client = AsyncOpenAI(api_key=os.environ.get("OPENAI_API_KEY", ""))
     while True:
         try:
+            # Whisper-transcribe recordings that haven't been processed yet.
+            try:
+                from app.services.post_call_transcribe import backfill_whisper_transcripts
+                n = await backfill_whisper_transcripts(limit=3)
+                if n:
+                    logger.info("Whisper-transcribed %d recordings", n)
+            except Exception as e:
+                logger.debug("Whisper backfill tick: %s", e)
+
             rows = await _pick_pending(limit=5)
             for row in rows:
                 try:

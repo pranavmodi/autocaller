@@ -90,6 +90,7 @@ def _row_to_call_log(row: CallLogRow) -> CallLog:
     cl.voice_provider = getattr(row, "voice_provider", None)
     cl.voice_model = getattr(row, "voice_model", None)
     cl.carrier = getattr(row, "carrier", None)
+    cl.whisper_transcript = getattr(row, "whisper_transcript", None)
     cl.ivr_detected = bool(getattr(row, "ivr_detected", False))
     cl.ivr_outcome = getattr(row, "ivr_outcome", None)
     cl.ivr_menu_log = getattr(row, "ivr_menu_log", None)

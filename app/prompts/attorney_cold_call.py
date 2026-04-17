@@ -18,7 +18,7 @@ from app.models import Patient  # Patient is aliased as Lead in models/patient.p
 
 # Bump this when you change the template or tool list in a way that materially
 # affects calling behavior. Used by the judge + Phase B A/B tests to compare.
-PROMPT_VERSION = "v1.21"  # v1.21: "is this about a case?" reframe + IVR turn-gate + name_is_person LLM guard.
+PROMPT_VERSION = "v1.22"  # v1.22: strip legal suffixes (LLP/Esq/APC) + post-call Whisper transcription.
 
 
 SYSTEM_PROMPT_TEMPLATE = """\
@@ -1363,6 +1363,31 @@ def _default_timezone_for_state(state: Optional[str]) -> str:
     return "America/New_York"
 
 
+import re as _re
+
+_LEGAL_SUFFIXES = _re.compile(
+    r'[,\s]+('
+    r'LLP|LLC|LLLP|LP|PC|P\.?C\.?|PLC|PLLC|PA|P\.?A\.?'
+    r'|APC|A\.?P\.?C\.?|APLC|A\.?P\.?L\.?C\.?'
+    r'|Inc\.?|Corp\.?|Ltd\.?'
+    r'|Esq\.?|Esquire|J\.?D\.?|JD'
+    r'|Attorney at Law|Attorneys at Law'
+    r')\.?\s*$',
+    _re.IGNORECASE,
+)
+
+
+def _strip_suffixes(name: str) -> str:
+    """Remove legal suffixes that sound robotic when spoken aloud."""
+    result = name
+    for _ in range(3):
+        stripped = _LEGAL_SUFFIXES.sub("", result).strip().rstrip(",").strip()
+        if stripped == result:
+            break
+        result = stripped
+    return result or name
+
+
 def render_system_prompt(
     lead: Patient,
     *,
@@ -1376,7 +1401,7 @@ def render_system_prompt(
     `language` overrides the template choice. When None, falls back to
     `lead.language` ("en" → English, "es" → Spanish, otherwise English).
     """
-    lead_name = (lead.name or "").strip() or "there"
+    lead_name = _strip_suffixes((lead.name or "").strip()) or "there"
     # name_is_person is set by the LLM extractor at sync time. When False,
     # the "name" is a firm/brand name (e.g. "Sweet James"), not a human.
     is_person = getattr(lead, "name_is_person", True)
@@ -1389,13 +1414,13 @@ def render_system_prompt(
     lang = (language or getattr(lead, "language", "en") or "en").strip().lower()[:2]
     if lang == "es":
         tmpl = SYSTEM_PROMPT_TEMPLATE_ES
-        title_clause = f", {lead.title}" if lead.title else ""
-        firm_name_clause = lead.firm_name or "su bufete"
+        title_clause = f", {_strip_suffixes(lead.title)}" if lead.title else ""
+        firm_name_clause = _strip_suffixes(lead.firm_name) if lead.firm_name else "su bufete"
         state_clause = f" en {lead.state}" if lead.state else ""
     else:
         tmpl = SYSTEM_PROMPT_TEMPLATE
-        title_clause = f", {lead.title}" if lead.title else ""
-        firm_name_clause = lead.firm_name or "your firm"
+        title_clause = f", {_strip_suffixes(lead.title)}" if lead.title else ""
+        firm_name_clause = _strip_suffixes(lead.firm_name) if lead.firm_name else "your firm"
         state_clause = f" in {lead.state}" if lead.state else ""
 
     return tmpl.format(

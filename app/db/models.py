@@ -134,6 +134,8 @@ class CallLogRow(Base):
     # Telephony carrier that placed this call ("twilio" | "telnyx").
     # Null on legacy rows — treat null as twilio.
     carrier: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    # Post-call Whisper transcription (more accurate than live Gemini STT).
+    whisper_transcript: Mapped[str | None] = mapped_column(Text, nullable=True)
     # IVR navigation (populated only when the phone tree was hit).
     # ivr_outcome values: reached_human | dead_end | timed_out | skipped | not_ivr
     ivr_detected: Mapped[bool] = mapped_column(Boolean, default=False)
