@@ -89,6 +89,7 @@ def _row_to_call_log(row: CallLogRow) -> CallLog:
     cl.dnc_reason = getattr(row, "dnc_reason", None)
     cl.voice_provider = getattr(row, "voice_provider", None)
     cl.voice_model = getattr(row, "voice_model", None)
+    cl.carrier = getattr(row, "carrier", None)
     cl.ivr_detected = bool(getattr(row, "ivr_detected", False))
     cl.ivr_outcome = getattr(row, "ivr_outcome", None)
     cl.ivr_menu_log = getattr(row, "ivr_menu_log", None)
@@ -135,6 +136,7 @@ class CallLogProvider:
         tools_snapshot: Optional[list] = None,
         voice_provider: Optional[str] = None,
         voice_model: Optional[str] = None,
+        carrier: Optional[str] = None,
     ) -> CallLog:
         call_id = str(uuid.uuid4())
         now = datetime.now(timezone.utc)
@@ -158,6 +160,7 @@ class CallLogProvider:
                 tools_snapshot=tools_snapshot,
                 voice_provider=voice_provider,
                 voice_model=voice_model,
+                carrier=carrier,
             )
             session.add(row)
             await session.commit()
@@ -194,6 +197,7 @@ class CallLogProvider:
         cl.recording_format = None
         cl.voice_provider = voice_provider
         cl.voice_model = voice_model
+        cl.carrier = carrier
         return cl
 
     async def get_call(self, call_id: str) -> Optional[CallLog]:
@@ -293,7 +297,7 @@ class CallLogProvider:
         "was_gatekeeper", "gatekeeper_contact",
         "demo_booking_id", "demo_scheduled_at", "demo_meeting_url",
         "followup_email_sent", "firm_name", "lead_state",
-        "voice_provider", "voice_model",
+        "voice_provider", "voice_model", "carrier",
         "ivr_detected", "ivr_outcome", "ivr_menu_log",
     }
 

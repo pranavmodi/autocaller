@@ -34,12 +34,18 @@ export function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  const url = req.nextUrl.clone();
-  url.pathname = "/login";
-  // Remember where the user wanted to go, so we can bounce back after login.
+  // Build the redirect URL from forwarded headers so we honor the public
+  // hostname/scheme (nginx sets Host + X-Forwarded-Proto). `req.nextUrl`
+  // uses the internal bind address (127.0.0.1:3099) when Next is behind
+  // a proxy, which would leak `localhost:3099` into the Location header.
+  const host = req.headers.get("host") ?? req.nextUrl.host;
+  const proto = req.headers.get("x-forwarded-proto") ?? req.nextUrl.protocol.replace(":", "");
   const next = pathname + (searchParams.toString() ? `?${searchParams}` : "");
-  if (next && next !== "/") url.searchParams.set("next", next);
-  return NextResponse.redirect(url);
+  const url = new URL(`${proto}://${host}/login`);
+  if (next && next !== "/") {
+    url.searchParams.set("next", next);
+  }
+  return NextResponse.redirect(url, 307);
 }
 
 export const config = {

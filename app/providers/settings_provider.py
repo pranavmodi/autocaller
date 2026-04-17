@@ -141,6 +141,7 @@ def _row_to_settings(row: SystemSettingsRow) -> SystemSettings:
     )
     settings.voice_provider = str(getattr(row, "voice_provider", None) or "openai")
     settings.voice_model = str(getattr(row, "voice_model", None) or "")
+    settings.default_carrier = str(getattr(row, "default_carrier", None) or "twilio")
     settings.ivr_navigate_enabled = bool(getattr(row, "ivr_navigate_enabled", False))
     return settings
 
@@ -440,6 +441,36 @@ class SettingsProvider:
                 row = SystemSettingsRow(id=1, business_hours={}, queue_thresholds={})
                 session.add(row)
             row.ivr_navigate_enabled = bool(enabled)
+            await session.commit()
+            return _row_to_settings(row)
+
+    async def set_default_carrier(self, carrier: str) -> SystemSettings:
+        """Set the default telephony carrier ('twilio' | 'telnyx')."""
+        c = (carrier or "").strip().lower()
+        if c not in ("twilio", "telnyx"):
+            raise ValueError(f"unsupported carrier: {carrier!r}")
+        async with AsyncSessionLocal() as session:
+            result = await session.execute(select(SystemSettingsRow).where(SystemSettingsRow.id == 1))
+            row = result.scalar_one_or_none()
+            if row is None:
+                row = SystemSettingsRow(id=1, business_hours={}, queue_thresholds={})
+                session.add(row)
+            row.default_carrier = c
+            await session.commit()
+            return _row_to_settings(row)
+
+    async def save_settings(self, settings: SystemSettings) -> SystemSettings:
+        """Save a subset of the dataclass back to the DB — currently only
+        fields the carrier UI toggles. Extend here if you add more writable
+        top-level fields.
+        """
+        async with AsyncSessionLocal() as session:
+            result = await session.execute(select(SystemSettingsRow).where(SystemSettingsRow.id == 1))
+            row = result.scalar_one_or_none()
+            if row is None:
+                row = SystemSettingsRow(id=1, business_hours={}, queue_thresholds={})
+                session.add(row)
+            row.default_carrier = (settings.default_carrier or "twilio").strip().lower()
             await session.commit()
             return _row_to_settings(row)
 

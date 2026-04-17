@@ -191,3 +191,31 @@ export interface JudgeAggregate {
 
 export const getJudgeAggregate = () =>
   get<JudgeAggregate>("/api/health/judge");
+
+// ---- Carrier (telephony provider: twilio | telnyx) ----
+export interface CarrierInfo {
+  provider: string;                  // "twilio" | "telnyx"
+  label: string | null;
+  account_sid: string;
+  account_sid_masked: string;
+  from_number: string;
+  configured: boolean;
+  status: string | null;
+  account_type: string | null;
+  account_name: string | null;
+  balance: string | null;
+  currency: string | null;
+  number_status: string | null;
+  reachable: boolean;
+  error: string | null;
+}
+
+export interface CarrierStatus extends CarrierInfo {
+  default_carrier: string;
+  carriers: { twilio: CarrierInfo; telnyx: CarrierInfo };
+}
+
+export const getCarrier = () => get<CarrierStatus>("/api/carrier");
+
+export const setDefaultCarrier = (carrier: "twilio" | "telnyx") =>
+  put<{ default_carrier: string }>("/api/carrier", { carrier });

@@ -98,6 +98,9 @@ class SystemSettings:
     # via CLI --voice flag or API body voice_provider field.
     voice_provider: str = "openai"
     voice_model: str = ""
+    # Default telephony carrier ("twilio" or "telnyx"). Override per-call via
+    # CLI --carrier flag or API body `carrier` field.
+    default_carrier: str = "twilio"
     # When True, the orchestrator invokes IVRNavigator on IVR detection
     # (tries to press digits to reach a human) instead of hanging up.
     ivr_navigate_enabled: bool = False

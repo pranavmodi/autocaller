@@ -276,6 +276,45 @@ async def twilio_media_websocket(websocket: WebSocket, stream_id: str):
             print(f"[TwilioMedia] Stream closed (call already ended) — reason={disconnect_reason}, stream_id={stream_id}")
 
 
+@router.websocket("/ws/telnyx-media/{stream_id}")
+async def telnyx_media_websocket(websocket: WebSocket, stream_id: str):
+    """WebSocket endpoint for Telnyx media streams.
+
+    Telnyx connects here after our TeXML <Connect><Stream> instruction.
+    Parallel to the Twilio handler above; uses TelnyxMediaBridge which
+    understands Telnyx's slightly-different JSON frame fields.
+    """
+    from app.services.telnyx_voice_service import pop_bridge
+
+    await websocket.accept()
+    logger.info(f"Telnyx media stream connected: stream_id={stream_id}")
+
+    bridge = pop_bridge(stream_id)
+    if not bridge:
+        logger.error(f"No pending Telnyx bridge for stream_id={stream_id}")
+        await websocket.close(code=4000, reason="No pending bridge")
+        return
+
+    disconnect_reason = "unknown"
+    try:
+        await bridge.handle_carrier_ws(websocket)
+        disconnect_reason = "stream_ended_normally"
+    except WebSocketDisconnect as e:
+        disconnect_reason = f"websocket_disconnect (code={e.code})"
+        print(f"[TelnyxMedia] Stream disconnected: stream_id={stream_id}, code={e.code}")
+    except Exception as e:
+        disconnect_reason = f"error: {type(e).__name__}: {e}"
+        print(f"[TelnyxMedia] Stream error: stream_id={stream_id}, {disconnect_reason}")
+    finally:
+        from app.services.call_orchestrator import get_orchestrator
+        orchestrator = get_orchestrator()
+        if orchestrator.is_call_active:
+            print(f"[TelnyxMedia] Stream closed while call active — reason={disconnect_reason}, stream_id={stream_id}")
+            await orchestrator.end_call(CallOutcome.DISCONNECTED)
+        else:
+            print(f"[TelnyxMedia] Stream closed (call already ended) — reason={disconnect_reason}, stream_id={stream_id}")
+
+
 @router.websocket("/ws/listen/{call_id}")
 async def listen_websocket(websocket: WebSocket, call_id: str):
     """Listen-only stream of the current live call's audio.

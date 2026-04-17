@@ -149,12 +149,17 @@ class CallOrchestrator:
         patient_id: str,
         call_mode: str = "web",
         voice_provider: Optional[str] = None,
+        carrier: Optional[str] = None,
     ) -> Optional[CallLog]:
         """Start an outbound call to a patient.
 
         `voice_provider` overrides the default realtime backend for this
         call only (highest precedence). If None, we fall back to the DB
         setting, then the `VOICE_PROVIDER` env var, then 'openai'.
+
+        `carrier` overrides the default telephony carrier ("twilio" or
+        "telnyx") for this call only. If None, we fall back to the DB
+        `default_carrier` setting, then `DEFAULT_CARRIER` env, then "twilio".
         """
         self._last_start_error = None
         call_log_provider = get_call_log_provider()
@@ -219,6 +224,15 @@ class CallOrchestrator:
         # let the backend pick its own default from its env var.
         resolved_model = (getattr(settings, "voice_model", "") or "").strip() or None
 
+        # Resolve telephony carrier (same precedence as voice backend).
+        from app.services.carrier import get_carrier, resolve_carrier_name
+        resolved_carrier_name = resolve_carrier_name(
+            per_call=carrier,
+            db_default=getattr(settings, "default_carrier", None),
+            env_default=os.getenv("DEFAULT_CARRIER", ""),
+        )
+        carrier_adapter = get_carrier(resolved_carrier_name)
+
         call = await call_log_provider.create_call(
             patient_id=patient.patient_id,
             patient_name=patient.name,
@@ -234,6 +248,7 @@ class CallOrchestrator:
             tools_snapshot=list(AUTOCALLER_TOOLS),
             voice_provider=resolved_provider,
             voice_model=resolved_model or "",
+            carrier=resolved_carrier_name,
         )
 
         self._current_call = call
@@ -304,7 +319,8 @@ class CallOrchestrator:
                 error_message=self._last_start_error,
             )
             await call_log_provider.end_call(call.call_id, CallOutcome.FAILED)
-            await self._mark_patient_attempt(patient, "failed")
+            # Pre-dial failure — the lead's phone never rang. Do NOT burn the
+            # retry window; let the dispatcher pick this lead up again.
             self._voice_service = None
             self._current_call = None
             self._current_patient = None
@@ -323,65 +339,63 @@ class CallOrchestrator:
                 print(f"[CallOrchestrator] MOCK MODE — redirecting call from {patient.phone} to mock_phone={dial_number}")
 
             try:
-                from app.services.twilio_voice_service import (
-                    TwilioMediaBridge,
-                    place_twilio_call,
-                    generate_stream_id,
-                    register_bridge,
-                )
-
-                stream_id = generate_stream_id()
-                bridge = TwilioMediaBridge(self._voice_service, verbose=self._verbose)
-                register_bridge(stream_id, bridge)
-                self._twilio_bridge = bridge
+                stream_id = carrier_adapter.generate_stream_id()
+                bridge = carrier_adapter.MediaBridge(self._voice_service, verbose=self._verbose)
+                carrier_adapter.register_bridge(stream_id, bridge)
+                self._twilio_bridge = bridge  # name kept for back-compat; holds whichever carrier's bridge
 
                 backend_host = os.getenv("PUBLIC_BASE_URL", "").rstrip("/")
                 if not backend_host:
                     backend_host = os.getenv("NEXT_PUBLIC_API_URL", "http://localhost:8000").rstrip("/")
-                twiml_url = f"{backend_host}/api/twilio/twiml/{stream_id}"
+                twiml_url = f"{backend_host}{carrier_adapter.twiml_path}/{stream_id}"
 
                 mock_label = " [MOCK]" if settings.mock_mode else ""
                 if self._verbose:
-                    print(f"[CallOrchestrator] Placing Twilio call{mock_label} for {call.call_id} to {dial_number}, twiml_url={twiml_url}")
+                    print(f"[CallOrchestrator] Placing {resolved_carrier_name} call{mock_label} for {call.call_id} to {dial_number}, twiml_url={twiml_url}")
                 if self.on_status_update:
-                    status_msg = f"Mock mode — calling {dial_number} (instead of {patient.phone})" if settings.mock_mode else f"Calling {patient.phone} via Twilio..."
+                    status_msg = (
+                        f"Mock mode — calling {dial_number} (instead of {patient.phone})"
+                        if settings.mock_mode
+                        else f"Calling {patient.phone} via {resolved_carrier_name.title()}..."
+                    )
                     await self.on_status_update(status_msg)
 
-                status_callback_url = f"{backend_host}/api/twilio/status"
-                recording_callback_url = f"{backend_host}/api/twilio/recording-status/{call.call_id}"
-                # AMD is DISABLED. Twilio's "DetectMessageEnd" runs BEFORE
-                # fetching TwiML; on PI firms with IVR + hold + human
-                # transfer, AMD misclassifies the IVR as a machine and
-                # aborts the call before our bot can connect. We instead
-                # detect IVR via transcript phrases in the first 20s of
-                # audio (transfer_service.looks_like_voicemail_signal),
-                # which is triggered from call_orchestrator._handle_transcript.
-                # Re-enable AMD only after we have a solid
-                # AsyncAmdStatusCallback flow that doesn't gate TwiML fetch.
-                call_sid = place_twilio_call(
+                status_callback_url = f"{backend_host}{carrier_adapter.status_path}"
+                recording_callback_url = f"{backend_host}{carrier_adapter.recording_path}/{call.call_id}"
+                # AMD is DISABLED for both carriers. Twilio's "DetectMessageEnd"
+                # runs BEFORE fetching TwiML; on PI firms with IVR + hold +
+                # human transfer, AMD misclassifies the IVR as a machine and
+                # aborts the call before our bot can connect. We detect IVR
+                # via transcript phrases in the first 20s of audio instead.
+                call_sid = carrier_adapter.place_call(
                     to_number=dial_number,
                     twiml_url=twiml_url,
                     status_callback_url=status_callback_url,
                     recording_status_callback_url=recording_callback_url,
                     enable_amd=False,
                 )
-                self._twilio_call_sid = call_sid
+                self._twilio_call_sid = call_sid  # name kept for back-compat
+                self._current_carrier = resolved_carrier_name
                 self._voicemail_handled = False
                 if self._verbose:
-                    print(f"[CallOrchestrator] Twilio call placed: SID={call_sid}, call_id={call.call_id}, to={dial_number}")
+                    print(f"[CallOrchestrator] {resolved_carrier_name} call placed: SID={call_sid}, call_id={call.call_id}, to={dial_number}")
 
             except Exception as e:
-                print(f"[CallOrchestrator] Twilio call FAILED for {call.call_id} to {dial_number}: {e}")
-                self._last_start_error = f"Twilio call placement failed: {type(e).__name__}: {str(e)}"
+                print(f"[CallOrchestrator] {resolved_carrier_name} call FAILED for {call.call_id} to {dial_number}: {e}")
+                self._last_start_error = f"{resolved_carrier_name.title()} call placement failed: {type(e).__name__}: {str(e)}"
                 if self.on_error:
-                    await self.on_error(f"Twilio call failed: {str(e)}")
+                    await self.on_error(f"{resolved_carrier_name.title()} call failed: {str(e)}")
                 await call_log_provider.update_call(
                     call.call_id,
-                    error_code="twilio_place_failed",
+                    error_code=f"{resolved_carrier_name}_place_failed",
                     error_message=self._last_start_error,
                 )
                 await call_log_provider.end_call(call.call_id, CallOutcome.FAILED)
-                await self._mark_patient_attempt(patient, "failed")
+                # Pre-dial failure (carrier rejected placement — fraud block,
+                # trial-unverified, auth, etc.). The lead's phone never rang,
+                # so don't consume an attempt or set the retry cooldown —
+                # the dispatcher should re-pick this lead on its next tick
+                # once the carrier issue is resolved.
                 voice = self._voice_service
                 self._voice_service = None
                 self._current_call = None
@@ -497,12 +511,15 @@ class CallOrchestrator:
             # finalization for 30+ seconds.
             if call_mode == "twilio" and twilio_call_sid and outcome != CallOutcome.TRANSFERRED:
                 try:
-                    from app.services.twilio_voice_service import hangup_twilio_call
+                    carrier_name = getattr(self, "_current_carrier", "twilio") or "twilio"
+                    from app.services.carrier import get_carrier as _get_carrier
+                    _adapter = _get_carrier(carrier_name)
                     if self._verbose:
-                        print(f"[CallOrchestrator] Hanging up Twilio call SID={twilio_call_sid}")
-                    await asyncio.to_thread(hangup_twilio_call, twilio_call_sid)
+                        print(f"[CallOrchestrator] Hanging up {carrier_name} call SID={twilio_call_sid}")
+                    await asyncio.to_thread(_adapter.hangup, twilio_call_sid)
                 except Exception as e:
-                    logger.warning("Failed to hang up Twilio call %s: %s", twilio_call_sid, e)
+                    logger.warning("Failed to hang up %s call %s: %s",
+                                   getattr(self, "_current_carrier", "twilio"), twilio_call_sid, e)
 
             self._current_call = None
             self._current_patient = None

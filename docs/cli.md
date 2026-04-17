@@ -119,6 +119,10 @@ Every command accepts `--help`. Exit code is `0` on success, `1` on any error
 | `voice openai [--model=…]` / `voice gemini [--model=…]` / `voice set <p> [--model=…]` | Switch the default backend for subsequent calls. Stored in DB. |
 | `call <lead_id> --voice=openai\|gemini` | Per-call override: pin this specific call to a provider regardless of the default. |
 | `calls list --provider=openai\|gemini` | Filter history by which backend handled each call. |
+| `carrier status` | Show both telephony carriers (Twilio + Telnyx): masked SID/key, account name + type, reachability, from-number status, live balance. Marks whichever is the current default. Also visible on the `/system` page with a switch button. |
+| `carrier twilio \| telnyx \| set <name>` | Change the default telephony carrier. Persisted in `system_settings.default_carrier`. Affects all new calls unless overridden per-call. |
+| `call <lead> --carrier=twilio\|telnyx` | Per-call carrier override (highest precedence). |
+| `env` setup for carriers | **Twilio:** `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER`, optional `TWILIO_ACCOUNT_LABEL`. **Telnyx:** `TELNYX_API_KEY` (V2 bearer), `TELNYX_FROM_NUMBER`, optional `TELNYX_ACCOUNT_SID` (defaults to `"default"`), optional `TELNYX_ACCOUNT_LABEL`. Both carriers share the `ALLOW_TWILIO_CALLS=true` safety gate. |
 
 ---
 

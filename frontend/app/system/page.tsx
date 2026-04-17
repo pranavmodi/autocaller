@@ -1,8 +1,15 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
-import { Check, X } from "lucide-react";
-import { getHealthChecks, getFunnel, getJudgeAggregate } from "@/lib/api";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Check, X, Phone } from "lucide-react";
+import {
+  getHealthChecks,
+  getFunnel,
+  getJudgeAggregate,
+  getCarrier,
+  setDefaultCarrier,
+  type CarrierInfo,
+} from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 export default function HealthPage() {
@@ -22,6 +29,18 @@ export default function HealthPage() {
     queryKey: ["health-judge"],
     queryFn: getJudgeAggregate,
     refetchInterval: 30_000,
+  });
+
+  const carrier = useQuery({
+    queryKey: ["carrier"],
+    queryFn: getCarrier,
+    refetchInterval: 30_000,
+  });
+
+  const qc = useQueryClient();
+  const switchCarrier = useMutation({
+    mutationFn: (c: "twilio" | "telnyx") => setDefaultCarrier(c),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["carrier"] }),
   });
 
   const allOk = checks.data?.checks.every((c) => c.ok) ?? false;
@@ -46,6 +65,156 @@ export default function HealthPage() {
           </span>
         )}
       </div>
+
+      {/* Carriers (Twilio + Telnyx) */}
+      <section className="rounded-lg border border-neutral-200 bg-white p-5">
+        <div className="flex items-start justify-between">
+          <div className="flex items-center gap-2">
+            <Phone className="h-4 w-4 text-neutral-500" />
+            <h2 className="text-sm font-medium uppercase tracking-wide text-neutral-500">
+              Carriers
+            </h2>
+          </div>
+          {carrier.data && (
+            <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-[11px] font-semibold text-neutral-700">
+              default: {carrier.data.default_carrier}
+            </span>
+          )}
+        </div>
+
+        {carrier.isLoading && (
+          <div className="mt-3 text-xs text-neutral-400">loading…</div>
+        )}
+
+        {carrier.data && (
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            {(["twilio", "telnyx"] as const).map((name) => {
+              const info: CarrierInfo = carrier.data!.carriers[name];
+              const isDefault = carrier.data!.default_carrier === name;
+              const statusOk =
+                info.configured && info.reachable && info.status === "active";
+              return (
+                <div
+                  key={name}
+                  className={cn(
+                    "rounded-md border p-4",
+                    isDefault
+                      ? "border-neutral-900 bg-neutral-50"
+                      : "border-neutral-200 bg-white",
+                  )}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-semibold capitalize">{name}</span>
+                      {info.label && (
+                        <span className="text-[11px] text-neutral-500">({info.label})</span>
+                      )}
+                      {isDefault && (
+                        <span className="rounded-full bg-neutral-900 px-2 py-0.5 text-[10px] font-semibold text-white">
+                          default
+                        </span>
+                      )}
+                    </div>
+                    <span
+                      className={cn(
+                        "rounded-full px-2 py-0.5 text-[10px] font-semibold",
+                        !info.configured
+                          ? "bg-neutral-200 text-neutral-600"
+                          : statusOk
+                          ? "bg-emerald-50 text-emerald-700"
+                          : info.reachable
+                          ? "bg-amber-50 text-amber-700"
+                          : "bg-rose-50 text-rose-700",
+                      )}
+                    >
+                      {!info.configured
+                        ? "not configured"
+                        : info.reachable
+                        ? info.status ?? "unknown"
+                        : "unreachable"}
+                    </span>
+                  </div>
+
+                  {info.configured && (
+                    <div className="mt-3 grid gap-2 text-xs">
+                      <div className="flex justify-between">
+                        <span className="text-neutral-500">From number</span>
+                        <span className="font-mono">{info.from_number}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-neutral-500">Account</span>
+                        <span className="font-mono text-[11px]">
+                          {info.account_sid_masked}
+                        </span>
+                      </div>
+                      {info.account_name && (
+                        <div className="flex justify-between">
+                          <span className="text-neutral-500">Name</span>
+                          <span>{info.account_name}</span>
+                        </div>
+                      )}
+                      {info.account_type && (
+                        <div className="flex justify-between">
+                          <span className="text-neutral-500">Type</span>
+                          <span>{info.account_type}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between">
+                        <span className="text-neutral-500">Balance</span>
+                        <span
+                          className={cn(
+                            "font-mono",
+                            info.balance != null && parseFloat(info.balance) < 5
+                              ? "text-rose-700"
+                              : "text-neutral-900",
+                          )}
+                        >
+                          {info.balance != null
+                            ? `${info.currency ?? ""} ${parseFloat(info.balance).toFixed(2)}`
+                            : "—"}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {info.error && (
+                    <div className="mt-3 rounded-md bg-rose-50 px-2 py-1.5 text-[11px] text-rose-700">
+                      {info.error}
+                    </div>
+                  )}
+
+                  <button
+                    type="button"
+                    disabled={isDefault || !info.configured || switchCarrier.isPending}
+                    onClick={() => switchCarrier.mutate(name)}
+                    className={cn(
+                      "mt-3 w-full rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
+                      isDefault
+                        ? "bg-neutral-900 text-white cursor-default"
+                        : info.configured
+                        ? "bg-white ring-1 ring-neutral-300 hover:bg-neutral-100"
+                        : "bg-neutral-100 text-neutral-400 cursor-not-allowed",
+                    )}
+                  >
+                    {isDefault
+                      ? "Active default"
+                      : switchCarrier.isPending && switchCarrier.variables === name
+                      ? "Switching…"
+                      : `Make default`}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        <p className="mt-4 text-[11px] text-neutral-400">
+          The default carrier places all new calls unless overridden per-call via API
+          body <span className="font-mono">carrier</span> or CLI{" "}
+          <span className="font-mono">--carrier=</span>. To swap the account on a
+          carrier, edit <span className="font-mono">.env</span> and restart the backend.
+        </p>
+      </section>
 
       <section className="overflow-hidden rounded-lg border border-neutral-200 bg-white">
         <table className="w-full text-sm">

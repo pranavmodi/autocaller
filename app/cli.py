@@ -38,6 +38,7 @@ allowlist_app = typer.Typer(help="Manage allowed_phones (phone allowlist)", no_a
 followups_app = typer.Typer(help="GTM follow-up queue — calls awaiting action", no_args_is_help=True)
 voice_app = typer.Typer(help="Switch between realtime voice backends (openai | gemini)", no_args_is_help=True)
 ivr_app = typer.Typer(help="Phone-tree (IVR) navigation — press digits to reach a human", no_args_is_help=True)
+carrier_app = typer.Typer(help="Inspect the active telephony carrier account (Twilio)", no_args_is_help=True)
 
 app.add_typer(leads_app, name="leads")
 app.add_typer(calls_app, name="calls")
@@ -49,6 +50,7 @@ app.add_typer(allowlist_app, name="allowlist")
 app.add_typer(followups_app, name="followups")
 app.add_typer(voice_app, name="voice")
 app.add_typer(ivr_app, name="ivr")
+app.add_typer(carrier_app, name="carrier")
 
 console = Console()
 
@@ -591,6 +593,11 @@ def call(
         help="Override voice backend for this call: 'openai' | 'gemini'. "
              "Default uses the DB setting or VOICE_PROVIDER env.",
     ),
+    carrier: str = typer.Option(
+        "", "--carrier",
+        help="Override telephony carrier for this call: 'twilio' | 'telnyx'. "
+             "Default uses the DB default_carrier setting.",
+    ),
 ):
     """Place a call immediately to a lead (bypasses dispatcher)."""
     body: dict = {"patient_id": lead_id, "mode": mode}
@@ -600,6 +607,12 @@ def call(
             console.print(f"[red]--voice must be 'openai' or 'gemini' (got {voice!r})[/red]")
             raise typer.Exit(code=2)
         body["voice_provider"] = v
+    c = (carrier or "").strip().lower()
+    if c:
+        if c not in ("twilio", "telnyx"):
+            console.print(f"[red]--carrier must be 'twilio' or 'telnyx' (got {carrier!r})[/red]")
+            raise typer.Exit(code=2)
+        body["carrier"] = c
     resp = _post("/api/call/start", body)
     console.print_json(data=resp)
 
@@ -678,6 +691,10 @@ def calls_list(
         None, "--provider",
         help="Filter by voice backend: 'openai' | 'gemini'",
     ),
+    carrier: Optional[str] = typer.Option(
+        None, "--carrier",
+        help="Filter by telephony carrier: 'twilio' | 'telnyx'",
+    ),
 ):
     """List recent calls."""
     async def _q():
@@ -690,12 +707,14 @@ def calls_list(
                 stmt = stmt.where(CallLogRow.outcome == outcome)
             if provider:
                 stmt = stmt.where(CallLogRow.voice_provider == provider.strip().lower())
+            if carrier:
+                stmt = stmt.where(CallLogRow.carrier == carrier.strip().lower())
             res = await session.execute(stmt)
             return list(res.scalars().all())
 
     rows = _run(_q())
     table = Table(title=f"Recent calls ({len(rows)})")
-    for col in ["call_id", "lead", "firm", "state", "outcome", "dur_s", "voice", "model", "interest", "demo_id", "started"]:
+    for col in ["call_id", "lead", "firm", "state", "outcome", "dur_s", "carrier", "voice", "model", "interest", "demo_id", "started"]:
         table.add_column(col, overflow="fold")
     for r in rows:
         table.add_row(
@@ -705,6 +724,7 @@ def calls_list(
             r.lead_state or "",
             r.outcome,
             str(r.duration_seconds),
+            (getattr(r, "carrier", None) or "")[:8],
             r.voice_provider or "",
             (r.voice_model or "")[:24],
             str(r.interest_level or ""),
@@ -1317,6 +1337,97 @@ def ivr_off():
     """Disable phone-tree navigation — hang up on first menu prompt (legacy behavior)."""
     s = _put("/api/settings/ivr-navigate", {"enabled": False})
     console.print(f"[green]✓[/green] ivr_navigate_enabled = {s.get('ivr_navigate_enabled')}")
+
+
+# ---------------------------------------------------------------------------
+# carrier — inspect active Twilio account
+# ---------------------------------------------------------------------------
+
+def _carrier_block(info: dict, is_default: bool) -> Table:
+    t = Table(show_header=False, box=None, pad_edge=False)
+    t.add_column(justify="right", style="dim")
+    t.add_column()
+    name = info.get("provider", "?")
+    label = info.get("label") or ""
+    title = f"[bold]{name}[/bold]"
+    if label:
+        title += f"  [dim]({label})[/dim]"
+    if is_default:
+        title += "  [green]← default[/green]"
+    t.add_row("", title)
+    if not info.get("configured"):
+        t.add_row("", f"[red]{info.get('error') or 'not configured'}[/red]")
+        return t
+    status = info.get("status") or "?"
+    status_color = (
+        "green" if status == "active" and info.get("reachable")
+        else "yellow" if info.get("reachable") else "red"
+    )
+    acct_sid = info.get("account_sid_masked") or ""
+    acct_name = info.get("account_name") or ""
+    t.add_row("account", f"{acct_sid}  [dim]{acct_name}[/dim]".strip())
+    if info.get("account_type"):
+        t.add_row("account type", info["account_type"])
+    t.add_row("status", f"[{status_color}]{status}[/{status_color}]  reachable={info.get('reachable')}")
+    t.add_row(
+        "from number",
+        f"{info.get('from_number','')}  [dim]{info.get('number_status') or ''}[/dim]",
+    )
+    bal = info.get("balance")
+    if bal is not None:
+        try:
+            b = float(bal)
+            col = "red" if b < 5 else "green"
+            t.add_row("balance", f"[{col}]{info.get('currency','')} {b:.2f}[/{col}]")
+        except ValueError:
+            t.add_row("balance", f"{info.get('currency','')} {bal}")
+    if info.get("error"):
+        t.add_row("error", f"[red]{info['error']}[/red]")
+    return t
+
+
+@carrier_app.command("status")
+def carrier_status():
+    """Show both carrier accounts — Twilio + Telnyx — and mark the default."""
+    c = _get("/api/carrier")
+    default = c.get("default_carrier", "twilio")
+    carriers = c.get("carriers", {})
+    for name in ("twilio", "telnyx"):
+        info = carriers.get(name) or {}
+        console.print(_carrier_block(info, is_default=(name == default)))
+        console.print("")
+    console.print(
+        "[dim]Switch default: [/dim][bold]autocaller carrier twilio[/bold][dim] / [/dim]"
+        "[bold]autocaller carrier telnyx[/bold][dim]. "
+        "Per-call override: [/dim][bold]--carrier=telnyx[/bold][dim] on `call`.[/dim]"
+    )
+
+
+@carrier_app.command("twilio")
+def carrier_set_twilio():
+    """Set default telephony carrier to Twilio."""
+    r = _put("/api/carrier", {"carrier": "twilio"})
+    console.print(f"[green]✓[/green] default_carrier = {r.get('default_carrier')}")
+
+
+@carrier_app.command("telnyx")
+def carrier_set_telnyx():
+    """Set default telephony carrier to Telnyx."""
+    r = _put("/api/carrier", {"carrier": "telnyx"})
+    console.print(f"[green]✓[/green] default_carrier = {r.get('default_carrier')}")
+
+
+@carrier_app.command("set")
+def carrier_set(
+    name: str = typer.Argument(..., help="'twilio' or 'telnyx'"),
+):
+    """Set the default carrier by name."""
+    n = name.strip().lower()
+    if n not in ("twilio", "telnyx"):
+        console.print("[red]carrier must be 'twilio' or 'telnyx'[/red]")
+        raise typer.Exit(code=2)
+    r = _put("/api/carrier", {"carrier": n})
+    console.print(f"[green]✓[/green] default_carrier = {r.get('default_carrier')}")
 
 
 if __name__ == "__main__":

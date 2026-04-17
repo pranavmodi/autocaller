@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pathlib import Path
 
-from .api import dashboard_router, websocket_router, settings_router, dispatcher_router, scenarios_router
+from .api import dashboard_router, websocket_router, settings_router, dispatcher_router, scenarios_router, carrier_router
 from .api.auth import router as auth_router, SESSION_COOKIE, verify_session_token, auth_configured
 from .services.dispatcher import get_dispatcher
 from .services.daily_report_service import daily_report_loop
@@ -102,13 +102,15 @@ app.add_middleware(
 
 # Password auth middleware. Enforced only when AUTH_PASSWORD +
 # AUTH_SESSION_SECRET are both set. Exempt paths: /api/auth/* (login),
-# /api/twilio/* (Twilio webhooks — validated separately by signature),
-# /ws/twilio/* (Twilio media stream — same reason), /health, /static,
+# /api/twilio/* and /api/telnyx/* (carrier webhooks), /ws/twilio/* and
+# /ws/telnyx/* (carrier media-stream websockets), /health, /static,
 # /audio, and loopback-origin traffic (the CLI hits 127.0.0.1 directly).
 _AUTH_EXEMPT_PREFIXES = (
     "/api/auth/",
     "/api/twilio/",   # inbound Twilio webhooks
-    "/ws/twilio/",    # Twilio media-stream websocket
+    "/api/telnyx/",   # inbound Telnyx webhooks (TeXML callbacks)
+    "/ws/twilio",     # Twilio media-stream websocket (/ws/twilio-media/...)
+    "/ws/telnyx",     # Telnyx media-stream websocket (/ws/telnyx-media/...)
     "/health",
     "/static/",
     "/audio/",
@@ -186,6 +188,7 @@ app.include_router(websocket_router)
 app.include_router(settings_router)
 app.include_router(dispatcher_router)
 app.include_router(scenarios_router)
+app.include_router(carrier_router)
 
 # Legacy static (kept for compatibility)
 STATIC_DIR = Path("static")

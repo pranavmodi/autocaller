@@ -397,18 +397,25 @@ async def get_calls(limit: int = 25, offset: int = 0):
 async def start_call_api(body: dict):
     """Trigger a manual call from the CLI / API.
 
-    Body: {"patient_id": "...", "mode": "twilio"|"web", "voice_provider": "openai"|"gemini"}
+    Body: {
+        "patient_id": "...",
+        "mode": "twilio"|"web",
+        "voice_provider": "openai"|"gemini",   # optional, per-call override
+        "carrier": "twilio"|"telnyx"            # optional, per-call override
+    }
 
-    `voice_provider` is optional; when omitted the DB / env default is used.
+    `voice_provider` and `carrier` are optional; when omitted the DB / env
+    defaults are used.
     """
     from app.services.call_orchestrator import get_orchestrator
     patient_id = str(body.get("patient_id", "") or body.get("lead_id", "")).strip()
     mode = str(body.get("mode", "twilio")).strip().lower() or "twilio"
     voice_provider = str(body.get("voice_provider", "") or "").strip().lower() or None
+    carrier = str(body.get("carrier", "") or "").strip().lower() or None
     if not patient_id:
         raise HTTPException(status_code=400, detail="patient_id is required")
     call = await get_orchestrator().start_call(
-        patient_id, call_mode=mode, voice_provider=voice_provider
+        patient_id, call_mode=mode, voice_provider=voice_provider, carrier=carrier
     )
     if call is None:
         raise HTTPException(status_code=409, detail="Call could not be started")
@@ -609,6 +616,124 @@ async def get_call_audio(call_id: str):
         media_type=media_type,
         filename=f"call-{call_id}.{call.recording_format or 'mp3'}",
     )
+
+
+# ---------------------------------------------------------------------------
+# Telnyx webhook endpoints — parallel to /twilio/* above.
+#
+# Telnyx's TeXML is a near-perfect TwiML clone, so the bodies here are the
+# same shape as the Twilio versions. We use distinct paths so each carrier
+# has its own media-stream WS endpoint (the JSON frame fields differ
+# slightly between carriers — see TelnyxMediaBridge).
+# ---------------------------------------------------------------------------
+
+
+@router.post("/telnyx/twiml/{stream_id}")
+@router.get("/telnyx/twiml/{stream_id}")
+async def telnyx_twiml(stream_id: str):
+    """Return TeXML that connects Telnyx to our media stream WebSocket."""
+    print(f"[TeXML] Telnyx fetched TeXML for stream_id={stream_id}")
+    public_url = os.getenv("PUBLIC_BASE_URL", "").rstrip("/")
+    if not public_url:
+        public_url = os.getenv("NEXT_PUBLIC_API_URL", "http://localhost:8000").rstrip("/")
+    ws_url = public_url.replace("https://", "wss://").replace("http://", "ws://")
+    stream_url = f"{ws_url}/ws/telnyx-media/{stream_id}"
+    texml = f"""<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+    <Connect>
+        <Stream url="{stream_url}" track="both_tracks" bidirectionalMode="rtp" bidirectionalCodec="PCMU" bidirectionalSamplingRate="8000" />
+    </Connect>
+</Response>"""
+    print(f"[TeXML] Returning TeXML: stream_url={stream_url}")
+    return Response(content=texml, media_type="application/xml")
+
+
+@router.post("/telnyx/status")
+async def telnyx_status_callback(
+    CallSid: str = Form(""),
+    CallStatus: str = Form(""),
+    AnsweredBy: str = Form(""),
+    ErrorCode: str = Form(""),
+    SipResponseCode: str = Form(""),
+):
+    """Telnyx call status callback (same field shape as Twilio StatusCallback)."""
+    parts = [f"[TelnyxStatus] SID={CallSid} status={CallStatus}"]
+    if AnsweredBy:
+        parts.append(f"answered_by={AnsweredBy}")
+    if ErrorCode:
+        parts.append(f"error_code={ErrorCode}")
+    if SipResponseCode:
+        parts.append(f"sip_code={SipResponseCode}")
+    print(" | ".join(parts))
+
+    try:
+        orchestrator = get_orchestrator()
+        if AnsweredBy:
+            safe_create_task(
+                orchestrator.handle_twilio_amd_status(CallSid, AnsweredBy),
+                logger,
+                f"telnyx_amd_status CallSid={CallSid}",
+            )
+        if CallStatus:
+            safe_create_task(
+                orchestrator.handle_twilio_call_status(
+                    call_sid=CallSid,
+                    call_status=CallStatus,
+                    error_code_raw=ErrorCode,
+                    sip_response_code_raw=SipResponseCode,
+                ),
+                logger,
+                f"telnyx_call_status CallSid={CallSid}",
+            )
+    except Exception as e:
+        print(f"[TelnyxStatus] Callback handling failed: {e}")
+    return {"status": "ok"}
+
+
+@router.post("/telnyx/recording-status/{call_id}")
+async def telnyx_recording_status(call_id: str, request: Request):
+    """Telnyx recording status callback — download recording (MP3/WAV) to disk.
+
+    TeXML form fields mirror Twilio: RecordingSid, RecordingUrl,
+    RecordingStatus, RecordingDuration.
+    """
+    form = await request.form()
+    recording_sid = str(form.get("RecordingSid", "") or "")
+    recording_url = str(form.get("RecordingUrl", "") or "")
+    recording_status = str(form.get("RecordingStatus", "") or "").lower()
+    try:
+        duration = int(form.get("RecordingDuration", 0) or 0)
+    except (ValueError, TypeError):
+        duration = 0
+
+    print(f"[TelnyxRecording] call_id={call_id} sid={recording_sid} status={recording_status} duration={duration}s")
+
+    if recording_status != "completed" or not recording_url or not recording_sid:
+        return {"status": "skipped", "reason": "not completed or missing fields"}
+
+    # Telnyx recording URLs are public (with an expiring query string) —
+    # downloader is carrier-agnostic: it just fetches the URL and writes
+    # the file. Same service works for both.
+    from app.services.recording_service import download_twilio_recording
+    meta = await download_twilio_recording(
+        call_id=call_id,
+        recording_sid=recording_sid,
+        recording_url=recording_url,
+        recording_duration=duration,
+    )
+    if not meta:
+        return {"status": "download_failed"}
+
+    call_log_provider = get_call_log_provider()
+    await call_log_provider.set_recording(
+        call_id=call_id,
+        recording_sid=recording_sid,
+        recording_path=meta["path"],
+        recording_size_bytes=meta["size_bytes"],
+        recording_duration_seconds=meta["duration_seconds"],
+        recording_format=meta["format"],
+    )
+    return {"status": "ok", "path": meta["path"], "size": meta["size_bytes"]}
 
 
 @router.post("/twilio/dial-status")
