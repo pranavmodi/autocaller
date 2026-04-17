@@ -261,11 +261,10 @@ export default function NowPage() {
               min={1}
               max={200}
               value={effectiveBatch}
-              onChange={(e) => setBatchCount(Math.max(1, parseInt(e.target.value || "1", 10)))}
-              onBlur={() => {
-                if (batchCount !== null && batchCount !== defaultBatch) {
-                  saveBatchSize.mutate(batchCount);
-                }
+              onChange={(e) => {
+                const v = Math.max(1, parseInt(e.target.value || "1", 10));
+                setBatchCount(v);
+                saveBatchSize.mutate(v);
               }}
               className="w-16 rounded border border-neutral-300 px-1.5 py-0.5 text-sm"
               disabled={running}

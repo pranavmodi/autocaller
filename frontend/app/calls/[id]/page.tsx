@@ -156,6 +156,83 @@ export default function CallDetailPage({ params }: Props) {
         )}
       </section>
 
+      {/* Call ending summary */}
+      {(() => {
+        const systemNotes = call.transcript
+          .filter((t) => t.speaker === "system")
+          .map((t) => t.text);
+        const lastAi = [...call.transcript].reverse().find((t) => t.speaker === "ai");
+        const silenceWatchdog = systemNotes.find((n) => n.includes("Silence watchdog"));
+        const holdWatchdog = systemNotes.find((n) => n.includes("Hold watchdog"));
+        const ivrNav = systemNotes.find((n) => n.includes("IVR navigation ended") || n.includes("IVR nav"));
+        const suppressedEndCall = systemNotes.find((n) => n.includes("Suppressed AI tool call"));
+
+        let endedBy = "unknown";
+        let reason = "";
+
+        if (silenceWatchdog) {
+          endedBy = "System (silence timeout)";
+          reason = silenceWatchdog;
+        } else if (holdWatchdog) {
+          endedBy = "System (hold timeout)";
+          reason = holdWatchdog;
+        } else if (call.error_code === "media_stream_timeout") {
+          endedBy = "System (media stream timeout)";
+          reason = "Call placed but media stream never connected — phone may not have been answered.";
+        } else if (call.outcome === "voicemail") {
+          endedBy = call.ivr_detected ? "System (IVR/voicemail detected)" : "AI (voicemail detected)";
+          reason = "Detected voicemail or IVR greeting — ended to avoid leaving a message.";
+        } else if (call.outcome === "disconnected") {
+          if (ivrNav) {
+            endedBy = "Remote (IVR dropped the call)";
+            reason = ivrNav;
+          } else {
+            endedBy = "Remote (other party hung up)";
+            reason = "The media stream closed from the carrier side.";
+          }
+        } else if (call.outcome === "gatekeeper_only") {
+          endedBy = "AI (gatekeeper exit)";
+          reason = "AI ended after gatekeeper interaction.";
+        } else if (call.outcome === "not_interested") {
+          endedBy = "AI (lead not interested)";
+          reason = "Lead declined — AI ended politely.";
+        } else if (call.outcome === "wrong_number") {
+          endedBy = "AI (wrong number)";
+          reason = "Confirmed wrong number — AI apologized and ended.";
+        } else if (call.outcome === "demo_scheduled") {
+          endedBy = "AI (demo booked)";
+          reason = "Primary objective achieved — demo scheduled.";
+        } else if (call.outcome === "completed") {
+          endedBy = "AI (conversation complete)";
+          reason = lastAi ? `Last AI message: "${lastAi.text.trim().slice(0, 80)}…"` : "";
+        } else if (call.outcome === "failed") {
+          endedBy = "System (error)";
+          reason = call.error_message || "Technical failure.";
+        }
+
+        return (
+          <section className="rounded-lg border border-neutral-200 bg-white p-4">
+            <div className="flex items-start gap-3">
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-medium uppercase tracking-wider text-neutral-500">
+                    Call ended by
+                  </span>
+                  <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-[11px] font-semibold text-neutral-700">
+                    {endedBy}
+                  </span>
+                </div>
+                {reason && (
+                  <p className="mt-1 text-xs text-neutral-500 leading-relaxed">
+                    {reason}
+                  </p>
+                )}
+              </div>
+            </div>
+          </section>
+        );
+      })()}
+
       {/* GTM disposition + Judge score */}
       <section className="rounded-lg border border-neutral-200 bg-white p-5">
         <div className="flex items-start justify-between gap-4">
