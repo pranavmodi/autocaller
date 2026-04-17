@@ -43,6 +43,7 @@ class DispatcherSettingsRequest(BaseModel):
     max_attempts: int = 3
     min_hours_between: int = 6
     cooldown_seconds: int = 0
+    default_batch_size: int = 5
     verbose_logging: bool = False
 
 
@@ -183,6 +184,7 @@ async def settings_to_response(provider) -> SystemSettingsResponse:
             max_attempts=settings.dispatcher_settings.max_attempts,
             min_hours_between=settings.dispatcher_settings.min_hours_between,
             cooldown_seconds=settings.dispatcher_settings.cooldown_seconds,
+            default_batch_size=settings.dispatcher_settings.default_batch_size,
             verbose_logging=settings.dispatcher_settings.verbose_logging,
         ),
         allow_live_calls=settings.allow_live_calls,
