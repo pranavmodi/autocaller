@@ -47,6 +47,7 @@ export default function CallDetailPage({ params }: Props) {
 
   const audioRef = useRef<HTMLAudioElement>(null);
   const [currentTime, setCurrentTime] = useState(0);
+  const [showWhisper, setShowWhisper] = useState(false);
 
   useEffect(() => {
     const el = audioRef.current;
@@ -467,10 +468,44 @@ export default function CallDetailPage({ params }: Props) {
 
       {/* Transcript */}
       <section className="rounded-lg border border-neutral-200 bg-white p-5">
-        <h2 className="text-sm font-medium uppercase tracking-wide text-neutral-500">
-          Transcript
-        </h2>
-        {coalesced.length === 0 ? (
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-medium uppercase tracking-wide text-neutral-500">
+            Transcript
+          </h2>
+          {call.whisper_transcript && (
+            <div className="flex items-center gap-1 rounded-full bg-neutral-100 p-0.5 text-[11px]">
+              <button
+                type="button"
+                onClick={() => setShowWhisper(false)}
+                className={cn(
+                  "rounded-full px-2.5 py-0.5 font-medium transition-colors",
+                  !showWhisper
+                    ? "bg-white text-neutral-900 shadow-sm"
+                    : "text-neutral-500 hover:text-neutral-700",
+                )}
+              >
+                Live
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowWhisper(true)}
+                className={cn(
+                  "rounded-full px-2.5 py-0.5 font-medium transition-colors",
+                  showWhisper
+                    ? "bg-white text-neutral-900 shadow-sm"
+                    : "text-neutral-500 hover:text-neutral-700",
+                )}
+              >
+                Whisper
+              </button>
+            </div>
+          )}
+        </div>
+        {showWhisper && call.whisper_transcript ? (
+          <div className="mt-4 whitespace-pre-wrap rounded-md bg-neutral-50 p-4 text-sm leading-relaxed text-neutral-800">
+            {call.whisper_transcript}
+          </div>
+        ) : coalesced.length === 0 ? (
           <p className="mt-3 text-xs text-neutral-400">No transcript captured.</p>
         ) : (
           <ol className="mt-4 space-y-3">

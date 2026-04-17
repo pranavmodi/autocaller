@@ -315,4 +315,5 @@ class CallLog:
             "ivr_detected": self.ivr_detected,
             "ivr_outcome": self.ivr_outcome,
             "ivr_menu_log": self.ivr_menu_log,
+            "whisper_transcript": self.whisper_transcript,
         }
