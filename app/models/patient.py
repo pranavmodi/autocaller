@@ -45,6 +45,7 @@ class Patient:
     source: Optional[str] = None
     tags: list[str] = field(default_factory=list)
     notes: Optional[str] = None
+    name_is_person: bool = True
 
     # -- Legacy medical fields (unused; kept so legacy code paths don't break) --
     language: Language = Language.ENGLISH

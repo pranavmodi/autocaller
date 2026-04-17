@@ -113,6 +113,7 @@ class TelnyxMediaBridge:
 
         self._original_on_audio = voice_service.on_audio
         voice_service.on_audio = self._forward_audio_to_carrier
+        self._media_codec: Optional[str] = None  # set from start event
 
     # ------------------------------------------------------------------
     # Listener fan-out (identical to Twilio bridge)
@@ -229,8 +230,9 @@ class TelnyxMediaBridge:
                         or msg.get("call_control_id")
                         or msg.get("callSid")
                     )
+                    media_fmt = start.get("media_format") or msg.get("media_format") or {}
+                    self._media_codec = (media_fmt.get("encoding") or "PCMU").upper()
                     if self._verbose:
-                        media_fmt = start.get("media_format") or msg.get("media_format")
                         logger.info(
                             f"Telnyx stream started: stream_id={self._stream_sid} "
                             f"media_format={media_fmt}"
@@ -239,14 +241,20 @@ class TelnyxMediaBridge:
 
                 elif event == "media":
                     media = msg.get("media", {})
+                    track = media.get("track", "inbound")
                     payload = media.get("payload", "")
                     if not payload:
                         payload = msg.get("payload", "")
                     if payload:
                         audio_bytes = base64.b64decode(payload)
-                        if self.voice_service.is_connected:
-                            await self.voice_service.send_audio(audio_bytes)
-                        await self._broadcast_audio(audio_bytes)
+                        if track == "inbound":
+                            # Caller audio → voice service (Gemini/OpenAI)
+                            if self.voice_service.is_connected:
+                                await self.voice_service.send_audio(audio_bytes)
+                            # Broadcast caller-side to listeners
+                            await self._broadcast_audio(audio_bytes)
+                        # Outbound track = our own AI audio echoed back;
+                        # ignore it to avoid feedback loops.
 
                 elif event == "stop":
                     reason = msg.get("stop", {}).get("reason", "unknown")

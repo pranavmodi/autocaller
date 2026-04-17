@@ -641,7 +641,7 @@ async def telnyx_twiml(stream_id: str):
     texml = f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
     <Connect>
-        <Stream url="{stream_url}" track="both_tracks" bidirectionalMode="rtp" bidirectionalCodec="PCMU" bidirectionalSamplingRate="8000" />
+        <Stream url="{stream_url}" track="inbound_track" bidirectionalMode="rtp" bidirectionalCodec="PCMU" bidirectionalSamplingRate="8000" />
     </Connect>
 </Response>"""
     print(f"[TeXML] Returning TeXML: stream_url={stream_url}")

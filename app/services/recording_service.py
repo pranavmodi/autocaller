@@ -56,33 +56,36 @@ async def download_twilio_recording(
     recording_url: str,
     recording_duration: int = 0,
     delete_from_twilio: bool = True,
+    carrier: str = "twilio",
 ) -> Optional[dict]:
-    """Download a Twilio recording to local disk and return metadata.
+    """Download a recording to local disk and return metadata.
 
-    Args:
-        call_id: our internal call_id (used for the filename).
-        recording_sid: Twilio RecordingSid.
-        recording_url: base URL from Twilio (no .mp3 suffix).
-        recording_duration: Twilio-reported duration in seconds.
-        delete_from_twilio: if True, delete the recording from Twilio after
-            a successful local save so we fully own the file.
+    Works for both Twilio and Telnyx:
+    - Twilio: URL needs `.mp3` suffix + basic-auth download + optional delete.
+    - Telnyx: URL is a pre-signed S3 link (already has .mp3 in path);
+      no auth needed; no server-side delete (Telnyx auto-expires).
 
     Returns a dict with {path, size_bytes, duration_seconds, format} on
     success, or None on failure.
     """
-    account_sid = os.getenv("TWILIO_ACCOUNT_SID", "").strip()
-    auth_token = os.getenv("TWILIO_AUTH_TOKEN", "").strip()
-    if not account_sid or not auth_token:
-        logger.warning("Twilio credentials missing; cannot download recording")
-        return None
+    is_telnyx = carrier == "telnyx" or "telnyx" in recording_url or "telephony-recorder-prod" in recording_url
 
-    # Twilio recording URL: append .mp3 to get the MP3 version
-    mp3_url = recording_url if recording_url.endswith(".mp3") else f"{recording_url}.mp3"
+    if is_telnyx:
+        download_url = recording_url
+        auth = None
+    else:
+        account_sid = os.getenv("TWILIO_ACCOUNT_SID", "").strip()
+        auth_token = os.getenv("TWILIO_AUTH_TOKEN", "").strip()
+        if not account_sid or not auth_token:
+            logger.warning("Twilio credentials missing; cannot download recording")
+            return None
+        download_url = recording_url if recording_url.endswith(".mp3") else f"{recording_url}.mp3"
+        auth = (account_sid, auth_token)
 
     dest_path = _recording_path_for_call(call_id)
     try:
         async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as client:
-            resp = await client.get(mp3_url, auth=(account_sid, auth_token))
+            resp = await client.get(download_url, auth=auth)
             resp.raise_for_status()
             content = resp.content
     except Exception as e:
@@ -101,8 +104,7 @@ async def download_twilio_recording(
         call_id, dest_path, size_bytes, recording_duration,
     )
 
-    # Delete from Twilio now that we own the file
-    if delete_from_twilio:
+    if not is_telnyx and delete_from_twilio:
         try:
             from app.services.twilio_voice_service import _get_twilio_client
             client = _get_twilio_client()

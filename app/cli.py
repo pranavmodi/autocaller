@@ -513,6 +513,7 @@ def leads_sync_mission(
             "source": "mission-control",
             "tags": tags,
             "notes": lead.notes,
+            "name_is_person": lead.name_is_person,
             "_dm_confidence": lead.decision_maker_confidence,  # dropped before insert
         })
 
@@ -563,6 +564,91 @@ def leads_sync_mission(
 
     ins, upd = _run(_upsert())
     console.print(f"[green]Inserted {ins}, updated {upd}.[/green]")
+
+
+@leads_app.command("backfill-names")
+def leads_backfill_names(
+    dry_run: bool = typer.Option(False, "--dry-run"),
+):
+    """Classify all leads: is the name a real person or a firm/brand?
+
+    Uses gpt-4o-mini to judge each lead where name_is_person has not been
+    explicitly set (defaults to true). Updates the DB so render_system_prompt
+    uses 'the managing partner' instead of a firm name as a person.
+    """
+    async def _backfill():
+        import json as _json
+        from app.db import AsyncSessionLocal
+        from app.db.models import PatientRow
+        from sqlalchemy import select
+        from openai import AsyncOpenAI
+
+        client = AsyncOpenAI(api_key=os.environ["OPENAI_API_KEY"])
+
+        async with AsyncSessionLocal() as session:
+            result = await session.execute(select(PatientRow))
+            rows = list(result.scalars().all())
+
+        console.print(f"Classifying {len(rows)} leads...")
+
+        sem = asyncio.Semaphore(15)
+        updates: list[tuple[str, bool]] = []
+
+        async def _classify(pid: str, name: str, firm: str, title: str):
+            async with sem:
+                try:
+                    resp = await client.chat.completions.create(
+                        model="gpt-4o-mini",
+                        messages=[
+                            {"role": "system", "content": "You classify whether a name is a real person or a firm/brand. Reply with JSON: {\"is_person\": true/false}."},
+                            {"role": "user", "content": _json.dumps({"name": name, "firm_name": firm, "title": title or ""})},
+                        ],
+                        response_format={"type": "json_object"},
+                        temperature=0,
+                    )
+                    data = _json.loads(resp.choices[0].message.content or "{}")
+                    return pid, bool(data.get("is_person", True))
+                except Exception as e:
+                    logger.warning("classify failed for %s: %s", pid, e)
+                    return pid, True
+
+        tasks = [
+            _classify(r.patient_id, r.name, r.firm_name or "", getattr(r, "title", "") or "")
+            for r in rows
+        ]
+        results = await asyncio.gather(*tasks)
+
+        changed = 0
+        for pid, is_person in results:
+            if not is_person:
+                updates.append((pid, is_person))
+                changed += 1
+
+        console.print(f"Results: {changed} leads are firm/brand names (not persons)")
+        for pid, _ in updates[:20]:
+            row = next((r for r in rows if r.patient_id == pid), None)
+            if row:
+                console.print(f"  [yellow]✗ not a person[/yellow]: {row.name} @ {row.firm_name or '—'}")
+        if len(updates) > 20:
+            console.print(f"  … and {len(updates) - 20} more")
+
+        if dry_run:
+            console.print("[cyan]--dry-run: no DB writes[/cyan]")
+            return changed
+
+        async with AsyncSessionLocal() as session:
+            for pid, is_person in updates:
+                result = await session.execute(
+                    select(PatientRow).where(PatientRow.patient_id == pid)
+                )
+                row = result.scalar_one_or_none()
+                if row:
+                    row.name_is_person = is_person
+            await session.commit()
+        console.print(f"[green]Updated {changed} leads.[/green]")
+        return changed
+
+    _run(_backfill())
 
 
 @leads_app.command("remove")

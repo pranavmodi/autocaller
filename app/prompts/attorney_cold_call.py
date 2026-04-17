@@ -18,7 +18,7 @@ from app.models import Patient  # Patient is aliased as Lead in models/patient.p
 
 # Bump this when you change the template or tool list in a way that materially
 # affects calling behavior. Used by the judge + Phase B A/B tests to compare.
-PROMPT_VERSION = "v1.19"  # v1.19: explicit gatekeeper classification gate after BEAT 1.
+PROMPT_VERSION = "v1.20"  # v1.20: firm-as-person guard, silence timeout, IVR question-attendant detection.
 
 
 SYSTEM_PROMPT_TEMPLATE = """\
@@ -86,8 +86,17 @@ respond. Call `end_call` with `outcome="voicemail"` immediately:
 - Music-on-hold, ringing patterns, DTMF tones
 - The same voice repeating options after a pause (menu loop)
 
+Additional IVR signals — scripted question-asking attendants:
+- "Are you calling about a new case?" / "Are you calling on a new case?"
+- "Is this a new client call?" / "Are you a new client?"
+- "Are you calling about a personal injury matter?"
+- Any scripted, evenly-paced voice that asks a qualifying question \
+  IMMEDIATELY on pickup (real receptionists say "hello" or "law offices \
+  of X" first — they don't jump straight to "are you calling about...").
+
 Rule of thumb: if the first thing you hear sounds scripted, evenly paced, \
-or lists numeric options — it's an IVR. **Silently `end_call(voicemail)`. \
+lists numeric options, OR asks a qualifying question in a pre-recorded \
+voice — it's an IVR. **Silently `end_call(voicemail)`. \
 Never try to converse with a phone tree. Never try to press buttons. Never \
 leave a message. Never say "hello?" to prompt it.**
 
@@ -1353,7 +1362,15 @@ def render_system_prompt(
     `lead.language` ("en" → English, "es" → Spanish, otherwise English).
     """
     lead_name = (lead.name or "").strip() or "there"
-    lead_first_name = lead_name.split()[0] if lead_name else "there"
+    # name_is_person is set by the LLM extractor at sync time. When False,
+    # the "name" is a firm/brand name (e.g. "Sweet James"), not a human.
+    is_person = getattr(lead, "name_is_person", True)
+    if is_person is None:
+        is_person = True
+    if is_person:
+        lead_first_name = lead_name.split()[0] if lead_name else "there"
+    else:
+        lead_first_name = "the managing partner"
     lang = (language or getattr(lead, "language", "en") or "en").strip().lower()[:2]
     if lang == "es":
         tmpl = SYSTEM_PROMPT_TEMPLATE_ES

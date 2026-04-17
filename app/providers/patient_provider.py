@@ -44,6 +44,7 @@ def _row_to_patient(row: PatientRow) -> Patient:
     p.source = getattr(row, "source", None)
     p.tags = list(getattr(row, "tags", None) or [])
     p.notes = getattr(row, "notes", None)
+    p.name_is_person = bool(getattr(row, "name_is_person", True))
     # Legacy medical fields
     p.language = lang
     p.order_id = row.order_id
@@ -144,6 +145,7 @@ class SimulationPatientProvider(BasePatientProvider):
             stmt = (
                 select(PatientRow)
                 .where(PatientRow.attempt_count < max_attempts)
+                .where(PatientRow.name_is_person == True)  # noqa: E712
                 .where(
                     (PatientRow.last_outcome == None) |  # noqa: E711
                     (PatientRow.last_outcome != "invalid_number")
@@ -170,6 +172,7 @@ class SimulationPatientProvider(BasePatientProvider):
             stmt = (
                 select(PatientRow)
                 .where(PatientRow.attempt_count < max_attempts)
+                .where(PatientRow.name_is_person == True)  # noqa: E712
                 .where(
                     (PatientRow.last_outcome == None) |  # noqa: E711
                     (PatientRow.last_outcome != "invalid_number")

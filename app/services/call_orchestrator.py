@@ -60,6 +60,12 @@ class CallOrchestrator:
         # hears when she comes back. Heard on the Aaron Boudaie call
         # (43fdb418) — whisper transcript of the real audio caught the loop.
         self._on_hold: bool = False
+        # Silence timeout: if no caller transcript arrives within N seconds
+        # of the conversation starting, auto-end the call. Catches voicemails
+        # and hold-music that Gemini doesn't transcribe.
+        self._silence_timeout_task: Optional[asyncio.Task] = None
+        self._caller_has_spoken: bool = False
+        self._caller_turn_count: int = 0
 
         # Callbacks for UI updates
         self.on_call_started: Optional[Callable[[CallLog], Any]] = None
@@ -455,7 +461,49 @@ class CallOrchestrator:
         if self._verbose:
             print(f"[CallOrchestrator] Conversation started for call {call.call_id} (language={prompt_lang})")
 
+        self._caller_has_spoken = False
+        self._silence_timeout_task = asyncio.create_task(
+            self._silence_watchdog(call.call_id, timeout_seconds=45)
+        )
+
         return call
+
+    async def _hold_watchdog(self, call_id: str, timeout_seconds: int = 60):
+        """End the call if we stay on hold for too long."""
+        try:
+            await asyncio.sleep(timeout_seconds)
+            if self._on_hold and self._current_call and self._current_call.call_id == call_id:
+                print(
+                    f"[CallOrchestrator] Hold timeout ({timeout_seconds}s) — "
+                    f"ending {call_id}."
+                )
+                await self._add_system_note(
+                    f"Hold watchdog: on hold for {timeout_seconds}s with no response. Auto-ending."
+                )
+                await self.end_call(CallOutcome.FAILED)
+        except asyncio.CancelledError:
+            pass
+
+    async def _silence_watchdog(self, call_id: str, timeout_seconds: int = 45):
+        """End the call if no caller transcript arrives within timeout.
+
+        Catches: voicemails Gemini doesn't transcribe, hold-music,
+        media-stream-connected-but-nobody-home scenarios. The timer
+        resets each time the caller speaks (see _handle_transcript).
+        """
+        try:
+            await asyncio.sleep(timeout_seconds)
+            if not self._caller_has_spoken and self._current_call and self._current_call.call_id == call_id:
+                print(
+                    f"[CallOrchestrator] Silence timeout ({timeout_seconds}s) — "
+                    f"no caller audio for {call_id}. Ending as no_answer."
+                )
+                await self._add_system_note(
+                    f"Silence watchdog: no caller transcript in {timeout_seconds}s. Auto-ending."
+                )
+                await self.end_call(CallOutcome.FAILED)
+        except asyncio.CancelledError:
+            pass
 
     async def end_call(self, outcome: CallOutcome = CallOutcome.COMPLETED):
         """End the current call."""
@@ -468,6 +516,9 @@ class CallOrchestrator:
             print(f"[CallOrchestrator] Ignoring DISCONNECTED during transfer — waiting for transfer outcome")
             return
         self._ending_call = True
+
+        if self._silence_timeout_task and not self._silence_timeout_task.done():
+            self._silence_timeout_task.cancel()
 
         call = self._current_call
         patient = self._current_patient
@@ -619,11 +670,23 @@ class CallOrchestrator:
                         "Entered hold state — muting AI output to Twilio "
                         "until caller speaks again (prevents filler-loop)."
                     )
+                    # Start a hold timeout — if nobody comes back within 60s,
+                    # end the call rather than sitting on hold indefinitely.
+                    if self._current_call:
+                        cid = self._current_call.call_id
+                        asyncio.create_task(self._hold_watchdog(cid, timeout_seconds=60))
         elif speaker == "patient":
             import time
             await call_log_provider.add_transcript(self._current_call.call_id, "patient", text)
             if self.on_transcript_update:
                 await self.on_transcript_update("patient", text)
+
+            # Caller spoke — cancel the silence watchdog and mark as spoken.
+            self._caller_turn_count += 1
+            if not self._caller_has_spoken:
+                self._caller_has_spoken = True
+                if self._silence_timeout_task and not self._silence_timeout_task.done():
+                    self._silence_timeout_task.cancel()
 
             # Caller spoke — if we were on hold, exit hold state and
             # unmute. Cancel any Gemini-queued filler so the AI's next
@@ -651,9 +714,14 @@ class CallOrchestrator:
             if self._first_caller_audio_at is None:
                 self._first_caller_audio_at = time.monotonic()
 
-            # Aggressive IVR / voicemail detection.
+            # IVR / voicemail detection — only on the first 2 caller turns.
+            # After 2+ back-and-forth exchanges, we're clearly talking to a
+            # human. Phrases like "voicemail" or "leave a message" appearing
+            # later are part of normal conversation (e.g. "want me to transfer
+            # you to her voicemail?"), not IVR signals.
             if (
-                not self._web_voicemail_simulated
+                self._caller_turn_count <= 2
+                and not self._web_voicemail_simulated
                 and not self._ivr_navigating
                 and not self._ivr_handled
                 and looks_like_voicemail_signal(text)

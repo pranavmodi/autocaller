@@ -33,6 +33,7 @@ class PatientRow(Base):
     source: Mapped[str | None] = mapped_column(String(64), nullable=True)
     tags: Mapped[list] = mapped_column(JSONB, default=list)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    name_is_person: Mapped[bool] = mapped_column(Boolean, default=True)
 
     # -- Legacy medical columns (nullable, unused by autocaller) --
     language: Mapped[str] = mapped_column(String(5), default="en")

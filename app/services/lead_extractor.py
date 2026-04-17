@@ -46,6 +46,7 @@ class ExtractedLead:
     # Extractor-provided flags
     usable: bool = True                  # False means "don't call this lead"
     rejection_reason: Optional[str] = None
+    name_is_person: bool = True          # False = name is a firm/brand, not a human
 
 
 EXTRACTION_SCHEMA = {
@@ -107,6 +108,10 @@ EXTRACTION_SCHEMA = {
                     "type": ["string", "null"],
                     "description": "One-sentence summary of anything non-obvious worth the caller knowing (e.g. 'recent volume of referrals' or 'firm specializes in mass torts'). Null if nothing material.",
                 },
+                "name_is_person": {
+                    "type": "boolean",
+                    "description": "True if the 'name' field is a real human name (e.g. 'Erika Almeida', 'Jim Adler'). False if it's a firm name, brand, initials, or non-person placeholder (e.g. 'Sweet James', 'Banner Law Group', 'JP Law', 'The Hammer'). When no named contact exists and you fell back to the firm name, this MUST be false.",
+                },
             },
             "required": [
                 "usable",
@@ -121,6 +126,7 @@ EXTRACTION_SCHEMA = {
                 "email",
                 "website",
                 "notes",
+                "name_is_person",
             ],
         },
     },
@@ -211,6 +217,7 @@ async def extract_lead(firm: dict, *, client: AsyncOpenAI, model: str = DEFAULT_
         notes=data.get("notes"),
         usable=bool(data.get("usable")),
         rejection_reason=data.get("rejection_reason"),
+        name_is_person=bool(data.get("name_is_person", True)),
     )
 
 
