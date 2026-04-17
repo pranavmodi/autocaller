@@ -73,17 +73,24 @@ export default function CallDetailPage({ params }: Props) {
   const recUrl = recordingUrl(call.recording_path);
   const startedAt = call.started_at ? new Date(call.started_at) : null;
 
-  // Transcript entries have timestamps. Compute each entry's offset from the
-  // call start (seconds) so clicking a line seeks the audio.
+  // Coalesce consecutive same-speaker entries into single messages so the
+  // transcript reads naturally instead of showing one bubble per streamed
+  // token. Each coalesced group keeps the first entry's timestamp for seek.
   const baseMs = startedAt ? startedAt.getTime() : null;
-  const transcriptWithOffsets = call.transcript.map((t) => {
+  const coalesced: { speaker: string; text: string; offset: number | null }[] = [];
+  for (const t of call.transcript) {
     let offset: number | null = null;
     if (baseMs && t.timestamp) {
       const diff = (new Date(t.timestamp).getTime() - baseMs) / 1000;
       if (!Number.isNaN(diff) && diff >= 0) offset = diff;
     }
-    return { ...t, offset };
-  });
+    const prev = coalesced[coalesced.length - 1];
+    if (prev && prev.speaker === t.speaker && t.speaker !== "system") {
+      prev.text += t.text;
+    } else {
+      coalesced.push({ speaker: t.speaker, text: t.text, offset });
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -386,48 +393,51 @@ export default function CallDetailPage({ params }: Props) {
         <h2 className="text-sm font-medium uppercase tracking-wide text-neutral-500">
           Transcript
         </h2>
-        {transcriptWithOffsets.length === 0 ? (
+        {coalesced.length === 0 ? (
           <p className="mt-3 text-xs text-neutral-400">No transcript captured.</p>
         ) : (
-          <ol className="mt-3 space-y-2">
-            {transcriptWithOffsets.map((t, i) => {
+          <ol className="mt-4 space-y-3">
+            {coalesced.map((t, i) => {
               const active =
                 t.offset != null &&
                 Math.abs(currentTime - t.offset) < 2;
-              const speakerColor =
-                t.speaker === "ai"
-                  ? "bg-white text-neutral-800 ring-1 ring-neutral-200"
-                  : t.speaker === "patient"
-                    ? "bg-emerald-600 text-white"
-                    : "bg-neutral-200 text-neutral-600 text-[11px]";
+              const isAi = t.speaker === "ai";
+              const isPatient = t.speaker === "patient";
+              const isSystem = t.speaker === "system";
               return (
                 <li
                   key={i}
                   className={cn(
-                    "flex",
-                    t.speaker === "ai"
-                      ? "justify-start"
-                      : t.speaker === "patient"
-                        ? "justify-end"
-                        : "justify-center",
+                    "flex flex-col gap-0.5",
+                    isAi
+                      ? "items-start"
+                      : isPatient
+                        ? "items-end"
+                        : "items-center",
                   )}
                 >
+                  <span className="text-[10px] font-medium uppercase tracking-wider text-neutral-400">
+                    {isAi ? "Alex (AI)" : isPatient ? "Caller" : "System"}
+                    {t.offset != null && (
+                      <span className="ml-1.5 font-normal normal-case">
+                        {formatOffset(t.offset)}
+                      </span>
+                    )}
+                  </span>
                   <button
                     onClick={() => t.offset != null && seekTo(t.offset)}
                     disabled={t.offset == null || !recUrl}
                     className={cn(
-                      "max-w-[78%] rounded-lg px-3 py-1.5 text-sm text-left",
-                      speakerColor,
+                      "max-w-[78%] rounded-lg px-3.5 py-2 text-sm leading-relaxed text-left",
+                      isAi && "bg-neutral-50 text-neutral-800 ring-1 ring-neutral-200",
+                      isPatient && "bg-emerald-600 text-white",
+                      isSystem &&
+                        "border border-dashed border-amber-300 bg-amber-50 text-[11px] text-amber-800",
                       active && "ring-2 ring-amber-400",
-                      t.offset != null && recUrl && "cursor-pointer",
+                      t.offset != null && recUrl && "cursor-pointer hover:shadow-sm",
                     )}
                   >
-                    {t.text}
-                    {t.offset != null && (
-                      <span className="ml-2 text-[10px] opacity-60">
-                        {formatOffset(t.offset)}
-                      </span>
-                    )}
+                    {t.text.trim()}
                   </button>
                 </li>
               );
