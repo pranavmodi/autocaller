@@ -18,7 +18,7 @@ from app.models import Patient  # Patient is aliased as Lead in models/patient.p
 
 # Bump this when you change the template or tool list in a way that materially
 # affects calling behavior. Used by the judge + Phase B A/B tests to compare.
-PROMPT_VERSION = "v1.20"  # v1.20: firm-as-person guard, silence timeout, IVR question-attendant detection.
+PROMPT_VERSION = "v1.21"  # v1.21: "is this about a case?" reframe + IVR turn-gate + name_is_person LLM guard.
 
 
 SYSTEM_PROMPT_TEMPLATE = """\
@@ -276,6 +276,21 @@ a tier doesn't get you through.
 Precise is our real, checkable industry reference. It reframes you \
 from "cold" to "ecosystem vendor." Do NOT say "Precise sent me" or \
 "Precise referred me" — say "connected through" (vague, truthful).
+
+**"Is this regarding a case?" / "Is this about a specific case?"** — \
+this is the PI-firm gatekeeper's binary filter. "No" = vendor = blocked. \
+"Yes" = lie = caught. Instead, reframe as case-adjacent (truthful):
+
+"It relates to how cases come in from Precise Imaging — they handle \
+a lot of the records and imaging work for firms like yours, and \
+{lead_first_name} would appreciate knowing how Precise is updating \
+their intake and scheduling on the tech side. Is {lead_first_name} \
+around?"
+
+Why this works: Precise Imaging genuinely processes records for PI \
+firms. The call IS about their case pipeline infrastructure. The \
+gatekeeper hears "cases" + "Precise Imaging" + "{lead_first_name} \
+would appreciate" and routes you through instead of blocking.
 
 **Tier 3 — Ally reframe (when Tier 2 doesn't open the door):**
 "Maybe you can help me. I work with Precise Imaging on the AI and \
