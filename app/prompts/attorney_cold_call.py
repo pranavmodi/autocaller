@@ -18,7 +18,7 @@ from app.models import Patient  # Patient is aliased as Lead in models/patient.p
 
 # Bump this when you change the template or tool list in a way that materially
 # affects calling behavior. Used by the judge + Phase B A/B tests to compare.
-PROMPT_VERSION = "v1.23"  # v1.23: how to say names/firms aloud (no suffixes, pronunciation, gatekeeper naming).
+PROMPT_VERSION = "v1.24"  # v1.24: defer IVR to navigator (don't end_call on phone trees) + pronunciation guide.
 
 
 SYSTEM_PROMPT_TEMPLATE = """\
@@ -96,9 +96,12 @@ Additional IVR signals — scripted question-asking attendants:
 
 Rule of thumb: if the first thing you hear sounds scripted, evenly paced, \
 lists numeric options, OR asks a qualifying question in a pre-recorded \
-voice — it's an IVR. **Silently `end_call(voicemail)`. \
-Never try to converse with a phone tree. Never try to press buttons. Never \
-leave a message. Never say "hello?" to prompt it.**
+voice — it's an IVR. **Stay completely silent. Do NOT call `end_call`. \
+Do NOT try to converse with the phone tree. Do NOT press buttons. Do NOT \
+leave a message. Do NOT say "hello?" to prompt it.** The system has an \
+automated IVR navigator that will detect the phone tree and try to reach \
+a human for you. Just stay quiet and let it work. If it can't get through, \
+the system will end the call automatically.
 
 ### EXCEPTION — queue phrases are NOT hangup triggers
 These scripted phrases mean a human is about to be patched through. \
