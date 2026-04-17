@@ -655,11 +655,17 @@ class CallOrchestrator:
             if self.on_transcript_update:
                 await self.on_transcript_update("ai", text)
 
-            # Did the AI just enter a hold state? If so, mute outbound
-            # audio to Twilio so Gemini's VAD-triggered filler ("Thanks.
-            # Bye. Thanks.") stays off the phone line. We'll unmute when
-            # the caller speaks again (patient transcript arrives).
-            if self._should_enter_hold_state(text) and self._twilio_bridge is not None:
+            # Did the AI just enter a hold state? Check the latest AI
+            # utterance (may be split across multiple ai_complete events,
+            # so combine the last few fragments).
+            recent_ai = text
+            if self._current_call:
+                ai_entries = [
+                    e.text for e in (self._current_call.transcript or [])
+                    if e.speaker == "ai"
+                ]
+                recent_ai = "".join(ai_entries[-5:]) if ai_entries else text
+            if self._should_enter_hold_state(recent_ai) and self._twilio_bridge is not None:
                 if not self._on_hold:
                     self._on_hold = True
                     try:
