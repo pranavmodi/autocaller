@@ -18,7 +18,7 @@ from app.models import Patient  # Patient is aliased as Lead in models/patient.p
 
 # Bump this when you change the template or tool list in a way that materially
 # affects calling behavior. Used by the judge + Phase B A/B tests to compare.
-PROMPT_VERSION = "v1.29"  # v1.29: fix prompt-instruction leak (AI reading guidance aloud).
+PROMPT_VERSION = "v1.30"  # v1.30: softer Precise assumption ("interacts with" not "works with").
 
 
 SYSTEM_PROMPT_TEMPLATE = """\
@@ -216,8 +216,8 @@ bottom 10% talked 30 min."
 
 **Beat A1 — one sentence, then STOP (~3 sec spoken):**
 
-"Hey {lead_first_name} — quick one. You work with Precise Imaging, \
-right?"
+"Hey {lead_first_name} — quick one. Your firm interacts with Precise \
+Imaging fairly often, right?"
 
 That's it. One question. Stop. They'll confirm — almost every PI firm \
 works with Precise. This gets them TALKING, not listening to you.
