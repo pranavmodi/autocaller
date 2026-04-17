@@ -47,12 +47,11 @@ async def transcribe_recording(call_id: str, *, client: Optional[AsyncOpenAI] = 
 
     try:
         with open(abs_path, "rb") as f:
-            resp = await asyncio.to_thread(
-                lambda: cli.audio.transcriptions.create(
-                    model=DEFAULT_MODEL,
-                    file=("recording.mp3", f, "audio/mpeg"),
-                )
-            )
+            file_bytes = f.read()
+        resp = await cli.audio.transcriptions.create(
+            model=DEFAULT_MODEL,
+            file=("recording.mp3", file_bytes, "audio/mpeg"),
+        )
         text = getattr(resp, "text", "") or ""
         text = text.strip()
     except Exception as e:
