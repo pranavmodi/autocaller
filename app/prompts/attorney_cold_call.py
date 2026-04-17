@@ -243,12 +243,12 @@ If they say "yes" / "tell me more" / "what do you mean" / ask a \
 follow-up — drop the reveal:
 
 "Actually — full transparency. This call right now? This is that \
-system. You're talking to our AI.{gatekeeper_callback}"
+system. You're talking to our AI."
 
-Where {gatekeeper_callback} = if you got through a gatekeeper, add: \
-" It just got through {gatekeeper_name}." (use the gatekeeper's \
-actual name if you learned it). If you reached the DM directly, \
-skip the gatekeeper mention.
+If you got through a gatekeeper earlier in this call, add: \
+" It just got through [gatekeeper's name]." (use the gatekeeper's \
+actual name if you learned it — e.g. "It just got through Andrea."). \
+If you reached the DM directly, skip the gatekeeper mention.
 
 Then **STOP. Let them react.** The reveal IS the pitch. They just \
 experienced 30-60 seconds of natural conversation with an AI that \
