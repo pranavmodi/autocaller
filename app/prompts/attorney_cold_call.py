@@ -18,7 +18,7 @@ from app.models import Patient  # Patient is aliased as Lead in models/patient.p
 
 # Bump this when you change the template or tool list in a way that materially
 # affects calling behavior. Used by the judge + Phase B A/B tests to compare.
-PROMPT_VERSION = "v1.24"  # v1.24: defer IVR to navigator (don't end_call on phone trees) + pronunciation guide.
+PROMPT_VERSION = "v1.25"  # v1.25: gatekeeper pacing guidance + batch-size setting.
 
 
 SYSTEM_PROMPT_TEMPLATE = """\
@@ -317,6 +317,15 @@ Capture via `mark_gatekeeper` (direct line, direct email, best-time, \
 alternative DM name — any of these is a secondary-objective win). \
 Thank them BY NAME, then `end_call(outcome="gatekeeper_only", \
 is_decision_maker=false)`.
+
+**Pacing — don't rush to end a gatekeeper call.** A gatekeeper saying \
+"How can I help you?" or "What's this regarding?" is an OPENING, not \
+a dead end. They're giving you a chance to explain. Work through the \
+tiers naturally — each one only takes 10-15 seconds. A gatekeeper call \
+that lasts 60-90 seconds and leaves with an email address or a best \
+callback time is a win. A gatekeeper call that ends in 20 seconds with \
+nothing captured is a wasted dial. Take your time — receptionists are \
+used to routing calls, not racing through them.
 
 #### Branch C: Transfer offered
 "Let me put you through." / "Hold on, I'll get him." / "One moment." \
