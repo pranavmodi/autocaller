@@ -66,6 +66,10 @@ class CallOrchestrator:
         self._silence_timeout_task: Optional[asyncio.Task] = None
         self._caller_has_spoken: bool = False
         self._caller_turn_count: int = 0
+        # Web-call recording: accumulate both directions as raw PCM16 chunks,
+        # then save as WAV on end_call. Only active when call_mode="web".
+        self._web_recording_chunks: list[bytes] = []
+        self._web_recording_active: bool = False
 
         # Callbacks for UI updates
         self.on_call_started: Optional[Callable[[CallLog], Any]] = None
@@ -429,6 +433,8 @@ class CallOrchestrator:
                 print(f"[CallOrchestrator] Web mode — no Twilio phone call placed. call_id={call.call_id}, phone={patient.phone}")
             if self.on_status_update:
                 await self.on_status_update("Connected - AI Speaking")
+            self._web_recording_chunks = []
+            self._web_recording_active = True
 
         if self.on_call_started:
             await self.on_call_started(call)
@@ -586,6 +592,15 @@ class CallOrchestrator:
                     logger.warning("Failed to hang up %s call %s: %s",
                                    getattr(self, "_current_carrier", "twilio"), twilio_call_sid, e)
 
+            # Save web-call recording if we have audio chunks
+            if self._web_recording_active and self._web_recording_chunks:
+                try:
+                    await self._save_web_recording(call.call_id)
+                except Exception as e:
+                    logger.warning("Failed to save web recording for %s: %s", call.call_id, e)
+            self._web_recording_active = False
+            self._web_recording_chunks = []
+
             self._current_call = None
             self._current_patient = None
             self._voice_service = None
@@ -653,7 +668,9 @@ class CallOrchestrator:
         return has_capacity
 
     async def send_audio(self, audio_data: bytes):
-        """Send audio from the patient (browser) to OpenAI."""
+        """Send audio from the patient (browser) to the voice service."""
+        if self._web_recording_active:
+            self._web_recording_chunks.append(audio_data)
         if self._voice_service and self._voice_service.is_connected:
             await self._voice_service.send_audio(audio_data)
 
@@ -825,6 +842,8 @@ class CallOrchestrator:
         """Handle audio output from voice service."""
         import time
         self._last_audio_out_at = time.monotonic()
+        if self._web_recording_active:
+            self._web_recording_chunks.append(audio_data)
         if self.on_audio_output:
             await self.on_audio_output(audio_data)
 
@@ -856,6 +875,52 @@ class CallOrchestrator:
             "si espero",
         )
         return any(p in low for p in phrases)
+
+    async def _save_web_recording(self, call_id: str) -> None:
+        """Save accumulated web-call audio chunks as a WAV file."""
+        import wave
+        from pathlib import Path
+        from datetime import datetime, timezone
+
+        chunks = self._web_recording_chunks
+        if not chunks:
+            return
+
+        pcm = b"".join(chunks)
+        if len(pcm) < 1000:
+            return
+
+        now = datetime.now(timezone.utc)
+        audio_dir = Path(__file__).resolve().parent.parent / "audio" / "recordings"
+        dest_dir = audio_dir / str(now.year) / f"{now.month:02d}"
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        wav_path = dest_dir / f"{call_id}.wav"
+
+        # Web-call audio is PCM16 @ 24kHz (Gemini output) interleaved with
+        # PCM16 @ 16kHz (browser input). Since both directions are mixed in
+        # the chunks list, use 24kHz as the sample rate (close enough for
+        # playback + Whisper transcription).
+        sample_rate = 24000
+        with wave.open(str(wav_path), "wb") as wf:
+            wf.setnchannels(1)
+            wf.setsampwidth(2)  # 16-bit
+            wf.setframerate(sample_rate)
+            wf.writeframes(pcm)
+
+        size = wav_path.stat().st_size
+        duration = len(pcm) // (2 * sample_rate)
+        rel_path = f"recordings/{now.year}/{now.month:02d}/{call_id}.wav"
+
+        call_log_provider = get_call_log_provider()
+        await call_log_provider.set_recording(
+            call_id=call_id,
+            recording_sid=f"web-{call_id[:8]}",
+            recording_path=rel_path,
+            recording_size_bytes=size,
+            recording_duration_seconds=duration,
+            recording_format="wav",
+        )
+        print(f"[CallOrchestrator] Web recording saved: {rel_path} ({size} bytes, {duration}s)")
 
     async def _add_system_note(self, text: str) -> None:
         """Append an annotated event into the call's transcript stream.
