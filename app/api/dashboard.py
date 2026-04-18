@@ -384,13 +384,68 @@ async def retry_lead(patient_id: str):
     return {"status": "ok", "patient_id": patient_id}
 
 
+_CALLS_LIST_OMIT = {
+    "prompt_text", "tools_snapshot", "whisper_transcript",
+    "transcript", "queue_snapshot",
+}
+
+
 @router.get("/calls")
-async def get_calls(limit: int = 25, offset: int = 0):
-    """Get call history with pagination."""
+async def get_calls(
+    limit: int = 25,
+    offset: int = 0,
+    outcome: Optional[str] = None,
+    mode: Optional[str] = None,
+    q: Optional[str] = None,
+):
+    """Get call history with pagination, filtering, and search.
+
+    Query params:
+      - limit/offset: pagination
+      - outcome: filter by outcome (e.g. "voicemail", "gatekeeper_only")
+      - mode: "real" or "mock"
+      - q: search across patient_name, firm_name, phone
+    """
+    from app.db import AsyncSessionLocal
+    from app.db.models import CallLogRow
+    from sqlalchemy import select, desc, func, or_
+
+    async with AsyncSessionLocal() as session:
+        stmt = select(CallLogRow).order_by(desc(CallLogRow.started_at))
+
+        if outcome and outcome != "all":
+            stmt = stmt.where(CallLogRow.outcome == outcome)
+        if mode == "real":
+            stmt = stmt.where(CallLogRow.mock_mode == False)  # noqa: E712
+        elif mode == "mock":
+            stmt = stmt.where(CallLogRow.mock_mode == True)  # noqa: E712
+        if q and q.strip():
+            term = f"%{q.strip()}%"
+            stmt = stmt.where(
+                or_(
+                    CallLogRow.patient_name.ilike(term),
+                    CallLogRow.firm_name.ilike(term),
+                    CallLogRow.phone.ilike(term),
+                )
+            )
+
+        count_stmt = select(func.count()).select_from(stmt.subquery())
+        total = (await session.execute(count_stmt)).scalar() or 0
+
+        stmt = stmt.limit(limit).offset(offset)
+        result = await session.execute(stmt)
+        rows = list(result.scalars().all())
+
     call_log_provider = get_call_log_provider()
-    calls = await call_log_provider.get_all_calls(limit=limit, offset=offset)
-    total = await call_log_provider.get_total_call_count()
-    return {"calls": [c.to_dict() for c in calls], "total": total}
+    from app.providers.call_log_provider import _row_to_call_log
+    calls = [_row_to_call_log(r) for r in rows]
+    return {
+        "calls": [
+            {k: v for k, v in c.to_dict().items() if k not in _CALLS_LIST_OMIT}
+            for c in calls
+        ],
+        "total": total,
+    }
 
 
 @router.post("/call/start")

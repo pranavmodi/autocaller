@@ -21,23 +21,30 @@ const OUTCOME_FILTERS: Array<{ value: CallOutcome | "all"; label: string }> = [
 ];
 
 type ModeFilter = "all" | "real" | "mock";
+const PAGE_SIZE = 25;
 
 export default function CallsPage() {
   const [filter, setFilter] = useState<CallOutcome | "all">("all");
   const [modeFilter, setModeFilter] = useState<ModeFilter>("all");
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(0);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["calls", 200],
-    queryFn: () => listCalls(200, 0),
+    queryKey: ["calls", page, filter, modeFilter, search],
+    queryFn: () =>
+      listCalls(PAGE_SIZE, page * PAGE_SIZE, {
+        outcome: filter,
+        mode: modeFilter,
+        q: search || undefined,
+      }),
     refetchInterval: 15_000,
   });
 
-  const calls = (data?.calls ?? []).filter((c) => {
-    if (filter !== "all" && c.outcome !== filter) return false;
-    if (modeFilter === "real" && c.mock_mode) return false;
-    if (modeFilter === "mock" && !c.mock_mode) return false;
-    return true;
-  });
+  const calls = data?.calls ?? [];
+  const total = data?.total ?? 0;
+  const totalPages = Math.ceil(total / PAGE_SIZE);
+
+  const resetPage = () => setPage(0);
 
   return (
     <div className="space-y-6">
@@ -48,13 +55,26 @@ export default function CallsPage() {
         </p>
       </div>
 
-      {/* Filter pills */}
+      {/* Search + filters */}
       <div className="space-y-2">
+        <input
+          type="text"
+          placeholder="Search by name, firm, or phone..."
+          value={search}
+          onChange={(e) => {
+            setSearch(e.target.value);
+            resetPage();
+          }}
+          className="w-full rounded-md border border-neutral-300 px-3 py-1.5 text-sm placeholder:text-neutral-400 focus:border-neutral-500 focus:outline-none focus:ring-1 focus:ring-neutral-500"
+        />
         <div className="flex flex-wrap gap-1.5">
           {OUTCOME_FILTERS.map((f) => (
             <button
               key={f.value}
-              onClick={() => setFilter(f.value)}
+              onClick={() => {
+                setFilter(f.value);
+                resetPage();
+              }}
               className={cn(
                 "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
                 filter === f.value
@@ -71,7 +91,10 @@ export default function CallsPage() {
           {(["all", "real", "mock"] as ModeFilter[]).map((m) => (
             <button
               key={m}
-              onClick={() => setModeFilter(m)}
+              onClick={() => {
+                setModeFilter(m);
+                resetPage();
+              }}
               className={cn(
                 "rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-colors",
                 modeFilter === m
@@ -109,7 +132,7 @@ export default function CallsPage() {
           <tbody>
             {isLoading && (
               <tr>
-                <td colSpan={7} className="px-4 py-6 text-xs text-neutral-400">
+                <td colSpan={10} className="px-4 py-6 text-xs text-neutral-400">
                   loading…
                 </td>
               </tr>
@@ -127,11 +150,7 @@ export default function CallsPage() {
                 className="cursor-pointer border-t border-neutral-100 hover:bg-neutral-50"
               >
                 <td className="px-4 py-2.5 align-top">
-                  <Link
-                    href={`/calls/${c.call_id}`}
-                    className="block text-xs text-neutral-600"
-                    aria-label={`open call ${c.call_id}`}
-                  >
+                  <Link href={`/calls/${c.call_id}`} className="block text-xs text-neutral-600">
                     {c.started_at
                       ? formatDistanceToNow(new Date(c.started_at), { addSuffix: true })
                       : "—"}
@@ -203,9 +222,33 @@ export default function CallsPage() {
         </table>
       </div>
 
-      <p className="text-xs text-neutral-400">
-        {calls.length} of {data?.total ?? 0} total calls • auto-refreshes every 15s
-      </p>
+      {/* Pagination */}
+      <div className="flex items-center justify-between text-xs text-neutral-500">
+        <span>
+          {total > 0
+            ? `${page * PAGE_SIZE + 1}–${Math.min((page + 1) * PAGE_SIZE, total)} of ${total} calls`
+            : "0 calls"}
+        </span>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setPage((p) => Math.max(0, p - 1))}
+            disabled={page === 0}
+            className="rounded border border-neutral-300 px-2.5 py-1 text-xs font-medium disabled:opacity-30"
+          >
+            ← Prev
+          </button>
+          <span>
+            {page + 1} / {Math.max(1, totalPages)}
+          </span>
+          <button
+            onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+            disabled={page >= totalPages - 1}
+            className="rounded border border-neutral-300 px-2.5 py-1 text-xs font-medium disabled:opacity-30"
+          >
+            Next →
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

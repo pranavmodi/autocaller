@@ -104,8 +104,17 @@ export interface CallsResponse {
   total: number;
 }
 
-export const listCalls = (limit = 25, offset = 0) =>
-  get<CallsResponse>(`/api/calls?limit=${limit}&offset=${offset}`);
+export const listCalls = (
+  limit = 25,
+  offset = 0,
+  filters?: { outcome?: string; mode?: string; q?: string },
+) => {
+  const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+  if (filters?.outcome && filters.outcome !== "all") params.set("outcome", filters.outcome);
+  if (filters?.mode && filters.mode !== "all") params.set("mode", filters.mode);
+  if (filters?.q) params.set("q", filters.q);
+  return get<CallsResponse>(`/api/calls?${params}`);
+};
 
 export function recordingUrl(recordingPath: string | null): string | null {
   if (!recordingPath) return null;
