@@ -22,8 +22,18 @@ import {
 import { useDashboardEvents } from "@/hooks/useDashboardEvents";
 import { OutcomePill } from "@/components/OutcomePill";
 import { Switch } from "@/components/ui/switch";
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import {
+  Play,
+  Pause,
+  Phone,
+  PhoneOff,
+  Zap,
+  Shield,
+  TreePine,
+  Mic,
+  ChevronRight,
+} from "lucide-react";
 
 export default function NowPage() {
   const qc = useQueryClient();
@@ -57,7 +67,6 @@ export default function NowPage() {
   const ivrNavigateOn = Boolean(settings.data?.ivr_navigate_enabled);
   const voiceProvider =
     (settings.data?.voice_provider as "openai" | "gemini" | undefined) ?? "openai";
-  const voiceModel = String(settings.data?.voice_model ?? "");
 
   const toggleSystem = useMutation({
     mutationFn: (enabled: boolean) => setSystemEnabled(enabled),
@@ -96,8 +105,8 @@ export default function NowPage() {
   });
 
   const recentCalls = useQuery({
-    queryKey: ["recent-calls", 3],
-    queryFn: () => listCalls(3, 0),
+    queryKey: ["recent-calls", 5],
+    queryFn: () => listCalls(5, 0),
     refetchInterval: 10_000,
   });
 
@@ -119,180 +128,137 @@ export default function NowPage() {
   const latestReason = lastDecision?.detail ?? dispatcher.data?.recent_decisions?.[0]?.detail ?? "—";
 
   return (
-    <div className="space-y-6">
-      {/* Note: active-call UI + auto-listen pill live in the global
-          ActiveCallOverlay (root layout), so they appear on every page
-          — not just here. */}
-
-      {/* Global controls */}
-      <section className="rounded-lg border border-neutral-200 bg-white p-5">
-        <h2 className="text-sm font-medium uppercase tracking-wide text-neutral-500">
-          Controls
-        </h2>
-        <div className="mt-3 grid gap-3 md:grid-cols-2">
-          <ControlRow
-            label="System enabled"
-            description="Master switch. When off, the dispatcher won't place any calls even if it's 'running'."
-            checked={systemEnabled}
-            disabled={toggleSystem.isPending || settings.isLoading}
-            onToggle={(v) => toggleSystem.mutate(v)}
-            accent={systemEnabled ? "green" : "red"}
+    <div className="space-y-5">
+      {/* Status bar */}
+      <div className="flex items-center gap-3 rounded-xl bg-gradient-to-r from-neutral-900 to-neutral-800 px-5 py-3.5 text-white shadow-sm">
+        <div className="flex items-center gap-2">
+          <div
+            className={cn(
+              "h-2.5 w-2.5 rounded-full",
+              running ? "animate-pulse bg-emerald-400" : "bg-neutral-500",
+            )}
           />
-          <ControlRow
-            label="Mock mode"
-            description="Redirect every call to your mock phone instead of the lead's real number. Turn OFF for real outbound."
-            checked={mockOn}
-            disabled={toggleMock.isPending || settings.isLoading}
-            onToggle={(v) => toggleMock.mutate(v)}
-            accent={mockOn ? "amber" : "neutral"}
-          />
-          {mockOn && (
-            <div className="ml-12 -mt-1 mb-2 flex items-center gap-2">
-              <label className="text-xs text-neutral-600">Mock phone:</label>
-              <input
-                type="tel"
-                placeholder="+1234567890"
-                value={mockPhoneDraft ?? mockPhone}
-                onChange={(e) => setMockPhoneDraft(e.target.value)}
-                className="w-40 rounded border border-neutral-300 px-2 py-0.5 text-xs font-mono"
-              />
-              {mockPhoneDraft !== null && mockPhoneDraft !== mockPhone && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => {
-                    saveMockPhone.mutate(mockPhoneDraft);
-                    setMockPhoneDraft(null);
-                  }}
-                  disabled={saveMockPhone.isPending}
-                  className="text-xs"
-                >
-                  Save
-                </Button>
-              )}
-              {mockPhone && (
-                <span className="text-[10px] text-neutral-400">
-                  calls redirect to {mockPhone}
-                </span>
-              )}
-            </div>
-          )}
-          <ControlRow
-            label="IVR navigation"
-            description="When a phone tree is detected, press digits with an LLM to reach a human instead of hanging up. Respects identity-claim rules; caps at 3 menu hops / 60 s."
-            checked={ivrNavigateOn}
-            disabled={toggleIVR.isPending || settings.isLoading}
-            onToggle={(v) => toggleIVR.mutate(v)}
-            accent={ivrNavigateOn ? "green" : "neutral"}
-          />
+          <span className="text-sm font-semibold">
+            {running ? "Dispatcher active" : "Dispatcher idle"}
+          </span>
         </div>
-        <div className="mt-3 flex items-center justify-between gap-3 rounded-md border border-neutral-100 p-3">
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-medium text-neutral-900">Voice backend</span>
-              <span
-                className={cn(
-                  "rounded-full px-2 py-0.5 text-[10px] font-semibold",
-                  voiceProvider === "gemini"
-                    ? "bg-violet-50 text-violet-700"
-                    : "bg-sky-50 text-sky-700",
-                )}
-              >
-                {voiceProvider}
-              </span>
-              {voiceModel && (
-                <span className="truncate text-[10px] text-neutral-500">
-                  {voiceModel}
-                </span>
-              )}
-            </div>
-            <p className="mt-0.5 text-xs text-neutral-500">
-              Realtime voice provider for the next call. OpenAI Realtime vs Gemini Live.
-              Overridden per-call by the dispatcher or CLI --voice flag.
-            </p>
+        {dispatcher.data?.batch?.target && (
+          <span className="rounded-full bg-white/15 px-2.5 py-0.5 text-xs font-medium">
+            {dispatcher.data.batch.placed}/{dispatcher.data.batch.target} calls
+          </span>
+        )}
+        <span className="ml-auto text-xs text-neutral-400 max-w-[40%] truncate">
+          {latestReason}
+        </span>
+      </div>
+
+      {/* Controls grid */}
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <ControlCard
+          icon={<Shield className="h-4 w-4" />}
+          label="System"
+          checked={systemEnabled}
+          disabled={toggleSystem.isPending}
+          onToggle={(v) => toggleSystem.mutate(v)}
+          color={systemEnabled ? "emerald" : "rose"}
+        />
+        <ControlCard
+          icon={<PhoneOff className="h-4 w-4" />}
+          label="Mock mode"
+          checked={mockOn}
+          disabled={toggleMock.isPending}
+          onToggle={(v) => toggleMock.mutate(v)}
+          color={mockOn ? "amber" : "neutral"}
+          sub={mockOn && mockPhone ? mockPhone : undefined}
+        />
+        <ControlCard
+          icon={<TreePine className="h-4 w-4" />}
+          label="IVR nav"
+          checked={ivrNavigateOn}
+          disabled={toggleIVR.isPending}
+          onToggle={(v) => toggleIVR.mutate(v)}
+          color={ivrNavigateOn ? "emerald" : "neutral"}
+        />
+        <div className="flex items-center justify-between rounded-xl border border-neutral-200 bg-white px-4 py-3">
+          <div className="flex items-center gap-2">
+            <Mic className="h-4 w-4 text-neutral-400" />
+            <span className="text-sm font-medium text-neutral-700">Voice</span>
           </div>
-          <div className="flex overflow-hidden rounded-md border border-neutral-200 text-xs">
+          <div className="flex overflow-hidden rounded-lg border border-neutral-200 text-[11px] font-medium">
             <button
-              type="button"
-              disabled={switchVoice.isPending || settings.isLoading}
               onClick={() => switchVoice.mutate("openai")}
+              disabled={switchVoice.isPending}
               className={cn(
-                "px-3 py-1.5 font-medium transition",
+                "px-2.5 py-1 transition-colors",
                 voiceProvider === "openai"
                   ? "bg-sky-600 text-white"
-                  : "bg-white text-neutral-700 hover:bg-neutral-50",
+                  : "bg-white text-neutral-600 hover:bg-neutral-50",
               )}
             >
               OpenAI
             </button>
             <button
-              type="button"
-              disabled={switchVoice.isPending || settings.isLoading}
               onClick={() => switchVoice.mutate("gemini")}
+              disabled={switchVoice.isPending}
               className={cn(
-                "border-l border-neutral-200 px-3 py-1.5 font-medium transition",
+                "border-l border-neutral-200 px-2.5 py-1 transition-colors",
                 voiceProvider === "gemini"
                   ? "bg-violet-600 text-white"
-                  : "bg-white text-neutral-700 hover:bg-neutral-50",
+                  : "bg-white text-neutral-600 hover:bg-neutral-50",
               )}
             >
               Gemini
             </button>
           </div>
         </div>
-      </section>
+      </div>
 
-      {/* Dispatcher + batch */}
-      <section className="rounded-lg border border-neutral-200 bg-white p-5">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h2 className="text-sm font-medium uppercase tracking-wide text-neutral-500">
-              Dispatcher
-            </h2>
-            <div className="mt-1 flex items-center gap-3">
-              <span
-                className={cn(
-                  "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold",
-                  running
-                    ? "bg-emerald-50 text-emerald-700"
-                    : "bg-neutral-100 text-neutral-600",
-                )}
-              >
-                <span
-                  className={cn(
-                    "h-1.5 w-1.5 rounded-full",
-                    running ? "animate-pulse bg-emerald-500" : "bg-neutral-400",
-                  )}
-                />
-                {running ? "running" : "stopped"}
-              </span>
-              <span className="text-sm text-neutral-700">
-                {dispatcher.data?.state ?? "—"}
-              </span>
-              {dispatcher.data?.batch?.target && (
-                <span className="rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-semibold text-blue-700">
-                  batch {dispatcher.data.batch.placed}/{dispatcher.data.batch.target}
-                </span>
-              )}
-            </div>
-            <p className="mt-2 text-xs text-neutral-500 line-clamp-2">
-              latest: <span className="text-neutral-700">{latestReason}</span>
-            </p>
+      {/* Mock phone editor */}
+      {mockOn && (
+        <div className="flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50/50 px-4 py-2.5">
+          <Phone className="h-3.5 w-3.5 text-amber-600" />
+          <span className="text-xs font-medium text-amber-800">Mock redirect:</span>
+          <input
+            type="tel"
+            placeholder="+1234567890"
+            value={mockPhoneDraft ?? mockPhone}
+            onChange={(e) => setMockPhoneDraft(e.target.value)}
+            className="w-40 rounded-lg border border-amber-300 bg-white px-2.5 py-1 text-xs font-mono text-neutral-800 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
+          />
+          {mockPhoneDraft !== null && mockPhoneDraft !== mockPhone && (
+            <button
+              onClick={() => {
+                saveMockPhone.mutate(mockPhoneDraft);
+                setMockPhoneDraft(null);
+              }}
+              disabled={saveMockPhone.isPending}
+              className="rounded-lg bg-amber-600 px-3 py-1 text-[11px] font-medium text-white hover:bg-amber-700 transition-colors"
+            >
+              Save
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Dispatcher controls */}
+      <section className="rounded-xl border border-neutral-200 bg-white p-5">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Zap className="h-4 w-4 text-neutral-400" />
+            <h2 className="text-sm font-semibold text-neutral-900">Dispatcher</h2>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-neutral-500">auto-dial</span>
-            <Switch
-              checked={running}
-              disabled={toggle.isPending}
-              onCheckedChange={(v) => toggle.mutate(v)}
-            />
-          </div>
+          <Switch
+            checked={running}
+            disabled={toggle.isPending}
+            onCheckedChange={(v) => toggle.mutate(v)}
+          />
         </div>
 
-        {/* Batch launcher */}
-        <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-neutral-100 pt-3">
-          <label className="text-xs text-neutral-600">
-            Batch size:{" "}
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-1.5">
+            <label className="text-[11px] font-medium uppercase tracking-wider text-neutral-400">
+              Batch
+            </label>
             <input
               type="number"
               min={1}
@@ -303,15 +269,14 @@ export default function NowPage() {
                 setBatchCount(v);
                 saveBatchSize.mutate(v);
               }}
-              className="w-16 rounded border border-neutral-300 px-1.5 py-0.5 text-sm"
+              className="w-14 rounded-lg border border-neutral-200 bg-neutral-50 px-2 py-1.5 text-center text-sm font-medium text-neutral-800 focus:border-neutral-400 focus:outline-none focus:ring-1 focus:ring-neutral-400"
               disabled={running}
             />
-          </label>
-          <label
-            className="text-xs text-neutral-600"
-            title="Seconds to wait after a call ends before the next one is placed"
-          >
-            Cooldown (s):{" "}
+          </div>
+          <div className="flex items-center gap-1.5">
+            <label className="text-[11px] font-medium uppercase tracking-wider text-neutral-400">
+              Cooldown
+            </label>
             <input
               type="number"
               min={0}
@@ -320,124 +285,116 @@ export default function NowPage() {
               onChange={(e) =>
                 setCooldownDraft(Math.max(0, parseInt(e.target.value || "0", 10)))
               }
-              className="w-16 rounded border border-neutral-300 px-1.5 py-0.5 text-sm"
+              className="w-14 rounded-lg border border-neutral-200 bg-neutral-50 px-2 py-1.5 text-center text-sm font-medium text-neutral-800 focus:border-neutral-400 focus:outline-none focus:ring-1 focus:ring-neutral-400"
               disabled={saveCooldown.isPending}
             />
-          </label>
+            <span className="text-[10px] text-neutral-400">sec</span>
+          </div>
           {cooldownDraft !== null && cooldownDraft !== cooldownServer && (
-            <>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => saveCooldown.mutate(cooldownDraft)}
-                disabled={saveCooldown.isPending}
-                className="gap-1.5"
-              >
-                Save cooldown
-              </Button>
-              <button
-                type="button"
-                onClick={() => setCooldownDraft(null)}
-                className="text-[11px] text-neutral-500 underline-offset-2 hover:underline"
-              >
-                cancel
-              </button>
-            </>
-          )}
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => startBatch.mutate(effectiveBatch)}
-            disabled={running || startBatch.isPending}
-            className="gap-1.5"
-          >
-            Start batch of {effectiveBatch}
-          </Button>
-          {dispatcher.data?.batch?.target && (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => toggle.mutate(false)}
-              disabled={!running}
-              className="gap-1.5 text-rose-700"
+            <button
+              onClick={() => saveCooldown.mutate(cooldownDraft)}
+              disabled={saveCooldown.isPending}
+              className="rounded-lg bg-neutral-900 px-3 py-1.5 text-[11px] font-medium text-white hover:bg-neutral-800 transition-colors"
             >
-              Stop batch
-            </Button>
+              Save cooldown
+            </button>
           )}
-          <span className="ml-auto text-[11px] text-neutral-400">
-            auto-stops after N calls placed · cooldown applies between each call
-          </span>
+          <div className="ml-auto flex items-center gap-2">
+            <button
+              onClick={() => startBatch.mutate(effectiveBatch)}
+              disabled={running || startBatch.isPending}
+              className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-emerald-700 transition-colors disabled:opacity-40"
+            >
+              <Play className="h-3 w-3" />
+              Start batch
+            </button>
+            {running && (
+              <button
+                onClick={() => toggle.mutate(false)}
+                className="flex items-center gap-1.5 rounded-lg bg-rose-600 px-4 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-rose-700 transition-colors"
+              >
+                <Pause className="h-3 w-3" />
+                Stop
+              </button>
+            )}
+          </div>
         </div>
       </section>
 
-      {/* Active call UI lives in the global ActiveCallOverlay — floats
-          on every page with minimize/expand. */}
-
-      {/* Next up + Recent calls, two-column on desktop */}
-      <div className="grid gap-6 md:grid-cols-2">
+      {/* Next up + Recent calls */}
+      <div className="grid gap-5 lg:grid-cols-2">
         {/* Next up */}
-        <section className="rounded-lg border border-neutral-200 bg-white p-5">
-          <h2 className="text-sm font-medium uppercase tracking-wide text-neutral-500">
-            Next up
-          </h2>
-          <div className="mt-3 space-y-2">
+        <section className="rounded-xl border border-neutral-200 bg-white">
+          <div className="border-b border-neutral-100 px-5 py-3">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-neutral-400">
+              Next up
+            </h2>
+          </div>
+          <div className="divide-y divide-neutral-100">
             {nextUp.isLoading && (
-              <p className="text-xs text-neutral-400">loading…</p>
+              <div className="px-5 py-4 text-xs text-neutral-400">loading...</div>
             )}
-            {nextUp.data?.patients?.slice(0, 3).map((l) => (
+            {nextUp.data?.patients?.slice(0, 5).map((l) => (
               <div
                 key={l.patient_id}
-                className="flex items-center justify-between rounded-md border border-neutral-100 p-3"
+                className="flex items-center gap-3 px-5 py-3 hover:bg-neutral-50 transition-colors"
               >
-                <div>
-                  <div className="text-sm font-medium">{l.name}</div>
-                  <div className="text-xs text-neutral-500">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-neutral-100 text-[11px] font-bold text-neutral-500">
+                  {l.name.charAt(0)}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-medium text-neutral-900 truncate">{l.name}</div>
+                  <div className="text-[11px] text-neutral-500 truncate">
                     {l.firm_name ?? "—"}
                     {l.state ? ` · ${l.state}` : ""}
-                    {l.title ? ` · ${l.title}` : ""}
                   </div>
                 </div>
-                <span className="rounded bg-neutral-100 px-2 py-0.5 text-[10px] font-medium text-neutral-600">
+                <span className="rounded-md bg-neutral-100 px-1.5 py-0.5 text-[10px] font-semibold text-neutral-500 tabular-nums">
                   P{l.priority_bucket}
                 </span>
               </div>
             ))}
             {nextUp.data && (nextUp.data.patients?.length ?? 0) === 0 && (
-              <p className="text-xs text-neutral-400">No eligible leads.</p>
+              <div className="px-5 py-6 text-center text-xs text-neutral-400">
+                No eligible leads in queue
+              </div>
             )}
           </div>
         </section>
 
         {/* Recent calls */}
-        <section className="rounded-lg border border-neutral-200 bg-white p-5">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-medium uppercase tracking-wide text-neutral-500">
+        <section className="rounded-xl border border-neutral-200 bg-white">
+          <div className="flex items-center justify-between border-b border-neutral-100 px-5 py-3">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-neutral-400">
               Recent calls
             </h2>
-            <Link href="/calls" className="text-xs text-neutral-500 hover:underline">
-              view all →
+            <Link
+              href="/calls"
+              className="flex items-center gap-0.5 text-[11px] font-medium text-neutral-500 hover:text-neutral-800 transition-colors"
+            >
+              View all
+              <ChevronRight className="h-3 w-3" />
             </Link>
           </div>
-          <div className="mt-3 space-y-2">
+          <div className="divide-y divide-neutral-100">
             {recentCalls.isLoading && (
-              <p className="text-xs text-neutral-400">loading…</p>
+              <div className="px-5 py-4 text-xs text-neutral-400">loading...</div>
             )}
             {recentCalls.data?.calls?.map((c) => (
               <Link
                 key={c.call_id}
                 href={`/calls/${c.call_id}`}
-                className="flex items-center justify-between rounded-md border border-neutral-100 p-3 hover:bg-neutral-50"
+                className="flex items-center gap-3 px-5 py-3 hover:bg-neutral-50 transition-colors"
               >
-                <div className="min-w-0">
-                  <div className="truncate text-sm font-medium">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-neutral-100 text-[11px] font-bold text-neutral-500">
+                  {(c.patient_name || "?").charAt(0)}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-medium text-neutral-900">
                     {c.patient_name}
-                    {c.firm_name && (
-                      <span className="ml-2 text-xs font-normal text-neutral-500">
-                        · {c.firm_name}
-                      </span>
-                    )}
                   </div>
-                  <div className="text-xs text-neutral-500">
+                  <div className="text-[11px] text-neutral-500">
+                    {c.firm_name && <span>{c.firm_name} · </span>}
                     {c.started_at
                       ? formatDistanceToNow(new Date(c.started_at), { addSuffix: true })
                       : ""}
@@ -449,7 +406,9 @@ export default function NowPage() {
               </Link>
             ))}
             {recentCalls.data && (recentCalls.data.calls?.length ?? 0) === 0 && (
-              <p className="text-xs text-neutral-400">No calls yet.</p>
+              <div className="px-5 py-6 text-center text-xs text-neutral-400">
+                No calls yet
+              </div>
             )}
           </div>
         </section>
@@ -458,48 +417,57 @@ export default function NowPage() {
   );
 }
 
-function ControlRow({
+function ControlCard({
+  icon,
   label,
-  description,
   checked,
   disabled,
   onToggle,
-  accent,
+  color,
+  sub,
 }: {
+  icon: React.ReactNode;
   label: string;
-  description: string;
   checked: boolean;
   disabled?: boolean;
   onToggle: (v: boolean) => void;
-  accent: "green" | "red" | "amber" | "neutral";
+  color: "emerald" | "rose" | "amber" | "neutral";
+  sub?: string;
 }) {
-  const pill = {
-    green: "bg-emerald-50 text-emerald-700",
-    red: "bg-rose-50 text-rose-700",
-    amber: "bg-amber-50 text-amber-700",
-    neutral: "bg-neutral-100 text-neutral-600",
-  }[accent];
+  const colors = {
+    emerald: { bg: "bg-emerald-50", dot: "bg-emerald-500", text: "text-emerald-700" },
+    rose: { bg: "bg-rose-50", dot: "bg-rose-500", text: "text-rose-700" },
+    amber: { bg: "bg-amber-50", dot: "bg-amber-500", text: "text-amber-700" },
+    neutral: { bg: "bg-neutral-50", dot: "bg-neutral-400", text: "text-neutral-600" },
+  }[color];
+
   return (
-    <div className="flex items-start justify-between gap-3 rounded-md border border-neutral-100 p-3">
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-neutral-900">{label}</span>
-          <span
-            className={cn(
-              "rounded-full px-2 py-0.5 text-[10px] font-semibold",
-              pill,
-            )}
-          >
-            {checked ? "ON" : "OFF"}
-          </span>
+    <div
+      className={cn(
+        "flex items-center justify-between rounded-xl border px-4 py-3 transition-colors",
+        checked ? `${colors.bg} border-${color}-200` : "border-neutral-200 bg-white",
+      )}
+    >
+      <div className="flex items-center gap-2.5">
+        <span className={cn("text-neutral-400", checked && colors.text)}>{icon}</span>
+        <div>
+          <span className="text-sm font-medium text-neutral-800">{label}</span>
+          {sub && (
+            <div className="text-[10px] font-mono text-neutral-500 truncate max-w-[120px]">
+              {sub}
+            </div>
+          )}
         </div>
-        <p className="mt-0.5 text-xs text-neutral-500">{description}</p>
       </div>
-      <Switch
-        checked={checked}
-        disabled={disabled}
-        onCheckedChange={onToggle}
-      />
+      <div className="flex items-center gap-2">
+        <span
+          className={cn(
+            "h-1.5 w-1.5 rounded-full",
+            checked ? colors.dot : "bg-neutral-300",
+          )}
+        />
+        <Switch checked={checked} disabled={disabled} onCheckedChange={onToggle} />
+      </div>
     </div>
   );
 }
