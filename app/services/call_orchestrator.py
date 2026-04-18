@@ -704,19 +704,18 @@ class CallOrchestrator:
                     if e.speaker == "ai"
                 ]
                 recent_ai = "".join(ai_entries[-5:]) if ai_entries else text
-            if self._should_enter_hold_state(recent_ai) and self._twilio_bridge is not None:
+            if self._should_enter_hold_state(recent_ai):
                 if not self._on_hold:
                     self._on_hold = True
-                    try:
-                        self._twilio_bridge.mute_ai_audio()
-                    except Exception as e:
-                        logger.debug("mute_ai_audio on hold entry failed: %s", e)
+                    if self._twilio_bridge is not None:
+                        try:
+                            self._twilio_bridge.mute_ai_audio()
+                        except Exception as e:
+                            logger.debug("mute_ai_audio on hold entry failed: %s", e)
                     await self._add_system_note(
-                        "Entered hold state — muting AI output to Twilio "
+                        "Entered hold state — muting AI output "
                         "until caller speaks again (prevents filler-loop)."
                     )
-                    # Start a hold timeout — if nobody comes back within 60s,
-                    # end the call rather than sitting on hold indefinitely.
                     if self._current_call:
                         cid = self._current_call.call_id
                         asyncio.create_task(self._hold_watchdog(cid, timeout_seconds=60))
@@ -736,20 +735,22 @@ class CallOrchestrator:
             # Caller spoke — if we were on hold, exit hold state and
             # unmute. Cancel any Gemini-queued filler so the AI's next
             # turn is a fresh response to the caller's actual words.
-            if self._on_hold and text.strip() and self._twilio_bridge is not None:
+            if self._on_hold and text.strip():
                 self._on_hold = False
-                try:
-                    self._twilio_bridge.unmute_ai_audio()
-                except Exception as e:
-                    logger.debug("unmute_ai_audio on hold exit failed: %s", e)
+                if self._twilio_bridge is not None:
+                    try:
+                        self._twilio_bridge.unmute_ai_audio()
+                    except Exception as e:
+                        logger.debug("unmute_ai_audio on hold exit failed: %s", e)
                 try:
                     if self._voice_service is not None:
                         await self._voice_service.cancel_response()
+                        await self._voice_service.start_response()
                 except Exception as e:
-                    logger.debug("cancel_response on hold exit failed: %s", e)
+                    logger.debug("cancel+start_response on hold exit failed: %s", e)
                 await self._add_system_note(
-                    "Caller returned from hold — unmuting AI + cancelling "
-                    "any queued filler."
+                    "Caller returned from hold — unmuting AI + restarting "
+                    "response so AI re-engages."
                 )
 
             # Track when the caller first spoke. The IVR-action window is
