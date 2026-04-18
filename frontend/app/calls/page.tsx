@@ -157,8 +157,12 @@ export default function CallsPage() {
                   </Link>
                 </td>
                 <td className="px-4 py-2.5 align-top">
-                  <Link href={`/calls/${c.call_id}`}>
-                    {c.mock_mode ? (
+                  <Link href={`/calls/${c.call_id}`} className="flex gap-1">
+                    {(c as any).call_mode === "web" ? (
+                      <span className="rounded-full bg-violet-50 px-2 py-0.5 text-[10px] font-semibold text-violet-700 ring-1 ring-inset ring-violet-200">
+                        WEB
+                      </span>
+                    ) : c.mock_mode ? (
                       <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700 ring-1 ring-inset ring-amber-200">
                         MOCK
                       </span>

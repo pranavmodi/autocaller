@@ -90,6 +90,7 @@ def _row_to_call_log(row: CallLogRow) -> CallLog:
     cl.voice_provider = getattr(row, "voice_provider", None)
     cl.voice_model = getattr(row, "voice_model", None)
     cl.carrier = getattr(row, "carrier", None)
+    cl.call_mode = getattr(row, "call_mode", "twilio") or "twilio"
     cl.whisper_transcript = getattr(row, "whisper_transcript", None)
     cl.ivr_detected = bool(getattr(row, "ivr_detected", False))
     cl.ivr_outcome = getattr(row, "ivr_outcome", None)
@@ -138,6 +139,7 @@ class CallLogProvider:
         voice_provider: Optional[str] = None,
         voice_model: Optional[str] = None,
         carrier: Optional[str] = None,
+        call_mode: str = "twilio",
     ) -> CallLog:
         call_id = str(uuid.uuid4())
         now = datetime.now(timezone.utc)
@@ -162,6 +164,7 @@ class CallLogProvider:
                 voice_provider=voice_provider,
                 voice_model=voice_model,
                 carrier=carrier,
+                call_mode=call_mode,
             )
             session.add(row)
             await session.commit()
@@ -199,6 +202,7 @@ class CallLogProvider:
         cl.voice_provider = voice_provider
         cl.voice_model = voice_model
         cl.carrier = carrier
+        cl.call_mode = call_mode
         return cl
 
     async def get_call(self, call_id: str) -> Optional[CallLog]:

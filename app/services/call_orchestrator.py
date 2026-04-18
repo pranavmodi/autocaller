@@ -254,7 +254,8 @@ class CallOrchestrator:
             tools_snapshot=list(AUTOCALLER_TOOLS),
             voice_provider=resolved_provider,
             voice_model=resolved_model or "",
-            carrier=resolved_carrier_name,
+            carrier=resolved_carrier_name if call_mode == "twilio" else None,
+            call_mode=call_mode,
         )
 
         self._current_call = call

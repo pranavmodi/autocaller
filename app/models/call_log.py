@@ -232,6 +232,8 @@ class CallLog:
     voice_model: Optional[str] = None     # exact model ID
     # Which telephony carrier placed this call ("twilio" | "telnyx").
     carrier: Optional[str] = None
+    # "twilio" (PSTN via carrier) or "web" (browser mic, no phone).
+    call_mode: str = "twilio"
     # Post-call Whisper transcript (more accurate than live Gemini STT).
     whisper_transcript: Optional[str] = None
     # IVR navigation record (populated if the phone tree was hit).
@@ -316,4 +318,5 @@ class CallLog:
             "ivr_outcome": self.ivr_outcome,
             "ivr_menu_log": self.ivr_menu_log,
             "whisper_transcript": self.whisper_transcript,
+            "call_mode": self.call_mode,
         }
