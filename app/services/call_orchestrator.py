@@ -338,9 +338,22 @@ class CallOrchestrator:
             self._mock_mode = settings.mock_mode
             self._mock_phone = settings.mock_phone if settings.mock_mode else ""
 
-            # In mock mode, redirect the Twilio call to the mock phone number
+            # In mock mode, redirect the call to the mock phone number.
+            # If mock_mode is on but no mock_phone is set, REFUSE to dial —
+            # never fall through to the real number.
             dial_number = patient.phone
-            if settings.mock_mode and settings.mock_phone:
+            if settings.mock_mode:
+                if not settings.mock_phone:
+                    self._last_start_error = "Mock mode is ON but no mock phone number is set. Set one with: autocaller mock on <phone>"
+                    if self.on_error:
+                        await self.on_error(self._last_start_error)
+                    await call_log_provider.end_call(call.call_id, CallOutcome.FAILED)
+                    self._voice_service = None
+                    self._current_call = None
+                    self._current_patient = None
+                    if voice_service:
+                        await voice_service.disconnect()
+                    return None
                 dial_number = settings.mock_phone
                 print(f"[CallOrchestrator] MOCK MODE — redirecting call from {patient.phone} to mock_phone={dial_number}")
 
