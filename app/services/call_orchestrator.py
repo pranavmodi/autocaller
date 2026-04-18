@@ -609,7 +609,15 @@ class CallOrchestrator:
             call_log_provider = get_call_log_provider()
             await call_log_provider.end_call(call.call_id, outcome)
 
-            if patient:
+            # Only update the lead's attempt count + outcome for REAL calls.
+            # Mock (phone redirect) and web (browser test) calls are practice
+            # runs — they shouldn't burn the lead's retry window or remove
+            # it from the dispatch queue.
+            is_test_call = bool(
+                getattr(call, "mock_mode", False)
+                or call_mode == "web"
+            )
+            if patient and not is_test_call:
                 patient_provider = get_patient_provider()
                 await patient_provider.update_patient_after_call(
                     patient.patient_id,
