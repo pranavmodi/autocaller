@@ -726,6 +726,16 @@ class CallOrchestrator:
                 await self.on_transcript_update("patient", text)
 
             # Caller spoke — cancel the silence watchdog and mark as spoken.
+            # Also: if the AI hasn't produced audio in a while, nudge it.
+            import time as _time
+            last_out = getattr(self, "_last_audio_out_at", None)
+            if last_out and (_time.monotonic() - last_out) > 5.0:
+                try:
+                    if self._voice_service is not None:
+                        await self._voice_service.start_response()
+                        print(f"[CallOrchestrator] Nudged AI — no output for {_time.monotonic() - last_out:.1f}s after caller spoke")
+                except Exception:
+                    pass
             self._caller_turn_count += 1
             if not self._caller_has_spoken:
                 self._caller_has_spoken = True
