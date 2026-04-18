@@ -33,7 +33,10 @@ import {
   TreePine,
   Mic,
   ChevronRight,
+  Headphones,
 } from "lucide-react";
+import { WebCallModal } from "@/components/WebCallModal";
+import type { Lead } from "@/types";
 
 export default function NowPage() {
   const qc = useQueryClient();
@@ -126,6 +129,7 @@ export default function NowPage() {
   });
 
   const latestReason = lastDecision?.detail ?? dispatcher.data?.recent_decisions?.[0]?.detail ?? "—";
+  const [webCallLead, setWebCallLead] = useState<Lead | null>(null);
 
   return (
     <div className="space-y-5">
@@ -349,6 +353,13 @@ export default function NowPage() {
                     {l.state ? ` · ${l.state}` : ""}
                   </div>
                 </div>
+                <button
+                  onClick={() => setWebCallLead(l)}
+                  className="rounded-lg border border-neutral-200 p-1.5 text-neutral-400 hover:border-neutral-300 hover:text-neutral-600 transition-colors"
+                  title="Test web call"
+                >
+                  <Headphones className="h-3.5 w-3.5" />
+                </button>
                 <span className="rounded-md bg-neutral-100 px-1.5 py-0.5 text-[10px] font-semibold text-neutral-500 tabular-nums">
                   P{l.priority_bucket}
                 </span>
@@ -413,6 +424,14 @@ export default function NowPage() {
           </div>
         </section>
       </div>
+
+      {/* Web call modal */}
+      {webCallLead && (
+        <WebCallModal
+          lead={webCallLead}
+          onClose={() => setWebCallLead(null)}
+        />
+      )}
     </div>
   );
 }
