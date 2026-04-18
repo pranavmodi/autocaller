@@ -10,6 +10,7 @@ import {
   startDispatcherBatch,
   listCalls,
   listLeads,
+  listNextUp,
   getSettings,
   setSystemEnabled,
   setMockMode,
@@ -101,8 +102,8 @@ export default function NowPage() {
   });
 
   const nextUp = useQuery({
-    queryKey: ["leads-next"],
-    queryFn: listLeads,
+    queryKey: ["leads-next-up"],
+    queryFn: listNextUp,
     refetchInterval: 10_000,
   });
 

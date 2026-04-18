@@ -142,6 +142,9 @@ export const startCall = (patientId: string, mode: "twilio" | "web" = "twilio") 
 export const listLeads = () =>
   get<{ patients: Lead[] }>("/api/patients");
 
+export const listNextUp = () =>
+  get<{ patients: Lead[] }>("/api/patients/next-up");
+
 export const getLead = (id: string) =>
   get<Lead>(`/api/patients/${id}`);
 

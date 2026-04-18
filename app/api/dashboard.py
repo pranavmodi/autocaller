@@ -101,6 +101,14 @@ async def get_patients():
     return {"patients": [p.to_dict() for p in patients]}
 
 
+@router.get("/patients/next-up")
+async def get_next_up():
+    """Get the next leads the dispatcher would call (respects all filters)."""
+    patient_provider = get_patient_provider()
+    queue = await patient_provider.get_outbound_queue(max_attempts=3, min_hours_between=168)
+    return {"patients": [p.to_dict() for p in queue[:5]]}
+
+
 @router.post("/patients")
 async def add_patient(
     name: str,
