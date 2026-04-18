@@ -62,8 +62,13 @@ export default function NowPage() {
     mutationFn: (enabled: boolean) => setSystemEnabled(enabled),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["settings"] }),
   });
+  const [mockPhoneDraft, setMockPhoneDraft] = useState<string | null>(null);
   const toggleMock = useMutation({
     mutationFn: (enabled: boolean) => setMockMode(enabled, mockPhone),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["settings"] }),
+  });
+  const saveMockPhone = useMutation({
+    mutationFn: (phone: string) => setMockMode(true, phone),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["settings"] }),
   });
   const toggleIVR = useMutation({
@@ -133,13 +138,44 @@ export default function NowPage() {
             accent={systemEnabled ? "green" : "red"}
           />
           <ControlRow
-            label={`Mock mode${mockOn && mockPhone ? ` → ${mockPhone}` : ""}`}
+            label="Mock mode"
             description="Redirect every call to your mock phone instead of the lead's real number. Turn OFF for real outbound."
             checked={mockOn}
             disabled={toggleMock.isPending || settings.isLoading}
             onToggle={(v) => toggleMock.mutate(v)}
             accent={mockOn ? "amber" : "neutral"}
           />
+          {mockOn && (
+            <div className="ml-12 -mt-1 mb-2 flex items-center gap-2">
+              <label className="text-xs text-neutral-600">Mock phone:</label>
+              <input
+                type="tel"
+                placeholder="+1234567890"
+                value={mockPhoneDraft ?? mockPhone}
+                onChange={(e) => setMockPhoneDraft(e.target.value)}
+                className="w-40 rounded border border-neutral-300 px-2 py-0.5 text-xs font-mono"
+              />
+              {mockPhoneDraft !== null && mockPhoneDraft !== mockPhone && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    saveMockPhone.mutate(mockPhoneDraft);
+                    setMockPhoneDraft(null);
+                  }}
+                  disabled={saveMockPhone.isPending}
+                  className="text-xs"
+                >
+                  Save
+                </Button>
+              )}
+              {mockPhone && (
+                <span className="text-[10px] text-neutral-400">
+                  calls redirect to {mockPhone}
+                </span>
+              )}
+            </div>
+          )}
           <ControlRow
             label="IVR navigation"
             description="When a phone tree is detected, press digits with an LLM to reach a human instead of hanging up. Respects identity-claim rules; caps at 3 menu hops / 60 s."
