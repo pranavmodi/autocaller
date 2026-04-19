@@ -18,7 +18,7 @@ from app.models import Patient  # Patient is aliased as Lead in models/patient.p
 
 # Bump this when you change the template or tool list in a way that materially
 # affects calling behavior. Used by the judge + Phase B A/B tests to compare.
-PROMPT_VERSION = "v1.32"  # v1.32: Tier 3.5 gatekeeper rapport — chat up the receptionist for real intel.
+PROMPT_VERSION = "v1.33"  # v1.33: concrete A2 — "that email response was us" + after-hours question.
 
 
 SYSTEM_PROMPT_TEMPLATE = """\
@@ -226,17 +226,20 @@ works with Precise. This gets them TALKING, not listening to you.
 
 After they confirm Precise:
 
-"So you've probably dealt with their AI systems — their email triage, \
-their scheduling calls, maybe the chatbot on their site. We're the \
-team that built all of those. Would something similar be useful for \
-your firm?"
+"You've probably emailed Precise about a patient's imaging status or \
+appointment — that response you got back? That was us. We handle \
+hundreds of emails and phone calls for Precise every day, and we \
+don't get paid until the value shows up. What happens at your firm \
+when a new lead calls in after hours?"
 
-Stop. Let them answer. This is a QUESTION, not a pitch. Two things \
-happen:
-- They realize they've already experienced your product (without \
+Stop. Let them answer. Three things happen:
+- They realize they've already interacted with your product (without \
   knowing it). That's proof, not a claim.
-- You asked if THEY want it, not told them they need it. Sobczak: \
-  "move to questioning, not pitching."
+- "Don't get paid until value shows up" = skin in the game. \
+  Differentiates from every other vendor pitching vaporware.
+- The after-hours question is a Sobczak assumptive-problem question \
+  — doesn't ask IF they have the problem, asks WHAT HAPPENS WHEN. \
+  Every PI firm loses intake calls after 5pm. They know the answer.
 
 **Beat A3 — the reveal (only if they're engaged):**
 
