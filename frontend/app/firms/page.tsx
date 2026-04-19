@@ -28,7 +28,8 @@ function tierColor(tier: string | null) {
   return "bg-neutral-100 text-neutral-500";
 }
 
-type ResearchFilter = "all" | "researched" | "unresearched";
+type ResearchFilter = "all" | "completed" | "pending";
+type TierFilter = "all" | "A" | "B" | "C" | "D";
 type SearchMode = "firms" | "people";
 
 const PAGE_SIZE = 25;
@@ -37,11 +38,12 @@ export default function FirmsPage() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [researchFilter, setResearchFilter] = useState<ResearchFilter>("all");
+  const [tierFilter, setTierFilter] = useState<TierFilter>("all");
   const [searchMode, setSearchMode] = useState<SearchMode>("firms");
 
   // Firm search/list
   const firmsQuery = useQuery({
-    queryKey: ["pif-firms", search, page],
+    queryKey: ["pif-firms", search, page, researchFilter, tierFilter],
     queryFn: () =>
       listPifFirms({
         search: search.trim() || undefined,
@@ -49,6 +51,8 @@ export default function FirmsPage() {
         page_size: PAGE_SIZE,
         sort: "updated_at",
         order: "desc",
+        research_status: researchFilter !== "all" ? researchFilter : undefined,
+        icp_tier: tierFilter !== "all" ? tierFilter : undefined,
       }),
     enabled: searchMode === "firms",
     refetchInterval: 60_000,
@@ -62,13 +66,7 @@ export default function FirmsPage() {
   });
 
   const data = firmsQuery.data;
-  const firms = (data?.items ?? []).filter((f) => {
-    if (researchFilter === "researched")
-      return f.research_status === "completed" || f.last_researched_at;
-    if (researchFilter === "unresearched")
-      return !f.research_status || f.research_status !== "completed";
-    return true;
-  });
+  const firms = data?.items ?? [];
   const total = data?.total ?? 0;
   const totalPages = data?.total_pages ?? 1;
 
@@ -131,28 +129,39 @@ export default function FirmsPage() {
 
       {/* Filters (firms mode only) */}
       {searchMode === "firms" && (
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Filter className="h-3.5 w-3.5 text-neutral-400" />
-          {(["all", "researched", "unresearched"] as ResearchFilter[]).map(
-            (f) => (
-              <button
-                key={f}
-                onClick={() => setResearchFilter(f)}
-                className={cn(
-                  "rounded-full border px-3 py-1 text-[11px] font-medium transition-colors",
-                  researchFilter === f
+          {(["all", "completed", "pending"] as ResearchFilter[]).map((f) => (
+            <button
+              key={f}
+              onClick={() => { setResearchFilter(f); setPage(1); }}
+              className={cn(
+                "rounded-full border px-3 py-1 text-[11px] font-medium transition-colors",
+                researchFilter === f
+                  ? "border-neutral-900 bg-neutral-900 text-white"
+                  : "border-neutral-200 bg-white text-neutral-600 hover:border-neutral-300",
+              )}
+            >
+              {f === "all" ? "All" : f === "completed" ? "Researched" : "Not researched"}
+            </button>
+          ))}
+          <span className="mx-1 text-neutral-300">|</span>
+          {(["all", "A", "B", "C", "D"] as TierFilter[]).map((t) => (
+            <button
+              key={t}
+              onClick={() => { setTierFilter(t); setPage(1); }}
+              className={cn(
+                "rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors",
+                tierFilter === t
+                  ? t === "all"
                     ? "border-neutral-900 bg-neutral-900 text-white"
-                    : "border-neutral-200 bg-white text-neutral-600 hover:border-neutral-300",
-                )}
-              >
-                {f === "all"
-                  ? "All"
-                  : f === "researched"
-                    ? "Researched"
-                    : "Not researched"}
-              </button>
-            ),
-          )}
+                    : cn("border-transparent", tierColor(t))
+                  : "border-neutral-200 bg-white text-neutral-600 hover:border-neutral-300",
+              )}
+            >
+              {t === "all" ? "All tiers" : `Tier ${t}`}
+            </button>
+          ))}
         </div>
       )}
 

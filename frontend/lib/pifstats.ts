@@ -103,6 +103,8 @@ export async function listPifFirms(params: {
   page_size?: number;
   sort?: string;
   order?: string;
+  research_status?: string;
+  icp_tier?: string;
 }): Promise<PifListResponse> {
   const qs = new URLSearchParams();
   if (params.search) qs.set("search", params.search);
@@ -110,6 +112,8 @@ export async function listPifFirms(params: {
   qs.set("page_size", String(params.page_size ?? 25));
   if (params.sort) qs.set("sort", params.sort);
   if (params.order) qs.set("order", params.order);
+  if (params.research_status) qs.set("research_status", params.research_status);
+  if (params.icp_tier) qs.set("icp_tier", params.icp_tier);
   const resp = await fetch(`${PIF_BASE}/?${qs}`);
   if (!resp.ok) throw new Error(`PIF list failed: ${resp.status}`);
   return resp.json();
