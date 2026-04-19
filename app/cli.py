@@ -1537,5 +1537,155 @@ def carrier_set(
     console.print(f"[green]✓[/green] default_carrier = {r.get('default_carrier')}")
 
 
+@leads_app.command("sync-pifstats")
+def leads_sync_pifstats(
+    limit: int = typer.Option(100, help="Max firms to pull"),
+    dry_run: bool = typer.Option(False, "--dry-run"),
+):
+    """Pull researched firms from PIF Stats into the autocaller leads table.
+
+    Only imports firms that have been researched (leadership data available)
+    and have a phone number. Picks the best decision-maker contact from
+    the leadership list. Keyed by 'pif-{pif_id}' for idempotent re-sync.
+    """
+    import httpx
+
+    PIF_BASE = "https://emailprocessing.mediflow360.com/api/v1/pif-info"
+
+    console.print(f"Fetching researched firms from PIF Stats (limit={limit})...")
+
+    firms = []
+    page = 1
+    while len(firms) < limit:
+        resp = httpx.get(
+            f"{PIF_BASE}/?page={page}&page_size=100",
+            timeout=30,
+        )
+        data = resp.json()
+        items = data.get("items", [])
+        for f in items:
+            if (f.get("research_status") == "completed" or f.get("last_researched_at")) \
+                    and f.get("phones") and f.get("leadership"):
+                firms.append(f)
+        if page >= data.get("total_pages", 1):
+            break
+        page += 1
+        if page > 30:
+            break
+
+    console.print(f"Found {len(firms)} callable researched firms")
+
+    # Pick best contact per firm
+    DM_TITLES = {"owner", "partner", "managing", "principal", "director", "ceo", "coo", "president", "founder", "shareholder"}
+
+    rows = []
+    for firm in firms[:limit]:
+        leaders = firm.get("leadership") or []
+        phones = firm.get("phones") or []
+        best = None
+        best_score = -1
+        for l in leaders:
+            title_lower = (l.get("title") or "").lower()
+            score = sum(1 for kw in DM_TITLES if kw in title_lower) * 10
+            if l.get("phone"):
+                score += 5
+            if l.get("email"):
+                score += 3
+            if l.get("linkedin"):
+                score += 2
+            if score > best_score:
+                best_score = score
+                best = l
+
+        if not best:
+            continue
+
+        # Pick phone: prefer leader's phone, fall back to firm phone
+        phone = (best.get("phone") or "").strip()
+        if not phone and phones:
+            phone = phones[0]
+        phone = phone.replace("\u2011", "-").replace(".", "-").strip()
+
+        # Normalize to E.164-ish
+        digits = "".join(c for c in phone if c.isdigit())
+        if len(digits) == 10:
+            phone = f"+1{digits}"
+        elif len(digits) == 11 and digits.startswith("1"):
+            phone = f"+{digits}"
+        elif not phone.startswith("+"):
+            phone = f"+{digits}" if digits else ""
+
+        if not phone or len(digits) < 10 or len(digits) > 15:
+            continue
+
+        beh = firm.get("behavioral_data") or {}
+        pain = beh.get("primary_pain_point", "")
+        after_hrs = beh.get("after_hours_ratio")
+        email_vol = beh.get("monthly_email_volume", [])
+        notes_parts = []
+        if pain:
+            notes_parts.append(f"Pain: {pain.replace('_', ' ')}")
+        if after_hrs is not None:
+            notes_parts.append(f"After-hours: {round(after_hrs * 100)}%")
+        if email_vol:
+            avg = sum(email_vol) / len(email_vol)
+            notes_parts.append(f"Email vol: {avg:.0f}/mo")
+        notes_parts.append(f"PIF ID: {firm['id']}")
+
+        rows.append({
+            "patient_id": f"pif-{firm['id']}",
+            "name": best["name"],
+            "phone": phone,
+            "firm_name": firm.get("firm_name"),
+            "state": None,  # TODO: extract from address
+            "practice_area": "personal injury",
+            "email": best.get("email"),
+            "title": (best.get("title") or "")[:128] or None,
+            "website": firm.get("website"),
+            "source": "pifstats",
+            "tags": [f"pif-tier:{firm.get('icp_tier', '?')}"],
+            "notes": " | ".join(notes_parts) if notes_parts else None,
+        })
+
+    console.print(f"Extracted {len(rows)} leads with valid phone + DM contact")
+
+    if dry_run:
+        for r in rows[:15]:
+            console.print(
+                f"  {r['name'][:28]:28s}  {(r.get('title') or '-')[:28]:28s}  "
+                f"{(r['firm_name'] or '-')[:30]:30s}  {r['phone']}"
+            )
+        if len(rows) > 15:
+            console.print(f"  ... and {len(rows) - 15} more")
+        console.print("[cyan]--dry-run: no DB writes[/cyan]")
+        return
+
+    async def _upsert():
+        from app.db import AsyncSessionLocal
+        from app.db.models import PatientRow
+        from sqlalchemy import select
+        ins, upd = 0, 0
+        async with AsyncSessionLocal() as session:
+            for lead in rows:
+                existing = await session.execute(
+                    select(PatientRow).where(PatientRow.patient_id == lead["patient_id"])
+                )
+                row_obj = existing.scalar_one_or_none()
+                if row_obj:
+                    for k, v in lead.items():
+                        if k == "patient_id":
+                            continue
+                        setattr(row_obj, k, v)
+                    upd += 1
+                else:
+                    session.add(PatientRow(**lead))
+                    ins += 1
+            await session.commit()
+        return ins, upd
+
+    ins, upd = _run(_upsert())
+    console.print(f"[green]Inserted {ins}, updated {upd}.[/green]")
+
+
 if __name__ == "__main__":
     app()
