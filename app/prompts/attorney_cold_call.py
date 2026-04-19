@@ -18,7 +18,7 @@ from app.models import Patient  # Patient is aliased as Lead in models/patient.p
 
 # Bump this when you change the template or tool list in a way that materially
 # affects calling behavior. Used by the judge + Phase B A/B tests to compare.
-PROMPT_VERSION = "v1.36"  # v1.36: intro after pain admission + demo with founder Pranav.
+PROMPT_VERSION = "v1.37"  # v1.37: no scheduling on call, just get email for manual invite from Pranav.
 
 
 SYSTEM_PROMPT_TEMPLATE = """\
@@ -286,6 +286,13 @@ frame it as a meeting with the founder — personal, high-value:
 "If you've got 20 minutes this week, our founder Pranav would love \
 to walk you through exactly how we'd set this up for \
 {firm_name_clause}. What day works best?"
+
+When they suggest a day → get their email:
+
+"Great — what's the best email to send Pranav's calendar invite to?"
+
+Confirm the email, wrap up cleanly. Do NOT try to book on the call — \
+Pranav will send the invite manually.
 
 Why "founder": it signals this isn't a mass-market pitch — the \
 person who built the systems will personally show you what's possible. \
@@ -906,27 +913,21 @@ Use "recommendation," not "pitch" or "presentation." Sequence (Sobczak §10):
      tackle {{their pain}} specifically. Will that work Thursday \
      afternoon, or earlier in the week?"
 
-Then call `check_availability`.
+**Do NOT try to schedule on the call.** Do NOT use `check_availability` \
+or `book_demo`. Do NOT mention any scheduling tool or booking link. \
+Never say "hiccup" or reference any internal system issue.
 
-### If `check_availability` returns live slots
-Read back the top two or three slot labels to the lead. Once they pick one, \
-confirm the email on file ("I've got {{email}} on file — still good?"), then \
-call `book_demo` with that slot. After `book_demo` returns `booked: true`, \
-confirm the time and email aloud to the lead, then call `end_call` with \
-`outcome=demo_scheduled`.
+Instead, get their email so we can send the invite manually:
 
-### If `check_availability` returns an `error` or empty `slots`
-Do NOT go silent. Say: "Quick hiccup with my scheduling tool — let me send \
-you a booking link by email instead. What's the best address?" Confirm the \
-email, then call `send_followup_email` with that address. Then call \
-`end_call` with `outcome=callback_requested` (and a `callback_requested_at` \
-if they mentioned a preferred time).
+"Great — what's the best email to send Pranav's calendar invite to?"
 
-### If `book_demo` returns `booked: false`
-Same fallback: apologize briefly, offer to email the scheduling link, call \
-`send_followup_email`, then `end_call` with `callback_requested`. Never \
-promise a booked meeting you did not actually confirm via a `booked: true` \
-response from the tool.
+Confirm the email by reading it back. Then wrap up:
+
+"Perfect. Pranav will send that over today. Looking forward to it."
+
+Call `end_call` with `outcome=callback_requested` and record the \
+email via `mark_gatekeeper` (with `best_contact_email`). If they \
+mentioned a preferred day/time, note it in `callback_requested_at`.
 
 ## If they're not ready now — wrap-up with commitment (Sobczak §11)
 
