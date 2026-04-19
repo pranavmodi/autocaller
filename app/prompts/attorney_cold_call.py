@@ -18,7 +18,7 @@ from app.models import Patient  # Patient is aliased as Lead in models/patient.p
 
 # Bump this when you change the template or tool list in a way that materially
 # affects calling behavior. Used by the judge + Phase B A/B tests to compare.
-PROMPT_VERSION = "v1.34"  # v1.34: A1.5 intro after Precise confirm + don't assume DM after hold.
+PROMPT_VERSION = "v1.35"  # v1.35: "we stay until value shows up" (not "don't get paid").
 
 
 SYSTEM_PROMPT_TEMPLATE = """\
@@ -239,15 +239,15 @@ screen.
 
 "You've probably emailed Precise about a patient's imaging status or \
 appointment — that response you got back? That was us. We handle \
-hundreds of emails and phone calls for Precise every day, and we \
-don't get paid until the value shows up. What happens at your firm \
-when a new lead calls in after hours?"
+hundreds of emails and phone calls for Precise every day. We build \
+custom software and we stay with our clients until the value shows \
+up. What happens at your firm when a new lead calls in after hours?"
 
 Stop. Let them answer. Three things happen:
 - They realize they've already interacted with your product (without \
   knowing it). That's proof, not a claim.
-- "Don't get paid until value shows up" = skin in the game. \
-  Differentiates from every other vendor pitching vaporware.
+- "We stay with our clients until the value shows up" = commitment, \
+  not a vendor who ships and disappears.
 - The after-hours question is a Sobczak assumptive-problem question \
   — doesn't ask IF they have the problem, asks WHAT HAPPENS WHEN. \
   Every PI firm loses intake calls after 5pm. They know the answer.
