@@ -76,7 +76,7 @@ export interface PifFirm {
   leadership: PifLeader[];
   staff: PifLeader[] | null;
   research_data: PifResearch | null;
-  research_status: string;
+  research_status: string | null;
   staff_research_status: string | null;
   behavioral_data: PifBehavior | null;
   icp_score: number | null;
@@ -84,19 +84,35 @@ export interface PifFirm {
   score_breakdown: PifScoreBreakdown | null;
   conversation_ids: string[];
   extraction_notes: string | null;
+  last_researched_at: string | null;
   created_at: string;
   updated_at: string;
 }
 
-export async function searchPifFirms(
-  query: string,
-  limit = 20,
-): Promise<PifFirm[]> {
-  const params = new URLSearchParams({ search: query, limit: String(limit) });
-  const resp = await fetch(`${PIF_BASE}/?${params}`);
-  if (!resp.ok) throw new Error(`PIF search failed: ${resp.status}`);
-  const data = await resp.json();
-  return Array.isArray(data) ? data : data.items ?? data.data ?? [];
+export interface PifListResponse {
+  items: PifFirm[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+}
+
+export async function listPifFirms(params: {
+  search?: string;
+  page?: number;
+  page_size?: number;
+  sort?: string;
+  order?: string;
+}): Promise<PifListResponse> {
+  const qs = new URLSearchParams();
+  if (params.search) qs.set("search", params.search);
+  qs.set("page", String(params.page ?? 1));
+  qs.set("page_size", String(params.page_size ?? 25));
+  if (params.sort) qs.set("sort", params.sort);
+  if (params.order) qs.set("order", params.order);
+  const resp = await fetch(`${PIF_BASE}/?${qs}`);
+  if (!resp.ok) throw new Error(`PIF list failed: ${resp.status}`);
+  return resp.json();
 }
 
 export async function getPifFirm(pifId: string): Promise<PifFirm> {
@@ -105,26 +121,17 @@ export async function getPifFirm(pifId: string): Promise<PifFirm> {
   return resp.json();
 }
 
-export async function listPifFirms(
-  sort = "icp_score",
-  order = "desc",
-  limit = 50,
-): Promise<PifFirm[]> {
-  const params = new URLSearchParams({
-    sort,
-    order,
-    limit: String(limit),
-  });
-  const resp = await fetch(`${PIF_BASE}/?${params}`);
-  if (!resp.ok) throw new Error(`PIF list failed: ${resp.status}`);
-  const data = await resp.json();
-  return Array.isArray(data) ? data : data.items ?? data.data ?? [];
+export interface PifPersonResult extends PifLeader {
+  firm_name?: string;
+  firm_id?: string;
+  source?: string;
+  role_category?: string;
 }
 
 export async function searchPifPeople(
   query: string,
   source = "all",
-): Promise<PifLeader[]> {
+): Promise<PifPersonResult[]> {
   const params = new URLSearchParams({ search: query, source });
   const resp = await fetch(`${PIF_BASE}/people?${params}`);
   if (!resp.ok) throw new Error(`PIF people search failed: ${resp.status}`);
