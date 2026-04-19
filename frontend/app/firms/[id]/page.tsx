@@ -2,8 +2,18 @@
 
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { useQuery } from "@tanstack/react-query";
-import { getPifFirm, type PifFirm, type PifLeader } from "@/lib/pifstats";
+import { useState, useEffect, useCallback } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  getPifFirm,
+  triggerResearch,
+  triggerStaffResearch,
+  triggerBehaviorAnalysis,
+  triggerIcpScore,
+  pollResearchStatus,
+  type PifFirm,
+  type PifLeader,
+} from "@/lib/pifstats";
 import { cn } from "@/lib/utils";
 import {
   ArrowLeft,
@@ -123,6 +133,9 @@ export default function FirmDetailPage() {
           )}
         </div>
       </section>
+
+      {/* Research actions */}
+      <ResearchActions firmId={firm.id} firm={firm} />
 
       {/* Score breakdown + Behavior — two columns */}
       <div className="grid gap-5 lg:grid-cols-2">
@@ -333,6 +346,195 @@ export default function FirmDetailPage() {
         </section>
       )}
     </div>
+  );
+}
+
+function ResearchActions({ firmId, firm }: { firmId: string; firm: PifFirm }) {
+  const qc = useQueryClient();
+  const [taskId, setTaskId] = useState<string | null>(null);
+  const [polling, setPolling] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
+  const [loading, setLoading] = useState<Record<string, boolean>>({});
+
+  const setBtn = (key: string, val: boolean) =>
+    setLoading((prev) => ({ ...prev, [key]: val }));
+
+  const refresh = useCallback(() => {
+    qc.invalidateQueries({ queryKey: ["pif-firm", firmId] });
+  }, [qc, firmId]);
+
+  // Poll research status
+  useEffect(() => {
+    if (!taskId || !polling) return;
+    const interval = setInterval(async () => {
+      try {
+        const res = await pollResearchStatus(taskId);
+        setStatus(res.status);
+        if (res.status === "completed" || res.status === "failed") {
+          setPolling(false);
+          setTaskId(null);
+          refresh();
+        }
+      } catch {
+        setPolling(false);
+      }
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [taskId, polling, refresh]);
+
+  const handleResearch = async () => {
+    setBtn("research", true);
+    try {
+      const res = await triggerResearch(firmId);
+      setTaskId(res.task_id);
+      setStatus("queued");
+      setPolling(true);
+    } catch (e: any) {
+      setStatus(`error: ${e.message}`);
+    }
+    setBtn("research", false);
+  };
+
+  const handleStaff = async () => {
+    setBtn("staff", true);
+    try {
+      const res = await triggerStaffResearch(firmId);
+      setTaskId(res.task_id);
+      setStatus("queued");
+      setPolling(true);
+    } catch (e: any) {
+      setStatus(`error: ${e.message}`);
+    }
+    setBtn("staff", false);
+  };
+
+  const handleBehavior = async () => {
+    setBtn("behavior", true);
+    try {
+      await triggerBehaviorAnalysis(firmId);
+      setStatus("behavior analysis queued");
+      // Poll by re-fetching firm data after a delay
+      setTimeout(refresh, 5000);
+      setTimeout(refresh, 15000);
+    } catch (e: any) {
+      setStatus(`error: ${e.message}`);
+    }
+    setBtn("behavior", false);
+  };
+
+  const handleScore = async () => {
+    setBtn("score", true);
+    try {
+      await triggerIcpScore(firmId);
+      refresh();
+      setStatus("scored");
+    } catch (e: any) {
+      setStatus(`error: ${e.message}`);
+    }
+    setBtn("score", false);
+  };
+
+  const hasLeadership = (firm.leadership?.length ?? 0) > 0;
+  const hasBehavior = !!firm.behavioral_data;
+  const hasScore = firm.icp_score != null;
+
+  return (
+    <section className="rounded-xl border border-neutral-200 bg-white p-5">
+      <div className="flex items-center justify-between">
+        <h2 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-neutral-400">
+          <BarChart3 className="h-4 w-4" />
+          Research & Enrichment
+        </h2>
+        {polling && (
+          <span className="flex items-center gap-1.5 text-xs text-amber-700">
+            <span className="h-2 w-2 animate-pulse rounded-full bg-amber-500" />
+            {status === "queued" ? "Queued..." : status === "started" ? "Researching..." : status}
+          </span>
+        )}
+        {status && !polling && (
+          <span className="text-[11px] text-neutral-500">{status}</span>
+        )}
+      </div>
+
+      <div className="mt-4 flex flex-wrap gap-2">
+        <ResearchButton
+          label="Leadership"
+          description={hasLeadership ? `${firm.leadership!.length} found` : "Not researched"}
+          done={hasLeadership}
+          loading={loading.research || (polling && !loading.staff)}
+          onClick={handleResearch}
+        />
+        <ResearchButton
+          label="Staff"
+          description={firm.staff ? `${firm.staff.length} found` : "Not researched"}
+          done={!!firm.staff}
+          loading={loading.staff}
+          onClick={handleStaff}
+        />
+        <ResearchButton
+          label="Behavior"
+          description={hasBehavior ? `${firm.behavioral_data!.total_email_count} emails analyzed` : "Not analyzed"}
+          done={hasBehavior}
+          loading={loading.behavior}
+          onClick={handleBehavior}
+        />
+        <ResearchButton
+          label="ICP Score"
+          description={hasScore ? `${firm.icp_score}/100 (Tier ${firm.icp_tier})` : "Not scored"}
+          done={hasScore}
+          loading={loading.score}
+          onClick={handleScore}
+          disabled={!hasBehavior}
+          disabledReason="Run behavior analysis first"
+        />
+      </div>
+    </section>
+  );
+}
+
+function ResearchButton({
+  label,
+  description,
+  done,
+  loading,
+  onClick,
+  disabled,
+  disabledReason,
+}: {
+  label: string;
+  description: string;
+  done: boolean;
+  loading: boolean;
+  onClick: () => void;
+  disabled?: boolean;
+  disabledReason?: string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={loading || disabled}
+      title={disabled ? disabledReason : `Run ${label.toLowerCase()} research`}
+      className={cn(
+        "flex flex-col items-start rounded-xl border px-4 py-3 text-left transition-colors min-w-[140px]",
+        done
+          ? "border-emerald-200 bg-emerald-50 hover:bg-emerald-100"
+          : disabled
+            ? "border-neutral-200 bg-neutral-50 opacity-50 cursor-not-allowed"
+            : "border-neutral-200 bg-white hover:border-neutral-300 hover:bg-neutral-50",
+      )}
+    >
+      <div className="flex items-center gap-2">
+        {loading ? (
+          <span className="h-3 w-3 animate-spin rounded-full border-2 border-neutral-300 border-t-neutral-700" />
+        ) : done ? (
+          <span className="h-3 w-3 rounded-full bg-emerald-500" />
+        ) : (
+          <span className="h-3 w-3 rounded-full border-2 border-neutral-300" />
+        )}
+        <span className="text-xs font-semibold text-neutral-800">{label}</span>
+      </div>
+      <span className="mt-1 text-[10px] text-neutral-500">{description}</span>
+    </button>
   );
 }
 

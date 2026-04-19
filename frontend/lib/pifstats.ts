@@ -132,6 +132,56 @@ export interface PifPersonResult extends PifLeader {
   role_category?: string;
 }
 
+// --- Research triggers ---
+
+export interface ResearchTriggerResponse {
+  pif_id: string;
+  firm_name: string;
+  task_id: string;
+  status: string;
+  message: string;
+}
+
+export interface ResearchStatusResponse {
+  pif_id: string;
+  firm_name: string;
+  task_id: string;
+  status: string; // "queued" | "started" | "completed" | "failed"
+  leadership: PifLeader[] | null;
+  research_data: PifResearch | null;
+  message: string;
+}
+
+export async function triggerResearch(pifId: string): Promise<ResearchTriggerResponse> {
+  const resp = await fetch(`${PIF_BASE}/${pifId}/research`, { method: "POST" });
+  if (!resp.ok) throw new Error(`Research trigger failed: ${resp.status}`);
+  return resp.json();
+}
+
+export async function triggerStaffResearch(pifId: string): Promise<ResearchTriggerResponse> {
+  const resp = await fetch(`${PIF_BASE}/${pifId}/research-staff`, { method: "POST" });
+  if (!resp.ok) throw new Error(`Staff research trigger failed: ${resp.status}`);
+  return resp.json();
+}
+
+export async function triggerBehaviorAnalysis(pifId: string): Promise<{ message: string }> {
+  const resp = await fetch(`${PIF_BASE}/${pifId}/analyze-behavior`, { method: "POST" });
+  if (!resp.ok) throw new Error(`Behavior analysis failed: ${resp.status}`);
+  return resp.json();
+}
+
+export async function triggerIcpScore(pifId: string): Promise<PifFirm> {
+  const resp = await fetch(`${PIF_BASE}/${pifId}/score`, { method: "POST" });
+  if (!resp.ok) throw new Error(`ICP scoring failed: ${resp.status}`);
+  return resp.json();
+}
+
+export async function pollResearchStatus(taskId: string): Promise<ResearchStatusResponse> {
+  const resp = await fetch(`${PIF_BASE}/research-status/${taskId}`);
+  if (!resp.ok) throw new Error(`Research status poll failed: ${resp.status}`);
+  return resp.json();
+}
+
 export async function searchPifPeople(
   query: string,
   source = "all",
