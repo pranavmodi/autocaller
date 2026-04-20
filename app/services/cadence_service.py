@@ -86,6 +86,13 @@ async def _ingest_signals() -> int:
                     continue
 
                 now = datetime.now(timezone.utc)
+                # Due tomorrow 8 AM Eastern — gives the batch time to
+                # accumulate before business hours.
+                tomorrow_8am = (
+                    datetime.now(SCAN_TZ)
+                    .replace(hour=8, minute=0, second=0, microsecond=0)
+                    + timedelta(days=1)
+                ).astimezone(timezone.utc)
                 entry = CadenceEntryRow(
                     id=str(uuid.uuid4()),
                     pif_id=pif_id,
@@ -93,7 +100,7 @@ async def _ingest_signals() -> int:
                     cadence_stage="signal_detected",
                     stage_entered_at=now,
                     next_action="Call managing partner",
-                    next_action_due=now,
+                    next_action_due=tomorrow_8am,
                     owner="autocaller",
                     outcome="in_progress",
                     icp_tier=firm.get("icp_tier"),
