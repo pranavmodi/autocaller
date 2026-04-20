@@ -259,3 +259,32 @@ class SimulationScenarioRow(Base):
     dispatcher: Mapped[dict] = mapped_column(JSONB, default=dict)
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow)
     updated_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow, onupdate=_utcnow)
+
+
+class CadenceEntryRow(Base):
+    """Tracks a firm through the multi-day outreach cadence."""
+    __tablename__ = "cadence_entries"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    pif_id: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    firm_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    cadence_stage: Mapped[str] = mapped_column(String(32), nullable=False, default="signal_detected")
+    stage_entered_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow)
+    next_action: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    next_action_due: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    owner: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    outcome: Mapped[str] = mapped_column(String(32), nullable=False, default="in_progress")
+    call_ids: Mapped[list] = mapped_column(JSONB, default=list)
+    contacts_tried: Mapped[list] = mapped_column(JSONB, default=list)
+    intel: Mapped[dict] = mapped_column(JSONB, default=dict)
+    icp_tier: Mapped[str | None] = mapped_column(String(1), nullable=True)
+    icp_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow, onupdate=_utcnow)
+
+    __table_args__ = (
+        Index("ix_cadence_stage", "cadence_stage"),
+        Index("ix_cadence_outcome", "outcome"),
+        Index("ix_cadence_next_due", "next_action_due"),
+    )

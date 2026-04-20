@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pathlib import Path
 
-from .api import dashboard_router, websocket_router, settings_router, dispatcher_router, scenarios_router, carrier_router
+from .api import dashboard_router, websocket_router, settings_router, dispatcher_router, scenarios_router, carrier_router, cadence_router
 from .api.auth import router as auth_router, SESSION_COOKIE, verify_session_token, auth_configured
 from .services.dispatcher import get_dispatcher
 from .services.daily_report_service import daily_report_loop
@@ -63,10 +63,13 @@ async def lifespan(app: FastAPI):
     daily_report_task = asyncio.create_task(daily_report_loop())
     # Start the background judge — every 60s, score unjudged ended calls
     judge_task = asyncio.create_task(judge_loop(interval_seconds=60))
+    # Start the cadence scan loop — checks hourly, fires at 6 AM Eastern
+    from .services.cadence_service import cadence_scan_loop
+    cadence_task = asyncio.create_task(cadence_scan_loop())
     yield
     # Shutdown: stop the dispatcher, cancel background tasks, dispose engine
     get_dispatcher().stop()
-    for t in (daily_report_task, judge_task):
+    for t in (daily_report_task, judge_task, cadence_task):
         t.cancel()
         try:
             await t
@@ -189,6 +192,7 @@ app.include_router(settings_router)
 app.include_router(dispatcher_router)
 app.include_router(scenarios_router)
 app.include_router(carrier_router)
+app.include_router(cadence_router)
 
 # Legacy static (kept for compatibility)
 STATIC_DIR = Path("static")

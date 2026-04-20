@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Activity, PhoneCall, Users, Stethoscope, Building2, LogOut } from "lucide-react";
+import { Activity, PhoneCall, Users, Stethoscope, Building2, CalendarClock, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ConnectionBadge } from "@/components/ConnectionBadge";
 import { apiUrl } from "@/lib/api";
@@ -23,6 +23,7 @@ const items = [
   { href: "/", label: "Now", icon: Activity },
   { href: "/calls", label: "Calls", icon: PhoneCall },
   { href: "/pipeline", label: "Pipeline", icon: Users },
+  { href: "/cadence", label: "Cadence", icon: CalendarClock },
   { href: "/firms", label: "Firms", icon: Building2 },
   { href: "/system", label: "Health", icon: Stethoscope },
 ];
