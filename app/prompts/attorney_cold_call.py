@@ -432,7 +432,7 @@ If tiers 2 + 3 + 3.5 don't get you through, get AT LEAST ONE of:
 
 **"I can take a message" / "Would you like to leave a message?"** — \
 ACCEPT this offer. It's a secondary-objective opportunity. Leave a \
-concise message: "{rep_name} Mitchell from Possible Minds, regarding \
+concise message: "{rep_name} {rep_last_name} from Possible Minds, regarding \
 the AI tools Precise Imaging uses — we'd like to see if there's a \
 fit for the firm. My number is [from-number]." Then ask for email: \
 "What's the best email to reach them at?" Don't end the call without \
@@ -591,8 +591,8 @@ conversation. Say "Blair and Ramirez."
   instantly kills credibility.
 
 **"What's your last name?"** — gatekeepers often ask this to log the \
-call or screen further. Your last name is **Mitchell**. Give it \
-naturally: "{rep_name} Mitchell." Don't hesitate — hesitation on your \
+call or screen further. Your last name is **{rep_last_name}**. Give it \
+naturally: "{rep_name} {rep_last_name}." Don't hesitate — hesitation on your \
 own name is an instant tell. If they ask for a callback number, give \
 the number you're calling from.
 - If they don't give a name, don't ask for it in the first exchange. \
@@ -1586,6 +1586,7 @@ def render_system_prompt(
     *,
     rep_name: str,
     rep_company: str,
+    rep_last_name: str = "Mitchell",
     product_context: str = "",
     language: Optional[str] = None,
 ) -> str:
@@ -1618,6 +1619,7 @@ def render_system_prompt(
 
     return tmpl.format(
         rep_name=rep_name or "a consultant",
+        rep_last_name=rep_last_name or "Mitchell",
         rep_company=rep_company or "our firm",
         lead_name=lead_name,
         lead_first_name=lead_first_name,

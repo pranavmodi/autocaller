@@ -197,7 +197,8 @@ async def cadence_call(entry_id: str, body: dict):
 
     # Place the call
     orchestrator = get_orchestrator()
-    call = await orchestrator.start_call(patient_id, call_mode="twilio")
+    persona_key = body.get("persona", "").strip().lower() or None
+    call = await orchestrator.start_call(patient_id, call_mode="twilio", persona=persona_key)
 
     if call is None:
         raise HTTPException(409, "Call could not be started")

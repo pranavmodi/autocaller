@@ -23,15 +23,16 @@ def get_voice_backend(
     audio_format: str,
     verbose: bool = False,
     model: Optional[str] = None,
+    voice_name: Optional[str] = None,
 ) -> RealtimeVoiceBackend:
     """Instantiate a backend by provider name."""
     p = (provider or "").strip().lower() or BACKEND_OPENAI
     if p == BACKEND_OPENAI:
         from .openai_realtime import OpenAIRealtimeBackend
-        return OpenAIRealtimeBackend(audio_format=audio_format, verbose=verbose, model=model)
+        return OpenAIRealtimeBackend(audio_format=audio_format, verbose=verbose, model=model, voice_name=voice_name)
     if p == BACKEND_GEMINI:
         from .gemini_live import GeminiLiveBackend
-        return GeminiLiveBackend(audio_format=audio_format, verbose=verbose, model=model)
+        return GeminiLiveBackend(audio_format=audio_format, verbose=verbose, model=model, voice_name=voice_name)
     raise ValueError(f"Unknown voice provider: {provider!r} (expected 'openai' or 'gemini')")
 
 

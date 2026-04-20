@@ -51,6 +51,7 @@ class OpenAIRealtimeBackend:
         audio_format: str = "pcm16",
         verbose: bool = False,
         model: Optional[str] = None,
+        voice_name: Optional[str] = None,
     ):
         self._ws = None
         self._session: Optional[VoiceSession] = None
@@ -58,6 +59,7 @@ class OpenAIRealtimeBackend:
         self._audio_format = audio_format
         self._verbose = verbose
         self.model = model or DEFAULT_MODEL
+        self._voice_name = voice_name
         self._custom_prompt: Optional[str] = None
         self._custom_tools: Optional[list[dict]] = None
 
@@ -138,7 +140,7 @@ class OpenAIRealtimeBackend:
             "session": {
                 "modalities": ["text", "audio"],
                 "instructions": self._custom_prompt,
-                "voice": os.getenv("OPENAI_VOICE", "alloy"),
+                "voice": self._voice_name or os.getenv("OPENAI_VOICE", "alloy"),
                 "input_audio_format": self._audio_format,
                 "output_audio_format": self._audio_format,
                 "input_audio_transcription": {

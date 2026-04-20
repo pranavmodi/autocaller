@@ -160,6 +160,7 @@ class CallOrchestrator:
         call_mode: str = "web",
         voice_provider: Optional[str] = None,
         carrier: Optional[str] = None,
+        persona: Optional[str] = None,
     ) -> Optional[CallLog]:
         """Start an outbound call to a patient.
 
@@ -208,10 +209,14 @@ class CallOrchestrator:
             val = getattr(sales, attr, "") if sales is not None else ""
             return val or os.getenv(env, default)
 
+        from app.services.personas import get_persona
+        active_persona = get_persona(persona)
+
         prompt_lang = prompt_language_for(patient)
         system_prompt = render_system_prompt(
             lead=patient,
-            rep_name=_sales_or_env("rep_name", "SALES_REP_NAME", "Alex"),
+            rep_name=active_persona.rep_name,
+            rep_last_name=active_persona.last_name,
             rep_company=_sales_or_env("rep_company", "SALES_REP_COMPANY", "our team"),
             product_context=_sales_or_env("product_context", "PRODUCT_CONTEXT", ""),
             language=prompt_lang,
@@ -282,11 +287,18 @@ class CallOrchestrator:
 
         audio_format = "g711_ulaw" if call_mode == "twilio" else "pcm16"
 
+        # Pick voice name from persona + provider
+        voice_name = (
+            active_persona.openai_voice if resolved_provider == "openai"
+            else active_persona.gemini_voice
+        )
+
         self._voice_service = get_voice_backend(
             resolved_provider,
             audio_format=audio_format,
             verbose=self._verbose,
             model=resolved_model,
+            voice_name=voice_name,
         )
         self._voice_service.on_transcript = self._handle_transcript
         self._voice_service.on_audio = self._handle_audio

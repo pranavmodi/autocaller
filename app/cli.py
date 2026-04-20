@@ -684,6 +684,10 @@ def call(
         help="Override telephony carrier for this call: 'twilio' | 'telnyx'. "
              "Default uses the DB default_carrier setting.",
     ),
+    persona: str = typer.Option(
+        "", "--persona",
+        help="Voice persona: 'alex' (male) | 'natalia' (female). Default: alex.",
+    ),
 ):
     """Place a call immediately to a lead (bypasses dispatcher)."""
     body: dict = {"patient_id": lead_id, "mode": mode}
@@ -699,6 +703,12 @@ def call(
             console.print(f"[red]--carrier must be 'twilio' or 'telnyx' (got {carrier!r})[/red]")
             raise typer.Exit(code=2)
         body["carrier"] = c
+    p = (persona or "").strip().lower()
+    if p:
+        if p not in ("alex", "natalia"):
+            console.print(f"[red]--persona must be 'alex' or 'natalia' (got {persona!r})[/red]")
+            raise typer.Exit(code=2)
+        body["persona"] = p
     resp = _post("/api/call/start", body)
     console.print_json(data=resp)
 

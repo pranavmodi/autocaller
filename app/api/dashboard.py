@@ -475,10 +475,11 @@ async def start_call_api(body: dict):
     mode = str(body.get("mode", "twilio")).strip().lower() or "twilio"
     voice_provider = str(body.get("voice_provider", "") or "").strip().lower() or None
     carrier = str(body.get("carrier", "") or "").strip().lower() or None
+    persona = str(body.get("persona", "") or "").strip().lower() or None
     if not patient_id:
         raise HTTPException(status_code=400, detail="patient_id is required")
     call = await get_orchestrator().start_call(
-        patient_id, call_mode=mode, voice_provider=voice_provider, carrier=carrier
+        patient_id, call_mode=mode, voice_provider=voice_provider, carrier=carrier, persona=persona
     )
     if call is None:
         raise HTTPException(status_code=409, detail="Call could not be started")

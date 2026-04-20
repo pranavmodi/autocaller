@@ -320,7 +320,7 @@ function CadenceRow({
 }: {
   entry: CadenceEntry;
   onAction: (action: string) => void;
-  onCall: (contact: { name: string; phone: string; title?: string; email?: string | null }) => void;
+  onCall: (contact: { name: string; phone: string; title?: string; email?: string | null; persona?: string }) => void;
   updating: boolean;
   calling: boolean;
 }) {
@@ -465,24 +465,47 @@ function CadenceRow({
                     {c.email && (
                       <span className="text-[11px] text-neutral-400 truncate max-w-[140px]">{c.email}</span>
                     )}
-                    <button
-                      onClick={() => onCall({
-                        name: c.name,
-                        phone: c.phone,
-                        title: c.title,
-                        email: c.email,
-                      })}
-                      disabled={calling}
-                      className={cn(
-                        "flex items-center gap-1 rounded-lg px-2.5 py-1 text-[10px] font-semibold transition-colors",
-                        tried
-                          ? "bg-neutral-200 text-neutral-500 hover:bg-neutral-300"
-                          : "bg-emerald-600 text-white hover:bg-emerald-700",
-                      )}
-                    >
-                      <PhoneCall className="h-3 w-3" />
-                      {tried ? "Retry" : "Call"}
-                    </button>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => onCall({
+                          name: c.name,
+                          phone: c.phone,
+                          title: c.title,
+                          email: c.email,
+                          persona: "alex",
+                        })}
+                        disabled={calling}
+                        className={cn(
+                          "flex items-center gap-1 rounded-l-lg px-2 py-1 text-[10px] font-semibold transition-colors",
+                          tried
+                            ? "bg-neutral-200 text-neutral-500 hover:bg-neutral-300"
+                            : "bg-emerald-600 text-white hover:bg-emerald-700",
+                        )}
+                        title="Call as Alex (male)"
+                      >
+                        <PhoneCall className="h-3 w-3" />
+                        Alex
+                      </button>
+                      <button
+                        onClick={() => onCall({
+                          name: c.name,
+                          phone: c.phone,
+                          title: c.title,
+                          email: c.email,
+                          persona: "natalia",
+                        })}
+                        disabled={calling}
+                        className={cn(
+                          "flex items-center gap-1 rounded-r-lg px-2 py-1 text-[10px] font-semibold transition-colors",
+                          tried
+                            ? "bg-neutral-200 text-neutral-500 hover:bg-neutral-300"
+                            : "bg-violet-600 text-white hover:bg-violet-700",
+                        )}
+                        title="Call as Natalia (female)"
+                      >
+                        Natalia
+                      </button>
+                    </div>
                   </div>
                 );
               })}

@@ -39,6 +39,8 @@ GEMINI_LIVE_PATH = (
 )
 DEFAULT_MODEL = os.getenv("GEMINI_LIVE_MODEL", "gemini-3.1-flash-live-preview")
 DEFAULT_VOICE = os.getenv("GEMINI_VOICE", "Aoede")
+# Per-call voice override — set by the orchestrator before connect().
+_voice_override: str | None = None
 
 
 class GeminiLiveBackend:
@@ -51,6 +53,7 @@ class GeminiLiveBackend:
         audio_format: str = "pcm16",
         verbose: bool = False,
         model: Optional[str] = None,
+        voice_name: Optional[str] = None,
     ):
         self._ws = None
         self._call_id: str = ""
@@ -60,6 +63,7 @@ class GeminiLiveBackend:
         self._audio_format = audio_format  # what the ORCHESTRATOR feeds us
         self._verbose = verbose
         self.model = model or DEFAULT_MODEL
+        self._voice_name = voice_name
 
         # Twilio bridging requires mulaw<->pcm transcoding. Browser path
         # already sends pcm16; we just pass through + resample output.
@@ -136,7 +140,7 @@ class GeminiLiveBackend:
                     "speechConfig": {
                         "voiceConfig": {
                             "prebuiltVoiceConfig": {
-                                "voiceName": DEFAULT_VOICE,
+                                "voiceName": self._voice_name or DEFAULT_VOICE,
                             }
                         }
                     },

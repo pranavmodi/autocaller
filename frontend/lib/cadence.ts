@@ -98,5 +98,6 @@ export const cadenceCall = (entryId: string, contact: {
   phone: string;
   title?: string;
   email?: string | null;
+  persona?: string;
 }) =>
   post<{ call_id: string; patient_id: string }>(`/api/cadence/${entryId}/call`, contact);
