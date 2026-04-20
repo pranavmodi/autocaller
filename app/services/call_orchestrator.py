@@ -702,6 +702,28 @@ class CallOrchestrator:
         call_log_provider = get_call_log_provider()
 
         if speaker == "ai_complete":
+            # Detect character breaks — AI dropped persona and spoke as
+            # a generic LLM. Cancel the response and force re-engage.
+            _break_phrases = (
+                "language model", "i can't help", "i cannot help",
+                "as an ai", "i'm an ai assistant", "i am an ai assistant",
+                "response:mark_gatekeeper", "response:end_call",
+                "metadata", "{notes:", "{status:",
+            )
+            low = text.lower()
+            if any(p in low for p in _break_phrases):
+                print(f"[CallOrchestrator] CHARACTER BREAK detected: {text[:80]!r} — cancelling + re-engaging")
+                await self._add_system_note(
+                    f"Character break detected: AI said {text[:60]!r}. Cancelled and re-engaged."
+                )
+                try:
+                    if self._voice_service:
+                        await self._voice_service.cancel_response()
+                        await self._voice_service.start_response()
+                except Exception:
+                    pass
+                return  # don't log this broken utterance as a real transcript
+
             await call_log_provider.add_transcript(self._current_call.call_id, "ai", text)
             if self.on_transcript_update:
                 await self.on_transcript_update("ai", text)
