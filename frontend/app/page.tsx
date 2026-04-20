@@ -11,6 +11,7 @@ import {
   listCalls,
   listLeads,
   listNextUp,
+  skipLead,
   getSettings,
   setSystemEnabled,
   setMockMode,
@@ -125,11 +126,19 @@ export default function NowPage() {
 
   const saveBatchSize = useMutation({
     mutationFn: (size: number) => setDispatcherBatchSize(size),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["settings"] }),
+    onSuccess: () => {
+      setBatchCount(null);
+      qc.invalidateQueries({ queryKey: ["settings"] });
+    },
   });
 
   const latestReason = lastDecision?.detail ?? dispatcher.data?.recent_decisions?.[0]?.detail ?? "—";
   const [webCallLead, setWebCallLead] = useState<Lead | null>(null);
+
+  const skip = useMutation({
+    mutationFn: (leadId: string) => skipLead(leadId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["leads-next-up"] }),
+  });
 
   return (
     <div className="space-y-5">
@@ -271,7 +280,16 @@ export default function NowPage() {
               onChange={(e) => {
                 const v = Math.max(1, parseInt(e.target.value || "1", 10));
                 setBatchCount(v);
-                saveBatchSize.mutate(v);
+              }}
+              onBlur={() => {
+                if (batchCount !== null && batchCount !== defaultBatch) {
+                  saveBatchSize.mutate(batchCount);
+                }
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && batchCount !== null) {
+                  saveBatchSize.mutate(batchCount);
+                }
               }}
               className="w-14 rounded-lg border border-neutral-200 bg-neutral-50 px-2 py-1.5 text-center text-sm font-medium text-neutral-800 focus:border-neutral-400 focus:outline-none focus:ring-1 focus:ring-neutral-400"
               disabled={running}
@@ -359,6 +377,14 @@ export default function NowPage() {
                   title="Test web call"
                 >
                   <Headphones className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  onClick={() => skip.mutate(l.patient_id)}
+                  disabled={skip.isPending}
+                  className="rounded-lg border border-neutral-200 px-2 py-1 text-[10px] font-medium text-neutral-400 hover:border-rose-300 hover:text-rose-600 transition-colors"
+                  title="Skip this lead"
+                >
+                  Skip
                 </button>
                 <span className="rounded-md bg-neutral-100 px-1.5 py-0.5 text-[10px] font-semibold text-neutral-500 tabular-nums">
                   P{l.priority_bucket}

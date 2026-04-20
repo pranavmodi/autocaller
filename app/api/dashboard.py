@@ -392,6 +392,32 @@ async def retry_lead(patient_id: str):
     return {"status": "ok", "patient_id": patient_id}
 
 
+@router.post("/patients/{patient_id}/skip")
+async def skip_lead(patient_id: str):
+    """Skip a lead — removes it from the dispatch queue by setting
+    last_outcome='skipped'. The lead won't be picked up by the
+    dispatcher until manually retried.
+    """
+    from app.db import AsyncSessionLocal
+    from app.db.models import PatientRow
+    from sqlalchemy import select
+    from datetime import datetime, timezone
+
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            select(PatientRow).where(PatientRow.patient_id == patient_id)
+        )
+        row = result.scalar_one_or_none()
+        if not row:
+            raise HTTPException(status_code=404, detail=f"lead {patient_id} not found")
+        row.last_outcome = "skipped"
+        row.last_attempt_at = datetime.now(timezone.utc)
+        await session.commit()
+
+    print(f"[SKIP] lead {patient_id} skipped")
+    return {"status": "ok", "patient_id": patient_id}
+
+
 _CALLS_LIST_OMIT = {
     "prompt_text", "tools_snapshot", "whisper_transcript",
     "transcript", "queue_snapshot",

@@ -148,7 +148,7 @@ class SimulationPatientProvider(BasePatientProvider):
                 .where(PatientRow.name_is_person == True)  # noqa: E712
                 .where(
                     (PatientRow.last_outcome == None) |  # noqa: E711
-                    (PatientRow.last_outcome != "invalid_number")
+                    (~PatientRow.last_outcome.in_(["invalid_number", "skipped"]))
                 )
                 .where(
                     (PatientRow.last_attempt_at == None) |  # noqa: E711
@@ -175,7 +175,7 @@ class SimulationPatientProvider(BasePatientProvider):
                 .where(PatientRow.name_is_person == True)  # noqa: E712
                 .where(
                     (PatientRow.last_outcome == None) |  # noqa: E711
-                    (PatientRow.last_outcome != "invalid_number")
+                    (~PatientRow.last_outcome.in_(["invalid_number", "skipped"]))
                 )
                 .where(
                     (PatientRow.last_attempt_at == None) |  # noqa: E711

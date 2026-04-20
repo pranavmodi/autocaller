@@ -173,6 +173,9 @@ export const setIVRNavigate = (enabled: boolean) =>
 export const retryLead = (leadId: string) =>
   post<{ status: string; patient_id: string }>(`/api/patients/${leadId}/retry`);
 
+export const skipLead = (leadId: string) =>
+  post<{ status: string; patient_id: string }>(`/api/patients/${leadId}/skip`);
+
 // ---- Health ----
 export const checkHealth = () =>
   fetch(apiUrl("/health")).then((r) => r.ok);
