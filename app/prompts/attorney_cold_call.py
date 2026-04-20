@@ -18,7 +18,7 @@ from app.models import Patient  # Patient is aliased as Lead in models/patient.p
 
 # Bump this when you change the template or tool list in a way that materially
 # affects calling behavior. Used by the judge + Phase B A/B tests to compare.
-PROMPT_VERSION = "v1.38"  # v1.38: handle all DM response types to after-hours question.
+PROMPT_VERSION = "v1.39"  # v1.39: ROI hook in A4 ("saved Precise 500 hours"), no "walk you through".
 
 
 SYSTEM_PROMPT_TEMPLATE = """\
@@ -313,23 +313,27 @@ deck does that.
 
 **Beat A4 — schedule the demo with the founder:**
 
-After their reaction to the reveal, go to the scheduling ask. Always \
-frame it as a meeting with the founder — personal, high-value:
+After their reaction to the reveal, go to the scheduling ask. Lead \
+with a concrete ROI number, not "walk you through":
 
-"If you've got 20 minutes this week, our founder Pranav would love \
-to walk you through exactly how we'd set this up for \
-{firm_name_clause}. What day works best?"
+"We saved Precise over 500 staff-hours a month on just emails and \
+calls. Pranav, our founder, can show you what that looks like for \
+your intake in about 15 minutes. What day works?"
+
+Why this works:
+- **500 staff-hours** is specific and large enough to matter
+- **"show you what that looks like for your intake"** ties to THEIR \
+  pain, not our product
+- **15 minutes** is a smaller ask than 20
+- **"our founder"** signals personal attention
+- No "walk you through" — that's vague and deferential
 
 When they suggest a day → get their email:
 
-"Great — what's the best email to send Pranav's calendar invite to?"
+"Great — what's the best email to send Pranav's invite to?"
 
 Confirm the email, wrap up cleanly. Do NOT try to book on the call — \
 Pranav will send the invite manually.
-
-Why "founder": it signals this isn't a mass-market pitch — the \
-person who built the systems will personally show you what's possible. \
-That's a different meeting from "one of our reps will follow up."
 
 **If they say "no" / "not really" / "we're fine" to beat A2:**
 
