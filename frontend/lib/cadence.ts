@@ -11,7 +11,14 @@ export interface CadenceEntry {
   owner: string | null;
   outcome: string;
   call_ids: string[];
-  contacts_tried: Array<{ name: string; phone: string }>;
+  contacts_tried: Array<{ name: string; phone: string; title?: string }>;
+  available_contacts: Array<{
+    name: string;
+    title: string;
+    phone: string;
+    email: string | null;
+    source: string;
+  }>;
   intel: Record<string, unknown>;
   icp_tier: string | null;
   icp_score: number | null;
@@ -85,3 +92,11 @@ export const updateCadence = (id: string, action: string, note?: string) =>
 
 export const refreshCadence = () =>
   post<{ status: string; new: number; advanced: number }>("/api/cadence/refresh");
+
+export const cadenceCall = (entryId: string, contact: {
+  name: string;
+  phone: string;
+  title?: string;
+  email?: string | null;
+}) =>
+  post<{ call_id: string; patient_id: string }>(`/api/cadence/${entryId}/call`, contact);

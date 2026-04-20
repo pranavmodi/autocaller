@@ -137,6 +137,89 @@ async def update_cadence(entry_id: str, body: dict):
         return _row_to_dict(entry)
 
 
+@router.post("/{entry_id}/call")
+async def cadence_call(entry_id: str, body: dict):
+    """Place a call to a specific contact at a cadence firm.
+
+    Body: {"name": "...", "phone": "+1...", "title": "...", "email": "..."}
+
+    Creates/finds a lead in the patients table, places the call via the
+    orchestrator, and links the call to this cadence entry.
+    """
+    from app.db.models import PatientRow
+    from app.services.call_orchestrator import get_orchestrator
+
+    name = body.get("name", "").strip()
+    phone = body.get("phone", "").strip()
+    title = body.get("title", "")
+    email = body.get("email")
+
+    if not name or not phone:
+        raise HTTPException(400, "name and phone are required")
+
+    # Normalize phone
+    digits = "".join(c for c in phone if c.isdigit())
+    if len(digits) == 10:
+        phone = f"+1{digits}"
+    elif len(digits) == 11 and digits.startswith("1"):
+        phone = f"+{digits}"
+
+    async with AsyncSessionLocal() as session:
+        # Get cadence entry
+        result = await session.execute(
+            select(CadenceEntryRow).where(CadenceEntryRow.id == entry_id)
+        )
+        entry = result.scalar_one_or_none()
+        if not entry:
+            raise HTTPException(404, "Cadence entry not found")
+
+        # Create or find lead
+        patient_id = f"pif-{entry.pif_id}-{digits[-4:]}"
+        result = await session.execute(
+            select(PatientRow).where(PatientRow.patient_id == patient_id)
+        )
+        lead = result.scalar_one_or_none()
+        if not lead:
+            lead = PatientRow(
+                patient_id=patient_id,
+                name=name,
+                phone=phone,
+                firm_name=entry.firm_name,
+                title=title[:128] if title else None,
+                email=email,
+                source="cadence",
+                practice_area="personal injury",
+                tags=[f"cadence:{entry.id[:8]}"],
+                notes=f"Cadence call for {entry.firm_name} | PIF ID: {entry.pif_id}",
+            )
+            session.add(lead)
+            await session.commit()
+
+    # Place the call
+    orchestrator = get_orchestrator()
+    call = await orchestrator.start_call(patient_id, call_mode="twilio")
+
+    if call is None:
+        raise HTTPException(409, "Call could not be started")
+
+    # Link call to cadence entry
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            select(CadenceEntryRow).where(CadenceEntryRow.id == entry_id)
+        )
+        entry = result.scalar_one_or_none()
+        if entry:
+            entry.call_ids = list(entry.call_ids or []) + [call.call_id]
+            tried = list(entry.contacts_tried or [])
+            contact = {"name": name, "phone": phone, "title": title}
+            if contact not in tried:
+                tried.append(contact)
+                entry.contacts_tried = tried
+            await session.commit()
+
+    return {"call_id": call.call_id, "patient_id": patient_id}
+
+
 @router.post("/refresh")
 async def refresh_cadence():
     """Manually trigger the daily cadence scan."""
@@ -158,6 +241,7 @@ def _row_to_dict(e: CadenceEntryRow) -> dict:
         "outcome": e.outcome,
         "call_ids": e.call_ids or [],
         "contacts_tried": e.contacts_tried or [],
+        "available_contacts": getattr(e, "available_contacts", None) or [],
         "intel": e.intel or {},
         "icp_tier": e.icp_tier,
         "icp_score": e.icp_score,

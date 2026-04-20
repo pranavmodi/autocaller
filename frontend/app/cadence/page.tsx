@@ -9,6 +9,7 @@ import {
   getCadenceStats,
   updateCadence,
   refreshCadence,
+  cadenceCall,
   type CadenceEntry,
 } from "@/lib/cadence";
 import { cn } from "@/lib/utils";
@@ -22,6 +23,9 @@ import {
   XCircle,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
+  Phone,
+  PhoneCall,
 } from "lucide-react";
 
 const STAGES = [
@@ -105,6 +109,16 @@ export default function CadencePage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["cadence"] });
       qc.invalidateQueries({ queryKey: ["cadence-stats"] });
+    },
+  });
+
+  const placeCall = useMutation({
+    mutationFn: ({ entryId, contact }: {
+      entryId: string;
+      contact: { name: string; phone: string; title?: string; email?: string | null };
+    }) => cadenceCall(entryId, contact),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["cadence"] });
     },
   });
 
@@ -260,7 +274,9 @@ export default function CadencePage() {
                 key={e.id}
                 entry={e}
                 onAction={(action) => update.mutate({ id: e.id, action })}
+                onCall={(contact) => placeCall.mutate({ entryId: e.id, contact })}
                 updating={update.isPending}
+                calling={placeCall.isPending}
               />
             ))}
           </tbody>
@@ -298,99 +314,183 @@ export default function CadencePage() {
 function CadenceRow({
   entry,
   onAction,
+  onCall,
   updating,
+  calling,
 }: {
   entry: CadenceEntry;
   onAction: (action: string) => void;
+  onCall: (contact: { name: string; phone: string; title?: string; email?: string | null }) => void;
   updating: boolean;
+  calling: boolean;
 }) {
+  const [expanded, setExpanded] = useState(false);
   const now = new Date();
   const due = entry.next_action_due ? new Date(entry.next_action_due) : null;
   const overdue = due && due < now;
+  const contacts = entry.available_contacts || [];
+  const triedPhones = new Set((entry.contacts_tried || []).map((c) => c.phone));
 
   return (
-    <tr className="border-t border-neutral-100 hover:bg-neutral-50">
-      <td className="px-4 py-2.5">
-        <Link
-          href={`/firms/${entry.pif_id}`}
-          className="text-sm font-medium text-neutral-900 hover:underline"
-        >
-          {entry.firm_name}
-        </Link>
-        {entry.icp_tier && (
-          <span className={cn(
-            "ml-1.5 rounded-full px-1.5 py-0.5 text-[9px] font-bold",
-            entry.icp_tier === "A" ? "bg-emerald-100 text-emerald-800" :
-            entry.icp_tier === "B" ? "bg-sky-100 text-sky-800" :
-            "bg-neutral-100 text-neutral-600",
-          )}>
-            {entry.icp_tier}
-          </span>
-        )}
-      </td>
-      <td className="px-4 py-2.5">
-        <span className={cn(
-          "rounded-full px-2 py-0.5 text-[10px] font-semibold",
-          STAGE_COLORS[entry.cadence_stage] || "bg-neutral-100 text-neutral-600",
-        )}>
-          {STAGE_LABELS[entry.cadence_stage] || entry.cadence_stage}
-        </span>
-      </td>
-      <td className="px-4 py-2.5 text-xs text-neutral-600 max-w-[200px] truncate">
-        {entry.next_action || "—"}
-      </td>
-      <td className="px-4 py-2.5">
-        {due ? (
-          <span className={cn("text-xs", overdue ? "font-semibold text-rose-600" : "text-neutral-500")}>
-            {overdue ? "overdue · " : ""}
-            {formatDistanceToNow(due, { addSuffix: true })}
-          </span>
-        ) : (
-          <span className="text-xs text-neutral-300">—</span>
-        )}
-      </td>
-      <td className="px-4 py-2.5">
-        {entry.owner ? (
+    <>
+      <tr className="border-t border-neutral-100 hover:bg-neutral-50">
+        <td className="px-4 py-2.5">
+          <div className="flex items-center gap-1.5">
+            {contacts.length > 0 && (
+              <button
+                onClick={() => setExpanded(!expanded)}
+                className="text-neutral-400 hover:text-neutral-600"
+              >
+                <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", expanded && "rotate-180")} />
+              </button>
+            )}
+            <div>
+              <Link
+                href={`/firms/${entry.pif_id}`}
+                className="text-sm font-medium text-neutral-900 hover:underline"
+              >
+                {entry.firm_name}
+              </Link>
+              {entry.icp_tier && (
+                <span className={cn(
+                  "ml-1.5 rounded-full px-1.5 py-0.5 text-[9px] font-bold",
+                  entry.icp_tier === "A" ? "bg-emerald-100 text-emerald-800" :
+                  entry.icp_tier === "B" ? "bg-sky-100 text-sky-800" :
+                  "bg-neutral-100 text-neutral-600",
+                )}>
+                  {entry.icp_tier}
+                </span>
+              )}
+              <div className="text-[10px] text-neutral-400">
+                {contacts.length} contacts
+                {entry.contacts_tried?.length > 0 &&
+                  ` · ${entry.contacts_tried.length} tried`}
+              </div>
+            </div>
+          </div>
+        </td>
+        <td className="px-4 py-2.5">
           <span className={cn(
             "rounded-full px-2 py-0.5 text-[10px] font-semibold",
-            entry.owner === "pranav" ? "bg-blue-50 text-blue-700" :
-            entry.owner === "autocaller" ? "bg-emerald-50 text-emerald-700" :
-            "bg-neutral-100 text-neutral-600",
+            STAGE_COLORS[entry.cadence_stage] || "bg-neutral-100 text-neutral-600",
           )}>
-            {entry.owner}
+            {STAGE_LABELS[entry.cadence_stage] || entry.cadence_stage}
           </span>
-        ) : (
-          <span className="text-xs text-neutral-300">—</span>
-        )}
-      </td>
-      <td className="px-4 py-2.5 text-center">
-        {entry.call_ids.length > 0 ? (
-          <Link
-            href={`/calls/${entry.call_ids[entry.call_ids.length - 1]}`}
-            className="text-xs text-blue-600 hover:underline"
-          >
-            {entry.call_ids.length}
-          </Link>
-        ) : (
-          <span className="text-xs text-neutral-300">0</span>
-        )}
-      </td>
-      <td className="px-4 py-2.5 text-right">
-        <div className="flex items-center justify-end gap-1">
-          {entry.cadence_stage === "email_intro" && (
-            <ActionBtn label="Email sent" onClick={() => onAction("mark_email_sent")} disabled={updating} />
+        </td>
+        <td className="px-4 py-2.5 text-xs text-neutral-600 max-w-[200px] truncate">
+          {entry.next_action || "—"}
+        </td>
+        <td className="px-4 py-2.5">
+          {due ? (
+            <span className={cn("text-xs", overdue ? "font-semibold text-rose-600" : "text-neutral-500")}>
+              {overdue ? "overdue · " : ""}
+              {formatDistanceToNow(due, { addSuffix: true })}
+            </span>
+          ) : (
+            <span className="text-xs text-neutral-300">—</span>
           )}
-          {entry.cadence_stage === "linkedin" && (
-            <ActionBtn label="LI sent" onClick={() => onAction("mark_linkedin_sent")} disabled={updating} />
+        </td>
+        <td className="px-4 py-2.5">
+          {entry.owner ? (
+            <span className={cn(
+              "rounded-full px-2 py-0.5 text-[10px] font-semibold",
+              entry.owner === "pranav" ? "bg-blue-50 text-blue-700" :
+              entry.owner === "autocaller" ? "bg-emerald-50 text-emerald-700" :
+              "bg-neutral-100 text-neutral-600",
+            )}>
+              {entry.owner}
+            </span>
+          ) : (
+            <span className="text-xs text-neutral-300">—</span>
           )}
-          {entry.cadence_stage === "callback_pending" && (
-            <ActionBtn label="Demo booked" onClick={() => onAction("mark_demo_booked")} disabled={updating} color="emerald" />
+        </td>
+        <td className="px-4 py-2.5 text-center">
+          {entry.call_ids.length > 0 ? (
+            <Link
+              href={`/calls/${entry.call_ids[entry.call_ids.length - 1]}`}
+              className="text-xs text-blue-600 hover:underline"
+            >
+              {entry.call_ids.length}
+            </Link>
+          ) : (
+            <span className="text-xs text-neutral-300">0</span>
           )}
-          <ActionBtn label="Skip" onClick={() => onAction("skip")} disabled={updating} />
-          <ActionBtn label="DNC" onClick={() => onAction("mark_dnc")} disabled={updating} color="rose" />
-        </div>
-      </td>
-    </tr>
+        </td>
+        <td className="px-4 py-2.5 text-right">
+          <div className="flex items-center justify-end gap-1">
+            {entry.cadence_stage === "email_intro" && (
+              <ActionBtn label="Email sent" onClick={() => onAction("mark_email_sent")} disabled={updating} />
+            )}
+            {entry.cadence_stage === "linkedin" && (
+              <ActionBtn label="LI sent" onClick={() => onAction("mark_linkedin_sent")} disabled={updating} />
+            )}
+            {entry.cadence_stage === "callback_pending" && (
+              <ActionBtn label="Demo booked" onClick={() => onAction("mark_demo_booked")} disabled={updating} color="emerald" />
+            )}
+            <ActionBtn label="Skip" onClick={() => onAction("skip")} disabled={updating} />
+            <ActionBtn label="DNC" onClick={() => onAction("mark_dnc")} disabled={updating} color="rose" />
+          </div>
+        </td>
+      </tr>
+      {/* Expanded contacts */}
+      {expanded && contacts.length > 0 && (
+        <tr className="bg-neutral-50/50">
+          <td colSpan={7} className="px-4 py-2">
+            <div className="ml-6 space-y-1">
+              {contacts.map((c, i) => {
+                const tried = triedPhones.has(c.phone);
+                return (
+                  <div
+                    key={i}
+                    className={cn(
+                      "flex items-center gap-3 rounded-lg px-3 py-1.5 text-xs",
+                      tried ? "bg-neutral-100 opacity-60" : "bg-white border border-neutral-100",
+                    )}
+                  >
+                    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-neutral-200 text-[9px] font-bold text-neutral-600">
+                      {c.name.charAt(0)}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <span className="font-medium text-neutral-800">{c.name}</span>
+                      {c.title && (
+                        <span className="ml-1.5 text-neutral-500">{c.title}</span>
+                      )}
+                      {tried && (
+                        <span className="ml-1.5 rounded bg-neutral-200 px-1 py-0.5 text-[9px] text-neutral-500">
+                          called
+                        </span>
+                      )}
+                    </div>
+                    <span className="font-mono text-[11px] text-neutral-500">{c.phone}</span>
+                    {c.email && (
+                      <span className="text-[11px] text-neutral-400 truncate max-w-[140px]">{c.email}</span>
+                    )}
+                    <button
+                      onClick={() => onCall({
+                        name: c.name,
+                        phone: c.phone,
+                        title: c.title,
+                        email: c.email,
+                      })}
+                      disabled={calling}
+                      className={cn(
+                        "flex items-center gap-1 rounded-lg px-2.5 py-1 text-[10px] font-semibold transition-colors",
+                        tried
+                          ? "bg-neutral-200 text-neutral-500 hover:bg-neutral-300"
+                          : "bg-emerald-600 text-white hover:bg-emerald-700",
+                      )}
+                    >
+                      <PhoneCall className="h-3 w-3" />
+                      {tried ? "Retry" : "Call"}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </td>
+        </tr>
+      )}
+    </>
   );
 }
 

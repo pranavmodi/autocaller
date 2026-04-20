@@ -86,13 +86,35 @@ async def _ingest_signals() -> int:
                     continue
 
                 now = datetime.now(timezone.utc)
-                # Due tomorrow 8 AM Eastern — gives the batch time to
-                # accumulate before business hours.
                 tomorrow_8am = (
                     datetime.now(SCAN_TZ)
                     .replace(hour=8, minute=0, second=0, microsecond=0)
                     + timedelta(days=1)
                 ).astimezone(timezone.utc)
+
+                # Collect all callable contacts from leadership + contacts
+                contacts = []
+                for l in (firm.get("leadership") or []):
+                    phone = (l.get("phone") or "").replace("\u2011", "-").strip()
+                    if phone:
+                        contacts.append({
+                            "name": l.get("name", ""),
+                            "title": l.get("title", ""),
+                            "phone": phone,
+                            "email": l.get("email"),
+                            "source": "leadership",
+                        })
+                for c in (firm.get("contacts") or []):
+                    phone = (c.get("phone") or "").strip()
+                    if phone:
+                        contacts.append({
+                            "name": c.get("name", ""),
+                            "title": c.get("title", ""),
+                            "phone": phone,
+                            "email": c.get("email"),
+                            "source": "contacts",
+                        })
+
                 entry = CadenceEntryRow(
                     id=str(uuid.uuid4()),
                     pif_id=pif_id,
@@ -102,6 +124,7 @@ async def _ingest_signals() -> int:
                     next_action="Call managing partner",
                     next_action_due=tomorrow_8am,
                     owner="autocaller",
+                    available_contacts=contacts,
                     outcome="in_progress",
                     icp_tier=firm.get("icp_tier"),
                     icp_score=firm.get("icp_score"),

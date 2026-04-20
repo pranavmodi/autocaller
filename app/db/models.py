@@ -276,6 +276,7 @@ class CadenceEntryRow(Base):
     outcome: Mapped[str] = mapped_column(String(32), nullable=False, default="in_progress")
     call_ids: Mapped[list] = mapped_column(JSONB, default=list)
     contacts_tried: Mapped[list] = mapped_column(JSONB, default=list)
+    available_contacts: Mapped[list] = mapped_column(JSONB, default=list)
     intel: Mapped[dict] = mapped_column(JSONB, default=dict)
     icp_tier: Mapped[str | None] = mapped_column(String(1), nullable=True)
     icp_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
