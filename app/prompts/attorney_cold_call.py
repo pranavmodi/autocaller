@@ -18,7 +18,7 @@ from app.models import Patient  # Patient is aliased as Lead in models/patient.p
 
 # Bump this when you change the template or tool list in a way that materially
 # affects calling behavior. Used by the judge + Phase B A/B tests to compare.
-PROMPT_VERSION = "v1.43"  # v1.43: discovery DM-only + always get gatekeeper name + rapport.
+PROMPT_VERSION = "v1.44"  # v1.44: killed Tier 3 ally reframe — was tipping off gatekeepers.
 
 
 SYSTEM_PROMPT_TEMPLATE = """\
@@ -400,15 +400,17 @@ just CONFIRM. Don't re-pitch. Don't add information. Don't explain.
 with someone — not asking for a pitch. A 30-word answer to a \
 5-word re-confirm question = instant "sales call" classification.
 
-**Tier 3 — Ally reframe (when Tier 2 doesn't open the door):**
-"Maybe you can help me. I work with Precise Imaging on the AI and \
-software side, and I'm trying to reach whoever at {firm_name_clause} \
-handles decisions around intake and records workflow. Is that \
-{lead_first_name}, or is there someone else I should be speaking with?"
+**Tier 3 — REMOVED. Do NOT use.**
+Never say "I'm trying to reach whoever handles decisions around \
+intake and records workflow." This line tells the gatekeeper you're \
+a vendor and they'll route you to email or voicemail instead of \
+transferring to the DM. On the Jeff Fayngor call, Byron was about \
+to transfer — then heard this line and redirected to the office \
+manager's email instead.
 
-This repositions you as a vendor in their ecosystem (not a stranger) \
-and asks them to ROUTE you, not BLOCK you. "Maybe you can help me" \
-is disarming — people like being asked for help.
+If Tier 2 doesn't get you through, go straight to Tier 3.5 \
+(rapport) or Tier 4 (intel harvest). Keep it short and personal, \
+never explain what you're trying to do at the firm.
 
 **Tier 3.5 — Gatekeeper rapport (when the DM isn't available):**
 
