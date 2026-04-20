@@ -12,6 +12,7 @@ import {
   listLeads,
   listNextUp,
   skipLead,
+  getDailyStats,
   getSettings,
   setSystemEnabled,
   setMockMode,
@@ -132,6 +133,12 @@ export default function NowPage() {
     },
   });
 
+  const daily = useQuery({
+    queryKey: ["daily-stats"],
+    queryFn: getDailyStats,
+    refetchInterval: 15_000,
+  });
+
   const latestReason = lastDecision?.detail ?? dispatcher.data?.recent_decisions?.[0]?.detail ?? "—";
   const [webCallLead, setWebCallLead] = useState<Lead | null>(null);
 
@@ -164,6 +171,21 @@ export default function NowPage() {
           {latestReason}
         </span>
       </div>
+
+      {/* Daily stats */}
+      {daily.data && daily.data.total > 0 && (
+        <div className="grid grid-cols-3 gap-3 sm:grid-cols-6 lg:grid-cols-9">
+          <MiniStat label="Calls" value={daily.data.total} />
+          <MiniStat label="DM reached" value={daily.data.dm.reached} accent="emerald" />
+          <MiniStat label="DM rate" value={`${daily.data.dm.reach_rate}%`} accent={daily.data.dm.reach_rate > 5 ? "emerald" : "neutral"} />
+          <MiniStat label="Intel captured" value={daily.data.dm.path_captured} accent="sky" />
+          <MiniStat label="Demos" value={daily.data.outcomes.demo} accent="emerald" />
+          <MiniStat label="Callbacks" value={daily.data.outcomes.callback} accent="amber" />
+          <MiniStat label="Gatekeepers" value={daily.data.outcomes.gatekeeper} />
+          <MiniStat label="Voicemail" value={daily.data.outcomes.voicemail} />
+          <MiniStat label="Avg duration" value={`${daily.data.avg_duration}s`} />
+        </div>
+      )}
 
       {/* Controls grid */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -512,6 +534,36 @@ function ControlCard({
           )}
         />
         <Switch checked={checked} disabled={disabled} onCheckedChange={onToggle} />
+      </div>
+    </div>
+  );
+}
+
+function MiniStat({
+  label,
+  value,
+  accent,
+}: {
+  label: string;
+  value: number | string;
+  accent?: "emerald" | "amber" | "rose" | "sky" | "neutral";
+}) {
+  return (
+    <div className="rounded-xl border border-neutral-200 bg-white px-3 py-2.5">
+      <div className="text-[9px] font-medium uppercase tracking-wider text-neutral-400">
+        {label}
+      </div>
+      <div
+        className={cn(
+          "mt-0.5 text-lg font-bold tabular-nums",
+          accent === "emerald" ? "text-emerald-700" :
+          accent === "amber" ? "text-amber-700" :
+          accent === "rose" ? "text-rose-700" :
+          accent === "sky" ? "text-sky-700" :
+          "text-neutral-900",
+        )}
+      >
+        {value}
       </div>
     </div>
   );

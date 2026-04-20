@@ -101,6 +101,65 @@ async def get_patients():
     return {"patients": [p.to_dict() for p in patients]}
 
 
+@router.get("/stats/daily")
+async def daily_stats():
+    """Today's call stats — outcomes, DM reach rate, IVR encounters."""
+    from app.db import AsyncSessionLocal
+    from app.db.models import CallLogRow
+    from sqlalchemy import select, func, case
+    from datetime import datetime, timezone
+
+    today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            select(
+                func.count().label("total"),
+                func.count().filter(CallLogRow.outcome == "voicemail").label("voicemail"),
+                func.count().filter(CallLogRow.outcome == "disconnected").label("disconnected"),
+                func.count().filter(CallLogRow.outcome == "completed").label("completed"),
+                func.count().filter(CallLogRow.outcome == "gatekeeper_only").label("gatekeeper"),
+                func.count().filter(CallLogRow.outcome == "callback_requested").label("callback"),
+                func.count().filter(CallLogRow.outcome == "demo_scheduled").label("demo"),
+                func.count().filter(CallLogRow.outcome == "not_interested").label("not_interested"),
+                func.count().filter(CallLogRow.outcome == "failed").label("failed"),
+                func.count().filter(CallLogRow.ivr_detected == True).label("ivr_detected"),
+                func.count().filter(CallLogRow.dm_reachability == "reached").label("dm_reached"),
+                func.count().filter(CallLogRow.dm_reachability == "path_captured").label("dm_path_captured"),
+                func.count().filter(CallLogRow.dm_reachability == "no_path").label("dm_no_path"),
+                func.avg(CallLogRow.duration_seconds).label("avg_duration"),
+                func.sum(CallLogRow.duration_seconds).label("total_duration"),
+            )
+            .where(CallLogRow.started_at >= today)
+            .where(CallLogRow.outcome != "in_progress")
+        )
+        row = result.one()
+
+    total = row.total or 0
+    return {
+        "total": total,
+        "outcomes": {
+            "voicemail": row.voicemail or 0,
+            "disconnected": row.disconnected or 0,
+            "completed": row.completed or 0,
+            "gatekeeper": row.gatekeeper or 0,
+            "callback": row.callback or 0,
+            "demo": row.demo or 0,
+            "not_interested": row.not_interested or 0,
+            "failed": row.failed or 0,
+        },
+        "dm": {
+            "reached": row.dm_reached or 0,
+            "path_captured": row.dm_path_captured or 0,
+            "no_path": row.dm_no_path or 0,
+            "reach_rate": round((row.dm_reached or 0) / total * 100, 1) if total > 0 else 0,
+        },
+        "ivr_detected": row.ivr_detected or 0,
+        "avg_duration": round(float(row.avg_duration or 0), 1),
+        "total_duration_min": round(float(row.total_duration or 0) / 60, 1),
+    }
+
+
 @router.get("/patients/next-up")
 async def get_next_up():
     """Get the next leads the dispatcher would call (respects all filters)."""

@@ -210,6 +210,18 @@ export interface JudgeAggregate {
 export const getJudgeAggregate = () =>
   get<JudgeAggregate>("/api/health/judge");
 
+// ---- Daily stats ----
+export interface DailyStats {
+  total: number;
+  outcomes: Record<string, number>;
+  dm: { reached: number; path_captured: number; no_path: number; reach_rate: number };
+  ivr_detected: number;
+  avg_duration: number;
+  total_duration_min: number;
+}
+
+export const getDailyStats = () => get<DailyStats>("/api/stats/daily");
+
 // ---- Carrier (telephony provider: twilio | telnyx) ----
 export interface CarrierInfo {
   provider: string;                  // "twilio" | "telnyx"
