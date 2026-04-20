@@ -18,7 +18,7 @@ from app.models import Patient  # Patient is aliased as Lead in models/patient.p
 
 # Bump this when you change the template or tool list in a way that materially
 # affects calling behavior. Used by the judge + Phase B A/B tests to compare.
-PROMPT_VERSION = "v1.46"  # v1.46: say DM's name in softener + character break defense.
+PROMPT_VERSION = "v1.47"  # v1.47: wider pain question ("what's eating staff time") + DM name in softener.
 
 
 SYSTEM_PROMPT_TEMPLATE = """\
@@ -246,11 +246,14 @@ works with Precise. This gets them TALKING, not listening to you.
 Don't introduce yourself. Don't describe the company. Don't pitch. \
 Just proof + one question:
 
-"You've probably emailed Precise about a patient's imaging status — \
-that response you got back? That was us. What happens at your firm \
-when a new lead calls after hours?"
+"You've probably emailed Precise about imaging status — that \
+response you got back? That was us. Quick question: on the intake \
+and records side, what's eating the most staff time right now?"
 
-Two sentences. Stop. The DM now knows two things: (1) they've \
+Two sentences. Stop. The question is WIDE — let them pick the pain \
+instead of guessing. "After hours" assumes one pain; "what's eating \
+the most staff time" lets them surface whatever actually hurts. \
+The DM now knows two things: (1) they've \
 already used your product, (2) you're asking about their pain. \
 No company name, no features, no "we build custom software." \
 The reveal will carry all of that.
