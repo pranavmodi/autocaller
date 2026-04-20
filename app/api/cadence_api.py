@@ -221,6 +221,64 @@ async def cadence_call(entry_id: str, body: dict):
     return {"call_id": call.call_id, "patient_id": patient_id}
 
 
+@router.get("/{entry_id}/calls")
+async def cadence_call_history(entry_id: str):
+    """Get all calls linked to a cadence entry + any calls matching the firm's phone numbers."""
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            select(CadenceEntryRow).where(CadenceEntryRow.id == entry_id)
+        )
+        entry = result.scalar_one_or_none()
+        if not entry:
+            raise HTTPException(404, "Cadence entry not found")
+
+        # Get all phone numbers from available_contacts
+        phones = set()
+        for c in (entry.available_contacts or []):
+            digits = "".join(ch for ch in (c.get("phone") or "") if ch.isdigit())
+            if len(digits) >= 10:
+                phones.add(digits[-10:])  # last 10 digits for matching
+
+        # Find calls matching any of these phones OR linked via call_ids
+        from sqlalchemy import or_, func
+        conditions = []
+        if entry.call_ids:
+            conditions.append(CallLogRow.call_id.in_(entry.call_ids))
+        for phone_digits in phones:
+            conditions.append(CallLogRow.phone.contains(phone_digits))
+        if entry.firm_name:
+            conditions.append(func.lower(CallLogRow.firm_name) == entry.firm_name.lower())
+
+        if not conditions:
+            return {"calls": []}
+
+        result = await session.execute(
+            select(CallLogRow)
+            .where(or_(*conditions))
+            .order_by(CallLogRow.started_at.desc())
+            .limit(50)
+        )
+        rows = list(result.scalars().all())
+
+    calls = []
+    for r in rows:
+        calls.append({
+            "call_id": r.call_id,
+            "patient_name": r.patient_name,
+            "phone": r.phone,
+            "outcome": r.outcome,
+            "duration_seconds": r.duration_seconds,
+            "started_at": r.started_at.isoformat() if r.started_at else None,
+            "carrier": getattr(r, "carrier", None),
+            "voice_provider": r.voice_provider,
+            "prompt_version": r.prompt_version,
+            "mock_mode": r.mock_mode,
+            "judge_score": getattr(r, "judge_score", None),
+            "gatekeeper_contact": getattr(r, "gatekeeper_contact", None),
+        })
+    return {"calls": calls}
+
+
 @router.post("/refresh")
 async def refresh_cadence():
     """Manually trigger the daily cadence scan."""

@@ -10,8 +10,11 @@ import {
   updateCadence,
   refreshCadence,
   cadenceCall,
+  getCadenceCallHistory,
   type CadenceEntry,
+  type CadenceCallRecord,
 } from "@/lib/cadence";
+import { OutcomePill } from "@/components/OutcomePill";
 import { cn } from "@/lib/utils";
 import {
   RefreshCw,
@@ -325,11 +328,22 @@ function CadenceRow({
   calling: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [callHistory, setCallHistory] = useState<CadenceCallRecord[]>([]);
+  const [historyLoaded, setHistoryLoaded] = useState(false);
   const now = new Date();
   const due = entry.next_action_due ? new Date(entry.next_action_due) : null;
   const overdue = due && due < now;
   const contacts = entry.available_contacts || [];
   const triedPhones = new Set((entry.contacts_tried || []).map((c) => c.phone));
+
+  const loadHistory = async () => {
+    if (historyLoaded) return;
+    try {
+      const data = await getCadenceCallHistory(entry.id);
+      setCallHistory(data.calls);
+    } catch { /* ignore */ }
+    setHistoryLoaded(true);
+  };
 
   return (
     <>
@@ -338,7 +352,10 @@ function CadenceRow({
           <div className="flex items-center gap-1.5">
             {contacts.length > 0 && (
               <button
-                onClick={() => setExpanded(!expanded)}
+                onClick={() => {
+                  setExpanded(!expanded);
+                  if (!expanded) loadHistory();
+                }}
                 className="text-neutral-400 hover:text-neutral-600"
               >
                 <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", expanded && "rotate-180")} />
@@ -439,12 +456,16 @@ function CadenceRow({
             <div className="ml-6 space-y-1">
               {contacts.map((c, i) => {
                 const tried = triedPhones.has(c.phone);
+                const cDigits = c.phone.replace(/\D/g, "").slice(-10);
+                const contactCalls = callHistory.filter(
+                  (call) => call.phone.replace(/\D/g, "").slice(-10) === cDigits
+                );
                 return (
+                  <div key={i} className="space-y-1">
                   <div
-                    key={i}
                     className={cn(
                       "flex items-center gap-3 rounded-lg px-3 py-1.5 text-xs",
-                      tried ? "bg-neutral-100 opacity-60" : "bg-white border border-neutral-100",
+                      tried ? "bg-neutral-100" : "bg-white border border-neutral-100",
                     )}
                   >
                     <div className="flex h-6 w-6 items-center justify-center rounded-full bg-neutral-200 text-[9px] font-bold text-neutral-600">
@@ -506,6 +527,33 @@ function CadenceRow({
                         Natalia
                       </button>
                     </div>
+                  </div>
+                  {/* Call history for this contact */}
+                  {contactCalls.length > 0 && (
+                    <div className="ml-9 space-y-0.5">
+                      {contactCalls.map((call) => (
+                        <Link
+                          key={call.call_id}
+                          href={`/calls/${call.call_id}`}
+                          className="flex items-center gap-2 rounded-md px-2 py-1 text-[10px] text-neutral-500 hover:bg-neutral-100"
+                        >
+                          <span className="text-neutral-400">
+                            {call.started_at
+                              ? formatDistanceToNow(new Date(call.started_at), { addSuffix: true })
+                              : "—"}
+                          </span>
+                          <span className="text-neutral-600">{call.duration_seconds}s</span>
+                          <OutcomePill outcome={call.outcome as any} />
+                          {call.prompt_version && (
+                            <span className="text-neutral-400">{call.prompt_version}</span>
+                          )}
+                          {call.mock_mode && (
+                            <span className="rounded bg-amber-100 px-1 py-0.5 text-[9px] text-amber-700">mock</span>
+                          )}
+                        </Link>
+                      ))}
+                    </div>
+                  )}
                   </div>
                 );
               })}

@@ -93,6 +93,24 @@ export const updateCadence = (id: string, action: string, note?: string) =>
 export const refreshCadence = () =>
   post<{ status: string; new: number; advanced: number }>("/api/cadence/refresh");
 
+export interface CadenceCallRecord {
+  call_id: string;
+  patient_name: string;
+  phone: string;
+  outcome: string;
+  duration_seconds: number;
+  started_at: string | null;
+  carrier: string | null;
+  voice_provider: string | null;
+  prompt_version: string | null;
+  mock_mode: boolean;
+  judge_score: number | null;
+  gatekeeper_contact: Record<string, string> | null;
+}
+
+export const getCadenceCallHistory = (entryId: string) =>
+  get<{ calls: CadenceCallRecord[] }>(`/api/cadence/${entryId}/calls`);
+
 export const cadenceCall = (entryId: string, contact: {
   name: string;
   phone: string;
