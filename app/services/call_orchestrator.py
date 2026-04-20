@@ -1159,20 +1159,35 @@ class CallOrchestrator:
         self._sync_status_callback()
 
         # Suppress AI tool calls while the IVR navigator has the wheel.
-        # The v1.11 prompt tells the model to silently end_call on IVR
-        # detection — but we've already handed that decision to
-        # IVRNavigator. If both race, the AI's end_call wins and the
-        # navigator never gets to classify/press. Block until nav
-        # returns (at which point _ivr_navigating flips false).
         if self._ivr_navigating and name != "send_function_result":
             await self._add_system_note(
                 f"Suppressed AI tool call `{name}` — IVR navigator is active."
             )
             if self._voice_service and fn_call_id:
-                # Return an empty success so the model's turn completes
-                # without further action.
                 await self._voice_service.send_function_result(
                     fn_call_id, {"status": "deferred_to_navigator"}
+                )
+            return
+
+        # Suppress early end_call(voicemail) when IVR navigation is enabled.
+        # The AI races the phrase matcher — it hears IVR audio and calls
+        # end_call before the orchestrator's transcript handler can start
+        # the navigator. Block the AI's end_call and let the phrase
+        # matcher + navigator handle it instead.
+        if (
+            name == "end_call"
+            and self._ivr_navigate_enabled
+            and self._caller_turn_count <= 2
+            and not self._ivr_handled
+            and str(args.get("outcome", "")).lower() in ("voicemail", "no_answer")
+        ):
+            await self._add_system_note(
+                f"Suppressed early AI end_call({args.get('outcome')}) — "
+                f"IVR nav enabled, letting phrase matcher handle it."
+            )
+            if self._voice_service and fn_call_id:
+                await self._voice_service.send_function_result(
+                    fn_call_id, {"status": "deferred_to_ivr_navigator"}
                 )
             return
 
