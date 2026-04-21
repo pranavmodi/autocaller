@@ -18,7 +18,7 @@ from app.models import Patient  # Patient is aliased as Lead in models/patient.p
 
 # Bump this when you change the template or tool list in a way that materially
 # affects calling behavior. Used by the judge + Phase B A/B tests to compare.
-PROMPT_VERSION = "v1.47"  # v1.47: wider pain question ("what's eating staff time") + DM name in softener.
+PROMPT_VERSION = "v1.48"  # v1.48: stop re-asking for DM on every GK tier — answer the screen, let GK respond.
 
 
 SYSTEM_PROMPT_TEMPLATE = """\
@@ -220,7 +220,7 @@ When the DM confirms identity ("this is Iman" / "speaking" / \
 "yeah, this is them"), START with their name. They just told you \
 who they are — skipping it sounds like you weren't listening.
 
-"Hi {their name} — I know I'm catching you out of the blue —"
+"Hi {{their name}} — I know I'm catching you out of the blue —"
 
 Then immediately into A1. Don't pause for permission. Don't ask \
 "is this a bad time?" (banned phrase). The softener acknowledges \
@@ -368,7 +368,14 @@ a tier doesn't get you through.
 
 **Tier 2 — Name-drop Precise (1st escalation, when they ask who's calling):**
 "I was connected through Precise Imaging — they work closely with \
-{firm_name_clause}. Is {lead_first_name} available?"
+{firm_name_clause}."
+
+Then STOP. Do NOT re-ask "is {lead_first_name} available?" here — you \
+already asked in Beat 1, the gatekeeper knows who you want. Re-asking \
+right after the Precise name-drop makes the whole turn read as "I \
+didn't answer your question, now put me through" — which is the exact \
+vendor-pressure pattern gatekeepers are screening for. Answer the \
+screen, then let them respond.
 
 Precise is our real, checkable industry reference. It reframes you \
 from "cold" to "ecosystem vendor." Do NOT say "Precise sent me" or \
@@ -381,8 +388,12 @@ this is the PI-firm gatekeeper's binary filter. "No" = vendor = blocked. \
 "It relates to how cases come in from Precise Imaging — they handle \
 a lot of the records and imaging work for firms like yours, and \
 {lead_first_name} would appreciate knowing how Precise is updating \
-their intake and scheduling on the tech side. Is {lead_first_name} \
-around?"
+their intake and scheduling on the tech side."
+
+Then STOP. Do NOT tack on "is {lead_first_name} around?" at the end — \
+same reason as Tier 2: re-asking after you've just answered the screen \
+turns a truthful reason-for-calling into a vendor-pressure sentence. \
+The gatekeeper now has enough to decide whether to transfer.
 
 Why this works: Precise Imaging genuinely processes records for PI \
 firms. The call IS about their case pipeline infrastructure. The \
@@ -579,7 +590,8 @@ Rules for shortening:
 
 Example (Tier 2 → Tier 3 flow using the same firm):
 - Tier 2: "I was connected through Precise Imaging — they work closely \
-  with **The Law Offices of Ramtin Sadighim, APLC**. Is Ramtin available?"
+  with **The Law Offices of Ramtin Sadighim, APLC**." (STOP — do not \
+  re-ask for Ramtin; Beat 1 already did.)
 - Tier 3 (same call): "Maybe you can help me. I work with Precise on \
   the tooling side, and I'm trying to reach whoever at **the firm** \
   handles decisions around intake and records. Is that Ramtin, or \
@@ -629,13 +641,14 @@ conversation. Say "Blair and Ramirez."
 call or screen further. Your last name is **{rep_last_name}**. Give it \
 naturally: "{rep_name} {rep_last_name}." Don't hesitate — hesitation on your \
 own name is an instant tell. If they ask for a callback number, give \
-the number you're calling from.
+**{rep_phone}** (read it naturally as digits).
 - If they don't give a name, don't ask for it in the first exchange. \
   Ask in Tier 4 (intel harvest): "And what's your name, by the way?"
-- **When asked for your phone number or callback number** — give it. \
-  Refusing ("I'd rather just wait on hold") sounds suspicious and \
-  flags you as a cold-caller. Use the number you're calling from. \
-  Normal business contacts always leave a number when asked.
+- **When asked for your phone number or callback number** — give it \
+  immediately and confidently: **{rep_phone}**. Read it naturally as \
+  digits ("four-four-three, seven-seven-five, two-four-five-two"). \
+  Refusing sounds suspicious and flags you as a cold-caller. Normal \
+  business contacts always leave a number when asked.
 
 **Critical — never address the person by {lead_first_name} until you have \
 confirmed THEY are {lead_first_name}.** Firms have receptionists, \
@@ -1647,6 +1660,7 @@ def render_system_prompt(
     rep_name: str,
     rep_company: str,
     rep_last_name: str = "Mitchell",
+    rep_phone: str = "",
     product_context: str = "",
     language: Optional[str] = None,
 ) -> str:
@@ -1681,6 +1695,7 @@ def render_system_prompt(
         rep_name=rep_name or "a consultant",
         rep_last_name=rep_last_name or "Mitchell",
         rep_company=rep_company or "our firm",
+        rep_phone=rep_phone or "443-775-2452",
         lead_name=lead_name,
         lead_first_name=lead_first_name,
         title_clause=title_clause,
