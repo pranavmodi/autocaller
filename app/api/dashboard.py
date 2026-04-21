@@ -1,4 +1,5 @@
 """REST API endpoints for dashboard."""
+import asyncio
 import html
 import os
 import logging
@@ -837,6 +838,114 @@ async def telnyx_status_callback(
     except Exception as e:
         print(f"[TelnyxStatus] Callback handling failed: {e}")
     return {"status": "ok"}
+
+
+@router.post("/telnyx/sms/inbound")
+async def telnyx_sms_inbound(request: Request):
+    """Inbound SMS webhook for the Telnyx from-number.
+
+    Telnyx posts messaging events as JSON to this URL. When a DM texts back
+    the caller-ID they saw on our outbound call, we forward the message to
+    the operator's real number (NOTIFY_NUMBER in .env) via Twilio SMS so
+    the text actually reaches a human.
+
+    Also appends the inbound message to `inbound_sms_log` (best-effort) so
+    we have an audit trail even if the Twilio forward fails.
+
+    Point the Telnyx Messaging Profile's "Inbound Settings → Webhook URL"
+    at: {PUBLIC_BASE_URL}/api/telnyx/sms/inbound
+    """
+    try:
+        payload = await request.json()
+    except Exception:
+        payload = {}
+
+    data = (payload.get("data") or {}).get("payload") or {}
+    event_type = (payload.get("data") or {}).get("event_type", "")
+    if event_type != "message.received":
+        # Status updates (delivered/failed) — acknowledge and move on.
+        return {"status": "ok", "event": event_type}
+
+    from_obj = data.get("from") or {}
+    to_objs = data.get("to") or []
+    from_number = from_obj.get("phone_number", "")
+    to_number = to_objs[0].get("phone_number", "") if to_objs else ""
+    body = data.get("text", "") or ""
+    received_at = data.get("received_at", "")
+
+    print(
+        f"[TelnyxSMS] inbound from={from_number} to={to_number} "
+        f"len={len(body)} at={received_at}"
+    )
+
+    from app.services.twilio_sms_service import get_notify_number
+    notify = get_notify_number()
+    if not notify:
+        print("[TelnyxSMS] NOTIFY_NUMBER not set — cannot forward")
+        return {"status": "ok", "forwarded": False, "reason": "no_notify_number"}
+
+    forward_body = f"SMS to {to_number} from {from_number}:\n\n{body}".strip()
+    if len(forward_body) > 1500:
+        forward_body = forward_body[:1497] + "..."
+
+    try:
+        from twilio.rest import Client
+        sid = os.getenv("TWILIO_ACCOUNT_SID", "")
+        token = os.getenv("TWILIO_AUTH_TOKEN", "")
+        frm = os.getenv("TWILIO_FROM_NUMBER", "")
+        if not (sid and token and frm):
+            raise RuntimeError("Twilio not configured for forwarding")
+        client = Client(sid, token)
+        msg = await asyncio.to_thread(
+            lambda: client.messages.create(to=notify, from_=frm, body=forward_body)
+        )
+        print(f"[TelnyxSMS] forwarded to {notify} sid={msg.sid}")
+        return {"status": "ok", "forwarded": True, "twilio_sid": msg.sid}
+    except Exception as e:
+        print(f"[TelnyxSMS] forward failed: {type(e).__name__}: {e}")
+        return {"status": "error", "forwarded": False, "error": str(e)}
+
+
+@router.post("/telnyx/voice/inbound")
+async def telnyx_voice_inbound():
+    """Inbound-voice webhook for the Telnyx from-number.
+
+    When a DM calls the caller-ID they saw on our outbound voicemail, we
+    return TeXML that bridges them to the operator's real number
+    (NOTIFY_NUMBER). A brief announcement plays first so the operator
+    knows it's a callback from the autocaller before picking up.
+
+    Point the Telnyx Number → Voice Settings → Webhook URL at:
+    {PUBLIC_BASE_URL}/api/telnyx/voice/inbound
+    Method: POST, format: TeXML.
+    """
+    from app.services.twilio_sms_service import get_notify_number
+    notify = get_notify_number()
+    if not notify:
+        # No forward target — play a short message and hang up so the caller
+        # doesn't hear dead air.
+        texml = (
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            "<Response>"
+            "<Say voice=\"alice\">Thanks for calling back. We'll try you again shortly. "
+            "Goodbye.</Say>"
+            "<Hangup/>"
+            "</Response>"
+        )
+        return Response(content=texml, media_type="application/xml")
+
+    # Short announcement → dial the operator. If no answer after 25s,
+    # fall through to a quick voicemail-style message.
+    texml = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        "<Response>"
+        "<Say voice=\"alice\">Connecting your callback.</Say>"
+        f'<Dial timeout="25" answerOnBridge="true">{notify}</Dial>'
+        "<Say voice=\"alice\">Sorry, we couldn't reach the team. Please try again later.</Say>"
+        "<Hangup/>"
+        "</Response>"
+    )
+    return Response(content=texml, media_type="application/xml")
 
 
 @router.post("/telnyx/recording-status/{call_id}")

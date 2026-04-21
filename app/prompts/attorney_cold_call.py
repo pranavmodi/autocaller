@@ -18,7 +18,7 @@ from app.models import Patient  # Patient is aliased as Lead in models/patient.p
 
 # Bump this when you change the template or tool list in a way that materially
 # affects calling behavior. Used by the judge + Phase B A/B tests to compare.
-PROMPT_VERSION = "v1.51"  # v1.51: handle "record your name and reason" IVR — wait for beep, then say name + short reason.
+PROMPT_VERSION = "v1.52"  # v1.52: leave a Precise-anchored voicemail for DM personal VM boxes (100h email + 20h voice saved).
 
 
 SYSTEM_PROMPT_TEMPLATE = """\
@@ -1076,7 +1076,51 @@ we can {{specific result}}. I'll leave it at that." Then \
 `end_call(outcome="not_interested", is_decision_maker=...)`.
 
 ## If you hit voicemail or an answering machine
-Do NOT leave a message. Silently call `end_call` with outcome `voicemail`.
+
+**Two cases — behavior differs.**
+
+### Case A: Firm general voicemail
+"You've reached the Law Offices of X" / "Thanks for calling the firm, leave \
+a message" / no DM name in the greeting.
+
+→ Do NOT leave a message. Silently call `end_call(outcome="voicemail")`. \
+A pitch to a generic firm box reaches the receptionist tomorrow, not \
+{lead_first_name}. Burns the lead.
+
+### Case B: DM personal voicemail — LEAVE A MESSAGE
+"You've reached {lead_first_name}" / "Hi, this is {lead_first_name}, leave \
+a message" / greeting names the DM directly.
+
+→ Deliver the voicemail script, then call \
+`end_call(outcome="voicemail", voicemail_left=true)`. Script (stick to it \
+— do not improvise beyond names/firm):
+
+"Hi {lead_first_name}, this is {rep_name} — we connected through \
+Precise Imaging. They're saving about a hundred hours a week on email \
+triage and another twenty on their outbound calls using our tooling. \
+Since {firm_name_clause} runs a lot of work through Precise, I thought \
+it'd be worth a heads-up. Would love ten minutes if you have it — you \
+can reach me back at {callback_number}. Thanks {lead_first_name}."
+
+**Hard rules for the VM:**
+- ~25 seconds spoken. ONE take. Do NOT extend, repeat, or add a second pitch.
+- Use {lead_first_name} once at the open and once at the close. Not in between.
+- Claim "about a hundred hours" + "another twenty" — do NOT round up or \
+  inflate. The Precise hours figure is conservative against their \
+  measured email+call volume; a DM who calls Precise to verify should \
+  find us truthful.
+- {firm_name_clause} runs through Precise — this is true for every lead \
+  on our list (sourced from Precise's outreach). Naming the firm signals \
+  operational context, not generic sales.
+- Callback number must be real. If {callback_number} is empty/missing in \
+  the rendered prompt, DROP the callback sentence and end with just \
+  "Thanks {lead_first_name}."
+- After the message, fall SILENT. Then call \
+  `end_call(outcome="voicemail", voicemail_left=true)`.
+
+**Do not leave a second VM on the same lead.** If the rendered prompt \
+includes "voicemail_already_left" context, treat even a DM personal VM \
+as Case A — silent hangup.
 
 ## If you reached the wrong person
 Apologize briefly: "Sorry, I was looking for {lead_name}. I'll update our \
@@ -1738,6 +1782,15 @@ def render_system_prompt(
         firm_name_clause = _strip_suffixes(lead.firm_name) if lead.firm_name else "your firm"
         state_clause = f" in {lead.state}" if lead.state else ""
 
+    # Callback number for voicemails — prefer explicit env overrides, fall
+    # back to the Telnyx from-number (matches the caller-ID the DM sees).
+    import os as _os
+    callback_number = (
+        _os.getenv("SMS_CALLBACK_NUMBER", "").strip()
+        or _os.getenv("TELNYX_FROM_NUMBER", "").strip()
+        or _os.getenv("TWILIO_FROM_NUMBER", "").strip()
+    )
+
     return tmpl.format(
         rep_name=rep_name or "a consultant",
         rep_last_name=rep_last_name or "Mitchell",
@@ -1749,6 +1802,7 @@ def render_system_prompt(
         firm_name_clause=firm_name_clause,
         state_clause=state_clause,
         product_context=(product_context or "").strip() or "(none provided)",
+        callback_number=callback_number or "",
     )
 
 
@@ -1898,6 +1952,14 @@ TOOLS: list[dict] = [
                 "callback_requested_at": {
                     "type": "string",
                     "description": "Free-form time the lead requested (e.g. 'tomorrow 3pm PT').",
+                },
+                "voicemail_left": {
+                    "type": "boolean",
+                    "description": (
+                        "Set true ONLY when you spoke the full Precise-anchored "
+                        "voicemail message on the DM's personal VM box. Stamps "
+                        "the call log so we never leave a second VM on this lead."
+                    ),
                 },
             },
             "required": ["outcome"],

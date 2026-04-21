@@ -128,12 +128,22 @@ class CallOrchestrator:
                 await self.on_status_update(f"Twilio AMD: voicemail detected ({answered_by})")
 
             callback_number = get_callback_number().strip()
-            rep_name = os.getenv("SALES_REP_NAME", "").strip() or "our team"
-            rep_company = os.getenv("SALES_REP_COMPANY", "").strip() or "our team"
-            contact = f" Give us a call back at {callback_number}." if callback_number else ""
+            rep_name = os.getenv("SALES_REP_NAME", "").strip() or "Alex"
+            lead_first = (self._current_patient.name or "").split(" ", 1)[0] if self._current_patient else ""
+            firm = self._current_patient.firm_name if self._current_patient and getattr(self._current_patient, "firm_name", None) else "your firm"
+            contact = f" You can reach me back at {callback_number}." if callback_number else ""
+            # Precise-anchored voicemail. Lead list is sourced from Precise's
+            # own outreach so naming Precise + the firm is truthful per lead.
+            # The "100 hours email + 20 hours voice" figure is conservative
+            # against the estimated 175h/wk ceiling on Precise's current
+            # email+call volume (see v1.52 commit for the math).
+            greeting_name = f" {lead_first}" if lead_first else ""
             message = (
-                f"Hi, this is {rep_name} from {rep_company}. We help personal injury firms with "
-                f"custom software and AI tooling. I was hoping to catch you for a quick chat.{contact} "
+                f"Hi{greeting_name}, this is {rep_name} — we connected through Precise Imaging. "
+                f"They're saving about a hundred hours a week on email triage and another twenty "
+                f"on their outbound calls using our tooling. Since {firm} runs a lot of work "
+                f"through Precise, I thought it'd be worth a heads-up. "
+                f"Would love ten minutes if you have it.{contact} "
                 "Thanks, and have a good day."
             )
 
@@ -1330,6 +1340,14 @@ class CallOrchestrator:
                 capture_update["is_decision_maker"] = bool(args["is_decision_maker"])
             if preferred_callback_time:
                 capture_update["preferred_callback_time"] = preferred_callback_time
+            # voicemail_left signals the AI actually delivered the VM script
+            # vs just noticing it hit a VM box. True → disposition becomes
+            # VOICEMAIL_LEFT and dispatcher won't leave a second message
+            # on this lead.
+            if args.get("voicemail_left"):
+                capture_update["voicemail_left"] = True
+                if self._current_call is not None:
+                    self._current_call.voicemail_left = True
 
             if capture_update:
                 call_log_provider = get_call_log_provider()

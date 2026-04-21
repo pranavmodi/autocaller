@@ -57,8 +57,26 @@ def is_twilio_opt_out_error(error: Exception) -> bool:
 
 
 def get_callback_number() -> str:
-    """Return callback number shown in SMS messages (from the Twilio from-number)."""
-    return os.getenv("SMS_CALLBACK_NUMBER", "").strip() or os.getenv("TWILIO_FROM_NUMBER", "").strip()
+    """Return callback number shown in SMS/VM messages.
+
+    Preference order:
+      1. `SMS_CALLBACK_NUMBER` — explicit override
+      2. `TELNYX_FROM_NUMBER` — matches the caller-ID the DM sees on the
+         outbound call, so they can dial it back and reach us
+      3. `TWILIO_FROM_NUMBER` — final fallback (historical default)
+    """
+    return (
+        os.getenv("SMS_CALLBACK_NUMBER", "").strip()
+        or os.getenv("TELNYX_FROM_NUMBER", "").strip()
+        or os.getenv("TWILIO_FROM_NUMBER", "").strip()
+    )
+
+
+def get_notify_number() -> str:
+    """Operator's real number — where we forward inbound SMS and send
+    notifications. Set via `NOTIFY_NUMBER` in .env. Empty → disabled.
+    """
+    return os.getenv("NOTIFY_NUMBER", "").strip()
 
 
 def get_main_number() -> str:
