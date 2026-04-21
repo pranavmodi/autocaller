@@ -11,6 +11,7 @@ import {
   type CarrierInfo,
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { VoiceSettingsPanel } from "@/components/VoiceSettingsPanel";
 
 export default function HealthPage() {
   const checks = useQuery({
@@ -215,6 +216,8 @@ export default function HealthPage() {
           carrier, edit <span className="font-mono">.env</span> and restart the backend.
         </p>
       </section>
+
+      <VoiceSettingsPanel />
 
       <section className="overflow-hidden rounded-lg border border-neutral-200 bg-white">
         <table className="w-full text-sm">

@@ -161,6 +161,24 @@ export const setMockMode = (enabled: boolean, mock_phone = "") =>
 export const setVoiceProvider = (provider: "openai" | "gemini", model = "") =>
   put<Record<string, unknown>>("/api/settings/voice", { provider, model });
 
+export type VoiceConfigPatch = {
+  provider: "openai" | "gemini";
+  voice?: string;
+  temperature?: number;
+  affective_dialog?: boolean; // Gemini-only
+  proactive_audio?: boolean;  // Gemini-only
+};
+
+export const setVoiceConfig = (patch: VoiceConfigPatch) =>
+  put<Record<string, unknown>>("/api/settings/voice-config", patch);
+
+export const OPENAI_VOICES = [
+  "alloy", "ash", "ballad", "coral", "echo", "sage", "shimmer", "verse",
+] as const;
+export const GEMINI_VOICES = [
+  "Aoede", "Puck", "Charon", "Kore", "Fenrir", "Leda", "Orus", "Zephyr",
+] as const;
+
 export const setDispatcherCooldown = (cooldown_seconds: number) =>
   put<Record<string, unknown>>("/api/settings/dispatcher/cooldown", { cooldown_seconds });
 
