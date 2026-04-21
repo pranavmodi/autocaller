@@ -138,20 +138,18 @@ class TelnyxMediaBridge:
     async def _broadcast_audio(self, mulaw: bytes, source: str = "unknown"):
         """Fan out µ-law → PCM16 to listeners. `source` is "ai" or "caller".
 
-        Caller audio is sent directly (arrives at steady real-time from
-        the carrier). AI audio is enqueued to a pacer task that emits
-        20ms frames at 8000 bps — mirroring the carrier-side pacing the
-        prospect already hears. Without this the listener sees
-        OpenAI/Gemini's bursty output (confirmed up to 3.7× real-time),
-        which either mangles playback via a drop-cap or desyncs against
-        the caller stream when buffered. Real-time pacing keeps the two
-        sides in sync for the operator.
+        Caller audio is sent directly. AI audio goes through the pacer
+        queue — UNLESS `_ai_audio_muted` is set (IVR nav / human
+        takeover), in which case we drop it entirely instead of
+        queuing. Reason: during human takeover the operator does NOT
+        want to hear the AI reasoning in their browser — it's noise
+        that makes it hard to follow the prospect's side. During IVR
+        nav, same thing. Dropping at broadcast keeps the listener clean.
         """
         if source == "ai":
+            if self._ai_audio_muted:
+                return
             await self._ai_pacer_queue.put(mulaw)
-            # Make sure the pacer is running. It's started lazily from
-            # `handle_carrier_ws` but also from here so a standalone
-            # bridge (not yet connected to Telnyx) still drains.
             if self._ai_pacer_task is None or self._ai_pacer_task.done():
                 self._ai_pacer_task = asyncio.create_task(self._ai_pacer_loop())
             return
@@ -242,7 +240,19 @@ class TelnyxMediaBridge:
     # ------------------------------------------------------------------
 
     async def _forward_audio_to_carrier(self, audio_data: bytes):
-        if not self._ai_audio_muted and self._ws and self._stream_sid:
+        # Rate-limited diagnostic: bytes/sec of AI output + mute state,
+        # so we can catch cases where the mute flag SHOULD be True but
+        # audio is still reaching the carrier.
+        import time
+        now = time.monotonic()
+        if not hasattr(self, "_ai_fwd_bytes"):
+            self._ai_fwd_bytes_sent = 0
+            self._ai_fwd_bytes_skipped = 0
+            self._ai_fwd_last_log = now
+        sent_to_carrier = (
+            not self._ai_audio_muted and self._ws and self._stream_sid
+        )
+        if sent_to_carrier:
             payload = base64.b64encode(audio_data).decode("utf-8")
             msg = {
                 "event": "media",
@@ -254,6 +264,19 @@ class TelnyxMediaBridge:
                 await self._ws.send_json(msg)
             except Exception as e:
                 print(f"[TelnyxMedia] OUTBOUND SEND ERROR: {e}")
+            self._ai_fwd_bytes_sent += len(audio_data)
+        else:
+            self._ai_fwd_bytes_skipped += len(audio_data)
+        if now - self._ai_fwd_last_log >= 2.0:
+            if self._ai_fwd_bytes_sent or self._ai_fwd_bytes_skipped:
+                print(
+                    f"[TelnyxMedia] AI→carrier: sent={self._ai_fwd_bytes_sent}B "
+                    f"skipped={self._ai_fwd_bytes_skipped}B "
+                    f"(ai_audio_muted={self._ai_audio_muted})"
+                )
+            self._ai_fwd_bytes_sent = 0
+            self._ai_fwd_bytes_skipped = 0
+            self._ai_fwd_last_log = now
 
         await self._broadcast_audio(audio_data, source="ai")
 
@@ -354,7 +377,15 @@ class TelnyxMediaBridge:
                     if payload:
                         audio_bytes = base64.b64decode(payload)
                         if track == "inbound":
-                            # Caller audio → voice service (Gemini/OpenAI)
+                            # Caller audio → voice service. Keep feeding
+                            # even during takeover/IVR-mute so
+                            # transcription continues (transcript stays
+                            # populated, silence watchdog sees activity).
+                            # The AI's generated responses are blocked
+                            # at the carrier-egress side (mute flag) and
+                            # at the listener-broadcast side, so even
+                            # though Gemini keeps reasoning, the
+                            # prospect and operator don't hear it.
                             if self.voice_service.is_connected:
                                 await self.voice_service.send_audio(audio_bytes)
                             # Broadcast caller-side to listeners

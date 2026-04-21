@@ -43,6 +43,7 @@ def _row_to_call_log(row: CallLogRow) -> CallLog:
     cl.transfer_attempted = row.transfer_attempted
     cl.transfer_success = row.transfer_success
     cl.voicemail_left = row.voicemail_left
+    cl.takeover_used = bool(getattr(row, "takeover_used", False))
     cl.sms_sent = row.sms_sent
     cl.preferred_callback_time = row.preferred_callback_time
     cl.queue_snapshot = row.queue_snapshot
@@ -295,7 +296,8 @@ class CallLogProvider:
     # ignored silently (safer than having callers accidentally set primary
     # keys, timestamps, or derived columns).
     _UPDATE_ALLOWED = {
-        "transfer_attempted", "transfer_success", "voicemail_left", "sms_sent",
+        "transfer_attempted", "transfer_success", "voicemail_left",
+        "takeover_used", "sms_sent",
         "preferred_callback_time", "error_code", "error_message",
         # Autocaller post-call capture
         "pain_point_summary", "interest_level", "is_decision_maker",

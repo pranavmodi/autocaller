@@ -98,12 +98,14 @@ class TwilioMediaBridge:
     async def _broadcast_audio(self, mulaw: bytes, source: str = "unknown"):
         """Fan out µ-law audio to listeners.
 
-        Caller audio sends directly (already real-time). AI audio gets
-        enqueued to the pacer so listener playback mirrors the carrier-
-        paced audio the prospect hears. See telnyx_voice_service for the
-        full rationale.
+        Caller → direct. AI → pacer queue, BUT dropped entirely when
+        `_ai_audio_muted` is set (IVR nav / human takeover). Operator
+        does not want to hear the AI reasoning in the browser during
+        takeover. See telnyx_voice_service for the full rationale.
         """
         if source == "ai":
+            if self._ai_audio_muted:
+                return
             await self._ai_pacer_queue.put(mulaw)
             if self._ai_pacer_task is None or self._ai_pacer_task.done():
                 self._ai_pacer_task = asyncio.create_task(self._ai_pacer_loop())
@@ -285,7 +287,9 @@ class TwilioMediaBridge:
                     self._connected.set()
 
                 elif event == "media":
-                    # Forward Twilio audio → OpenAI
+                    # Forward Twilio audio → OpenAI. Keep feeding even
+                    # during mute so transcription keeps running; AI
+                    # responses get suppressed at the egress side.
                     payload = msg["media"]["payload"]
                     audio_bytes = base64.b64decode(payload)
                     if self.voice_service.is_connected:

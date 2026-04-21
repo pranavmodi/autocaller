@@ -173,6 +173,7 @@ class CallLog:
     transfer_attempted: bool = False
     transfer_success: bool = False
     voicemail_left: bool = False
+    takeover_used: bool = False
     sms_sent: bool = False
     preferred_callback_time: Optional[str] = None
 
@@ -270,6 +271,7 @@ class CallLog:
             "transfer_attempted": self.transfer_attempted,
             "transfer_success": self.transfer_success,
             "voicemail_left": self.voicemail_left,
+            "takeover_used": self.takeover_used,
             "sms_sent": self.sms_sent,
             "preferred_callback_time": self.preferred_callback_time,
             "queue_snapshot": self.queue_snapshot,

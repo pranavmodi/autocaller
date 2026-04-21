@@ -85,6 +85,11 @@ class CallLogRow(Base):
     transfer_attempted: Mapped[bool] = mapped_column(Boolean, default=False)
     transfer_success: Mapped[bool] = mapped_column(Boolean, default=False)
     voicemail_left: Mapped[bool] = mapped_column(Boolean, default=False)
+    # True if the operator pressed "Take over" at any point during the
+    # call. Triggers segment-level Whisper backfill post-call (live
+    # transcript is incomplete when takeover is active because the
+    # operator's side isn't fed to the voice backend).
+    takeover_used: Mapped[bool] = mapped_column(Boolean, default=False)
     sms_sent: Mapped[bool] = mapped_column(Boolean, default=False)
     preferred_callback_time: Mapped[str | None] = mapped_column(String(255), nullable=True)
     queue_snapshot: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
@@ -182,6 +187,11 @@ class SystemSettingsRow(Base):
     # Default realtime voice backend. Overridden per call via CLI flag or API body.
     voice_provider: Mapped[str] = mapped_column(String(32), default="openai")
     voice_model: Mapped[str] = mapped_column(String(64), default="")
+    # Per-provider voice knobs (voice name, affective-dialog flag,
+    # proactive-audio flag, temperature). Schema docs in the Alembic
+    # migration x8y9z0a1b2c3_add_voice_config.py. Missing keys fall back
+    # to env-var defaults at connect time.
+    voice_config: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     # Default telephony carrier ("twilio" | "telnyx"). Per-call override via
     # CLI --carrier / API body. See app/services/carrier.py.
     default_carrier: Mapped[str] = mapped_column(String(16), default="twilio")

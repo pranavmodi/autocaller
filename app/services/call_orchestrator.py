@@ -552,9 +552,20 @@ class CallOrchestrator:
         Catches: voicemails Gemini doesn't transcribe, hold-music,
         media-stream-connected-but-nobody-home scenarios. The timer
         resets each time the caller speaks (see _handle_transcript).
+
+        Suppressed during human takeover — the operator IS the one
+        carrying the conversation, so "no caller transcript" is
+        expected (the prospect may be quietly listening) and ending
+        the call would kill an active conversation.
         """
         try:
             await asyncio.sleep(timeout_seconds)
+            if self._human_takeover_flag:
+                print(
+                    f"[CallOrchestrator] Silence watchdog suppressed — "
+                    f"human takeover active on {call_id}"
+                )
+                return
             if not self._caller_has_spoken and self._current_call and self._current_call.call_id == call_id:
                 print(
                     f"[CallOrchestrator] Silence timeout ({timeout_seconds}s) — "
@@ -1710,16 +1721,30 @@ class CallOrchestrator:
         if enabled:
             self._twilio_bridge.mute_ai_audio()
             self._human_takeover_flag = True
+            # Stamp the call log so the post-call pipeline knows to
+            # segment-transcribe the recording (operator side isn't in
+            # the live transcript).
+            try:
+                call_log_provider = get_call_log_provider()
+                await call_log_provider.update_call(
+                    self._current_call.call_id, takeover_used=True
+                )
+                self._current_call.takeover_used = True
+            except Exception as e:
+                logger.warning("marking takeover_used failed: %s", e)
             try:
                 if self._voice_service is not None:
                     await self._voice_service.cancel_response()
             except Exception as e:
                 logger.warning("cancel_response during takeover failed: %s", e)
-            logger.info("[takeover] HUMAN took over call %s", self._current_call.call_id)
+            print(f"[takeover] HUMAN took over call {self._current_call.call_id}")
         else:
             self._human_takeover_flag = False
             self._twilio_bridge.unmute_ai_audio()
-            logger.info("[takeover] HUMAN released call %s", self._current_call.call_id)
+            print(f"[takeover] HUMAN released call {self._current_call.call_id}")
+        # Reset operator-audio diagnostic counters on each state flip.
+        self._op_audio_bytes = 0
+        self._op_audio_last_log = 0.0
         return True
 
     async def inject_operator_audio(self, mulaw: bytes) -> None:
@@ -1729,8 +1754,33 @@ class CallOrchestrator:
         so a stuck browser worklet can't talk over the AI by accident.
         """
         if not self._human_takeover_flag or self._twilio_bridge is None:
+            # Debug: rarely log silent drops so we can tell "button didn't
+            # fire" from "button fired but flag is False".
+            drop_ctr = getattr(self, "_op_audio_drop_ctr", 0) + 1
+            self._op_audio_drop_ctr = drop_ctr
+            if drop_ctr == 1 or drop_ctr % 500 == 0:
+                print(
+                    f"[takeover] inject_operator_audio DROPPED frame "
+                    f"(takeover_flag={self._human_takeover_flag}, "
+                    f"bridge={'set' if self._twilio_bridge else 'None'}) "
+                    f"drops={drop_ctr}"
+                )
             return
         await self._twilio_bridge.inject_inbound_audio(mulaw)
+        # Rate-limited forward-rate diagnostic — one line every ~1 second.
+        import time
+        now = time.monotonic()
+        self._op_audio_bytes = getattr(self, "_op_audio_bytes", 0) + len(mulaw)
+        last = getattr(self, "_op_audio_last_log", 0.0)
+        if now - last >= 1.0:
+            print(
+                f"[takeover] operator→carrier: "
+                f"{self._op_audio_bytes}B in last {now - last:.1f}s "
+                f"(~{int(self._op_audio_bytes / max(0.001, now - last))}B/s, "
+                f"target ~8000B/s)"
+            )
+            self._op_audio_bytes = 0
+            self._op_audio_last_log = now
 
     @property
     def is_call_active(self) -> bool:

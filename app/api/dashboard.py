@@ -1017,6 +1017,25 @@ async def telnyx_recording_status(call_id: str, request: Request):
         recording_duration_seconds=meta["duration_seconds"],
         recording_format=meta["format"],
     )
+
+    # If the operator took over at any point on this call, auto-run
+    # segment-level Whisper on the recording and splice into transcript.
+    # The live voice backend doesn't see operator audio (we inject it
+    # directly into the carrier's outbound track), so the live transcript
+    # is missing that side. Whisper on the recording captures both.
+    try:
+        call = await call_log_provider.get_call(call_id)
+        if call and getattr(call, "takeover_used", False):
+            print(f"[takeover] kicking off post-call Whisper splice for {call_id}")
+            from app.services.post_call_transcribe import transcribe_recording_to_segments
+            safe_create_task(
+                transcribe_recording_to_segments(call_id),
+                logger,
+                f"takeover_whisper_splice {call_id}",
+            )
+    except Exception as e:
+        logger.warning("failed to kick off takeover Whisper splice: %s", e)
+
     return {"status": "ok", "path": meta["path"], "size": meta["size_bytes"]}
 
 
@@ -1101,15 +1120,21 @@ async def call_takeover(call_id: str, body: dict):
     404 if there is no live call, 409 if `call_id` doesn't match the one
     currently on the line.
     """
+    enabled = bool(body.get("enabled", True))
+    print(f"[takeover] POST /api/calls/{call_id}/takeover enabled={enabled}")
     orchestrator = get_orchestrator()
     current = orchestrator.current_call
     if current is None:
+        print(f"[takeover] REJECTED call_id={call_id} — no active call")
         raise HTTPException(status_code=404, detail="no active call")
     if current.call_id != call_id:
+        print(f"[takeover] REJECTED call_id={call_id} — current={current.call_id}")
         raise HTTPException(status_code=409, detail="call_id does not match active call")
+    bridge_type = type(orchestrator._twilio_bridge).__name__ if orchestrator._twilio_bridge else "None"
+    print(f"[takeover] bridge={bridge_type} voice_service={type(orchestrator._voice_service).__name__ if orchestrator._voice_service else 'None'}")
 
-    enabled = bool(body.get("enabled", True))
     ok = await orchestrator.set_human_takeover(enabled)
+    print(f"[takeover] set_human_takeover({enabled}) returned ok={ok} — human_takeover={orchestrator.human_takeover}")
     if not ok:
         raise HTTPException(status_code=409, detail="could not flip takeover (no bridge?)")
     return {

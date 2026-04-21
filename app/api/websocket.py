@@ -322,6 +322,7 @@ async def listen_websocket(websocket: WebSocket, call_id: str):
     """
     from app.services.call_orchestrator import get_orchestrator
 
+    print(f"[takeover] WS /ws/listen/{call_id} accepting")
     await websocket.accept()
 
     orchestrator = get_orchestrator()
@@ -329,6 +330,11 @@ async def listen_websocket(websocket: WebSocket, call_id: str):
     bridge = orchestrator._twilio_bridge  # type: ignore[attr-defined]
 
     if not current_call or not bridge or current_call.call_id != call_id:
+        print(
+            f"[takeover] WS /ws/listen/{call_id} REJECTED — "
+            f"current={current_call.call_id if current_call else None}, "
+            f"bridge={'set' if bridge else 'None'}"
+        )
         await websocket.send_json({
             "type": "error",
             "error": "no_active_call",
@@ -386,6 +392,18 @@ async def listen_websocket(websocket: WebSocket, call_id: str):
                     mulaw = base64.b64decode(payload_b64)
                 except Exception:
                     continue
+                # Diagnostic — log the first frame per WS session so we
+                # can confirm the mic pipeline delivered something. After
+                # that, inject_operator_audio's own rate log takes over.
+                if not getattr(websocket.state, "logged_first_inbound", False):
+                    print(
+                        f"[takeover] WS received FIRST inbound_audio frame "
+                        f"for call {call_id} ({len(mulaw)}B mulaw)"
+                    )
+                    try:
+                        websocket.state.logged_first_inbound = True
+                    except Exception:
+                        pass
                 # Orchestrator drops the frame if takeover isn't active —
                 # we don't re-gate here so the client can flush any in-flight
                 # worklet buffer without a race against the flag flip.

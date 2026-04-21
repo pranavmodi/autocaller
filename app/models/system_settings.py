@@ -99,6 +99,16 @@ class SystemSettings:
     # via CLI --voice flag or API body voice_provider field.
     voice_provider: str = "openai"
     voice_model: str = ""
+    # Per-provider voice knobs — voice name, temperature, provider-specific
+    # flags (Gemini: affective_dialog, proactive_audio). Shape:
+    #   {
+    #     "openai": {"voice": "alloy", "temperature": 0.8},
+    #     "gemini": {"voice": "Aoede", "affective_dialog": false,
+    #                "proactive_audio": false, "temperature": 1.0}
+    #   }
+    # Missing keys fall back to env vars (OPENAI_VOICE, GEMINI_VOICE)
+    # at backend connect time.
+    voice_config: dict = field(default_factory=dict)
     # Default telephony carrier ("twilio" or "telnyx"). Override per-call via
     # CLI --carrier flag or API body `carrier` field.
     default_carrier: str = "twilio"
