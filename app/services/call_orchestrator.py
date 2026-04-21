@@ -70,6 +70,12 @@ class CallOrchestrator:
         # then save as WAV on end_call. Only active when call_mode="web".
         self._web_recording_chunks: list[bytes] = []
         self._web_recording_active: bool = False
+        # Human-takeover state. True when the operator has pressed "Take over"
+        # in the UI: AI audio is muted to Twilio, in-flight response cancelled,
+        # and operator browser-mic audio is injected via the bridge. Separate
+        # from bridge._ai_audio_muted (which IVR-nav also uses) so the two
+        # cases don't stomp on each other's flag flips.
+        self._human_takeover_flag: bool = False
 
         # Callbacks for UI updates
         self.on_call_started: Optional[Callable[[CallLog], Any]] = None
@@ -213,11 +219,25 @@ class CallOrchestrator:
         active_persona = get_persona(persona)
 
         prompt_lang = prompt_language_for(patient)
+        # Pick the callback number that matches the active carrier so it's real.
+        _carrier = (settings.default_carrier or "twilio").lower()
+        _from_env = "TELNYX_FROM_NUMBER" if _carrier == "telnyx" else "TWILIO_FROM_NUMBER"
+        _raw_phone = os.getenv(_from_env, os.getenv("TWILIO_FROM_NUMBER", "")).strip()
+        # Format as readable digits e.g. "+14437752452" → "443-775-2452"
+        def _fmt_phone(p: str) -> str:
+            digits = "".join(c for c in p if c.isdigit())
+            if len(digits) == 11 and digits.startswith("1"):
+                digits = digits[1:]
+            if len(digits) == 10:
+                return f"{digits[:3]}-{digits[3:6]}-{digits[6:]}"
+            return p
+        rep_phone = _fmt_phone(_raw_phone) if _raw_phone else "443-775-2452"
         system_prompt = render_system_prompt(
             lead=patient,
             rep_name=active_persona.rep_name,
             rep_last_name=active_persona.last_name,
             rep_company=_sales_or_env("rep_company", "SALES_REP_COMPANY", "our team"),
+            rep_phone=rep_phone,
             product_context=_sales_or_env("product_context", "PRODUCT_CONTEXT", ""),
             language=prompt_lang,
         )
@@ -539,6 +559,10 @@ class CallOrchestrator:
 
     async def end_call(self, outcome: CallOutcome = CallOutcome.COMPLETED):
         """End the current call."""
+        import traceback
+        print(f"[DEBUG_IVR] end_call called: outcome={outcome.value} caller from:")
+        for line in traceback.format_stack()[-4:-1]:
+            print(f"  {line.strip()}")
         if not self._current_call or self._ending_call:
             return
         # During a SIP transfer, Twilio closes the media stream which triggers
@@ -617,6 +641,7 @@ class CallOrchestrator:
             self._current_patient = None
             self._voice_service = None
             self._twilio_bridge = None
+            self._human_takeover_flag = False
 
             call_log_provider = get_call_log_provider()
             await call_log_provider.end_call(call.call_id, outcome)
@@ -809,12 +834,18 @@ class CallOrchestrator:
             # human. Phrases like "voicemail" or "leave a message" appearing
             # later are part of normal conversation (e.g. "want me to transfer
             # you to her voicemail?"), not IVR signals.
+            _phrase_match = looks_like_voicemail_signal(text)
+            print(
+                f"[DEBUG_IVR] transcript handler: turns={self._caller_turn_count} "
+                f"phrase_match={_phrase_match} navigating={self._ivr_navigating} "
+                f"handled={self._ivr_handled} text={text[:80]!r}"
+            )
             if (
                 self._caller_turn_count <= 2
                 and not self._web_voicemail_simulated
                 and not self._ivr_navigating
                 and not self._ivr_handled
-                and looks_like_voicemail_signal(text)
+                and _phrase_match
             ):
                 elapsed_caller = time.monotonic() - (self._first_caller_audio_at or time.monotonic())
                 # Always STAMP the signal — even outside the action window,
@@ -1192,8 +1223,16 @@ class CallOrchestrator:
 
         self._sync_status_callback()
 
+        # DEBUG: log every function call with IVR state
+        print(
+            f"[DEBUG_IVR] _handle_function_call: name={name} args={args} "
+            f"ivr_navigating={self._ivr_navigating} ivr_nav_enabled={self._ivr_navigate_enabled} "
+            f"caller_turns={self._caller_turn_count} ivr_handled={self._ivr_handled}"
+        )
+
         # Suppress AI tool calls while the IVR navigator has the wheel.
         if self._ivr_navigating and name != "send_function_result":
+            print(f"[DEBUG_IVR] SUPPRESSED (navigator active): {name}")
             await self._add_system_note(
                 f"Suppressed AI tool call `{name}` — IVR navigator is active."
             )
@@ -1204,17 +1243,20 @@ class CallOrchestrator:
             return
 
         # Suppress early end_call(voicemail) when IVR navigation is enabled.
-        # The AI races the phrase matcher — it hears IVR audio and calls
-        # end_call before the orchestrator's transcript handler can start
-        # the navigator. Block the AI's end_call and let the phrase
-        # matcher + navigator handle it instead.
-        if (
+        outcome_val = str(args.get("outcome", "")).lower()
+        should_suppress = (
             name == "end_call"
             and self._ivr_navigate_enabled
             and self._caller_turn_count <= 2
             and not self._ivr_handled
-            and str(args.get("outcome", "")).lower() in ("voicemail", "no_answer")
-        ):
+            and outcome_val in ("voicemail", "no_answer")
+        )
+        print(
+            f"[DEBUG_IVR] suppress check: name={name} outcome={outcome_val} "
+            f"nav_enabled={self._ivr_navigate_enabled} turns={self._caller_turn_count} "
+            f"handled={self._ivr_handled} → should_suppress={should_suppress}"
+        )
+        if should_suppress:
             await self._add_system_note(
                 f"Suppressed early AI end_call({args.get('outcome')}) — "
                 f"IVR nav enabled, letting phrase matcher handle it."
@@ -1622,6 +1664,55 @@ class CallOrchestrator:
         """Handle voice session ending unexpectedly."""
         if self._current_call and self._current_call.outcome == CallOutcome.IN_PROGRESS:
             await self.end_call(CallOutcome.FAILED)
+
+    # ------------------------------------------------------------------
+    # Human takeover
+    # ------------------------------------------------------------------
+
+    @property
+    def human_takeover(self) -> bool:
+        return self._human_takeover_flag
+
+    async def set_human_takeover(self, enabled: bool) -> bool:
+        """Flip the operator-takeover state on the live call.
+
+        When enabled: mute AI→Twilio audio, cancel any in-flight response on
+        the voice backend so a half-generated sentence doesn't leak through,
+        and allow `inject_inbound_audio` on the bridge (which the /ws/listen
+        handler forwards from the operator's browser mic).
+
+        When disabled: unmute AI, resume normal flow. The AI will speak on
+        its next turn when the prospect says something.
+
+        Returns True on success, False if there's no live call to flip.
+        """
+        if self._twilio_bridge is None or self._current_call is None:
+            return False
+
+        if enabled:
+            self._twilio_bridge.mute_ai_audio()
+            self._human_takeover_flag = True
+            try:
+                if self._voice_service is not None:
+                    await self._voice_service.cancel_response()
+            except Exception as e:
+                logger.warning("cancel_response during takeover failed: %s", e)
+            logger.info("[takeover] HUMAN took over call %s", self._current_call.call_id)
+        else:
+            self._human_takeover_flag = False
+            self._twilio_bridge.unmute_ai_audio()
+            logger.info("[takeover] HUMAN released call %s", self._current_call.call_id)
+        return True
+
+    async def inject_operator_audio(self, mulaw: bytes) -> None:
+        """Send operator browser-mic audio (µ-law 8kHz) into the live call.
+
+        Only forwards when takeover is active — otherwise silently drops,
+        so a stuck browser worklet can't talk over the AI by accident.
+        """
+        if not self._human_takeover_flag or self._twilio_bridge is None:
+            return
+        await self._twilio_bridge.inject_inbound_audio(mulaw)
 
     @property
     def is_call_active(self) -> bool:

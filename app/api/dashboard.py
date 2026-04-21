@@ -954,6 +954,36 @@ async def delete_all_calls(confirm: str = ""):
     return {"status": "ok", "wiped": False, "note": "active-call marker cleared; logs preserved. pass ?confirm=wipe to delete all history."}
 
 
+@router.post("/calls/{call_id}/takeover")
+async def call_takeover(call_id: str, body: dict):
+    """Flip the operator-takeover state for a live call.
+
+    Body: {"enabled": bool}. When enabled=true the AI is muted on the Twilio
+    leg and the live-listen WS accepts operator mic frames (sent as
+    `{type:"inbound_audio", payload:<base64 µ-law 8kHz>}`). When false the
+    AI resumes speaking on its next turn.
+
+    404 if there is no live call, 409 if `call_id` doesn't match the one
+    currently on the line.
+    """
+    orchestrator = get_orchestrator()
+    current = orchestrator.current_call
+    if current is None:
+        raise HTTPException(status_code=404, detail="no active call")
+    if current.call_id != call_id:
+        raise HTTPException(status_code=409, detail="call_id does not match active call")
+
+    enabled = bool(body.get("enabled", True))
+    ok = await orchestrator.set_human_takeover(enabled)
+    if not ok:
+        raise HTTPException(status_code=409, detail="could not flip takeover (no bridge?)")
+    return {
+        "status": "ok",
+        "call_id": call_id,
+        "human_takeover": orchestrator.human_takeover,
+    }
+
+
 @router.post("/calls/clear-active")
 async def clear_active_call_marker():
     """Hang up the live Twilio call (if any), then clear the in-memory marker.

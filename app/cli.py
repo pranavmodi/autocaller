@@ -952,6 +952,20 @@ def calls_judge(
     console.print_json(data=r)
 
 
+@calls_app.command("takeover")
+def calls_takeover(
+    call_id: str = typer.Argument(..., help="ID of the live call to take over / release"),
+    off: bool = typer.Option(False, "--off", help="Release — hand the call back to the AI"),
+):
+    """Flip human-takeover on a live call. Mutes AI, accepts operator mic via the UI.
+
+    Only useful mid-call: pair with the UI's Listen + mic button. This CLI
+    command flips the server-side flag only; the browser still owns the mic.
+    """
+    r = _post(f"/api/calls/{call_id}/takeover", {"enabled": not off})
+    console.print_json(data=r)
+
+
 @calls_app.command("export")
 def calls_export(
     output: Path = typer.Option(Path("calls_export.csv"), "--output", "-o"),
@@ -1551,6 +1565,11 @@ def carrier_set(
 def leads_sync_pifstats(
     limit: int = typer.Option(100, help="Max firms to pull"),
     dry_run: bool = typer.Option(False, "--dry-run"),
+    recently_researched: int = typer.Option(
+        0,
+        "--recently-researched",
+        help="Only pull firms researched in the last N days (0 = no filter)",
+    ),
 ):
     """Pull researched firms from PIF Stats into the autocaller leads table.
 
@@ -1566,9 +1585,10 @@ def leads_sync_pifstats(
 
     firms = []
     page = 1
+    extra = f"&recently_researched={recently_researched}" if recently_researched > 0 else ""
     while len(firms) < limit:
         resp = httpx.get(
-            f"{PIF_BASE}/?page={page}&page_size=100",
+            f"{PIF_BASE}/?page={page}&page_size=100{extra}",
             timeout=30,
         )
         data = resp.json()

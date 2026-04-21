@@ -8,6 +8,8 @@ import {
   ChevronUp,
   Headphones,
   HeadphoneOff,
+  Mic,
+  MicOff,
   PhoneOff,
   X,
 } from "lucide-react";
@@ -182,6 +184,35 @@ export function ActiveCallOverlay() {
           >
             <Headphones className="h-3.5 w-3.5" />
             {listener.connecting ? "Connecting…" : "Listen"}
+          </Button>
+        )}
+        {listener.takeover ? (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={listener.stopTakeover}
+            disabled={listener.takeoverPending}
+            className="gap-1.5 border-rose-300 bg-rose-50 text-rose-800 hover:bg-rose-100"
+            title="Release: unmute AI, close mic"
+          >
+            <MicOff className="h-3.5 w-3.5" />
+            Hand back
+          </Button>
+        ) : (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={listener.startTakeover}
+            disabled={!listener.listening || listener.takeoverPending}
+            className="gap-1.5"
+            title={
+              listener.listening
+                ? "Mute AI and speak into this call from your browser mic"
+                : "Start listening first"
+            }
+          >
+            <Mic className="h-3.5 w-3.5" />
+            {listener.takeoverPending ? "…" : "Take over"}
           </Button>
         )}
         <Button

@@ -350,20 +350,46 @@ async def listen_websocket(websocket: WebSocket, call_id: str):
     logger.info(f"Listener attached to call {call_id} (total={bridge.listener_count})")
 
     try:
-        # Keep the connection open. We don't expect client messages, but
-        # receive() lets us detect disconnects promptly.
+        # Keep the connection open. We accept three kinds of client messages:
+        #   - "ping"  → reply "pong" (keepalive)
+        #   - "pong"  → ignore (reply to our own ping)
+        #   - JSON    → {"type":"inbound_audio","payload":<base64 µ-law 8kHz>}
+        #              forwarded to Twilio for human-takeover mode.
         while True:
             try:
                 msg = await asyncio.wait_for(websocket.receive_text(), timeout=30)
-                # Ignore whatever the client sends (keepalives allowed).
-                if msg == "ping":
-                    await websocket.send_text("pong")
             except asyncio.TimeoutError:
-                # Idle. Send a text ping so the socket stays warm.
                 try:
                     await websocket.send_text("ping")
                 except Exception:
                     break
+                continue
+
+            if msg == "ping":
+                await websocket.send_text("pong")
+                continue
+            if msg == "pong":
+                continue
+
+            # Try JSON (client-sent control or audio frame).
+            try:
+                parsed = json.loads(msg)
+            except Exception:
+                continue
+            if not isinstance(parsed, dict):
+                continue
+            if parsed.get("type") == "inbound_audio":
+                payload_b64 = parsed.get("payload") or ""
+                if not payload_b64:
+                    continue
+                try:
+                    mulaw = base64.b64decode(payload_b64)
+                except Exception:
+                    continue
+                # Orchestrator drops the frame if takeover isn't active —
+                # we don't re-gate here so the client can flush any in-flight
+                # worklet buffer without a race against the flag flip.
+                await orchestrator.inject_operator_audio(mulaw)
     except WebSocketDisconnect:
         pass
     except Exception as e:

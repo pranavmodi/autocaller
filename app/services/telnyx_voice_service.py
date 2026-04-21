@@ -115,6 +115,12 @@ class TelnyxMediaBridge:
         voice_service.on_audio = self._forward_audio_to_carrier
         self._media_codec: Optional[str] = None  # set from start event
 
+        # AI audio is paced to listeners at real-time (8000 bps µ-law)
+        # even when the voice backend bursts it faster. See the comment
+        # on `_broadcast_audio` and `_ai_pacer_loop` for why.
+        self._ai_pacer_queue: asyncio.Queue[bytes] = asyncio.Queue()
+        self._ai_pacer_task: Optional[asyncio.Task] = None
+
     # ------------------------------------------------------------------
     # Listener fan-out (identical to Twilio bridge)
     # ------------------------------------------------------------------
@@ -129,7 +135,29 @@ class TelnyxMediaBridge:
     def listener_count(self) -> int:
         return len(self._listeners)
 
-    async def _broadcast_audio(self, mulaw: bytes):
+    async def _broadcast_audio(self, mulaw: bytes, source: str = "unknown"):
+        """Fan out µ-law → PCM16 to listeners. `source` is "ai" or "caller".
+
+        Caller audio is sent directly (arrives at steady real-time from
+        the carrier). AI audio is enqueued to a pacer task that emits
+        20ms frames at 8000 bps — mirroring the carrier-side pacing the
+        prospect already hears. Without this the listener sees
+        OpenAI/Gemini's bursty output (confirmed up to 3.7× real-time),
+        which either mangles playback via a drop-cap or desyncs against
+        the caller stream when buffered. Real-time pacing keeps the two
+        sides in sync for the operator.
+        """
+        if source == "ai":
+            await self._ai_pacer_queue.put(mulaw)
+            # Make sure the pacer is running. It's started lazily from
+            # `handle_carrier_ws` but also from here so a standalone
+            # bridge (not yet connected to Telnyx) still drains.
+            if self._ai_pacer_task is None or self._ai_pacer_task.done():
+                self._ai_pacer_task = asyncio.create_task(self._ai_pacer_loop())
+            return
+        await self._send_to_listeners(mulaw, source)
+
+    async def _send_to_listeners(self, mulaw: bytes, source: str):
         if not self._listeners:
             return
         try:
@@ -138,14 +166,76 @@ class TelnyxMediaBridge:
         except Exception as e:
             logger.debug("audioop.ulaw2lin failed: %s", e)
             return
+        # 2-byte header for PCM16 alignment: [tag, 0xAC magic]. The magic
+        # byte lets a stale client drop misframed data instead of playing
+        # garbage. Tag: 0x01=caller, 0x02=ai.
+        tag = b"\x02" if source == "ai" else b"\x01"
+        frame = tag + b"\xac" + pcm16
         dead: list[WebSocket] = []
         for ws in list(self._listeners):
             try:
-                await ws.send_bytes(pcm16)
+                await ws.send_bytes(frame)
             except Exception:
                 dead.append(ws)
         for ws in dead:
             self._listeners.discard(ws)
+
+    async def _ai_pacer_loop(self):
+        """Drain the AI audio queue at real-time (8000 bps µ-law).
+
+        Emits one 20ms frame (160 bytes) per tick to listeners. This is
+        the same pacing the carrier (Telnyx/Twilio) applies before
+        playing AI audio to the prospect, so the listener hears what the
+        prospect hears, in sync with the caller-side stream. When the
+        queue is empty the loop just sleeps — cheap, keeps the pacer
+        ready for the next AI utterance.
+
+        If the queue ever accumulates > MAX_BACKLOG_BYTES of unsent
+        audio (pathological case: listener stalled or AI produced
+        catastrophic excess), drop the oldest backlog to bound memory
+        and resync. Normal bursts (1-3 seconds) are fine.
+        """
+        import time
+        FRAME_BYTES = 160
+        FRAME_DT = 0.02
+        MAX_BACKLOG_BYTES = 8000 * 10  # 10 seconds of audio
+        buf = bytearray()
+        t_next = time.monotonic()
+        try:
+            while True:
+                # Non-blocking drain of any chunks that arrived.
+                while True:
+                    try:
+                        chunk = self._ai_pacer_queue.get_nowait()
+                        buf.extend(chunk)
+                    except asyncio.QueueEmpty:
+                        break
+                if len(buf) > MAX_BACKLOG_BYTES:
+                    drop = len(buf) - MAX_BACKLOG_BYTES
+                    del buf[:drop]
+                    logger.warning(
+                        "[TelnyxMedia] AI pacer backlog dropped %d bytes (listener stall?)",
+                        drop,
+                    )
+                if len(buf) >= FRAME_BYTES:
+                    frame = bytes(buf[:FRAME_BYTES])
+                    del buf[:FRAME_BYTES]
+                    await self._send_to_listeners(frame, source="ai")
+                # Keep the loop on a 20ms cadence — using monotonic
+                # target-time so sleep drift doesn't accumulate.
+                t_next += FRAME_DT
+                sleep_dt = t_next - time.monotonic()
+                if sleep_dt < -0.2:
+                    # Fell way behind (GC pause / heavy load). Resync.
+                    t_next = time.monotonic()
+                elif sleep_dt > 0:
+                    await asyncio.sleep(sleep_dt)
+                else:
+                    await asyncio.sleep(0)
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            logger.exception("AI pacer loop crashed: %s", e)
 
     # ------------------------------------------------------------------
     # Audio paths
@@ -165,7 +255,7 @@ class TelnyxMediaBridge:
             except Exception as e:
                 print(f"[TelnyxMedia] OUTBOUND SEND ERROR: {e}")
 
-        await self._broadcast_audio(audio_data)
+        await self._broadcast_audio(audio_data, source="ai")
 
         if self._original_on_audio:
             await self._original_on_audio(audio_data)
@@ -179,6 +269,22 @@ class TelnyxMediaBridge:
         self._ai_audio_muted = False
         if self._verbose:
             logger.info("[TelnyxMedia] AI audio UNMUTED")
+
+    async def inject_inbound_audio(self, mulaw: bytes) -> None:
+        """Inject operator audio (µ-law 8kHz mono) into the Telnyx media
+        stream during human-takeover. Mirrors the Twilio bridge.
+        """
+        if not self._ws or not self._stream_sid or not mulaw:
+            return
+        payload = base64.b64encode(mulaw).decode("utf-8")
+        msg = {
+            "event": "media",
+            "media": {"payload": payload},
+        }
+        try:
+            await self._ws.send_json(msg)
+        except Exception as e:
+            logger.error(f"inject_inbound_audio (telnyx) failed: {e}")
 
     async def send_dtmf(self, digit: str) -> None:
         d = (digit or "").strip()[:1]
@@ -252,7 +358,7 @@ class TelnyxMediaBridge:
                             if self.voice_service.is_connected:
                                 await self.voice_service.send_audio(audio_bytes)
                             # Broadcast caller-side to listeners
-                            await self._broadcast_audio(audio_bytes)
+                            await self._broadcast_audio(audio_bytes, source="caller")
                         # Outbound track = our own AI audio echoed back;
                         # ignore it to avoid feedback loops.
 
@@ -273,6 +379,9 @@ class TelnyxMediaBridge:
         finally:
             self._ws = None
             self._connected.clear()
+            if self._ai_pacer_task is not None and not self._ai_pacer_task.done():
+                self._ai_pacer_task.cancel()
+            self._ai_pacer_task = None
             for ws in list(self._listeners):
                 try:
                     await ws.close(code=1000, reason="call ended")

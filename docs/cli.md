@@ -122,6 +122,7 @@ Every command accepts `--help`. Exit code is `0` on success, `1` on any error
 | `carrier status` | Show both telephony carriers (Twilio + Telnyx): masked SID/key, account name + type, reachability, from-number status, live balance. Marks whichever is the current default. Also visible on the `/system` page with a switch button. |
 | `carrier twilio \| telnyx \| set <name>` | Change the default telephony carrier. Persisted in `system_settings.default_carrier`. Affects all new calls unless overridden per-call. |
 | `call <lead> --carrier=twilio\|telnyx` | Per-call carrier override (highest precedence). |
+| `calls takeover <call_id> [--off]` | Flip human-takeover on a live call: mutes AI audio to Twilio, cancels the in-flight response, and lets the UI pipe the operator's browser mic into the call via `/ws/listen/{call_id}`. Pass `--off` to hand back to the AI. Also available as a button on the `ActiveCallOverlay` in any frontend page. Audio path: browser mic → AudioWorklet (`/operator-mic-worklet.js`, 48kHz→8kHz µ-law, 20ms frames) → listener WS as `{type:"inbound_audio",payload:<base64>}` → `TwilioMediaBridge.inject_inbound_audio` → Twilio `media` event. |
 | `env` setup for carriers | **Twilio:** `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER`, optional `TWILIO_ACCOUNT_LABEL`. **Telnyx:** `TELNYX_API_KEY` (V2 bearer), `TELNYX_FROM_NUMBER`, optional `TELNYX_ACCOUNT_SID` (defaults to `"default"`), optional `TELNYX_ACCOUNT_LABEL`. Both carriers share the `ALLOW_TWILIO_CALLS=true` safety gate. |
 
 ---
@@ -454,6 +455,23 @@ bin/autocaller dispatcher status    # state + recent_decisions tell you why it's
 tmux capture-pane -t autocaller -p | tail -100   # daemon logs
 ```
 
+### Recipe: "take over a live call"
+The AI has warmed up a gatekeeper or DM and you want to close the demo yourself.
+Works from any frontend page via the `ActiveCallOverlay`:
+```text
+1. Click Listen (start streaming call audio to browser)
+2. Put on headphones (avoids echo — mic will feed the call)
+3. Click "Take over" — AI is muted server-side, your browser mic pipes in
+4. Speak. Click "Hand back" when done; AI resumes on prospect's next turn.
+```
+Or from the CLI for scripting:
+```bash
+bin/autocaller calls takeover <call_id>         # server-side flag only
+bin/autocaller calls takeover <call_id> --off   # release back to AI
+```
+CLI alone doesn't capture your voice — the UI owns the mic. The CLI is for
+scripted mute (e.g., pause AI while an internal tool hands DTMF via Twilio REST).
+
 ### Recipe: "stop all calling now"
 ```bash
 bin/autocaller dispatcher stop       # pauses dispatching; in-flight call finishes
@@ -481,6 +499,7 @@ Relevant endpoints:
 | GET  | `/api/calls?limit=25&offset=0` | |
 | GET  | `/api/calls/{call_id}` | |
 | GET  | `/api/calls/active` | |
+| POST | `/api/calls/{call_id}/takeover` | body `{"enabled": bool}` — mute AI / resume |
 | GET  | `/api/statistics/today` | |
 | POST | `/api/settings/allow-live-calls` | body `{"allowed": true}` |
 | POST | `/api/settings/allowed-phones` | body `{"allowed_phones": ["+1..."]}` |

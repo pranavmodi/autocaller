@@ -73,6 +73,14 @@ class TwilioMediaBridge:
         self._original_on_audio = voice_service.on_audio
         voice_service.on_audio = self._forward_audio_to_twilio
 
+        # AI audio is paced to listeners at real-time (8000 bps µ-law),
+        # mirroring what Twilio does for the prospect. Raw OpenAI/Gemini
+        # output can burst 2-4× real-time — without pacing, listeners
+        # either hear mangled audio (drop-cap) or desync against the
+        # caller stream.
+        self._ai_pacer_queue: asyncio.Queue[bytes] = asyncio.Queue()
+        self._ai_pacer_task: Optional[asyncio.Task] = None
+
     # ------------------------------------------------------------------
     # Listener fan-out
     # ------------------------------------------------------------------
@@ -87,25 +95,76 @@ class TwilioMediaBridge:
     def listener_count(self) -> int:
         return len(self._listeners)
 
-    async def _broadcast_audio(self, mulaw: bytes):
-        """Decode mulaw → PCM16 and send to every listener. Safe if none."""
+    async def _broadcast_audio(self, mulaw: bytes, source: str = "unknown"):
+        """Fan out µ-law audio to listeners.
+
+        Caller audio sends directly (already real-time). AI audio gets
+        enqueued to the pacer so listener playback mirrors the carrier-
+        paced audio the prospect hears. See telnyx_voice_service for the
+        full rationale.
+        """
+        if source == "ai":
+            await self._ai_pacer_queue.put(mulaw)
+            if self._ai_pacer_task is None or self._ai_pacer_task.done():
+                self._ai_pacer_task = asyncio.create_task(self._ai_pacer_loop())
+            return
+        await self._send_to_listeners(mulaw, source)
+
+    async def _send_to_listeners(self, mulaw: bytes, source: str):
         if not self._listeners:
             return
         try:
             import audioop
-            pcm16 = audioop.ulaw2lin(mulaw, 2)  # width=2 → int16
+            pcm16 = audioop.ulaw2lin(mulaw, 2)
         except Exception as e:
             logger.debug("audioop.ulaw2lin failed: %s", e)
             return
-
+        # 2-byte header for PCM16 alignment: [tag, 0xAC magic].
+        tag = b"\x02" if source == "ai" else b"\x01"
+        frame = tag + b"\xac" + pcm16
         dead: list[WebSocket] = []
         for ws in list(self._listeners):
             try:
-                await ws.send_bytes(pcm16)
+                await ws.send_bytes(frame)
             except Exception:
                 dead.append(ws)
         for ws in dead:
             self._listeners.discard(ws)
+
+    async def _ai_pacer_loop(self):
+        """Drain AI queue at real-time. See telnyx bridge for details."""
+        import time
+        FRAME_BYTES = 160
+        FRAME_DT = 0.02
+        MAX_BACKLOG_BYTES = 8000 * 10
+        buf = bytearray()
+        t_next = time.monotonic()
+        try:
+            while True:
+                while True:
+                    try:
+                        chunk = self._ai_pacer_queue.get_nowait()
+                        buf.extend(chunk)
+                    except asyncio.QueueEmpty:
+                        break
+                if len(buf) > MAX_BACKLOG_BYTES:
+                    del buf[: len(buf) - MAX_BACKLOG_BYTES]
+                if len(buf) >= FRAME_BYTES:
+                    frame = bytes(buf[:FRAME_BYTES])
+                    del buf[:FRAME_BYTES]
+                    await self._send_to_listeners(frame, source="ai")
+                t_next += FRAME_DT
+                sleep_dt = t_next - time.monotonic()
+                if sleep_dt < -0.2:
+                    t_next = time.monotonic()
+                elif sleep_dt > 0:
+                    await asyncio.sleep(sleep_dt)
+                else:
+                    await asyncio.sleep(0)
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            logger.exception("AI pacer loop crashed: %s", e)
 
     # ------------------------------------------------------------------
     # Audio paths
@@ -133,7 +192,7 @@ class TwilioMediaBridge:
         # Fan out to listeners (AI-side audio) regardless of mute, so the
         # operator can hear what the model WOULD say in the browser even when
         # we've silenced the phone line.
-        await self._broadcast_audio(audio_data)
+        await self._broadcast_audio(audio_data, source="ai")
 
         if self._original_on_audio:
             await self._original_on_audio(audio_data)
@@ -153,6 +212,30 @@ class TwilioMediaBridge:
         self._ai_audio_muted = False
         if self._verbose:
             logger.info("[TwilioMedia] AI audio UNMUTED")
+
+    async def inject_inbound_audio(self, mulaw: bytes) -> None:
+        """Inject operator audio (µ-law 8kHz mono) into the Twilio media stream.
+
+        Used during human-takeover: the operator's browser captures mic audio,
+        downsamples to 8kHz, µ-law encodes, and ships frames here. We forward
+        them to Twilio as `media` events so the prospect hears the operator.
+
+        No-op if the stream isn't live. Caller is responsible for muting the
+        AI side (via `mute_ai_audio`) before sending — we don't gate here so
+        the same pipe can be used for other inject-audio cases later.
+        """
+        if not self._twilio_ws or not self._stream_sid or not mulaw:
+            return
+        payload = base64.b64encode(mulaw).decode("utf-8")
+        msg = {
+            "event": "media",
+            "streamSid": self._stream_sid,
+            "media": {"payload": payload},
+        }
+        try:
+            await self._twilio_ws.send_json(msg)
+        except Exception as e:
+            logger.error(f"inject_inbound_audio failed: {e}")
 
     async def send_dtmf(self, digit: str) -> None:
         """Send a single DTMF tone to the phone tree over the Twilio media
@@ -208,7 +291,7 @@ class TwilioMediaBridge:
                     if self.voice_service.is_connected:
                         await self.voice_service.send_audio(audio_bytes)
                     # Fan out to listeners (caller-side audio)
-                    await self._broadcast_audio(audio_bytes)
+                    await self._broadcast_audio(audio_bytes, source="caller")
 
                 elif event == "stop":
                     reason = msg.get("stop", {}).get("reason", "unknown")
@@ -223,6 +306,9 @@ class TwilioMediaBridge:
         finally:
             self._twilio_ws = None
             self._connected.clear()
+            if self._ai_pacer_task is not None and not self._ai_pacer_task.done():
+                self._ai_pacer_task.cancel()
+            self._ai_pacer_task = None
             # Close any remaining listener sockets
             for ws in list(self._listeners):
                 try:
