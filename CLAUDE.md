@@ -40,3 +40,7 @@ A reasonable heuristic: if someone three months from now had only the CLI and `d
 - **Judge every completed call.** `app/services/judge.py` runs a background loop; new outcome types need to be added to its rubric.
 - **Record the rendered prompt on every call log** (`prompt_text` + `prompt_version` + `tools_snapshot`). Post-hoc debugging depends on this.
 - **Commit discipline**: descriptive commit message, Co-Authored-By Claude on every commit.
+- **Never restart the daemon while a call is in progress.** Killing `app.cli serve` mid-call drops the OpenAI/Gemini WS, drops the Twilio/Telnyx media stream, and leaves the carrier holding an orphan leg that only times out later. Before any `pkill`/`kill -f app.cli` or daemon swap, check:
+  1. `curl -s http://127.0.0.1:8099/api/calls/active` — if `active: true`, **wait**.
+  2. `sudo -u postgres psql -d autocaller -c "SELECT call_id, firm_name, started_at FROM call_logs WHERE ended_at IS NULL AND started_at > now() - interval '10 minutes';"` — active marker may be stale; recent `ended_at=NULL` rows are authoritative.
+  If an operator is listening via `/ws/listen/{call_id}`, the restart also cuts their audio. New code can wait — queue the restart for after the call completes.

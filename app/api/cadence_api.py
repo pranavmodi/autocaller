@@ -1,4 +1,5 @@
 """Cadence tracking API — manage multi-day outreach sequences."""
+import re
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -6,7 +7,7 @@ from fastapi import APIRouter, HTTPException
 from sqlalchemy import select, func, desc
 
 from app.db import AsyncSessionLocal
-from app.db.models import CadenceEntryRow
+from app.db.models import CadenceEntryRow, CallLogRow
 
 router = APIRouter(prefix="/api/cadence", tags=["cadence"])
 
@@ -148,21 +149,26 @@ async def cadence_call(entry_id: str, body: dict):
     """
     from app.db.models import PatientRow
     from app.services.call_orchestrator import get_orchestrator
+    from app.services.phone_normalize import normalize_phone
 
     name = body.get("name", "").strip()
-    phone = body.get("phone", "").strip()
+    phone_raw = body.get("phone", "").strip()
     title = body.get("title", "")
     email = body.get("email")
 
-    if not name or not phone:
+    if not name or not phone_raw:
         raise HTTPException(400, "name and phone are required")
 
-    # Normalize phone
-    digits = "".join(c for c in phone if c.isdigit())
-    if len(digits) == 10:
-        phone = f"+1{digits}"
-    elif len(digits) == 11 and digits.startswith("1"):
-        phone = f"+{digits}"
+    # Cadence research rows often carry multi-value phone strings like
+    # "Primary: 818-784-8544; Additional: 424-283-5822, Fax: ...". The
+    # old inline normalizer stripped non-digits across the whole string
+    # and rejected because the concatenated 30-digit result didn't match
+    # 10/11 — silently dropping the lead. normalize_phone splits on the
+    # first separator first, so the primary number wins.
+    phone = normalize_phone(phone_raw)
+    if not phone:
+        raise HTTPException(400, f"phone not parseable to E.164: {phone_raw!r}")
+    digits = re.sub(r"\D", "", phone)
 
     async with AsyncSessionLocal() as session:
         # Get cadence entry
