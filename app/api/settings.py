@@ -106,12 +106,27 @@ class SystemSettingsResponse(BaseModel):
     is_within_business_hours: bool
     voice_provider: str = "openai"
     voice_model: str = ""
+    voice_config: dict = {}
     ivr_navigate_enabled: bool = False
 
 
 class VoiceProviderRequest(BaseModel):
     provider: str  # "openai" | "gemini"
     model: str = ""
+
+
+class VoiceConfigRequest(BaseModel):
+    """Merge-patch for per-provider voice knobs.
+
+    `provider` is "openai" or "gemini". Any of the patch fields that
+    aren't set are left as-is on the stored config. Keys unsupported by
+    the selected provider (e.g. `affective_dialog` on OpenAI) return 400.
+    """
+    provider: str
+    voice: str | None = None
+    temperature: float | None = None
+    affective_dialog: bool | None = None
+    proactive_audio: bool | None = None
 
 
 class IVRNavigateRequest(BaseModel):
@@ -205,6 +220,7 @@ async def settings_to_response(provider) -> SystemSettingsResponse:
         is_within_business_hours=await provider.is_within_business_hours(),
         voice_provider=getattr(settings, "voice_provider", "openai") or "openai",
         voice_model=getattr(settings, "voice_model", "") or "",
+        voice_config=dict(getattr(settings, "voice_config", None) or {}),
         ivr_navigate_enabled=bool(getattr(settings, "ivr_navigate_enabled", False)),
     )
 
@@ -615,6 +631,41 @@ async def set_voice_provider(request: VoiceProviderRequest):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     print(f"[SETTINGS] voice_provider → {request.provider} model={request.model or '<default>'}")
+    return await settings_response_and_broadcast(provider)
+
+
+@router.put("/voice-config", response_model=SystemSettingsResponse)
+async def set_voice_config(request: VoiceConfigRequest):
+    """Merge-update per-provider voice knobs.
+
+    Body (example for Gemini):
+        {"provider":"gemini", "voice":"Aoede", "temperature":1.0,
+         "affective_dialog":true, "proactive_audio":false}
+
+    Only the fields you pass get changed. Omit a field to leave it as-is.
+    `affective_dialog` and `proactive_audio` are Gemini-only.
+
+    Which provider is actually USED per call is determined by
+    `PUT /api/settings/voice` + any per-call override; this endpoint
+    configures the knobs for each provider independently.
+    """
+    from fastapi import HTTPException
+    patch = {}
+    if request.voice is not None:
+        patch["voice"] = request.voice
+    if request.temperature is not None:
+        patch["temperature"] = request.temperature
+    if request.affective_dialog is not None:
+        patch["affective_dialog"] = request.affective_dialog
+    if request.proactive_audio is not None:
+        patch["proactive_audio"] = request.proactive_audio
+
+    provider = get_settings_provider()
+    try:
+        await provider.update_voice_config(request.provider, patch)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    print(f"[SETTINGS] voice_config[{request.provider}] ← {patch}")
     return await settings_response_and_broadcast(provider)
 
 

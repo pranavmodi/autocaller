@@ -142,6 +142,8 @@ def _row_to_settings(row: SystemSettingsRow) -> SystemSettings:
     )
     settings.voice_provider = str(getattr(row, "voice_provider", None) or "openai")
     settings.voice_model = str(getattr(row, "voice_model", None) or "")
+    vc = getattr(row, "voice_config", None)
+    settings.voice_config = dict(vc) if isinstance(vc, dict) else {}
     settings.default_carrier = str(getattr(row, "default_carrier", None) or "twilio")
     settings.ivr_navigate_enabled = bool(getattr(row, "ivr_navigate_enabled", False))
     return settings
@@ -494,6 +496,81 @@ class SettingsProvider:
                 session.add(row)
             row.voice_provider = provider
             row.voice_model = model or ""
+            await session.commit()
+            return _row_to_settings(row)
+
+    # Allowlist of per-provider voice names to keep typos from silently
+    # blowing up a call. If the backend ever adds a new voice, extend here.
+    _OPENAI_VOICES = {
+        "alloy", "ash", "ballad", "coral", "echo", "sage", "shimmer", "verse",
+    }
+    _GEMINI_VOICES = {
+        "Aoede", "Puck", "Charon", "Kore", "Fenrir", "Leda", "Orus", "Zephyr",
+    }
+
+    async def update_voice_config(self, provider: str, patch: dict) -> SystemSettings:
+        """Merge `patch` into the per-provider voice_config dict.
+
+        `provider` is "openai" or "gemini". `patch` is a dict of keys to
+        set — missing keys are left untouched. Supported keys:
+
+        - `voice` (str) — prebuilt voice name. Validated against the
+          provider's allowlist.
+        - `temperature` (float, 0.0-2.0) — sampling temperature.
+        - `affective_dialog` (bool) — Gemini only. Model adjusts prosody
+          to match the caller's emotional tone.
+        - `proactive_audio` (bool) — Gemini only. Model emits non-verbal
+          cues (short affirmations, etc.) at natural moments.
+
+        Keys that aren't supported by the selected provider are rejected
+        with ValueError so the caller knows a typo ended up in the DB.
+        """
+        if provider not in ("openai", "gemini"):
+            raise ValueError(f"unsupported voice provider: {provider!r}")
+
+        clean: dict = {}
+        if "voice" in patch:
+            v = str(patch["voice"] or "").strip()
+            if provider == "openai" and v and v not in self._OPENAI_VOICES:
+                raise ValueError(
+                    f"unknown OpenAI voice {v!r}; expected one of "
+                    f"{sorted(self._OPENAI_VOICES)}"
+                )
+            if provider == "gemini" and v and v not in self._GEMINI_VOICES:
+                raise ValueError(
+                    f"unknown Gemini voice {v!r}; expected one of "
+                    f"{sorted(self._GEMINI_VOICES)}"
+                )
+            clean["voice"] = v
+        if "temperature" in patch:
+            try:
+                t = float(patch["temperature"])
+            except (TypeError, ValueError):
+                raise ValueError("temperature must be a number")
+            if not 0.0 <= t <= 2.0:
+                raise ValueError("temperature must be between 0.0 and 2.0")
+            clean["temperature"] = t
+        if "affective_dialog" in patch:
+            if provider != "gemini":
+                raise ValueError("affective_dialog is Gemini-only")
+            clean["affective_dialog"] = bool(patch["affective_dialog"])
+        if "proactive_audio" in patch:
+            if provider != "gemini":
+                raise ValueError("proactive_audio is Gemini-only")
+            clean["proactive_audio"] = bool(patch["proactive_audio"])
+
+        async with AsyncSessionLocal() as session:
+            result = await session.execute(select(SystemSettingsRow).where(SystemSettingsRow.id == 1))
+            row = result.scalar_one_or_none()
+            if row is None:
+                row = SystemSettingsRow(id=1, business_hours={}, queue_thresholds={})
+                session.add(row)
+            current = dict(row.voice_config or {})
+            per_provider = dict(current.get(provider) or {})
+            per_provider.update(clean)
+            current[provider] = per_provider
+            # JSONB dirty-tracking — new dict object.
+            row.voice_config = current
             await session.commit()
             return _row_to_settings(row)
 

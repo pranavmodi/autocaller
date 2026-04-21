@@ -135,26 +135,45 @@ class OpenAIRealtimeBackend:
 
     async def _configure_session(self):
         assert self._custom_prompt is not None and self._custom_tools is not None
-        config = {
-            "type": "session.update",
-            "session": {
-                "modalities": ["text", "audio"],
-                "instructions": self._custom_prompt,
-                "voice": self._voice_name or os.getenv("OPENAI_VOICE", "alloy"),
-                "input_audio_format": self._audio_format,
-                "output_audio_format": self._audio_format,
-                "input_audio_transcription": {
-                    "model": "gpt-4o-transcribe",
-                },
-                "turn_detection": {
-                    "type": "server_vad",
-                    "threshold": float(os.getenv("OPENAI_VAD_THRESHOLD", "0.85")),
-                    "prefix_padding_ms": int(os.getenv("OPENAI_VAD_PREFIX_MS", "300")),
-                    "silence_duration_ms": int(os.getenv("OPENAI_VAD_SILENCE_MS", "700")),
-                },
-                "tools": self._custom_tools,
+        # Pull per-provider voice config from system_settings. Fall back
+        # to env vars / defaults when keys are missing. Imported lazily
+        # to keep the voice backend free of circular-import risk at
+        # module load (settings provider pulls in the ORM).
+        voice_name = self._voice_name or os.getenv("OPENAI_VOICE", "alloy")
+        temperature: Optional[float] = None
+        try:
+            from app.providers import get_settings_provider
+            s = await get_settings_provider().get_settings()
+            cfg = (s.voice_config or {}).get("openai") or {}
+            if cfg.get("voice"):
+                voice_name = str(cfg["voice"])
+            if cfg.get("temperature") is not None:
+                temperature = float(cfg["temperature"])
+        except Exception as e:
+            # Settings unavailable (e.g. DB not ready during startup test
+            # harness) — env defaults still apply, just log.
+            print(f"[OpenAIRealtime] voice_config lookup failed: {e}")
+
+        session: dict = {
+            "modalities": ["text", "audio"],
+            "instructions": self._custom_prompt,
+            "voice": voice_name,
+            "input_audio_format": self._audio_format,
+            "output_audio_format": self._audio_format,
+            "input_audio_transcription": {
+                "model": "gpt-4o-transcribe",
             },
+            "turn_detection": {
+                "type": "server_vad",
+                "threshold": float(os.getenv("OPENAI_VAD_THRESHOLD", "0.85")),
+                "prefix_padding_ms": int(os.getenv("OPENAI_VAD_PREFIX_MS", "300")),
+                "silence_duration_ms": int(os.getenv("OPENAI_VAD_SILENCE_MS", "700")),
+            },
+            "tools": self._custom_tools,
         }
+        if temperature is not None:
+            session["temperature"] = temperature
+        config = {"type": "session.update", "session": session}
         await self._send(config)
 
     # ------------------------------------------------------------------ listen

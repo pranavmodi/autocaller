@@ -132,31 +132,64 @@ class GeminiLiveBackend:
         # JSON uses camelCase over the wire for Gemini Live.
         # https://ai.google.dev/api/live
         gemini_tools = _canonical_tools_to_gemini_camel(tools)
-        setup = {
-            "setup": {
-                "model": f"models/{self.model}",
-                "generationConfig": {
-                    "responseModalities": ["AUDIO"],
-                    "speechConfig": {
-                        "voiceConfig": {
-                            "prebuiltVoiceConfig": {
-                                "voiceName": self._voice_name or DEFAULT_VOICE,
-                            }
-                        }
-                    },
-                },
-                # systemInstruction accepts a Content struct with parts.
-                "systemInstruction": {
-                    "parts": [{"text": system_prompt}],
-                },
-                # Transcription for both sides so we can populate the
-                # transcript stream / CallLog.transcript just like OpenAI.
-                "inputAudioTranscription": {},
-                "outputAudioTranscription": {},
-            }
+
+        # Pull per-provider voice config from system_settings. Missing
+        # keys fall back to env-var / hardcoded defaults. Lazy import
+        # to avoid ORM pulling in at module load.
+        voice_name = self._voice_name or DEFAULT_VOICE
+        temperature: Optional[float] = None
+        affective = False
+        proactive = False
+        try:
+            from app.providers import get_settings_provider
+            s = await get_settings_provider().get_settings()
+            cfg = (s.voice_config or {}).get("gemini") or {}
+            if cfg.get("voice"):
+                voice_name = str(cfg["voice"])
+            if cfg.get("temperature") is not None:
+                temperature = float(cfg["temperature"])
+            affective = bool(cfg.get("affective_dialog", False))
+            proactive = bool(cfg.get("proactive_audio", False))
+        except Exception as e:
+            print(f"[GeminiLive] voice_config lookup failed: {e}")
+
+        generation_config: dict = {
+            "responseModalities": ["AUDIO"],
+            "speechConfig": {
+                "voiceConfig": {
+                    "prebuiltVoiceConfig": {"voiceName": voice_name}
+                }
+            },
         }
+        if temperature is not None:
+            generation_config["temperature"] = temperature
+
+        setup_body: dict = {
+            "model": f"models/{self.model}",
+            "generationConfig": generation_config,
+            "systemInstruction": {"parts": [{"text": system_prompt}]},
+            # Transcription for both sides so we can populate the
+            # transcript stream / CallLog.transcript just like OpenAI.
+            "inputAudioTranscription": {},
+            "outputAudioTranscription": {},
+        }
+        # enableAffectiveDialog: prosody matches the caller's emotional
+        # tone. proactivity.proactiveAudio: model emits occasional
+        # non-verbal cues (short "mm-hmm"s, etc.). Both are Gemini-only
+        # and additive — off by default.
+        if affective:
+            setup_body["enableAffectiveDialog"] = True
+        if proactive:
+            setup_body["proactivity"] = {"proactiveAudio": True}
+        setup = {"setup": setup_body}
         if gemini_tools:
-            setup["setup"]["tools"] = gemini_tools
+            setup_body["tools"] = gemini_tools
+
+        if self._verbose:
+            print(
+                f"[GeminiLive] setup: voice={voice_name} "
+                f"temp={temperature} affective={affective} proactive={proactive}"
+            )
         await self._send(setup)
 
     # ------------------------------------------------------------------ listen

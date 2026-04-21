@@ -1444,6 +1444,98 @@ def voice_set(
     console.print(f"[green]✓[/green] {_voice_status_line(s)}")
 
 
+@voice_app.command("config")
+def voice_config(
+    provider: str = typer.Argument(
+        "",
+        help="'openai' or 'gemini'. Omit to see the full config for both.",
+    ),
+):
+    """Show the per-provider voice config (name, temperature, flags)."""
+    p = (provider or "").strip().lower()
+    s = _get("/api/settings")
+    cfg = s.get("voice_config") or {}
+    if not p:
+        console.print_json(data=cfg)
+        return
+    if p not in ("openai", "gemini"):
+        console.print(f"[red]provider must be 'openai' or 'gemini' (got {provider!r})[/red]")
+        raise typer.Exit(code=2)
+    console.print_json(data=cfg.get(p, {}))
+
+
+@voice_app.command("set-voice")
+def voice_set_voice(
+    provider: str = typer.Argument(..., help="'openai' or 'gemini'"),
+    voice: str = typer.Argument(..., help="Prebuilt voice name"),
+):
+    """Set the prebuilt voice name for a provider.
+
+    OpenAI: alloy, ash, ballad, coral, echo, sage, shimmer, verse.
+    Gemini: Aoede, Puck, Charon, Kore, Fenrir, Leda, Orus, Zephyr.
+    """
+    p = provider.strip().lower()
+    s = _put("/api/settings/voice-config", {"provider": p, "voice": voice})
+    console.print(f"[green]✓[/green] voice_config[{p}].voice = {voice}")
+    console.print_json(data=(s.get("voice_config") or {}).get(p, {}))
+
+
+@voice_app.command("temperature")
+def voice_temperature(
+    provider: str = typer.Argument(..., help="'openai' or 'gemini'"),
+    value: float = typer.Argument(..., help="0.0 to 2.0"),
+):
+    """Set sampling temperature for a provider."""
+    p = provider.strip().lower()
+    s = _put("/api/settings/voice-config", {"provider": p, "temperature": value})
+    console.print(f"[green]✓[/green] voice_config[{p}].temperature = {value}")
+    console.print_json(data=(s.get("voice_config") or {}).get(p, {}))
+
+
+@voice_app.command("affective")
+def voice_affective(
+    state: str = typer.Argument(..., help="'on' or 'off' — Gemini only"),
+):
+    """Toggle Gemini's affective-dialog flag (emotion-matched prosody)."""
+    st = state.strip().lower()
+    if st not in ("on", "off"):
+        console.print("[red]state must be 'on' or 'off'[/red]")
+        raise typer.Exit(code=2)
+    s = _put("/api/settings/voice-config", {
+        "provider": "gemini", "affective_dialog": st == "on",
+    })
+    console.print(f"[green]✓[/green] voice_config[gemini].affective_dialog = {st == 'on'}")
+    console.print_json(data=(s.get("voice_config") or {}).get("gemini", {}))
+
+
+@voice_app.command("proactive")
+def voice_proactive(
+    state: str = typer.Argument(..., help="'on' or 'off' — Gemini only"),
+):
+    """Toggle Gemini's proactive-audio flag (model emits short non-verbal cues)."""
+    st = state.strip().lower()
+    if st not in ("on", "off"):
+        console.print("[red]state must be 'on' or 'off'[/red]")
+        raise typer.Exit(code=2)
+    s = _put("/api/settings/voice-config", {
+        "provider": "gemini", "proactive_audio": st == "on",
+    })
+    console.print(f"[green]✓[/green] voice_config[gemini].proactive_audio = {st == 'on'}")
+    console.print_json(data=(s.get("voice_config") or {}).get("gemini", {}))
+
+
+@voice_app.command("voices")
+def voice_voices():
+    """Print the supported voice names per provider (reference)."""
+    console.print("[bold]OpenAI Realtime[/bold]")
+    for v in ("alloy", "ash", "ballad", "coral", "echo", "sage", "shimmer", "verse"):
+        console.print(f"  • {v}")
+    console.print()
+    console.print("[bold]Gemini Live[/bold]")
+    for v in ("Aoede", "Puck", "Charon", "Kore", "Fenrir", "Leda", "Orus", "Zephyr"):
+        console.print(f"  • {v}")
+
+
 # ---------------------------------------------------------------------------
 # ivr (phone-tree navigation)
 # ---------------------------------------------------------------------------
