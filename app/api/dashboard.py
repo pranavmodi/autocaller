@@ -885,22 +885,48 @@ async def telnyx_sms_inbound(request: Request):
         return {"status": "ok", "forwarded": False, "reason": "no_notify_number"}
 
     forward_body = f"SMS to {to_number} from {from_number}:\n\n{body}".strip()
+    # Telnyx SMS segments at 160 chars (GSM) / 70 chars (UCS-2). Long-form is
+    # auto-concatenated by the carrier, but cap anyway to avoid runaway
+    # per-segment charges on a rogue reply.
     if len(forward_body) > 1500:
         forward_body = forward_body[:1497] + "..."
 
+    # Forward via Telnyx (same carrier as inbound side — fewer moving parts,
+    # consistent caller-ID on the operator's phone, no cross-carrier geo
+    # permissions gotchas).
+    api_key = os.getenv("TELNYX_API_KEY", "").strip()
+    frm = os.getenv("TELNYX_FROM_NUMBER", "").strip()
+    if not (api_key and frm):
+        print("[TelnyxSMS] TELNYX_API_KEY / TELNYX_FROM_NUMBER not set — cannot forward")
+        return {"status": "error", "forwarded": False, "error": "telnyx_not_configured"}
+
     try:
-        from twilio.rest import Client
-        sid = os.getenv("TWILIO_ACCOUNT_SID", "")
-        token = os.getenv("TWILIO_AUTH_TOKEN", "")
-        frm = os.getenv("TWILIO_FROM_NUMBER", "")
-        if not (sid and token and frm):
-            raise RuntimeError("Twilio not configured for forwarding")
-        client = Client(sid, token)
-        msg = await asyncio.to_thread(
-            lambda: client.messages.create(to=notify, from_=frm, body=forward_body)
-        )
-        print(f"[TelnyxSMS] forwarded to {notify} sid={msg.sid}")
-        return {"status": "ok", "forwarded": True, "twilio_sid": msg.sid}
+        import httpx
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.post(
+                "https://api.telnyx.com/v2/messages",
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "from": frm,
+                    "to": notify,
+                    "text": forward_body,
+                    "type": "SMS",
+                },
+            )
+        if resp.status_code >= 300:
+            print(f"[TelnyxSMS] forward failed HTTP {resp.status_code}: {resp.text[:300]}")
+            return {
+                "status": "error",
+                "forwarded": False,
+                "error": f"telnyx_http_{resp.status_code}",
+                "detail": resp.text[:300],
+            }
+        msg_id = (resp.json().get("data") or {}).get("id", "")
+        print(f"[TelnyxSMS] forwarded to {notify} telnyx_id={msg_id}")
+        return {"status": "ok", "forwarded": True, "telnyx_id": msg_id}
     except Exception as e:
         print(f"[TelnyxSMS] forward failed: {type(e).__name__}: {e}")
         return {"status": "error", "forwarded": False, "error": str(e)}
