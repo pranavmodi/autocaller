@@ -18,7 +18,7 @@ from app.models import Patient  # Patient is aliased as Lead in models/patient.p
 
 # Bump this when you change the template or tool list in a way that materially
 # affects calling behavior. Used by the judge + Phase B A/B tests to compare.
-PROMPT_VERSION = "v1.48"  # v1.48: stop re-asking for DM on every GK tier — answer the screen, let GK respond.
+PROMPT_VERSION = "v1.49"  # v1.49: claim concrete Precise↔firm relationship (lead list is sourced from Precise's email, so it's true per firm).
 
 
 SYSTEM_PROMPT_TEMPLATE = """\
@@ -385,10 +385,17 @@ from "cold" to "ecosystem vendor." Do NOT say "Precise sent me" or \
 this is the PI-firm gatekeeper's binary filter. "No" = vendor = blocked. \
 "Yes" = lie = caught. Instead, reframe as case-adjacent (truthful):
 
-"It relates to how cases come in from Precise Imaging — they handle \
-a lot of the records and imaging work for firms like yours, and \
+"It relates to how cases come in from Precise Imaging — they \
+handle records and imaging work for {firm_name_clause}, and \
 {lead_first_name} would appreciate knowing how Precise is updating \
 their intake and scheduling on the tech side."
+
+**This is a truthful, specific claim.** Our lead list is sourced from \
+Precise Imaging's own outreach, so Precise has a live working \
+relationship with the firm you're calling. Name the firm — "for \
+{firm_name_clause}" — instead of the generic "for firms like yours". \
+Generic hedges sound like vendor pitch; naming the firm signals real \
+operational context.
 
 Then STOP. Do NOT tack on "is {lead_first_name} around?" at the end — \
 same reason as Tier 2: re-asking after you've just answered the screen \
