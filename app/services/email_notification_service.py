@@ -48,8 +48,12 @@ def send_disconnected_number_email(call: CallLog, status: str) -> str:
     return _send_email(subject, body)
 
 
-def _send_email(subject: str, body: str) -> str:
-    recipient = os.getenv("EMAIL_NOTIFICATION_RECIPIENT", "").strip()
+def _send_email(subject: str, body: str, *, to: str | None = None) -> str:
+    """Send an email via SMTP. `to` defaults to EMAIL_NOTIFICATION_RECIPIENT
+    (the operator inbox). Pass `to` to target a specific recipient (e.g.
+    a consult-booker's confirmation email).
+    """
+    recipient = (to or os.getenv("EMAIL_NOTIFICATION_RECIPIENT", "")).strip()
     if not recipient:
         raise RuntimeError("Email recipient is not configured. Set EMAIL_NOTIFICATION_RECIPIENT.")
     smtp_host = os.getenv("SMTP_HOST", "").strip()
@@ -76,6 +80,57 @@ def _send_email(subject: str, body: str) -> str:
         server.send_message(msg)
 
     return msg.get("Message-ID", "")
+
+
+# ---------------------------------------------------------------------------
+# Consult booking confirmation
+# ---------------------------------------------------------------------------
+
+CONSULT_MEET_URL = os.getenv(
+    "CONSULT_MEET_URL", "https://meet.google.com/xoy-mwvo-thf"
+)
+
+
+def send_consult_confirmation(
+    *,
+    to_email: str,
+    name: str,
+    firm_name: str | None,
+    slot_local_str: str,
+    notes: str | None = None,
+) -> str:
+    """Send a booking confirmation to the consult booker. Includes the
+    Google Meet link and the PT-formatted slot time. Raises RuntimeError
+    if SMTP isn't configured — caller catches and logs, booking still
+    succeeds (the operator is separately pinged via Telnyx SMS).
+    """
+    firm_clause = f" at {firm_name}" if firm_name else ""
+    subject = f"Your Possible Minds consult is booked — {slot_local_str}"
+    body_lines = [
+        f"Hi {name.split()[0] if name else 'there'},",
+        "",
+        f"You're booked for a 30-minute AI-consult{firm_clause} on:",
+        "",
+        f"    {slot_local_str}",
+        "",
+        "Join via Google Meet:",
+        f"    {CONSULT_MEET_URL}",
+        "",
+        "What we'll cover: how the same AI tech that handles Precise "
+        "Imaging's email triage (~100 hrs/week saved) and outbound "
+        "calls (~20 hrs/week) could plug into your intake and records "
+        "workflow. No slides — we'll look at what fits and what doesn't.",
+        "",
+        "Need to reschedule? Just reply to this email.",
+        "",
+        "— Possible Minds",
+    ]
+    if notes:
+        body_lines.insert(
+            7,
+            f'\nYou mentioned you wanted to focus on: "{notes}"\n',
+        )
+    return _send_email(subject, "\n".join(body_lines), to=to_email)
 
 
 # ---------------------------------------------------------------------------

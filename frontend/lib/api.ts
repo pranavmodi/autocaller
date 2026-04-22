@@ -172,6 +172,24 @@ export type VoiceConfigPatch = {
 export const setVoiceConfig = (patch: VoiceConfigPatch) =>
   put<Record<string, unknown>>("/api/settings/voice-config", patch);
 
+export type ConsultBooking = {
+  id: number;
+  name: string;
+  firm_name: string | null;
+  email: string;
+  phone: string | null;
+  slot_start: string;
+  slot_end: string;
+  notes: string | null;
+  status: string;
+  source: string;
+  created_at: string;
+};
+
+export const getConsultBookings = () =>
+  get<{ bookings: ConsultBooking[] }>("/api/consults?limit=200");
+
+
 export const OPENAI_VOICES = [
   "alloy", "ash", "ballad", "coral", "echo", "sage", "shimmer", "verse",
 ] as const;

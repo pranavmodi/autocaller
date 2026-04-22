@@ -221,6 +221,36 @@ class DispatcherEventRow(Base):
     )
 
 
+class ConsultBookingRow(Base):
+    """Free 30-minute consult bookings from getpossibleminds.com/consult.
+
+    Created by the public booking endpoint (no auth — rate-limited by IP)
+    and surfaced in the autocaller admin UI at `/consults`. A Telnyx SMS
+    fires on create to NOTIFY_NUMBER so the operator is pinged in real time.
+    """
+    __tablename__ = "consult_bookings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    firm_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    email: Mapped[str] = mapped_column(String(255), nullable=False)
+    phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    slot_start: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
+    slot_end: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(String(16), default="booked")
+    source: Mapped[str] = mapped_column(String(32), default="website")
+    user_agent: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    ip_address: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow)
+
+    __table_args__ = (
+        Index("ix_consult_bookings_slot_start", "slot_start"),
+        Index("ix_consult_bookings_created_at", "created_at"),
+        Index("ix_consult_bookings_email", "email"),
+    )
+
+
 class QueueStateSnapshotRow(Base):
     __tablename__ = "queue_state_snapshots"
 

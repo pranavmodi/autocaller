@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pathlib import Path
 
-from .api import dashboard_router, websocket_router, settings_router, dispatcher_router, scenarios_router, carrier_router, cadence_router
+from .api import dashboard_router, websocket_router, settings_router, dispatcher_router, scenarios_router, carrier_router, cadence_router, consults_router
 from .api.auth import router as auth_router, SESSION_COOKIE, verify_session_token, auth_configured
 from .services.dispatcher import get_dispatcher
 from .services.daily_report_service import daily_report_loop
@@ -117,6 +117,10 @@ _AUTH_EXEMPT_PREFIXES = (
     "/health",
     "/static/",
     "/audio/",
+    # Public endpoints the marketing site posts/queries unauthenticated.
+    # Only the book/slots paths are exempt; list/admin is still gated.
+    "/api/consults/slots",
+    "/api/consults/book",
 )
 
 class _AuthMiddleware:
@@ -193,6 +197,7 @@ app.include_router(dispatcher_router)
 app.include_router(scenarios_router)
 app.include_router(carrier_router)
 app.include_router(cadence_router)
+app.include_router(consults_router)
 
 # Legacy static (kept for compatibility)
 STATIC_DIR = Path("static")

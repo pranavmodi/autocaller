@@ -127,24 +127,27 @@ class CallOrchestrator:
             if self.on_status_update:
                 await self.on_status_update(f"Twilio AMD: voicemail detected ({answered_by})")
 
-            callback_number = get_callback_number().strip()
             rep_name = os.getenv("SALES_REP_NAME", "").strip() or "Alex"
             lead_first = (self._current_patient.name or "").split(" ", 1)[0] if self._current_patient else ""
-            firm = self._current_patient.firm_name if self._current_patient and getattr(self._current_patient, "firm_name", None) else "your firm"
-            contact = f" You can reach me back at {callback_number}." if callback_number else ""
-            # Precise-anchored voicemail. Lead list is sourced from Precise's
-            # own outreach so naming Precise + the firm is truthful per lead.
-            # The "100 hours email + 20 hours voice" figure is conservative
-            # against the estimated 175h/wk ceiling on Precise's current
-            # email+call volume (see v1.52 commit for the math).
+            # v1.55 VM script. Mirror of the prompt's Case-B VM (see
+            # attorney_cold_call.py § "Case B: DM personal voicemail").
+            # Fires on Twilio/Telnyx AMD=machine detection. The number
+            # in "text this number back" is the caller-ID the DM saw —
+            # get_callback_number() resolves to TELNYX_FROM_NUMBER which
+            # has inbound-SMS forwarding wired.
             greeting_name = f" {lead_first}" if lead_first else ""
+            close_name = f" {lead_first}" if lead_first else ""
             message = (
-                f"Hi{greeting_name}, this is {rep_name} — we connected through Precise Imaging. "
-                f"They're saving about a hundred hours a week on email triage and another twenty "
-                f"on their outbound calls using our tooling. Since {firm} runs a lot of work "
-                f"through Precise, I thought it'd be worth a heads-up. "
-                f"Would love ten minutes if you have it.{contact} "
-                "Thanks, and have a good day."
+                f"Hi{greeting_name}, this is {rep_name} at Possible Minds. "
+                "We work with Precise Imaging — those responses you get "
+                "from them on imaging-status questions, that's our system. "
+                "Precise is saving about a hundred hours a week on email "
+                "triage using it. We're doing free thirty-minute consults "
+                "with firms that work with Precise, on how the same tech "
+                "can handle your intake and records workflow. Text this "
+                "number back and I'll send you a time, or grab one "
+                "yourself at getpossibleminds dot com slash consult. "
+                f"Thanks{close_name}."
             )
 
             try:
