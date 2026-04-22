@@ -320,6 +320,56 @@ async def create_booking(request: Request, payload: BookingRequest):
     )
 
 
+@router.get("/pending")
+async def list_pending_bookings():
+    """Return bookings that haven't been acknowledged yet.
+
+    Drives the dashboard popup: the frontend polls this every few
+    seconds, shows the first unacked booking as a modal, and calls
+    POST /api/consults/{id}/acknowledge when the operator dismisses it.
+    Once acked, the booking drops off this list permanently.
+    """
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            select(ConsultBookingRow)
+            .where(ConsultBookingRow.acknowledged_at.is_(None))
+            .order_by(ConsultBookingRow.created_at.asc())
+        )
+        rows = result.scalars().all()
+    return {
+        "pending": [
+            {
+                "id": r.id,
+                "name": r.name,
+                "firm_name": r.firm_name,
+                "email": r.email,
+                "phone": r.phone,
+                "slot_start": r.slot_start.isoformat(),
+                "slot_end": r.slot_end.isoformat(),
+                "notes": r.notes,
+                "created_at": r.created_at.isoformat(),
+            }
+            for r in rows
+        ]
+    }
+
+
+@router.post("/{booking_id}/acknowledge")
+async def acknowledge_booking(booking_id: int):
+    """Mark a booking as acknowledged so the popup stops firing."""
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            select(ConsultBookingRow).where(ConsultBookingRow.id == booking_id)
+        )
+        row = result.scalar_one_or_none()
+        if row is None:
+            raise HTTPException(status_code=404, detail="booking not found")
+        if row.acknowledged_at is None:
+            row.acknowledged_at = datetime.now(timezone.utc)
+            await session.commit()
+    return {"id": booking_id, "acknowledged": True}
+
+
 @router.get("")
 async def list_bookings(limit: int = 100):
     """Admin: list bookings (newest first). Auth-gated by the
@@ -347,6 +397,9 @@ async def list_bookings(limit: int = 100):
                 "status": r.status,
                 "source": r.source,
                 "created_at": r.created_at.isoformat(),
+                "acknowledged_at": (
+                    r.acknowledged_at.isoformat() if r.acknowledged_at else None
+                ),
             }
             for r in rows
         ]

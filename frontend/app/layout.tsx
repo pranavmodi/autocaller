@@ -4,6 +4,7 @@ import "./globals.css";
 import { Providers } from "@/lib/providers";
 import { Nav } from "@/components/Nav";
 import { ActiveCallOverlay } from "@/components/ActiveCallOverlay";
+import { ConsultBookingPopup } from "@/components/ConsultBookingPopup";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -24,6 +25,7 @@ export default function RootLayout({
             <main className="mx-auto max-w-6xl px-4 py-6 md:px-8">{children}</main>
           </div>
           <ActiveCallOverlay />
+          <ConsultBookingPopup />
         </Providers>
       </body>
     </html>

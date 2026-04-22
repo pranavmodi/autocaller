@@ -253,6 +253,12 @@ class ConsultBookingRow(Base):
     user_agent: Mapped[str | None] = mapped_column(String(512), nullable=True)
     ip_address: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow)
+    # Operator ack timestamp. NULL = the UI popup hasn't been dismissed
+    # yet; set once acknowledged so the popup never fires again for this
+    # booking. One popup per consult, ever.
+    acknowledged_at: Mapped[datetime | None] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=True,
+    )
 
     __table_args__ = (
         Index("ix_consult_bookings_slot_start", "slot_start"),
