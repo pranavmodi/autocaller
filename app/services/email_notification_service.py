@@ -67,6 +67,7 @@ def _send_via_resend(*, subject: str, body: str, from_addr: str, to: str) -> str
     fallback_from = os.getenv("RESEND_FALLBACK_FROM", "").strip()
 
     reply_to = os.getenv("REPLY_TO_EMAIL", "").strip()
+    bcc = os.getenv("BCC_EMAIL", "").strip()
 
     def _post(this_from: str) -> httpx.Response:
         payload: dict = {
@@ -77,6 +78,12 @@ def _send_via_resend(*, subject: str, body: str, from_addr: str, to: str) -> str
         }
         if reply_to:
             payload["reply_to"] = reply_to
+        # BCC every outbound email to the operator (audit trail + "did
+        # the thing I expect get sent" visibility). Only add the BCC if
+        # it's not the same address as the primary recipient, so a
+        # test-send to yourself doesn't double-deliver.
+        if bcc and bcc.lower() != to.lower():
+            payload["bcc"] = [bcc]
         with httpx.Client(timeout=15.0) as client:
             return client.post(
                 "https://api.resend.com/emails",
@@ -110,6 +117,8 @@ def _send_via_smtp(*, subject: str, body: str, from_addr: str, to: str) -> str:
     smtp_user = os.getenv("SMTP_USERNAME", "").strip()
     smtp_pass = os.getenv("SMTP_PASSWORD", "").strip()
     smtp_use_tls = _is_truthy(os.getenv("SMTP_USE_TLS", "true"))
+    reply_to = os.getenv("REPLY_TO_EMAIL", "").strip()
+    bcc = os.getenv("BCC_EMAIL", "").strip()
     if not smtp_host:
         raise RuntimeError("SMTP_HOST not set")
 
@@ -117,14 +126,22 @@ def _send_via_smtp(*, subject: str, body: str, from_addr: str, to: str) -> str:
     msg["From"] = from_addr
     msg["To"] = to
     msg["Subject"] = subject
+    if reply_to:
+        msg["Reply-To"] = reply_to
     msg.set_content(body)
+
+    # BCC: include in the SMTP envelope RCPT list but NOT in headers.
+    # Otherwise "BCC" is visible to recipients, which defeats the point.
+    envelope_to = [to]
+    if bcc and bcc.lower() != to.lower():
+        envelope_to.append(bcc)
 
     with smtplib.SMTP(smtp_host, smtp_port, timeout=20) as server:
         if smtp_use_tls:
             server.starttls()
         if smtp_user and smtp_pass:
             server.login(smtp_user, smtp_pass)
-        server.send_message(msg)
+        server.send_message(msg, to_addrs=envelope_to)
 
     return msg.get("Message-ID", "")
 
