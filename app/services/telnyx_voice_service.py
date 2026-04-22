@@ -550,6 +550,77 @@ def place_telnyx_call(
     return call_sid
 
 
+async def play_voicemail_and_hangup_telnyx(
+    call_control_id: str, message: str
+) -> bool:
+    """Play a TTS voicemail via Telnyx Call Control, then hang up when done.
+
+    Deterministic alternative to letting Gemini speak the VM script
+    itself — used when the orchestrator takes over VM delivery from
+    the model. Flow:
+
+        1. POST /actions/speak with the script text (Telnyx's Amazon
+           Polly TTS). Returns immediately; speech streams to the
+           prospect in the background.
+        2. Wait an estimated duration based on word count (~150
+           words/minute is average TTS pacing + a 3s buffer).
+        3. POST /actions/hangup to close the call leg.
+
+    Not using the speak-ended webhook for simplicity — the duration
+    estimate is accurate to within 2-3 seconds for a 30-second script,
+    and the buffer absorbs the error.
+    """
+    api_key = _api_key()
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    speak_url = f"{TELNYX_API_BASE}/calls/{call_control_id}/actions/speak"
+    hangup_url = f"{TELNYX_API_BASE}/calls/{call_control_id}/actions/hangup"
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            speak_resp = await client.post(
+                speak_url,
+                headers=headers,
+                json={
+                    "payload": message,
+                    "voice": "Polly.Joanna-Neural",
+                    "language": "en-US",
+                },
+            )
+        if speak_resp.status_code >= 300:
+            logger.error(
+                "Telnyx /speak failed %s: %s",
+                speak_resp.status_code, speak_resp.text[:300],
+            )
+            return False
+    except Exception as e:
+        logger.error("Telnyx /speak raised: %s", e)
+        return False
+
+    # Estimate playback duration + buffer. ~160 WPM = 2.67 wps.
+    words = max(1, len(message.split()))
+    est_seconds = max(18.0, words / 2.5) + 3.0
+    try:
+        await asyncio.sleep(est_seconds)
+    except asyncio.CancelledError:
+        # If the task gets cancelled (e.g., daemon shutdown), still try
+        # to hang up to avoid leaving the call leg dangling.
+        pass
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(hangup_url, headers=headers, json={})
+        if resp.status_code >= 300:
+            logger.warning(
+                "Telnyx /hangup after VM %s HTTP %s: %s",
+                call_control_id, resp.status_code, resp.text[:200],
+            )
+    except Exception as e:
+        logger.warning("Telnyx /hangup after VM raised: %s", e)
+    return True
+
+
 def hangup_telnyx_call(call_sid: str) -> None:
     """Hang up an active Telnyx call via Call Control API.
 

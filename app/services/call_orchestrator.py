@@ -76,6 +76,11 @@ class CallOrchestrator:
         # from bridge._ai_audio_muted (which IVR-nav also uses) so the two
         # cases don't stomp on each other's flag flips.
         self._human_takeover_flag: bool = False
+        # VM-handoff guard — once the orchestrator takes over the VM
+        # script delivery via carrier TTS for this call, don't take
+        # over a second time. Prevents a re-entrant end_call from
+        # re-triggering the speak+hangup sequence. Reset in end_call.
+        self._vm_handoff_fired: bool = False
         # Manual-IVR state. True when the operator has clicked "IVR" on
         # the overlay to drive the phone tree themselves. While this is
         # on: AI audio is muted on the carrier leg (prospect doesn't
@@ -692,6 +697,7 @@ class CallOrchestrator:
             self._twilio_bridge = None
             self._human_takeover_flag = False
             self._manual_ivr_flag = False
+            self._vm_handoff_fired = False
 
             call_log_provider = get_call_log_provider()
             await call_log_provider.end_call(call.call_id, outcome, ended_by=ended_by)
@@ -1456,56 +1462,114 @@ class CallOrchestrator:
             if callback and outcome == CallOutcome.COMPLETED:
                 outcome = CallOutcome.CALLBACK_REQUESTED
 
-            # Guard: reject end_call(voicemail_left=true) when the AI hasn't
-            # actually delivered the full voicemail script. Gemini Flash Live
-            # tends to fire the tool mid-sentence; our audio-drain waits on
-            # silence, so it hangs up before the CTA plays. We detect an
-            # incomplete VM by the absence of the URL marker in the AI's
-            # recent transcript and push the model back to finish the script.
+            # VM delivery handoff: when the AI signals it reached a
+            # voicemail and wants to leave the scripted message, DON'T
+            # trust it to finish speaking cleanly — Gemini Flash Live
+            # has a habit of repeating the script or truncating mid-
+            # sentence when it tool-calls. Instead, the orchestrator
+            # takes over: mute the AI immediately, play the canonical
+            # v1.59 script via carrier-side TTS, and let the carrier's
+            # hangup action close the call. Deterministic duration,
+            # deterministic end, no loop risk.
             if (
                 outcome == CallOutcome.VOICEMAIL
                 and args.get("voicemail_left")
                 and self._current_call is not None
+                and self._twilio_bridge is not None
+                and self._twilio_call_sid
+                and not getattr(self, "_vm_handoff_fired", False)
             ):
-                transcript = getattr(self._current_call, "transcript", []) or []
-                ai_text = " ".join(
-                    (e.text if hasattr(e, "text") else e.get("text", ""))
-                    for e in transcript
-                    if (getattr(e, "speaker", None) or e.get("speaker")) == "ai"
-                ).lower()
-                # The scripted VM ends with "getpossibleminds dot com slash
-                # consult. Thanks {first_name}." — gate on the URL token
-                # since names vary. Accept common TTS renderings.
-                vm_complete_markers = ("getpossibleminds", "possible minds dot com", "possibleminds dot com")
-                if not any(m in ai_text for m in vm_complete_markers):
-                    snippet = ai_text[-160:] if ai_text else "<no ai speech>"
-                    print(
-                        f"[CallOrchestrator] REJECT premature end_call(voicemail_left=true): "
-                        f"no CTA marker in AI transcript. last_160_chars={snippet!r}"
+                self._vm_handoff_fired = True
+                print(
+                    f"[CallOrchestrator] VM handoff — AI signalled voicemail. "
+                    f"Taking over script delivery via carrier TTS."
+                )
+                # Mute the AI so Gemini stops mid-sentence and the
+                # carrier's TTS plays cleanly without overlap.
+                try:
+                    self._twilio_bridge.mute_ai_audio()
+                    if self._voice_service is not None:
+                        await self._voice_service.cancel_response()
+                except Exception as e:
+                    logger.warning("VM handoff mute/cancel failed: %s", e)
+
+                # Mark voicemail_left on the log now so it persists even
+                # if TTS playback fails downstream.
+                try:
+                    call_log_provider = get_call_log_provider()
+                    await call_log_provider.update_call(
+                        self._current_call.call_id, voicemail_left=True
                     )
-                    await self._add_system_note(
-                        "Rejected premature end_call(voicemail_left=true) — "
-                        "CTA URL missing from AI transcript. Model must finish "
-                        "the script before ending the call."
-                    )
-                    if self._voice_service and fn_call_id:
+                    self._current_call.voicemail_left = True
+                except Exception as e:
+                    logger.warning("marking voicemail_left failed: %s", e)
+                await self._add_system_note(
+                    "AI handoff accepted — orchestrator playing canonical VM "
+                    "script via carrier TTS, hangup on completion."
+                )
+
+                # Render the same v1.59 script used in the AMD path.
+                rep_name = os.getenv("SALES_REP_NAME", "").strip() or "Alex"
+                lead_first = (
+                    (self._current_patient.name or "").split(" ", 1)[0]
+                    if self._current_patient else ""
+                )
+                greeting_name = f" {lead_first}" if lead_first else ""
+                close_name = f" {lead_first}" if lead_first else ""
+                message = (
+                    f"Hi{greeting_name}, this is {rep_name} at Possible Minds. "
+                    "We work with Precise Imaging — those responses you get "
+                    "from them on imaging-status questions, that's our system. "
+                    "Precise is saving about a hundred hours a week on email "
+                    "triage using it. We're doing free thirty-minute consults "
+                    "with firms that work with Precise, on how the same tech "
+                    "can handle your intake and records workflow. Text this "
+                    "number back and I'll send you a time, or grab one "
+                    "yourself at getpossibleminds dot com slash consult. "
+                    f"Thanks{close_name}."
+                )
+
+                # Dispatch to carrier-specific TTS-then-hangup path. Both
+                # run in the background — the carrier's own hangup action
+                # triggers the media-stream stop which end_call will
+                # observe via the normal path.
+                carrier = getattr(self, "_current_carrier", "twilio") or "twilio"
+                try:
+                    if carrier == "telnyx":
+                        from app.services.telnyx_voice_service import (
+                            play_voicemail_and_hangup_telnyx,
+                        )
+                        asyncio.create_task(
+                            play_voicemail_and_hangup_telnyx(
+                                self._twilio_call_sid, message,
+                            )
+                        )
+                    else:
+                        from app.services.twilio_voice_service import (
+                            play_voicemail_and_hangup,
+                        )
+                        await asyncio.to_thread(
+                            play_voicemail_and_hangup,
+                            self._twilio_call_sid, message,
+                        )
+                except Exception as e:
+                    logger.warning("VM carrier TTS dispatch failed: %s", e)
+
+                # Ack the AI's end_call so Gemini doesn't retry-loop
+                # while the carrier TTS is playing.
+                if self._voice_service and fn_call_id:
+                    try:
                         await self._voice_service.send_function_result(
                             fn_call_id,
-                            {
-                                "status": "rejected",
-                                "reason": "voicemail_script_incomplete",
-                                "instruction": (
-                                    "You called end_call before finishing the "
-                                    "voicemail script. Do NOT call end_call "
-                                    "again until you have spoken the full "
-                                    "closing: '...or grab one yourself at "
-                                    "getpossibleminds dot com slash consult. "
-                                    "Thanks <first_name>.' Resume speaking "
-                                    "the script from where you left off."
-                                ),
-                            },
+                            {"status": "ok", "handled_by": "orchestrator_tts"},
                         )
-                    return
+                    except Exception as e:
+                        logger.debug("send_function_result on VM handoff: %s", e)
+                # DON'T call self.end_call here — the carrier's hangup
+                # action will tear down the media stream and the stop
+                # event will trigger end_call through the normal path
+                # (with voicemail_left already set above).
+                return
 
             # Persist autocaller capture fields if the AI supplied them.
             capture_update: dict = {}
