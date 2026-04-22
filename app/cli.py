@@ -1601,6 +1601,22 @@ def voice_voices():
         console.print(f"  • {v}")
 
 
+@voice_app.command("speed")
+def voice_speed(value: float = typer.Argument(..., help="Playback speed 0.25-4.0 (default 1.0) — OpenAI only")):
+    """Set OpenAI Realtime speech speed. Higher = faster playback."""
+    s = _put("/api/settings/voice-config", {"provider": "openai", "speed": value})
+    console.print(f"[green]✓[/green] voice_config[openai].speed = {value}")
+    console.print_json(data=(s.get("voice_config") or {}).get("openai", {}))
+
+
+@voice_app.command("top-p")
+def voice_top_p(value: float = typer.Argument(..., help="Top-P sampling 0.0-1.0 (default 0.95) — Gemini only")):
+    """Set Gemini nucleus-sampling cutoff. Lower = more deterministic."""
+    s = _put("/api/settings/voice-config", {"provider": "gemini", "top_p": value})
+    console.print(f"[green]✓[/green] voice_config[gemini].top_p = {value}")
+    console.print_json(data=(s.get("voice_config") or {}).get("gemini", {}))
+
+
 # ---------------------------------------------------------------------------
 # ivr (phone-tree navigation)
 # ---------------------------------------------------------------------------

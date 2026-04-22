@@ -167,6 +167,8 @@ export type VoiceConfigPatch = {
   temperature?: number;
   affective_dialog?: boolean; // Gemini-only
   proactive_audio?: boolean;  // Gemini-only
+  speed?: number;             // OpenAI-only (0.25-4.0)
+  top_p?: number;             // Gemini-only (0.0-1.0)
 };
 
 export const setVoiceConfig = (patch: VoiceConfigPatch) =>

@@ -141,6 +141,7 @@ class OpenAIRealtimeBackend:
         # module load (settings provider pulls in the ORM).
         voice_name = self._voice_name or os.getenv("OPENAI_VOICE", "alloy")
         temperature: Optional[float] = None
+        speed: Optional[float] = None
         try:
             from app.providers import get_settings_provider
             s = await get_settings_provider().get_settings()
@@ -149,6 +150,8 @@ class OpenAIRealtimeBackend:
                 voice_name = str(cfg["voice"])
             if cfg.get("temperature") is not None:
                 temperature = float(cfg["temperature"])
+            if cfg.get("speed") is not None:
+                speed = float(cfg["speed"])
         except Exception as e:
             # Settings unavailable (e.g. DB not ready during startup test
             # harness) — env defaults still apply, just log.
@@ -173,6 +176,11 @@ class OpenAIRealtimeBackend:
         }
         if temperature is not None:
             session["temperature"] = temperature
+        # OpenAI Realtime speech speed: 0.25-4.0, default 1.0. Only set
+        # when explicitly configured — lets the platform default shift
+        # if OpenAI tunes it, without us pinning an old value.
+        if speed is not None:
+            session["speed"] = speed
         config = {"type": "session.update", "session": session}
         await self._send(config)
 

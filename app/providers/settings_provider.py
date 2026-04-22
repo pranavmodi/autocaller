@@ -558,6 +558,26 @@ class SettingsProvider:
             if provider != "gemini":
                 raise ValueError("proactive_audio is Gemini-only")
             clean["proactive_audio"] = bool(patch["proactive_audio"])
+        if "speed" in patch:
+            if provider != "openai":
+                raise ValueError("speed is OpenAI-only")
+            try:
+                s = float(patch["speed"])
+            except (TypeError, ValueError):
+                raise ValueError("speed must be a number")
+            if not 0.25 <= s <= 4.0:
+                raise ValueError("speed must be between 0.25 and 4.0")
+            clean["speed"] = s
+        if "top_p" in patch:
+            if provider != "gemini":
+                raise ValueError("top_p is Gemini-only")
+            try:
+                p = float(patch["top_p"])
+            except (TypeError, ValueError):
+                raise ValueError("top_p must be a number")
+            if not 0.0 <= p <= 1.0:
+                raise ValueError("top_p must be between 0.0 and 1.0")
+            clean["top_p"] = p
 
         async with AsyncSessionLocal() as session:
             result = await session.execute(select(SystemSettingsRow).where(SystemSettingsRow.id == 1))

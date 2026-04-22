@@ -120,13 +120,16 @@ class VoiceConfigRequest(BaseModel):
 
     `provider` is "openai" or "gemini". Any of the patch fields that
     aren't set are left as-is on the stored config. Keys unsupported by
-    the selected provider (e.g. `affective_dialog` on OpenAI) return 400.
+    the selected provider (e.g. `affective_dialog` on OpenAI, `speed`
+    on Gemini) return 400.
     """
     provider: str
     voice: str | None = None
     temperature: float | None = None
     affective_dialog: bool | None = None
     proactive_audio: bool | None = None
+    speed: float | None = None       # OpenAI-only (0.25-4.0)
+    top_p: float | None = None       # Gemini-only (0.0-1.0)
 
 
 class IVRNavigateRequest(BaseModel):
@@ -659,6 +662,10 @@ async def set_voice_config(request: VoiceConfigRequest):
         patch["affective_dialog"] = request.affective_dialog
     if request.proactive_audio is not None:
         patch["proactive_audio"] = request.proactive_audio
+    if request.speed is not None:
+        patch["speed"] = request.speed
+    if request.top_p is not None:
+        patch["top_p"] = request.top_p
 
     provider = get_settings_provider()
     try:

@@ -16,10 +16,15 @@ type Settings = {
   voice_provider?: string;
   voice_model?: string;
   voice_config?: {
-    openai?: { voice?: string; temperature?: number };
+    openai?: {
+      voice?: string;
+      temperature?: number;
+      speed?: number;
+    };
     gemini?: {
       voice?: string;
       temperature?: number;
+      top_p?: number;
       affective_dialog?: boolean;
       proactive_audio?: boolean;
     };
@@ -100,7 +105,21 @@ export function VoiceSettingsPanel() {
             patchConfig.mutate({ provider: "openai", temperature: t })
           }
           pending={patchConfig.isPending}
-        />
+        >
+          <RangeSliderRow
+            label="Speed"
+            hint="Playback rate, 1.0 = normal."
+            value={openaiCfg.speed}
+            min={0.25}
+            max={4}
+            step={0.05}
+            defaultDisplay={1.0}
+            disabled={patchConfig.isPending}
+            onCommit={(s) =>
+              patchConfig.mutate({ provider: "openai", speed: s })
+            }
+          />
+        </ProviderBlock>
         <ProviderBlock
           label="Gemini Live"
           voices={GEMINI_VOICES}
@@ -112,6 +131,19 @@ export function VoiceSettingsPanel() {
           }
           pending={patchConfig.isPending}
         >
+          <RangeSliderRow
+            label="Top-P"
+            hint="Nucleus sampling cutoff. Lower = more deterministic."
+            value={geminiCfg.top_p}
+            min={0}
+            max={1}
+            step={0.01}
+            defaultDisplay={0.95}
+            disabled={patchConfig.isPending}
+            onCommit={(p) =>
+              patchConfig.mutate({ provider: "gemini", top_p: p })
+            }
+          />
           {/* Gemini-only flags */}
           <ToggleRow
             label="Affective dialog"
@@ -266,6 +298,63 @@ function ToggleRow({
           )}
         />
       </button>
+    </label>
+  );
+}
+
+
+function RangeSliderRow({
+  label,
+  hint,
+  value,
+  min,
+  max,
+  step,
+  defaultDisplay,
+  disabled,
+  onCommit,
+}: {
+  label: string;
+  hint: string;
+  value?: number;
+  min: number;
+  max: number;
+  step: number;
+  defaultDisplay: number;
+  disabled?: boolean;
+  onCommit: (v: number) => void;
+}) {
+  const [draft, setDraft] = useState<string>(
+    value !== undefined ? String(value) : "",
+  );
+  if (value !== undefined && draft !== String(value) && !disabled) {
+    // One-shot reconciliation when the remote value changes.
+    setDraft(String(value));
+  }
+  const current = draft === "" ? defaultDisplay : Number(draft);
+  return (
+    <label className="mb-3 block text-xs">
+      <span className="text-neutral-600">
+        {label} ({value !== undefined ? Number(value).toFixed(2) : "backend default"})
+      </span>
+      <div className="mt-1 flex items-center gap-2">
+        <input
+          type="range"
+          min={min}
+          max={max}
+          step={step}
+          value={current}
+          onChange={(e) => setDraft(e.target.value)}
+          onMouseUp={(e) => onCommit(Number((e.target as HTMLInputElement).value))}
+          onTouchEnd={(e) => onCommit(Number((e.target as HTMLInputElement).value))}
+          disabled={disabled}
+          className="flex-1"
+        />
+        <span className="w-10 text-right font-mono text-xs text-neutral-700">
+          {draft === "" ? "—" : Number(draft).toFixed(2)}
+        </span>
+      </div>
+      <span className="mt-1 block text-[11px] text-neutral-500">{hint}</span>
     </label>
   );
 }

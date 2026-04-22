@@ -138,6 +138,7 @@ class GeminiLiveBackend:
         # to avoid ORM pulling in at module load.
         voice_name = self._voice_name or DEFAULT_VOICE
         temperature: Optional[float] = None
+        top_p: Optional[float] = None
         affective = False
         proactive = False
         try:
@@ -148,6 +149,8 @@ class GeminiLiveBackend:
                 voice_name = str(cfg["voice"])
             if cfg.get("temperature") is not None:
                 temperature = float(cfg["temperature"])
+            if cfg.get("top_p") is not None:
+                top_p = float(cfg["top_p"])
             affective = bool(cfg.get("affective_dialog", False))
             proactive = bool(cfg.get("proactive_audio", False))
         except Exception as e:
@@ -163,6 +166,8 @@ class GeminiLiveBackend:
         }
         if temperature is not None:
             generation_config["temperature"] = temperature
+        if top_p is not None:
+            generation_config["topP"] = top_p
 
         setup_body: dict = {
             "model": f"models/{self.model}",
