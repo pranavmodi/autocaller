@@ -172,6 +172,25 @@ export type VoiceConfigPatch = {
 export const setVoiceConfig = (patch: VoiceConfigPatch) =>
   put<Record<string, unknown>>("/api/settings/voice-config", patch);
 
+export type VoicemailRecipient = {
+  call_id: string;
+  patient_id: string;
+  patient_name: string;
+  firm_name: string | null;
+  phone: string;
+  lead_state: string | null;
+  started_at: string | null;
+  duration_seconds: number;
+  voicemail_left: boolean;
+  prompt_version: string | null;
+};
+
+export const getVoicemailRecipients = () =>
+  get<{ rows: VoicemailRecipient[]; count: number }>(
+    "/api/call-lists/voicemail?limit=500",
+  );
+
+
 export type ConsultBooking = {
   id: number;
   name: string;
