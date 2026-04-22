@@ -66,7 +66,17 @@ def _send_via_resend(*, subject: str, body: str, from_addr: str, to: str) -> str
     # keep emails flowing from the generic address.
     fallback_from = os.getenv("RESEND_FALLBACK_FROM", "").strip()
 
+    reply_to = os.getenv("REPLY_TO_EMAIL", "").strip()
+
     def _post(this_from: str) -> httpx.Response:
+        payload: dict = {
+            "from": this_from,
+            "to": [to],
+            "subject": subject,
+            "text": body,
+        }
+        if reply_to:
+            payload["reply_to"] = reply_to
         with httpx.Client(timeout=15.0) as client:
             return client.post(
                 "https://api.resend.com/emails",
@@ -74,12 +84,7 @@ def _send_via_resend(*, subject: str, body: str, from_addr: str, to: str) -> str
                     "Authorization": f"Bearer {api_key}",
                     "Content-Type": "application/json",
                 },
-                json={
-                    "from": this_from,
-                    "to": [to],
-                    "subject": subject,
-                    "text": body,
-                },
+                json=payload,
             )
 
     resp = _post(from_addr)
