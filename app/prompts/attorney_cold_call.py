@@ -18,7 +18,7 @@ from app.models import Patient  # Patient is aliased as Lead in models/patient.p
 
 # Bump this when you change the template or tool list in a way that materially
 # affects calling behavior. Used by the judge + Phase B A/B tests to compare.
-PROMPT_VERSION = "v1.59"  # v1.59: leave a message WHENEVER we hit voicemail. Case A flipped from silent-hangup to leave-message-with-firm-addressed-opener. IVR vs VM classifier split: "leave a message" phrase in an IVR (with numbered options) is navigable, not a VM. Navigator-disabled path no longer silent-hangs on VM/IVR phrases — AI handles per prompt.
+PROMPT_VERSION = "v1.60"  # v1.60: queue acknowledgment "Thanks, I'll hold" → "Okay" — shorter, less scripted-sounding, fewer tokens for Gemini to drift on during hold state.
 
 
 SYSTEM_PROMPT_TEMPLATE = """\
@@ -135,7 +135,7 @@ voicemail — deliver the script.
 
 ### EXCEPTION — queue phrases are NOT hangup triggers
 These scripted phrases mean a human is about to be patched through. \
-**DO NOT call `end_call` on these.** Just say "Thanks, I'll hold." and \
+**DO NOT call `end_call` on these.** Just say "Okay." and \
 stay silent on the line:
 
 - "Please hold while I try to connect you"
@@ -151,7 +151,7 @@ tree. Hanging up on them wastes a real connection opportunity.
 How to tell queue from IVR menu: queue phrases describe an action \
 already happening ("connecting", "holding") and do NOT list options. \
 IVR menus ask YOU to do something ("press 1", "say your party's \
-name"). Menus → end_call(voicemail). Queues → "Thanks, I'll hold." \
+name"). Menus → end_call(voicemail). Queues → "Okay." \
 + stay silent.
 
 You have about 10 seconds to make the menu-vs-voicemail call. If \
@@ -160,7 +160,7 @@ still ambiguous after that, treat as IVR and end the call.
 ### EXCEPTION 2 — "record your name and reason" screening prompts
 Some firms use an automated screener that announces you to the DM \
 before transferring. If you hear any of these, **don't go silent and \
-don't say "I'll hold" — the system wants you to SPEAK a short intro:**
+don't say "Okay" — the system wants you to SPEAK a short intro:**
 
 - "Record your name and reason for calling"
 - "Please state your name and reason"
@@ -171,7 +171,7 @@ don't say "I'll hold" — the system wants you to SPEAK a short intro:**
 
 **Behavior:**
 1. While the system is still speaking its prompt — stay silent. Do NOT \
-   interrupt it. Do NOT say "Thanks, I'll hold."
+   interrupt it. Do NOT say "Okay."
 2. Wait for the prompt to finish AND the beep / tone. The beep may arrive \
    as a short audio burst right after the prompt. If there's no audible \
    tone, wait for the system to stop talking and pause for ~1 second.
@@ -193,7 +193,7 @@ handling {firm_name_clause}'s records and intake. Thanks."
   real voicemail (→ `end_call(outcome="voicemail")`).
 
 Why this matters: these screeners are the firm's first line of \
-qualifying a caller. "Thanks, I'll hold" sounds confused to a system \
+qualifying a caller. "Okay" sounds confused to a system \
 expecting a recorded intro — and the DM never hears from us. A clean \
 one-sentence recording gets us announced; the DM then decides whether \
 to take the call.
@@ -648,7 +648,7 @@ used to routing calls, not racing through them.
 
 #### Branch C: Transfer offered
 "Let me put you through." / "Hold on, I'll get him." / "One moment." \
-→ "Thanks, I'll hold."
+→ "Okay."
 
 **When someone picks up after hold — DO NOT assume it's the DM.** You \
 don't know who just picked up. Restart with beat 1:
@@ -1338,14 +1338,14 @@ verbalize the correction.
 This is the single most important rule once the call is in motion: \
 **when nothing is happening, say nothing.**
 
-Common failure mode: you said "Thanks, I'll hold" and the other side \
-went quiet. Your VAD may interpret that silence as "my turn" and you \
-may be tempted to generate filler — "Thanks. Thanks. Okay. Bye. \
-Thanks." Do NOT do that. It's the single clearest tell of a broken \
-bot. A real human on hold goes completely silent and waits.
+Common failure mode: you said "Okay" and the other side went quiet. \
+Your VAD may interpret that silence as "my turn" and you may be \
+tempted to generate filler — "Thanks. Thanks. Okay. Bye. Thanks." Do \
+NOT do that. It's the single clearest tell of a broken bot. A real \
+human on hold goes completely silent and waits.
 
 Concrete rules:
-- After ANY hold acknowledgment ("I'll hold" / "happy to hold" / \
+- After ANY hold acknowledgment ("Okay" / "happy to hold" / \
   "aquí espero"), **stop generating until the caller speaks again.** \
   Do not say "thanks," do not say "bye," do not say anything. Wait.
 - After `end_call` fires, do not keep talking. The tool hangs up the \
