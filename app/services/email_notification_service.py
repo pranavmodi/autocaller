@@ -1,11 +1,16 @@
 """Email notifications for call outcome issues."""
+import logging
 import os
 import smtplib
 from datetime import datetime, timezone
 from email.message import EmailMessage
 from typing import Optional
 
+import httpx
+
 from app.models import CallLog
+
+logger = logging.getLogger(__name__)
 
 
 def _is_truthy(value: str) -> bool:
@@ -48,27 +53,64 @@ def send_disconnected_number_email(call: CallLog, status: str) -> str:
     return _send_email(subject, body)
 
 
-def _send_email(subject: str, body: str, *, to: str | None = None) -> str:
-    """Send an email via SMTP. `to` defaults to EMAIL_NOTIFICATION_RECIPIENT
-    (the operator inbox). Pass `to` to target a specific recipient (e.g.
-    a consult-booker's confirmation email).
+def _send_via_resend(*, subject: str, body: str, from_addr: str, to: str) -> str:
+    """Send via Resend's HTTPS API. Works in environments where cloud
+    providers block outbound SMTP (port 25/587/465).
     """
-    recipient = (to or os.getenv("EMAIL_NOTIFICATION_RECIPIENT", "")).strip()
-    if not recipient:
-        raise RuntimeError("Email recipient is not configured. Set EMAIL_NOTIFICATION_RECIPIENT.")
+    api_key = os.getenv("RESEND_API_KEY", "").strip()
+    if not api_key:
+        raise RuntimeError("RESEND_API_KEY not set")
+    # Resend requires the FROM to be on a verified domain (or use
+    # onboarding@resend.dev for testing). If the user hasn't verified
+    # their Zoho domain on Resend yet, RESEND_FALLBACK_FROM lets them
+    # keep emails flowing from the generic address.
+    fallback_from = os.getenv("RESEND_FALLBACK_FROM", "").strip()
+
+    def _post(this_from: str) -> httpx.Response:
+        with httpx.Client(timeout=15.0) as client:
+            return client.post(
+                "https://api.resend.com/emails",
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "from": this_from,
+                    "to": [to],
+                    "subject": subject,
+                    "text": body,
+                },
+            )
+
+    resp = _post(from_addr)
+    if resp.status_code == 403 and fallback_from:
+        # Domain unverified — retry with the fallback sender.
+        logger.warning(
+            "Resend 403 on from=%s (domain probably unverified) — "
+            "retrying with RESEND_FALLBACK_FROM=%s",
+            from_addr, fallback_from,
+        )
+        resp = _post(fallback_from)
+    if resp.status_code >= 300:
+        raise RuntimeError(
+            f"Resend HTTP {resp.status_code}: {resp.text[:300]}"
+        )
+    data = resp.json() if resp.content else {}
+    return str(data.get("id", ""))
+
+
+def _send_via_smtp(*, subject: str, body: str, from_addr: str, to: str) -> str:
     smtp_host = os.getenv("SMTP_HOST", "").strip()
     smtp_port = int(os.getenv("SMTP_PORT", "587").strip() or "587")
     smtp_user = os.getenv("SMTP_USERNAME", "").strip()
     smtp_pass = os.getenv("SMTP_PASSWORD", "").strip()
-    smtp_from = os.getenv("SMTP_FROM_EMAIL", "").strip() or smtp_user
     smtp_use_tls = _is_truthy(os.getenv("SMTP_USE_TLS", "true"))
-
-    if not smtp_host or not smtp_from:
-        raise RuntimeError("Email is not configured. Set SMTP_HOST and SMTP_FROM_EMAIL (or SMTP_USERNAME).")
+    if not smtp_host:
+        raise RuntimeError("SMTP_HOST not set")
 
     msg = EmailMessage()
-    msg["From"] = smtp_from
-    msg["To"] = recipient
+    msg["From"] = from_addr
+    msg["To"] = to
     msg["Subject"] = subject
     msg.set_content(body)
 
@@ -80,6 +122,42 @@ def _send_email(subject: str, body: str, *, to: str | None = None) -> str:
         server.send_message(msg)
 
     return msg.get("Message-ID", "")
+
+
+def _send_email(subject: str, body: str, *, to: str | None = None) -> str:
+    """Send an email. Prefers Resend (HTTPS) when RESEND_API_KEY is set,
+    falls back to SMTP otherwise. Raises if neither is configured.
+
+    `to` defaults to EMAIL_NOTIFICATION_RECIPIENT (the operator inbox).
+    Pass `to` for a specific recipient (e.g. consult booker).
+    """
+    recipient = (to or os.getenv("EMAIL_NOTIFICATION_RECIPIENT", "")).strip()
+    if not recipient:
+        raise RuntimeError("Email recipient is not configured. Set EMAIL_NOTIFICATION_RECIPIENT.")
+    from_addr = (
+        os.getenv("SMTP_FROM_EMAIL", "").strip()
+        or os.getenv("SMTP_USERNAME", "").strip()
+        or os.getenv("RESEND_FALLBACK_FROM", "").strip()
+    )
+    if not from_addr:
+        raise RuntimeError("Sender address not configured — set SMTP_FROM_EMAIL.")
+
+    if os.getenv("RESEND_API_KEY", "").strip():
+        try:
+            return _send_via_resend(
+                subject=subject, body=body, from_addr=from_addr, to=recipient,
+            )
+        except Exception as e:
+            # Only fall back to SMTP if it's actually plausible to
+            # succeed — we know it probably won't if the host is
+            # behind a provider SMTP block. Log and re-raise.
+            logger.warning("Resend send failed: %s — attempting SMTP", e)
+            return _send_via_smtp(
+                subject=subject, body=body, from_addr=from_addr, to=recipient,
+            )
+    return _send_via_smtp(
+        subject=subject, body=body, from_addr=from_addr, to=recipient,
+    )
 
 
 # ---------------------------------------------------------------------------
