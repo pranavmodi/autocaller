@@ -20,10 +20,11 @@ import asyncio
 import json
 import logging
 import os
+import re
 from datetime import datetime, timezone
 from typing import Any, Optional
 
-from sqlalchemy import select, and_, or_
+from sqlalchemy import select, and_, or_, text
 
 from app.db import AsyncSessionLocal
 from app.db.models import CallLogRow, PatientRow
@@ -34,6 +35,27 @@ logger = logging.getLogger(__name__)
 
 # Calls that never reached a human but we still want to follow up on.
 _NO_REACH_OUTCOMES = ("voicemail", "no_answer", "disconnected")
+
+# Don't email the same address more than once in this rolling window.
+_DEDUP_WINDOW_DAYS = int(os.getenv("VOICEMAIL_EMAIL_DEDUP_DAYS", "7"))
+
+# Strict recipient validator — rejects the junk we've seen in captured_contacts
+# (placeholder strings like "[email protected]", "X and Y@z.com" joins, multi-@,
+# embedded whitespace, markup brackets).
+_EMAIL_RE = re.compile(r"^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$")
+
+
+def _looks_like_valid_email(email: str) -> bool:
+    if not email:
+        return False
+    e = email.strip()
+    if len(e) > 254:
+        return False
+    if any(c in e for c in " \t\n\r[]()<>,"):
+        return False
+    if e.count("@") != 1:
+        return False
+    return bool(_EMAIL_RE.match(e))
 
 
 def _is_truthy(v: str) -> bool:
@@ -58,7 +80,7 @@ def _pick_email_from_captured(captured: Any) -> tuple[Optional[str], Optional[st
         if entry.get("source") == "voicemail_followup":
             continue
         email = (entry.get("email") or "").strip()
-        if email and "@" in email and "." in email.split("@")[-1]:
+        if _looks_like_valid_email(email):
             return email, (entry.get("name") or "").strip() or None
     return None, None
 
@@ -111,23 +133,62 @@ async def _lookup_patient_email(patient_id: str) -> tuple[Optional[str], Optiona
         return email, name
 
 
+async def _recently_emailed(email: str, days: int = _DEDUP_WINDOW_DAYS) -> bool:
+    """True if this email address has a delivered voicemail_followup record
+    in any call's captured_contacts within the last N days. Case-insensitive
+    match on the email value.
+    """
+    if not email:
+        return False
+    sql = text(
+        """
+        SELECT 1
+        FROM call_logs,
+             jsonb_array_elements(
+               COALESCE(captured_contacts, '[]'::jsonb)
+             ) AS elem
+        WHERE elem->>'source' = 'voicemail_followup'
+          AND (elem->>'delivered')::boolean = true
+          AND lower(elem->>'email') = lower(:email)
+          AND (elem->>'captured_at')::timestamptz
+              > now() - make_interval(days => :days)
+        LIMIT 1
+        """
+    )
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(sql, {"email": email, "days": days})
+        return result.first() is not None
+
+
 async def process_call(call: CallLogRow, dry_run: bool = False) -> dict:
     """Process one call. Returns a result dict for caller/CLI visibility."""
     call_id = call.call_id
     captured_email, captured_name = _pick_email_from_captured(call.captured_contacts)
     patient_email, patient_name = await _lookup_patient_email(call.patient_id)
 
-    if captured_email:
+    if captured_email and _looks_like_valid_email(captured_email):
         recipient = captured_email
         recipient_name = captured_name or patient_name or (call.firm_name or "")
         source = "captured_contact"
-    elif patient_email:
+    elif patient_email and _looks_like_valid_email(patient_email):
         recipient = patient_email
         recipient_name = patient_name or ""
         source = "patients_db"
     else:
         return {
-            "call_id": call_id, "skipped": True, "reason": "no_email_available",
+            "call_id": call_id, "skipped": True, "reason": "no_valid_email",
+            "voicemail_left": bool(call.voicemail_left),
+        }
+
+    # DB-level dedup: skip if this address has already received a
+    # voicemail_followup within the rolling window. Applies to dry-run
+    # too so operators see the same decision they'd get live.
+    already = await _recently_emailed(recipient, days=_DEDUP_WINDOW_DAYS)
+    if already:
+        return {
+            "call_id": call_id, "skipped": True,
+            "reason": f"already_emailed_within_{_DEDUP_WINDOW_DAYS}d",
+            "recipient": recipient, "source": source,
             "voicemail_left": bool(call.voicemail_left),
         }
 
@@ -183,9 +244,40 @@ async def process_call(call: CallLogRow, dry_run: bool = False) -> dict:
 
 
 async def tick(limit: int = 10, since_days: int = 30, dry_run: bool = False) -> list[dict]:
-    rows = await _pick_pending(limit=limit, since_days=since_days)
-    out: list[dict] = []
+    # Fetch a bit wider than `limit` so that within-batch dedup by recipient
+    # still leaves `limit` unique addresses to actually process.
+    fetch_limit = min(max(limit * 3, limit), 500)
+    rows = await _pick_pending(limit=fetch_limit, since_days=since_days)
+
+    # Within-batch dedup: for each unique resolved recipient email, keep
+    # only the most recent call. Prevents a single invocation from emailing
+    # the same firm twice even before the DB-level window check.
+    seen_recipients: set[str] = set()
+    deduped: list[CallLogRow] = []
+    batch_skips: list[dict] = []
     for row in rows:
+        captured_email, _ = _pick_email_from_captured(row.captured_contacts)
+        if captured_email and _looks_like_valid_email(captured_email):
+            recipient = captured_email
+        else:
+            pemail, _ = await _lookup_patient_email(row.patient_id)
+            recipient = pemail if _looks_like_valid_email(pemail or "") else None
+        if recipient:
+            key = recipient.strip().lower()
+            if key in seen_recipients:
+                batch_skips.append({
+                    "call_id": row.call_id, "skipped": True,
+                    "reason": "duplicate_in_batch", "recipient": recipient,
+                    "voicemail_left": bool(row.voicemail_left),
+                })
+                continue
+            seen_recipients.add(key)
+        deduped.append(row)
+        if len(deduped) >= limit:
+            break
+
+    out: list[dict] = list(batch_skips)
+    for row in deduped:
         try:
             out.append(await process_call(row, dry_run=dry_run))
         except Exception as e:
