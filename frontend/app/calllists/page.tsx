@@ -1,13 +1,21 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
-import { ListChecks, Voicemail, CheckCircle2, Circle } from "lucide-react";
+import {
+  ListChecks,
+  Voicemail,
+  CheckCircle2,
+  Circle,
+  Phone,
+  Loader2,
+} from "lucide-react";
 
 import {
   getVoicemailRecipients,
+  startCall,
   type VoicemailRecipient,
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -22,10 +30,44 @@ import { cn } from "@/lib/utils";
  * machine, and hangs up quickly on humans.
  */
 export default function CallListsPage() {
+  const qc = useQueryClient();
   const vm = useQuery({
     queryKey: ["call-lists", "voicemail"],
     queryFn: getVoicemailRecipients,
     refetchInterval: 60_000,
+  });
+
+  const [dialingId, setDialingId] = useState<string | null>(null);
+  const [lastError, setLastError] = useState<string | null>(null);
+  const [lastDialed, setLastDialed] = useState<string | null>(null);
+
+  const dial = useMutation({
+    mutationFn: (patientId: string) => startCall(patientId, "twilio"),
+    onMutate: (patientId) => {
+      setDialingId(patientId);
+      setLastError(null);
+    },
+    onSuccess: (_data, patientId) => {
+      setLastDialed(patientId);
+      // A fresh call will appear in the Now overlay via dashboard WS;
+      // nothing to invalidate here yet, but refresh the list in 30s
+      // so the row moves to "Already messaged" once the VM lands.
+      setTimeout(() => qc.invalidateQueries({ queryKey: ["call-lists"] }), 30_000);
+    },
+    onError: (err: unknown) => {
+      const msg = err instanceof Error ? err.message : String(err);
+      // The daemon surfaces 409 when any rail is blocked (in-progress
+      // call, allow_live_calls=false, phone not in allowlist). Give a
+      // shorter hint instead of the raw URL error.
+      if (msg.includes("409")) {
+        setLastError(
+          "Blocked — check /system for: another call in progress, live-calls off, or phone not in allowlist.",
+        );
+      } else {
+        setLastError(msg);
+      }
+    },
+    onSettled: () => setDialingId(null),
   });
 
   const { unblasted, blasted } = useMemo(() => {
@@ -73,12 +115,27 @@ export default function CallListsPage() {
         </p>
       )}
 
+      {lastError && (
+        <div className="rounded-md border border-rose-200 bg-rose-50 px-4 py-2 text-sm text-rose-800">
+          <strong className="font-medium">Call didn&apos;t start.</strong>{" "}
+          {lastError}
+        </div>
+      )}
+
+      {lastDialed && !lastError && (
+        <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-800">
+          Dialing — watch the overlay or <Link href="/" className="underline">the Now page</Link> for live status.
+        </div>
+      )}
+
       <VMListSection
         title="Awaiting VM"
         subtitle="Next up for a VM-only redial."
         icon={<Circle className="h-4 w-4 text-amber-500" />}
         rows={unblasted}
         variant="unblasted"
+        onDial={(id) => dial.mutate(id)}
+        dialingId={dialingId}
       />
       <VMListSection
         title="Already messaged"
@@ -86,6 +143,8 @@ export default function CallListsPage() {
         icon={<CheckCircle2 className="h-4 w-4 text-emerald-500" />}
         rows={blasted}
         variant="blasted"
+        onDial={(id) => dial.mutate(id)}
+        dialingId={dialingId}
       />
     </div>
   );
@@ -97,12 +156,16 @@ function VMListSection({
   icon,
   rows,
   variant,
+  onDial,
+  dialingId,
 }: {
   title: string;
   subtitle: string;
   icon: React.ReactNode;
   rows: VoicemailRecipient[];
   variant: "unblasted" | "blasted";
+  onDial: (patientId: string) => void;
+  dialingId: string | null;
 }) {
   return (
     <section className="space-y-3">
@@ -136,7 +199,10 @@ function VMListSection({
               </tr>
             </thead>
             <tbody>
-              {rows.map((r) => (
+              {rows.map((r) => {
+                const isDialing = dialingId === r.patient_id;
+                const isOtherDialing = !!dialingId && !isDialing;
+                return (
                 <tr
                   key={r.call_id}
                   className={cn(
@@ -176,15 +242,48 @@ function VMListSection({
                     {r.prompt_version || "—"}
                   </td>
                   <td className="whitespace-nowrap px-4 py-3 text-right">
-                    <Link
-                      href={`/calls/${r.call_id}`}
-                      className="text-xs text-neutral-600 hover:underline"
-                    >
-                      view →
-                    </Link>
+                    <div className="flex items-center justify-end gap-3">
+                      <button
+                        type="button"
+                        onClick={() => onDial(r.patient_id)}
+                        disabled={isDialing || isOtherDialing}
+                        title={
+                          variant === "blasted"
+                            ? "Already messaged — confirm before re-dialing"
+                            : "Place a call to this lead"
+                        }
+                        className={cn(
+                          "inline-flex items-center gap-1.5 rounded-md border px-3 py-1 text-xs font-medium transition",
+                          isDialing
+                            ? "cursor-wait border-emerald-300 bg-emerald-50 text-emerald-800"
+                            : isOtherDialing
+                            ? "cursor-not-allowed border-neutral-200 bg-neutral-50 text-neutral-400"
+                            : "border-emerald-400 bg-emerald-50 text-emerald-900 hover:bg-emerald-100",
+                        )}
+                      >
+                        {isDialing ? (
+                          <>
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                            Dialing…
+                          </>
+                        ) : (
+                          <>
+                            <Phone className="h-3 w-3" />
+                            {variant === "blasted" ? "Re-dial" : "Call"}
+                          </>
+                        )}
+                      </button>
+                      <Link
+                        href={`/calls/${r.call_id}`}
+                        className="text-xs text-neutral-600 hover:underline"
+                      >
+                        view
+                      </Link>
+                    </div>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>
