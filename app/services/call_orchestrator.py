@@ -953,22 +953,29 @@ class CallOrchestrator:
                             await self.on_status_update("IVR detected — navigating phone tree")
                         asyncio.create_task(self._run_ivr_navigation(initial_snippet=text))
                     else:
-                        self._web_voicemail_simulated = True
+                        # Navigator disabled. v1.59 policy: do NOT silent-hang
+                        # on a VM-phrase match. Stamp ivr_outcome=skipped for
+                        # post-hoc routing signal, then let the AI read the
+                        # caller transcript and act per the prompt (leave a
+                        # Case A message on VM, stay quiet on IVR). The
+                        # v1.56 CTA-marker guard will catch premature AI
+                        # end_call if it tries to silent-hang.
                         await call_log_provider.update_call(
                             self._current_call.call_id,
-                            voicemail_left=True,
                             ivr_outcome="skipped",
                         )
-                        self._current_call.voicemail_left = True
                         self._current_call.ivr_outcome = "skipped"
-                        print(f"[CallOrchestrator] IVR/voicemail detected at {elapsed_caller:.1f}s (caller-audio) — hanging up (navigation disabled) (phrase: {text[:100]!r})")
+                        print(
+                            f"[CallOrchestrator] IVR/voicemail phrase at {elapsed_caller:.1f}s "
+                            f"(nav disabled) — leaving it to the AI. Heard: {text[:100]!r}"
+                        )
                         await self._add_system_note(
-                            f"IVR/voicemail detected at {elapsed_caller:.1f}s of caller audio — "
-                            f"hanging up (navigation disabled). Heard: {text[:160]!r}"
+                            f"IVR/voicemail phrase matched at {elapsed_caller:.1f}s "
+                            f"(navigator disabled) — AI will handle per prompt. "
+                            f"Heard: {text[:160]!r}"
                         )
                         if self.on_status_update:
-                            await self.on_status_update("IVR/voicemail detected — hanging up")
-                        await self.end_call(CallOutcome.VOICEMAIL, ended_by="vm_detect")
+                            await self.on_status_update("VM/IVR phrase — AI will handle")
         elif speaker == "ai":
             if self.on_transcript_update:
                 await self.on_transcript_update("ai_delta", text)
@@ -1268,12 +1275,49 @@ class CallOrchestrator:
                     logger.warning("Could not nudge AI for VM_DM_PERSONAL: %s", e)
                 return  # AI will speak + fire end_call(voicemail_left=true) itself
 
-            # Firm-general VM / dead-end / timed-out / unknown VM → silent
-            # hangup. These outcomes mean either the mailbox was for the
-            # firm (pitching it reaches the receptionist, not the DM) or we
-            # ran out of IVR navigation budget. Do NOT stamp voicemail_left
-            # — we didn't leave a message. derive_status_and_disposition
-            # will map this to IVR_UNREACHED.
+            # Firm-general voicemail OR unknown-VM-subtype → unmute AI,
+            # nudge it to deliver the Case A (firm-addressed) script. Policy
+            # as of v1.59: leave a message whenever we've hit a mailbox, not
+            # silent-hang. A recorded pitch in the firm's general mailbox
+            # beats a silent hangup — whoever checks it can route.
+            firm_vm_outcomes = (OUTCOME_VM_FIRM_GENERAL, OUTCOME_NOT_IVR)
+            if result.outcome in firm_vm_outcomes:
+                firm = (self._current_call.firm_name or "").strip() if self._current_call else ""
+                firm_label = firm or "the firm"
+                await self._add_system_note(
+                    f"Navigator: firm-general voicemail for {firm_label}. "
+                    "Unmuting AI to deliver Case A script."
+                )
+                if self.on_status_update:
+                    await self.on_status_update(
+                        f"Firm voicemail — leaving message for {firm_label}"
+                    )
+                try:
+                    bridge.unmute_ai_audio()
+                except Exception as e:
+                    logger.debug("unmute_ai_audio on firm VM failed: %s", e)
+                try:
+                    if self._voice_service is not None:
+                        await self._voice_service.cancel_response()
+                        await self._voice_service.send_system_nudge(
+                            f"You have hit {firm_label}'s general voicemail. "
+                            "Deliver the Case A voicemail script NOW, verbatim "
+                            "(firm-addressed opener 'Hi there, this is Alex at "
+                            f"Possible Minds. I'm trying to reach whoever at {firm_label} "
+                            "handles decisions around intake and records.'). Speak every "
+                            "word including the closing '...or grab one yourself at "
+                            "getpossibleminds dot com slash consult. Thanks.' Do NOT "
+                            "call end_call until the FULL script has been spoken — "
+                            "the system will reject a premature end_call."
+                        )
+                except Exception as e:
+                    logger.warning("Could not nudge AI for firm VM: %s", e)
+                return  # AI will speak + fire end_call(voicemail_left=true) itself
+
+            # DEAD_END / TIMED_OUT / SKIPPED → we're stuck in a phone tree
+            # with no path to a human AND no VM fallback played. Leaving a
+            # VM script mid-IVR-menu is nonsensical — silent hangup. Do NOT
+            # stamp voicemail_left (nothing was left).
             await self._add_system_note(
                 f"IVR navigation ended: {result.outcome} after {len(menu_log)} hop(s) — hanging up (no VM left)."
             )
