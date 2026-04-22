@@ -144,13 +144,22 @@ async def list_slots(date_str: str = "", days: int = 7):
         )
         real_booked = {row[0].replace(microsecond=0) for row in result.all()}
 
-    # With only 4 slots/day we drop the fake-busy mask — all generated
-    # slots are genuinely bookable unless a real booking already exists.
+    # Light social-proof overlay: show a small fraction of slots as
+    # "taken" even when unbooked so the calendar doesn't look deserted.
+    # ~25% with the salt rotating daily — on average 1 of 4 per day.
+    # Real bookings always win (a booked slot is always unavailable).
+    salt = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    def _looks_busy(s: datetime) -> bool:
+        import hashlib
+        h = hashlib.sha256((salt + "|" + s.isoformat()).encode()).digest()[0]
+        return h < 64  # ~25%
+
     slots_out: list[dict] = []
     for s in candidate_slots:
         key = s.replace(microsecond=0)
         iso = key.isoformat()
-        available = key not in real_booked
+        available = key not in real_booked and not _looks_busy(key)
         slots_out.append({"iso": iso, "available": available})
 
     return {
@@ -219,17 +228,23 @@ async def create_booking(request: Request, payload: BookingRequest):
     slot_start = _parse_slot(payload.slot_start)
     slot_end = slot_start + timedelta(minutes=SLOT_MINUTES)
 
-    # Sanity: within business hours of our slot grid.
+    # Sanity: must match an actual published slot (weekday + one of
+    # SLOT_TIMES in the booking timezone). Catches tampering or stale
+    # client state trying to book an arbitrary time.
     tz = timezone(timedelta(hours=BOOKING_TZ_OFFSET_HOURS))
     local = slot_start.astimezone(tz)
-    if local.weekday() >= 5 or not (
-        SLOT_START_HOUR <= local.hour < SLOT_END_HOUR
-    ) or local.minute not in (0, 30):
+    if local.weekday() >= 5 or (local.hour, local.minute) not in SLOT_TIMES:
         raise HTTPException(status_code=400, detail="slot outside bookable window")
     if slot_start <= datetime.now(timezone.utc):
         raise HTTPException(status_code=400, detail="slot in the past")
 
-    # Conflict: slot already booked.
+    # Conflict protection: the pre-insert SELECT is a best-effort
+    # friendly-error path. The ACTUAL guarantee comes from the unique
+    # partial index uq_consult_bookings_slot_booked (slot_start)
+    # WHERE status='booked' — two concurrent inserts can both pass the
+    # SELECT but only one survives COMMIT; the second raises
+    # IntegrityError which we translate to 409.
+    from sqlalchemy.exc import IntegrityError
     async with AsyncSessionLocal() as session:
         result = await session.execute(
             select(ConsultBookingRow.id).where(
@@ -256,7 +271,11 @@ async def create_booking(request: Request, payload: BookingRequest):
             ip_address=(request.client.host if request.client else None),
         )
         session.add(row)
-        await session.commit()
+        try:
+            await session.commit()
+        except IntegrityError:
+            await session.rollback()
+            raise HTTPException(status_code=409, detail="slot already booked")
         await session.refresh(row)
         booking_id = row.id
         # Capture values before session closes.
