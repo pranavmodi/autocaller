@@ -179,10 +179,20 @@ export const setManualIvr = (callId: string, enabled: boolean) =>
     { enabled },
   );
 
+// Send one digit (legacy — still supported by the backend).
 export const sendDtmf = (callId: string, digit: string) =>
-  post<{ status: string; digit: string }>(
+  post<{ status: string; digits: string }>(
     `/api/calls/${callId}/dtmf`,
     { digit },
+  );
+
+// Send a multi-digit sequence (e.g. "701") as a single batch. The
+// orchestrator streams each tone with an 80ms inter-digit gap so the
+// phone tree registers the whole string as one input.
+export const sendDtmfBatch = (callId: string, digits: string) =>
+  post<{ status: string; digits: string }>(
+    `/api/calls/${callId}/dtmf`,
+    { digits },
   );
 
 

@@ -1994,24 +1994,56 @@ class CallOrchestrator:
             print(f"[manual-ivr] OFF call={self._current_call.call_id}")
         return True
 
-    async def send_operator_dtmf(self, digit: str) -> bool:
-        """Send a single DTMF tone to the carrier on behalf of the
-        operator. Logs to the transcript so post-call review can see
-        the menu navigation. Allows only one digit per call (operator
-        presses 10 digits for a 10-key menu = 10 calls to this method).
+    # Inter-digit gap when streaming a multi-digit sequence. Short enough
+    # that carriers register the string as "one input" (most phone trees
+    # tolerate 50-120ms gaps), long enough that each tone is cleanly
+    # detected. 80ms is the Twilio/Telnyx recommended spacing for chained
+    # <Play digits>.
+    _DTMF_INTER_DIGIT_GAP_SECS: float = 0.08
+    # Hard cap on operator DTMF-batch length. Extensions are 3–4 digits,
+    # account numbers up to ~10. 16 is generous and prevents runaway
+    # pastes or misclicks from holding up the media bridge.
+    _DTMF_MAX_BATCH: int = 16
+
+    async def send_operator_dtmf(self, digits: str) -> bool:
+        """Send one OR MORE DTMF tones to the carrier on behalf of the
+        operator. Accepts "1" or "701" or "*1234#". Streams each tone
+        with an 80ms inter-digit gap so phone trees register the whole
+        string as a single input (pressing 7-0-1 as separate REST calls
+        races the IVR's next menu option; batching fixes that).
+
+        Logs ONE system note per batch ("Operator DTMF: 701") rather
+        than one per digit.
         """
-        d = (digit or "").strip()[:1]
-        if d not in "0123456789*#":
+        cleaned = "".join(
+            c for c in (digits or "").strip() if c in "0123456789*#"
+        )[: self._DTMF_MAX_BATCH]
+        if not cleaned:
             return False
         if self._twilio_bridge is None or self._current_call is None:
             return False
-        try:
-            await self._twilio_bridge.send_dtmf(d)
-        except Exception as e:
-            logger.warning("send_dtmf(%s) failed: %s", d, e)
-            return False
-        await self._add_system_note(f"Operator DTMF: {d}")
-        print(f"[manual-ivr] DTMF {d} sent on call={self._current_call.call_id}")
+        for i, d in enumerate(cleaned):
+            if i:
+                await asyncio.sleep(self._DTMF_INTER_DIGIT_GAP_SECS)
+            try:
+                await self._twilio_bridge.send_dtmf(d)
+            except Exception as e:
+                logger.warning(
+                    "send_dtmf(%s) failed mid-batch (after %d/%d digits): %s",
+                    d, i, len(cleaned), e,
+                )
+                # Still stamp a note for what DID get through.
+                sent = cleaned[: i]
+                if sent:
+                    await self._add_system_note(
+                        f"Operator DTMF (partial, send_dtmf failed on digit {i+1}): {sent}"
+                    )
+                return False
+        await self._add_system_note(f"Operator DTMF: {cleaned}")
+        print(
+            f"[manual-ivr] DTMF batch {cleaned!r} ({len(cleaned)} digits) "
+            f"sent on call={self._current_call.call_id}"
+        )
         return True
 
     @property

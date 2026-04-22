@@ -1174,12 +1174,16 @@ async def call_manual_ivr(call_id: str, body: dict):
 
 @router.post("/calls/{call_id}/dtmf")
 async def call_dtmf(call_id: str, body: dict):
-    """Send a single DTMF tone on the active call. Only valid while
-    manual IVR mode is on (set via /api/calls/{id}/manual-ivr).
+    """Send DTMF tones on the active call. Only valid while manual IVR
+    mode is on (set via /api/calls/{id}/manual-ivr).
 
-    Body: {"digit": "1"} — one of 0-9, *, #.
+    Body: either
+      {"digits": "701"} — batched (recommended; orchestrator streams
+        each tone with an 80ms inter-digit gap so the phone tree
+        registers the whole string as one input), or
+      {"digit": "1"} — single digit (legacy, still supported).
     """
-    digit = str(body.get("digit", "")).strip()[:1]
+    digits = str(body.get("digits") or body.get("digit") or "").strip()
     orchestrator = get_orchestrator()
     current = orchestrator.current_call
     if current is None:
@@ -1191,10 +1195,10 @@ async def call_dtmf(call_id: str, body: dict):
             status_code=409,
             detail="manual IVR mode is off — enable it first via /manual-ivr",
         )
-    ok = await orchestrator.send_operator_dtmf(digit)
+    ok = await orchestrator.send_operator_dtmf(digits)
     if not ok:
-        raise HTTPException(status_code=400, detail=f"invalid or rejected digit: {digit!r}")
-    return {"status": "ok", "digit": digit}
+        raise HTTPException(status_code=400, detail=f"invalid or rejected digits: {digits!r}")
+    return {"status": "ok", "digits": digits}
 
 
 @router.post("/calls/clear-active")

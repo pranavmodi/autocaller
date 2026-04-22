@@ -17,7 +17,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useDashboardEvents } from "@/hooks/useDashboardEvents";
 import { useLiveListener } from "@/hooks/useLiveListener";
-import { clearActiveCall, sendDtmf, setManualIvr } from "@/lib/api";
+import { clearActiveCall, sendDtmf, sendDtmfBatch, setManualIvr } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { TranscriptStream } from "@/components/TranscriptStream";
 
@@ -96,6 +96,21 @@ export function ActiveCallOverlay() {
 
   const dtmf = useMutation({
     mutationFn: (digit: string) => sendDtmf(activeCall!.call_id, digit),
+    onError: (err: unknown) => {
+      setIvrError(err instanceof Error ? err.message : String(err));
+    },
+  });
+
+  // Batched DTMF: "701" sent as one payload, streamed with 80ms gaps.
+  // Needed for extension-directory IVRs where three separate REST calls
+  // race the tree's next menu option and lose their slot.
+  const [dtmfBatchInput, setDtmfBatchInput] = useState("");
+  const dtmfBatch = useMutation({
+    mutationFn: (digits: string) => sendDtmfBatch(activeCall!.call_id, digits),
+    onSuccess: () => {
+      setIvrError(null);
+      setDtmfBatchInput("");
+    },
     onError: (err: unknown) => {
       setIvrError(err instanceof Error ? err.message : String(err));
     },
@@ -291,21 +306,49 @@ export function ActiveCallOverlay() {
           <div className="mb-2 flex items-start justify-between gap-2 text-[11px] text-amber-900">
             <span>
               <strong className="font-semibold">Manual IVR active.</strong>{" "}
-              AI is muted. Press a key to send DTMF. Click &ldquo;Exit IVR&rdquo;
-              when a human is on the line.
+              AI is muted. Type an extension below (or tap a single key).
+              Click &ldquo;Exit IVR&rdquo; when a human is on the line.
             </span>
           </div>
+          {/* Batched input — type "701" and press Send to stream the whole
+              extension as one IVR input (recommended for directories where
+              single-digit presses race the tree's next menu option). */}
+          <form
+            className="mb-2 flex items-center gap-1.5"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const v = dtmfBatchInput.replace(/[^0-9*#]/g, "");
+              if (v && !dtmfBatch.isPending) dtmfBatch.mutate(v);
+            }}
+          >
+            <input
+              type="text"
+              inputMode="tel"
+              value={dtmfBatchInput}
+              onChange={(e) => setDtmfBatchInput(e.target.value.replace(/[^0-9*#]/g, "").slice(0, 16))}
+              placeholder="e.g. 701"
+              disabled={dtmfBatch.isPending}
+              className="flex-1 rounded-md border border-amber-300 bg-white px-2 py-1.5 text-sm font-mono text-amber-900 placeholder:text-amber-400 focus:border-amber-500 focus:outline-none disabled:opacity-50"
+            />
+            <button
+              type="submit"
+              disabled={!dtmfBatchInput || dtmfBatch.isPending}
+              className="rounded-md border border-amber-500 bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {dtmfBatch.isPending ? "..." : "Send"}
+            </button>
+          </form>
           <div className="grid grid-cols-3 gap-1.5">
             {["1","2","3","4","5","6","7","8","9","*","0","#"].map((d) => (
               <button
                 key={d}
                 type="button"
                 onClick={() => dtmf.mutate(d)}
-                disabled={dtmf.isPending}
+                disabled={dtmf.isPending || dtmfBatch.isPending}
                 className={cn(
                   "rounded-md border border-amber-300 bg-white py-2 text-sm font-semibold text-amber-900 transition",
                   "hover:bg-amber-100 active:bg-amber-200",
-                  dtmf.isPending && "cursor-wait opacity-50",
+                  (dtmf.isPending || dtmfBatch.isPending) && "cursor-wait opacity-50",
                 )}
                 title={`Send DTMF ${d}`}
               >

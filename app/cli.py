@@ -966,6 +966,29 @@ def calls_takeover(
     console.print_json(data=r)
 
 
+@calls_app.command("dtmf")
+def calls_dtmf(
+    call_id: str = typer.Argument(..., help="ID of the live call"),
+    digits: str = typer.Argument(..., help='DTMF sequence to send, e.g. "701" or "*123#"'),
+    enable_manual: bool = typer.Option(
+        False, "--enable-manual",
+        help="First flip manual-IVR mode on (required before DTMF is accepted)",
+    ),
+):
+    """Send an operator DTMF sequence on a live call.
+
+    Multi-digit input is batched: "701" streams 7, 0, 1 with 80ms
+    inter-digit gaps so the phone tree registers the whole string
+    as one input. Requires manual-IVR mode to be on first — pass
+    --enable-manual to flip it for you.
+    """
+    if enable_manual:
+        r = _post(f"/api/calls/{call_id}/manual-ivr", {"enabled": True})
+        console.print(f"[dim]manual-ivr → {r.get('manual_ivr_active')}[/dim]")
+    r = _post(f"/api/calls/{call_id}/dtmf", {"digits": digits})
+    console.print_json(data=r)
+
+
 @calls_app.command("export")
 def calls_export(
     output: Path = typer.Option(Path("calls_export.csv"), "--output", "-o"),
