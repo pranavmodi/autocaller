@@ -121,7 +121,7 @@ async def list_slots(date_str: str = "", days: int = 7):
     if not candidate_slots:
         return {"slots": []}
 
-    # Exclude already-booked slots.
+    # Real bookings → definitively unavailable.
     window_start = min(candidate_slots)
     window_end = max(candidate_slots) + timedelta(minutes=SLOT_MINUTES)
     async with AsyncSessionLocal() as session:
@@ -134,15 +134,28 @@ async def list_slots(date_str: str = "", days: int = 7):
                 )
             )
         )
-        booked = {row[0].replace(microsecond=0) for row in result.all()}
+        real_booked = {row[0].replace(microsecond=0) for row in result.all()}
 
-    free = [
-        s.replace(microsecond=0).isoformat()
-        for s in candidate_slots
-        if s.replace(microsecond=0) not in booked
-    ]
+    # Social-proof fake-busy: mark roughly half of the generated slots
+    # as taken using a stable hash. The salt rotates daily so the
+    # pattern evolves naturally over time (a DM reloading the next day
+    # sees different slots free). Real bookings always override to
+    # unavailable regardless of the hash.
+    salt = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    def _looks_busy(s: datetime) -> bool:
+        import hashlib
+        h = hashlib.sha256((salt + "|" + s.isoformat()).encode()).digest()[0]
+        return h < 128  # ~50%
+
+    slots_out: list[dict] = []
+    for s in candidate_slots:
+        key = s.replace(microsecond=0)
+        iso = key.isoformat()
+        available = key not in real_booked and not _looks_busy(key)
+        slots_out.append({"iso": iso, "available": available})
+
     return {
-        "slots": free,
+        "slots": slots_out,
         "slot_minutes": SLOT_MINUTES,
         "tz_offset_hours": BOOKING_TZ_OFFSET_HOURS,
     }
