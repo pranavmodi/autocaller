@@ -174,6 +174,13 @@ export type VoiceConfigPatch = {
 export const setVoiceConfig = (patch: VoiceConfigPatch) =>
   put<Record<string, unknown>>("/api/settings/voice-config", patch);
 
+// Build the URL for a voice preview clip. Backend caches per-voice so
+// repeated calls are cheap; the <audio> element can fetch it directly.
+export const voicePreviewUrl = (
+  provider: "openai" | "gemini",
+  voice: string,
+) => apiUrl(`/api/voice/preview/${provider}/${encodeURIComponent(voice)}`);
+
 // Manual IVR: operator drives digits; AI stays muted until disabled.
 export const setManualIvr = (callId: string, enabled: boolean) =>
   post<{ status: string; manual_ivr_active: boolean }>(
@@ -233,6 +240,27 @@ export type ConsultBooking = {
 
 export const getConsultBookings = () =>
   get<{ bookings: ConsultBooking[] }>("/api/consults?limit=200");
+
+// Unacknowledged bookings — drives the global popup. Polled.
+export type PendingBooking = {
+  id: number;
+  name: string;
+  firm_name: string | null;
+  email: string;
+  phone: string | null;
+  slot_start: string;
+  slot_end: string;
+  notes: string | null;
+  created_at: string;
+};
+
+export const getPendingBookings = () =>
+  get<{ pending: PendingBooking[] }>("/api/consults/pending");
+
+export const acknowledgeBooking = (id: number) =>
+  post<{ id: number; acknowledged: boolean }>(
+    `/api/consults/${id}/acknowledge`,
+  );
 
 
 export const OPENAI_VOICES = [

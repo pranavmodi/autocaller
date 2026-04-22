@@ -1,11 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   getSettings,
   setVoiceProvider,
   setVoiceConfig,
+  voicePreviewUrl,
   OPENAI_VOICES,
   GEMINI_VOICES,
   type VoiceConfigPatch,
@@ -96,6 +97,7 @@ export function VoiceSettingsPanel() {
 
       <div className="grid gap-6 sm:grid-cols-2">
         <ProviderBlock
+          provider="openai"
           label="OpenAI Realtime"
           voices={OPENAI_VOICES}
           voice={openaiCfg.voice}
@@ -121,6 +123,7 @@ export function VoiceSettingsPanel() {
           />
         </ProviderBlock>
         <ProviderBlock
+          provider="gemini"
           label="Gemini Live"
           voices={GEMINI_VOICES}
           voice={geminiCfg.voice}
@@ -181,6 +184,7 @@ export function VoiceSettingsPanel() {
 }
 
 function ProviderBlock({
+  provider,
   label,
   voices,
   voice,
@@ -190,6 +194,7 @@ function ProviderBlock({
   pending,
   children,
 }: {
+  provider: "openai" | "gemini";
   label: string;
   voices: readonly string[];
   voice?: string;
@@ -214,13 +219,18 @@ function ProviderBlock({
     <div className="rounded-md border border-neutral-200 p-4">
       <h3 className="mb-3 text-sm font-semibold text-neutral-900">{label}</h3>
 
-      <label className="mb-3 block text-xs">
-        <span className="text-neutral-600">Voice</span>
+      <div className="mb-3">
+        <div className="mb-1 flex items-center justify-between">
+          <span className="text-xs text-neutral-600">Voice</span>
+          {voice && (
+            <VoicePreviewButton provider={provider} voice={voice} />
+          )}
+        </div>
         <select
           value={voice || ""}
           disabled={pending}
           onChange={(e) => onVoice(e.target.value)}
-          className="mt-1 w-full rounded border border-neutral-300 bg-white px-2 py-1 text-sm"
+          className="w-full rounded border border-neutral-300 bg-white px-2 py-1 text-sm"
         >
           <option value="">(backend default)</option>
           {voices.map((v) => (
@@ -229,7 +239,7 @@ function ProviderBlock({
             </option>
           ))}
         </select>
-      </label>
+      </div>
 
       <label className="mb-3 block text-xs">
         <span className="text-neutral-600">
@@ -356,5 +366,61 @@ function RangeSliderRow({
       </div>
       <span className="mt-1 block text-[11px] text-neutral-500">{hint}</span>
     </label>
+  );
+}
+
+
+function VoicePreviewButton({
+  provider,
+  voice,
+}: {
+  provider: "openai" | "gemini";
+  voice: string;
+}) {
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [state, setState] = useState<"idle" | "loading" | "playing">("idle");
+
+  const stop = () => {
+    const a = audioRef.current;
+    if (a) {
+      a.pause();
+      a.currentTime = 0;
+    }
+    setState("idle");
+  };
+
+  const play = async () => {
+    if (state === "playing") {
+      stop();
+      return;
+    }
+    setState("loading");
+    try {
+      const a = new Audio(voicePreviewUrl(provider, voice));
+      audioRef.current = a;
+      a.onended = () => setState("idle");
+      a.onerror = () => setState("idle");
+      a.onplaying = () => setState("playing");
+      await a.play();
+    } catch {
+      setState("idle");
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={play}
+      title={`Preview ${voice}`}
+      className={cn(
+        "inline-flex items-center gap-1 rounded border px-2 py-0.5 text-[10px] font-medium transition",
+        state === "playing"
+          ? "border-emerald-400 bg-emerald-50 text-emerald-900"
+          : "border-neutral-300 bg-white text-neutral-700 hover:bg-neutral-50",
+        state === "loading" && "opacity-60",
+      )}
+    >
+      {state === "playing" ? "■ Stop" : state === "loading" ? "…" : "▶ Preview"}
+    </button>
   );
 }
