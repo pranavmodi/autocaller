@@ -36,8 +36,17 @@ router = APIRouter(prefix="/api/consults", tags=["consults"])
 # table we can add them; for now a simple fixed grid.
 BOOKING_TZ_OFFSET_HOURS = int(os.getenv("CONSULT_TZ_OFFSET", "-7"))  # PT default
 SLOT_MINUTES = 30
-SLOT_START_HOUR = 9
-SLOT_END_HOUR = 17  # exclusive — last slot starts at 16:30
+# Four 30-min slots per weekday, spread across morning / midday / afternoon.
+# Each entry is (hour, minute) in the booking timezone (PT by default).
+SLOT_TIMES: List[tuple[int, int]] = [
+    (9, 0),    # 9:00 AM PT
+    (11, 0),   # 11:00 AM PT
+    (13, 30),  # 1:30 PM PT
+    (16, 0),   # 4:00 PM PT
+]
+# Kept for backward-compat with any external callers; derived from SLOT_TIMES.
+SLOT_START_HOUR = SLOT_TIMES[0][0] if SLOT_TIMES else 9
+SLOT_END_HOUR = (SLOT_TIMES[-1][0] + 1) if SLOT_TIMES else 17
 
 
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
@@ -76,10 +85,9 @@ def _generate_slots_for_date(d: date) -> List[datetime]:
         return []
     tz = timezone(timedelta(hours=BOOKING_TZ_OFFSET_HOURS))
     slots: List[datetime] = []
-    for hour in range(SLOT_START_HOUR, SLOT_END_HOUR):
-        for minute in (0, 30):
-            local = datetime.combine(d, time(hour, minute, tzinfo=tz))
-            slots.append(local.astimezone(timezone.utc))
+    for hour, minute in SLOT_TIMES:
+        local = datetime.combine(d, time(hour, minute, tzinfo=tz))
+        slots.append(local.astimezone(timezone.utc))
     return slots
 
 
@@ -136,22 +144,13 @@ async def list_slots(date_str: str = "", days: int = 7):
         )
         real_booked = {row[0].replace(microsecond=0) for row in result.all()}
 
-    # Social-proof fake-busy: mark roughly half of the generated slots
-    # as taken using a stable hash. The salt rotates daily so the
-    # pattern evolves naturally over time (a DM reloading the next day
-    # sees different slots free). Real bookings always override to
-    # unavailable regardless of the hash.
-    salt = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    def _looks_busy(s: datetime) -> bool:
-        import hashlib
-        h = hashlib.sha256((salt + "|" + s.isoformat()).encode()).digest()[0]
-        return h < 128  # ~50%
-
+    # With only 4 slots/day we drop the fake-busy mask — all generated
+    # slots are genuinely bookable unless a real booking already exists.
     slots_out: list[dict] = []
     for s in candidate_slots:
         key = s.replace(microsecond=0)
         iso = key.isoformat()
-        available = key not in real_booked and not _looks_busy(key)
+        available = key not in real_booked
         slots_out.append({"iso": iso, "available": available})
 
     return {
