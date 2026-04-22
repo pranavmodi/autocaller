@@ -1,0 +1,228 @@
+"""Voicemail / no-reach follow-up emailer.
+
+Background loop that picks completed calls which (a) left a voicemail or
+(b) hit voicemail/no-answer/disconnected without leaving a message, and
+sends the post-call "free consult" email when we have an address on file
+or captured during the call.
+
+Safety gate: `ALLOW_VOICEMAIL_EMAIL=true` must be set. Without it the
+loop runs but skips every row (and returns that note). The underlying
+send function also enforces the gate as a belt-and-suspenders.
+
+Source-of-truth priority for the recipient address:
+  1. captured_contacts entries on this call (most specific)
+  2. patients.email (per-lead on-file address)
+Neither present → skip, leave followup_email_sent=False.
+"""
+from __future__ import annotations
+
+import asyncio
+import json
+import logging
+import os
+from datetime import datetime, timezone
+from typing import Any, Optional
+
+from sqlalchemy import select, and_, or_
+
+from app.db import AsyncSessionLocal
+from app.db.models import CallLogRow, PatientRow
+from app.providers.call_log_provider import get_call_log_provider
+from app.services.email_notification_service import send_voicemail_followup_email
+
+logger = logging.getLogger(__name__)
+
+# Calls that never reached a human but we still want to follow up on.
+_NO_REACH_OUTCOMES = ("voicemail", "no_answer", "disconnected")
+
+
+def _is_truthy(v: str) -> bool:
+    return (v or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _pick_email_from_captured(captured: Any) -> tuple[Optional[str], Optional[str]]:
+    """Scan captured_contacts list for the first valid email + name pair."""
+    if not captured:
+        return None, None
+    if isinstance(captured, str):
+        try:
+            captured = json.loads(captured)
+        except Exception:
+            return None, None
+    if not isinstance(captured, list):
+        return None, None
+    for entry in captured:
+        if not isinstance(entry, dict):
+            continue
+        # Avoid sending twice by skipping our own prior delivery records.
+        if entry.get("source") == "voicemail_followup":
+            continue
+        email = (entry.get("email") or "").strip()
+        if email and "@" in email and "." in email.split("@")[-1]:
+            return email, (entry.get("name") or "").strip() or None
+    return None, None
+
+
+async def _pick_pending(limit: int = 10, since_days: int = 30) -> list[CallLogRow]:
+    """Find calls eligible for the follow-up email."""
+    async with AsyncSessionLocal() as session:
+        stmt = (
+            select(CallLogRow)
+            .where(CallLogRow.ended_at.is_not(None))
+            .where(CallLogRow.followup_email_sent.is_(False))
+            .where(
+                or_(
+                    CallLogRow.voicemail_left.is_(True),
+                    and_(
+                        CallLogRow.voicemail_left.is_(False),
+                        CallLogRow.outcome.in_(_NO_REACH_OUTCOMES),
+                    ),
+                )
+            )
+            .where(
+                CallLogRow.ended_at
+                > datetime.now(timezone.utc).replace(microsecond=0)
+                - _interval(days=since_days)
+            )
+            .order_by(CallLogRow.ended_at.desc())
+            .limit(limit)
+        )
+        result = await session.execute(stmt)
+        return list(result.scalars().all())
+
+
+def _interval(days: int):
+    from datetime import timedelta
+    return timedelta(days=days)
+
+
+async def _lookup_patient_email(patient_id: str) -> tuple[Optional[str], Optional[str]]:
+    if not patient_id:
+        return None, None
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            select(PatientRow.email, PatientRow.name).where(PatientRow.patient_id == patient_id)
+        )
+        row = result.first()
+        if not row:
+            return None, None
+        email = (row[0] or "").strip() or None
+        name = (row[1] or "").strip() or None
+        return email, name
+
+
+async def process_call(call: CallLogRow, dry_run: bool = False) -> dict:
+    """Process one call. Returns a result dict for caller/CLI visibility."""
+    call_id = call.call_id
+    captured_email, captured_name = _pick_email_from_captured(call.captured_contacts)
+    patient_email, patient_name = await _lookup_patient_email(call.patient_id)
+
+    if captured_email:
+        recipient = captured_email
+        recipient_name = captured_name or patient_name or (call.firm_name or "")
+        source = "captured_contact"
+    elif patient_email:
+        recipient = patient_email
+        recipient_name = patient_name or ""
+        source = "patients_db"
+    else:
+        return {
+            "call_id": call_id, "skipped": True, "reason": "no_email_available",
+            "voicemail_left": bool(call.voicemail_left),
+        }
+
+    if dry_run:
+        return {
+            "call_id": call_id, "dry_run": True, "would_send_to": recipient,
+            "source": source, "voicemail_left": bool(call.voicemail_left),
+        }
+
+    delivered, note = send_voicemail_followup_email(
+        to_email=recipient,
+        first_name=recipient_name,
+        voicemail_left=bool(call.voicemail_left),
+    )
+
+    # Append delivery record to captured_contacts + flip followup_email_sent
+    new_entry = {
+        "name": recipient_name,
+        "email": recipient,
+        "phone": None,
+        "source": "voicemail_followup",
+        "voicemail_left_at_call": bool(call.voicemail_left),
+        "delivered": delivered,
+        "delivery_note": note,
+        "resolved_from": source,
+        "captured_at": datetime.now(timezone.utc).isoformat(),
+    }
+    existing = call.captured_contacts
+    if isinstance(existing, str):
+        try:
+            existing = json.loads(existing)
+        except Exception:
+            existing = []
+    if not isinstance(existing, list):
+        existing = []
+    updated = list(existing) + [new_entry]
+
+    provider = get_call_log_provider()
+    await provider.update_call(
+        call_id,
+        followup_email_sent=delivered,
+        captured_contacts=updated,
+    )
+    logger.info(
+        "voicemail_followup: call=%s → %s (delivered=%s, source=%s)",
+        call_id, recipient, delivered, source,
+    )
+    return {
+        "call_id": call_id, "delivered": delivered, "recipient": recipient,
+        "source": source, "note": note,
+        "voicemail_left": bool(call.voicemail_left),
+    }
+
+
+async def tick(limit: int = 10, since_days: int = 30, dry_run: bool = False) -> list[dict]:
+    rows = await _pick_pending(limit=limit, since_days=since_days)
+    out: list[dict] = []
+    for row in rows:
+        try:
+            out.append(await process_call(row, dry_run=dry_run))
+        except Exception as e:
+            logger.exception("voicemail_followup failed for %s: %s", row.call_id, e)
+            out.append({"call_id": row.call_id, "error": str(e)[:300]})
+    return out
+
+
+async def voicemail_followup_loop(interval_seconds: int = 120):
+    """Poll loop for the daemon. Mirrors judge_loop structure."""
+    logger.info("Voicemail-followup loop started (interval=%ds)", interval_seconds)
+    while True:
+        try:
+            if not _is_truthy(os.getenv("ALLOW_VOICEMAIL_EMAIL", "false")):
+                # Gate closed — no-op tick.
+                await asyncio.sleep(interval_seconds)
+                continue
+            results = await tick(limit=10)
+            sent = sum(1 for r in results if r.get("delivered"))
+            skipped = sum(1 for r in results if r.get("skipped"))
+            if sent or skipped:
+                logger.info("voicemail_followup tick: sent=%d skipped=%d total=%d",
+                            sent, skipped, len(results))
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            logger.warning("voicemail_followup_loop tick failed: %s", e)
+        await asyncio.sleep(interval_seconds)
+
+
+async def process_one_by_id(call_id: str, dry_run: bool = False) -> dict:
+    """Programmatic single-call entry point for CLI."""
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            select(CallLogRow).where(CallLogRow.call_id == call_id)
+        )
+        row = result.scalar_one_or_none()
+        if not row:
+            return {"call_id": call_id, "error": "call_not_found"}
+    return await process_call(row, dry_run=dry_run)

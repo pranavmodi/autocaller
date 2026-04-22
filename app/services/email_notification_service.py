@@ -253,6 +253,69 @@ _ONE_PAGER_BODY = (
 )
 
 
+# ---------------------------------------------------------------------------
+# Post-call voicemail / no-reach follow-up (Pranav as founder, Possible Minds)
+# ---------------------------------------------------------------------------
+
+_VM_FOLLOWUP_SUBJECT_VM_LEFT = (
+    "The free consult I mentioned in my voicemail"
+)
+_VM_FOLLOWUP_SUBJECT_NO_VM = (
+    "Tried to reach you — free AI consult for your PI firm"
+)
+
+_VM_FOLLOWUP_BODY = (
+    "Hi {first_name},\n\n"
+    "{opener} Quick intro — my firm Possible Minds builds the AI systems "
+    "Precise Imaging uses. The responses you get from Precise on "
+    "imaging-status questions come from our software. Precise is saving "
+    "about 100 hours a week on email triage using it.\n\n"
+    "We're running free 30-minute consults with PI firms that work with "
+    "Precise, on how the same tech can handle your intake and records "
+    "workflow.\n\n"
+    "Grab a time: https://getpossibleminds.com/consult\n"
+    "Or just reply to this email and I'll find one that works.\n\n"
+    "Thanks,\n"
+    "Pranav Modi\n"
+    "Founder, Possible Minds\n"
+)
+
+
+def send_voicemail_followup_email(
+    *, to_email: str, first_name: str = "", voicemail_left: bool = True,
+) -> tuple[bool, str]:
+    """Send the post-call follow-up email.
+
+    Subject + opener vary by whether we actually left a voicemail:
+      voicemail_left=True  -> mirrors the VM script ("left you a voicemail")
+      voicemail_left=False -> "tried to reach you" (no VM was recorded)
+
+    Gated by ALLOW_VOICEMAIL_EMAIL=true so SMTP mis-config or mid-test
+    flips cannot accidentally blast. Returns (delivered, note_or_message_id).
+    """
+    if not _is_truthy(os.getenv("ALLOW_VOICEMAIL_EMAIL", "false")):
+        return False, "gate_closed: ALLOW_VOICEMAIL_EMAIL=false"
+    email = (to_email or "").strip()
+    if not email or "@" not in email:
+        return False, f"invalid_email: {email!r}"
+
+    first = (first_name or "").split()[0] if first_name else "there"
+    if voicemail_left:
+        subject = _VM_FOLLOWUP_SUBJECT_VM_LEFT
+        opener = "I just left you a voicemail."
+    else:
+        subject = _VM_FOLLOWUP_SUBJECT_NO_VM
+        opener = "Just tried you on the phone and didn't get a chance to leave a message."
+    body = _VM_FOLLOWUP_BODY.format(first_name=first, opener=opener)
+
+    try:
+        msg_id = _send_email(subject, body, to=email)
+        return True, msg_id or "sent"
+    except Exception as e:
+        logger.warning("VM follow-up email failed to %s: %s", email, e)
+        return False, f"error: {e}"
+
+
 async def send_followup_email(
     *,
     to_email: str,

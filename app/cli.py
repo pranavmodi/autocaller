@@ -1296,6 +1296,48 @@ def followups_show(call_id: str = typer.Argument(...)):
     })
 
 
+@followups_app.command("send-voicemail")
+def followups_send_voicemail(
+    call_id: str = typer.Argument(...),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Resolve recipient only; do not send."),
+):
+    """Fire the VM / no-reach follow-up email for a single call_id.
+
+    Gated by ALLOW_VOICEMAIL_EMAIL=true. Picks email from captured_contacts,
+    falls back to patients.email.
+    """
+    from app.services.voicemail_followup_service import process_one_by_id
+    result = _run(process_one_by_id(call_id, dry_run=dry_run))
+    console.print_json(data=result)
+
+
+@followups_app.command("backfill-voicemails")
+def followups_backfill_voicemails(
+    since_days: int = typer.Option(7, "--since-days", help="Only look back N days."),
+    limit: int = typer.Option(50, "--limit", help="Max calls to process this run."),
+    dry_run: bool = typer.Option(True, "--dry-run/--live",
+                                 help="Default dry-run. Pass --live to actually send."),
+):
+    """Batch-send VM / no-reach follow-up emails for eligible calls.
+
+    Default is --dry-run for safety. Pass --live to actually send.
+    Also gated by ALLOW_VOICEMAIL_EMAIL=true.
+    """
+    from app.services.voicemail_followup_service import tick
+    results = _run(tick(limit=limit, since_days=since_days, dry_run=dry_run))
+    sent = sum(1 for r in results if r.get("delivered"))
+    skipped = sum(1 for r in results if r.get("skipped"))
+    dry = sum(1 for r in results if r.get("dry_run"))
+    errors = sum(1 for r in results if r.get("error"))
+    console.print_json(data={
+        "mode": "dry_run" if dry_run else "live",
+        "since_days": since_days,
+        "total": len(results),
+        "sent": sent, "skipped": skipped, "dry_run_count": dry, "errors": errors,
+        "results": results,
+    })
+
+
 # ---------------------------------------------------------------------------
 # status + doctor
 # ---------------------------------------------------------------------------

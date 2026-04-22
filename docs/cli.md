@@ -114,6 +114,8 @@ Every command accepts `--help`. Exit code is `0` on success, `1` on any error
 | `calls judge --all-pending` | Backfill-judge every un-judged completed call. ~$0.02 each with gpt-4o-mini. |
 | `followups list [--action=... --owner=... --disposition=... --within=14]` | Show calls that need human or automated follow-up, sorted by due date. |
 | `followups show <call_id>` | JSON focus view for a single follow-up. |
+| `followups send-voicemail <call_id> [--dry-run]` | Send the voicemail / no-reach follow-up email for one call. Gated by `ALLOW_VOICEMAIL_EMAIL=true`. Resolves recipient from `captured_contacts` then `patients.email`. |
+| `followups backfill-voicemails [--since-days=7 --limit=50 --live]` | Batch-send pending voicemail / no-reach follow-up emails. Default is `--dry-run`; pass `--live` to actually send. Also gated by `ALLOW_VOICEMAIL_EMAIL`. |
 | `leads sync-mission [--tiers=A,B --dm-threshold=5]` | LLM-driven import of PI-firm contacts from Mission Control. |
 | `voice status` | Show the current default realtime voice backend (openai or gemini) + model. |
 | `voice openai [--model=…]` / `voice gemini [--model=…]` / `voice set <p> [--model=…]` | Switch the default backend for subsequent calls. Stored in DB. |

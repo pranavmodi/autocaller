@@ -15,6 +15,7 @@ from .api.auth import router as auth_router, SESSION_COOKIE, verify_session_toke
 from .services.dispatcher import get_dispatcher
 from .services.daily_report_service import daily_report_loop
 from .services.judge import judge_loop
+from .services.voicemail_followup_service import voicemail_followup_loop
 from .providers import set_queue_source, set_patient_source
 from .providers.settings_provider import get_settings_provider
 from .db import AsyncSessionLocal, async_engine
@@ -66,10 +67,13 @@ async def lifespan(app: FastAPI):
     # Start the cadence scan loop — checks hourly, fires at 6 AM Eastern
     from .services.cadence_service import cadence_scan_loop
     cadence_task = asyncio.create_task(cadence_scan_loop())
+    # Start the voicemail / no-reach follow-up emailer (gated by
+    # ALLOW_VOICEMAIL_EMAIL=true — loop ticks but no-ops without the flag).
+    vm_followup_task = asyncio.create_task(voicemail_followup_loop(interval_seconds=120))
     yield
     # Shutdown: stop the dispatcher, cancel background tasks, dispose engine
     get_dispatcher().stop()
-    for t in (daily_report_task, judge_task, cadence_task):
+    for t in (daily_report_task, judge_task, cadence_task, vm_followup_task):
         t.cancel()
         try:
             await t
