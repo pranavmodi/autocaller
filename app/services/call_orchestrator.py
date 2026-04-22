@@ -64,6 +64,13 @@ class CallOrchestrator:
         # of the conversation starting, auto-end the call. Catches voicemails
         # and hold-music that Gemini doesn't transcribe.
         self._silence_timeout_task: Optional[asyncio.Task] = None
+        # VM auto-end: when the AI finishes the voicemail script (detected
+        # by the CTA URL "getpossibleminds" landing in the AI transcript)
+        # but doesn't self-fire end_call(voicemail_left=true), this
+        # watchdog waits for audio drain + a short buffer and then tears
+        # the call down itself. Fixes Gemini-Live's tendency to complete
+        # the script but omit the tool call, leaving the line dangling.
+        self._vm_autoend_task: Optional[asyncio.Task] = None
         self._caller_has_spoken: bool = False
         self._caller_turn_count: int = 0
         # Web-call recording: accumulate both directions as raw PCM16 chunks,
@@ -595,6 +602,72 @@ class CallOrchestrator:
         except asyncio.CancelledError:
             pass
 
+    async def _vm_autoend_watchdog(self, call_id: str):
+        """Tear down the call after the AI finishes speaking a voicemail.
+
+        Triggered from _handle_transcript once the CTA URL marker
+        ("getpossibleminds") lands in the accumulated AI transcript —
+        at that point the script is effectively complete. We then wait
+        for audio drain (1.5s of silence since the last AI audio chunk)
+        plus a 1s tail buffer, and fire end_call(VOICEMAIL,
+        voicemail_left=true) IF the AI hasn't already self-terminated.
+
+        Fixes Gemini Flash Live's pattern of completing the script but
+        omitting the end_call tool call — leaving the line dangling in
+        silence until an operator manually hangs up. Observed on the
+        Colony Law call today (c7014180): full Case A VM delivered, no
+        tool call fired, ~15s of dead air before manual hangup.
+        """
+        import time
+        try:
+            # Wait for audio drain first — 1.5s of silence since the
+            # last AI audio output. Bounded at 12s (if audio keeps
+            # streaming past that, something's wrong, bail).
+            drain_deadline = time.monotonic() + 12.0
+            silence_needed = 1.5
+            while True:
+                if self._ending_call or not self._current_call:
+                    return
+                if self._current_call.call_id != call_id:
+                    return
+                last_audio = getattr(self, "_last_audio_out_at", 0.0) or 0.0
+                now = time.monotonic()
+                if last_audio == 0.0 or (now - last_audio) >= silence_needed:
+                    break
+                if now >= drain_deadline:
+                    break
+                await asyncio.sleep(0.2)
+
+            # Tail buffer — gives Gemini one last chance to self-fire
+            # end_call. If it does, self._ending_call trips and we bail.
+            await asyncio.sleep(1.0)
+            if self._ending_call or not self._current_call:
+                return
+            if self._current_call.call_id != call_id:
+                return
+
+            # Stamp voicemail_left=True (the AI said the full script,
+            # confirmed by the CTA marker check) and tear down.
+            print(
+                f"[CallOrchestrator] VM autoend: CTA marker present + drain+buffer "
+                f"elapsed, no AI end_call. Firing end_call(VOICEMAIL) for {call_id}."
+            )
+            await self._add_system_note(
+                "VM autoend watchdog: script complete (CTA URL spoken) + audio "
+                "drain elapsed + AI did not self-fire end_call. Auto-ending."
+            )
+            call_log_provider = get_call_log_provider()
+            try:
+                await call_log_provider.update_call(
+                    self._current_call.call_id, voicemail_left=True,
+                )
+                self._current_call.voicemail_left = True
+            except Exception as e:
+                logger.warning("vm_autoend voicemail_left stamp failed: %s", e)
+            await self.end_call(CallOutcome.VOICEMAIL, ended_by="vm_autoend")
+        except asyncio.CancelledError:
+            pass
+
     async def end_call(
         self,
         outcome: CallOutcome = CallOutcome.COMPLETED,
@@ -626,6 +699,8 @@ class CallOrchestrator:
 
         if self._silence_timeout_task and not self._silence_timeout_task.done():
             self._silence_timeout_task.cancel()
+        if self._vm_autoend_task and not self._vm_autoend_task.done():
+            self._vm_autoend_task.cancel()
 
         call = self._current_call
         patient = self._current_patient
@@ -808,6 +883,27 @@ class CallOrchestrator:
             await call_log_provider.add_transcript(self._current_call.call_id, "ai", text)
             if self.on_transcript_update:
                 await self.on_transcript_update("ai", text)
+
+            # VM auto-end trigger: once the CTA URL lands in the AI's
+            # accumulated transcript, the voicemail script is effectively
+            # complete. Start a watchdog that will fire end_call after
+            # audio drain IF the AI hasn't self-terminated. Gemini Flash
+            # Live reliably finishes the script but unreliably emits the
+            # tool call, so the line dangles until someone manually hangs
+            # up. Check the combined recent AI text (fragments split).
+            combined_recent = "".join(
+                e.text for e in (self._current_call.transcript or [])
+                if e.speaker == "ai"
+            ).lower()
+            vm_cta_markers = ("getpossibleminds", "possibleminds dot com", "possible minds dot com")
+            if (
+                any(m in combined_recent for m in vm_cta_markers)
+                and (self._vm_autoend_task is None or self._vm_autoend_task.done())
+                and not self._ending_call
+            ):
+                self._vm_autoend_task = asyncio.create_task(
+                    self._vm_autoend_watchdog(self._current_call.call_id)
+                )
 
             # Did the AI just enter a hold state? Check the latest AI
             # utterance (may be split across multiple ai_complete events,

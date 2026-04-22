@@ -18,7 +18,7 @@ from app.models import Patient  # Patient is aliased as Lead in models/patient.p
 
 # Bump this when you change the template or tool list in a way that materially
 # affects calling behavior. Used by the judge + Phase B A/B tests to compare.
-PROMPT_VERSION = "v1.60"  # v1.60: queue acknowledgment "Thanks, I'll hold" → "Okay" — shorter, less scripted-sounding, fewer tokens for Gemini to drift on during hold state.
+PROMPT_VERSION = "v1.61"  # v1.61: VM autoend watchdog — orchestrator fires end_call(voicemail_left=true) ~2.5s after CTA URL lands in AI transcript + audio drain. Catches Gemini Flash Live's pattern of completing the VM script but omitting the tool call, which left the line dangling in silence until manual hangup (Colony Law call today).
 
 
 SYSTEM_PROMPT_TEMPLATE = """\
