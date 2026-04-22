@@ -29,6 +29,19 @@ logger = logging.getLogger(__name__)
 PIF_BASE = "https://emailprocessing.mediflow360.com/api/v1/pif-info"
 SCAN_HOUR = 6  # 6 AM
 SCAN_TZ = ZoneInfo("America/New_York")
+RECENT_RESEARCH_DAYS = int(os.getenv("CADENCE_RECENT_RESEARCH_DAYS", "7"))
+
+
+def _is_recent(iso_ts: Optional[str], days: int) -> bool:
+    if not iso_ts:
+        return False
+    try:
+        ts = datetime.fromisoformat(iso_ts.replace("Z", "+00:00"))
+    except (ValueError, AttributeError):
+        return False
+    if ts.tzinfo is None:
+        ts = ts.replace(tzinfo=timezone.utc)
+    return (datetime.now(timezone.utc) - ts) <= timedelta(days=days)
 
 
 async def run_daily_scan() -> dict:
@@ -52,6 +65,7 @@ async def _ingest_signals() -> int:
                     f"{PIF_BASE}/",
                     params={
                         "research_status": "completed",
+                        "recently_researched": RECENT_RESEARCH_DAYS,
                         "page": page,
                         "page_size": 100,
                     },
@@ -61,7 +75,13 @@ async def _ingest_signals() -> int:
                 data = resp.json()
                 for f in data.get("items", []):
                     beh = f.get("behavioral_data")
-                    if beh and beh.get("days_since_last_contact", 999) <= 2:
+                    recently_active = bool(
+                        beh and beh.get("days_since_last_contact", 999) <= 2
+                    )
+                    recently_researched = _is_recent(
+                        f.get("last_researched_at"), RECENT_RESEARCH_DAYS
+                    )
+                    if recently_active or recently_researched:
                         firms.append(f)
                 if page >= data.get("total_pages", 1):
                     break
@@ -69,7 +89,11 @@ async def _ingest_signals() -> int:
                 if page > 30:
                     break
 
-        logger.info("PIF Stats signal scan: %d recently-active firms", len(firms))
+        logger.info(
+            "PIF Stats signal scan: %d firms (recent activity or researched <=%dd)",
+            len(firms),
+            RECENT_RESEARCH_DAYS,
+        )
 
         async with AsyncSessionLocal() as session:
             existing_pifs = set()

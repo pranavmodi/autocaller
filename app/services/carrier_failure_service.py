@@ -154,4 +154,4 @@ class CarrierFailureHandler:
 
         if self.on_status_update:
             await self.on_status_update(f"Twilio carrier failure: {reason}")
-        await self._end_call(CallOutcome.FAILED)
+        await self._end_call(CallOutcome.FAILED, ended_by="carrier_failure")

@@ -96,6 +96,7 @@ def _row_to_call_log(row: CallLogRow) -> CallLog:
     cl.ivr_detected = bool(getattr(row, "ivr_detected", False))
     cl.ivr_outcome = getattr(row, "ivr_outcome", None)
     cl.ivr_menu_log = getattr(row, "ivr_menu_log", None)
+    cl.ended_by = getattr(row, "ended_by", None)
 
     # Convert JSONB transcript list to TranscriptEntry objects
     raw = row.transcript or []
@@ -259,7 +260,12 @@ class CallLogProvider:
                 row.transcript = current
                 await session.commit()
 
-    async def end_call(self, call_id: str, outcome: CallOutcome):
+    async def end_call(
+        self,
+        call_id: str,
+        outcome: CallOutcome,
+        ended_by: Optional[str] = None,
+    ):
         now = datetime.now(timezone.utc)
         async with AsyncSessionLocal() as session:
             result = await session.execute(
@@ -269,6 +275,8 @@ class CallLogProvider:
             if row:
                 row.ended_at = now
                 row.outcome = outcome.value
+                if ended_by and not row.ended_by:
+                    row.ended_by = ended_by
                 if row.started_at:
                     row.duration_seconds = int((now - row.started_at).total_seconds())
 

@@ -133,6 +133,7 @@ export default function CallDetailPage({ params }: Props) {
               {call.ivr_detected
                 ? ` · IVR ${call.ivr_outcome ?? "detected"}`
                 : ""}
+              {call.ended_by ? ` · ended by ${call.ended_by}` : ""}
             </p>
           </div>
           <OutcomePill outcome={call.outcome} />

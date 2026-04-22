@@ -147,6 +147,16 @@ class CallLogRow(Base):
     ivr_detected: Mapped[bool] = mapped_column(Boolean, default=False)
     ivr_outcome: Mapped[str | None] = mapped_column(String(32), nullable=True)
     ivr_menu_log: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    # Who ended the call. Set once, at call teardown. Values:
+    #   ai_tool            — model invoked the end_call tool
+    #   vm_detect          — caller-audio VM/IVR phrase matcher
+    #   ivr_navigator      — IVR navigator hit dead_end/timed_out/not_ivr
+    #   silence_watchdog   — no caller speech inside the silence timeout
+    #   stream_closed      — carrier WS closed first (they hung up / network drop)
+    #   error              — early-failure path during start_call()
+    #   manual             — operator hang-up from the UI
+    # Null on legacy rows.
+    ended_by: Mapped[str | None] = mapped_column(String(32), nullable=True)
 
     __table_args__ = (
         Index("ix_call_logs_patient_id", "patient_id"),

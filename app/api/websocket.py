@@ -202,7 +202,8 @@ async def voice_websocket(websocket: WebSocket):
                         outcome = CallOutcome(outcome_str)
                     except ValueError:
                         outcome = CallOutcome.COMPLETED
-                    await orchestrator.end_call(outcome)
+                    # Operator hit "hang up" from the web UI.
+                    await orchestrator.end_call(outcome, ended_by="manual")
 
                 elif msg_type == "ping":
                     await websocket.send_json({"type": "pong"})
@@ -232,7 +233,7 @@ async def voice_websocket(websocket: WebSocket):
 
         # End any active call
         if orchestrator.is_call_active:
-            await orchestrator.end_call(CallOutcome.FAILED)
+            await orchestrator.end_call(CallOutcome.FAILED, ended_by="stream_closed")
 
 
 @router.websocket("/ws/twilio-media/{stream_id}")
@@ -268,7 +269,7 @@ async def twilio_media_websocket(websocket: WebSocket, stream_id: str):
         orchestrator = get_orchestrator()
         if orchestrator.is_call_active:
             print(f"[TwilioMedia] Stream closed while call active — reason={disconnect_reason}, stream_id={stream_id}")
-            await orchestrator.end_call(CallOutcome.DISCONNECTED)
+            await orchestrator.end_call(CallOutcome.DISCONNECTED, ended_by="stream_closed")
         else:
             print(f"[TwilioMedia] Stream closed (call already ended) — reason={disconnect_reason}, stream_id={stream_id}")
 
@@ -307,7 +308,7 @@ async def telnyx_media_websocket(websocket: WebSocket, stream_id: str):
         orchestrator = get_orchestrator()
         if orchestrator.is_call_active:
             print(f"[TelnyxMedia] Stream closed while call active — reason={disconnect_reason}, stream_id={stream_id}")
-            await orchestrator.end_call(CallOutcome.DISCONNECTED)
+            await orchestrator.end_call(CallOutcome.DISCONNECTED, ended_by="stream_closed")
         else:
             print(f"[TelnyxMedia] Stream closed (call already ended) — reason={disconnect_reason}, stream_id={stream_id}")
 

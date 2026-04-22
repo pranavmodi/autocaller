@@ -139,6 +139,7 @@ export interface CallLog {
   ivr_detected: boolean;
   ivr_outcome: string | null;
   ivr_menu_log: unknown[] | null;
+  ended_by: string | null;
   whisper_transcript: string | null;
   call_mode: string;
 }

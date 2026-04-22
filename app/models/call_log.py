@@ -241,6 +241,8 @@ class CallLog:
     ivr_detected: bool = False
     ivr_outcome: Optional[str] = None     # reached_human | dead_end | timed_out | skipped | not_ivr
     ivr_menu_log: Optional[list] = None
+    # Who tore the call down. See CallLogRow.ended_by for values.
+    ended_by: Optional[str] = None
 
     def add_transcript(self, speaker: str, text: str):
         """Add a transcript entry."""
@@ -319,6 +321,7 @@ class CallLog:
             "ivr_detected": self.ivr_detected,
             "ivr_outcome": self.ivr_outcome,
             "ivr_menu_log": self.ivr_menu_log,
+            "ended_by": self.ended_by,
             "whisper_transcript": self.whisper_transcript,
             "call_mode": self.call_mode,
         }

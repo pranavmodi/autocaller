@@ -77,7 +77,10 @@ _CLASSIFY_PROMPT = (
     "- 'leave a message' / 'record after the tone' / 'mailbox is full' → voicemail\n"
     "- 'please hold' / 'next available agent' / 'connecting you' / 'one moment' → queue\n"
     "- 'You have reached [firm]' with no option to press → voicemail (default)\n"
-    "- 'Thank you for calling [firm]' alone is AMBIGUOUS — wait for more.\n"
+    "- 'Thank you for calling [firm]' with NO preceding speech is AMBIGUOUS — wait for more.\n"
+    "- 'Hi, good afternoon / good morning / hello. Thank you for calling [firm]' "
+    "IS a HUMAN — an informal opener before the formal greeting means a live receptionist.\n"
+    "- Any greeting starting with 'Hi,' or 'Hello,' followed by a business name is HUMAN.\n"
     "- Silence, ringback tone, brief hold music, or 'one moment' immediately "
     "AFTER a DTMF press usually means a transfer is in progress — lean queue, "
     "not ambiguous."
@@ -338,8 +341,12 @@ class IVRNavigator:
                     or str(chosen_entry.get("route_type", "")).lower() == "operator"
                     or any(kw in rationale_lc for kw in (
                         "operator", "representative", "receptionist",
-                        "front desk", "main", "speak to",
+                        "front desk", "main", "speak to", "human",
+                        "other matters", "all other", "general",
                     ))
+                    # Any non-client route pressed may result in a transfer —
+                    # treat ambiguous post-DTMF as transfer-in-progress by default.
+                    or str(chosen_entry.get("identity_claim_required", "true")).lower() != "true"
                 )
 
                 hop_step = NavigationStep(

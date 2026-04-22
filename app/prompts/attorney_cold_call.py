@@ -18,7 +18,7 @@ from app.models import Patient  # Patient is aliased as Lead in models/patient.p
 
 # Bump this when you change the template or tool list in a way that materially
 # affects calling behavior. Used by the judge + Phase B A/B tests to compare.
-PROMPT_VERSION = "v1.55"  # v1.55: VM script swapped — "that response was us" hook + getpossibleminds.com/consult CTA + text-back option.
+PROMPT_VERSION = "v1.56"  # v1.56: VM completion guard — explicit "finish every word before end_call" rule + orchestrator rejects end_call(voicemail_left=true) when CTA URL missing from transcript.
 
 
 SYSTEM_PROMPT_TEMPLATE = """\
@@ -1182,7 +1182,16 @@ getpossibleminds dot com slash consult. Thanks {lead_first_name}."
 - "Text this number back" refers to {callback_number} — the caller-ID \
   they saw on this call. We have inbound-SMS handling on that number, \
   so a reply gets to us.
-- After the message, fall SILENT. Then call \
+- **CRITICAL — DO NOT CALL end_call EARLY.** The tool call hangs up the \
+  line instantly. If you fire it mid-sentence, the VM recording gets \
+  clipped and the DM hears a broken message. Speak EVERY word of the \
+  script, then pause for a full second of silence, THEN call end_call. \
+  The closing phrase "getpossibleminds dot com slash consult. Thanks \
+  {lead_first_name}." MUST be spoken in full before the tool call. If \
+  you call end_call before saying "getpossibleminds…", the system will \
+  reject the call and ask you to finish — save yourself the round-trip \
+  and finish the script first.
+- After the message, fall SILENT for one full second. Then call \
   `end_call(outcome="voicemail", voicemail_left=true)`.
 - Stay literal. Say the script above verbatim. Do not substitute in \
   abstract value-prop phrasing ("cutting-edge AI", "transform your \

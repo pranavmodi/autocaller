@@ -1368,6 +1368,57 @@ class CallOrchestrator:
             if callback and outcome == CallOutcome.COMPLETED:
                 outcome = CallOutcome.CALLBACK_REQUESTED
 
+            # Guard: reject end_call(voicemail_left=true) when the AI hasn't
+            # actually delivered the full voicemail script. Gemini Flash Live
+            # tends to fire the tool mid-sentence; our audio-drain waits on
+            # silence, so it hangs up before the CTA plays. We detect an
+            # incomplete VM by the absence of the URL marker in the AI's
+            # recent transcript and push the model back to finish the script.
+            if (
+                outcome == CallOutcome.VOICEMAIL
+                and args.get("voicemail_left")
+                and self._current_call is not None
+            ):
+                transcript = getattr(self._current_call, "transcript", []) or []
+                ai_text = " ".join(
+                    (e.text if hasattr(e, "text") else e.get("text", ""))
+                    for e in transcript
+                    if (getattr(e, "speaker", None) or e.get("speaker")) == "ai"
+                ).lower()
+                # The scripted VM ends with "getpossibleminds dot com slash
+                # consult. Thanks {first_name}." — gate on the URL token
+                # since names vary. Accept common TTS renderings.
+                vm_complete_markers = ("getpossibleminds", "possible minds dot com", "possibleminds dot com")
+                if not any(m in ai_text for m in vm_complete_markers):
+                    snippet = ai_text[-160:] if ai_text else "<no ai speech>"
+                    print(
+                        f"[CallOrchestrator] REJECT premature end_call(voicemail_left=true): "
+                        f"no CTA marker in AI transcript. last_160_chars={snippet!r}"
+                    )
+                    await self._add_system_note(
+                        "Rejected premature end_call(voicemail_left=true) — "
+                        "CTA URL missing from AI transcript. Model must finish "
+                        "the script before ending the call."
+                    )
+                    if self._voice_service and fn_call_id:
+                        await self._voice_service.send_function_result(
+                            fn_call_id,
+                            {
+                                "status": "rejected",
+                                "reason": "voicemail_script_incomplete",
+                                "instruction": (
+                                    "You called end_call before finishing the "
+                                    "voicemail script. Do NOT call end_call "
+                                    "again until you have spoken the full "
+                                    "closing: '...or grab one yourself at "
+                                    "getpossibleminds dot com slash consult. "
+                                    "Thanks <first_name>.' Resume speaking "
+                                    "the script from where you left off."
+                                ),
+                            },
+                        )
+                    return
+
             # Persist autocaller capture fields if the AI supplied them.
             capture_update: dict = {}
             if "pain_point_summary" in args and args["pain_point_summary"]:
