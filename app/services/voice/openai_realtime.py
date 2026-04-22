@@ -314,6 +314,20 @@ class OpenAIRealtimeBackend:
         })
         await self._send({"type": "response.create"})
 
+    async def send_system_nudge(self, text: str):
+        """Inject a [System: ...] instruction mid-call and trigger a response."""
+        if not self._ws or not text:
+            return
+        await self._send({
+            "type": "conversation.item.create",
+            "item": {
+                "type": "message",
+                "role": "user",
+                "content": [{"type": "input_text", "text": f"[System: {text}]"}],
+            },
+        })
+        await self._send({"type": "response.create"})
+
     async def disconnect(self):
         if self._session:
             self._session.is_active = False

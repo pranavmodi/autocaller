@@ -51,6 +51,15 @@ OUTCOME_NOT_IVR = "not_ivr"
 # not a dead end — a human is about to be patched through. Orchestrator
 # should keep the line open (and stay muted) instead of hanging up.
 OUTCOME_QUEUE_WAIT = "queue_wait"
+# Voicemail subtypes (see _CLASSIFY_PROMPT).
+#   dm_personal: greeting names the DM ("you've reached <first_name>",
+#     "her voicemail", "leave a message for <name>"). Orchestrator should
+#     unmute the AI and let it deliver the Case B script.
+#   firm_general: generic firm mailbox ("you've reached the law offices
+#     of X", no named DM). Orchestrator should silent-hangup (leaving a
+#     generic pitch reaches the receptionist, not the DM — burns the lead).
+OUTCOME_VM_DM_PERSONAL = "vm_dm_personal"
+OUTCOME_VM_FIRM_GENERAL = "vm_firm_general"
 
 
 # ---------------------------------------------------------------------------
@@ -61,7 +70,10 @@ _CLASSIFY_PROMPT = (
     "You are analysing audio transcript from the start of a US business "
     "phone call. Classify what the other side is. Output JSON only:\n"
     '  {"kind": "human"|"ivr_menu"|"voicemail"|"queue"|"ambiguous", '
+    '   "vm_subtype": "dm_personal"|"firm_general"|"unknown", '
     '   "confidence": 0.0-1.0, "reason": "<short>"}\n\n'
+    "You will also be given the DM (decision-maker) name we are trying to "
+    "reach. Use it to distinguish a DM-personal voicemail from a firm mailbox.\n\n"
     "Definitions:\n"
     "- human: a live person speaking informally (e.g. 'Hello?', 'Law office of X, this is Y').\n"
     "- ivr_menu: a scripted prompt offering NUMBERED OPTIONS to navigate "
@@ -72,11 +84,24 @@ _CLASSIFY_PROMPT = (
     "'please hold', 'next available agent', 'connecting your call', 'one moment'. "
     "NOT navigable, NOT a dead end — the right action is to stay silent and wait.\n"
     "- ambiguous: cannot tell yet (too little audio, music, etc.).\n\n"
+    "Voicemail subtypes (ONLY set when kind=voicemail, else use 'unknown'):\n"
+    "- dm_personal: the greeting names the DM or uses a DM pronoun — "
+    "'you've reached <dm_first_name>', 'hi this is <dm_first_name>', "
+    "'send you to her/his voicemail', 'leave a message for <dm_name>', "
+    "'<dm_name> is not available'. If the receptionist said 'let me "
+    "send you to her voicemail' BEFORE the mailbox greeting played, "
+    "that also counts as dm_personal (context carries the name).\n"
+    "- firm_general: the mailbox belongs to the firm, not a named person — "
+    "'you've reached the law offices of X', 'thanks for calling <firm>, "
+    "please leave a message', or a greeting with NO DM name anywhere in "
+    "the surrounding transcript.\n"
+    "- unknown: kind != voicemail, OR it's a voicemail but not enough "
+    "context to tell (prefer this over guessing).\n\n"
     "Key distinctions:\n"
     "- 'press N' / 'dial N' / 'for X, press N' → ivr_menu\n"
     "- 'leave a message' / 'record after the tone' / 'mailbox is full' → voicemail\n"
     "- 'please hold' / 'next available agent' / 'connecting you' / 'one moment' → queue\n"
-    "- 'You have reached [firm]' with no option to press → voicemail (default)\n"
+    "- 'You have reached [firm]' with no option to press → voicemail (firm_general)\n"
     "- 'Thank you for calling [firm]' with NO preceding speech is AMBIGUOUS — wait for more.\n"
     "- 'Hi, good afternoon / good morning / hello. Thank you for calling [firm]' "
     "IS a HUMAN — an informal opener before the formal greeting means a live receptionist.\n"
@@ -166,24 +191,53 @@ class IVRNavigator:
         self._client = client or AsyncOpenAI(api_key=api_key)
         self._model = model
 
-    async def classify(self, transcript: str) -> dict:
-        """Return {"kind", "confidence", "reason"}."""
+    async def classify(
+        self,
+        transcript: str,
+        *,
+        dm_first_name: Optional[str] = None,
+        dm_full_name: Optional[str] = None,
+    ) -> dict:
+        """Return {"kind", "vm_subtype", "confidence", "reason"}.
+
+        dm_first_name/dm_full_name are forwarded to the classifier so it
+        can tell a DM-personal voicemail ("send you to her voicemail",
+        "you've reached Rosie") from a firm-general mailbox.
+        """
+        dm_context = ""
+        if dm_first_name or dm_full_name:
+            parts = []
+            if dm_full_name:
+                parts.append(f"full: {dm_full_name}")
+            if dm_first_name:
+                parts.append(f"first: {dm_first_name}")
+            dm_context = f"DM we're calling for — {', '.join(parts)}\n\nTranscript:\n"
+        user_msg = f"{dm_context}{transcript or '(silence)'}"
         try:
             resp = await self._client.chat.completions.create(
                 model=self._model,
                 response_format={"type": "json_object"},
                 messages=[
                     {"role": "system", "content": _CLASSIFY_PROMPT},
-                    {"role": "user", "content": transcript or "(silence)"},
+                    {"role": "user", "content": user_msg},
                 ],
                 temperature=0.0,
-                max_tokens=150,
+                max_tokens=200,
             )
             raw = resp.choices[0].message.content or "{}"
-            return json.loads(raw)
+            data = json.loads(raw)
+            # Default vm_subtype so callers don't need to .get() with a fallback.
+            if "vm_subtype" not in data:
+                data["vm_subtype"] = "unknown"
+            return data
         except Exception as e:
             logger.warning("IVR classify failed: %s", e)
-            return {"kind": "ambiguous", "confidence": 0.0, "reason": f"llm_error: {e}"}
+            return {
+                "kind": "ambiguous",
+                "vm_subtype": "unknown",
+                "confidence": 0.0,
+                "reason": f"llm_error: {e}",
+            }
 
     async def parse_and_pick(
         self,
@@ -235,6 +289,8 @@ class IVRNavigator:
         unmute_ai_audio: Callable[[], None],
         initial_transcript: str = "",
         on_note: Optional[Callable[[str], Awaitable[None]]] = None,
+        dm_first_name: Optional[str] = None,
+        dm_full_name: Optional[str] = None,
     ) -> NavigationResult:
         """Run the full navigation loop.
 
@@ -270,9 +326,14 @@ class IVRNavigator:
 
             # Step 0: classify the initial prompt.
             current_transcript = (initial_transcript or get_recent_transcript() or "").strip()
-            classified = await self.classify(current_transcript)
+            classified = await self.classify(
+                current_transcript,
+                dm_first_name=dm_first_name,
+                dm_full_name=dm_full_name,
+            )
             await _note(
                 f"Classified first prompt as '{classified.get('kind','?')}' "
+                f"vm_subtype={classified.get('vm_subtype','unknown')} "
                 f"({int((classified.get('confidence') or 0)*100)}% conf): "
                 f"{str(classified.get('reason',''))[:140]}"
             )
@@ -289,8 +350,19 @@ class IVRNavigator:
                 step.result = "reached_human"
                 return result
             if step.kind == "voicemail":
-                result.outcome = OUTCOME_NOT_IVR  # handled by existing voicemail path
-                step.result = "voicemail"
+                vm_subtype = str(classified.get("vm_subtype", "unknown")).lower()
+                if vm_subtype == "dm_personal":
+                    result.outcome = OUTCOME_VM_DM_PERSONAL
+                    step.result = "voicemail_dm_personal"
+                elif vm_subtype == "firm_general":
+                    result.outcome = OUTCOME_VM_FIRM_GENERAL
+                    step.result = "voicemail_firm_general"
+                else:
+                    # Unknown subtype — keep legacy NOT_IVR outcome so the
+                    # orchestrator falls back to the existing silent-hangup
+                    # path rather than risking a pitch to a firm mailbox.
+                    result.outcome = OUTCOME_NOT_IVR
+                    step.result = "voicemail_unknown"
                 return result
             if step.kind == "queue":
                 # A human is incoming; stay on the line silently.

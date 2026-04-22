@@ -386,6 +386,12 @@ class GeminiLiveBackend:
             }
         })
 
+    async def send_system_nudge(self, text: str):
+        """Inject a [System: ...] instruction mid-call so the model redirects."""
+        if not self._ws or not text:
+            return
+        await self._send({"realtimeInput": {"text": f"[System: {text}]"}})
+
     async def disconnect(self):
         self._is_active = False
         ws = self._ws

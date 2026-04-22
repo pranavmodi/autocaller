@@ -18,7 +18,7 @@ from app.models import Patient  # Patient is aliased as Lead in models/patient.p
 
 # Bump this when you change the template or tool list in a way that materially
 # affects calling behavior. Used by the judge + Phase B A/B tests to compare.
-PROMPT_VERSION = "v1.56"  # v1.56: VM completion guard — explicit "finish every word before end_call" rule + orchestrator rejects end_call(voicemail_left=true) when CTA URL missing from transcript.
+PROMPT_VERSION = "v1.57"  # v1.57: IVR navigator now classifies VM subtype (dm_personal/firm_general/unknown). On dm_personal, navigator unmutes AI + nudges Case B script; on firm_general, silent hangup without stamping voicemail_left.
 
 
 SYSTEM_PROMPT_TEMPLATE = """\

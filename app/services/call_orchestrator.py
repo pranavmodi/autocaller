@@ -1110,6 +1110,8 @@ class CallOrchestrator:
             OUTCOME_TIMED_OUT,
             OUTCOME_NOT_IVR,
             OUTCOME_QUEUE_WAIT,
+            OUTCOME_VM_DM_PERSONAL,
+            OUTCOME_VM_FIRM_GENERAL,
         )
 
         # _ivr_navigating is set synchronously by _handle_transcript BEFORE
@@ -1133,6 +1135,12 @@ class CallOrchestrator:
             async def _note(msg: str) -> None:
                 await self._add_system_note(msg)
 
+            # DM name context — lets the classifier distinguish a DM-personal
+            # VM ("send you to her voicemail", where "her" = the named DM)
+            # from a generic firm mailbox.
+            _dm_full = (self._current_patient.name or "").strip() if self._current_patient else ""
+            _dm_first = _dm_full.split()[0] if _dm_full else ""
+
             result = await navigator.navigate(
                 get_recent_transcript=_recent,
                 send_dtmf=_dtmf,
@@ -1140,6 +1148,8 @@ class CallOrchestrator:
                 unmute_ai_audio=bridge.unmute_ai_audio,
                 initial_transcript=initial_snippet or _recent(),
                 on_note=_note,
+                dm_first_name=_dm_first or None,
+                dm_full_name=_dm_full or None,
             )
 
             call_log_provider = get_call_log_provider()
@@ -1222,16 +1232,50 @@ class CallOrchestrator:
                     await self.on_status_update("False IVR alarm — resuming conversation")
                 return  # no hang-up, no reseed greeting
 
-            # Dead-end / timed-out / not_ivr(voicemail) → hang up with voicemail outcome.
-            # The derive_* helper will turn this into IVR_UNREACHED now that
-            # ivr_detected=True + ivr_outcome is stamped.
-            self._web_voicemail_simulated = True
-            await call_log_provider.update_call(
-                self._current_call.call_id, voicemail_left=True,
-            )
-            self._current_call.voicemail_left = True
+            # DM-personal voicemail → unmute the AI, nudge it to deliver the
+            # Case B script, and DON'T hang up. The AI's own end_call(
+            # voicemail_left=true) tool will fire when it finishes, and the
+            # v1.56 CTA-marker guard in _handle_function_call will reject it
+            # if the script was clipped.
+            if result.outcome == OUTCOME_VM_DM_PERSONAL:
+                dm_full = (self._current_patient.name or "").strip() if self._current_patient else ""
+                dm_first = dm_full.split()[0] if dm_full else "(the DM)"
+                await self._add_system_note(
+                    f"Navigator: DM-personal voicemail detected for {dm_first}. "
+                    "Unmuting AI to deliver Case B script."
+                )
+                if self.on_status_update:
+                    await self.on_status_update(
+                        f"DM voicemail — leaving message for {dm_first}"
+                    )
+                try:
+                    bridge.unmute_ai_audio()
+                except Exception as e:
+                    logger.debug("unmute_ai_audio on VM_DM_PERSONAL failed: %s", e)
+                try:
+                    if self._voice_service is not None:
+                        await self._voice_service.cancel_response()
+                        await self._voice_service.send_system_nudge(
+                            f"You have hit {dm_first}'s personal voicemail. "
+                            f"Deliver the Case B voicemail script NOW, verbatim. "
+                            "Speak every word of the script including the closing "
+                            "'...or grab one yourself at getpossibleminds dot com "
+                            f"slash consult. Thanks {dm_first}.' "
+                            "Do NOT call end_call until the FULL script has been "
+                            "spoken — the system will reject a premature end_call."
+                        )
+                except Exception as e:
+                    logger.warning("Could not nudge AI for VM_DM_PERSONAL: %s", e)
+                return  # AI will speak + fire end_call(voicemail_left=true) itself
+
+            # Firm-general VM / dead-end / timed-out / unknown VM → silent
+            # hangup. These outcomes mean either the mailbox was for the
+            # firm (pitching it reaches the receptionist, not the DM) or we
+            # ran out of IVR navigation budget. Do NOT stamp voicemail_left
+            # — we didn't leave a message. derive_status_and_disposition
+            # will map this to IVR_UNREACHED.
             await self._add_system_note(
-                f"IVR navigation ended: {result.outcome} after {len(menu_log)} hop(s) — hanging up."
+                f"IVR navigation ended: {result.outcome} after {len(menu_log)} hop(s) — hanging up (no VM left)."
             )
             if self.on_status_update:
                 await self.on_status_update(f"IVR navigation {result.outcome} — hanging up")
