@@ -76,6 +76,15 @@ class CallOrchestrator:
         # from bridge._ai_audio_muted (which IVR-nav also uses) so the two
         # cases don't stomp on each other's flag flips.
         self._human_takeover_flag: bool = False
+        # Manual-IVR state. True when the operator has clicked "IVR" on
+        # the overlay to drive the phone tree themselves. While this is
+        # on: AI audio is muted on the carrier leg (prospect doesn't
+        # hear pitches mid-menu), the automatic IVR navigator is
+        # suppressed (no duplicate digit presses), and each DTMF the
+        # operator sends gets recorded to the transcript for post-call
+        # review. Operator toggles off once a human is on the line —
+        # AI resumes speaking on the human's first turn.
+        self._manual_ivr_flag: bool = False
 
         # Callbacks for UI updates
         self.on_call_started: Optional[Callable[[CallLog], Any]] = None
@@ -158,7 +167,7 @@ class CallOrchestrator:
                 if self.on_status_update:
                     await self.on_status_update(f"Voicemail playback failed: {str(e)}")
 
-            await self.end_call(CallOutcome.VOICEMAIL)
+            await self.end_call(CallOutcome.VOICEMAIL, ended_by="amd_voicemail")
 
     async def handle_twilio_call_status(
         self,
@@ -545,7 +554,7 @@ class CallOrchestrator:
                 await self._add_system_note(
                     f"Hold watchdog: on hold for {timeout_seconds}s with no response. Auto-ending."
                 )
-                await self.end_call(CallOutcome.FAILED)
+                await self.end_call(CallOutcome.FAILED, ended_by="hold_watchdog")
         except asyncio.CancelledError:
             pass
 
@@ -577,14 +586,27 @@ class CallOrchestrator:
                 await self._add_system_note(
                     f"Silence watchdog: no caller transcript in {timeout_seconds}s. Auto-ending."
                 )
-                await self.end_call(CallOutcome.FAILED)
+                await self.end_call(CallOutcome.FAILED, ended_by="silence_watchdog")
         except asyncio.CancelledError:
             pass
 
-    async def end_call(self, outcome: CallOutcome = CallOutcome.COMPLETED):
-        """End the current call."""
+    async def end_call(
+        self,
+        outcome: CallOutcome = CallOutcome.COMPLETED,
+        ended_by: Optional[str] = None,
+    ):
+        """End the current call.
+
+        ended_by identifies which code path tore the call down:
+          ai_tool | vm_detect | ivr_navigator | silence_watchdog |
+          stream_closed | error | manual
+        Persisted to call_logs.ended_by for post-hoc "us vs. them" analysis.
+        """
         import traceback
-        print(f"[DEBUG_IVR] end_call called: outcome={outcome.value} caller from:")
+        print(
+            f"[DEBUG_IVR] end_call called: outcome={outcome.value} "
+            f"ended_by={ended_by or 'unspecified'} caller from:"
+        )
         for line in traceback.format_stack()[-4:-1]:
             print(f"  {line.strip()}")
         if not self._current_call or self._ending_call:
@@ -606,7 +628,10 @@ class CallOrchestrator:
         call_mode = self._call_mode
         twilio_call_sid = self._twilio_call_sid
 
-        print(f"[CallOrchestrator] Ending call {call.call_id} with outcome={outcome.value} (mode={call_mode})")
+        print(
+            f"[CallOrchestrator] Ending call {call.call_id} "
+            f"with outcome={outcome.value} ended_by={ended_by or 'unspecified'} (mode={call_mode})"
+        )
 
         self._sync_status_callback()
 
@@ -666,9 +691,10 @@ class CallOrchestrator:
             self._voice_service = None
             self._twilio_bridge = None
             self._human_takeover_flag = False
+            self._manual_ivr_flag = False
 
             call_log_provider = get_call_log_provider()
-            await call_log_provider.end_call(call.call_id, outcome)
+            await call_log_provider.end_call(call.call_id, outcome, ended_by=ended_by)
 
             # Only update the lead's attempt count + outcome for REAL calls.
             # Mock (phone redirect) and web (browser test) calls are practice
@@ -869,6 +895,7 @@ class CallOrchestrator:
                 and not self._web_voicemail_simulated
                 and not self._ivr_navigating
                 and not self._ivr_handled
+                and not self._manual_ivr_flag  # skip auto-nav when operator is driving
                 and _phrase_match
             ):
                 elapsed_caller = time.monotonic() - (self._first_caller_audio_at or time.monotonic())
@@ -941,7 +968,7 @@ class CallOrchestrator:
                         )
                         if self.on_status_update:
                             await self.on_status_update("IVR/voicemail detected — hanging up")
-                        await self.end_call(CallOutcome.VOICEMAIL)
+                        await self.end_call(CallOutcome.VOICEMAIL, ended_by="vm_detect")
         elif speaker == "ai":
             if self.on_transcript_update:
                 await self.on_transcript_update("ai_delta", text)
@@ -1208,7 +1235,7 @@ class CallOrchestrator:
             )
             if self.on_status_update:
                 await self.on_status_update(f"IVR navigation {result.outcome} — hanging up")
-            await self.end_call(CallOutcome.VOICEMAIL)
+            await self.end_call(CallOutcome.VOICEMAIL, ended_by="ivr_navigator")
         finally:
             self._ivr_navigating = False
 
@@ -1311,7 +1338,7 @@ class CallOrchestrator:
                     mock_mode=self._mock_mode,
                     mock_phone=self._mock_phone,
                 )
-                await self.end_call(outcome)
+                await self.end_call(outcome, ended_by="transfer")
 
         elif name == "end_call":
             # Supports BOTH arg schemas: legacy {reason} and autocaller {outcome}.
@@ -1373,7 +1400,7 @@ class CallOrchestrator:
 
             # Let any in-flight goodbye audio drain before we hang up.
             await self._wait_for_audio_drain()
-            await self.end_call(outcome)
+            await self.end_call(outcome, ended_by="ai_tool")
 
         elif name == "send_sms":
             await self._notifications.send_sms_for_call(
@@ -1695,7 +1722,7 @@ class CallOrchestrator:
     async def _handle_session_ended(self):
         """Handle voice session ending unexpectedly."""
         if self._current_call and self._current_call.outcome == CallOutcome.IN_PROGRESS:
-            await self.end_call(CallOutcome.FAILED)
+            await self.end_call(CallOutcome.FAILED, ended_by="voice_session_ended")
 
     # ------------------------------------------------------------------
     # Human takeover
@@ -1784,6 +1811,69 @@ class CallOrchestrator:
             )
             self._op_audio_bytes = 0
             self._op_audio_last_log = now
+
+    # ------------------------------------------------------------------
+    # Manual IVR navigation — operator presses digits via the UI
+    # ------------------------------------------------------------------
+
+    @property
+    def manual_ivr_active(self) -> bool:
+        return self._manual_ivr_flag
+
+    async def set_manual_ivr(self, enabled: bool) -> bool:
+        """Toggle manual IVR mode on the live call.
+
+        When enabled: mutes AI audio on the carrier (prospect hears
+        only the IVR they dialed into), suppresses the auto IVR
+        navigator from interjecting, and adds a system marker to the
+        transcript. The operator presses digits via the UI; each goes
+        out as DTMF and also lands in the transcript.
+
+        When disabled: unmutes AI so it picks up on the next human
+        turn. Use when a human finally answers.
+        """
+        if self._twilio_bridge is None or self._current_call is None:
+            return False
+        if enabled:
+            self._manual_ivr_flag = True
+            self._twilio_bridge.mute_ai_audio()
+            try:
+                if self._voice_service is not None:
+                    await self._voice_service.cancel_response()
+            except Exception as e:
+                logger.warning("cancel_response during manual-IVR enable failed: %s", e)
+            await self._add_system_note(
+                "Manual IVR mode ON — operator driving digits, AI muted."
+            )
+            print(f"[manual-ivr] ON call={self._current_call.call_id}")
+        else:
+            self._manual_ivr_flag = False
+            self._twilio_bridge.unmute_ai_audio()
+            await self._add_system_note(
+                "Manual IVR mode OFF — AI resumes on next caller turn."
+            )
+            print(f"[manual-ivr] OFF call={self._current_call.call_id}")
+        return True
+
+    async def send_operator_dtmf(self, digit: str) -> bool:
+        """Send a single DTMF tone to the carrier on behalf of the
+        operator. Logs to the transcript so post-call review can see
+        the menu navigation. Allows only one digit per call (operator
+        presses 10 digits for a 10-key menu = 10 calls to this method).
+        """
+        d = (digit or "").strip()[:1]
+        if d not in "0123456789*#":
+            return False
+        if self._twilio_bridge is None or self._current_call is None:
+            return False
+        try:
+            await self._twilio_bridge.send_dtmf(d)
+        except Exception as e:
+            logger.warning("send_dtmf(%s) failed: %s", d, e)
+            return False
+        await self._add_system_note(f"Operator DTMF: {d}")
+        print(f"[manual-ivr] DTMF {d} sent on call={self._current_call.call_id}")
+        return True
 
     @property
     def is_call_active(self) -> bool:

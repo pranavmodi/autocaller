@@ -172,6 +172,20 @@ export type VoiceConfigPatch = {
 export const setVoiceConfig = (patch: VoiceConfigPatch) =>
   put<Record<string, unknown>>("/api/settings/voice-config", patch);
 
+// Manual IVR: operator drives digits; AI stays muted until disabled.
+export const setManualIvr = (callId: string, enabled: boolean) =>
+  post<{ status: string; manual_ivr_active: boolean }>(
+    `/api/calls/${callId}/manual-ivr`,
+    { enabled },
+  );
+
+export const sendDtmf = (callId: string, digit: string) =>
+  post<{ status: string; digit: string }>(
+    `/api/calls/${callId}/dtmf`,
+    { digit },
+  );
+
+
 export type VoicemailRecipient = {
   call_id: string;
   patient_id: string;

@@ -1144,6 +1144,59 @@ async def call_takeover(call_id: str, body: dict):
     }
 
 
+@router.post("/calls/{call_id}/manual-ivr")
+async def call_manual_ivr(call_id: str, body: dict):
+    """Toggle manual IVR mode for a live call.
+
+    Body: {"enabled": bool}. When enabled=true: AI is muted on the
+    carrier, auto-navigator is suppressed, operator drives digits via
+    POST /api/calls/{id}/dtmf. When false: AI resumes on the next
+    caller turn (typically once the operator has navigated to a human).
+
+    404 if no live call. 409 if call_id doesn't match the active call.
+    """
+    enabled = bool(body.get("enabled", True))
+    orchestrator = get_orchestrator()
+    current = orchestrator.current_call
+    if current is None:
+        raise HTTPException(status_code=404, detail="no active call")
+    if current.call_id != call_id:
+        raise HTTPException(status_code=409, detail="call_id does not match active call")
+    ok = await orchestrator.set_manual_ivr(enabled)
+    if not ok:
+        raise HTTPException(status_code=409, detail="could not flip manual IVR (no bridge?)")
+    return {
+        "status": "ok",
+        "call_id": call_id,
+        "manual_ivr_active": orchestrator.manual_ivr_active,
+    }
+
+
+@router.post("/calls/{call_id}/dtmf")
+async def call_dtmf(call_id: str, body: dict):
+    """Send a single DTMF tone on the active call. Only valid while
+    manual IVR mode is on (set via /api/calls/{id}/manual-ivr).
+
+    Body: {"digit": "1"} — one of 0-9, *, #.
+    """
+    digit = str(body.get("digit", "")).strip()[:1]
+    orchestrator = get_orchestrator()
+    current = orchestrator.current_call
+    if current is None:
+        raise HTTPException(status_code=404, detail="no active call")
+    if current.call_id != call_id:
+        raise HTTPException(status_code=409, detail="call_id does not match active call")
+    if not orchestrator.manual_ivr_active:
+        raise HTTPException(
+            status_code=409,
+            detail="manual IVR mode is off — enable it first via /manual-ivr",
+        )
+    ok = await orchestrator.send_operator_dtmf(digit)
+    if not ok:
+        raise HTTPException(status_code=400, detail=f"invalid or rejected digit: {digit!r}")
+    return {"status": "ok", "digit": digit}
+
+
 @router.post("/calls/clear-active")
 async def clear_active_call_marker():
     """Hang up the live Twilio call (if any), then clear the in-memory marker.
@@ -1158,7 +1211,7 @@ async def clear_active_call_marker():
     hung_up = False
     try:
         if orchestrator._current_call is not None:
-            await orchestrator.end_call(CallOutcome.COMPLETED)
+            await orchestrator.end_call(CallOutcome.COMPLETED, ended_by="manual")
             hung_up = True
     except Exception as e:
         logger.warning("orchestrator.end_call failed during clear-active: %s", e)

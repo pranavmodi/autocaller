@@ -6,6 +6,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   ChevronDown,
   ChevronUp,
+  Grid3x3,
   Headphones,
   HeadphoneOff,
   Mic,
@@ -16,7 +17,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useDashboardEvents } from "@/hooks/useDashboardEvents";
 import { useLiveListener } from "@/hooks/useLiveListener";
-import { clearActiveCall } from "@/lib/api";
+import { clearActiveCall, sendDtmf, setManualIvr } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { TranscriptStream } from "@/components/TranscriptStream";
 
@@ -70,6 +71,34 @@ export function ActiveCallOverlay() {
   const hangup = useMutation({
     mutationFn: clearActiveCall,
     onSuccess: () => qc.invalidateQueries({ queryKey: ["active-call"] }),
+  });
+
+  // Manual IVR: operator drives the phone tree, AI stays muted.
+  const [manualIvrOn, setManualIvrOn] = useState(false);
+  const [ivrError, setIvrError] = useState<string | null>(null);
+  // Reset when the call changes so the next call starts in auto mode.
+  useEffect(() => {
+    setManualIvrOn(false);
+    setIvrError(null);
+  }, [activeCall?.call_id]);
+
+  const toggleIvr = useMutation({
+    mutationFn: (enabled: boolean) =>
+      setManualIvr(activeCall!.call_id, enabled),
+    onSuccess: (res, enabled) => {
+      setManualIvrOn(enabled);
+      setIvrError(null);
+    },
+    onError: (err: unknown) => {
+      setIvrError(err instanceof Error ? err.message : String(err));
+    },
+  });
+
+  const dtmf = useMutation({
+    mutationFn: (digit: string) => sendDtmf(activeCall!.call_id, digit),
+    onError: (err: unknown) => {
+      setIvrError(err instanceof Error ? err.message : String(err));
+    },
   });
 
   if (!activeCall) {
@@ -218,6 +247,24 @@ export function ActiveCallOverlay() {
         <Button
           size="sm"
           variant="outline"
+          onClick={() => toggleIvr.mutate(!manualIvrOn)}
+          disabled={toggleIvr.isPending}
+          className={cn(
+            "gap-1.5",
+            manualIvrOn && "border-amber-400 bg-amber-50 text-amber-900 hover:bg-amber-100",
+          )}
+          title={
+            manualIvrOn
+              ? "Turn off manual IVR — AI resumes on next caller turn"
+              : "Mute AI and drive the phone tree yourself — digits will send DTMF"
+          }
+        >
+          <Grid3x3 className="h-3.5 w-3.5" />
+          {manualIvrOn ? "Exit IVR" : "IVR"}
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
           onClick={() => hangup.mutate()}
           disabled={hangup.isPending}
           className="gap-1.5 text-rose-700"
@@ -236,6 +283,44 @@ export function ActiveCallOverlay() {
       {listener.error && (
         <div className="border-b border-rose-100 bg-rose-50 px-3 py-1.5 text-xs text-rose-700">
           ⚠ {listener.error}
+        </div>
+      )}
+
+      {manualIvrOn && (
+        <div className="border-b border-amber-200 bg-amber-50/60 p-3">
+          <div className="mb-2 flex items-start justify-between gap-2 text-[11px] text-amber-900">
+            <span>
+              <strong className="font-semibold">Manual IVR active.</strong>{" "}
+              AI is muted. Press a key to send DTMF. Click &ldquo;Exit IVR&rdquo;
+              when a human is on the line.
+            </span>
+          </div>
+          <div className="grid grid-cols-3 gap-1.5">
+            {["1","2","3","4","5","6","7","8","9","*","0","#"].map((d) => (
+              <button
+                key={d}
+                type="button"
+                onClick={() => dtmf.mutate(d)}
+                disabled={dtmf.isPending}
+                className={cn(
+                  "rounded-md border border-amber-300 bg-white py-2 text-sm font-semibold text-amber-900 transition",
+                  "hover:bg-amber-100 active:bg-amber-200",
+                  dtmf.isPending && "cursor-wait opacity-50",
+                )}
+                title={`Send DTMF ${d}`}
+              >
+                {d}
+              </button>
+            ))}
+          </div>
+          {ivrError && (
+            <p className="mt-2 text-[11px] text-rose-700">⚠ {ivrError}</p>
+          )}
+        </div>
+      )}
+      {!manualIvrOn && ivrError && (
+        <div className="border-b border-rose-100 bg-rose-50 px-3 py-1.5 text-xs text-rose-700">
+          ⚠ {ivrError}
         </div>
       )}
 
