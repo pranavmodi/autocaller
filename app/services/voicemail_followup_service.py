@@ -133,6 +133,35 @@ async def _lookup_patient_email(patient_id: str) -> tuple[Optional[str], Optiona
         return email, name
 
 
+async def _patient_recently_emailed(
+    patient_id: str, exclude_call_id: str, days: int = _DEDUP_WINDOW_DAYS
+) -> bool:
+    """True if any OTHER call for this patient already has
+    followup_email_sent=True within the last N days. Uses the
+    per-call boolean (reliably persisted) instead of the jsonb
+    audit trail, so it catches duplicates even if the audit
+    records were missed.
+    """
+    if not patient_id:
+        return False
+    sql = text(
+        """
+        SELECT 1
+        FROM call_logs
+        WHERE patient_id = :pid
+          AND call_id <> :cid
+          AND followup_email_sent = true
+          AND ended_at > now() - make_interval(days => :days)
+        LIMIT 1
+        """
+    )
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            sql, {"pid": patient_id, "cid": exclude_call_id, "days": days}
+        )
+        return result.first() is not None
+
+
 async def _recently_emailed(email: str, days: int = _DEDUP_WINDOW_DAYS) -> bool:
     """True if this email address has a delivered voicemail_followup record
     in any call's captured_contacts within the last N days. Case-insensitive
@@ -180,14 +209,22 @@ async def process_call(call: CallLogRow, dry_run: bool = False) -> dict:
             "voicemail_left": bool(call.voicemail_left),
         }
 
-    # DB-level dedup: skip if this address has already received a
-    # voicemail_followup within the rolling window. Applies to dry-run
-    # too so operators see the same decision they'd get live.
-    already = await _recently_emailed(recipient, days=_DEDUP_WINDOW_DAYS)
-    if already:
+    # DB-level dedup — two checks, either triggers a skip:
+    #   (a) any prior call for the same patient with followup_email_sent=true
+    #       in the window (belt: uses the reliably-persisted boolean)
+    #   (b) any prior captured_contacts audit record for the same address
+    #       in the window (suspenders: catches cross-patient dupes too)
+    if await _patient_recently_emailed(call.patient_id, call_id, days=_DEDUP_WINDOW_DAYS):
         return {
             "call_id": call_id, "skipped": True,
-            "reason": f"already_emailed_within_{_DEDUP_WINDOW_DAYS}d",
+            "reason": f"patient_already_emailed_within_{_DEDUP_WINDOW_DAYS}d",
+            "recipient": recipient, "source": source,
+            "voicemail_left": bool(call.voicemail_left),
+        }
+    if await _recently_emailed(recipient, days=_DEDUP_WINDOW_DAYS):
+        return {
+            "call_id": call_id, "skipped": True,
+            "reason": f"email_already_sent_within_{_DEDUP_WINDOW_DAYS}d",
             "recipient": recipient, "source": source,
             "voicemail_left": bool(call.voicemail_left),
         }

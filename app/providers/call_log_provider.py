@@ -306,6 +306,8 @@ class CallLogProvider:
         "followup_email_sent", "firm_name", "lead_state",
         "voice_provider", "voice_model", "carrier",
         "ivr_detected", "ivr_outcome", "ivr_menu_log",
+        # Written by voicemail_followup_service + in-call send_followup_email
+        "captured_contacts",
     }
 
     async def update_call(self, call_id: str, **fields):
