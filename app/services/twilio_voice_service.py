@@ -264,6 +264,45 @@ class TwilioMediaBridge:
         except Exception as e:
             logger.error("DTMF send failed: %s", e)
 
+    # Inter-digit gap when streaming a multi-digit batch over the Twilio WS.
+    # 80ms keeps us under the "one input" threshold most phone trees use.
+    _DTMF_INTER_DIGIT_GAP_SECS: float = 0.08
+
+    async def send_dtmf_batch(self, digits: str) -> bool:
+        """Send one OR MORE DTMF tones. Twilio's Media Streams protocol is
+        one-digit-per-event; we loop with an 80ms gap so the phone tree
+        registers the whole string as one input.
+
+        Returns True if every digit was sent successfully.
+        """
+        import asyncio
+        cleaned = "".join(c for c in (digits or "").strip() if c in "0123456789*#")
+        if not cleaned:
+            logger.warning("[TwilioMedia] refusing DTMF batch %r (empty/invalid)", digits)
+            return False
+        if not self._twilio_ws or not self._stream_sid:
+            logger.warning("[TwilioMedia] DTMF batch %r dropped — stream not live", cleaned)
+            return False
+        for i, d in enumerate(cleaned):
+            if i:
+                await asyncio.sleep(self._DTMF_INTER_DIGIT_GAP_SECS)
+            msg = {
+                "event": "dtmf",
+                "streamSid": self._stream_sid,
+                "dtmf": {"digit": d},
+            }
+            try:
+                await self._twilio_ws.send_json(msg)
+            except Exception as e:
+                logger.error(
+                    "[TwilioMedia] DTMF batch send failed on digit %d/%d (%r): %s",
+                    i + 1, len(cleaned), d, e,
+                )
+                return False
+        if self._verbose:
+            logger.info(f"[TwilioMedia] DTMF batch sent: {cleaned}")
+        return True
+
     async def handle_twilio_ws(self, websocket: WebSocket):
         """Handle an incoming Twilio media stream WebSocket."""
         self._twilio_ws = websocket

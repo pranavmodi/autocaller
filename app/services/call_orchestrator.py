@@ -2007,13 +2007,17 @@ class CallOrchestrator:
 
     async def send_operator_dtmf(self, digits: str) -> bool:
         """Send one OR MORE DTMF tones to the carrier on behalf of the
-        operator. Accepts "1" or "701" or "*1234#". Streams each tone
-        with an 80ms inter-digit gap so phone trees register the whole
-        string as a single input (pressing 7-0-1 as separate REST calls
-        races the IVR's next menu option; batching fixes that).
+        operator. Accepts "1" or "701" or "*1234#".
 
-        Logs ONE system note per batch ("Operator DTMF: 701") rather
-        than one per digit.
+        Delegates to `bridge.send_dtmf_batch(digits)` which each carrier
+        implements natively: Telnyx POSTs the whole string to the Call
+        Control `send_dtmf` action (handles inter-digit pacing itself);
+        Twilio loops per-digit over Media Streams with an 80ms gap.
+        Telnyx Media Streams silently drops outbound DTMF-on-WS, so the
+        batch path is the only channel that actually reaches Telnyx PSTN
+        legs.
+
+        Logs ONE system note per batch ("Operator DTMF: 701").
         """
         cleaned = "".join(
             c for c in (digits or "").strip() if c in "0123456789*#"
@@ -2022,23 +2026,34 @@ class CallOrchestrator:
             return False
         if self._twilio_bridge is None or self._current_call is None:
             return False
-        for i, d in enumerate(cleaned):
-            if i:
-                await asyncio.sleep(self._DTMF_INTER_DIGIT_GAP_SECS)
-            try:
-                await self._twilio_bridge.send_dtmf(d)
-            except Exception as e:
-                logger.warning(
-                    "send_dtmf(%s) failed mid-batch (after %d/%d digits): %s",
-                    d, i, len(cleaned), e,
-                )
-                # Still stamp a note for what DID get through.
-                sent = cleaned[: i]
-                if sent:
-                    await self._add_system_note(
-                        f"Operator DTMF (partial, send_dtmf failed on digit {i+1}): {sent}"
+        try:
+            ok = await self._twilio_bridge.send_dtmf_batch(cleaned)
+        except AttributeError:
+            # Legacy bridge without batch support — fall back to per-digit
+            # loop. Shouldn't happen once every carrier implements the
+            # method, but keep the compat path so a missed upgrade doesn't
+            # break operator DTMF outright.
+            ok = True
+            for i, d in enumerate(cleaned):
+                if i:
+                    await asyncio.sleep(self._DTMF_INTER_DIGIT_GAP_SECS)
+                try:
+                    await self._twilio_bridge.send_dtmf(d)
+                except Exception as e:
+                    logger.warning(
+                        "send_dtmf(%s) failed mid-batch (after %d/%d digits): %s",
+                        d, i, len(cleaned), e,
                     )
-                return False
+                    ok = False
+                    break
+        except Exception as e:
+            logger.warning("send_dtmf_batch(%s) raised: %s", cleaned, e)
+            ok = False
+        if not ok:
+            await self._add_system_note(
+                f"Operator DTMF {cleaned} — send FAILED (carrier rejected or unreachable)"
+            )
+            return False
         await self._add_system_note(f"Operator DTMF: {cleaned}")
         print(
             f"[manual-ivr] DTMF batch {cleaned!r} ({len(cleaned)} digits) "

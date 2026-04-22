@@ -310,25 +310,66 @@ class TelnyxMediaBridge:
             logger.error(f"inject_inbound_audio (telnyx) failed: {e}")
 
     async def send_dtmf(self, digit: str) -> None:
-        d = (digit or "").strip()[:1]
-        if d not in "0123456789*#":
-            logger.warning("[TelnyxMedia] refusing DTMF digit %r (invalid)", digit)
-            return
-        if not self._ws or not self._stream_sid:
-            logger.warning("[TelnyxMedia] DTMF %s dropped — stream not live", d)
-            return
-        msg = {
-            "event": "dtmf",
-            "stream_id": self._stream_sid,
-            "streamSid": self._stream_sid,
-            "dtmf": {"digit": d},
-        }
+        """Send a single DTMF tone over the PSTN leg.
+
+        Telnyx's TeXML Media Streams WebSocket does not accept outbound
+        DTMF — digits sent via {"event":"dtmf"} frames on the WS are
+        silently dropped and never reach the called party. We confirmed
+        this the hard way on the Champ Law call: neither auto-navigator
+        nor manual-operator DTMF was ever acknowledged by the IVR.
+
+        The correct channel is the Telnyx Call Control REST action
+        `POST /v2/calls/{call_control_id}/actions/send_dtmf`. That
+        endpoint injects tones onto the actual PSTN leg and natively
+        accepts multi-digit batches.
+        """
+        await self.send_dtmf_batch(digit)
+
+    async def send_dtmf_batch(self, digits: str) -> bool:
+        """Send one OR MORE DTMF tones via Telnyx Call Control.
+
+        Telnyx's REST action accepts a full digit string and handles
+        inter-digit pacing itself (default 250ms/tone). One REST call
+        per batch — no need for per-digit WS events.
+
+        Returns True on HTTP 2xx.
+        """
+        cleaned = "".join(c for c in (digits or "").strip() if c in "0123456789*#")
+        if not cleaned:
+            logger.warning("[TelnyxMedia] refusing DTMF batch %r (empty/invalid)", digits)
+            return False
+        if not self._call_sid:
+            logger.warning(
+                "[TelnyxMedia] DTMF %r dropped — no call_control_id yet",
+                cleaned,
+            )
+            return False
         try:
-            await self._ws.send_json(msg)
-            if self._verbose:
-                logger.info(f"[TelnyxMedia] DTMF sent: {d}")
+            api_key = _api_key()
         except Exception as e:
-            logger.error("DTMF send failed: %s", e)
+            logger.error("[TelnyxMedia] DTMF %r dropped — API key missing: %s", cleaned, e)
+            return False
+        url = f"{TELNYX_API_BASE}/calls/{self._call_sid}/actions/send_dtmf"
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        }
+        body = {"digits": cleaned}
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.post(url, json=body, headers=headers)
+            if resp.status_code >= 400:
+                logger.warning(
+                    "[TelnyxMedia] send_dtmf(%s) HTTP %s: %s",
+                    cleaned, resp.status_code, resp.text[:200],
+                )
+                return False
+            if self._verbose:
+                logger.info(f"[TelnyxMedia] DTMF batch sent via Call Control: {cleaned}")
+            return True
+        except Exception as e:
+            logger.error("[TelnyxMedia] DTMF batch %s raised: %s", cleaned, e)
+            return False
 
     async def handle_carrier_ws(self, websocket: WebSocket):
         """Handle an incoming Telnyx media stream WebSocket."""
