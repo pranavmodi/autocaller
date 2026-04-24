@@ -39,6 +39,7 @@ followups_app = typer.Typer(help="GTM follow-up queue — calls awaiting action"
 voice_app = typer.Typer(help="Switch between realtime voice backends (openai | gemini)", no_args_is_help=True)
 ivr_app = typer.Typer(help="Phone-tree (IVR) navigation — press digits to reach a human", no_args_is_help=True)
 carrier_app = typer.Typer(help="Inspect the active telephony carrier account (Twilio)", no_args_is_help=True)
+prompts_app = typer.Typer(help="Prompt-style selector (current | minimal). Parallel prompt versions.", no_args_is_help=True)
 
 app.add_typer(leads_app, name="leads")
 app.add_typer(calls_app, name="calls")
@@ -51,6 +52,7 @@ app.add_typer(followups_app, name="followups")
 app.add_typer(voice_app, name="voice")
 app.add_typer(ivr_app, name="ivr")
 app.add_typer(carrier_app, name="carrier")
+app.add_typer(prompts_app, name="prompts")
 
 console = Console()
 
@@ -1888,6 +1890,83 @@ def leads_sync_pifstats(
 
     ins, upd = _run(_upsert())
     console.print(f"[green]Inserted {ins}, updated {upd}.[/green]")
+
+
+# ---------------------------------------------------------------------------
+# Prompts — parallel prompt-style selector
+# ---------------------------------------------------------------------------
+
+@prompts_app.command("show")
+def prompts_show():
+    """Show the active prompt style + version (reads PROMPT_STYLE env)."""
+    from app.prompts import active as prompt_mod
+    style = prompt_mod.get_active_style()
+    version = prompt_mod.get_prompt_version()
+    console.print(f"Active style  : [bold]{style}[/bold]")
+    console.print(f"PROMPT_VERSION: {version}")
+    console.print(f"(Change via PROMPT_STYLE env var + backend restart. "
+                  f"Valid: {', '.join(prompt_mod.VALID_STYLES)}.)")
+
+
+@prompts_app.command("list")
+def prompts_list():
+    """List available prompt styles with their versions."""
+    from app.prompts import active as prompt_mod
+    active = prompt_mod.get_active_style()
+    console.print("[bold]Available prompt styles:[/bold]")
+    for style in prompt_mod.VALID_STYLES:
+        if style == "current":
+            from app.prompts import attorney_cold_call as m
+        else:
+            from app.prompts import attorney_cold_call_minimal as m
+        marker = "●" if style == active else "○"
+        console.print(
+            f"  {marker} {style:10} {m.PROMPT_VERSION}"
+            f"{'  (active)' if style == active else ''}"
+        )
+
+
+@prompts_app.command("preview")
+def prompts_preview(
+    style: str = typer.Option(
+        "", "--style", "-s",
+        help="Style to preview (default: active). One of: current, minimal.",
+    ),
+    lead_name: str = typer.Option("Zoe Fernbacher", help="Sample lead name"),
+    firm: str = typer.Option("Homa Molayem Law Corporation", help="Sample firm"),
+    state: str = typer.Option("CA", help="Sample state (2-letter)"),
+):
+    """Preview the rendered system prompt against a sample lead.
+
+    Useful for eyeballing what each style actually sends to the model
+    without placing a live call.
+    """
+    from types import SimpleNamespace
+    from app.prompts import active as prompt_mod
+
+    s = (style or prompt_mod.get_active_style()).strip().lower()
+    if s == "current":
+        from app.prompts import attorney_cold_call as mod
+    elif s == "minimal":
+        from app.prompts import attorney_cold_call_minimal as mod
+    else:
+        console.print(f"[red]Unknown style {s!r}. Use current or minimal.[/red]")
+        raise typer.Exit(code=2)
+
+    lead = SimpleNamespace(
+        name=lead_name, firm_name=firm, state=state,
+        title="Partner", language="en", name_is_person=True,
+    )
+    text = mod.render_system_prompt(
+        lead=lead,
+        rep_name="Alex",
+        rep_company="Possible Minds",
+        rep_phone="443-775-2452",
+        product_context="",
+    )
+    console.print(f"[dim]--- {s} ({mod.PROMPT_VERSION}) · "
+                  f"{len(text)} chars · {text.count(chr(10))+1} lines ---[/dim]")
+    console.print(text)
 
 
 if __name__ == "__main__":

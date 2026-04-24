@@ -237,12 +237,13 @@ class CallOrchestrator:
 
         # Render the system prompt + resolve tools BEFORE creating the call
         # log so we can store both on the row for post-hoc debugging.
-        from app.prompts.attorney_cold_call import (
-            render_system_prompt,
-            prompt_language_for,
-            TOOLS as AUTOCALLER_TOOLS,
-            PROMPT_VERSION,
-        )
+        # Prompt module is selected per-call via PROMPT_STYLE env var —
+        # see app/prompts/active.py. Default: current (v1.61). Alt: minimal.
+        from app.prompts import active as _prompt_mod
+        render_system_prompt = _prompt_mod.render_system_prompt
+        prompt_language_for = _prompt_mod.prompt_language_for
+        AUTOCALLER_TOOLS = _prompt_mod.get_tools()
+        PROMPT_VERSION = _prompt_mod.get_prompt_version()
         sales = getattr(settings, "sales_context", None)
 
         def _sales_or_env(attr: str, env: str, default: str = "") -> str:

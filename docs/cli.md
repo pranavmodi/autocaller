@@ -126,6 +126,8 @@ Every command accepts `--help`. Exit code is `0` on success, `1` on any error
 | `call <lead> --carrier=twilio\|telnyx` | Per-call carrier override (highest precedence). |
 | `calls takeover <call_id> [--off]` | Flip human-takeover on a live call: mutes AI audio to Twilio, cancels the in-flight response, and lets the UI pipe the operator's browser mic into the call via `/ws/listen/{call_id}`. Pass `--off` to hand back to the AI. Also available as a button on the `ActiveCallOverlay` in any frontend page. Audio path: browser mic → AudioWorklet (`/operator-mic-worklet.js`, 48kHz→8kHz µ-law, 20ms frames) → listener WS as `{type:"inbound_audio",payload:<base64>}` → `TwilioMediaBridge.inject_inbound_audio` → Twilio `media` event. |
 | `env` setup for carriers | **Twilio:** `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER`, optional `TWILIO_ACCOUNT_LABEL`. **Telnyx:** `TELNYX_API_KEY` (V2 bearer), `TELNYX_FROM_NUMBER`, optional `TELNYX_ACCOUNT_SID` (defaults to `"default"`), optional `TELNYX_ACCOUNT_LABEL`. Both carriers share the `ALLOW_TWILIO_CALLS=true` safety gate. |
+| `prompts show` / `prompts list` | Display the active prompt style + version. Two parallel styles exist: `current` (rules-heavy, `v1.61`) and `minimal` (intent-first, `v2.0-minimal`). Switch by setting `PROMPT_STYLE=current\|minimal` in `.env` and restarting the backend. Default = `current`. |
+| `prompts preview [--style=current\|minimal] [--lead-name=... --firm=... --state=...]` | Render the full system prompt against a sample lead — eyeball what each style sends to the model without placing a live call. |
 
 ---
 
