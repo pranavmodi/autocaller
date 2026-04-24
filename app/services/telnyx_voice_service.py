@@ -603,52 +603,78 @@ def place_telnyx_call(
 
 
 async def play_voicemail_and_hangup_telnyx(
-    call_control_id: str, message: str
+    call_control_id: str,
+    message: str,
+    *,
+    audio_url: Optional[str] = None,
 ) -> bool:
-    """Play a TTS voicemail via Telnyx Call Control, then hang up when done.
+    """Play a VM via Telnyx Call Control, then hang up when done.
 
-    Deterministic alternative to letting Gemini speak the VM script
-    itself — used when the orchestrator takes over VM delivery from
-    the model. Flow:
+    When `audio_url` is provided (points to our Gemini-TTS WAV), use
+    /actions/playback_start to stream it — natural voice. If the
+    playback action errors or audio_url is missing, fall back to
+    /actions/speak with Polly (robotic but reliable). Either way we
+    then estimate duration and POST /actions/hangup.
 
-        1. POST /actions/speak with the script text (Telnyx's Amazon
-           Polly TTS). Returns immediately; speech streams to the
-           prospect in the background.
-        2. Wait an estimated duration based on word count (~150
-           words/minute is average TTS pacing + a 3s buffer).
-        3. POST /actions/hangup to close the call leg.
-
-    Not using the speak-ended webhook for simplicity — the duration
-    estimate is accurate to within 2-3 seconds for a 30-second script,
-    and the buffer absorbs the error.
+    Not using the playback.ended / speak.ended webhooks for simplicity
+    — the duration estimate is within 2-3s for a 30s script, and the
+    buffer absorbs the error.
     """
     api_key = _api_key()
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
     }
+    playback_url = f"{TELNYX_API_BASE}/calls/{call_control_id}/actions/playback_start"
     speak_url = f"{TELNYX_API_BASE}/calls/{call_control_id}/actions/speak"
     hangup_url = f"{TELNYX_API_BASE}/calls/{call_control_id}/actions/hangup"
-    try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            speak_resp = await client.post(
-                speak_url,
-                headers=headers,
-                json={
-                    "payload": message,
-                    "voice": "Polly.Joanna-Neural",
-                    "language": "en-US",
-                },
+
+    played_natural = False
+    if audio_url:
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                pb_resp = await client.post(
+                    playback_url,
+                    headers=headers,
+                    json={"audio_url": audio_url},
+                )
+            if pb_resp.status_code < 300:
+                played_natural = True
+                logger.info(
+                    "Telnyx /playback_start ok for %s (url=%s)",
+                    call_control_id, audio_url,
+                )
+            else:
+                logger.warning(
+                    "Telnyx /playback_start HTTP %s: %s — falling back to Polly",
+                    pb_resp.status_code, pb_resp.text[:200],
+                )
+        except Exception as e:
+            logger.warning(
+                "Telnyx /playback_start raised %s — falling back to Polly", e,
             )
-        if speak_resp.status_code >= 300:
-            logger.error(
-                "Telnyx /speak failed %s: %s",
-                speak_resp.status_code, speak_resp.text[:300],
-            )
+
+    if not played_natural:
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                speak_resp = await client.post(
+                    speak_url,
+                    headers=headers,
+                    json={
+                        "payload": message,
+                        "voice": "Polly.Joanna-Neural",
+                        "language": "en-US",
+                    },
+                )
+            if speak_resp.status_code >= 300:
+                logger.error(
+                    "Telnyx /speak failed %s: %s",
+                    speak_resp.status_code, speak_resp.text[:300],
+                )
+                return False
+        except Exception as e:
+            logger.error("Telnyx /speak raised: %s", e)
             return False
-    except Exception as e:
-        logger.error("Telnyx /speak raised: %s", e)
-        return False
 
     # Estimate playback duration + buffer. ~160 WPM = 2.67 wps.
     words = max(1, len(message.split()))

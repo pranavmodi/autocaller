@@ -221,6 +221,7 @@ async def reconciler_loop():
     except Exception as e:
         logger.exception("[Reconciler] boot-sweep failed: %s", e)
 
+    sweep_counter = 0
     while True:
         await asyncio.sleep(RECONCILE_INTERVAL_SECS)
         try:
@@ -229,6 +230,17 @@ async def reconciler_loop():
             raise
         except Exception as e:
             logger.exception("[Reconciler] tick failed: %s", e)
+        # Sweep pre-synthesized VM audio files older than 1h every ~10
+        # reconciler ticks (~10 min with the default interval). Cheap.
+        sweep_counter += 1
+        if sweep_counter % 10 == 0:
+            try:
+                from app.services.vm_audio_service import sweep_stale
+                n = sweep_stale(max_age_seconds=3600)
+                if n:
+                    logger.info("[Reconciler] VM audio sweep removed %d stale files", n)
+            except Exception as e:
+                logger.debug("[Reconciler] VM audio sweep raised: %s", e)
 
 
 def start_reconciler_loop() -> asyncio.Task:

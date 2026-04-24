@@ -39,7 +39,7 @@ from app.prompts.attorney_cold_call import (
 )
 
 
-PROMPT_VERSION = "v2.5-minimal"  # v2.5-minimal: Gemini no longer delivers voicemails. Navigator's VM_DM_PERSONAL / VM_FIRM_GENERAL / NOT_IVR branches and Gemini's own end_call(voicemail_left=true) now both route to the canonical carrier-TTS path (_deliver_canonical_vm_via_carrier). Fixes the Burg & Brock double-delivery race + Gemini's script-looping, script-clipping, and no-end_call failure modes. Prompt Case A/B script content retained for reference but Gemini never speaks it — it signals "this is a voicemail" via end_call and the carrier reads the canonical message.
+PROMPT_VERSION = "v2.6-minimal"  # v2.6-minimal: VM delivery now uses Gemini-voice TTS via carrier <Play>/playback_start with Polly/<Say> fallback. Audio is pre-synthesized at call start (zero perceived latency at VM detection). Keeps v2.5's single-delivery-path invariant and adds natural voice; if the TTS fetch fails, carrier falls back to its built-in voice with no change in reliability.
 
 
 # ---------------------------------------------------------------------------

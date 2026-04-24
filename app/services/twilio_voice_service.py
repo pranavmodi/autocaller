@@ -498,16 +498,39 @@ async def get_twilio_call_state(call_sid: str) -> tuple[str, str]:
     return "live", status
 
 
-def play_voicemail_and_hangup(call_sid: str, message: str):
-    """Update an in-progress Twilio call to play voicemail then hang up."""
+def play_voicemail_and_hangup(
+    call_sid: str,
+    message: str,
+    *,
+    audio_url: Optional[str] = None,
+):
+    """Update an in-progress Twilio call to play voicemail then hang up.
+
+    When `audio_url` is given (points to our Gemini-TTS-synthesized
+    WAV), the TwiML is ordered `<Play>…</Play><Say>…</Say><Hangup/>` —
+    the Say acts as a belt-and-braces fallback if Twilio can't fetch the
+    URL. Without audio_url (synthesis failed or not attempted), behaves
+    as before with the Alice voice only.
+    """
     escaped = html.escape(message, quote=True)
-    twiml = (
-        '<?xml version="1.0" encoding="UTF-8"?>'
-        "<Response>"
-        f"<Say voice=\"alice\">{escaped}</Say>"
-        "<Hangup/>"
-        "</Response>"
-    )
+    if audio_url:
+        url_escaped = html.escape(audio_url, quote=True)
+        twiml = (
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            "<Response>"
+            f"<Play>{url_escaped}</Play>"
+            f"<Say voice=\"alice\">{escaped}</Say>"
+            "<Hangup/>"
+            "</Response>"
+        )
+    else:
+        twiml = (
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            "<Response>"
+            f"<Say voice=\"alice\">{escaped}</Say>"
+            "<Hangup/>"
+            "</Response>"
+        )
 
     client = _get_twilio_client()
     client.calls(call_sid).update(twiml=twiml)

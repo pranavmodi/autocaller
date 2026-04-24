@@ -88,6 +88,12 @@ class CallOrchestrator:
         # over a second time. Prevents a re-entrant end_call from
         # re-triggering the speak+hangup sequence. Reset in end_call.
         self._vm_handoff_fired: bool = False
+        # Pre-synthesized VM audio URL. Populated at call-start by a
+        # proactive Gemini TTS render (warm up the file before we
+        # actually need it) so VM delivery has zero perceived latency
+        # between detection and playback. None → carrier falls back to
+        # its built-in TTS. Reset in end_call.
+        self._vm_audio_url: Optional[str] = None
         # Manual-IVR state. True when the operator has clicked "IVR" on
         # the overlay to drive the phone tree themselves. While this is
         # on: AI audio is muted on the carrier leg (prospect doesn't
@@ -486,6 +492,16 @@ class CallOrchestrator:
                         call.call_id, e,
                     )
 
+                # Pre-synthesize the VM audio in the background using
+                # Gemini TTS — so if we hit a mailbox 10-20s into the
+                # call, the WAV is already on disk and playback starts
+                # instantly. Fire-and-forget; populates
+                # self._vm_audio_url on success.
+                try:
+                    asyncio.create_task(self._warm_vm_audio(call.call_id))
+                except Exception as e:
+                    logger.debug("VM audio pre-synthesis skipped: %s", e)
+
             except Exception as e:
                 print(f"[CallOrchestrator] {resolved_carrier_name} call FAILED for {call.call_id} to {dial_number}: {e}")
                 self._last_start_error = f"{resolved_carrier_name.title()} call placement failed: {type(e).__name__}: {str(e)}"
@@ -834,6 +850,15 @@ class CallOrchestrator:
             self._human_takeover_flag = False
             self._manual_ivr_flag = False
             self._vm_handoff_fired = False
+            # Delete the pre-synthesized VM audio file for this call,
+            # if one exists. Belt-and-suspenders vs. vm_audio_service's
+            # periodic stale-sweep.
+            try:
+                from app.services.vm_audio_service import cleanup_vm_audio
+                cleanup_vm_audio(call.call_id)
+            except Exception as _e:
+                logger.debug("vm_audio cleanup on end_call failed: %s", _e)
+            self._vm_audio_url = None
 
             # (provider.end_call was called above, before the carrier
             # hangup, so INTENT is recorded even if hangup fails.)
@@ -1250,6 +1275,53 @@ class CallOrchestrator:
             except Exception:
                 pass
 
+    def _build_canonical_vm_message(self, *, use_dm_first_name: bool) -> str:
+        """Render the canonical VM script — shared by the warm-up
+        pre-synthesis and the actual handoff dispatch so they stay in sync."""
+        rep_name = os.getenv("SALES_REP_NAME", "").strip() or "Alex"
+        lead_first = ""
+        if use_dm_first_name and self._current_patient:
+            lead_first = (self._current_patient.name or "").split(" ", 1)[0]
+        greeting_name = f" {lead_first}" if lead_first else " there"
+        close_name = f" {lead_first}" if lead_first else ""
+        return (
+            f"Hi{greeting_name}, this is {rep_name} at Possible Minds. "
+            "We work with Precise Imaging — those responses you get "
+            "from them on imaging-status questions, that's our system. "
+            "Precise is saving about a hundred hours a week on email "
+            "triage using it. We're doing free thirty-minute consults "
+            "with firms that work with Precise, on how the same tech "
+            "can handle your intake and records workflow. Text this "
+            "number back and I'll send you a time, or grab one "
+            "yourself at getpossibleminds dot com slash consult. "
+            f"Thanks{close_name}."
+        )
+
+    async def _warm_vm_audio(self, call_id: str) -> None:
+        """Pre-synthesize the VM WAV at call start so playback is
+        instant if/when we hit a mailbox. Best-effort — any failure
+        leaves `_vm_audio_url=None` and the carrier falls back to its
+        built-in TTS at delivery time."""
+        try:
+            has_first = bool(
+                self._current_patient and self._current_patient.name
+                and self._current_patient.name.strip()
+            )
+            script = self._build_canonical_vm_message(use_dm_first_name=has_first)
+            from app.services.vm_audio_service import synthesize_vm_audio
+            url = await synthesize_vm_audio(script=script, call_id=call_id)
+            # Only set if the call is still for this call_id — could have
+            # churned while we were synthesizing.
+            if self._current_call and self._current_call.call_id == call_id:
+                self._vm_audio_url = url
+                if url:
+                    await self._add_system_note(
+                        "VM audio pre-synthesized (Gemini TTS) and cached; "
+                        "ready for instant playback if mailbox detected."
+                    )
+        except Exception as e:
+            logger.debug("VM audio warm-up raised: %s", e)
+
     async def _deliver_canonical_vm_via_carrier(
         self,
         *,
@@ -1308,27 +1380,28 @@ class CallOrchestrator:
         except Exception as e:
             logger.warning("marking voicemail_left failed: %s", e)
 
-        # Build the canonical v1.59 script. First-name inclusion depends
-        # on whether the navigator classified DM-personal (Case B) or
-        # firm-general (Case A) — "Hi Solmaz, …" vs "Hi there, …".
-        rep_name = os.getenv("SALES_REP_NAME", "").strip() or "Alex"
-        lead_first = ""
-        if use_dm_first_name and self._current_patient:
-            lead_first = (self._current_patient.name or "").split(" ", 1)[0]
-        greeting_name = f" {lead_first}" if lead_first else " there"
-        close_name = f" {lead_first}" if lead_first else ""
-        message = (
-            f"Hi{greeting_name}, this is {rep_name} at Possible Minds. "
-            "We work with Precise Imaging — those responses you get "
-            "from them on imaging-status questions, that's our system. "
-            "Precise is saving about a hundred hours a week on email "
-            "triage using it. We're doing free thirty-minute consults "
-            "with firms that work with Precise, on how the same tech "
-            "can handle your intake and records workflow. Text this "
-            "number back and I'll send you a time, or grab one "
-            "yourself at getpossibleminds dot com slash consult. "
-            f"Thanks{close_name}."
+        # Canonical script comes from the shared builder so warm-up and
+        # actual-delivery paths always use the same text. First-name
+        # inclusion depends on the navigator's Case A/B classification.
+        message = self._build_canonical_vm_message(
+            use_dm_first_name=use_dm_first_name,
         )
+
+        # Prefer the Gemini-voice pre-synthesized WAV (if it exists
+        # from the proactive call-start synthesis, or synthesize now).
+        # On synthesis failure, the carrier helpers automatically fall
+        # back to their built-in TTS (Twilio Alice / Telnyx Polly), so
+        # reliability is unchanged — only voice quality degrades.
+        audio_url: Optional[str] = getattr(self, "_vm_audio_url", None)
+        if not audio_url:
+            try:
+                from app.services.vm_audio_service import synthesize_vm_audio
+                audio_url = await synthesize_vm_audio(
+                    script=message, call_id=call.call_id,
+                )
+            except Exception as e:
+                logger.warning("VM audio synth-at-handoff failed: %s", e)
+                audio_url = None
 
         # Dispatch to carrier-specific TTS + hangup action. The
         # carrier's own hangup closes the media stream; `end_call`
@@ -1342,6 +1415,7 @@ class CallOrchestrator:
                 asyncio.create_task(
                     play_voicemail_and_hangup_telnyx(
                         self._twilio_call_sid, message,
+                        audio_url=audio_url,
                     )
                 )
             else:
@@ -1351,6 +1425,7 @@ class CallOrchestrator:
                 await asyncio.to_thread(
                     play_voicemail_and_hangup,
                     self._twilio_call_sid, message,
+                    audio_url=audio_url,
                 )
         except Exception as e:
             logger.warning("VM carrier TTS dispatch failed: %s", e)
