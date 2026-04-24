@@ -470,6 +470,21 @@ class CallOrchestrator:
                 self._voicemail_handled = False
                 if self._verbose:
                     print(f"[CallOrchestrator] {resolved_carrier_name} call placed: SID={call_sid}, call_id={call.call_id}, to={dial_number}")
+                # Persist the carrier call SID on the DB row ASAP. The
+                # reconciler + force-hangup need it to look the call up
+                # carrier-side. For Twilio this IS the call_control_id;
+                # for Telnyx the media-stream 'start' event will
+                # overwrite this with the Telnyx call_control_id (a
+                # distinct value from the TeXML-call SID returned here).
+                try:
+                    await call_log_provider.set_carrier_call_sid(
+                        call.call_id, call_sid,
+                    )
+                except Exception as e:
+                    logger.warning(
+                        "set_carrier_call_sid failed for %s: %s",
+                        call.call_id, e,
+                    )
 
             except Exception as e:
                 print(f"[CallOrchestrator] {resolved_carrier_name} call FAILED for {call.call_id} to {dial_number}: {e}")
@@ -738,25 +753,70 @@ class CallOrchestrator:
             else:
                 print(f"[CallOrchestrator] Skipping SMS for call {call.call_id} — outcome={outcome.value}")
 
-            # Hang up the Twilio phone call (skip for transfers/voicemail which handle it themselves)
-            # Always hang up Twilio on call end EXCEPT for TRANSFERRED (the
-            # transfer logic manages the SIP transition itself). VOICEMAIL
-            # used to be excluded because AMD+play-voicemail needed Twilio
-            # to keep the line open; we now detect IVRs via transcript
-            # BEFORE any message plays, so we should immediately hang up.
-            # Keeping the line open would waste billing + delay recording
-            # finalization for 30+ seconds.
-            if call_mode == "twilio" and twilio_call_sid and outcome != CallOutcome.TRANSFERRED:
-                try:
-                    carrier_name = getattr(self, "_current_carrier", "twilio") or "twilio"
-                    from app.services.carrier import get_carrier as _get_carrier
-                    _adapter = _get_carrier(carrier_name)
-                    if self._verbose:
-                        print(f"[CallOrchestrator] Hanging up {carrier_name} call SID={twilio_call_sid}")
-                    await asyncio.to_thread(_adapter.hangup, twilio_call_sid)
-                except Exception as e:
-                    logger.warning("Failed to hang up %s call %s: %s",
-                                   getattr(self, "_current_carrier", "twilio"), twilio_call_sid, e)
+            # Atomic carrier teardown. Record INTENT first
+            # (outcome/ended_by/termination_state='hangup_requested' via
+            # provider.end_call) so even if we crash in the middle of
+            # the hangup POST, the DB reflects what we intended and the
+            # reconciler picks up the row. Then hang up with retry and
+            # transition termination_state to 'hangup_acked' on carrier
+            # ack, or 'hangup_failed' on exhaustion. ended_at is gated
+            # on the ack — preserves the invariant
+            #   `ended_at IS NOT NULL ⟺ carrier confirmed terminal`.
+            #
+            # TRANSFERRED: the transfer logic manages the SIP handoff
+            # itself, no hangup needed here. VOICEMAIL used to be
+            # excluded because AMD+play-voicemail needed Twilio to keep
+            # the line open; we now detect IVR/VM via transcript BEFORE
+            # any message plays, so hang up immediately.
+            call_log_provider = get_call_log_provider()
+            await call_log_provider.end_call(call.call_id, outcome, ended_by=ended_by)
+            needs_hangup = (
+                call_mode == "twilio"
+                and twilio_call_sid
+                and outcome != CallOutcome.TRANSFERRED
+            )
+            if needs_hangup:
+                carrier_name = getattr(self, "_current_carrier", "twilio") or "twilio"
+                from app.services.carrier import get_carrier as _get_carrier
+                _adapter = _get_carrier(carrier_name)
+                if self._verbose:
+                    print(
+                        f"[CallOrchestrator] Hanging up {carrier_name} "
+                        f"SID={twilio_call_sid}"
+                    )
+                ok, err_detail = await _adapter.hangup_async(twilio_call_sid)
+                if ok:
+                    await call_log_provider.mark_carrier_terminal(
+                        call.call_id, state="hangup_acked",
+                    )
+                else:
+                    logger.error(
+                        "[CallOrchestrator] %s hangup FAILED after retries for "
+                        "call %s (SID=%s): %s. Leaving termination_state="
+                        "'hangup_failed' — reconciler will sweep.",
+                        carrier_name, call.call_id, twilio_call_sid, err_detail,
+                    )
+                    await call_log_provider.mark_carrier_terminal(
+                        call.call_id, state="hangup_failed",
+                        error=f"hangup_async: {err_detail}",
+                    )
+            elif outcome == CallOutcome.TRANSFERRED:
+                # Transfer path bypasses our hangup — SIP hand-off leaves
+                # the leg in the far-party's hands. Mark terminal; no
+                # reconciliation needed (the transfer target owns it now).
+                await call_log_provider.mark_carrier_terminal(
+                    call.call_id, state="carrier_confirmed_ended",
+                )
+            elif call_mode != "twilio":
+                # Web-mode / mock calls have no carrier leg to hang up.
+                await call_log_provider.mark_carrier_terminal(
+                    call.call_id, state="carrier_confirmed_ended",
+                )
+            elif not twilio_call_sid:
+                # Carrier leg failed to place — nothing to hang up.
+                await call_log_provider.mark_carrier_terminal(
+                    call.call_id, state="carrier_confirmed_ended",
+                )
 
             # Save web-call recording if we have audio chunks
             if self._web_recording_active and self._web_recording_chunks:
@@ -775,8 +835,8 @@ class CallOrchestrator:
             self._manual_ivr_flag = False
             self._vm_handoff_fired = False
 
-            call_log_provider = get_call_log_provider()
-            await call_log_provider.end_call(call.call_id, outcome, ended_by=ended_by)
+            # (provider.end_call was called above, before the carrier
+            # hangup, so INTENT is recorded even if hangup fails.)
 
             # Only update the lead's attempt count + outcome for REAL calls.
             # Mock (phone redirect) and web (browser test) calls are practice

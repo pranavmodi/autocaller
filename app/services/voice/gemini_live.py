@@ -178,14 +178,19 @@ class GeminiLiveBackend:
             "inputAudioTranscription": {},
             "outputAudioTranscription": {},
         }
-        # enableAffectiveDialog: prosody matches the caller's emotional
-        # tone. proactivity.proactiveAudio: model emits occasional
-        # non-verbal cues (short "mm-hmm"s, etc.). Both are Gemini-only
-        # and additive — off by default.
-        if affective:
-            setup_body["enableAffectiveDialog"] = True
-        if proactive:
-            setup_body["proactivity"] = {"proactiveAudio": True}
+        # enableAffectiveDialog / proactivity.proactiveAudio were
+        # Gemini-only flags for prosody matching + short non-verbal
+        # cues. `gemini-3.1-flash-live-preview` rejects both with
+        # WS close code 1007 ("Unknown name 'enableAffectiveDialog'
+        # at 'setup': Cannot find field"), which dropped every call
+        # at ~1s. Drop the fields until the model spec supports them
+        # again; the operator toggles in /system are effectively
+        # no-ops by design.
+        if affective or proactive:
+            print(
+                "[GeminiLive] ignoring affective/proactive — not supported "
+                f"by model {self.model}; toggle in /system is a no-op"
+            )
         setup = {"setup": setup_body}
         if gemini_tools:
             setup_body["tools"] = gemini_tools

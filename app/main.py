@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pathlib import Path
 
-from .api import dashboard_router, websocket_router, settings_router, dispatcher_router, scenarios_router, carrier_router, cadence_router, consults_router, call_lists_router, voice_preview_router
+from .api import dashboard_router, websocket_router, settings_router, dispatcher_router, scenarios_router, carrier_router, cadence_router, consults_router, call_lists_router, voice_preview_router, firm_reviews_router
 from .api.auth import router as auth_router, SESSION_COOKIE, verify_session_token, auth_configured
 from .services.dispatcher import get_dispatcher
 from .services.daily_report_service import daily_report_loop
@@ -70,10 +70,18 @@ async def lifespan(app: FastAPI):
     # Start the voicemail / no-reach follow-up emailer (gated by
     # ALLOW_VOICEMAIL_EMAIL=true — loop ticks but no-ops without the flag).
     vm_followup_task = asyncio.create_task(voicemail_followup_loop(interval_seconds=120))
+    # Start the carrier-state reconciler — enforces the invariant
+    # `ended_at IS NOT NULL ⟺ carrier confirmed terminal`. Sweeps
+    # non-terminal call_log rows every 60s and force-hangs-up any
+    # carrier-side orphans. Also does a one-shot backfill of pre-existing
+    # zombies on boot.
+    from .services.call_reconciler import reconciler_loop as _reconciler_loop
+    reconciler_task = asyncio.create_task(_reconciler_loop())
     yield
     # Shutdown: stop the dispatcher, cancel background tasks, dispose engine
     get_dispatcher().stop()
-    for t in (daily_report_task, judge_task, cadence_task, vm_followup_task):
+    for t in (daily_report_task, judge_task, cadence_task, vm_followup_task,
+              reconciler_task):
         t.cancel()
         try:
             await t
@@ -204,6 +212,7 @@ app.include_router(cadence_router)
 app.include_router(consults_router)
 app.include_router(call_lists_router)
 app.include_router(voice_preview_router)
+app.include_router(firm_reviews_router)
 
 # Legacy static (kept for compatibility)
 STATIC_DIR = Path("static")

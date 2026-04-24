@@ -243,6 +243,11 @@ class CallLog:
     ivr_menu_log: Optional[list] = None
     # Who tore the call down. See CallLogRow.ended_by for values.
     ended_by: Optional[str] = None
+    # Carrier teardown fields — see CallLogRow for semantics.
+    carrier_call_sid: Optional[str] = None
+    termination_state: str = "live"
+    termination_last_error: Optional[str] = None
+    termination_last_checked_at: Optional[datetime] = None
 
     def add_transcript(self, speaker: str, text: str):
         """Add a transcript entry."""
@@ -322,6 +327,13 @@ class CallLog:
             "ivr_outcome": self.ivr_outcome,
             "ivr_menu_log": self.ivr_menu_log,
             "ended_by": self.ended_by,
+            "carrier_call_sid": self.carrier_call_sid,
+            "termination_state": self.termination_state,
+            "termination_last_error": self.termination_last_error,
+            "termination_last_checked_at": (
+                self.termination_last_checked_at.isoformat()
+                if self.termination_last_checked_at else None
+            ),
             "whisper_transcript": self.whisper_transcript,
             "call_mode": self.call_mode,
         }

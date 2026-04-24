@@ -355,21 +355,54 @@ class TelnyxMediaBridge:
             "Content-Type": "application/json",
         }
         body = {"digits": cleaned}
-        try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                resp = await client.post(url, json=body, headers=headers)
-            if resp.status_code >= 400:
+        # One retry — the operator saw a 400 on Champ Law today because the
+        # first attempt raised a transient (empty-message) exception; the
+        # second click succeeded without any other change. A silent retry
+        # handles that without surfacing a failure to the UI.
+        last_err: Optional[Exception] = None
+        last_status: Optional[int] = None
+        last_text: str = ""
+        for attempt in (1, 2):
+            try:
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    resp = await client.post(url, json=body, headers=headers)
+                if resp.status_code >= 400:
+                    last_status = resp.status_code
+                    last_text = resp.text[:200]
+                    logger.warning(
+                        "[TelnyxMedia] send_dtmf(%s) attempt %d HTTP %s: %s",
+                        cleaned, attempt, resp.status_code, resp.text[:200],
+                    )
+                    if 500 <= resp.status_code < 600 and attempt == 1:
+                        await asyncio.sleep(0.25)
+                        continue
+                    return False
+                if self._verbose:
+                    logger.info(
+                        f"[TelnyxMedia] DTMF batch sent via Call Control: "
+                        f"{cleaned} (attempt {attempt})"
+                    )
+                return True
+            except Exception as e:
+                last_err = e
+                # Include type + repr so a bare exception with empty str()
+                # still produces diagnosable output — previous logging
+                # format ("raised: %s") printed nothing when str(e) was ''.
                 logger.warning(
-                    "[TelnyxMedia] send_dtmf(%s) HTTP %s: %s",
-                    cleaned, resp.status_code, resp.text[:200],
+                    "[TelnyxMedia] DTMF batch %s attempt %d raised "
+                    "%s: %s (repr=%r)",
+                    cleaned, attempt, type(e).__name__, e, e,
                 )
-                return False
-            if self._verbose:
-                logger.info(f"[TelnyxMedia] DTMF batch sent via Call Control: {cleaned}")
-            return True
-        except Exception as e:
-            logger.error("[TelnyxMedia] DTMF batch %s raised: %s", cleaned, e)
-            return False
+                if attempt == 1:
+                    await asyncio.sleep(0.25)
+                    continue
+                break
+        logger.error(
+            "[TelnyxMedia] DTMF batch %s FAILED after retries. "
+            "last_status=%s last_text=%r last_err=%r",
+            cleaned, last_status, last_text, last_err,
+        )
+        return False
 
     async def handle_carrier_ws(self, websocket: WebSocket):
         """Handle an incoming Telnyx media stream WebSocket."""
@@ -406,6 +439,25 @@ class TelnyxMediaBridge:
                         logger.info(
                             f"Telnyx stream started: stream_id={self._stream_sid} "
                             f"media_format={media_fmt}"
+                        )
+                    # Persist the call_control_id onto the CallLog row
+                    # ASAP. The reconciler + force-hangup CLI need it
+                    # to look the call up carrier-side. voice_service
+                    # carries the call_id; resolve it lazily so we
+                    # don't hard-require the CallLog provider here.
+                    try:
+                        cid = getattr(self.voice_service, "_call_id", None) or \
+                              getattr(self.voice_service, "call_id", None)
+                        if cid and self._call_sid:
+                            from app.providers.call_log_provider import (
+                                get_call_log_provider as _get_clp,
+                            )
+                            asyncio.create_task(
+                                _get_clp().set_carrier_call_sid(cid, self._call_sid)
+                            )
+                    except Exception as e:
+                        logger.debug(
+                            "could not stamp carrier_call_sid: %s", e,
                         )
                     self._connected.set()
 
@@ -622,11 +674,12 @@ async def play_voicemail_and_hangup_telnyx(
 
 
 def hangup_telnyx_call(call_sid: str) -> None:
-    """Hang up an active Telnyx call via Call Control API.
+    """Best-effort sync hangup (kept for back-compat paths that can't await).
 
-    Telnyx uses call_control_id as the call handle (returned by place_call).
-    Hangup is a native Call Control action, not TeXML — simpler than the
-    Twilio-compat REST shape.
+    For the atomic-teardown path prefer `hangup_telnyx_call_async` which
+    retries + returns a boolean ack so the orchestrator can gate
+    `ended_at` on carrier confirmation. See `docs/production-readiness.md`
+    Carrier Reconciliation section.
     """
     api_key = _api_key()
     url = f"{TELNYX_API_BASE}/calls/{call_sid}/actions/hangup"
@@ -644,6 +697,99 @@ def hangup_telnyx_call(call_sid: str) -> None:
             )
     except Exception as e:
         logger.warning("Telnyx hangup %s raised: %s", call_sid, e)
+
+
+async def hangup_telnyx_call_async(call_sid: str) -> tuple[bool, str]:
+    """Async hangup with one retry. Returns (ok, error_detail).
+
+    `ok=True`: Telnyx returned 2xx or 404 (404 means the call is already
+    gone from their side — effectively a success for our purposes).
+    `ok=False`: both attempts failed; reconciler will sweep.
+    """
+    try:
+        api_key = _api_key()
+    except Exception as e:
+        return False, f"api_key_missing: {e!r}"
+    url = f"{TELNYX_API_BASE}/calls/{call_sid}/actions/hangup"
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    last_err = ""
+    last_status: Optional[int] = None
+    for attempt in (1, 2):
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.post(url, json={}, headers=headers)
+            if resp.status_code < 300 or resp.status_code == 404:
+                logger.info(
+                    "Telnyx hangup %s HTTP %s (attempt %d) — ack",
+                    call_sid, resp.status_code, attempt,
+                )
+                return True, ""
+            last_status = resp.status_code
+            last_err = f"HTTP {resp.status_code}: {resp.text[:200]}"
+            logger.warning(
+                "Telnyx hangup %s attempt %d: %s",
+                call_sid, attempt, last_err,
+            )
+            if 500 <= resp.status_code < 600 and attempt == 1:
+                await asyncio.sleep(0.25)
+                continue
+            # 4xx (other than 404) — not transient, don't retry.
+            break
+        except Exception as e:
+            last_err = f"{type(e).__name__}: {e!r}"
+            logger.warning(
+                "Telnyx hangup %s attempt %d raised %s",
+                call_sid, attempt, last_err,
+            )
+            if attempt == 1:
+                await asyncio.sleep(0.25)
+                continue
+            break
+    return False, last_err or f"last_status={last_status}"
+
+
+async def get_telnyx_call_state(call_sid: str) -> tuple[str, str]:
+    """Query Telnyx for the current state of a call_control_id.
+
+    Returns (state, raw). Possible states (normalised):
+      'live'     — call_state is one of active non-terminal values
+                   (parked, ringing, bridged, hangup_pending, ...)
+      'terminal' — call_state is hangup/ended OR Telnyx returns 404
+                   (they've already cleaned up the record)
+      'unknown'  — API error, timeout, parse failure. Caller should
+                   retry on next reconciliation tick.
+
+    Used by the reconciler to decide whether a locally-orphaned row
+    should be force-hung-up or just marked confirmed-ended.
+    """
+    try:
+        api_key = _api_key()
+    except Exception as e:
+        return "unknown", f"api_key_missing: {e!r}"
+    url = f"{TELNYX_API_BASE}/calls/{call_sid}"
+    headers = {"Authorization": f"Bearer {api_key}"}
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(url, headers=headers)
+    except Exception as e:
+        return "unknown", f"{type(e).__name__}: {e!r}"
+    if resp.status_code == 404:
+        return "terminal", "not_found"
+    if resp.status_code >= 400:
+        return "unknown", f"HTTP {resp.status_code}: {resp.text[:200]}"
+    try:
+        payload = resp.json()
+    except Exception as e:
+        return "unknown", f"json_decode: {e!r}"
+    data = payload.get("data") or {}
+    call_state = str(data.get("call_state") or "").lower()
+    terminal_markers = {"hangup", "ended", "completed", "failed"}
+    if call_state in terminal_markers or not call_state:
+        return "terminal", call_state or "empty"
+    return "live", call_state
 
 
 def generate_stream_id() -> str:

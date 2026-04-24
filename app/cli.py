@@ -968,6 +968,51 @@ def calls_takeover(
     console.print_json(data=r)
 
 
+@calls_app.command("force-hangup")
+def calls_force_hangup(
+    call_id: str = typer.Argument(..., help="Call ID (not the carrier SID)"),
+):
+    """Force the carrier to hang up a call, via the carrier REST API.
+
+    Looks up the row's carrier_call_sid and fires the async hangup with
+    retry. Use when the DB thinks a call is ended but the carrier still
+    has a live leg (the reconciler catches this within ~60s on its own;
+    this command bypasses the wait).
+    """
+    r = _post(f"/api/calls/{call_id}/force-hangup")
+    console.print_json(data=r)
+
+
+@calls_app.command("reconcile")
+def calls_reconcile(
+    window_hours: int = typer.Option(
+        0, "--window-hours", "-w",
+        help="Only sweep rows whose started_at is within this many hours. "
+             "0 (default) = sweep all pending orphans regardless of age.",
+    ),
+):
+    """Run one pass of the carrier-state reconciler on demand.
+
+    Loads every call_log row whose termination_state is non-terminal
+    and asks the carrier what it currently thinks of each one. Stamps
+    ended_at / force-hangs-up as needed. Returns per-row action summary.
+    """
+    payload = {"window_hours": window_hours} if window_hours else {}
+    path = "/api/calls/reconcile"
+    if window_hours:
+        path = f"{path}?window_hours={window_hours}"
+    r = _post(path, payload if payload else None)
+    summary = {k: v for k, v in r.items() if k != "details"}
+    console.print_json(data=summary)
+    details = r.get("details") or []
+    if details:
+        console.print("[bold]Per-row actions (first 50):[/bold]")
+        for d in details:
+            console.print(
+                f"  {d['call_id'][:8]}  {d['action']:28}  {d.get('detail','')[:80]}"
+            )
+
+
 @calls_app.command("dtmf")
 def calls_dtmf(
     call_id: str = typer.Argument(..., help="ID of the live call"),

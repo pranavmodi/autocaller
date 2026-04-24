@@ -1223,6 +1223,37 @@ async def clear_active_call_marker():
     return {"status": "ok", "hung_up": hung_up}
 
 
+@router.post("/calls/{call_id}/force-hangup")
+async def call_force_hangup(call_id: str):
+    """Operator-invoked force-hangup via the carrier REST API.
+
+    Looks up the call's carrier_call_sid, fires the async hangup with
+    retry, and records the result on termination_state. Idempotent.
+
+    Use when the normal end-of-call path somehow left a carrier leg
+    alive (DB says ended but carrier doesn't know). The reconciler will
+    catch this within ~60s on its own, but this endpoint bypasses the
+    wait when an operator has an ear on the line.
+    """
+    from app.services.call_reconciler import force_hangup
+    return await force_hangup(call_id)
+
+
+@router.post("/calls/reconcile")
+async def calls_reconcile(
+    window_hours: Optional[int] = None,
+):
+    """Run one reconciler pass on demand. Query param `window_hours`
+    defaults to the standard recent window; pass 0 / null / omit to
+    sweep all pending orphans regardless of age.
+
+    Returns a summary of actions taken per row.
+    """
+    from app.services.call_reconciler import reconcile_once
+    w = None if window_hours in (None, 0) else int(window_hours)
+    return await reconcile_once(window_hours=w)
+
+
 @router.get("/health/checks")
 async def health_checks():
     """Run the same checks as the CLI doctor and return a list of rows.

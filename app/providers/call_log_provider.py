@@ -97,6 +97,10 @@ def _row_to_call_log(row: CallLogRow) -> CallLog:
     cl.ivr_outcome = getattr(row, "ivr_outcome", None)
     cl.ivr_menu_log = getattr(row, "ivr_menu_log", None)
     cl.ended_by = getattr(row, "ended_by", None)
+    cl.carrier_call_sid = getattr(row, "carrier_call_sid", None)
+    cl.termination_state = getattr(row, "termination_state", "live") or "live"
+    cl.termination_last_error = getattr(row, "termination_last_error", None)
+    cl.termination_last_checked_at = getattr(row, "termination_last_checked_at", None)
 
     # Convert JSONB transcript list to TranscriptEntry objects
     raw = row.transcript or []
@@ -266,39 +270,142 @@ class CallLogProvider:
         outcome: CallOutcome,
         ended_by: Optional[str] = None,
     ):
-        now = datetime.now(timezone.utc)
+        """Record the caller's INTENT to end the call. Does NOT stamp
+        `ended_at` — that's gated on carrier ack via `mark_carrier_terminal`.
+
+        Orchestrator flow:
+          1. end_call(...) — outcome + ended_by + termination_state='hangup_requested'
+          2. carrier.hangup() — async, retry
+          3. mark_carrier_terminal(..., state='hangup_acked') on success
+             OR mark_carrier_terminal(..., state='hangup_failed') on exhaustion.
+             Reconciler catches the latter.
+
+        The split preserves the invariant
+          `ended_at IS NOT NULL ⟺ carrier confirmed terminal`
+        which is what eliminates "our DB says ended, carrier still has a
+        live leg" divergences.
+        """
         async with AsyncSessionLocal() as session:
             result = await session.execute(
                 select(CallLogRow).where(CallLogRow.call_id == call_id)
             )
             row = result.scalar_one_or_none()
             if row:
-                row.ended_at = now
                 row.outcome = outcome.value
                 if ended_by and not row.ended_by:
                     row.ended_by = ended_by
-                if row.started_at:
-                    row.duration_seconds = int((now - row.started_at).total_seconds())
+                # Only advance termination_state if we haven't already
+                # reached a terminal state (reconciler may have raced us).
+                if row.termination_state in ("live", None):
+                    row.termination_state = "hangup_requested"
 
-                # Derive call_status + call_disposition from the full context
+                # Derive call_status + call_disposition from context even
+                # though the row isn't fully "ended" yet — the UI shows
+                # these immediately, and the carrier ack (later) only
+                # changes ended_at / termination_state.
                 transcript = row.transcript or []
                 had_patient_speech = any(
                     entry.get("speaker") == "patient" and (entry.get("text") or "").strip()
                     for entry in transcript
                 )
+                # Provisional duration until carrier ack lands — computed
+                # from wall clock so the UI isn't blank.
+                now = datetime.now(timezone.utc)
+                provisional_dur = (
+                    int((now - row.started_at).total_seconds())
+                    if row.started_at else 0
+                )
                 status, disposition = derive_status_and_disposition(
                     outcome=outcome,
                     error_code=row.error_code,
                     had_patient_speech=had_patient_speech,
-                    duration_seconds=row.duration_seconds,
+                    duration_seconds=provisional_dur,
                     ivr_detected=bool(getattr(row, "ivr_detected", False)),
                     ivr_outcome=getattr(row, "ivr_outcome", None),
                 )
                 row.call_status = status.value
                 row.call_disposition = disposition.value
+                row.duration_seconds = provisional_dur
                 await session.commit()
+        # Release the active-call marker immediately — the carrier
+        # teardown races happen in the background.
         if self._active_call_id == call_id:
             self._active_call_id = None
+
+    async def set_carrier_call_sid(self, call_id: str, carrier_call_sid: str) -> None:
+        """Stamp the carrier's call handle as soon as we learn it.
+
+        Twilio: set when place_call returns the Call SID.
+        Telnyx: set when the media-stream 'start' event arrives with
+        call_control_id. (For Telnyx, place_call also returns a SID, but
+        the call_control_id from the start event is what the Call
+        Control REST actions require.)
+
+        Required for the reconciler to look the call up carrier-side.
+        """
+        if not carrier_call_sid:
+            return
+        async with AsyncSessionLocal() as session:
+            result = await session.execute(
+                select(CallLogRow).where(CallLogRow.call_id == call_id)
+            )
+            row = result.scalar_one_or_none()
+            if row and not row.carrier_call_sid:
+                row.carrier_call_sid = carrier_call_sid
+                await session.commit()
+
+    async def mark_carrier_terminal(
+        self,
+        call_id: str,
+        *,
+        state: str,
+        error: Optional[str] = None,
+    ) -> None:
+        """Transition a call's termination_state + (conditionally) stamp
+        ended_at.
+
+        state ∈ {
+          'hangup_acked'             — our hangup POST got 2xx
+          'carrier_confirmed_ended'  — carrier status webhook or
+                                       reconciler GET says terminal
+          'hangup_failed'            — all hangup attempts exhausted;
+                                       reconciler will re-attempt
+        }
+
+        ended_at is stamped on 'hangup_acked' and 'carrier_confirmed_ended'
+        (both mean the carrier side is done). For 'hangup_failed' we
+        leave ended_at NULL so the reconciler keeps sweeping.
+        """
+        allowed = {"hangup_acked", "carrier_confirmed_ended", "hangup_failed"}
+        if state not in allowed:
+            raise ValueError(f"termination_state {state!r} not in {allowed}")
+        now = datetime.now(timezone.utc)
+        async with AsyncSessionLocal() as session:
+            result = await session.execute(
+                select(CallLogRow).where(CallLogRow.call_id == call_id)
+            )
+            row = result.scalar_one_or_none()
+            if not row:
+                return
+            # Monotonic advance — don't regress a row that already reached
+            # 'carrier_confirmed_ended' back to 'hangup_acked' etc.
+            terminal_states = {"hangup_acked", "carrier_confirmed_ended"}
+            if row.termination_state == "carrier_confirmed_ended":
+                row.termination_last_checked_at = now
+                await session.commit()
+                return
+            row.termination_state = state
+            row.termination_last_checked_at = now
+            if error is not None:
+                row.termination_last_error = error[:2000]
+            if state in terminal_states:
+                if not row.ended_at:
+                    row.ended_at = now
+                    if row.started_at:
+                        row.duration_seconds = int(
+                            (now - row.started_at).total_seconds()
+                        )
+            await session.commit()
 
     # Whitelist of columns update_call is allowed to set. Anything else is
     # ignored silently (safer than having callers accidentally set primary

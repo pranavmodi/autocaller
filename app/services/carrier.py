@@ -34,6 +34,16 @@ class CarrierAdapter:
     name: str
     place_call: Callable[..., str]
     hangup: Callable[[str], None]
+    # Async hangup with retry + boolean ack. Orchestrator gates `ended_at`
+    # on this returning True, so a failed hangup leaves the call in
+    # termination_state='hangup_failed' for the reconciler to pick up.
+    # Signature: `async def hangup_async(sid) -> (ok: bool, error: str)`
+    hangup_async: Callable
+    # Async carrier-state query. Used by reconciler to tell whether a
+    # locally-orphaned row is still live carrier-side. Signature:
+    # `async def get_call_state(sid) -> (state, raw)` where state is one
+    # of 'live' | 'terminal' | 'unknown'.
+    get_call_state: Callable
     register_bridge: Callable
     pop_bridge: Callable
     MediaBridge: type
@@ -63,6 +73,8 @@ _TWILIO = CarrierAdapter(
     name="twilio",
     place_call=_twilio.place_twilio_call,
     hangup=_twilio_hangup_noop,
+    hangup_async=_twilio.hangup_twilio_call_async,
+    get_call_state=_twilio.get_twilio_call_state,
     register_bridge=_twilio.register_bridge,
     pop_bridge=_twilio.pop_bridge,
     MediaBridge=_twilio.TwilioMediaBridge,
@@ -78,6 +90,8 @@ _TELNYX = CarrierAdapter(
     name="telnyx",
     place_call=_telnyx.place_telnyx_call,
     hangup=_telnyx.hangup_telnyx_call,
+    hangup_async=_telnyx.hangup_telnyx_call_async,
+    get_call_state=_telnyx.get_telnyx_call_state,
     register_bridge=_telnyx.register_bridge,
     pop_bridge=_telnyx.pop_bridge,
     MediaBridge=_telnyx.TelnyxMediaBridge,

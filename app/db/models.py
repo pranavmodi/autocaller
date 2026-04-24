@@ -158,6 +158,19 @@ class CallLogRow(Base):
     # Null on legacy rows.
     ended_by: Mapped[str | None] = mapped_column(String(32), nullable=True)
 
+    # Carrier teardown invariant: `ended_at IS NOT NULL` iff the carrier has
+    # acknowledged the call is terminal. Before that, a row is in one of
+    # the non-terminal `termination_state` values and `ended_at` stays NULL.
+    # The reconciler sweeps any non-terminal row to re-verify via carrier API.
+    carrier_call_sid: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    termination_state: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="live", server_default="live",
+    )
+    termination_last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    termination_last_checked_at: Mapped[datetime | None] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=True,
+    )
+
     __table_args__ = (
         Index("ix_call_logs_patient_id", "patient_id"),
         Index("ix_call_logs_started_at", "started_at"),
@@ -264,6 +277,33 @@ class ConsultBookingRow(Base):
         Index("ix_consult_bookings_slot_start", "slot_start"),
         Index("ix_consult_bookings_created_at", "created_at"),
         Index("ix_consult_bookings_email", "email"),
+    )
+
+
+class FirmReviewRow(Base):
+    """Operator-pasted reviews for a firm, keyed on Mediflow pif_id.
+
+    The /firms/[id] detail page is backed by an external service that
+    doesn't store anything we can dump reviews into, so autocaller
+    holds a local free-form text blob — pasted from Google Maps, Yelp,
+    avvo, etc. One row per firm; overwriting the content is the
+    update path.
+    """
+    __tablename__ = "firm_reviews"
+
+    pif_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    # Legacy combined-blob column from the original single-textarea
+    # version. The API no longer reads or writes it; kept in-schema
+    # so existing rows aren't wiped. Drop in a later migration once
+    # we're confident nothing else references it.
+    content: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    google_content: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    yelp_content: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), default=_utcnow,
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), default=_utcnow, onupdate=_utcnow,
     )
 
 

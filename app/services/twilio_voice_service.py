@@ -427,10 +427,75 @@ def generate_stream_id() -> str:
 
 
 def hangup_twilio_call(call_sid: str):
-    """Hang up an in-progress Twilio call by setting its status to completed."""
+    """Best-effort sync hangup (kept for back-compat paths)."""
     client = _get_twilio_client()
     client.calls(call_sid).update(status="completed")
     logger.info(f"Twilio call hung up: SID={call_sid}")
+
+
+async def hangup_twilio_call_async(call_sid: str) -> tuple[bool, str]:
+    """Async hangup with one retry. Returns (ok, error_detail).
+
+    Twilio's SDK is sync, so we run it via asyncio.to_thread. Twilio 404
+    (call already gone) is treated as success — matches Telnyx semantics.
+    """
+    import asyncio
+    last_err = ""
+    for attempt in (1, 2):
+        try:
+            client = _get_twilio_client()
+            await asyncio.to_thread(
+                client.calls(call_sid).update, status="completed"
+            )
+            logger.info(
+                "Twilio hangup %s ack (attempt %d)", call_sid, attempt,
+            )
+            return True, ""
+        except Exception as e:
+            msg = str(e)
+            # Twilio 20404 / 404 = call doesn't exist — treat as success.
+            if "20404" in msg or ("404" in msg and "not found" in msg.lower()):
+                logger.info(
+                    "Twilio hangup %s: call already terminal (attempt %d)",
+                    call_sid, attempt,
+                )
+                return True, ""
+            last_err = f"{type(e).__name__}: {e!r}"
+            logger.warning(
+                "Twilio hangup %s attempt %d raised %s",
+                call_sid, attempt, last_err,
+            )
+            if attempt == 1:
+                await asyncio.sleep(0.25)
+                continue
+            break
+    return False, last_err
+
+
+async def get_twilio_call_state(call_sid: str) -> tuple[str, str]:
+    """Query Twilio for the current state of a call SID.
+
+    Returns (state, raw) matching the Telnyx helper's interface:
+      'live'     — status is in progress / ringing / queued / etc.
+      'terminal' — status is completed / failed / canceled / no-answer
+                   / busy OR Twilio returns 404.
+      'unknown'  — API error or parse failure.
+    """
+    import asyncio
+    try:
+        client = _get_twilio_client()
+        call = await asyncio.to_thread(client.calls(call_sid).fetch)
+    except Exception as e:
+        msg = str(e)
+        if "20404" in msg or ("404" in msg and "not found" in msg.lower()):
+            return "terminal", "not_found"
+        return "unknown", f"{type(e).__name__}: {e!r}"
+    status = (getattr(call, "status", "") or "").lower()
+    terminal_markers = {"completed", "failed", "canceled", "cancelled",
+                        "no-answer", "busy"}
+    if status in terminal_markers or not status:
+        return "terminal", status or "empty"
+    return "live", status
 
 
 def play_voicemail_and_hangup(call_sid: str, message: str):
