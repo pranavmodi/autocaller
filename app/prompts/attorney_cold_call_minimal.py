@@ -39,7 +39,7 @@ from app.prompts.attorney_cold_call import (
 )
 
 
-PROMPT_VERSION = "v2.4-minimal"  # v2.4-minimal: DM flow now 4 explicit beats — Precise opener → confirm connection (and pause) → ask permission to continue → discovery. Catches wrong-firm-list cases (Precise not recognised → end_call wrong_number instead of pitching into a void) and frames the call as consent-driven rather than pushy vendor.
+PROMPT_VERSION = "v2.5-minimal"  # v2.5-minimal: Gemini no longer delivers voicemails. Navigator's VM_DM_PERSONAL / VM_FIRM_GENERAL / NOT_IVR branches and Gemini's own end_call(voicemail_left=true) now both route to the canonical carrier-TTS path (_deliver_canonical_vm_via_carrier). Fixes the Burg & Brock double-delivery race + Gemini's script-looping, script-clipping, and no-end_call failure modes. Prompt Case A/B script content retained for reference but Gemini never speaks it — it signals "this is a voicemail" via end_call and the carrier reads the canonical message.
 
 
 # ---------------------------------------------------------------------------
@@ -271,16 +271,25 @@ like it, then `end_call(outcome="not_interested")`.
 
 ## If you hit a voicemail
 
-Leave a single take, about thirty seconds. If the mailbox greeting \
-names {lead_first_name}, open with their name; otherwise open with \
-"Hi there." Lead with the Precise tie-in, mention the ~100-hours-a- \
-week figure, and close with the consult link spelled out as \
-"getpossibleminds dot com slash consult." Then speak a short sign-off \
-and call `end_call` with outcome `voicemail` and `voicemail_left=true`.
+**Don't speak. The system delivers the message for you.**
+
+When you realise you're on a voicemail mailbox, stop talking and call \
+`end_call` with `outcome="voicemail"` and `voicemail_left=true`. The \
+orchestrator takes over, plays the canonical message via the carrier's \
+text-to-speech (starts with "Hi [first name], this is {rep_name} at \
+Possible Minds. We work with Precise Imaging…" closing at \
+"getpossibleminds dot com slash consult. Thanks."), and hangs up. \
+Deterministic duration, guaranteed completion.
+
+You do NOT need to recite the script yourself — trying to deliver it \
+via the live audio channel was unreliable (clipping, looping, missing \
+hangup). The signal to us is `end_call(voicemail_left=true)`; we do \
+the rest.
 
 One voicemail per lead. If the product-context block below says \
 `voicemail_already_left`, end the call silently with outcome \
-`voicemail` and `voicemail_left=false` — do not leave a second message.
+`voicemail` and `voicemail_left=false` — don't trigger a second \
+delivery.
 
 ## Rules (there are only a few)
 

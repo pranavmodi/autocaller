@@ -1250,6 +1250,111 @@ class CallOrchestrator:
             except Exception:
                 pass
 
+    async def _deliver_canonical_vm_via_carrier(
+        self,
+        *,
+        use_dm_first_name: bool,
+    ) -> None:
+        """Leave the canonical VM message via carrier-side TTS + hangup.
+
+        Single source of truth for voicemail delivery — replaces the
+        prior "unmute Gemini + nudge Case A/B script" path that was
+        unreliable (see docs/PROMPT_EDITOR.md and the Burg & Brock
+        `b4ba6530` post-mortem: 4 overlapping renditions).
+
+        Behavior:
+        - Mutes Gemini so any residual generation doesn't overlap with
+          the carrier TTS.
+        - Sets `_vm_handoff_fired=True` to block the `_handle_function_call`
+          VM handoff from double-firing if Gemini later emits
+          `end_call(voicemail_left=true)`.
+        - Stamps voicemail_left=True on the call log immediately — if
+          the TTS playback fails for any reason, we at least know the
+          AI reached a mailbox.
+        - Dispatches carrier-specific TTS playback (Twilio <Say> or
+          Telnyx TeXML) which then hangs up the call; the media-stream
+          stop event flows through `end_call` as normal.
+
+        use_dm_first_name:
+          True  — "Hi {first}, this is Alex at Possible Minds…"  (Case B)
+          False — "Hi there, this is Alex at Possible Minds…"    (Case A)
+        """
+        call = self._current_call
+        if call is None or self._twilio_bridge is None or not self._twilio_call_sid:
+            return
+        if getattr(self, "_vm_handoff_fired", False):
+            # Already in flight (either from here or from the AI
+            # end_call path). Don't double-dispatch.
+            return
+        self._vm_handoff_fired = True
+
+        # Mute Gemini so any buffered audio doesn't overlap with the
+        # carrier-TTS playback that's about to start.
+        try:
+            self._twilio_bridge.mute_ai_audio()
+            if self._voice_service is not None:
+                await self._voice_service.cancel_response()
+        except Exception as e:
+            logger.warning("VM handoff mute/cancel failed: %s", e)
+
+        # Stamp voicemail_left=True now — if carrier TTS fails, we
+        # still know the AI reached a mailbox.
+        try:
+            call_log_provider = get_call_log_provider()
+            await call_log_provider.update_call(
+                call.call_id, voicemail_left=True,
+            )
+            call.voicemail_left = True
+        except Exception as e:
+            logger.warning("marking voicemail_left failed: %s", e)
+
+        # Build the canonical v1.59 script. First-name inclusion depends
+        # on whether the navigator classified DM-personal (Case B) or
+        # firm-general (Case A) — "Hi Solmaz, …" vs "Hi there, …".
+        rep_name = os.getenv("SALES_REP_NAME", "").strip() or "Alex"
+        lead_first = ""
+        if use_dm_first_name and self._current_patient:
+            lead_first = (self._current_patient.name or "").split(" ", 1)[0]
+        greeting_name = f" {lead_first}" if lead_first else " there"
+        close_name = f" {lead_first}" if lead_first else ""
+        message = (
+            f"Hi{greeting_name}, this is {rep_name} at Possible Minds. "
+            "We work with Precise Imaging — those responses you get "
+            "from them on imaging-status questions, that's our system. "
+            "Precise is saving about a hundred hours a week on email "
+            "triage using it. We're doing free thirty-minute consults "
+            "with firms that work with Precise, on how the same tech "
+            "can handle your intake and records workflow. Text this "
+            "number back and I'll send you a time, or grab one "
+            "yourself at getpossibleminds dot com slash consult. "
+            f"Thanks{close_name}."
+        )
+
+        # Dispatch to carrier-specific TTS + hangup action. The
+        # carrier's own hangup closes the media stream; `end_call`
+        # gets invoked naturally via the stop event.
+        carrier = getattr(self, "_current_carrier", "twilio") or "twilio"
+        try:
+            if carrier == "telnyx":
+                from app.services.telnyx_voice_service import (
+                    play_voicemail_and_hangup_telnyx,
+                )
+                asyncio.create_task(
+                    play_voicemail_and_hangup_telnyx(
+                        self._twilio_call_sid, message,
+                    )
+                )
+            else:
+                from app.services.twilio_voice_service import (
+                    play_voicemail_and_hangup,
+                )
+                await asyncio.to_thread(
+                    play_voicemail_and_hangup,
+                    self._twilio_call_sid, message,
+                )
+        except Exception as e:
+            logger.warning("VM carrier TTS dispatch failed: %s", e)
+
     def _recent_caller_transcript(self, max_entries: int = 6) -> str:
         """Return the most recent caller-side transcript entries joined.
 
@@ -1402,80 +1507,43 @@ class CallOrchestrator:
                     await self.on_status_update("False IVR alarm — resuming conversation")
                 return  # no hang-up, no reseed greeting
 
-            # DM-personal voicemail → unmute the AI, nudge it to deliver the
-            # Case B script, and DON'T hang up. The AI's own end_call(
-            # voicemail_left=true) tool will fire when it finishes, and the
-            # v1.56 CTA-marker guard in _handle_function_call will reject it
-            # if the script was clipped.
+            # DM-personal voicemail → canonical carrier TTS (same path as
+            # firm-general; see Gemini reliability rationale below).
             if result.outcome == OUTCOME_VM_DM_PERSONAL:
                 dm_full = (self._current_patient.name or "").strip() if self._current_patient else ""
                 dm_first = dm_full.split()[0] if dm_full else "(the DM)"
                 await self._add_system_note(
                     f"Navigator: DM-personal voicemail detected for {dm_first}. "
-                    "Unmuting AI to deliver Case B script."
+                    "Delivering canonical VM via carrier TTS."
                 )
                 if self.on_status_update:
                     await self.on_status_update(
                         f"DM voicemail — leaving message for {dm_first}"
                     )
-                try:
-                    bridge.unmute_ai_audio()
-                except Exception as e:
-                    logger.debug("unmute_ai_audio on VM_DM_PERSONAL failed: %s", e)
-                try:
-                    if self._voice_service is not None:
-                        await self._voice_service.cancel_response()
-                        await self._voice_service.send_system_nudge(
-                            f"You have hit {dm_first}'s personal voicemail. "
-                            f"Deliver the Case B voicemail script NOW, verbatim. "
-                            "Speak every word of the script including the closing "
-                            "'...or grab one yourself at getpossibleminds dot com "
-                            f"slash consult. Thanks {dm_first}.' "
-                            "Do NOT call end_call until the FULL script has been "
-                            "spoken — the system will reject a premature end_call."
-                        )
-                except Exception as e:
-                    logger.warning("Could not nudge AI for VM_DM_PERSONAL: %s", e)
-                return  # AI will speak + fire end_call(voicemail_left=true) itself
+                await self._deliver_canonical_vm_via_carrier(use_dm_first_name=True)
+                return  # carrier hangup action closes the call on its own
 
-            # Firm-general voicemail OR unknown-VM-subtype → unmute AI,
-            # nudge it to deliver the Case A (firm-addressed) script. Policy
-            # as of v1.59: leave a message whenever we've hit a mailbox, not
-            # silent-hang. A recorded pitch in the firm's general mailbox
-            # beats a silent hangup — whoever checks it can route.
+            # Firm-general / unknown VM → canonical carrier TTS. Gemini
+            # Flash Live has proven unreliable at delivering VMs (clips
+            # mid-sentence, loops the script with no turn-end signal,
+            # omits the end_call tool call, or drops inbound audio
+            # entirely). Carrier-side <Say>/TeXML TTS is deterministic:
+            # starts, finishes, hangs up. See docs/production-readiness.md
+            # "Voicemail delivery" section.
             firm_vm_outcomes = (OUTCOME_VM_FIRM_GENERAL, OUTCOME_NOT_IVR)
             if result.outcome in firm_vm_outcomes:
                 firm = (self._current_call.firm_name or "").strip() if self._current_call else ""
                 firm_label = firm or "the firm"
                 await self._add_system_note(
                     f"Navigator: firm-general voicemail for {firm_label}. "
-                    "Unmuting AI to deliver Case A script."
+                    "Delivering canonical VM via carrier TTS."
                 )
                 if self.on_status_update:
                     await self.on_status_update(
                         f"Firm voicemail — leaving message for {firm_label}"
                     )
-                try:
-                    bridge.unmute_ai_audio()
-                except Exception as e:
-                    logger.debug("unmute_ai_audio on firm VM failed: %s", e)
-                try:
-                    if self._voice_service is not None:
-                        await self._voice_service.cancel_response()
-                        await self._voice_service.send_system_nudge(
-                            f"You have hit {firm_label}'s general voicemail. "
-                            "Deliver the Case A voicemail script NOW, verbatim "
-                            "(firm-addressed opener 'Hi there, this is Alex at "
-                            f"Possible Minds. I'm trying to reach whoever at {firm_label} "
-                            "handles decisions around intake and records.'). Speak every "
-                            "word including the closing '...or grab one yourself at "
-                            "getpossibleminds dot com slash consult. Thanks.' Do NOT "
-                            "call end_call until the FULL script has been spoken — "
-                            "the system will reject a premature end_call."
-                        )
-                except Exception as e:
-                    logger.warning("Could not nudge AI for firm VM: %s", e)
-                return  # AI will speak + fire end_call(voicemail_left=true) itself
+                await self._deliver_canonical_vm_via_carrier(use_dm_first_name=False)
+                return  # carrier hangup action closes the call on its own
 
             # DEAD_END / TIMED_OUT / SKIPPED → we're stuck in a phone tree
             # with no path to a human AND no VM fallback played. Leaving a
@@ -1619,98 +1687,37 @@ class CallOrchestrator:
             if callback and outcome == CallOutcome.COMPLETED:
                 outcome = CallOutcome.CALLBACK_REQUESTED
 
-            # VM delivery handoff: when the AI signals it reached a
-            # voicemail and wants to leave the scripted message, DON'T
-            # trust it to finish speaking cleanly — Gemini Flash Live
-            # has a habit of repeating the script or truncating mid-
-            # sentence when it tool-calls. Instead, the orchestrator
-            # takes over: mute the AI immediately, play the canonical
-            # v1.59 script via carrier-side TTS, and let the carrier's
-            # hangup action close the call. Deterministic duration,
-            # deterministic end, no loop risk.
+            # VM delivery handoff — Gemini signalled it reached a
+            # mailbox. Route to the canonical carrier-TTS path (shared
+            # with the navigator's VM branches). If the navigator
+            # already dispatched, `_vm_handoff_fired` is set and
+            # _deliver_canonical_vm_via_carrier becomes a no-op —
+            # prevents the double-delivery race we hit on Burg & Brock.
             if (
                 outcome == CallOutcome.VOICEMAIL
                 and args.get("voicemail_left")
                 and self._current_call is not None
                 and self._twilio_bridge is not None
                 and self._twilio_call_sid
-                and not getattr(self, "_vm_handoff_fired", False)
             ):
-                self._vm_handoff_fired = True
                 print(
                     f"[CallOrchestrator] VM handoff — AI signalled voicemail. "
-                    f"Taking over script delivery via carrier TTS."
+                    f"Routing to canonical carrier-TTS path."
                 )
-                # Mute the AI so Gemini stops mid-sentence and the
-                # carrier's TTS plays cleanly without overlap.
-                try:
-                    self._twilio_bridge.mute_ai_audio()
-                    if self._voice_service is not None:
-                        await self._voice_service.cancel_response()
-                except Exception as e:
-                    logger.warning("VM handoff mute/cancel failed: %s", e)
-
-                # Mark voicemail_left on the log now so it persists even
-                # if TTS playback fails downstream.
-                try:
-                    call_log_provider = get_call_log_provider()
-                    await call_log_provider.update_call(
-                        self._current_call.call_id, voicemail_left=True
-                    )
-                    self._current_call.voicemail_left = True
-                except Exception as e:
-                    logger.warning("marking voicemail_left failed: %s", e)
                 await self._add_system_note(
                     "AI handoff accepted — orchestrator playing canonical VM "
                     "script via carrier TTS, hangup on completion."
                 )
-
-                # Render the same v1.59 script used in the AMD path.
-                rep_name = os.getenv("SALES_REP_NAME", "").strip() or "Alex"
-                lead_first = (
-                    (self._current_patient.name or "").split(" ", 1)[0]
-                    if self._current_patient else ""
+                # Infer Case A vs B from the presence of a first name
+                # (same heuristic as the canonical script — "Hi Solmaz"
+                # vs "Hi there"). If we have the DM's name, use it.
+                has_first = bool(
+                    self._current_patient and self._current_patient.name
+                    and self._current_patient.name.strip()
                 )
-                greeting_name = f" {lead_first}" if lead_first else ""
-                close_name = f" {lead_first}" if lead_first else ""
-                message = (
-                    f"Hi{greeting_name}, this is {rep_name} at Possible Minds. "
-                    "We work with Precise Imaging — those responses you get "
-                    "from them on imaging-status questions, that's our system. "
-                    "Precise is saving about a hundred hours a week on email "
-                    "triage using it. We're doing free thirty-minute consults "
-                    "with firms that work with Precise, on how the same tech "
-                    "can handle your intake and records workflow. Text this "
-                    "number back and I'll send you a time, or grab one "
-                    "yourself at getpossibleminds dot com slash consult. "
-                    f"Thanks{close_name}."
+                await self._deliver_canonical_vm_via_carrier(
+                    use_dm_first_name=has_first,
                 )
-
-                # Dispatch to carrier-specific TTS-then-hangup path. Both
-                # run in the background — the carrier's own hangup action
-                # triggers the media-stream stop which end_call will
-                # observe via the normal path.
-                carrier = getattr(self, "_current_carrier", "twilio") or "twilio"
-                try:
-                    if carrier == "telnyx":
-                        from app.services.telnyx_voice_service import (
-                            play_voicemail_and_hangup_telnyx,
-                        )
-                        asyncio.create_task(
-                            play_voicemail_and_hangup_telnyx(
-                                self._twilio_call_sid, message,
-                            )
-                        )
-                    else:
-                        from app.services.twilio_voice_service import (
-                            play_voicemail_and_hangup,
-                        )
-                        await asyncio.to_thread(
-                            play_voicemail_and_hangup,
-                            self._twilio_call_sid, message,
-                        )
-                except Exception as e:
-                    logger.warning("VM carrier TTS dispatch failed: %s", e)
 
                 # Ack the AI's end_call so Gemini doesn't retry-loop
                 # while the carrier TTS is playing.
@@ -1724,8 +1731,7 @@ class CallOrchestrator:
                         logger.debug("send_function_result on VM handoff: %s", e)
                 # DON'T call self.end_call here — the carrier's hangup
                 # action will tear down the media stream and the stop
-                # event will trigger end_call through the normal path
-                # (with voicemail_left already set above).
+                # event will trigger end_call through the normal path.
                 return
 
             # Persist autocaller capture fields if the AI supplied them.
