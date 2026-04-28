@@ -507,17 +507,49 @@ class CallOrchestrator:
                 self._last_start_error = f"{resolved_carrier_name.title()} call placement failed: {type(e).__name__}: {str(e)}"
                 if self.on_error:
                     await self.on_error(f"{resolved_carrier_name.title()} call failed: {str(e)}")
+                # Detect known invalid-number signatures from the carrier.
+                # If the destination is unroutable (e.g. malformed digits,
+                # smushed extension, disconnected number), retrying won't
+                # help — flag the patient so the dispatcher stops picking
+                # this lead and the operator can fix the data.
+                err_blob = str(e).lower()
+                is_invalid_number = (
+                    "d11" in err_blob
+                    or "destination number is invalid" in err_blob
+                    or "10010" in err_blob
+                    or "32005" in err_blob   # Twilio: invalid To number
+                    or "32009" in err_blob   # Twilio: number not in service
+                )
                 await call_log_provider.update_call(
                     call.call_id,
-                    error_code=f"{resolved_carrier_name}_place_failed",
+                    error_code=(
+                        f"{resolved_carrier_name}_invalid_number"
+                        if is_invalid_number
+                        else f"{resolved_carrier_name}_place_failed"
+                    ),
                     error_message=self._last_start_error,
                 )
                 await call_log_provider.end_call(call.call_id, CallOutcome.FAILED)
-                # Pre-dial failure (carrier rejected placement — fraud block,
-                # trial-unverified, auth, etc.). The lead's phone never rang,
-                # so don't consume an attempt or set the retry cooldown —
-                # the dispatcher should re-pick this lead on its next tick
-                # once the carrier issue is resolved.
+                if is_invalid_number and patient is not None:
+                    try:
+                        patient_provider = get_patient_provider()
+                        await patient_provider.mark_patient_invalid_number(
+                            patient.patient_id,
+                            f"place_call rejected as invalid destination: {str(e)[:200]}",
+                        )
+                        print(
+                            f"[CallOrchestrator] Patient {patient.patient_id} "
+                            f"flagged invalid_number — dispatcher will skip."
+                        )
+                    except Exception as flag_err:
+                        logger.warning(
+                            "mark_patient_invalid_number failed for %s: %s",
+                            patient.patient_id, flag_err,
+                        )
+                # Other pre-dial failures (fraud block, trial-unverified,
+                # auth, etc.) leave the lead retryable on the dispatcher's
+                # next tick once the carrier issue is resolved — no
+                # attempt is consumed.
                 voice = self._voice_service
                 self._voice_service = None
                 self._current_call = None
@@ -1407,6 +1439,29 @@ class CallOrchestrator:
         # carrier's own hangup closes the media stream; `end_call`
         # gets invoked naturally via the stop event.
         carrier = getattr(self, "_current_carrier", "twilio") or "twilio"
+
+        # Mirror the cached WAV to listen-in clients in parallel with
+        # carrier playback. Carrier TTS audio bypasses the media-stream
+        # WS, so without this mirror the operator hears silence during
+        # the entire VM delivery (and tends to manually end the call,
+        # thinking it's stuck — exactly what we hit on call
+        # 25e9bd37 on 2026-04-28).
+        if self._twilio_bridge and audio_url:
+            try:
+                from pathlib import Path
+                wav_path = (
+                    Path(__file__).resolve().parent.parent
+                    / "audio" / "vm" / f"{call.call_id}.wav"
+                )
+                if wav_path.exists():
+                    asyncio.create_task(
+                        self._twilio_bridge.mirror_vm_audio_to_listeners(
+                            str(wav_path)
+                        )
+                    )
+            except Exception as e:
+                logger.warning("VM listener-mirror dispatch failed: %s", e)
+
         try:
             if carrier == "telnyx":
                 from app.services.telnyx_voice_service import (

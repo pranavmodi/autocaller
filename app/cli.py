@@ -1856,16 +1856,16 @@ def leads_sync_pifstats(
             phone = phones[0]
         phone = phone.replace("\u2011", "-").replace(".", "-").strip()
 
-        # Normalize to E.164-ish
-        digits = "".join(c for c in phone if c.isdigit())
-        if len(digits) == 10:
-            phone = f"+1{digits}"
-        elif len(digits) == 11 and digits.startswith("1"):
-            phone = f"+{digits}"
-        elif not phone.startswith("+"):
-            phone = f"+{digits}" if digits else ""
-
-        if not phone or len(digits) < 10 or len(digits) > 15:
+        # Normalize via the canonical helper so extension-suffixed
+        # numbers ("844-422-3476 ext 102") drop to the base instead of
+        # smushing into an invalid 13-digit blob — root cause of the
+        # Dennis Lalezar D11 failure. See app/services/phone_normalize.py.
+        from app.services.phone_normalize import normalize_phone
+        phone = normalize_phone(phone)
+        if not phone:
+            continue
+        # Sanity bound — 10-digit US is 12 chars (+1NNN…); max E.164 16.
+        if len(phone) < 11 or len(phone) > 16:
             continue
 
         beh = firm.get("behavioral_data") or {}
