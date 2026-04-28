@@ -138,6 +138,67 @@ export const clearActiveCall = () =>
 export const startCall = (patientId: string, mode: "twilio" | "web" = "twilio") =>
   post<{ call: CallLog }>("/api/call/start", { patient_id: patientId, mode });
 
+// ---- Cadence priority queue (Layer 1: autorespond signals) ----
+
+export type CadencePriorityRow = {
+  id: string;
+  pif_id: string;
+  firm_name: string;
+  cadence_stage: string;
+  next_action: string | null;
+  next_action_due: string | null;
+  owner: string | null;
+  outcome: string;
+  call_ids: string[];
+  contacts_tried: Array<{ name: string; phone: string; title?: string }>;
+  available_contacts: Array<{
+    name: string;
+    title: string;
+    phone: string;
+    email: string | null;
+    source: string;
+  }>;
+  intel: Record<string, unknown>;
+  icp_tier: string | null;
+  icp_score: number | null;
+  notes: string | null;
+  priority_score: number;
+  autorespond: {
+    events_24h: number;
+    events_7d: number;
+    latest_event_at: string | null;
+    latest_subject: string;
+    top_agent_types: string[];
+    distinct_contact_count: number;
+  };
+  last_call_age_hours: number | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export const getCadenceNextUp = (limit = 50) =>
+  get<{ items: CadencePriorityRow[]; total: number }>(
+    `/api/cadence/next-up?limit=${limit}`,
+  );
+
+export type AutorespondSummary = {
+  total_events?: number;
+  events_today?: number;
+  events_this_week?: number;
+  by_agent_type?: Record<string, number>;
+  by_day?: Array<{ date: string; count: number }>;
+  top_firms?: Array<{ firm_name: string; pif_id: string; count: number }>;
+  error?: string;
+};
+
+export const getAutorespondSummary = () =>
+  get<AutorespondSummary>("/api/cadence/autorespond-summary");
+
+export const getFirmAutorespondEvents = (pifId: string, page = 1, pageSize = 50) =>
+  get<{ items: unknown[]; total: number; page: number; page_size: number }>(
+    `/api/cadence/${pifId}/autorespond-events?page=${page}&page_size=${pageSize}`,
+  );
+
 // ---- Leads (patients table) ----
 export const listLeads = () =>
   get<{ patients: Lead[] }>("/api/patients");
@@ -261,6 +322,40 @@ export const acknowledgeBooking = (id: number) =>
   post<{ id: number; acknowledged: boolean }>(
     `/api/consults/${id}/acknowledge`,
   );
+
+
+// ---- Firm reviews (operator-pasted, split by source) ----
+export type FirmReviews = {
+  pif_id: string;
+  google: string;
+  yelp: string;
+  updated_at: string | null;
+};
+
+export const getFirmReviews = (pifId: string) =>
+  get<FirmReviews>(`/api/firms/${encodeURIComponent(pifId)}/reviews`);
+
+// Patch semantics: omit a field to leave it untouched. Pass "" to
+// explicitly clear that source's blob.
+export const putFirmReviews = (
+  pifId: string,
+  patch: { google?: string; yelp?: string },
+) =>
+  put<FirmReviews>(`/api/firms/${encodeURIComponent(pifId)}/reviews`, patch);
+
+
+// Force-pull researched firms from PIF Stats into the local patients
+// table. Returns counts; the same op the background loop runs every
+// CADENCE_SCAN_INTERVAL_SECONDS.
+export type FirmsSyncResult = {
+  fetched: number;
+  inserted: number;
+  updated: number;
+  skipped: number;
+};
+
+export const syncFirms = () =>
+  post<FirmsSyncResult>("/api/firms/sync");
 
 
 export const OPENAI_VOICES = [

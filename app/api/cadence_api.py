@@ -293,6 +293,147 @@ async def refresh_cadence():
     return {"status": "ok", **result}
 
 
+# ---------------------------------------------------------------------------
+# Priority queue — what the operator should call next
+# ---------------------------------------------------------------------------
+
+# In-memory cache for the autorespond fetch — burst-protect the PIF
+# API when the /cadence page polls. Single-process only; that's fine
+# for our 1-daemon-per-host deployment.
+_autorespond_cache: dict = {"at": 0.0, "data": {}, "summary": None}
+_AUTORESPOND_CACHE_TTL_SECS = 60
+
+
+async def _cached_autorespond_signals() -> dict:
+    import time
+    from app.services.autorespond_signals import fetch_recent_events_grouped
+    now = time.time()
+    if (now - _autorespond_cache["at"]) < _AUTORESPOND_CACHE_TTL_SECS and _autorespond_cache["data"]:
+        return _autorespond_cache["data"]
+    try:
+        data = await fetch_recent_events_grouped(days=7)
+        _autorespond_cache["data"] = data
+        _autorespond_cache["at"] = now
+        return data
+    except Exception:
+        return _autorespond_cache.get("data") or {}
+
+
+@router.get("/next-up")
+async def cadence_next_up(
+    limit: int = 50,
+    include_completed: bool = False,
+):
+    """Priority-ordered call queue. Highest-score firms first.
+
+    Joins cadence_entries with fresh autorespond-events signals
+    (60s-cached) and computes a score per row. The order this returns
+    is what the operator should call top-to-bottom.
+
+    Score components in `app/services/autorespond_signals.py`:
+        events_24h × 8 + events_7d × 2
+        + ICP tier weight (A=20, B=10, C=3)
+        + DM phone known: +10
+        + cadence stage weight (callback_pending +15, signal +5, retry -5)
+        - recent-call penalty
+    """
+    from app.services.autorespond_signals import priority_score
+    autorespond = await _cached_autorespond_signals()
+
+    async with AsyncSessionLocal() as session:
+        stmt = select(CadenceEntryRow)
+        if not include_completed:
+            stmt = stmt.where(CadenceEntryRow.outcome == "in_progress")
+        result = await session.execute(stmt)
+        entries = list(result.scalars().all())
+
+        # Recent calls per pif_id — for the call-age penalty.
+        from sqlalchemy import desc as _desc
+        recent_calls_by_phone: dict[str, datetime] = {}
+        # Cheap lookup: pull the last 200 calls; index recent ones by
+        # phone so we don't N+1 the DB.
+        rec_stmt = (
+            select(CallLogRow.phone, CallLogRow.started_at)
+            .where(CallLogRow.started_at >= datetime.now(timezone.utc) - __import__("datetime").timedelta(hours=48))
+            .order_by(_desc(CallLogRow.started_at))
+            .limit(500)
+        )
+        rec_res = await session.execute(rec_stmt)
+        for phone, started in rec_res.all():
+            digits = "".join(c for c in (phone or "") if c.isdigit())[-10:]
+            if digits and digits not in recent_calls_by_phone:
+                recent_calls_by_phone[digits] = started
+
+    now = datetime.now(timezone.utc)
+    rows: list[dict] = []
+    for e in entries:
+        ar = autorespond.get(e.pif_id) or (e.intel or {}).get("autorespond") or {}
+        events_24h = int(ar.get("events_24h") or 0)
+        events_7d = int(ar.get("events_7d") or 0)
+        contacts = e.available_contacts or []
+        has_dm_phone = any((c.get("phone") or "").strip() for c in contacts)
+        # last-call age — match against any phone in available_contacts
+        last_call_age_hours: Optional[float] = None
+        for c in contacts:
+            digits = "".join(d for d in (c.get("phone") or "") if d.isdigit())[-10:]
+            if not digits:
+                continue
+            ts = recent_calls_by_phone.get(digits)
+            if ts:
+                age = (now - ts).total_seconds() / 3600.0
+                if last_call_age_hours is None or age < last_call_age_hours:
+                    last_call_age_hours = age
+
+        score = priority_score(
+            events_24h=events_24h,
+            events_7d=events_7d,
+            icp_tier=e.icp_tier,
+            has_dm_phone=has_dm_phone,
+            cadence_stage=e.cadence_stage,
+            last_call_age_hours=last_call_age_hours,
+        )
+        d = _row_to_dict(e)
+        d["priority_score"] = score
+        d["autorespond"] = {
+            "events_24h": events_24h,
+            "events_7d": events_7d,
+            "latest_event_at": ar.get("latest_event_at"),
+            "latest_subject": ar.get("latest_subject") or "",
+            "top_agent_types": ar.get("top_agent_types") or [],
+            "distinct_contact_count": int(ar.get("distinct_contact_count") or 0),
+        }
+        d["last_call_age_hours"] = last_call_age_hours
+        rows.append(d)
+
+    rows.sort(key=lambda r: r["priority_score"], reverse=True)
+    return {"items": rows[:max(1, min(limit, 200))], "total": len(rows)}
+
+
+@router.get("/autorespond-summary")
+async def cadence_autorespond_summary():
+    """Pass-through to PIF Stats /autorespond-events/summary.
+
+    Surfaces aggregate stats on the Now / cadence pages: events_today,
+    events_this_week, by_agent_type breakdown, by_day sparkline,
+    top_firms.
+    """
+    from app.services.autorespond_signals import fetch_summary
+    data = await fetch_summary()
+    return data or {"error": "upstream unavailable"}
+
+
+@router.get("/{pif_id}/autorespond-events")
+async def cadence_firm_autorespond_events(
+    pif_id: str,
+    page: int = 1,
+    page_size: int = 50,
+):
+    """Pass-through: events for a specific firm. Used by firm-detail page."""
+    from app.services.autorespond_signals import fetch_events_for_firm
+    data = await fetch_events_for_firm(pif_id, page=page, page_size=page_size)
+    return data or {"items": [], "total": 0, "page": page, "page_size": page_size}
+
+
 def _row_to_dict(e: CadenceEntryRow) -> dict:
     return {
         "id": e.id,

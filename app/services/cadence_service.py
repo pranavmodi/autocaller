@@ -54,8 +54,29 @@ async def run_daily_scan() -> dict:
 
 
 async def _ingest_signals() -> int:
-    """Phase A: fetch recently-active firms from PIF Stats, create entries."""
+    """Phase A: fetch recently-active firms from PIF Stats, create entries.
+
+    Three priority signals stack:
+      1. Autorespond events (NEW, strongest) — firms with real
+         autorespond activity in the last 7 days. Recorded interaction
+         with our Precise Imaging system → near-perfect cold-call hook.
+      2. Behavioral_data days_since_last_contact ≤ 2 — broader email
+         activity signal from PIF Stats.
+      3. recently_researched within RECENT_RESEARCH_DAYS — research
+         freshness fallback.
+
+    Each ingested cadence row gets `intel.autorespond_signals` stamped
+    if we have data for that pif_id, so the call-queue priority score
+    can read it without re-fetching.
+    """
     created = 0
+    # Autorespond signals — fetch once, stamp on every entry we create.
+    try:
+        from app.services.autorespond_signals import fetch_recent_events_grouped
+        autorespond_by_pif = await fetch_recent_events_grouped(days=7)
+    except Exception as e:
+        logger.warning("Autorespond signals fetch failed: %s", e)
+        autorespond_by_pif = {}
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
             page = 1
@@ -81,7 +102,8 @@ async def _ingest_signals() -> int:
                     recently_researched = _is_recent(
                         f.get("last_researched_at"), RECENT_RESEARCH_DAYS
                     )
-                    if recently_active or recently_researched:
+                    has_autorespond = f.get("id") in autorespond_by_pif
+                    if recently_active or recently_researched or has_autorespond:
                         firms.append(f)
                 if page >= data.get("total_pages", 1):
                     break
@@ -139,6 +161,13 @@ async def _ingest_signals() -> int:
                             "source": "contacts",
                         })
 
+                # Stamp autorespond signals on intel so the call-queue
+                # priority scorer can read them without re-fetching.
+                intel_seed: dict = {}
+                ar_signal = autorespond_by_pif.get(pif_id)
+                if ar_signal:
+                    intel_seed["autorespond"] = ar_signal
+
                 entry = CadenceEntryRow(
                     id=str(uuid.uuid4()),
                     pif_id=pif_id,
@@ -152,6 +181,7 @@ async def _ingest_signals() -> int:
                     outcome="in_progress",
                     icp_tier=firm.get("icp_tier"),
                     icp_score=firm.get("icp_score"),
+                    intel=intel_seed,
                 )
                 session.add(entry)
                 created += 1
@@ -372,24 +402,34 @@ async def get_cadence_stats() -> dict:
 
 
 async def cadence_scan_loop():
-    """Background task: run the daily scan at SCAN_HOUR Eastern."""
-    logger.info("Cadence scan loop started (hour=%d %s)", SCAN_HOUR, SCAN_TZ)
-    last_scan_date: Optional[str] = None
+    """Background task: scan PIF Stats on a fixed cadence.
+
+    Was: once a day at 08:00 ET. New behaviour: every
+    `CADENCE_SCAN_INTERVAL_SECONDS` (default 900 = 15 min) so newly-
+    researched Mediflow firms become callable leads quickly without
+    waiting until tomorrow morning. Set the env var to a large value
+    (e.g. 86400) to restore daily semantics.
+    """
+    interval = int(os.getenv("CADENCE_SCAN_INTERVAL_SECONDS", "900"))
+    interval = max(60, interval)  # never tighter than 1 min
+    logger.info(
+        "Cadence scan loop started (interval=%ds, recent_research=%dd)",
+        interval, RECENT_RESEARCH_DAYS,
+    )
 
     while True:
         try:
-            now_local = datetime.now(SCAN_TZ)
-            today_str = now_local.strftime("%Y-%m-%d")
-
-            if now_local.hour == SCAN_HOUR and last_scan_date != today_str:
-                logger.info("Cadence daily scan triggered for %s", today_str)
-                result = await run_daily_scan()
-                last_scan_date = today_str
-                logger.info("Cadence scan result: %s", result)
-
+            result = await run_daily_scan()
+            logger.info("Cadence scan result: %s", result)
+            # Also keep the local `patients` table in sync — that's
+            # what makes new firms appear as callable leads on /now
+            # and renders enrichment on /firms/{pif_id}.
+            from .pifstats_sync import sync_pifstats_to_patients
+            patient_result = await sync_pifstats_to_patients(limit=500)
+            logger.info("pifstats → patients sync: %s", patient_result)
         except asyncio.CancelledError:
             raise
         except Exception as e:
             logger.warning("Cadence scan loop error: %s", e)
 
-        await asyncio.sleep(3600)  # check hourly
+        await asyncio.sleep(interval)
