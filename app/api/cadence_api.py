@@ -438,9 +438,13 @@ async def cadence_firm_autorespond_events(
     return data or {"items": [], "total": 0, "page": page, "page_size": page_size}
 
 
-@router.get("/{pif_id}/calls")
+@router.get("/firm/{pif_id}/calls")
 async def cadence_firm_calls(pif_id: str, limit: int = 50):
-    """All call_logs rows for a firm.
+    """All call_logs rows for a firm (keyed by pif_id).
+
+    Path is `/firm/{pif_id}/calls` (not `/{pif_id}/calls`) to avoid
+    colliding with the older `/{entry_id}/calls` route which takes a
+    cadence entry's UUID `id`, not the upstream pif_id.
 
     Match strategy: case-insensitive equality on call_logs.firm_name
     against the cadence row's firm_name for this pif_id, plus a

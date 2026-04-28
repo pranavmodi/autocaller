@@ -228,7 +228,7 @@ export type FirmCallRow = {
 
 export const getFirmCalls = (pifId: string, limit = 50) =>
   get<{ items: FirmCallRow[]; total: number; firm_name: string | null }>(
-    `/api/cadence/${pifId}/calls?limit=${limit}`,
+    `/api/cadence/firm/${pifId}/calls?limit=${limit}`,
   );
 
 // ---- Leads (patients table) ----
