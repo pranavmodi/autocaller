@@ -408,7 +408,13 @@ export default function NowPage() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="text-sm font-medium text-neutral-900 truncate">
-                      {displayName}
+                      <Link
+                        href={`/firms/${row.pif_id}`}
+                        className="hover:text-blue-600 hover:underline"
+                        title="Open firm detail page"
+                      >
+                        {displayName}
+                      </Link>
                       {row.icp_tier && (
                         <span className="ml-1.5 rounded bg-neutral-100 px-1 py-0.5 text-[9px] font-semibold text-neutral-600">
                           {row.icp_tier}

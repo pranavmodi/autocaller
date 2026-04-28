@@ -208,9 +208,13 @@ function QueueRow({ index, row }: { index: number; row: CadencePriorityRow }) {
         </span>
       </td>
       <td className="px-3 py-2">
-        <div className="font-medium text-neutral-900">
+        <Link
+          href={`/firms/${row.pif_id}`}
+          className="font-medium text-neutral-900 hover:text-blue-600 hover:underline"
+          title="Open firm detail page"
+        >
           {row.firm_name || "(unnamed firm)"}
-        </div>
+        </Link>
         {dmContact && (
           <div className="text-xs text-neutral-500">
             {dmContact.name}

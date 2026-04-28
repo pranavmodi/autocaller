@@ -14,6 +14,7 @@ import {
   type PifFirm,
   type PifLeader,
 } from "@/lib/pifstats";
+import { getFirmReviews, putFirmReviews, getFirmCalls } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import {
   ArrowLeft,
@@ -21,6 +22,7 @@ import {
   Globe,
   Mail,
   Phone,
+  PhoneCall,
   MapPin,
   Users,
   BarChart3,
@@ -30,6 +32,8 @@ import {
   Linkedin,
   ExternalLink,
   Briefcase,
+  Star,
+  Search,
 } from "lucide-react";
 
 function tierColor(tier: string | null) {
@@ -136,6 +140,13 @@ export default function FirmDetailPage() {
 
       {/* Research actions */}
       <ResearchActions firmId={firm.id} firm={firm} />
+
+      {/* Operator-pasted reviews — separate blobs per source */}
+      <FirmReviewsPanel
+        pifId={firm.id}
+        firmName={firm.firm_name}
+        address={firm.addresses?.[0] ?? null}
+      />
 
       {/* Score breakdown + Behavior — two columns */}
       <div className="grid gap-5 lg:grid-cols-2">
@@ -345,8 +356,145 @@ export default function FirmDetailPage() {
           </div>
         </section>
       )}
+
+      <FirmCallsPanel pifId={id} />
     </div>
   );
+}
+
+function FirmCallsPanel({ pifId }: { pifId: string }) {
+  const calls = useQuery({
+    queryKey: ["firm-calls", pifId],
+    queryFn: () => getFirmCalls(pifId, 100),
+    refetchInterval: 30_000,
+  });
+
+  return (
+    <section className="rounded-xl border border-neutral-200 bg-white p-5">
+      <h2 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-neutral-400">
+        <PhoneCall className="h-4 w-4" />
+        Calls ({calls.data?.total ?? 0})
+      </h2>
+      {calls.isLoading && (
+        <div className="mt-3 text-xs text-neutral-400">loading…</div>
+      )}
+      {!calls.isLoading && (calls.data?.items?.length ?? 0) === 0 && (
+        <div className="mt-3 text-xs text-neutral-400">
+          No calls yet to this firm.
+        </div>
+      )}
+      {(calls.data?.items?.length ?? 0) > 0 && (
+        <div className="mt-3 overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead className="text-[10px] uppercase tracking-wide text-neutral-400">
+              <tr className="text-left">
+                <th className="px-2 py-1.5 font-medium">When</th>
+                <th className="px-2 py-1.5 font-medium">Contact</th>
+                <th className="px-2 py-1.5 font-medium">Phone</th>
+                <th className="px-2 py-1.5 font-medium">Outcome</th>
+                <th className="px-2 py-1.5 font-medium">Disposition</th>
+                <th className="px-2 py-1.5 text-right font-medium">Dur</th>
+                <th className="px-2 py-1.5 font-medium">Judge</th>
+                <th className="px-2 py-1.5 font-medium">VM</th>
+                <th className="px-2 py-1.5 font-medium">IVR</th>
+                <th className="px-2 py-1.5 font-medium">Voice</th>
+                <th className="px-2 py-1.5 font-medium">Prompt</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-neutral-100">
+              {calls.data?.items?.map((c) => (
+                <tr
+                  key={c.call_id}
+                  className="text-neutral-700 hover:bg-neutral-50"
+                >
+                  <td className="px-2 py-1.5 whitespace-nowrap">
+                    <Link
+                      href={`/calls/${c.call_id}`}
+                      className="text-blue-600 hover:underline"
+                      title={c.started_at ?? ""}
+                    >
+                      {c.started_at
+                        ? new Date(c.started_at).toLocaleString(undefined, {
+                            month: "short",
+                            day: "numeric",
+                            hour: "numeric",
+                            minute: "2-digit",
+                          })
+                        : "—"}
+                    </Link>
+                  </td>
+                  <td className="px-2 py-1.5 max-w-[14rem] truncate">
+                    {c.patient_name || "—"}
+                  </td>
+                  <td className="px-2 py-1.5 font-mono text-[11px] text-neutral-500">
+                    {c.phone || "—"}
+                  </td>
+                  <td className="px-2 py-1.5">
+                    <span
+                      className={cn(
+                        "rounded px-1.5 py-0.5 text-[10px] font-medium",
+                        outcomeColor(c.outcome),
+                      )}
+                    >
+                      {c.outcome}
+                    </span>
+                  </td>
+                  <td className="px-2 py-1.5 text-[11px] text-neutral-600">
+                    {c.call_disposition}
+                    {c.ended_by ? (
+                      <span className="ml-1 text-[10px] text-neutral-400">
+                        ({c.ended_by})
+                      </span>
+                    ) : null}
+                  </td>
+                  <td className="px-2 py-1.5 text-right tabular-nums">
+                    {c.duration_seconds}s
+                  </td>
+                  <td className="px-2 py-1.5">
+                    {c.judge_score != null ? c.judge_score : "—"}
+                  </td>
+                  <td className="px-2 py-1.5">{c.voicemail_left ? "✓" : ""}</td>
+                  <td className="px-2 py-1.5 text-[10px] text-neutral-500">
+                    {c.ivr_detected ? c.ivr_outcome ?? "yes" : ""}
+                  </td>
+                  <td className="px-2 py-1.5 text-[10px] text-neutral-500">
+                    {c.voice_provider ?? "—"}
+                  </td>
+                  <td className="px-2 py-1.5 text-[10px] text-neutral-500">
+                    {c.prompt_version ?? "—"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function outcomeColor(outcome: string): string {
+  switch (outcome) {
+    case "demo_scheduled":
+      return "bg-emerald-100 text-emerald-800";
+    case "callback_requested":
+      return "bg-sky-100 text-sky-800";
+    case "voicemail":
+      return "bg-violet-100 text-violet-800";
+    case "gatekeeper_only":
+      return "bg-amber-100 text-amber-800";
+    case "not_interested":
+      return "bg-rose-100 text-rose-800";
+    case "wrong_number":
+      return "bg-neutral-200 text-neutral-700";
+    case "completed":
+      return "bg-neutral-100 text-neutral-700";
+    case "failed":
+    case "disconnected":
+      return "bg-neutral-100 text-neutral-500";
+    default:
+      return "bg-neutral-100 text-neutral-600";
+  }
 }
 
 function ResearchActions({ firmId, firm }: { firmId: string; firm: PifFirm }) {
@@ -606,6 +754,241 @@ function Stat({
         )}
       >
         {value}
+      </div>
+    </div>
+  );
+}
+
+
+// 2-letter US state code → full state name. Google search matches on
+// either, but the full word is a stronger signal than the abbrev
+// (which often collides with other words — "CA" vs "California").
+const STATE_NAMES: Record<string, string> = {
+  AL: "Alabama", AK: "Alaska", AZ: "Arizona", AR: "Arkansas",
+  CA: "California", CO: "Colorado", CT: "Connecticut", DE: "Delaware",
+  FL: "Florida", GA: "Georgia", HI: "Hawaii", ID: "Idaho",
+  IL: "Illinois", IN: "Indiana", IA: "Iowa", KS: "Kansas",
+  KY: "Kentucky", LA: "Louisiana", ME: "Maine", MD: "Maryland",
+  MA: "Massachusetts", MI: "Michigan", MN: "Minnesota", MS: "Mississippi",
+  MO: "Missouri", MT: "Montana", NE: "Nebraska", NV: "Nevada",
+  NH: "New Hampshire", NJ: "New Jersey", NM: "New Mexico", NY: "New York",
+  NC: "North Carolina", ND: "North Dakota", OH: "Ohio", OK: "Oklahoma",
+  OR: "Oregon", PA: "Pennsylvania", RI: "Rhode Island", SC: "South Carolina",
+  SD: "South Dakota", TN: "Tennessee", TX: "Texas", UT: "Utah",
+  VT: "Vermont", VA: "Virginia", WA: "Washington", WV: "West Virginia",
+  WI: "Wisconsin", WY: "Wyoming", DC: "District of Columbia",
+};
+
+/** Pull the US state name out of an address string like
+ * "123 Main St, Los Angeles, CA 90210". Falls back to empty if no
+ * 2-letter state abbrev is present. */
+function extractState(address: string | null | undefined): string {
+  if (!address) return "";
+  const m = address.match(/\b([A-Z]{2})\b\s*\d{5}(?:-\d{4})?\b/);
+  const ab = (m?.[1] ?? "").toUpperCase();
+  return STATE_NAMES[ab] ?? "";
+}
+
+function FirmReviewsPanel({
+  pifId,
+  firmName,
+  address,
+}: {
+  pifId: string;
+  firmName: string;
+  address: string | null;
+}) {
+  const { data, isLoading } = useQuery({
+    queryKey: ["firm-reviews", pifId],
+    queryFn: () => getFirmReviews(pifId),
+  });
+
+  // Loose bag-of-words — quoted phrases were too strict (Yelp pages
+  // often don't have the firm's full legal name verbatim) and
+  // Mediflow's practice-area copy was marketing fluff. Keep the query
+  // short: name + canonical firm type + full state name. Let Google
+  // fuzzy-match.
+  const state = extractState(address);
+  const firmType = "personal injury law firm";
+
+  const googleQuery = [firmName, firmType, state, "reviews"]
+    .filter(Boolean)
+    .join(" ");
+  const yelpQuery = ["site:yelp.com", firmName, firmType, state]
+    .filter(Boolean)
+    .join(" ");
+
+  return (
+    <section className="rounded-xl border border-neutral-200 bg-white p-5">
+      <div className="flex items-center justify-between">
+        <h2 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-neutral-400">
+          <Star className="h-4 w-4" />
+          Reviews
+        </h2>
+        <span className="text-[11px] text-neutral-400">
+          {isLoading
+            ? "loading…"
+            : data?.updated_at
+              ? `last saved ${new Date(data.updated_at).toLocaleString(undefined, {
+                  month: "short",
+                  day: "numeric",
+                  hour: "numeric",
+                  minute: "2-digit",
+                })}`
+              : "not saved"}
+        </span>
+      </div>
+      <p className="mt-1 text-[11px] text-neutral-500">
+        Paste reviews per source. The search buttons open Google in a new
+        tab scoped to that source — copy the blurbs back here.
+      </p>
+
+      <div className="mt-4 grid gap-5 lg:grid-cols-2">
+        <ReviewSourcePane
+          pifId={pifId}
+          firmName={firmName}
+          source="google"
+          label="Google Reviews"
+          searchQuery={googleQuery}
+          serverValue={data?.google ?? ""}
+          isLoading={isLoading}
+          placeholder={"Google — 4.8 ★ (312 reviews)\n\n★★★★★ Jane D. — Aug 2024\n\"They were great on my auto-accident case…\""}
+        />
+        <ReviewSourcePane
+          pifId={pifId}
+          firmName={firmName}
+          source="yelp"
+          label="Yelp Reviews"
+          searchQuery={yelpQuery}
+          serverValue={data?.yelp ?? ""}
+          isLoading={isLoading}
+          placeholder={"Yelp — 4.5 ★ (87 reviews)\n\n★★★★★ Mark T. — 2/2025\n\"Responsive and honest. Explained every step…\""}
+        />
+      </div>
+    </section>
+  );
+}
+
+
+function ReviewSourcePane({
+  pifId,
+  source,
+  label,
+  searchQuery,
+  serverValue,
+  isLoading,
+  placeholder,
+}: {
+  pifId: string;
+  firmName: string;
+  source: "google" | "yelp";
+  label: string;
+  searchQuery: string;
+  serverValue: string;
+  isLoading: boolean;
+  placeholder: string;
+}) {
+  const qc = useQueryClient();
+  const [draft, setDraft] = useState("");
+  const [synced, setSynced] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  // First non-loading sync: seed the textarea with whatever the server
+  // has. Afterwards, remote pushes that don't match the last-sync we
+  // saw are treated as a reconciliation (e.g. another tab saved).
+  useEffect(() => {
+    if (isLoading) return;
+    if (synced === null) {
+      setDraft(serverValue);
+      setSynced(serverValue);
+      return;
+    }
+    if (serverValue !== synced && draft === synced) {
+      setDraft(serverValue);
+      setSynced(serverValue);
+    }
+  }, [serverValue, isLoading, synced, draft]);
+
+  const dirty = synced !== null && draft !== synced;
+
+  const save = async () => {
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const patch = source === "google" ? { google: draft } : { yelp: draft };
+      const res = await putFirmReviews(pifId, patch);
+      const next = source === "google" ? res.google : res.yelp;
+      setDraft(next);
+      setSynced(next);
+      qc.setQueryData(["firm-reviews", pifId], res);
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : "save failed");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const openSearch = () => {
+    const url = `https://www.google.com/search?q=${encodeURIComponent(searchQuery)}`;
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
+
+  return (
+    <div className="rounded-lg border border-neutral-200 bg-neutral-50/40 p-3">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <div className="text-[11px] font-semibold uppercase tracking-wider text-neutral-600">
+            {label}
+          </div>
+          <div
+            className="mt-0.5 truncate font-mono text-[10px] text-neutral-400"
+            title={searchQuery}
+          >
+            q: {searchQuery}
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={openSearch}
+          title={`Open Google search: ${searchQuery}`}
+          className="shrink-0 inline-flex items-center gap-1 rounded border border-neutral-300 bg-white px-2 py-1 text-[10px] font-medium text-neutral-700 hover:bg-neutral-100"
+        >
+          <Search className="h-3 w-3" />
+          Search {source === "google" ? "Google" : "Yelp"}
+        </button>
+      </div>
+      <textarea
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        placeholder={placeholder}
+        rows={9}
+        disabled={isLoading}
+        className="mt-2 w-full resize-y rounded-md border border-neutral-300 bg-white px-3 py-2 font-mono text-xs text-neutral-800 focus:border-neutral-400 focus:outline-none"
+      />
+      <div className="mt-2 flex items-center justify-between">
+        <span className="text-[10px] text-neutral-400">
+          {draft.length.toLocaleString()} chars
+          {dirty && <span className="ml-2 text-amber-600">unsaved</span>}
+        </span>
+        <div className="flex items-center gap-2">
+          {saveError && (
+            <span className="text-[10px] text-rose-600">{saveError}</span>
+          )}
+          <button
+            type="button"
+            onClick={save}
+            disabled={saving || !dirty}
+            className={cn(
+              "rounded-md px-2.5 py-1 text-[11px] font-medium transition",
+              dirty && !saving
+                ? "bg-neutral-900 text-white hover:bg-neutral-700"
+                : "bg-neutral-100 text-neutral-400",
+            )}
+          >
+            {saving ? "Saving…" : "Save"}
+          </button>
+        </div>
       </div>
     </div>
   );

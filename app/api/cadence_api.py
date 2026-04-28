@@ -438,6 +438,68 @@ async def cadence_firm_autorespond_events(
     return data or {"items": [], "total": 0, "page": page, "page_size": page_size}
 
 
+@router.get("/{pif_id}/calls")
+async def cadence_firm_calls(pif_id: str, limit: int = 50):
+    """All call_logs rows for a firm.
+
+    Match strategy: case-insensitive equality on call_logs.firm_name
+    against the cadence row's firm_name for this pif_id, plus a
+    fallback prefix match on patient_id (`pif-{pif_id}-…` rows are
+    created when calls are placed via the cadence "Call" button).
+    Returns most-recent calls first.
+    """
+    async with AsyncSessionLocal() as session:
+        # Resolve the firm_name from the cadence row.
+        cad_stmt = select(CadenceEntryRow.firm_name).where(
+            CadenceEntryRow.pif_id == pif_id
+        )
+        firm_row = (await session.execute(cad_stmt)).first()
+        firm_name = firm_row[0] if firm_row else None
+
+        from sqlalchemy import or_
+        conditions = []
+        if firm_name:
+            conditions.append(func.lower(CallLogRow.firm_name) == firm_name.lower())
+        # Patient-id prefix fallback so calls placed via cadence-button
+        # (which uses patient_ids like `pif-{pif_id}-XXXX`) also match
+        # even if firm_name on the call_log is missing/different.
+        conditions.append(CallLogRow.patient_id.like(f"pif-{pif_id}%"))
+
+        stmt = (
+            select(CallLogRow)
+            .where(or_(*conditions))
+            .order_by(CallLogRow.started_at.desc())
+            .limit(max(1, min(limit, 200)))
+        )
+        rows = list((await session.execute(stmt)).scalars().all())
+
+    items = [
+        {
+            "call_id": r.call_id,
+            "started_at": r.started_at.isoformat() if r.started_at else None,
+            "ended_at": r.ended_at.isoformat() if r.ended_at else None,
+            "duration_seconds": r.duration_seconds,
+            "patient_name": r.patient_name,
+            "phone": r.phone,
+            "outcome": r.outcome,
+            "call_status": r.call_status,
+            "call_disposition": r.call_disposition,
+            "ended_by": getattr(r, "ended_by", None),
+            "voicemail_left": bool(r.voicemail_left),
+            "judge_score": getattr(r, "judge_score", None),
+            "prompt_version": getattr(r, "prompt_version", None),
+            "voice_provider": getattr(r, "voice_provider", None),
+            "ivr_detected": bool(getattr(r, "ivr_detected", False)),
+            "ivr_outcome": getattr(r, "ivr_outcome", None),
+            "demo_scheduled_at": (
+                r.demo_scheduled_at.isoformat() if r.demo_scheduled_at else None
+            ),
+        }
+        for r in rows
+    ]
+    return {"items": items, "total": len(items), "firm_name": firm_name}
+
+
 def _row_to_dict(e: CadenceEntryRow) -> dict:
     return {
         "id": e.id,

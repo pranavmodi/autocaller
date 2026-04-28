@@ -206,6 +206,31 @@ export const getFirmAutorespondEvents = (pifId: string, page = 1, pageSize = 50)
 export const skipCadenceEntry = (entryId: string) =>
   put<unknown>(`/api/cadence/${entryId}`, { action: "skip" });
 
+export type FirmCallRow = {
+  call_id: string;
+  started_at: string | null;
+  ended_at: string | null;
+  duration_seconds: number;
+  patient_name: string;
+  phone: string;
+  outcome: string;
+  call_status: string;
+  call_disposition: string;
+  ended_by: string | null;
+  voicemail_left: boolean;
+  judge_score: number | null;
+  prompt_version: string | null;
+  voice_provider: string | null;
+  ivr_detected: boolean;
+  ivr_outcome: string | null;
+  demo_scheduled_at: string | null;
+};
+
+export const getFirmCalls = (pifId: string, limit = 50) =>
+  get<{ items: FirmCallRow[]; total: number; firm_name: string | null }>(
+    `/api/cadence/${pifId}/calls?limit=${limit}`,
+  );
+
 // ---- Leads (patients table) ----
 export const listLeads = () =>
   get<{ patients: Lead[] }>("/api/patients");
