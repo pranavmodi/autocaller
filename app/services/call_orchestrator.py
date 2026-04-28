@@ -530,6 +530,18 @@ class CallOrchestrator:
                     error_message=self._last_start_error,
                 )
                 await call_log_provider.end_call(call.call_id, CallOutcome.FAILED)
+                # No carrier leg ever existed (REST rejection before
+                # call placement). Stamp termination terminal directly
+                # so the row doesn't sit in the reconciler's queue
+                # waiting for a carrier_call_sid that'll never arrive.
+                try:
+                    await call_log_provider.mark_carrier_terminal(
+                        call.call_id,
+                        state="carrier_confirmed_ended",
+                        error="place_call rejected pre-dial; no leg to reconcile",
+                    )
+                except Exception as _e:
+                    logger.debug("mark_carrier_terminal on place fail: %s", _e)
                 if is_invalid_number and patient is not None:
                     try:
                         patient_provider = get_patient_provider()
