@@ -126,9 +126,20 @@ async def _ingest_signals() -> int:
             )
             existing_pifs = {r[0] for r in result.all()}
 
+            from app.services.firm_blocklist import is_blocked
+
             for firm in firms:
                 pif_id = firm.get("id", "")
                 if pif_id in existing_pifs:
+                    continue
+                # Blocklist guard — never create cadence rows for our
+                # imaging-vendor partners (Precise Imaging et al.) or
+                # any operator-configured CALL_FIRM_BLOCKLIST entries.
+                if is_blocked(pif_id, firm.get("firm_name", "")):
+                    logger.info(
+                        "Cadence ingest: skipping blocked firm %s (%s)",
+                        pif_id, firm.get("firm_name", ""),
+                    )
                     continue
 
                 now = datetime.now(timezone.utc)

@@ -405,6 +405,10 @@ async def cadence_next_up(
         d["last_call_age_hours"] = last_call_age_hours
         rows.append(d)
 
+    # Blocklist — Precise Imaging + imaging-vendor partners must never
+    # appear in any call queue. See app/services/firm_blocklist.py.
+    from app.services.firm_blocklist import filter_blocked
+    rows = filter_blocked(rows)
     rows.sort(key=lambda r: r["priority_score"], reverse=True)
     return {"items": rows[:max(1, min(limit, 200))], "total": len(rows)}
 
