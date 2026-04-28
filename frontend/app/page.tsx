@@ -10,8 +10,8 @@ import {
   startDispatcherBatch,
   listCalls,
   listLeads,
-  listNextUp,
-  skipLead,
+  getCadenceNextUp,
+  skipCadenceEntry,
   getDailyStats,
   getSettings,
   setSystemEnabled,
@@ -20,6 +20,7 @@ import {
   setDispatcherCooldown,
   setDispatcherBatchSize,
   setIVRNavigate,
+  type CadencePriorityRow,
 } from "@/lib/api";
 import { useDashboardEvents } from "@/hooks/useDashboardEvents";
 import { OutcomePill } from "@/components/OutcomePill";
@@ -115,9 +116,12 @@ export default function NowPage() {
     refetchInterval: 10_000,
   });
 
+  // Next-up uses the cadence priority queue (autorespond-driven score).
+  // Sourced from /api/cadence/next-up — same data as /cadence page
+  // but capped at top-5 for the dashboard widget.
   const nextUp = useQuery({
-    queryKey: ["leads-next-up"],
-    queryFn: listNextUp,
+    queryKey: ["cadence-next-up", 5],
+    queryFn: () => getCadenceNextUp(5),
     refetchInterval: 10_000,
   });
 
@@ -143,8 +147,8 @@ export default function NowPage() {
   const [webCallLead, setWebCallLead] = useState<Lead | null>(null);
 
   const skip = useMutation({
-    mutationFn: (leadId: string) => skipLead(leadId),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["leads-next-up"] }),
+    mutationFn: (entryId: string) => skipCadenceEntry(entryId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["cadence-next-up", 5] }),
   });
 
   return (
@@ -378,44 +382,88 @@ export default function NowPage() {
             {nextUp.isLoading && (
               <div className="px-5 py-4 text-xs text-neutral-400">loading...</div>
             )}
-            {nextUp.data?.patients?.slice(0, 5).map((l) => (
-              <div
-                key={l.patient_id}
-                className="flex items-center gap-3 px-5 py-3 hover:bg-neutral-50 transition-colors"
-              >
-                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-neutral-100 text-[11px] font-bold text-neutral-500">
-                  {l.name.charAt(0)}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="text-sm font-medium text-neutral-900 truncate">{l.name}</div>
-                  <div className="text-[11px] text-neutral-500 truncate">
-                    {l.firm_name ?? "—"}
-                    {l.state ? ` · ${l.state}` : ""}
+            {nextUp.data?.items?.slice(0, 5).map((row: CadencePriorityRow) => {
+              const dm = (row.available_contacts || []).find(
+                (c) => (c.phone || "").trim().length > 0,
+              );
+              const displayName = row.firm_name || dm?.name || "(unnamed firm)";
+              const sub = dm
+                ? `${dm.name}${dm.title ? ` · ${dm.title}` : ""}`
+                : row.cadence_stage;
+              const ar = row.autorespond;
+              const hasSignal = ar.events_24h > 0 || ar.events_7d > 0;
+              const scoreColor =
+                row.priority_score >= 30
+                  ? "bg-emerald-100 text-emerald-900"
+                  : row.priority_score >= 10
+                    ? "bg-sky-100 text-sky-900"
+                    : "bg-neutral-100 text-neutral-600";
+              return (
+                <div
+                  key={row.id}
+                  className="flex items-center gap-3 px-5 py-3 hover:bg-neutral-50 transition-colors"
+                >
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-neutral-100 text-[11px] font-bold text-neutral-500">
+                    {displayName.charAt(0).toUpperCase()}
                   </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-medium text-neutral-900 truncate">
+                      {displayName}
+                      {row.icp_tier && (
+                        <span className="ml-1.5 rounded bg-neutral-100 px-1 py-0.5 text-[9px] font-semibold text-neutral-600">
+                          {row.icp_tier}
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-[11px] text-neutral-500 truncate">
+                      {sub}
+                      {hasSignal && (
+                        <span className="ml-1.5 text-emerald-600">
+                          · {ar.events_24h}/{ar.events_7d}
+                          {ar.top_agent_types[0]
+                            ? ` · ${ar.top_agent_types[0]}`
+                            : ""}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <Link
+                    href={`/cadence`}
+                    className="rounded-lg border border-neutral-200 p-1.5 text-neutral-400 hover:border-neutral-300 hover:text-neutral-600 transition-colors"
+                    title="Open priority queue"
+                  >
+                    <Headphones className="h-3.5 w-3.5" />
+                  </Link>
+                  <button
+                    onClick={() => skip.mutate(row.id)}
+                    disabled={skip.isPending}
+                    className="rounded-lg border border-neutral-200 px-2 py-1 text-[10px] font-medium text-neutral-400 hover:border-rose-300 hover:text-rose-600 transition-colors"
+                    title="Skip this firm — advance to next cadence stage"
+                  >
+                    Skip
+                  </button>
+                  <span
+                    className={`rounded-md px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${scoreColor}`}
+                    title="Priority score (autorespond-weighted)"
+                  >
+                    {row.priority_score}
+                  </span>
                 </div>
-                <button
-                  onClick={() => setWebCallLead(l)}
-                  className="rounded-lg border border-neutral-200 p-1.5 text-neutral-400 hover:border-neutral-300 hover:text-neutral-600 transition-colors"
-                  title="Test web call"
-                >
-                  <Headphones className="h-3.5 w-3.5" />
-                </button>
-                <button
-                  onClick={() => skip.mutate(l.patient_id)}
-                  disabled={skip.isPending}
-                  className="rounded-lg border border-neutral-200 px-2 py-1 text-[10px] font-medium text-neutral-400 hover:border-rose-300 hover:text-rose-600 transition-colors"
-                  title="Skip this lead"
-                >
-                  Skip
-                </button>
-                <span className="rounded-md bg-neutral-100 px-1.5 py-0.5 text-[10px] font-semibold text-neutral-500 tabular-nums">
-                  P{l.priority_bucket}
-                </span>
-              </div>
-            ))}
-            {nextUp.data && (nextUp.data.patients?.length ?? 0) === 0 && (
+              );
+            })}
+            {nextUp.data && (nextUp.data.items?.length ?? 0) === 0 && (
               <div className="px-5 py-6 text-center text-xs text-neutral-400">
-                No eligible leads in queue
+                No active cadence entries
+              </div>
+            )}
+            {nextUp.data && (nextUp.data.items?.length ?? 0) > 0 && (
+              <div className="border-t border-neutral-100 px-5 py-2 text-center">
+                <Link
+                  href="/cadence"
+                  className="text-[11px] font-medium text-neutral-500 hover:text-neutral-800"
+                >
+                  View full queue ({nextUp.data.total} firms) →
+                </Link>
               </div>
             )}
           </div>

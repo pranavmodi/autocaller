@@ -199,6 +199,13 @@ export const getFirmAutorespondEvents = (pifId: string, page = 1, pageSize = 50)
     `/api/cadence/${pifId}/autorespond-events?page=${page}&page_size=${pageSize}`,
   );
 
+// Skip a cadence entry — bumps it to the next stage in the cadence
+// FSM (signal_detected → call_1 → … → exhausted). Used by the
+// Now-page Next-up widget so the operator can defer a row without
+// opening the full /cadence page.
+export const skipCadenceEntry = (entryId: string) =>
+  put<unknown>(`/api/cadence/${entryId}`, { action: "skip" });
+
 // ---- Leads (patients table) ----
 export const listLeads = () =>
   get<{ patients: Lead[] }>("/api/patients");
