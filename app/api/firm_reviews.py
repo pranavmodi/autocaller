@@ -73,6 +73,18 @@ def _row_to_response(pif_id: str, row: FirmReviewRow | None) -> ReviewsResponse:
     )
 
 
+def _looks_like_pif_uuid(pif_id: str) -> bool:
+    """Real PIF Stats firm IDs are UUIDs (36 chars, 8-4-4-4-12). Test
+    fixtures like "smoke-test" / "test-firm-1" leak into firm_reviews
+    occasionally and should not pollute the /firms filter counts."""
+    s = (pif_id or "").strip()
+    return (
+        len(s) == 36
+        and s[8] == "-" and s[13] == "-"
+        and s[18] == "-" and s[23] == "-"
+    )
+
+
 @router.get("/reviews-summary")
 async def get_reviews_summary() -> dict:
     """Pif-IDs of firms that have any reviews stored locally.
@@ -82,6 +94,9 @@ async def get_reviews_summary() -> dict:
     firm list itself is paginated server-side from PIF Stats, so the
     page fetches this small summary once when the filter activates
     and intersects the two on the client.
+
+    Test-fixture rows (non-UUID pif_ids like "smoke-test") are
+    filtered out so counts reflect real firms only.
     """
     async with AsyncSessionLocal() as session:
         rows = list(
@@ -90,6 +105,8 @@ async def get_reviews_summary() -> dict:
     google_ids: list[str] = []
     yelp_ids: list[str] = []
     for r in rows:
+        if not _looks_like_pif_uuid(r.pif_id):
+            continue
         if (r.google_content or "").strip():
             google_ids.append(r.pif_id)
         if (r.yelp_content or "").strip():
