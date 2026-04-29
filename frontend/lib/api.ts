@@ -269,6 +269,30 @@ export const getFirmsAutorespondSummary = (days = 7) =>
     `/api/firms/autorespond-summary?days=${days}`,
   );
 
+export type FirmWithReviewsRow = {
+  pif_id: string;
+  firm_name: string;
+  website: string | null;
+  phones: string[];
+  addresses: string[];
+  contacts_count: number;
+  leadership_count: number;
+  icp_tier: string | null;
+  icp_score: number | null;
+  research_status: string | null;
+  last_researched_at: string | null;
+  google_chars: number;
+  yelp_chars: number;
+  reviews_updated_at: string | null;
+  missing?: boolean;
+  error?: string;
+};
+
+export const getFirmsWithReviews = (source: "any" | "google" | "yelp" = "any") =>
+  get<{ items: FirmWithReviewsRow[]; total: number; source: string }>(
+    `/api/firms/with-reviews?source=${source}`,
+  );
+
 // ---- Leads (patients table) ----
 export const listLeads = () =>
   get<{ patients: Lead[] }>("/api/patients");

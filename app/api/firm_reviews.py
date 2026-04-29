@@ -73,6 +73,118 @@ def _row_to_response(pif_id: str, row: FirmReviewRow | None) -> ReviewsResponse:
     )
 
 
+@router.get("/with-reviews")
+async def get_firms_with_reviews(source: str = "any") -> dict:
+    """All firms with reviews stored, enriched with PIF Stats info.
+
+    Used when the /firms page review filter is active. Avoids the
+    "matches scattered across PIF-Stats pagination" problem by
+    fetching each matched pif_id directly (concurrent /pif-info/{id}
+    calls), so operators see every match in one view regardless of
+    upstream sort order.
+
+    `source` ∈ {any, google, yelp}. Defaults to any.
+
+    Capped at 100 firms per request — the local review set is small
+    (operators paste these manually). If it grows beyond that, this
+    endpoint should paginate or move to a less round-trip-heavy
+    join strategy.
+    """
+    import asyncio
+    import os
+    import httpx
+
+    src = (source or "any").strip().lower()
+    if src not in ("any", "google", "yelp"):
+        src = "any"
+
+    # Resolve which pif_ids match this source — same UUID-shape filter
+    # as /reviews-summary.
+    async with AsyncSessionLocal() as session:
+        rows = list(
+            (await session.execute(select(FirmReviewRow))).scalars().all()
+        )
+    pif_ids: list[str] = []
+    review_meta: dict[str, dict] = {}
+    for r in rows:
+        if not _looks_like_pif_uuid(r.pif_id):
+            continue
+        g_len = len((r.google_content or "").strip())
+        y_len = len((r.yelp_content or "").strip())
+        match = (
+            (src == "any" and (g_len > 0 or y_len > 0))
+            or (src == "google" and g_len > 0)
+            or (src == "yelp" and y_len > 0)
+        )
+        if not match:
+            continue
+        pif_ids.append(r.pif_id)
+        review_meta[r.pif_id] = {
+            "google_chars": g_len,
+            "yelp_chars": y_len,
+            "reviews_updated_at": (
+                r.updated_at.isoformat() if r.updated_at else None
+            ),
+        }
+    pif_ids = pif_ids[:100]
+
+    pif_base = os.getenv(
+        "PIFSTATS_BASE_URL",
+        "https://emailprocessing.mediflow360.com/api/v1/pif-info",
+    )
+
+    async def _fetch_one(client: httpx.AsyncClient, pif_id: str) -> dict:
+        try:
+            resp = await client.get(f"{pif_base}/{pif_id}")
+            if resp.status_code != 200:
+                return {"pif_id": pif_id, "missing": True}
+            d = resp.json()
+            return {
+                "pif_id": pif_id,
+                "firm_name": d.get("firm_name") or "",
+                "website": d.get("website"),
+                "phones": d.get("phones") or [],
+                "addresses": d.get("addresses") or [],
+                "contacts_count": len(d.get("contacts") or []),
+                "leadership_count": len(d.get("leadership") or []),
+                "icp_tier": d.get("icp_tier"),
+                "icp_score": d.get("icp_score"),
+                "research_status": d.get("research_status"),
+                "last_researched_at": d.get("last_researched_at"),
+                "behavioral_data": d.get("behavioral_data"),
+                "missing": False,
+            }
+        except Exception as e:
+            return {
+                "pif_id": pif_id,
+                "missing": True,
+                "error": f"{type(e).__name__}: {e}",
+            }
+
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        firms_data = await asyncio.gather(
+            *(_fetch_one(client, p) for p in pif_ids),
+            return_exceptions=False,
+        )
+
+    items = []
+    for f in firms_data:
+        meta = review_meta.get(f["pif_id"], {})
+        items.append({**f, **meta})
+
+    # Sort: prefer firms with newer review-paste dates first; fall back
+    # to firm_name for stability when timestamps tie.
+    items.sort(
+        key=lambda i: (
+            i.get("reviews_updated_at") or "",
+            (i.get("firm_name") or "").lower(),
+        ),
+        reverse=True,
+    )
+
+    return {"items": items, "total": len(items), "source": src}
+
+
 @router.get("/autorespond-summary")
 async def get_firms_autorespond_summary(days: int = 7) -> dict:
     """Per-firm autorespond signal summary, sorted by most-recent event.

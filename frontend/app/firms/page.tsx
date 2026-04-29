@@ -14,8 +14,10 @@ import {
   getReviewsSummary,
   getFirmsStats,
   getFirmsAutorespondSummary,
+  getFirmsWithReviews,
   type FirmsStats,
   type AutorespondFirmRow,
+  type FirmWithReviewsRow,
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import {
@@ -86,6 +88,21 @@ export default function FirmsPage() {
     queryKey: ["firms-autorespond-7d"],
     queryFn: () => getFirmsAutorespondSummary(7),
     enabled: activityFilter === "autorespond_7d" && searchMode === "firms",
+    refetchInterval: 60_000,
+    staleTime: 30_000,
+  });
+
+  // Firms-with-reviews list (only fetched when the review filter is
+  // not "all"). Avoids the "matches scattered across PIF-Stats
+  // pagination" problem — backend fetches all matched pif_ids
+  // directly so the operator sees every match in one view.
+  const withReviews = useQuery({
+    queryKey: ["firms-with-reviews", reviewFilter],
+    queryFn: () => getFirmsWithReviews(reviewFilter as "any" | "google" | "yelp"),
+    enabled:
+      reviewFilter !== "all"
+      && activityFilter === "all"
+      && searchMode === "firms",
     refetchInterval: 60_000,
     staleTime: 30_000,
   });
@@ -322,13 +339,6 @@ export default function FirmsPage() {
           })}
         </div>
       )}
-      {searchMode === "firms" && reviewFilter !== "all" && hiddenByReviewFilter > 0 && activityFilter === "all" && (
-        <p className="text-[11px] text-neutral-500">
-          Hiding {hiddenByReviewFilter} firms on this page that don&apos;t have
-          {reviewFilter === "google" ? " Google" : reviewFilter === "yelp" ? " Yelp" : ""} reviews stored.
-          {totalPages > 1 ? " Use the pagination below to find more." : ""}
-        </p>
-      )}
 
       {/* Activity filter — autorespond events in last N days, sorted newest first */}
       {searchMode === "firms" && (
@@ -368,14 +378,25 @@ export default function FirmsPage() {
         </div>
       )}
 
-      {/* Firms list — autorespond-7d view OR the standard PIF Stats list */}
+      {/* Firms list — autorespond-7d, review-filter, or standard view */}
       {searchMode === "firms" && activityFilter === "autorespond_7d" && (
         <AutorespondFirmsList
           rows={autorespond7d.data?.items ?? []}
           loading={autorespond7d.isLoading}
         />
       )}
-      {searchMode === "firms" && activityFilter === "all" && (
+      {searchMode === "firms"
+        && activityFilter === "all"
+        && reviewFilter !== "all" && (
+        <WithReviewsFirmsList
+          rows={withReviews.data?.items ?? []}
+          source={reviewFilter as "any" | "google" | "yelp"}
+          loading={withReviews.isLoading}
+        />
+      )}
+      {searchMode === "firms"
+        && activityFilter === "all"
+        && reviewFilter === "all" && (
         <>
           <div className="rounded-xl border border-neutral-200 bg-white">
             {firmsQuery.isLoading && (
@@ -732,4 +753,123 @@ function humanAgo(iso: string): string {
   if (sec < 3600) return `${Math.floor(sec / 60)}m ago`;
   if (sec < 86400) return `${Math.floor(sec / 3600)}h ago`;
   return `${Math.floor(sec / 86400)}d ago`;
+}
+
+function WithReviewsFirmsList({
+  rows,
+  source,
+  loading,
+}: {
+  rows: FirmWithReviewsRow[];
+  source: "any" | "google" | "yelp";
+  loading?: boolean;
+}) {
+  const sourceLabel =
+    source === "any" ? "Google or Yelp" : source === "google" ? "Google" : "Yelp";
+  return (
+    <div className="space-y-2">
+      <p className="text-[11px] text-neutral-500">
+        All firms with {sourceLabel} reviews stored locally — every
+        match shown in one view, sorted by most-recent review-paste
+        first. Click a firm name for the full detail page.
+      </p>
+      <div className="overflow-hidden rounded-xl border border-neutral-200 bg-white">
+        {loading && (
+          <div className="px-5 py-8 text-center text-xs text-neutral-400">
+            Loading firms with reviews…
+          </div>
+        )}
+        {!loading && rows.length === 0 && (
+          <div className="px-5 py-8 text-center text-xs text-neutral-400">
+            No firms with {sourceLabel} reviews yet. Paste reviews via
+            the firm detail page.
+          </div>
+        )}
+        {!loading && rows.length > 0 && (
+          <table className="w-full text-sm">
+            <thead className="bg-neutral-50 text-[10px] uppercase tracking-wide text-neutral-500">
+              <tr className="text-left">
+                <th className="w-10 px-3 py-2 text-right font-medium">#</th>
+                <th className="px-3 py-2 font-medium">Firm</th>
+                <th className="w-14 px-3 py-2 text-center font-medium">Tier</th>
+                <th className="px-3 py-2 font-medium">Phone</th>
+                <th className="w-28 px-3 py-2 text-right font-medium">Google</th>
+                <th className="w-28 px-3 py-2 text-right font-medium">Yelp</th>
+                <th className="w-32 px-3 py-2 font-medium">Reviews updated</th>
+                <th className="w-20 px-3 py-2 text-right font-medium">Contacts</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-neutral-100">
+              {rows.map((r, idx) => (
+                <tr key={r.pif_id} className="hover:bg-neutral-50">
+                  <td className="px-3 py-2 text-right text-xs text-neutral-400">
+                    {idx + 1}
+                  </td>
+                  <td className="px-3 py-2">
+                    {r.missing ? (
+                      <span className="text-neutral-400">
+                        (PIF Stats record unavailable)
+                      </span>
+                    ) : (
+                      <Link
+                        href={`/firms/${r.pif_id}`}
+                        className="font-medium text-neutral-900 hover:text-blue-600 hover:underline"
+                        title="Open firm detail"
+                      >
+                        {r.firm_name || "(unnamed firm)"}
+                      </Link>
+                    )}
+                    {r.research_status === "completed" && (
+                      <span className="ml-1.5 rounded bg-emerald-50 px-1 py-0.5 text-[9px] font-semibold text-emerald-700">
+                        RESEARCHED
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2 text-center">
+                    <span
+                      className={cn(
+                        "inline-block w-6 rounded text-center text-xs font-semibold",
+                        tierColor(r.icp_tier),
+                      )}
+                    >
+                      {r.icp_tier || "–"}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2 font-mono text-[11px] text-neutral-600">
+                    {(r.phones && r.phones[0]) || "—"}
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    {r.google_chars > 0 ? (
+                      <span className="rounded bg-emerald-50 px-1.5 py-0.5 font-mono text-[10px] tabular-nums text-emerald-800">
+                        {r.google_chars.toLocaleString()} chars
+                      </span>
+                    ) : (
+                      <span className="text-xs text-neutral-300">—</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    {r.yelp_chars > 0 ? (
+                      <span className="rounded bg-rose-50 px-1.5 py-0.5 font-mono text-[10px] tabular-nums text-rose-800">
+                        {r.yelp_chars.toLocaleString()} chars
+                      </span>
+                    ) : (
+                      <span className="text-xs text-neutral-300">—</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2 text-xs text-neutral-600">
+                    {r.reviews_updated_at
+                      ? humanAgo(r.reviews_updated_at)
+                      : "—"}
+                  </td>
+                  <td className="px-3 py-2 text-right text-xs tabular-nums">
+                    {r.contacts_count + r.leadership_count}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
 }
