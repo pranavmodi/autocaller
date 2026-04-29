@@ -61,6 +61,18 @@ def _row_to_patient(row: PatientRow) -> Patient:
     return p
 
 
+def _pif_id_from_patient(row: PatientRow) -> Optional[str]:
+    """Extract the upstream PIF Stats UUID from a patient_id like
+    `pif-{uuid}` or `pif-{uuid}-{phone-suffix}`. Returns None for
+    non-PIF-sourced patients (e.g., mc-... mission-control rows)."""
+    pid = (row.patient_id or "")
+    if not pid.startswith("pif-"):
+        return None
+    rest = pid[4:]
+    # First 36 chars after 'pif-' are the UUID.
+    return rest[:36] if len(rest) >= 36 else None
+
+
 def _compute_priority(has_abandoned_before: bool, ai_called_before: bool,
                        has_called_in_before: bool) -> int:
     if has_abandoned_before and not ai_called_before:
@@ -162,11 +174,20 @@ class SimulationPatientProvider(BasePatientProvider):
                 )
             )
             result = await session.execute(stmt)
-            return [_row_to_patient(r) for r in result.scalars().all()]
+            rows = list(result.scalars().all())
+        # Blocklist filter — Precise Imaging et al must never reach the
+        # dispatcher even if a patients row leaked in pre-blocklist.
+        # See app/services/firm_blocklist.py.
+        from app.services.firm_blocklist import is_blocked
+        return [
+            _row_to_patient(r) for r in rows
+            if not is_blocked(_pif_id_from_patient(r), r.firm_name)
+        ]
 
     async def get_next_candidate(self, max_attempts: int = 3, min_hours_between: int = 6) -> Optional[Patient]:
         now = datetime.now(timezone.utc)
         cutoff = now - timedelta(hours=min_hours_between)
+        from app.services.firm_blocklist import is_blocked
 
         async with AsyncSessionLocal() as session:
             stmt = (
@@ -187,11 +208,14 @@ class SimulationPatientProvider(BasePatientProvider):
                     PatientRow.order_created.asc().nulls_last(),
                     PatientRow.attempt_count,
                 )
-                .limit(1)
+                .limit(20)  # fetch a few candidates so blocklist can skip past blocked ones
             )
             result = await session.execute(stmt)
-            row = result.scalar_one_or_none()
-            return _row_to_patient(row) if row else None
+            for row in result.scalars().all():
+                if is_blocked(_pif_id_from_patient(row), row.firm_name):
+                    continue
+                return _row_to_patient(row)
+            return None
 
     async def update_patient_after_call(
         self,
