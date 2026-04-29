@@ -9,7 +9,14 @@ import {
   type PifFirm,
   type PifPersonResult,
 } from "@/lib/pifstats";
-import { syncFirms, getReviewsSummary, getFirmsStats, type FirmsStats } from "@/lib/api";
+import {
+  syncFirms,
+  getReviewsSummary,
+  getFirmsStats,
+  getFirmsAutorespondSummary,
+  type FirmsStats,
+  type AutorespondFirmRow,
+} from "@/lib/api";
 import { cn } from "@/lib/utils";
 import {
   Building2,
@@ -35,6 +42,7 @@ type ResearchFilter = "all" | "completed" | "pending";
 type TierFilter = "all" | "A" | "B" | "C" | "D";
 type SearchMode = "firms" | "people";
 type ReviewFilter = "all" | "any" | "google" | "yelp";
+type ActivityFilter = "all" | "autorespond_7d";
 
 const PAGE_SIZE = 25;
 // When the review filter is on, the matching set is small (operator-
@@ -49,6 +57,7 @@ export default function FirmsPage() {
   const [researchFilter, setResearchFilter] = useState<ResearchFilter>("all");
   const [tierFilter, setTierFilter] = useState<TierFilter>("all");
   const [reviewFilter, setReviewFilter] = useState<ReviewFilter>("all");
+  const [activityFilter, setActivityFilter] = useState<ActivityFilter>("all");
   const [searchMode, setSearchMode] = useState<SearchMode>("firms");
 
   // Reviews summary — small payload (~100 pif_ids), refreshed when the
@@ -69,6 +78,16 @@ export default function FirmsPage() {
     queryFn: getFirmsStats,
     refetchInterval: 120_000,
     staleTime: 60_000,
+  });
+
+  // Autorespond-7d list (only fetched when the activity filter is on).
+  // Server returns rows pre-sorted by latest_event_at desc.
+  const autorespond7d = useQuery({
+    queryKey: ["firms-autorespond-7d"],
+    queryFn: () => getFirmsAutorespondSummary(7),
+    enabled: activityFilter === "autorespond_7d" && searchMode === "firms",
+    refetchInterval: 60_000,
+    staleTime: 30_000,
   });
 
   const reviewIdSet = (() => {
@@ -303,7 +322,7 @@ export default function FirmsPage() {
           })}
         </div>
       )}
-      {searchMode === "firms" && reviewFilter !== "all" && hiddenByReviewFilter > 0 && (
+      {searchMode === "firms" && reviewFilter !== "all" && hiddenByReviewFilter > 0 && activityFilter === "all" && (
         <p className="text-[11px] text-neutral-500">
           Hiding {hiddenByReviewFilter} firms on this page that don&apos;t have
           {reviewFilter === "google" ? " Google" : reviewFilter === "yelp" ? " Yelp" : ""} reviews stored.
@@ -311,8 +330,52 @@ export default function FirmsPage() {
         </p>
       )}
 
-      {/* Firms list */}
+      {/* Activity filter — autorespond events in last N days, sorted newest first */}
       {searchMode === "firms" && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[11px] uppercase tracking-wide text-neutral-400">
+            Activity
+          </span>
+          {(["all", "autorespond_7d"] as ActivityFilter[]).map((a) => {
+            const count =
+              a === "autorespond_7d"
+                ? stats.data?.autorespond_7d_count
+                : null;
+            const label =
+              a === "all"
+                ? "All firms"
+                : `Autorespond (7d)${count != null ? ` (${count})` : ""}`;
+            return (
+              <button
+                key={a}
+                onClick={() => { setActivityFilter(a); setPage(1); }}
+                className={cn(
+                  "rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors",
+                  activityFilter === a
+                    ? "border-neutral-900 bg-neutral-900 text-white"
+                    : "border-neutral-200 bg-white text-neutral-600 hover:border-neutral-300",
+                )}
+                title={
+                  a === "all"
+                    ? "Show the standard firm list"
+                    : "Only firms that received an autorespond email reply in the last 7 days, sorted by most-recent first"
+                }
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Firms list — autorespond-7d view OR the standard PIF Stats list */}
+      {searchMode === "firms" && activityFilter === "autorespond_7d" && (
+        <AutorespondFirmsList
+          rows={autorespond7d.data?.items ?? []}
+          loading={autorespond7d.isLoading}
+        />
+      )}
+      {searchMode === "firms" && activityFilter === "all" && (
         <>
           <div className="rounded-xl border border-neutral-200 bg-white">
             {firmsQuery.isLoading && (
@@ -557,4 +620,116 @@ function FirmsStatsStrip({
       ))}
     </div>
   );
+}
+
+function AutorespondFirmsList({
+  rows,
+  loading,
+}: {
+  rows: AutorespondFirmRow[];
+  loading?: boolean;
+}) {
+  return (
+    <div className="space-y-2">
+      <p className="text-[11px] text-neutral-500">
+        Firms with autorespond activity in the last 7 days, sorted by
+        most-recent event first. Click a firm name for the full detail
+        page (research, contacts, calls, reviews).
+      </p>
+      <div className="overflow-hidden rounded-xl border border-neutral-200 bg-white">
+        {loading && (
+          <div className="px-5 py-8 text-center text-xs text-neutral-400">
+            Loading autorespond activity…
+          </div>
+        )}
+        {!loading && rows.length === 0 && (
+          <div className="px-5 py-8 text-center text-xs text-neutral-400">
+            No autorespond activity in the last 7 days.
+          </div>
+        )}
+        {!loading && rows.length > 0 && (
+          <table className="w-full text-sm">
+            <thead className="bg-neutral-50 text-[10px] uppercase tracking-wide text-neutral-500">
+              <tr className="text-left">
+                <th className="w-10 px-3 py-2 text-right font-medium">#</th>
+                <th className="px-3 py-2 font-medium">Firm</th>
+                <th className="w-32 px-3 py-2 font-medium">Latest event</th>
+                <th className="w-24 px-3 py-2 font-medium">24h / 7d</th>
+                <th className="px-3 py-2 font-medium">Top agent_types</th>
+                <th className="w-20 px-3 py-2 text-right font-medium">Contacts</th>
+                <th className="px-3 py-2 font-medium">Latest subject</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-neutral-100">
+              {rows.map((r, idx) => (
+                <tr key={r.pif_id} className="hover:bg-neutral-50">
+                  <td className="px-3 py-2 text-right text-xs text-neutral-400">
+                    {idx + 1}
+                  </td>
+                  <td className="px-3 py-2">
+                    <Link
+                      href={`/firms/${r.pif_id}`}
+                      className="font-medium text-neutral-900 hover:text-blue-600 hover:underline"
+                      title="Open firm detail"
+                    >
+                      {r.firm_name || "(unnamed firm)"}
+                    </Link>
+                  </td>
+                  <td className="px-3 py-2 text-xs text-neutral-600">
+                    {r.latest_event_at
+                      ? humanAgo(r.latest_event_at)
+                      : "—"}
+                  </td>
+                  <td className="px-3 py-2">
+                    <span className="font-mono text-xs">
+                      <span className="font-semibold text-emerald-700">
+                        {r.events_24h}
+                      </span>
+                      <span className="text-neutral-400"> / </span>
+                      <span className="text-neutral-700">{r.events_7d}</span>
+                    </span>
+                  </td>
+                  <td className="px-3 py-2">
+                    {r.top_agent_types.length > 0 ? (
+                      <div className="flex flex-wrap gap-1">
+                        {r.top_agent_types.map((t) => (
+                          <span
+                            key={t}
+                            className="rounded bg-neutral-100 px-1.5 py-0.5 font-mono text-[10px] text-neutral-700"
+                          >
+                            {t}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-xs text-neutral-400">—</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2 text-right text-xs tabular-nums">
+                    {r.distinct_contact_count}
+                  </td>
+                  <td
+                    className="max-w-[24rem] truncate px-3 py-2 text-[11px] text-neutral-500"
+                    title={r.latest_subject}
+                  >
+                    {r.latest_subject ? `“${r.latest_subject}”` : "—"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function humanAgo(iso: string): string {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "—";
+  const sec = Math.max(0, (Date.now() - d.getTime()) / 1000);
+  if (sec < 60) return `${Math.floor(sec)}s ago`;
+  if (sec < 3600) return `${Math.floor(sec / 60)}m ago`;
+  if (sec < 86400) return `${Math.floor(sec / 3600)}h ago`;
+  return `${Math.floor(sec / 86400)}d ago`;
 }

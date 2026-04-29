@@ -253,6 +253,22 @@ export type FirmsStats = {
 export const getFirmsStats = () =>
   get<FirmsStats>("/api/firms/stats");
 
+export type AutorespondFirmRow = {
+  pif_id: string;
+  firm_name: string;
+  events_24h: number;
+  events_7d: number;
+  latest_event_at: string | null;
+  latest_subject: string;
+  top_agent_types: string[];
+  distinct_contact_count: number;
+};
+
+export const getFirmsAutorespondSummary = (days = 7) =>
+  get<{ items: AutorespondFirmRow[]; total: number; days: number }>(
+    `/api/firms/autorespond-summary?days=${days}`,
+  );
+
 // ---- Leads (patients table) ----
 export const listLeads = () =>
   get<{ patients: Lead[] }>("/api/patients");

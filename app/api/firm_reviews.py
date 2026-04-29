@@ -73,6 +73,42 @@ def _row_to_response(pif_id: str, row: FirmReviewRow | None) -> ReviewsResponse:
     )
 
 
+@router.get("/autorespond-summary")
+async def get_firms_autorespond_summary(days: int = 7) -> dict:
+    """Per-firm autorespond signal summary, sorted by most-recent event.
+
+    Used by the /firms page when the operator activates the
+    "autoresponds sent in last N days" filter. Returns enough data
+    to render a list view directly (firm_name, latest_event_at,
+    counts, top agent_types) without needing a follow-up fetch
+    against PIF Stats — the firm-list endpoint doesn't support
+    pif_id-list filtering, so trying to intersect with it would
+    require N round-trips. Far simpler to render straight from the
+    autorespond signal map.
+    """
+    from app.services.autorespond_signals import fetch_recent_events_grouped
+    days = max(1, min(int(days or 7), 30))
+    grouped = await fetch_recent_events_grouped(days=days)
+    # Sort by latest_event_at desc — newest activity first.
+    items = []
+    for pif_id, sig in grouped.items():
+        items.append({
+            "pif_id": pif_id,
+            "firm_name": sig.get("firm_name") or "",
+            "events_24h": sig.get("events_24h", 0),
+            "events_7d": sig.get("events_7d", 0),
+            "latest_event_at": sig.get("latest_event_at"),
+            "latest_subject": sig.get("latest_subject") or "",
+            "top_agent_types": sig.get("top_agent_types") or [],
+            "distinct_contact_count": sig.get("distinct_contact_count", 0),
+        })
+    items.sort(
+        key=lambda i: i.get("latest_event_at") or "",
+        reverse=True,
+    )
+    return {"items": items, "total": len(items), "days": days}
+
+
 @router.get("/stats")
 async def get_firms_stats() -> dict:
     """Aggregate stats strip for the /firms page header.
