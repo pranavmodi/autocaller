@@ -234,6 +234,39 @@ class CallOrchestrator:
                 await self.on_error(f"Patient {patient_id} not found")
             return None
 
+        # Blocklist enforcement at the chokepoint — every call-placement
+        # path (dispatcher, /api/call/start, /api/cadence/{id}/call, CLI
+        # `autocaller call`) flows through start_call. See
+        # app/services/firm_blocklist.py.
+        try:
+            from app.services.firm_blocklist import is_blocked
+            pif_id_for_block: Optional[str] = None
+            pid = patient.patient_id or ""
+            if pid.startswith("pif-"):
+                rest = pid[4:]
+                if len(rest) >= 36:
+                    pif_id_for_block = rest[:36]
+                else:
+                    pif_id_for_block = rest
+            elif pid.startswith("mc-"):
+                pif_id_for_block = pid[3:]
+            if is_blocked(pif_id_for_block, patient.firm_name):
+                msg = (
+                    f"Refusing to call {patient.name} at "
+                    f"{patient.firm_name or '(no firm)'} — firm is on the "
+                    f"call blocklist (CALL_FIRM_BLOCKLIST + built-ins). "
+                    f"See app/services/firm_blocklist.py."
+                )
+                logger.warning("[CallOrchestrator] BLOCKED: %s", msg)
+                self._last_start_error = msg
+                if self.on_error:
+                    await self.on_error(msg)
+                return None
+        except Exception as e:
+            # Never let a blocklist-import error break call placement —
+            # it's an additive guard, not a critical path. Log + continue.
+            logger.warning("blocklist check raised, allowing call: %s", e)
+
         queue_provider = get_queue_provider()
         queue_state = queue_provider.get_state()
 
