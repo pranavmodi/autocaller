@@ -231,6 +231,18 @@ export const getFirmCalls = (pifId: string, limit = 50) =>
     `/api/cadence/firm/${pifId}/calls?limit=${limit}`,
   );
 
+export type ReviewsSummary = {
+  google: string[];        // pif_ids with non-empty google_content
+  yelp: string[];          // pif_ids with non-empty yelp_content
+  any: string[];           // union (unique, sorted)
+  google_count: number;
+  yelp_count: number;
+  total_count: number;
+};
+
+export const getReviewsSummary = () =>
+  get<ReviewsSummary>("/api/firms/reviews-summary");
+
 // ---- Leads (patients table) ----
 export const listLeads = () =>
   get<{ patients: Lead[] }>("/api/patients");

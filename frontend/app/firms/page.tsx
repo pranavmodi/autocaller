@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import {
   listPifFirms,
   searchPifPeople,
   type PifFirm,
   type PifPersonResult,
 } from "@/lib/pifstats";
+import { syncFirms, getReviewsSummary } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import {
   Building2,
@@ -18,6 +19,8 @@ import {
   Filter,
   Users,
   User,
+  RefreshCw,
+  Star,
 } from "lucide-react";
 
 function tierColor(tier: string | null) {
@@ -31,24 +34,53 @@ function tierColor(tier: string | null) {
 type ResearchFilter = "all" | "completed" | "pending";
 type TierFilter = "all" | "A" | "B" | "C" | "D";
 type SearchMode = "firms" | "people";
+type ReviewFilter = "all" | "any" | "google" | "yelp";
 
 const PAGE_SIZE = 25;
+// When the review filter is on, the matching set is small (operator-
+// pasted reviews — usually <100). We intersect client-side after the
+// PIF-Stats fetch, so bigger pages mean more matches per page and
+// less pagination friction.
+const PAGE_SIZE_REVIEW_FILTER = 100;
 
 export default function FirmsPage() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [researchFilter, setResearchFilter] = useState<ResearchFilter>("all");
   const [tierFilter, setTierFilter] = useState<TierFilter>("all");
+  const [reviewFilter, setReviewFilter] = useState<ReviewFilter>("all");
   const [searchMode, setSearchMode] = useState<SearchMode>("firms");
+
+  // Reviews summary — small payload (~100 pif_ids), refreshed when the
+  // review filter is active. Used to client-side intersect with the
+  // server-paginated PIF Stats firm list.
+  const reviews = useQuery({
+    queryKey: ["reviews-summary"],
+    queryFn: getReviewsSummary,
+    refetchInterval: 120_000,
+    staleTime: 60_000,
+  });
+
+  const reviewIdSet = (() => {
+    if (reviewFilter === "all" || !reviews.data) return null;
+    const ids =
+      reviewFilter === "google"
+        ? reviews.data.google
+        : reviewFilter === "yelp"
+          ? reviews.data.yelp
+          : reviews.data.any;
+    return new Set(ids);
+  })();
 
   // Firm search/list
   const firmsQuery = useQuery({
-    queryKey: ["pif-firms", search, page, researchFilter, tierFilter],
+    queryKey: ["pif-firms", search, page, researchFilter, tierFilter, reviewFilter],
     queryFn: () =>
       listPifFirms({
         search: search.trim() || undefined,
         page,
-        page_size: PAGE_SIZE,
+        page_size:
+          reviewFilter !== "all" ? PAGE_SIZE_REVIEW_FILTER : PAGE_SIZE,
         sort: "updated_at",
         order: "desc",
         research_status: researchFilter !== "all" ? researchFilter : undefined,
@@ -66,18 +98,68 @@ export default function FirmsPage() {
   });
 
   const data = firmsQuery.data;
-  const firms = data?.items ?? [];
+  const allFirms = data?.items ?? [];
+  // Apply the client-side review intersection. Server-side total /
+  // total_pages are still authoritative for pagination since the
+  // filter operates on the current page only.
+  const firms =
+    reviewIdSet === null
+      ? allFirms
+      : allFirms.filter((f) => reviewIdSet.has(f.id));
   const total = data?.total ?? 0;
   const totalPages = data?.total_pages ?? 1;
+  const hiddenByReviewFilter =
+    reviewIdSet === null ? 0 : allFirms.length - firms.length;
+
+  // Sync now — pulls researched firms into the local patients table so
+  // they become callable leads. The background loop already does this
+  // every 15 min by default; the button is for "I just researched a
+  // batch on Mediflow and don't want to wait."
+  const sync = useMutation({
+    mutationFn: () => syncFirms(),
+  });
 
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="text-xl font-semibold">Firms</h1>
-        <p className="text-sm text-neutral-500">
-          {total.toLocaleString()} PI firms from PIF Stats. Search by firm name,
-          person name, email, or website.
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold">Firms</h1>
+          <p className="text-sm text-neutral-500">
+            {total.toLocaleString()} PI firms from PIF Stats. Search by firm name,
+            person name, email, or website.
+          </p>
+        </div>
+        <div className="flex flex-col items-end gap-1">
+          <button
+            type="button"
+            onClick={() => sync.mutate()}
+            disabled={sync.isPending}
+            title="Pull newly-researched firms from PIF Stats into the local leads table"
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium transition",
+              sync.isPending
+                ? "border-neutral-200 bg-neutral-100 text-neutral-400"
+                : "border-neutral-200 bg-white text-neutral-700 hover:border-neutral-300 hover:bg-neutral-50",
+            )}
+          >
+            <RefreshCw
+              className={cn("h-3.5 w-3.5", sync.isPending && "animate-spin")}
+            />
+            {sync.isPending ? "Syncing…" : "Sync from PIF Stats"}
+          </button>
+          {sync.data && (
+            <span className="text-[10px] text-emerald-700">
+              fetched {sync.data.fetched} · inserted {sync.data.inserted} ·
+              updated {sync.data.updated}
+              {sync.data.skipped > 0 ? ` · skipped ${sync.data.skipped}` : ""}
+            </span>
+          )}
+          {sync.isError && (
+            <span className="text-[10px] text-rose-600">
+              {(sync.error as Error).message}
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Search + mode toggle */}
@@ -162,7 +244,56 @@ export default function FirmsPage() {
               {t === "all" ? "All tiers" : `Tier ${t}`}
             </button>
           ))}
+          <span className="mx-1 text-neutral-300">|</span>
+          <Star className="h-3.5 w-3.5 text-neutral-400" />
+          {(["all", "any", "google", "yelp"] as ReviewFilter[]).map((r) => {
+            const summary = reviews.data;
+            const count =
+              r === "all"
+                ? null
+                : r === "any"
+                  ? summary?.total_count
+                  : r === "google"
+                    ? summary?.google_count
+                    : summary?.yelp_count;
+            const label =
+              r === "all"
+                ? "Any reviews"
+                : r === "any"
+                  ? `Has reviews${count != null ? ` (${count})` : ""}`
+                  : r === "google"
+                    ? `Google${count != null ? ` (${count})` : ""}`
+                    : `Yelp${count != null ? ` (${count})` : ""}`;
+            return (
+              <button
+                key={r}
+                onClick={() => { setReviewFilter(r); setPage(1); }}
+                className={cn(
+                  "rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors",
+                  reviewFilter === r
+                    ? "border-neutral-900 bg-neutral-900 text-white"
+                    : "border-neutral-200 bg-white text-neutral-600 hover:border-neutral-300",
+                )}
+                title={
+                  r === "all"
+                    ? "Show all firms regardless of review presence"
+                    : r === "any"
+                      ? "Only firms with Google or Yelp reviews stored"
+                      : `Only firms with ${r === "google" ? "Google" : "Yelp"} reviews stored`
+                }
+              >
+                {label}
+              </button>
+            );
+          })}
         </div>
+      )}
+      {searchMode === "firms" && reviewFilter !== "all" && hiddenByReviewFilter > 0 && (
+        <p className="text-[11px] text-neutral-500">
+          Hiding {hiddenByReviewFilter} firms on this page that don&apos;t have
+          {reviewFilter === "google" ? " Google" : reviewFilter === "yelp" ? " Yelp" : ""} reviews stored.
+          {totalPages > 1 ? " Use the pagination below to find more." : ""}
+        </p>
       )}
 
       {/* Firms list */}

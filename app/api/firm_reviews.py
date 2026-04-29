@@ -15,14 +15,39 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from app.db import AsyncSessionLocal
 from app.db.models import FirmReviewRow
+from app.services.pifstats_sync import sync_pifstats_to_patients
 
 router = APIRouter(prefix="/api/firms", tags=["firms"])
+
+
+class SyncResponse(BaseModel):
+    fetched: int
+    inserted: int
+    updated: int
+    skipped: int
+
+
+@router.post("/sync", response_model=SyncResponse)
+async def sync_firms(
+    limit: int = 500, recently_researched_days: int = 0,
+) -> SyncResponse:
+    """Force-pull researched firms from PIF Stats into the local
+    `patients` table. Returns counts. Same shape as the background
+    cadence-loop tick, just operator-triggered."""
+    try:
+        result = await sync_pifstats_to_patients(
+            limit=max(1, min(2000, limit)),
+            recently_researched_days=max(0, recently_researched_days),
+        )
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"sync failed: {e}")
+    return SyncResponse(**result)
 
 
 class ReviewsBody(BaseModel):
@@ -46,6 +71,37 @@ def _row_to_response(pif_id: str, row: FirmReviewRow | None) -> ReviewsResponse:
         yelp=row.yelp_content or "",
         updated_at=row.updated_at.isoformat() if row.updated_at else None,
     )
+
+
+@router.get("/reviews-summary")
+async def get_reviews_summary() -> dict:
+    """Pif-IDs of firms that have any reviews stored locally.
+
+    Used by the /firms list page to filter "show only firms with
+    Google or Yelp reviews." Reviews live in our local DB, but the
+    firm list itself is paginated server-side from PIF Stats, so the
+    page fetches this small summary once when the filter activates
+    and intersects the two on the client.
+    """
+    async with AsyncSessionLocal() as session:
+        rows = list(
+            (await session.execute(select(FirmReviewRow))).scalars().all()
+        )
+    google_ids: list[str] = []
+    yelp_ids: list[str] = []
+    for r in rows:
+        if (r.google_content or "").strip():
+            google_ids.append(r.pif_id)
+        if (r.yelp_content or "").strip():
+            yelp_ids.append(r.pif_id)
+    return {
+        "google": google_ids,
+        "yelp": yelp_ids,
+        "any": sorted(set(google_ids) | set(yelp_ids)),
+        "google_count": len(google_ids),
+        "yelp_count": len(yelp_ids),
+        "total_count": len(set(google_ids) | set(yelp_ids)),
+    }
 
 
 @router.get("/{pif_id}/reviews", response_model=ReviewsResponse)
