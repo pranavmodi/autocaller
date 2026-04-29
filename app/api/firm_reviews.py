@@ -73,6 +73,90 @@ def _row_to_response(pif_id: str, row: FirmReviewRow | None) -> ReviewsResponse:
     )
 
 
+@router.get("/stats")
+async def get_firms_stats() -> dict:
+    """Aggregate stats strip for the /firms page header.
+
+    Combines PIF Stats counts (total firms, researched count) with
+    local-DB counts (firms with reviews, firms with autorespond
+    activity in the last 7 days). Each subquery is independent so a
+    transient upstream failure on one doesn't break the others —
+    failed fields come back as None and the UI shows a placeholder.
+
+    Cached 60s in-process to keep page-load cheap when the operator
+    flips between filter pills.
+    """
+    import time
+    import os
+    import httpx
+    from app.services.autorespond_signals import fetch_recent_events_grouped
+
+    global _firms_stats_cache
+    now = time.time()
+    if (
+        "_firms_stats_cache" in globals()
+        and (now - _firms_stats_cache.get("at", 0)) < 60
+    ):
+        return _firms_stats_cache["data"]
+
+    pif_base = os.getenv(
+        "PIFSTATS_BASE_URL",
+        "https://emailprocessing.mediflow360.com/api/v1/pif-info",
+    )
+
+    async def _pif_total(params: dict) -> int | None:
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                resp = await client.get(f"{pif_base}/", params=params)
+            if resp.status_code != 200:
+                return None
+            return int(resp.json().get("total") or 0)
+        except Exception:
+            return None
+
+    # Total firms — single page_size=1 fetch just to read `total`.
+    total_firms = await _pif_total({"page": 1, "page_size": 1})
+    researched_count = await _pif_total(
+        {"page": 1, "page_size": 1, "research_status": "completed"},
+    )
+
+    # Local: review presence (already filters out non-UUID test rows).
+    async with AsyncSessionLocal() as session:
+        rows = list(
+            (await session.execute(select(FirmReviewRow))).scalars().all()
+        )
+    with_reviews_count = len(
+        {
+            r.pif_id for r in rows
+            if _looks_like_pif_uuid(r.pif_id)
+            and (
+                (r.google_content or "").strip()
+                or (r.yelp_content or "").strip()
+            )
+        }
+    )
+
+    # Autorespond activity in the last 7 days, unique firms.
+    try:
+        ar_grouped = await fetch_recent_events_grouped(days=7)
+        autorespond_7d_count = len(ar_grouped)
+    except Exception:
+        autorespond_7d_count = None
+
+    data = {
+        "total_firms": total_firms,
+        "researched_count": researched_count,
+        "with_reviews_count": with_reviews_count,
+        "autorespond_7d_count": autorespond_7d_count,
+    }
+    _firms_stats_cache = {"at": now, "data": data}
+    return data
+
+
+# Module-level cache for /stats. Populated on first call.
+_firms_stats_cache: dict = {}
+
+
 def _looks_like_pif_uuid(pif_id: str) -> bool:
     """Real PIF Stats firm IDs are UUIDs (36 chars, 8-4-4-4-12). Test
     fixtures like "smoke-test" / "test-firm-1" leak into firm_reviews

@@ -243,6 +243,16 @@ export type ReviewsSummary = {
 export const getReviewsSummary = () =>
   get<ReviewsSummary>("/api/firms/reviews-summary");
 
+export type FirmsStats = {
+  total_firms: number | null;
+  researched_count: number | null;
+  with_reviews_count: number;
+  autorespond_7d_count: number | null;
+};
+
+export const getFirmsStats = () =>
+  get<FirmsStats>("/api/firms/stats");
+
 // ---- Leads (patients table) ----
 export const listLeads = () =>
   get<{ patients: Lead[] }>("/api/patients");

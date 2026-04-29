@@ -9,7 +9,7 @@ import {
   type PifFirm,
   type PifPersonResult,
 } from "@/lib/pifstats";
-import { syncFirms, getReviewsSummary } from "@/lib/api";
+import { syncFirms, getReviewsSummary, getFirmsStats, type FirmsStats } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import {
   Building2,
@@ -57,6 +57,16 @@ export default function FirmsPage() {
   const reviews = useQuery({
     queryKey: ["reviews-summary"],
     queryFn: getReviewsSummary,
+    refetchInterval: 120_000,
+    staleTime: 60_000,
+  });
+
+  // Header stats — total firms, researched count, with-reviews count,
+  // autorespond-7d unique-firm count. Cached 60s server-side; refetch
+  // every 2 min on the client.
+  const stats = useQuery({
+    queryKey: ["firms-stats"],
+    queryFn: getFirmsStats,
     refetchInterval: 120_000,
     staleTime: 60_000,
   });
@@ -161,6 +171,11 @@ export default function FirmsPage() {
           )}
         </div>
       </div>
+
+      {/* Stats strip */}
+      {searchMode === "firms" && (
+        <FirmsStatsStrip data={stats.data} loading={stats.isLoading} />
+      )}
 
       {/* Search + mode toggle */}
       <div className="flex gap-2">
@@ -484,5 +499,62 @@ function FirmRow({ firm }: { firm: PifFirm }) {
         <ChevronRight className="h-4 w-4" />
       </div>
     </Link>
+  );
+}
+
+function FirmsStatsStrip({
+  data,
+  loading,
+}: {
+  data?: FirmsStats;
+  loading?: boolean;
+}) {
+  const cards: Array<{
+    label: string;
+    value: number | null | undefined;
+    hint: string;
+  }> = [
+    {
+      label: "Total firms",
+      value: data?.total_firms,
+      hint: "All PI firms in PIF Stats",
+    },
+    {
+      label: "Researched",
+      value: data?.researched_count,
+      hint: "research_status = completed",
+    },
+    {
+      label: "With reviews",
+      value: data?.with_reviews_count,
+      hint: "Google or Yelp content stored locally",
+    },
+    {
+      label: "Autorespond (7d)",
+      value: data?.autorespond_7d_count,
+      hint: "Unique firms with at least 1 autorespond event in last 7 days",
+    },
+  ];
+  return (
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      {cards.map((c) => (
+        <div
+          key={c.label}
+          className="rounded-lg border border-neutral-200 bg-white px-4 py-3 shadow-sm"
+        >
+          <div className="text-[10px] font-medium uppercase tracking-wide text-neutral-500">
+            {c.label}
+          </div>
+          <div className="mt-1 text-2xl font-semibold tabular-nums text-neutral-900">
+            {loading
+              ? "…"
+              : c.value == null
+                ? "—"
+                : c.value.toLocaleString()}
+          </div>
+          <div className="mt-0.5 text-[11px] text-neutral-500">{c.hint}</div>
+        </div>
+      ))}
+    </div>
   );
 }
