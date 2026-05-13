@@ -77,6 +77,17 @@ class GeminiLiveBackend:
         self.on_error: Optional[Callable[[str], Any]] = None
         self.on_function_call: Optional[Callable[[str, dict, str], Any]] = None
 
+        # Audio-flow diagnostics (printed once/s while a call is live).
+        # Flips temp/permanent based on demand; keeping in for now —
+        # the cost is two prints per second per active call.
+        self._audio_diag_sent_to_gemini: int = 0
+        self._audio_diag_dropped_no_ws: int = 0
+        self._audio_diag_dropped_empty_pcm: int = 0
+        self._audio_diag_input_transcripts: int = 0
+        self._audio_diag_ai_transcripts: int = 0
+        self._audio_diag_last_summary: float = 0.0
+        self._setup_complete_seen: bool = False
+
     @property
     def audio_format(self) -> str:
         return self._audio_format
@@ -234,8 +245,12 @@ class GeminiLiveBackend:
 
         # Gemini setup ack
         if "setup_complete" in data or "setupComplete" in data:
-            if self._verbose:
-                print("[GeminiLive] setup complete")
+            if not self._setup_complete_seen:
+                self._setup_complete_seen = True
+                print(
+                    f"[AUDIO_DIAG/Gemini] setupComplete received call={self._call_id}",
+                    flush=True,
+                )
             return
 
         server_content = data.get("server_content") or data.get("serverContent")
@@ -272,9 +287,11 @@ class GeminiLiveBackend:
         # Input/output transcription for transcript capture
         input_t = sc.get("input_transcription") or sc.get("inputTranscription")
         if input_t and input_t.get("text") and self.on_transcript:
+            self._audio_diag_input_transcripts += 1
             await self.on_transcript("patient", input_t["text"])
         output_t = sc.get("output_transcription") or sc.get("outputTranscription")
         if output_t and output_t.get("text") and self.on_transcript:
+            self._audio_diag_ai_transcripts += 1
             await self.on_transcript("ai_complete", output_t["text"])
 
         # Turn / generation complete — nothing to forward; orchestrator
@@ -319,6 +336,7 @@ class GeminiLiveBackend:
         needed before forwarding to Gemini (which only accepts 16 kHz PCM16).
         """
         if not self._ws or not self._is_active or not audio_data:
+            self._audio_diag_dropped_no_ws += 1
             return
         if self._audio_format == "g711_ulaw":
             pcm16k = self._transcoder.mulaw8k_to_pcm16k(audio_data)
@@ -326,6 +344,7 @@ class GeminiLiveBackend:
             # Browser path already supplies 16 kHz PCM16.
             pcm16k = audio_data
         if not pcm16k:
+            self._audio_diag_dropped_empty_pcm += 1
             return
         # Gemini Live: realtimeInput.audio (singular, camelCase).
         # mimeType must be "audio/pcm;rate=16000".
@@ -338,6 +357,28 @@ class GeminiLiveBackend:
             }
         }
         await self._send(payload)
+        self._audio_diag_sent_to_gemini += 1
+        # Once-per-second roll-up so we can see whether
+        # bridge→Gemini is genuinely flowing.
+        import time as _time
+        now = _time.monotonic()
+        if now - self._audio_diag_last_summary >= 1.0:
+            print(
+                "[AUDIO_DIAG/Gemini] sent=%d dropped_no_ws=%d "
+                "dropped_empty=%d input_transcripts=%d "
+                "ai_transcripts=%d setup_complete=%s call=%s"
+                % (
+                    self._audio_diag_sent_to_gemini,
+                    self._audio_diag_dropped_no_ws,
+                    self._audio_diag_dropped_empty_pcm,
+                    self._audio_diag_input_transcripts,
+                    self._audio_diag_ai_transcripts,
+                    self._setup_complete_seen,
+                    self._call_id,
+                ),
+                flush=True,
+            )
+            self._audio_diag_last_summary = now
 
     async def commit_audio(self):
         """Gemini Live uses continuous streaming + server VAD; no explicit

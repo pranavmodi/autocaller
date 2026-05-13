@@ -1116,6 +1116,45 @@ class CallOrchestrator:
                 if self._silence_timeout_task and not self._silence_timeout_task.done():
                     self._silence_timeout_task.cancel()
 
+            # VM handoff abort — if the orchestrator already fired the
+            # canonical VM script (mute + carrier TTS) but a real
+            # human is now talking, reverse course: unmute, clear the
+            # handoff flag, nudge the AI to keep going. Without this,
+            # any false-positive VM detection condemns the rest of
+            # the call to silence (Edward Ramsey 2026-04-29 b2b0cbf6).
+            if (
+                self._vm_handoff_fired
+                and text.strip()
+                and not self._looks_like_vm_machine_speech(text)
+            ):
+                print(
+                    "[CallOrchestrator] VM handoff ABORT — substantive "
+                    f"human turn after handoff: {text[:120]!r}"
+                )
+                await self._add_system_note(
+                    "VM handoff aborted — human spoke after handoff fired. "
+                    "Unmuting AI and resuming normal flow."
+                )
+                self._vm_handoff_fired = False
+                if self._twilio_bridge is not None:
+                    try:
+                        self._twilio_bridge.unmute_ai_audio()
+                    except Exception as e:
+                        logger.debug("unmute on VM-abort failed: %s", e)
+                if self._voice_service is not None:
+                    try:
+                        await self._voice_service.cancel_response()
+                        await self._voice_service.send_system_nudge(
+                            "A human just spoke. The earlier audio was "
+                            "NOT a voicemail. Run your normal cold-call "
+                            "opener now — identify yourself, give the "
+                            "smart-intel reason for the call, ask the "
+                            "contingent question."
+                        )
+                        await self._voice_service.start_response()
+                    except Exception as e:
+                        logger.debug("AI re-arm on VM-abort failed: %s", e)
+
             # Caller spoke — if we were on hold, exit hold state and
             # unmute. Cancel any Gemini-queued filler so the AI's next
             # turn is a fresh response to the caller's actual words.
@@ -1253,6 +1292,76 @@ class CallOrchestrator:
             self._web_recording_chunks.append(audio_data)
         if self.on_audio_output:
             await self.on_audio_output(audio_data)
+
+    @staticmethod
+    def _looks_like_vm_machine_speech(text: str) -> bool:
+        """True if the caller-side text reads like an answering-machine
+        / voicemail greeting (or a routine recording disclaimer that
+        often plays alongside one). Used by the VM-handoff abort path
+        to distinguish a still-playing greeting from a live human turn —
+        we DON'T want to abort just because the VM greeting is still
+        spilling more words.
+        """
+        if not text:
+            return True
+        low = text.lower().strip()
+        if len(low) < 8:
+            return True
+        tells = (
+            "voicemail",
+            "leave a message",
+            "after the tone",
+            "after the beep",
+            "at the tone",
+            "is not available",
+            "has been forwarded",
+            "please record",
+            "your call has been forwarded",
+            "this call is being recorded",
+            "this call may be recorded",
+            "this conversation is being recorded",
+            "for quality assurance",
+            "for quality and training",
+            # Spanish
+            "deje su mensaje",
+            "después del tono",
+            "despues del tono",
+        )
+        return any(t in low for t in tells)
+
+    @staticmethod
+    def _looks_like_recording_disclaimer(text: str) -> bool:
+        """True if the caller-side text is a routine call-recording
+        disclaimer that human-answered firms play before a real
+        receptionist speaks.
+
+        These phrases used to falsely trigger the VM-detection path
+        (Gemini classified them as voicemail and called
+        `end_call(outcome=voicemail)` → orchestrator muted the AI and
+        played the canonical VM script over a live human). We now use
+        this filter to refuse the VM handoff in that case — see the
+        guard around line 1871 of `_handle_function_call`.
+        """
+        if not text:
+            return False
+        low = text.lower().strip()
+        phrases = (
+            "this call is being recorded",
+            "this call may be recorded",
+            "this call is recorded",
+            "this conversation is being recorded",
+            "this conversation may be recorded",
+            "for quality assurance",
+            "for quality and training",
+            "calls may be recorded",
+            "your call may be recorded",
+            "your call is being recorded",
+            # Spanish variants — same pattern, common on bilingual lines
+            "esta llamada puede ser grabada",
+            "esta llamada está siendo grabada",
+            "esta llamada esta siendo grabada",
+        )
+        return any(p in low for p in phrases)
 
     @staticmethod
     def _should_enter_hold_state(ai_utterance: str) -> bool:
@@ -1875,6 +1984,53 @@ class CallOrchestrator:
                 and self._twilio_bridge is not None
                 and self._twilio_call_sid
             ):
+                # Hard-negative guard: if the caller just played a
+                # routine "this call is being recorded" disclaimer,
+                # Gemini will frequently misclassify it as a voicemail
+                # prompt and call end_call(voicemail). Refuse the
+                # handoff and nudge the AI to keep going. Real callers
+                # never recover from a wrongful VM handoff because the
+                # bridge mutes the AI for the rest of the call (we hit
+                # this on Edward Ramsey 2026-04-29 b2b0cbf6).
+                recent_caller = self._recent_caller_transcript()
+                if self._looks_like_recording_disclaimer(recent_caller):
+                    print(
+                        "[CallOrchestrator] VM handoff REFUSED — recent "
+                        f"caller transcript looks like a recording "
+                        f"disclaimer, not a voicemail prompt: "
+                        f"{recent_caller[:140]!r}"
+                    )
+                    await self._add_system_note(
+                        "VM handoff refused — caller side was a recording "
+                        "disclaimer, not a voicemail. Continuing AI flow."
+                    )
+                    # Tell the AI directly so it doesn't immediately
+                    # retry the same end_call.
+                    if self._voice_service is not None:
+                        try:
+                            await self._voice_service.send_system_nudge(
+                                "That phrase ('this call is being recorded' / "
+                                "'for quality assurance') is a routine "
+                                "disclaimer played BEFORE a human picks up — "
+                                "NOT a voicemail. Do NOT call end_call. "
+                                "Wait for the human to greet you, then run "
+                                "the normal opener."
+                            )
+                        except Exception as e:
+                            logger.debug("recording-disclaimer nudge failed: %s", e)
+                    if self._voice_service and fn_call_id:
+                        try:
+                            await self._voice_service.send_function_result(
+                                fn_call_id,
+                                {
+                                    "status": "rejected",
+                                    "reason": "recording_disclaimer_not_voicemail",
+                                },
+                            )
+                        except Exception as e:
+                            logger.debug("send_function_result on VM-refuse: %s", e)
+                    return
+
                 print(
                     f"[CallOrchestrator] VM handoff — AI signalled voicemail. "
                     f"Routing to canonical carrier-TTS path."

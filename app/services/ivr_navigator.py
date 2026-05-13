@@ -108,7 +108,13 @@ _CLASSIFY_PROMPT = (
     "- Any greeting starting with 'Hi,' or 'Hello,' followed by a business name is HUMAN.\n"
     "- Silence, ringback tone, brief hold music, or 'one moment' immediately "
     "AFTER a DTMF press usually means a transfer is in progress — lean queue, "
-    "not ambiguous."
+    "not ambiguous.\n"
+    "- 'This call is being recorded' / 'this call may be recorded' / "
+    "'for quality assurance' / 'for quality and training' / "
+    "'esta llamada puede ser grabada' is NOT a voicemail — it is a routine "
+    "disclaimer firms play before a HUMAN picks up. Treat as 'ambiguous' "
+    "and wait for what comes next, OR (if a human greeting follows in the "
+    "same turn) classify as 'human'. Never voicemail on its own."
 )
 
 

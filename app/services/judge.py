@@ -219,6 +219,8 @@ recommending prompt edits or flagging DNC.
 
 ## Hard constraints
 - If the lead asked to be removed, gtm_disposition MUST be do_not_recontact and dnc_reason must cite it.
+- do_not_recontact REQUIRES an explicit verbal request from a human on the call. If no human spoke, do_not_recontact is FORBIDDEN.
+- If the only patient-side audio is a voicemail greeting / beep / no-answer (call.voicemail_left=true, no substantive human turn in the transcript), gtm_disposition MUST be no_conversation and follow_up_action MUST be standard_retry. This is NOT a DNC signal.
 - follow_up_when is null ONLY for terminal dispositions (do_not_recontact, bad_data, needs_human_review).
 - captured_contacts: include ONLY people actually named on the call. Normalize phones to E.164, emails to lowercase. Never invent.
 - Do not hallucinate pain points; if none were surfaced, return [].
@@ -265,6 +267,67 @@ def _compact_transcript(transcript: list[dict]) -> str:
     return "\n".join(lines) or "(no transcript)"
 
 
+def _voicemail_only_review(call_row) -> Optional[CallReview]:
+    """Deterministic review for the canonical "VM left, no human spoke"
+    case. Bypasses the LLM — the judge has misclassified these as
+    `do_not_recontact` (call 25e9bd37 on 2026-04-28), and there's no
+    judgement to make: the canonical follow-up is `standard_retry`.
+
+    Triggers when `voicemail_left=True` AND no patient turn in the
+    transcript contains substantive non-VM-greeting text.
+    """
+    if not getattr(call_row, "voicemail_left", False):
+        return None
+    transcript = call_row.transcript or []
+    # Look for any patient turn that isn't the VM greeting / beep.
+    # The VM greeting itself is short and contains stock phrases.
+    VM_TELLS = (
+        "voicemail",
+        "leave a message",
+        "at the tone",
+        "after the beep",
+        "is not available",
+        "has been forwarded",
+        "please record",
+    )
+    for t in transcript:
+        speaker = (t.get("speaker") or "").lower()
+        if speaker != "patient":
+            continue
+        text = (t.get("text") or "").strip().lower()
+        if len(text) < 8:
+            continue
+        if any(tell in text for tell in VM_TELLS):
+            continue
+        # Found a substantive patient utterance — let the LLM judge.
+        return None
+
+    return CallReview(
+        opening_quality=0,
+        discovery_quality=0,
+        tool_use_correctness=0,
+        objection_handling=0,
+        closing_quality=0,
+        secondary_objective_achieved=0,
+        overall=0,
+        missed_opportunities=[],
+        ai_errors=[],
+        recommended_prompt_edits=[],
+        gtm_disposition="no_conversation",
+        follow_up_action="standard_retry",
+        follow_up_when=None,
+        follow_up_owner="autocaller",
+        follow_up_note="VM left, no human conversation — retry per cadence.",
+        call_summary="Voicemail delivered; no human spoke on the call.",
+        signal_flags=["voicemail_only"],
+        pain_points_discussed=[],
+        objections_raised=[],
+        captured_contacts=[],
+        dm_reachability="unknown",
+        dnc_reason=None,
+    )
+
+
 async def review_call(
     call_row,  # CallLogRow
     *,
@@ -272,6 +335,10 @@ async def review_call(
     model: str = DEFAULT_MODEL,
 ) -> CallReview:
     """Run the reviewer on a single call_log row. Returns structured result."""
+    # Short-circuit the canonical VM-only path before burning an LLM call.
+    bypass = _voicemail_only_review(call_row)
+    if bypass is not None:
+        return bypass
     cli = client or AsyncOpenAI(api_key=os.environ["OPENAI_API_KEY"])
 
     payload = {
@@ -290,6 +357,7 @@ async def review_call(
             "call_disposition": call_row.call_disposition,
             "was_gatekeeper": call_row.was_gatekeeper,
             "is_decision_maker_declared": call_row.is_decision_maker,
+            "voicemail_left": getattr(call_row, "voicemail_left", False),
             "mock_mode": call_row.mock_mode,
             "error_code": call_row.error_code,
             "error_message": call_row.error_message,

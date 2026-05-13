@@ -34,6 +34,7 @@ import base64
 import json
 import logging
 import os
+import time
 import uuid
 from typing import Optional
 
@@ -114,6 +115,16 @@ class TelnyxMediaBridge:
         self._original_on_audio = voice_service.on_audio
         voice_service.on_audio = self._forward_audio_to_carrier
         self._media_codec: Optional[str] = None  # set from start event
+
+        # Per-call audio diagnostic counters (printed once/s while a
+        # call is live). Lets us tell at a glance whether the patient
+        # audio is reaching the voice service or being dropped, and
+        # whether the AI side is being muted.
+        self._inbound_frames: int = 0
+        self._inbound_bytes: int = 0
+        self._frames_to_voice: int = 0
+        self._frames_dropped_disconnected: int = 0
+        self._last_audio_summary_at: float = 0.0
 
         # AI audio is paced to listeners at real-time (8000 bps µ-law)
         # even when the voice backend bursts it faster. See the comment
@@ -234,6 +245,55 @@ class TelnyxMediaBridge:
             pass
         except Exception as e:
             logger.exception("AI pacer loop crashed: %s", e)
+
+    async def mirror_vm_audio_to_listeners(self, wav_path: str) -> None:
+        """Stream a pre-synthesized VM WAV to listeners as `source="ai"`.
+
+        Carrier-side TTS (Telnyx /actions/playback_start or /actions/speak)
+        is mixed onto the PSTN leg only — those bytes never traverse the
+        media-stream WS, so listen-in stays silent during VM playback.
+        This method re-broadcasts the same cached WAV through the
+        listener fan-out path so the operator hears what the prospect's
+        voicemail is recording. Caller-side audio (the VM greeting tail
+        + beep) is unaffected; this only adds the AI side.
+
+        WAV format from vm_audio_service is 24 kHz PCM16 LE mono.
+        Listeners want 8 kHz µ-law (the same format the AI normally
+        broadcasts), so resample + encode here.
+        """
+        try:
+            import audioop
+            from pathlib import Path
+            data = await asyncio.to_thread(Path(wav_path).read_bytes)
+        except Exception as e:
+            logger.warning("[TelnyxMedia] VM mirror read %s failed: %s", wav_path, e)
+            return
+
+        # Skip the 44-byte canonical RIFF header that vm_audio_service
+        # writes. (We control the writer; format is fixed.)
+        if len(data) < 44 or data[:4] != b"RIFF":
+            logger.warning("[TelnyxMedia] VM mirror: not a WAV file: %s", wav_path)
+            return
+        pcm_24k = data[44:]
+
+        try:
+            pcm_8k, _state = audioop.ratecv(pcm_24k, 2, 1, 24000, 8000, None)
+            mulaw = audioop.lin2ulaw(pcm_8k, 2)
+        except Exception as e:
+            logger.warning("[TelnyxMedia] VM mirror resample failed: %s", e)
+            return
+
+        FRAME_BYTES = 160
+        FRAME_DT = 0.02
+        for offset in range(0, len(mulaw), FRAME_BYTES):
+            frame = mulaw[offset:offset + FRAME_BYTES]
+            if len(frame) < FRAME_BYTES:
+                frame = frame + b"\xff" * (FRAME_BYTES - len(frame))
+            try:
+                await self._send_to_listeners(frame, source="ai")
+            except Exception:
+                return
+            await asyncio.sleep(FRAME_DT)
 
     # ------------------------------------------------------------------
     # Audio paths
@@ -479,8 +539,34 @@ class TelnyxMediaBridge:
                             # at the listener-broadcast side, so even
                             # though Gemini keeps reasoning, the
                             # prospect and operator don't hear it.
+                            self._inbound_frames += 1
+                            self._inbound_bytes += len(audio_bytes)
                             if self.voice_service.is_connected:
                                 await self.voice_service.send_audio(audio_bytes)
+                                self._frames_to_voice += 1
+                            else:
+                                self._frames_dropped_disconnected += 1
+                            # Once-per-second summary so we can see
+                            # whether Telnyx → bridge → voice_service
+                            # is flowing for diagnosis call AB-7.
+                            now = time.monotonic()
+                            if now - self._last_audio_summary_at >= 1.0:
+                                print(
+                                    "[AUDIO_DIAG] inbound_frames=%d (+%d B) "
+                                    "→ voice=%d dropped_disconnected=%d "
+                                    "voice_connected=%s mute=%s call=%s"
+                                    % (
+                                        self._inbound_frames,
+                                        self._inbound_bytes,
+                                        self._frames_to_voice,
+                                        self._frames_dropped_disconnected,
+                                        self.voice_service.is_connected,
+                                        self._ai_audio_muted,
+                                        self._call_sid,
+                                    ),
+                                    flush=True,
+                                )
+                                self._last_audio_summary_at = now
                             # Broadcast caller-side to listeners
                             await self._broadcast_audio(audio_bytes, source="caller")
                         # Outbound track = our own AI audio echoed back;

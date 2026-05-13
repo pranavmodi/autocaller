@@ -42,6 +42,8 @@ app/audio/*.mp3
 app/audio/*.wav
 app/audio/recordings/
 app/audio/recordings/**
+app/audio/vm/
+app/audio/vm/**
 static/audio/*.mp3
 static/audio/*.wav
 static/

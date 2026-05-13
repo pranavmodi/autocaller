@@ -168,6 +168,47 @@ class TwilioMediaBridge:
         except Exception as e:
             logger.exception("AI pacer loop crashed: %s", e)
 
+    async def mirror_vm_audio_to_listeners(self, wav_path: str) -> None:
+        """Stream a pre-synthesized VM WAV to listeners as `source="ai"`.
+
+        Carrier-side TTS audio (Twilio <Say> or <Play>) is mixed onto
+        the PSTN leg only and never traverses the media-stream WS, so
+        listen-in stays silent during VM playback. This re-broadcasts
+        the cached WAV through the listener fan-out so the operator
+        hears what the prospect's voicemail is recording.
+
+        WAV format from vm_audio_service is 24 kHz PCM16 LE mono;
+        listeners want 8 kHz µ-law.
+        """
+        try:
+            import audioop
+            from pathlib import Path
+            data = await asyncio.to_thread(Path(wav_path).read_bytes)
+        except Exception as e:
+            logger.warning("[TwilioMedia] VM mirror read %s failed: %s", wav_path, e)
+            return
+        if len(data) < 44 or data[:4] != b"RIFF":
+            logger.warning("[TwilioMedia] VM mirror: not a WAV file: %s", wav_path)
+            return
+        pcm_24k = data[44:]
+        try:
+            pcm_8k, _state = audioop.ratecv(pcm_24k, 2, 1, 24000, 8000, None)
+            mulaw = audioop.lin2ulaw(pcm_8k, 2)
+        except Exception as e:
+            logger.warning("[TwilioMedia] VM mirror resample failed: %s", e)
+            return
+        FRAME_BYTES = 160
+        FRAME_DT = 0.02
+        for offset in range(0, len(mulaw), FRAME_BYTES):
+            frame = mulaw[offset:offset + FRAME_BYTES]
+            if len(frame) < FRAME_BYTES:
+                frame = frame + b"\xff" * (FRAME_BYTES - len(frame))
+            try:
+                await self._send_to_listeners(frame, source="ai")
+            except Exception:
+                return
+            await asyncio.sleep(FRAME_DT)
+
     # ------------------------------------------------------------------
     # Audio paths
     # ------------------------------------------------------------------
