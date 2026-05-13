@@ -11,11 +11,11 @@ export function formatDuration(seconds: number): string {
   return `${mins}:${secs.toString().padStart(2, "0")}`;
 }
 
-const DISPLAY_TIMEZONE = "America/Los_Angeles";
+const DISPLAY_TIMEZONE = "Asia/Kolkata";
 
 export function formatTime(date: Date | string): string {
   const d = typeof date === "string" ? new Date(date) : date;
-  return d.toLocaleTimeString("en-US", {
+  return d.toLocaleTimeString("en-IN", {
     hour: "numeric",
     minute: "2-digit",
     hour12: true,
@@ -25,7 +25,7 @@ export function formatTime(date: Date | string): string {
 
 export function formatDate(date: Date | string): string {
   const d = typeof date === "string" ? new Date(date) : date;
-  return d.toLocaleDateString("en-US", {
+  return d.toLocaleDateString("en-IN", {
     month: "short",
     day: "numeric",
     year: "numeric",

@@ -39,14 +39,14 @@ SLOT_MINUTES = 30
 # Four 30-min slots per weekday, spread across morning / midday / afternoon.
 # Each entry is (hour, minute) in the booking timezone (PT by default).
 SLOT_TIMES: List[tuple[int, int]] = [
-    (9, 0),    # 9:00 AM PT
-    (11, 0),   # 11:00 AM PT
-    (13, 30),  # 1:30 PM PT
-    (16, 0),   # 4:00 PM PT
+    (9, 0),    # 9:00 AM PT  (9:30 PM IST)
+    (10, 0),   # 10:00 AM PT (10:30 PM IST)
+    (17, 0),   # 5:00 PM PT  (5:30 AM IST next day)
+    (18, 0),   # 6:00 PM PT  (6:30 AM IST next day)
 ]
 # Kept for backward-compat with any external callers; derived from SLOT_TIMES.
 SLOT_START_HOUR = SLOT_TIMES[0][0] if SLOT_TIMES else 9
-SLOT_END_HOUR = (SLOT_TIMES[-1][0] + 1) if SLOT_TIMES else 17
+SLOT_END_HOUR = (SLOT_TIMES[-1][0] + 1) if SLOT_TIMES else 19
 
 
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")

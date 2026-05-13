@@ -75,12 +75,14 @@ export function ConsultBookingPopup() {
 
   if (!current) return null;
 
-  const slotLocal = new Date(current.slot_start).toLocaleString(undefined, {
+  const slotLocal = new Date(current.slot_start).toLocaleString("en-IN", {
     weekday: "short",
     month: "short",
     day: "numeric",
     hour: "numeric",
     minute: "2-digit",
+    timeZone: "Asia/Kolkata",
+    timeZoneName: "short",
   });
   const remaining = queue.length - 1;
 

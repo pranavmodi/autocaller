@@ -128,14 +128,17 @@ function BookingRow({
   variant: "upcoming" | "past";
 }) {
   const slot = new Date(b.slot_start);
-  const dateFmt = new Intl.DateTimeFormat(undefined, {
+  const dateFmt = new Intl.DateTimeFormat("en-IN", {
     weekday: "short",
     month: "short",
     day: "numeric",
+    timeZone: "Asia/Kolkata",
   });
-  const timeFmt = new Intl.DateTimeFormat(undefined, {
+  const timeFmt = new Intl.DateTimeFormat("en-IN", {
     hour: "numeric",
     minute: "2-digit",
+    timeZone: "Asia/Kolkata",
+    timeZoneName: "short",
   });
   return (
     <tr
