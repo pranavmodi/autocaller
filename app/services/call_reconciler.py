@@ -122,6 +122,33 @@ async def reconcile_one(row: CallLogRow) -> dict:
             state="carrier_confirmed_ended",
             error=(row.termination_last_error or None),
         )
+        # If our local orchestrator still thinks this is the active
+        # call (carrier silently terminated — webhook + WS stop both
+        # missed), tear down its in-memory state too. Without this,
+        # the orchestrator keeps holding `_current_call`, the
+        # `_active_call_id` marker stays set, and the next dispatcher
+        # tick is blocked by "A call is already in progress."
+        if row.termination_state == "live":
+            try:
+                from app.services.call_orchestrator import get_orchestrator
+                from app.models.call_log import CallOutcome
+                orch = get_orchestrator()
+                current = getattr(orch, "_current_call", None)
+                if current is not None and current.call_id == row.call_id:
+                    logger.warning(
+                        "[Reconciler] Carrier-silent terminate detected for "
+                        "active call %s (sid=%s) — ending orchestrator state.",
+                        row.call_id, row.carrier_call_sid,
+                    )
+                    await orch.end_call(
+                        CallOutcome.DISCONNECTED,
+                        ended_by="reconciler_carrier_silent",
+                    )
+            except Exception as e:
+                logger.warning(
+                    "[Reconciler] orchestrator teardown after carrier-terminal "
+                    "failed for %s: %s", row.call_id, e,
+                )
         result["action"] = "marked_terminal"
         result["detail"] = raw
     elif state == "live":

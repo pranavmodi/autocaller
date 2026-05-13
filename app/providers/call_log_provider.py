@@ -332,14 +332,27 @@ class CallLogProvider:
         if self._active_call_id == call_id:
             self._active_call_id = None
 
-    async def set_carrier_call_sid(self, call_id: str, carrier_call_sid: str) -> None:
+    async def set_carrier_call_sid(
+        self,
+        call_id: str,
+        carrier_call_sid: str,
+        *,
+        overwrite: bool = False,
+    ) -> None:
         """Stamp the carrier's call handle as soon as we learn it.
 
         Twilio: set when place_call returns the Call SID.
-        Telnyx: set when the media-stream 'start' event arrives with
-        call_control_id. (For Telnyx, place_call also returns a SID, but
-        the call_control_id from the start event is what the Call
-        Control REST actions require.)
+        Telnyx: set when the media-stream 'start' event or the
+        /telnyx/status webhook arrives with call_control_id. (For
+        Telnyx, place_call also returns a TeXML call SID, but the
+        call_control_id is what the Call Control REST actions —
+        including the reconciler's `get_call_state` — require.)
+
+        By default the stamp is first-write-wins (idempotent). Pass
+        `overwrite=True` for paths that carry the authoritative
+        identifier (Telnyx media-stream start + status webhook) — the
+        place_call return value is a less-useful TeXML synthetic in
+        some Telnyx tiers.
 
         Required for the reconciler to look the call up carrier-side.
         """
@@ -350,9 +363,14 @@ class CallLogProvider:
                 select(CallLogRow).where(CallLogRow.call_id == call_id)
             )
             row = result.scalar_one_or_none()
-            if row and not row.carrier_call_sid:
-                row.carrier_call_sid = carrier_call_sid
-                await session.commit()
+            if not row:
+                return
+            if row.carrier_call_sid and not overwrite:
+                return
+            if row.carrier_call_sid == carrier_call_sid:
+                return
+            row.carrier_call_sid = carrier_call_sid
+            await session.commit()
 
     async def mark_carrier_terminal(
         self,

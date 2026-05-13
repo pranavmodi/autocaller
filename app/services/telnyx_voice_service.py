@@ -502,9 +502,10 @@ class TelnyxMediaBridge:
                         )
                     # Persist the call_control_id onto the CallLog row
                     # ASAP. The reconciler + force-hangup CLI need it
-                    # to look the call up carrier-side. voice_service
-                    # carries the call_id; resolve it lazily so we
-                    # don't hard-require the CallLog provider here.
+                    # to look the call up carrier-side. Awaited (not
+                    # fire-and-forget) so we know it landed before the
+                    # call accumulates media events that could mask a
+                    # silent failure.
                     try:
                         cid = getattr(self.voice_service, "_call_id", None) or \
                               getattr(self.voice_service, "call_id", None)
@@ -512,12 +513,13 @@ class TelnyxMediaBridge:
                             from app.providers.call_log_provider import (
                                 get_call_log_provider as _get_clp,
                             )
-                            asyncio.create_task(
-                                _get_clp().set_carrier_call_sid(cid, self._call_sid)
+                            await _get_clp().set_carrier_call_sid(
+                                cid, self._call_sid, overwrite=True,
                             )
                     except Exception as e:
-                        logger.debug(
-                            "could not stamp carrier_call_sid: %s", e,
+                        logger.warning(
+                            "could not stamp carrier_call_sid for call_id=%s sid=%s: %s",
+                            cid, self._call_sid, e,
                         )
                     self._connected.set()
 

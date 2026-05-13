@@ -194,8 +194,30 @@ class CallOrchestrator:
         error_code_raw: str = "",
         sip_response_code_raw: str = "",
     ):
-        """Delegate to CarrierFailureHandler."""
+        """Delegate to CarrierFailureHandler.
+
+        Also redundantly stamps `carrier_call_sid` on the active call's
+        DB row. This is belt-and-suspenders behind the place_call /
+        media-stream-start paths — the status webhook is the most
+        reliable signal that the carrier knows about the leg, and we
+        want the SID on the row even if those other paths silently fail.
+        """
         self._sync_status_callback()
+        if (
+            self._current_call is not None
+            and call_sid
+            and call_sid == self._twilio_call_sid
+        ):
+            try:
+                clp = get_call_log_provider()
+                await clp.set_carrier_call_sid(
+                    self._current_call.call_id, call_sid, overwrite=True,
+                )
+            except Exception as e:
+                logger.warning(
+                    "status-webhook set_carrier_call_sid failed for %s: %s",
+                    self._current_call.call_id, e,
+                )
         await self._carrier_failure.handle_twilio_call_status(
             call_sid, call_status, error_code_raw, sip_response_code_raw,
         )
