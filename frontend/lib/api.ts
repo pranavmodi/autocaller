@@ -316,6 +316,10 @@ export const setMockMode = (enabled: boolean, mock_phone = "") =>
 export const setVoiceProvider = (provider: "openai" | "gemini", model = "") =>
   put<Record<string, unknown>>("/api/settings/voice", { provider, model });
 
+export type PromptStyle = "current" | "minimal";
+export const setPromptStyle = (style: PromptStyle) =>
+  put<Record<string, unknown>>("/api/settings/prompt-style", { style });
+
 export type VoiceConfigPatch = {
   provider: "openai" | "gemini";
   voice?: string;

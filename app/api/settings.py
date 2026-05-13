@@ -108,6 +108,8 @@ class SystemSettingsResponse(BaseModel):
     voice_model: str = ""
     voice_config: dict = {}
     ivr_navigate_enabled: bool = False
+    prompt_style: str = "current"
+    prompt_version: str = ""
 
 
 class VoiceProviderRequest(BaseModel):
@@ -134,6 +136,10 @@ class VoiceConfigRequest(BaseModel):
 
 class IVRNavigateRequest(BaseModel):
     enabled: bool
+
+
+class PromptStyleRequest(BaseModel):
+    style: str  # "current" | "minimal"
 
 
 class ActiveScenarioRequest(BaseModel):
@@ -225,7 +231,37 @@ async def settings_to_response(provider) -> SystemSettingsResponse:
         voice_model=getattr(settings, "voice_model", "") or "",
         voice_config=dict(getattr(settings, "voice_config", None) or {}),
         ivr_navigate_enabled=bool(getattr(settings, "ivr_navigate_enabled", False)),
+        prompt_style=await _active_prompt_style(),
+        prompt_version=_active_prompt_version(),
     )
+
+
+async def _active_prompt_style() -> str:
+    """Async DB-safe resolver for the response builder."""
+    try:
+        from app.prompts import active as prompt_mod
+        return await prompt_mod.get_active_style_async()
+    except Exception:
+        return "current"
+
+
+def _active_prompt_version() -> str:
+    """Resolve the version of the currently-active style. The version
+    is a module-level constant on the prompt module — no DB needed —
+    so we read whichever module the cached style points to."""
+    try:
+        from app.prompts import active as prompt_mod
+        # The cached value is whatever the most-recent
+        # get_active_style_async() populated; safe to use here since
+        # response_and_broadcast is always called right after that.
+        cached = prompt_mod._db_cache.get("value") or "current"
+        if cached == "minimal":
+            from app.prompts import attorney_cold_call_minimal as m
+        else:
+            from app.prompts import attorney_cold_call as m
+        return m.PROMPT_VERSION
+    except Exception:
+        return ""
 
 
 async def activate_scenario(scenario_id: str) -> None:
@@ -603,6 +639,30 @@ async def set_mock_mode(request: MockModeRequest):
     label = f"ON (redirect to {request.mock_phone})" if request.enabled else "OFF"
     print(f"[SETTINGS] mock_mode → {label}")
     return await settings_response_and_broadcast(provider)
+
+
+@router.put("/prompt-style", response_model=SystemSettingsResponse)
+async def set_prompt_style(request: PromptStyleRequest):
+    """Switch the active voice-AI prompt style.
+
+    Persisted in `system_settings.prompt_style`. Hot-reload friendly:
+    the in-process cache (TTL ~5s) picks up the change on the next
+    call without a daemon restart. Body: `{"style": "current"|"minimal"}`.
+    """
+    from fastapi import HTTPException
+    from app.prompts import active as prompt_mod
+    s = (request.style or "").strip().lower()
+    if s not in prompt_mod.VALID_STYLES:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Invalid style {request.style!r}. "
+                f"Valid: {', '.join(prompt_mod.VALID_STYLES)}"
+            ),
+        )
+    written = await prompt_mod.set_active_style(s)
+    print(f"[SETTINGS] prompt_style → {written}")
+    return await settings_response_and_broadcast(get_settings_provider())
 
 
 @router.put("/ivr-navigate", response_model=SystemSettingsResponse)

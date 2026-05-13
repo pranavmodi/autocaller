@@ -221,6 +221,11 @@ class SystemSettingsRow(Base):
     # Whether the AI should try to navigate phone trees (press digits to reach
     # a human) instead of hanging up as soon as an IVR is detected.
     ivr_navigate_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Active voice-AI prompt style. "current" = the long Sobczak-style
+    # cold-call prompt; "minimal" = trimmed-down variant. Persisted
+    # here so operators can flip from CLI/UI without a daemon restart;
+    # PROMPT_STYLE env var, if set, takes precedence at boot only.
+    prompt_style: Mapped[str] = mapped_column(String(32), default="current")
 
     updated_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow, onupdate=_utcnow)
 

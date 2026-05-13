@@ -12,6 +12,7 @@ import {
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { VoiceSettingsPanel } from "@/components/VoiceSettingsPanel";
+import { PromptStylePanel } from "@/components/PromptStylePanel";
 
 export default function HealthPage() {
   const checks = useQuery({
@@ -216,6 +217,8 @@ export default function HealthPage() {
           carrier, edit <span className="font-mono">.env</span> and restart the backend.
         </p>
       </section>
+
+      <PromptStylePanel />
 
       <VoiceSettingsPanel />
 

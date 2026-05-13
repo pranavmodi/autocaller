@@ -1943,14 +1943,40 @@ def leads_sync_pifstats(
 
 @prompts_app.command("show")
 def prompts_show():
-    """Show the active prompt style + version (reads PROMPT_STYLE env)."""
+    """Show the active prompt style + version."""
     from app.prompts import active as prompt_mod
     style = prompt_mod.get_active_style()
     version = prompt_mod.get_prompt_version()
     console.print(f"Active style  : [bold]{style}[/bold]")
     console.print(f"PROMPT_VERSION: {version}")
-    console.print(f"(Change via PROMPT_STYLE env var + backend restart. "
-                  f"Valid: {', '.join(prompt_mod.VALID_STYLES)}.)")
+    console.print(
+        f"(Switch via [bold]autocaller prompts set <style>[/bold] or the "
+        f"/system UI panel. DB-backed, no restart needed. Valid: "
+        f"{', '.join(prompt_mod.VALID_STYLES)}.)"
+    )
+
+
+@prompts_app.command("set")
+def prompts_set(
+    style: str = typer.Argument(
+        ..., help="Prompt style to activate. One of: current, minimal."
+    ),
+):
+    """Switch the active prompt style. Persisted in system_settings;
+    takes effect on the next call (cache TTL ~5s)."""
+    from app.prompts import active as prompt_mod
+    s = (style or "").strip().lower()
+    if s not in prompt_mod.VALID_STYLES:
+        console.print(
+            f"[red]Invalid style: {style!r}. Valid: "
+            f"{', '.join(prompt_mod.VALID_STYLES)}[/red]"
+        )
+        raise typer.Exit(code=1)
+    written = _run(prompt_mod.set_active_style(s))
+    console.print(
+        f"[green]Active prompt style → {written}[/green] "
+        f"(takes effect on the next call)"
+    )
 
 
 @prompts_app.command("list")
