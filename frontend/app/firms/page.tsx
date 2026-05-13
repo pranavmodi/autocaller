@@ -43,7 +43,7 @@ function tierColor(tier: string | null) {
 type ResearchFilter = "all" | "completed" | "pending";
 type TierFilter = "all" | "A" | "B" | "C" | "D";
 type SearchMode = "firms" | "people";
-type ReviewFilter = "all" | "any" | "google" | "yelp";
+type ReviewFilter = "all" | "any" | "google" | "yelp" | "none";
 type ActivityFilter = "all" | "autorespond_7d";
 
 const PAGE_SIZE = 25;
@@ -101,6 +101,7 @@ export default function FirmsPage() {
     queryFn: () => getFirmsWithReviews(reviewFilter as "any" | "google" | "yelp"),
     enabled:
       reviewFilter !== "all"
+      && reviewFilter !== "none"
       && activityFilter === "all"
       && searchMode === "firms",
     refetchInterval: 60_000,
@@ -109,6 +110,7 @@ export default function FirmsPage() {
 
   const reviewIdSet = (() => {
     if (reviewFilter === "all" || !reviews.data) return null;
+    if (reviewFilter === "none") return new Set(reviews.data.any);
     const ids =
       reviewFilter === "google"
         ? reviews.data.google
@@ -151,7 +153,9 @@ export default function FirmsPage() {
   const firms =
     reviewIdSet === null
       ? allFirms
-      : allFirms.filter((f) => reviewIdSet.has(f.id));
+      : reviewFilter === "none"
+        ? allFirms.filter((f) => !reviewIdSet.has(f.id))
+        : allFirms.filter((f) => reviewIdSet.has(f.id));
   const total = data?.total ?? 0;
   const totalPages = data?.total_pages ?? 1;
   const hiddenByReviewFilter =
@@ -297,8 +301,12 @@ export default function FirmsPage() {
           ))}
           <span className="mx-1 text-neutral-300">|</span>
           <Star className="h-3.5 w-3.5 text-neutral-400" />
-          {(["all", "any", "google", "yelp"] as ReviewFilter[]).map((r) => {
+          {(["all", "any", "google", "yelp", "none"] as ReviewFilter[]).map((r) => {
             const summary = reviews.data;
+            const noReviewsCount =
+              stats.data?.total_firms != null && summary?.total_count != null
+                ? stats.data.total_firms - summary.total_count
+                : null;
             const count =
               r === "all"
                 ? null
@@ -306,7 +314,9 @@ export default function FirmsPage() {
                   ? summary?.total_count
                   : r === "google"
                     ? summary?.google_count
-                    : summary?.yelp_count;
+                    : r === "yelp"
+                      ? summary?.yelp_count
+                      : noReviewsCount;
             const label =
               r === "all"
                 ? "Any reviews"
@@ -314,7 +324,9 @@ export default function FirmsPage() {
                   ? `Has reviews${count != null ? ` (${count})` : ""}`
                   : r === "google"
                     ? `Google${count != null ? ` (${count})` : ""}`
-                    : `Yelp${count != null ? ` (${count})` : ""}`;
+                    : r === "yelp"
+                      ? `Yelp${count != null ? ` (${count})` : ""}`
+                      : `No reviews${count != null ? ` (${count})` : ""}`;
             return (
               <button
                 key={r}
@@ -330,7 +342,9 @@ export default function FirmsPage() {
                     ? "Show all firms regardless of review presence"
                     : r === "any"
                       ? "Only firms with Google or Yelp reviews stored"
-                      : `Only firms with ${r === "google" ? "Google" : "Yelp"} reviews stored`
+                      : r === "none"
+                        ? "Only firms with NO reviews stored — combine with Researched to find researched firms missing review content"
+                        : `Only firms with ${r === "google" ? "Google" : "Yelp"} reviews stored`
                 }
               >
                 {label}
@@ -387,7 +401,8 @@ export default function FirmsPage() {
       )}
       {searchMode === "firms"
         && activityFilter === "all"
-        && reviewFilter !== "all" && (
+        && reviewFilter !== "all"
+        && reviewFilter !== "none" && (
         <WithReviewsFirmsList
           rows={withReviews.data?.items ?? []}
           source={reviewFilter as "any" | "google" | "yelp"}
@@ -396,7 +411,7 @@ export default function FirmsPage() {
       )}
       {searchMode === "firms"
         && activityFilter === "all"
-        && reviewFilter === "all" && (
+        && (reviewFilter === "all" || reviewFilter === "none") && (
         <>
           <div className="rounded-xl border border-neutral-200 bg-white">
             {firmsQuery.isLoading && (

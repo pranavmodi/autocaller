@@ -391,3 +391,54 @@ async def put_reviews(pif_id: str, body: ReviewsBody) -> ReviewsResponse:
         await session.commit()
         await session.refresh(row)
     return _row_to_response(pif_id, row)
+
+
+class DeleteFirmResponse(BaseModel):
+    deleted: bool
+    pif_id: str
+    patients: int
+    cadence_entries: int
+    firm_reviews: int
+    firm_contacts: int
+    patient_call_state: int
+
+
+@router.delete("/{pif_id}", response_model=DeleteFirmResponse)
+async def delete_firm_endpoint(pif_id: str):
+    """Hard-delete all local artifacts for this firm.
+    Removes: patients (lead row), cadence_entries, firm_reviews,
+    firm_contacts (cascades to email_sequences), patient_call_state.
+    Preserves: email_logs, sms_logs, call_logs (historical record).
+    The firm itself lives in PIF Stats; re-running sync will re-import
+    a clean version with no reviews/contacts/cadence."""
+    from sqlalchemy import delete as sqla_delete
+    from app.db.models import (
+        PatientRow, CadenceEntryRow, FirmReviewRow, FirmContactRow,
+        PatientCallStateRow,
+    )
+
+    counts = {
+        "patients": 0,
+        "cadence_entries": 0,
+        "firm_reviews": 0,
+        "firm_contacts": 0,
+        "patient_call_state": 0,
+    }
+    async with AsyncSessionLocal() as session:
+        counts["patients"] = (await session.execute(
+            sqla_delete(PatientRow).where(PatientRow.patient_id == pif_id)
+        )).rowcount or 0
+        counts["cadence_entries"] = (await session.execute(
+            sqla_delete(CadenceEntryRow).where(CadenceEntryRow.pif_id == pif_id)
+        )).rowcount or 0
+        counts["firm_reviews"] = (await session.execute(
+            sqla_delete(FirmReviewRow).where(FirmReviewRow.pif_id == pif_id)
+        )).rowcount or 0
+        counts["firm_contacts"] = (await session.execute(
+            sqla_delete(FirmContactRow).where(FirmContactRow.pif_id == pif_id)
+        )).rowcount or 0
+        counts["patient_call_state"] = (await session.execute(
+            sqla_delete(PatientCallStateRow).where(PatientCallStateRow.patient_id == pif_id)
+        )).rowcount or 0
+        await session.commit()
+    return DeleteFirmResponse(deleted=True, pif_id=pif_id, **counts)

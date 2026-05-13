@@ -1,8 +1,9 @@
 "use client";
 
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useState, useEffect, useCallback } from "react";
+import { CommsTable } from "@/components/CommsTable";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   getPifFirm,
@@ -14,7 +15,15 @@ import {
   type PifFirm,
   type PifLeader,
 } from "@/lib/pifstats";
-import { getFirmReviews, putFirmReviews, getFirmCalls } from "@/lib/api";
+import {
+  getFirmReviews,
+  putFirmReviews,
+  getFirmCalls,
+  listFirmCommunications,
+  deleteFirm,
+  type CommsItem,
+  type DeleteFirmResult,
+} from "@/lib/api";
 import { cn } from "@/lib/utils";
 import {
   ArrowLeft,
@@ -34,6 +43,7 @@ import {
   Briefcase,
   Star,
   Search,
+  Trash2,
 } from "lucide-react";
 
 function tierColor(tier: string | null) {
@@ -47,6 +57,33 @@ function painLabel(pain: string) {
   return pain
     .replace(/_/g, " ")
     .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+type ExtractedQuote = {
+  quote: string;
+  reviewer_name: string | null;
+  review_date: string | null;
+  star_rating: number | null;
+  confidence: number;
+};
+
+type ExtractedReviews = {
+  extractor_version?: string;
+  extracted_at?: string;
+  pain_points?: Record<string, ExtractedQuote[]>;
+  absent_pain_points?: Record<string, string>;
+};
+
+function parseExtractedReviews(blob: string | null | undefined): ExtractedReviews | null {
+  if (!blob) return null;
+  const m = blob.match(/<!--\s*EXTRACTED v\d+\s*([\s\S]*?)\s*-->/);
+  if (!m) return null;
+  try {
+    const parsed = JSON.parse(m[1]);
+    return parsed && typeof parsed === "object" ? (parsed as ExtractedReviews) : null;
+  } catch {
+    return null;
+  }
 }
 
 export default function FirmDetailPage() {
@@ -357,10 +394,124 @@ export default function FirmDetailPage() {
         </section>
       )}
 
+      <FirmCommunicationsPanel pifId={id} />
       <FirmCallsPanel pifId={id} />
+      <FirmDangerZone pifId={id} firmName={firm.firm_name} />
     </div>
   );
 }
+
+function FirmDangerZone({ pifId, firmName }: { pifId: string; firmName: string }) {
+  const router = useRouter();
+  const [confirming, setConfirming] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function onDelete() {
+    setSubmitting(true);
+    setError(null);
+    try {
+      const result: DeleteFirmResult = await deleteFirm(pifId);
+      const total =
+        result.patients +
+        result.cadence_entries +
+        result.firm_reviews +
+        result.firm_contacts +
+        result.patient_call_state;
+      console.log(`[delete-firm] ${pifId} removed ${total} local rows`, result);
+      router.push("/firms");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "delete failed");
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <section className="rounded-xl border border-rose-200 bg-rose-50/40 p-5">
+      <h2 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-rose-700">
+        <AlertTriangle className="h-4 w-4" />
+        Danger zone
+      </h2>
+      <p className="mt-2 text-xs text-rose-900/80">
+        Hard-deletes this firm&apos;s local autocaller data: lead row, cadence
+        entry, operator-pasted reviews, contacts (and their email sequences),
+        and call-state. Outbound call / email / SMS history is preserved.
+        The firm itself lives in PIF Stats and will remain in the firms list.
+      </p>
+      {!confirming ? (
+        <button
+          type="button"
+          onClick={() => setConfirming(true)}
+          className="mt-3 inline-flex items-center gap-2 rounded-lg border border-rose-300 bg-white px-3 py-1.5 text-xs font-medium text-rose-700 hover:bg-rose-100"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+          Delete firm
+        </button>
+      ) : (
+        <div className="mt-3 flex items-center gap-2">
+          <span className="text-xs font-medium text-rose-900">
+            Delete &ldquo;{firmName}&rdquo;?
+          </span>
+          <button
+            type="button"
+            onClick={onDelete}
+            disabled={submitting}
+            className="rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-rose-700 disabled:opacity-50"
+          >
+            {submitting ? "Deleting…" : "Yes, delete"}
+          </button>
+          <button
+            type="button"
+            onClick={() => setConfirming(false)}
+            disabled={submitting}
+            className="rounded-lg border border-neutral-300 bg-white px-3 py-1.5 text-xs font-medium text-neutral-700 hover:bg-neutral-50 disabled:opacity-50"
+          >
+            Cancel
+          </button>
+        </div>
+      )}
+      {error && (
+        <div className="mt-2 text-xs text-rose-700">Error: {error}</div>
+      )}
+    </section>
+  );
+}
+
+function FirmCommunicationsPanel({ pifId }: { pifId: string }) {
+  const comms = useQuery({
+    queryKey: ["firm-comms", pifId],
+    queryFn: () => listFirmCommunications(pifId, { limit: 100 }),
+    refetchInterval: 30_000,
+  });
+  const items = comms.data?.items ?? [];
+  return (
+    <section className="rounded-xl border border-neutral-200 bg-white p-5">
+      <div className="flex items-center justify-between">
+        <h2 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-neutral-400">
+          <PhoneCall className="h-4 w-4" />
+          Communications ({comms.data?.total ?? 0})
+        </h2>
+        <span className="text-[11px] text-neutral-400">
+          calls · voicemail · sms · email — all outbound
+        </span>
+      </div>
+      {comms.isLoading && (
+        <div className="mt-3 text-xs text-neutral-400">loading…</div>
+      )}
+      {!comms.isLoading && items.length === 0 && (
+        <div className="mt-3 text-xs text-neutral-400">
+          No outbound communications to this firm yet.
+        </div>
+      )}
+      {items.length > 0 && (
+        <div className="mt-3">
+          <CommsTable items={items} hideFirm />
+        </div>
+      )}
+    </section>
+  );
+}
+
 
 function FirmCallsPanel({ pifId }: { pifId: string }) {
   const calls = useQuery({
@@ -843,6 +994,11 @@ function FirmReviewsPanel({
         tab scoped to that source — copy the blurbs back here.
       </p>
 
+      <ExtractedQuotesSection
+        google={data?.google ?? ""}
+        yelp={data?.yelp ?? ""}
+      />
+
       <div className="mt-4 grid gap-5 lg:grid-cols-2">
         <ReviewSourcePane
           pifId={pifId}
@@ -866,6 +1022,108 @@ function FirmReviewsPanel({
         />
       </div>
     </section>
+  );
+}
+
+
+function ExtractedQuotesSection({
+  google,
+  yelp,
+}: {
+  google: string;
+  yelp: string;
+}) {
+  const sources: { key: "google" | "yelp"; label: string; data: ExtractedReviews | null }[] = [
+    { key: "google", label: "Google", data: parseExtractedReviews(google) },
+    { key: "yelp", label: "Yelp", data: parseExtractedReviews(yelp) },
+  ];
+  const anyParsed = sources.some((s) => s.data !== null);
+  if (!anyParsed) return null;
+
+  return (
+    <div className="mt-4 space-y-3">
+      {sources.map(({ key, label, data }) =>
+        data ? <ExtractedQuotesForSource key={key} label={label} data={data} /> : null,
+      )}
+    </div>
+  );
+}
+
+
+function ExtractedQuotesForSource({
+  label,
+  data,
+}: {
+  label: string;
+  data: ExtractedReviews;
+}) {
+  const present = Object.entries(data.pain_points ?? {}).filter(
+    ([, arr]) => Array.isArray(arr) && arr.length > 0,
+  );
+  const absent = Object.entries(data.absent_pain_points ?? {});
+
+  if (present.length === 0 && absent.length === 0) return null;
+
+  return (
+    <div className="rounded-lg border border-neutral-200 bg-neutral-50/60 p-3">
+      <div className="flex items-center justify-between text-[11px] uppercase tracking-wider text-neutral-500">
+        <span className="font-semibold">{label} pain-point quotes</span>
+        {data.extracted_at ? (
+          <span className="text-neutral-400">
+            {data.extractor_version ?? "extracted"} ·{" "}
+            {new Date(data.extracted_at).toLocaleString(undefined, {
+              month: "short",
+              day: "numeric",
+              hour: "numeric",
+              minute: "2-digit",
+            })}
+          </span>
+        ) : null}
+      </div>
+
+      {present.map(([key, quotes]) => (
+        <div key={key} className="mt-3">
+          <div className="text-xs font-semibold text-neutral-700">
+            {painLabel(key)}{" "}
+            <span className="font-normal text-neutral-400">
+              · {quotes.length} {quotes.length === 1 ? "quote" : "quotes"}
+            </span>
+          </div>
+          <ul className="mt-1 space-y-2">
+            {quotes.map((q, i) => (
+              <li
+                key={i}
+                className="rounded border border-neutral-200 bg-white p-2 text-[13px] text-neutral-800"
+              >
+                <p className="italic text-neutral-700">&ldquo;{q.quote}&rdquo;</p>
+                <div className="mt-1 flex flex-wrap items-center gap-x-2 text-[11px] text-neutral-500">
+                  {q.reviewer_name ? <span>{q.reviewer_name}</span> : null}
+                  {q.review_date ? <span>· {q.review_date}</span> : null}
+                  {typeof q.star_rating === "number" ? (
+                    <span>· {"★".repeat(q.star_rating)}{"☆".repeat(5 - q.star_rating)}</span>
+                  ) : null}
+                  <span className="ml-auto text-neutral-400">
+                    confidence {q.confidence.toFixed(2)}
+                  </span>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+
+      {absent.map(([key, rationale]) => (
+        <div
+          key={key}
+          className="mt-3 rounded border border-dashed border-neutral-300 bg-white p-2 text-[12px] text-neutral-500"
+        >
+          <span className="font-semibold text-neutral-600">
+            {painLabel(key)} not evident
+          </span>{" "}
+          — {rationale}
+        </div>
+      ))}
+    </div>
   );
 }
 
