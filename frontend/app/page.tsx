@@ -481,13 +481,29 @@ export default function NowPage() {
             <h2 className="text-xs font-semibold uppercase tracking-wider text-neutral-400">
               Recent calls
             </h2>
-            <Link
-              href="/calls"
-              className="flex items-center gap-0.5 text-[11px] font-medium text-neutral-500 hover:text-neutral-800 transition-colors"
-            >
-              View all
-              <ChevronRight className="h-3 w-3" />
-            </Link>
+            <div className="flex items-center gap-3">
+              <Link
+                href="/sequences"
+                className="flex items-center gap-0.5 text-[11px] font-medium text-neutral-500 hover:text-neutral-800 transition-colors"
+              >
+                Sequences
+                <ChevronRight className="h-3 w-3" />
+              </Link>
+              <Link
+                href="/comms"
+                className="flex items-center gap-0.5 text-[11px] font-medium text-neutral-500 hover:text-neutral-800 transition-colors"
+              >
+                Comms feed
+                <ChevronRight className="h-3 w-3" />
+              </Link>
+              <Link
+                href="/calls"
+                className="flex items-center gap-0.5 text-[11px] font-medium text-neutral-500 hover:text-neutral-800 transition-colors"
+              >
+                View all
+                <ChevronRight className="h-3 w-3" />
+              </Link>
+            </div>
           </div>
           <div className="divide-y divide-neutral-100">
             {recentCalls.isLoading && (

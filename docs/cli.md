@@ -128,6 +128,18 @@ Every command accepts `--help`. Exit code is `0` on success, `1` on any error
 | `env` setup for carriers | **Twilio:** `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER`, optional `TWILIO_ACCOUNT_LABEL`. **Telnyx:** `TELNYX_API_KEY` (V2 bearer), `TELNYX_FROM_NUMBER`, optional `TELNYX_ACCOUNT_SID` (defaults to `"default"`), optional `TELNYX_ACCOUNT_LABEL`. Both carriers share the `ALLOW_TWILIO_CALLS=true` safety gate. |
 | `prompts show` / `prompts list` | Display the active prompt style + version. Two parallel styles exist: `current` (rules-heavy, `v1.61`) and `minimal` (intent-first, `v2.0-minimal`). Switch by setting `PROMPT_STYLE=current\|minimal` in `.env` and restarting the backend. Default = `current`. |
 | `prompts preview [--style=current\|minimal] [--lead-name=... --firm=... --state=...]` | Render the full system prompt against a sample lead — eyeball what each style sends to the model without placing a live call. |
+| `email status` | Show email transport (Resend vs SMTP), sender address, default recipient, BCC, reply-to, and the `ALLOW_VOICEMAIL_EMAIL` gate. Sensitive values masked. |
+| `email test [--to=... --subject=... --body=...]` | Send a plain test email end-to-end. Recipient defaults to `EMAIL_NOTIFICATION_RECIPIENT`. Verifies Resend/SMTP credentials without firing a templated follow-up. |
+| `email send-onepager --to=... [--name=... --firm=... --note=... --rep-name=... --rep-company=... --rep-email=...]` | Manually fire the post-call one-pager template (same as the AI's `send_followup_email`). Rep fields default to `SALES_REP_*` env. |
+| `email send-vm-followup --to=... [--first-name=...] [--no-vm]` | Manually fire the VM / no-reach follow-up template against an arbitrary address (no `call_id` needed — useful for previewing copy). Same `ALLOW_VOICEMAIL_EMAIL` gate as the automated path. `--no-vm` switches to the "tried to reach you" subject/opener. |
+| `email send-consult --to=... --name=... --slot="Wed Apr 30 at 2:00 PM PT" [--firm=... --notes=...]` | Manually fire the consult-booking confirmation (same template Cal.com booking flow uses). Includes the Google Meet link from `CONSULT_MEET_URL`. |
+| `comms list [--firm=<pif_id> --channel=call\|voicemail\|sms\|email --since=7d --status=... --q=... --limit=N --raw]` | Cross-firm or per-firm outbound communications feed. Unions `call_logs` (channel = `call` or `voicemail` based on `voicemail_left`), `email_logs`, and `sms_logs` by timestamp. Mirrors the `/comms` UI page. `--raw` prints JSON instead of a table. |
+| `comms show <channel-prefixed-id>` | Print one communication as JSON. ID format: `call:<call_id>` (covers voicemail too), `email:<id>`, `sms:<id>`. |
+| `contacts backfill [--limit=N]` | Pull leadership rosters from PIF Stats + autocaller patient DM rows into `firm_contacts`. Idempotent. Run once before using `sequences start`. |
+| `contacts list [--firm=<pif_id>] [--limit=N]` | List firm_contacts rows. Without `--firm`, walks across firms. |
+| `sequences preview <contact_id>` | Render the four (or three, if no Yelp quote) email drafts for one contact against their actual personalization data. Read-only. |
+| `sequences start <contact_id>` | Start the 4-step sequence for one contact. Idempotent — second start returns 409 with current state. Sends gated by `ALLOW_SEQUENCE_SEND=true`. |
+| `sequences list [--status=active\|paused\|completed]` | List sequence rows + which step each is on. |
 
 ---
 
@@ -476,6 +488,33 @@ bin/autocaller calls takeover <call_id> --off   # release back to AI
 CLI alone doesn't capture your voice — the UI owns the mic. The CLI is for
 scripted mute (e.g., pause AI while an internal tool hands DTMF via Twilio REST).
 
+### Recipe: "verify email pipeline before relying on follow-ups"
+```bash
+bin/autocaller email status                            # transport + gates
+bin/autocaller email test --to you@example.com         # plain end-to-end ping
+# preview the actual templates against a real address:
+bin/autocaller email send-onepager --to you@example.com --name "Jane" --firm "Test Firm"
+bin/autocaller email send-vm-followup --to you@example.com --first-name Jane
+bin/autocaller email send-consult --to you@example.com --name "Jane Doe" \
+    --slot "Wed Apr 30 at 2:00 PM PT" --firm "Test Firm"
+```
+If `email status` shows "NOT CONFIGURED", set `RESEND_API_KEY` (preferred) or
+the `SMTP_*` block in `.env` and restart the daemon.
+
+### Recipe: "review every outbound touch with one firm"
+```bash
+bin/autocaller comms list --firm <pif_id> --since 30d --raw | jq '.items[] | {when:.occurred_at, ch:.channel, who:.contact_name, sum:.summary}'
+```
+Or open `https://<host>/firms/<pif_id>` and scroll to the **Communications** panel — same data, same shape, just rendered with channel pills + expandable rows.
+
+### Recipe: "what went out today across all firms"
+```bash
+bin/autocaller comms list --since 24h
+# narrow to one channel:
+bin/autocaller comms list --since 24h --channel email
+# or browse: open `/comms` in the UI and use the channel + range filters.
+```
+
 ### Recipe: "stop all calling now"
 ```bash
 bin/autocaller dispatcher stop       # pauses dispatching; in-flight call finishes
@@ -503,6 +542,8 @@ Relevant endpoints:
 | GET  | `/api/calls?limit=25&offset=0` | |
 | GET  | `/api/calls/{call_id}` | |
 | GET  | `/api/calls/active` | |
+| GET  | `/api/communications?channel=&since=&until=&q=&status=&limit=` | cross-firm outbound feed (calls + voicemail + sms + email) |
+| GET  | `/api/firms/{pif_id}/communications?channel=&since=&limit=` | per-firm outbound timeline |
 | POST | `/api/calls/{call_id}/takeover` | body `{"enabled": bool}` — mute AI / resume |
 | GET  | `/api/statistics/today` | |
 | POST | `/api/settings/allow-live-calls` | body `{"allowed": true}` |

@@ -9,6 +9,7 @@ from typing import Optional
 import httpx
 
 from app.models import CallLog
+from app.services.comms_log import log_email
 
 logger = logging.getLogger(__name__)
 
@@ -43,14 +44,22 @@ def send_wrong_number_email(call: CallLog) -> str:
     """Send wrong-number notification email. Returns message-id."""
     subject = _build_wrong_number_subject(call.patient_id)
     body = _format_body(call)
-    return _send_email(subject, body)
+    return _send_email(
+        subject, body,
+        message_type="wrong_number",
+        call_id=call.call_id,
+    )
 
 
 def send_disconnected_number_email(call: CallLog, status: str) -> str:
     """Send disconnected/invalid-number notification email. Returns message-id."""
     subject = _build_disconnected_subject(call.patient_id)
     body = _format_body(call, status=status)
-    return _send_email(subject, body)
+    return _send_email(
+        subject, body,
+        message_type="disconnected_number",
+        call_id=call.call_id,
+    )
 
 
 def _send_via_resend(*, subject: str, body: str, from_addr: str, to: str) -> str:
@@ -146,12 +155,26 @@ def _send_via_smtp(*, subject: str, body: str, from_addr: str, to: str) -> str:
     return msg.get("Message-ID", "")
 
 
-def _send_email(subject: str, body: str, *, to: str | None = None) -> str:
+def _send_email(
+    subject: str,
+    body: str,
+    *,
+    to: str | None = None,
+    message_type: str = "other",
+    pif_id: str | None = None,
+    call_id: str | None = None,
+    recipient_name: str | None = None,
+) -> str:
     """Send an email. Prefers Resend (HTTPS) when RESEND_API_KEY is set,
     falls back to SMTP otherwise. Raises if neither is configured.
 
     `to` defaults to EMAIL_NOTIFICATION_RECIPIENT (the operator inbox).
     Pass `to` for a specific recipient (e.g. consult booker).
+
+    Logs every attempt (success or failure) into `email_logs` for the
+    comms dashboard. The `message_type` / `pif_id` / `call_id` /
+    `recipient_name` kwargs are pure metadata — they're recorded as-is
+    and never affect send behavior.
     """
     recipient = (to or os.getenv("EMAIL_NOTIFICATION_RECIPIENT", "")).strip()
     if not recipient:
@@ -164,22 +187,54 @@ def _send_email(subject: str, body: str, *, to: str | None = None) -> str:
     if not from_addr:
         raise RuntimeError("Sender address not configured — set SMTP_FROM_EMAIL.")
 
-    if os.getenv("RESEND_API_KEY", "").strip():
-        try:
-            return _send_via_resend(
+    transport = "resend" if os.getenv("RESEND_API_KEY", "").strip() else "smtp"
+    try:
+        if transport == "resend":
+            try:
+                msg_id = _send_via_resend(
+                    subject=subject, body=body, from_addr=from_addr, to=recipient,
+                )
+            except Exception as e:
+                # Only fall back to SMTP if it's actually plausible to
+                # succeed — we know it probably won't if the host is
+                # behind a provider SMTP block. Log and re-raise.
+                logger.warning("Resend send failed: %s — attempting SMTP", e)
+                transport = "smtp"
+                msg_id = _send_via_smtp(
+                    subject=subject, body=body, from_addr=from_addr, to=recipient,
+                )
+        else:
+            msg_id = _send_via_smtp(
                 subject=subject, body=body, from_addr=from_addr, to=recipient,
             )
-        except Exception as e:
-            # Only fall back to SMTP if it's actually plausible to
-            # succeed — we know it probably won't if the host is
-            # behind a provider SMTP block. Log and re-raise.
-            logger.warning("Resend send failed: %s — attempting SMTP", e)
-            return _send_via_smtp(
-                subject=subject, body=body, from_addr=from_addr, to=recipient,
-            )
-    return _send_via_smtp(
-        subject=subject, body=body, from_addr=from_addr, to=recipient,
+    except Exception as e:
+        log_email(
+            recipient_email=recipient,
+            subject=subject,
+            body=body,
+            message_type=message_type,
+            transport=transport,
+            status="failed",
+            error=f"{type(e).__name__}: {str(e)[:300]}",
+            pif_id=pif_id,
+            call_id=call_id,
+            recipient_name=recipient_name,
+        )
+        raise
+
+    log_email(
+        recipient_email=recipient,
+        subject=subject,
+        body=body,
+        message_type=message_type,
+        transport=transport,
+        message_id=msg_id,
+        status="sent",
+        pif_id=pif_id,
+        call_id=call_id,
+        recipient_name=recipient_name,
     )
+    return msg_id
 
 
 # ---------------------------------------------------------------------------
@@ -230,7 +285,12 @@ def send_consult_confirmation(
             7,
             f'\nYou mentioned you wanted to focus on: "{notes}"\n',
         )
-    return _send_email(subject, "\n".join(body_lines), to=to_email)
+    return _send_email(
+        subject, "\n".join(body_lines),
+        to=to_email,
+        message_type="consult_confirmation",
+        recipient_name=name,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -309,7 +369,12 @@ def send_voicemail_followup_email(
     body = _VM_FOLLOWUP_BODY.format(first_name=first, opener=opener)
 
     try:
-        msg_id = _send_email(subject, body, to=email)
+        msg_id = _send_email(
+            subject, body,
+            to=email,
+            message_type="vm_followup",
+            recipient_name=first_name or None,
+        )
         return True, msg_id or "sent"
     except Exception as e:
         logger.warning("VM follow-up email failed to %s: %s", email, e)
@@ -368,6 +433,28 @@ async def send_followup_email(
         return True
 
     try:
-        return await asyncio.get_event_loop().run_in_executor(None, _send)
-    except Exception:
+        ok = await asyncio.get_event_loop().run_in_executor(None, _send)
+        await asyncio.to_thread(
+            log_email,
+            recipient_email=recipient,
+            subject=subject,
+            body=body,
+            message_type=message_type or "one_pager",
+            transport="smtp",
+            status="sent",
+            recipient_name=lead_name or None,
+        )
+        return ok
+    except Exception as e:
+        await asyncio.to_thread(
+            log_email,
+            recipient_email=recipient,
+            subject=subject,
+            body=body,
+            message_type=message_type or "one_pager",
+            transport="smtp",
+            status="failed",
+            error=f"{type(e).__name__}: {str(e)[:300]}",
+            recipient_name=lead_name or None,
+        )
         return False

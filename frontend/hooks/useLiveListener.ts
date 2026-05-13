@@ -40,13 +40,18 @@ export function useLiveListener(callId: string | null) {
   const [state, setState] = useState<State>(() => ({
     listening: false,
     connecting: false,
-    autoReconnect:
-      typeof window !== "undefined" &&
-      window.localStorage.getItem(AUTO_LS_KEY) === "true",
+    autoReconnect: false,
     takeover: false,
     takeoverPending: false,
     error: null,
   }));
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (window.localStorage.getItem(AUTO_LS_KEY) === "true") {
+      setState((s) => ({ ...s, autoReconnect: true }));
+    }
+  }, []);
 
   const socketRef = useRef<WebSocket | null>(null);
   const socketCallIdRef = useRef<string | null>(null);

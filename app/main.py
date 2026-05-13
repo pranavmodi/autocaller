@@ -10,12 +10,13 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pathlib import Path
 
-from .api import dashboard_router, websocket_router, settings_router, dispatcher_router, scenarios_router, carrier_router, cadence_router, consults_router, call_lists_router, voice_preview_router, firm_reviews_router
+from .api import dashboard_router, websocket_router, settings_router, dispatcher_router, scenarios_router, carrier_router, cadence_router, consults_router, call_lists_router, voice_preview_router, firm_reviews_router, comms_router, sequences_router
 from .api.auth import router as auth_router, SESSION_COOKIE, verify_session_token, auth_configured
 from .services.dispatcher import get_dispatcher
 from .services.daily_report_service import daily_report_loop
 from .services.judge import judge_loop
 from .services.voicemail_followup_service import voicemail_followup_loop
+from .services.sequence_scheduler import sequence_loop
 from .providers import set_queue_source, set_patient_source
 from .providers.settings_provider import get_settings_provider
 from .db import AsyncSessionLocal, async_engine
@@ -70,6 +71,9 @@ async def lifespan(app: FastAPI):
     # Start the voicemail / no-reach follow-up emailer (gated by
     # ALLOW_VOICEMAIL_EMAIL=true — loop ticks but no-ops without the flag).
     vm_followup_task = asyncio.create_task(voicemail_followup_loop(interval_seconds=120))
+    # Start the 4-step email sequence scheduler. Gated by
+    # ALLOW_SEQUENCE_SEND=true — loop ticks but no-ops without the flag.
+    sequence_task = asyncio.create_task(sequence_loop(interval_seconds=60))
     # Start the carrier-state reconciler — enforces the invariant
     # `ended_at IS NOT NULL ⟺ carrier confirmed terminal`. Sweeps
     # non-terminal call_log rows every 60s and force-hangs-up any
@@ -81,7 +85,7 @@ async def lifespan(app: FastAPI):
     # Shutdown: stop the dispatcher, cancel background tasks, dispose engine
     get_dispatcher().stop()
     for t in (daily_report_task, judge_task, cadence_task, vm_followup_task,
-              reconciler_task):
+              sequence_task, reconciler_task):
         t.cancel()
         try:
             await t
@@ -213,6 +217,8 @@ app.include_router(consults_router)
 app.include_router(call_lists_router)
 app.include_router(voice_preview_router)
 app.include_router(firm_reviews_router)
+app.include_router(comms_router)
+app.include_router(sequences_router)
 
 # Legacy static (kept for compatibility)
 STATIC_DIR = Path("static")

@@ -312,6 +312,135 @@ class FirmReviewRow(Base):
     )
 
 
+class EmailLogRow(Base):
+    """Outbound-email send log. One row per `_send_email` call that
+    reached the provider (success or failure). Calls live in
+    `call_logs`; SMS lives in `sms_logs`; the dashboard assembler
+    unions all three by `pif_id` + timestamp. Engagement events
+    (opens, clicks, replies) are out of scope for v1."""
+    __tablename__ = "email_logs"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    pif_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    call_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    recipient_email: Mapped[str] = mapped_column(String(320), nullable=False)
+    recipient_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    subject: Mapped[str] = mapped_column(Text, default="")
+    body_excerpt: Mapped[str] = mapped_column(Text, default="")
+    message_type: Mapped[str] = mapped_column(String(64), default="other")
+    transport: Mapped[str] = mapped_column(String(16), default="resend")
+    message_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    status: Mapped[str] = mapped_column(String(16), default="sent")
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    sent_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), default=_utcnow,
+    )
+
+    __table_args__ = (
+        Index("ix_email_logs_pif_id", "pif_id"),
+        Index("ix_email_logs_call_id", "call_id"),
+        Index("ix_email_logs_sent_at", "sent_at"),
+    )
+
+
+class SmsLogRow(Base):
+    """Outbound-SMS send log. Same shape philosophy as `email_logs`:
+    a row per Twilio `messages.create` attempt, with status reflecting
+    what we knew at submission time. Async delivery callbacks
+    (`delivered`/`undelivered`) are not wired in v1."""
+    __tablename__ = "sms_logs"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    pif_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    call_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    recipient_phone: Mapped[str] = mapped_column(String(32), nullable=False)
+    recipient_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    body: Mapped[str] = mapped_column(Text, default="")
+    message_sid: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    status: Mapped[str] = mapped_column(String(16), default="sent")
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    sent_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), default=_utcnow,
+    )
+
+    __table_args__ = (
+        Index("ix_sms_logs_pif_id", "pif_id"),
+        Index("ix_sms_logs_call_id", "call_id"),
+        Index("ix_sms_logs_sent_at", "sent_at"),
+    )
+
+
+class FirmContactRow(Base):
+    """One row per known person at a PI firm. Backfilled from PIF Stats
+    `leadership[]` plus the autocaller `patients` DM. `email` is the
+    natural key alongside `pif_id` — the unique constraint blocks
+    duplicate (firm, email) pairs."""
+    __tablename__ = "firm_contacts"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    pif_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    full_name: Mapped[str] = mapped_column(String(255), default="")
+    first_name: Mapped[str] = mapped_column(String(128), default="")
+    email: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    title: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    linkedin_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    source: Mapped[str] = mapped_column(String(32), default="manual")
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), default=_utcnow,
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), default=_utcnow, onupdate=_utcnow,
+    )
+
+    __table_args__ = (
+        Index("ix_firm_contacts_pif_id", "pif_id"),
+        Index("ix_firm_contacts_email", "email"),
+    )
+
+
+class EmailSequenceRow(Base):
+    """4-step email sequence state for one (contact, template_key) pair.
+    Strict v1 invariant: at most one sequence per template per contact.
+    Restarts unsupported. The personalization fields (`frozen_*`) are
+    captured at start-time so re-extracting Yelp reviews mid-sequence
+    can't change what already-sent steps quoted."""
+    __tablename__ = "email_sequences"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    contact_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("firm_contacts.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    template_key: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), default="active")
+    current_step: Mapped[int] = mapped_column(Integer, default=0)
+    steps_total: Mapped[int] = mapped_column(Integer, default=4)
+    variant: Mapped[str] = mapped_column(String(32), default="with_quote")
+    last_sent_at: Mapped[datetime | None] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=True,
+    )
+    next_step_due_at: Mapped[datetime | None] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=True,
+    )
+    paused_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    pain_point_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    frozen_pain_quote: Mapped[str | None] = mapped_column(Text, nullable=True)
+    frozen_reviewer_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    frozen_review_date: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    started_by: Mapped[str] = mapped_column(String(255), default="operator")
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), default=_utcnow,
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), default=_utcnow, onupdate=_utcnow,
+    )
+
+    __table_args__ = (
+        Index("ix_email_sequences_due", "status", "next_step_due_at"),
+    )
+
+
 class QueueStateSnapshotRow(Base):
     __tablename__ = "queue_state_snapshots"
 

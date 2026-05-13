@@ -40,6 +40,10 @@ voice_app = typer.Typer(help="Switch between realtime voice backends (openai | g
 ivr_app = typer.Typer(help="Phone-tree (IVR) navigation — press digits to reach a human", no_args_is_help=True)
 carrier_app = typer.Typer(help="Inspect the active telephony carrier account (Twilio)", no_args_is_help=True)
 prompts_app = typer.Typer(help="Prompt-style selector (current | minimal). Parallel prompt versions.", no_args_is_help=True)
+email_app = typer.Typer(help="Outbound email — config check + manual sends (test, one-pager, VM follow-up, consult).", no_args_is_help=True)
+comms_app = typer.Typer(help="Outbound communications dashboard — calls, voicemails, SMS, emails (read-only).", no_args_is_help=True)
+contacts_app = typer.Typer(help="Per-firm contact roster (backfill from PIF Stats + patients).", no_args_is_help=True)
+sequences_app = typer.Typer(help="4-step email sequence — preview + start (one contact at a time).", no_args_is_help=True)
 
 app.add_typer(leads_app, name="leads")
 app.add_typer(calls_app, name="calls")
@@ -53,6 +57,10 @@ app.add_typer(voice_app, name="voice")
 app.add_typer(ivr_app, name="ivr")
 app.add_typer(carrier_app, name="carrier")
 app.add_typer(prompts_app, name="prompts")
+app.add_typer(email_app, name="email")
+app.add_typer(comms_app, name="comms")
+app.add_typer(contacts_app, name="contacts")
+app.add_typer(sequences_app, name="sequences")
 
 console = Console()
 
@@ -2038,6 +2046,520 @@ def prompts_preview(
     console.print(f"[dim]--- {s} ({mod.PROMPT_VERSION}) · "
                   f"{len(text)} chars · {text.count(chr(10))+1} lines ---[/dim]")
     console.print(text)
+
+
+# ---------------------------------------------------------------------------
+# email — config check + manual sends
+# ---------------------------------------------------------------------------
+
+def _mask(value: str, keep: int = 4) -> str:
+    v = (value or "").strip()
+    if not v:
+        return ""
+    if len(v) <= keep:
+        return "*" * len(v)
+    return v[:keep] + "*" * (len(v) - keep)
+
+
+@email_app.command("status")
+def email_status():
+    """Show email transport config: which provider is active (Resend vs SMTP),
+    sender address, default recipient, BCC, reply-to, and the gates that
+    govern automated sends.
+    """
+    resend_key = os.getenv("RESEND_API_KEY", "").strip()
+    smtp_host = os.getenv("SMTP_HOST", "").strip()
+    smtp_user = os.getenv("SMTP_USERNAME", "").strip()
+    smtp_pass = os.getenv("SMTP_PASSWORD", "").strip()
+    smtp_from = os.getenv("SMTP_FROM_EMAIL", "").strip()
+    fallback_from = os.getenv("RESEND_FALLBACK_FROM", "").strip()
+    recipient = os.getenv("EMAIL_NOTIFICATION_RECIPIENT", "").strip()
+    reply_to = os.getenv("REPLY_TO_EMAIL", "").strip()
+    bcc = os.getenv("BCC_EMAIL", "").strip()
+    vm_gate = os.getenv("ALLOW_VOICEMAIL_EMAIL", "false").strip().lower() in {"1", "true", "yes", "on"}
+
+    if resend_key:
+        transport = "resend (HTTPS)"
+    elif smtp_host:
+        transport = f"smtp ({smtp_host}:{os.getenv('SMTP_PORT','587')})"
+    else:
+        transport = "[red]NOT CONFIGURED[/red]"
+
+    table = Table(show_header=False, box=None)
+    table.add_column("key", style="dim")
+    table.add_column("value")
+    table.add_row("transport", transport)
+    table.add_row("RESEND_API_KEY", _mask(resend_key, 6) or "—")
+    table.add_row("SMTP_HOST", smtp_host or "—")
+    table.add_row("SMTP_USERNAME", smtp_user or "—")
+    table.add_row("SMTP_PASSWORD", _mask(smtp_pass, 0) or "—")
+    table.add_row("SMTP_FROM_EMAIL", smtp_from or "—")
+    table.add_row("RESEND_FALLBACK_FROM", fallback_from or "—")
+    table.add_row("EMAIL_NOTIFICATION_RECIPIENT", recipient or "—")
+    table.add_row("REPLY_TO_EMAIL", reply_to or "—")
+    table.add_row("BCC_EMAIL", bcc or "—")
+    table.add_row("ALLOW_VOICEMAIL_EMAIL", "[green]true[/green]" if vm_gate else "[yellow]false[/yellow] (VM follow-ups blocked)")
+    console.print(table)
+
+    if not (resend_key or smtp_host):
+        console.print("[yellow]No transport configured — set RESEND_API_KEY or SMTP_HOST in .env.[/yellow]")
+    if not recipient:
+        console.print("[yellow]EMAIL_NOTIFICATION_RECIPIENT unset — `email test` needs --to or this var.[/yellow]")
+
+
+@email_app.command("test")
+def email_test(
+    to: str = typer.Option("", "--to", help="Recipient. Defaults to EMAIL_NOTIFICATION_RECIPIENT."),
+    subject: str = typer.Option("Autocaller test email", "--subject"),
+    body: str = typer.Option(
+        "If you can read this, the autocaller email pipeline works.",
+        "--body",
+    ),
+):
+    """Send a plain test email through the configured transport. Useful for
+    verifying Resend/SMTP credentials end-to-end without firing a real
+    follow-up template.
+    """
+    from app.services.email_notification_service import _send_email
+    recipient = (to or os.getenv("EMAIL_NOTIFICATION_RECIPIENT", "")).strip()
+    if not recipient:
+        console.print("[red]No recipient. Pass --to or set EMAIL_NOTIFICATION_RECIPIENT.[/red]")
+        raise typer.Exit(code=1)
+    try:
+        msg_id = _send_email(subject, body, to=recipient)
+    except Exception as e:
+        console.print(f"[red]Send failed: {e}[/red]")
+        raise typer.Exit(code=1) from e
+    console.print(f"[green]Sent[/green] to {recipient} (id={msg_id or '—'})")
+
+
+@email_app.command("send-onepager")
+def email_send_onepager(
+    to: str = typer.Option(..., "--to", help="Recipient email."),
+    name: str = typer.Option("there", "--name", help="Lead first name (used in greeting)."),
+    firm: str = typer.Option("", "--firm", help="Firm name (currently informational)."),
+    note: str = typer.Option("", "--note", help="Optional custom paragraph prepended to the body."),
+    rep_name: str = typer.Option("", "--rep-name", help="Defaults to SALES_REP_NAME."),
+    rep_company: str = typer.Option("", "--rep-company", help="Defaults to SALES_REP_COMPANY."),
+    rep_email: str = typer.Option("", "--rep-email", help="Defaults to SALES_REP_EMAIL."),
+):
+    """Send the post-call one-pager follow-up email (the same template the
+    AI fires from `send_followup_email` mid-call).
+    """
+    from app.services.email_notification_service import send_followup_email
+    rn = rep_name or os.getenv("SALES_REP_NAME", "Alex")
+    rc = rep_company or os.getenv("SALES_REP_COMPANY", "Possible Minds")
+    re_ = rep_email or os.getenv("SALES_REP_EMAIL", "")
+    ok = _run(send_followup_email(
+        to_email=to,
+        lead_name=name,
+        firm_name=firm,
+        message_type="one_pager",
+        custom_note=note,
+        rep_name=rn,
+        rep_company=rc,
+        rep_email=re_,
+    ))
+    if not ok:
+        console.print(f"[red]Send failed (likely SMTP unconfigured — check `email status`).[/red]")
+        raise typer.Exit(code=1)
+    console.print(f"[green]One-pager sent[/green] to {to} (rep={rn} <{re_}>)")
+
+
+@email_app.command("send-vm-followup")
+def email_send_vm_followup(
+    to: str = typer.Option(..., "--to", help="Recipient email."),
+    first_name: str = typer.Option("", "--first-name", help="Lead first name (used in greeting)."),
+    no_vm: bool = typer.Option(
+        False, "--no-vm",
+        help="Use the 'tried to reach you' subject/opener (no voicemail was left).",
+    ),
+):
+    """Send the VM / no-reach follow-up email (the same template
+    `followups send-voicemail` fires, but to an arbitrary address — useful
+    for previewing copy without a call_id).
+
+    Gated by ALLOW_VOICEMAIL_EMAIL=true, same as the automated path.
+    """
+    from app.services.email_notification_service import send_voicemail_followup_email
+    delivered, note = send_voicemail_followup_email(
+        to_email=to, first_name=first_name, voicemail_left=not no_vm,
+    )
+    if not delivered:
+        console.print(f"[red]Not delivered:[/red] {note}")
+        raise typer.Exit(code=1)
+    console.print(f"[green]VM follow-up sent[/green] to {to} (id={note})")
+
+
+@email_app.command("send-consult")
+def email_send_consult(
+    to: str = typer.Option(..., "--to", help="Booker's email."),
+    name: str = typer.Option(..., "--name", help="Booker's full name."),
+    firm: str = typer.Option("", "--firm", help="Firm name (optional)."),
+    slot: str = typer.Option(
+        ..., "--slot",
+        help='PT-formatted slot string, e.g. "Wed Apr 30 at 2:00 PM PT".',
+    ),
+    notes: str = typer.Option("", "--notes", help="Optional focus area the booker mentioned."),
+):
+    """Send a consult-booking confirmation email (the same one fired when a
+    Cal.com booking is created). Includes the Google Meet link from
+    CONSULT_MEET_URL.
+    """
+    from app.services.email_notification_service import send_consult_confirmation
+    try:
+        msg_id = send_consult_confirmation(
+            to_email=to, name=name, firm_name=firm or None,
+            slot_local_str=slot, notes=notes or None,
+        )
+    except Exception as e:
+        console.print(f"[red]Send failed: {e}[/red]")
+        raise typer.Exit(code=1) from e
+    console.print(f"[green]Consult confirmation sent[/green] to {to} (id={msg_id or '—'})")
+
+
+# ---------------------------------------------------------------------------
+# comms — outbound communications dashboard (read-only)
+# ---------------------------------------------------------------------------
+
+_CHANNEL_GLYPH = {
+    "call": "📞",
+    "voicemail": "📼",
+    "email": "📧",
+    "sms": "💬",
+}
+
+
+@comms_app.command("list")
+def comms_list(
+    firm: str = typer.Option("", "--firm", help="Filter to one pif_id."),
+    channel: str = typer.Option(
+        "", "--channel",
+        help="One of: call, voicemail, email, sms. Empty = all.",
+    ),
+    since: str = typer.Option(
+        "", "--since",
+        help="Lookback window: '7d' / '24h' / ISO8601. Empty = no lower bound.",
+    ),
+    status: str = typer.Option("", "--status", help="Filter by exact status string."),
+    q: str = typer.Option("", "--q", help="Free-text over recipient/contact/firm/summary."),
+    limit: int = typer.Option(50, "--limit", min=1, max=500),
+    raw: bool = typer.Option(False, "--raw/--table", help="Print JSON instead of a table."),
+):
+    """List outbound communications across all channels.
+
+    Reads from the running daemon. Mirrors the /comms UI page.
+    """
+    if firm:
+        path = f"/api/firms/{firm}/communications"
+    else:
+        path = "/api/communications"
+    params = {"limit": limit}
+    if channel:
+        params["channel"] = channel
+    if since:
+        params["since"] = since
+    if status:
+        params["status"] = status
+    if q:
+        params["q"] = q
+    data = _get(path, **params)
+
+    if raw:
+        console.print_json(data=data)
+        return
+
+    items = data.get("items", [])
+    if not items:
+        console.print("[dim]No communications match the filter.[/dim]")
+        return
+
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("when (UTC)", style="dim", no_wrap=True)
+    table.add_column("ch", no_wrap=True)
+    table.add_column("firm")
+    table.add_column("contact")
+    table.add_column("recipient")
+    table.add_column("summary", max_width=60)
+    table.add_column("status", no_wrap=True)
+    for it in items:
+        ts = (it.get("occurred_at") or "")[:19].replace("T", " ")
+        ch = it.get("channel") or "?"
+        glyph = f"{_CHANNEL_GLYPH.get(ch, '·')} {ch}"
+        table.add_row(
+            ts,
+            glyph,
+            (it.get("firm_name") or "—")[:32],
+            (it.get("contact_name") or "—")[:24],
+            (it.get("recipient") or "—")[:32],
+            (it.get("summary") or "")[:60],
+            it.get("status") or "—",
+        )
+    console.print(table)
+    console.print(f"[dim]{len(items)} item(s)[/dim]")
+
+
+@comms_app.command("show")
+def comms_show(
+    item_id: str = typer.Argument(
+        ...,
+        help='Channel-prefixed id: "call:<call_id>", "email:<id>", or "sms:<id>".',
+    ),
+):
+    """Print one communication as pretty JSON.
+
+    Looks the row up directly in the source table — call_logs for
+    "call:" / "voicemail:" prefixes, email_logs for "email:", sms_logs
+    for "sms:".
+    """
+    if ":" not in item_id:
+        console.print(
+            "[red]ID must be channel-prefixed: call:<call_id> | email:<id> | sms:<id>[/red]"
+        )
+        raise typer.Exit(code=2)
+    kind, ref = item_id.split(":", 1)
+    kind = kind.lower()
+
+    async def _fetch() -> dict:
+        from sqlalchemy import select
+        from app.db import AsyncSessionLocal
+        from app.db.models import CallLogRow, EmailLogRow, SmsLogRow
+        async with AsyncSessionLocal() as session:
+            if kind in ("call", "voicemail"):
+                row = (await session.execute(
+                    select(CallLogRow).where(CallLogRow.call_id == ref)
+                )).scalar_one_or_none()
+                if not row:
+                    return {}
+                return {
+                    "kind": "call",
+                    "call_id": row.call_id,
+                    "patient_id": row.patient_id,
+                    "patient_name": row.patient_name,
+                    "firm_name": row.firm_name,
+                    "phone": row.phone,
+                    "started_at": row.started_at.isoformat() if row.started_at else None,
+                    "ended_at": row.ended_at.isoformat() if row.ended_at else None,
+                    "duration_seconds": row.duration_seconds,
+                    "outcome": row.outcome,
+                    "voicemail_left": row.voicemail_left,
+                    "call_summary": row.call_summary,
+                    "judge_score": row.judge_score,
+                    "gtm_disposition": row.gtm_disposition,
+                    "voice_provider": row.voice_provider,
+                    "carrier": row.carrier,
+                }
+            if kind == "email":
+                row = (await session.execute(
+                    select(EmailLogRow).where(EmailLogRow.id == ref)
+                )).scalar_one_or_none()
+                if not row:
+                    return {}
+                return {
+                    "kind": "email",
+                    "id": row.id,
+                    "pif_id": row.pif_id,
+                    "call_id": row.call_id,
+                    "recipient_email": row.recipient_email,
+                    "recipient_name": row.recipient_name,
+                    "subject": row.subject,
+                    "body_excerpt": row.body_excerpt,
+                    "message_type": row.message_type,
+                    "transport": row.transport,
+                    "message_id": row.message_id,
+                    "status": row.status,
+                    "error": row.error,
+                    "sent_at": row.sent_at.isoformat() if row.sent_at else None,
+                }
+            if kind == "sms":
+                row = (await session.execute(
+                    select(SmsLogRow).where(SmsLogRow.id == ref)
+                )).scalar_one_or_none()
+                if not row:
+                    return {}
+                return {
+                    "kind": "sms",
+                    "id": row.id,
+                    "pif_id": row.pif_id,
+                    "call_id": row.call_id,
+                    "recipient_phone": row.recipient_phone,
+                    "recipient_name": row.recipient_name,
+                    "body": row.body,
+                    "message_sid": row.message_sid,
+                    "status": row.status,
+                    "error": row.error,
+                    "sent_at": row.sent_at.isoformat() if row.sent_at else None,
+                }
+            return {}
+
+    result = _run(_fetch())
+    if not result:
+        console.print(f"[red]Not found: {item_id}[/red]")
+        raise typer.Exit(code=1)
+    console.print_json(data=result)
+
+
+# ---------------------------------------------------------------------------
+# contacts — firm_contacts roster (backfill + list)
+# ---------------------------------------------------------------------------
+
+@contacts_app.command("backfill")
+def contacts_backfill(
+    limit: int = typer.Option(0, "--limit", help="Cap firms processed (0 = all)."),
+):
+    """Pull leadership rosters from PIF Stats + the autocaller DM rows
+    into `firm_contacts`. Idempotent — re-running is a near-no-op."""
+    from app.services.firm_contacts_service import backfill_all
+    res = _run(backfill_all(limit=limit or None))
+    console.print_json(data=res)
+
+
+@contacts_app.command("list")
+def contacts_list(
+    firm: str = typer.Option("", "--firm", help="Filter to one pif_id."),
+    limit: int = typer.Option(50, "--limit", min=1, max=500),
+):
+    """List firm_contacts rows."""
+    from app.services.firm_contacts_service import (
+        list_contacts_for_firm, list_firms_with_contacts,
+    )
+    if firm:
+        rows = _run(list_contacts_for_firm(firm))
+    else:
+        firms = _run(list_firms_with_contacts())
+        rows = []
+        for f in firms[:limit]:
+            for c in _run(list_contacts_for_firm(f["pif_id"])):
+                rows.append({**c, "firm_name": f["firm_name"]})
+                if len(rows) >= limit:
+                    break
+            if len(rows) >= limit:
+                break
+
+    if not rows:
+        console.print("[dim]No contacts. Run `autocaller contacts backfill` first.[/dim]")
+        return
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("contact_id", no_wrap=True)
+    table.add_column("firm" if not firm else "title")
+    table.add_column("name")
+    table.add_column("email")
+    table.add_column("phone", no_wrap=True)
+    table.add_column("source", no_wrap=True)
+    for r in rows:
+        table.add_row(
+            r["id"][:8] + "…",
+            (r.get("firm_name") if not firm else r.get("title")) or "—",
+            r["full_name"] or "—",
+            r.get("email") or "—",
+            r.get("phone") or "—",
+            r.get("source", "—"),
+        )
+    console.print(table)
+    console.print(f"[dim]{len(rows)} contact(s)[/dim]")
+
+
+# ---------------------------------------------------------------------------
+# sequences — preview + start (strict one-at-a-time)
+# ---------------------------------------------------------------------------
+
+@sequences_app.command("preview")
+def sequences_preview(
+    contact_id: str = typer.Argument(..., help="firm_contacts.id"),
+):
+    """Render every step of the sequence for one contact, against their
+    real personalization data. Read-only — no DB writes, no sends."""
+    data = _get(f"/api/contacts/{contact_id}/sequence/preview")
+    for step in data:
+        console.print(f"[bold cyan]── Step {step['step']} ──[/bold cyan]")
+        console.print(f"[dim]message_type: {step['message_type']}[/dim]")
+        console.print(f"[bold]Subject:[/bold] {step['subject']}")
+        console.print()
+        console.print(step["body"])
+        console.print()
+
+
+@sequences_app.command("start")
+def sequences_start(
+    contact_id: str = typer.Argument(..., help="firm_contacts.id"),
+):
+    """Start the 4-step sequence for one contact. Idempotent — second
+    start returns 409 with current state.
+
+    The scheduler picks step 1 up within ~60s. Sends are gated by
+    ALLOW_SEQUENCE_SEND=true; without that env var, the row sits
+    active and ticks no-op until the gate is opened."""
+    res = _post(f"/api/contacts/{contact_id}/sequence/start")
+    console.print_json(data=res)
+
+
+@sequences_app.command("pause")
+def sequences_pause(
+    contact_id: str = typer.Argument(..., help="firm_contacts.id"),
+    reason: str = typer.Option("", "--reason", "-r", help="Why you're pausing — recorded on the row."),
+):
+    """Pause an active sequence. Scheduler will skip it; no further
+    sends fire until `sequences resume`."""
+    res = _post(
+        f"/api/contacts/{contact_id}/sequence/pause",
+        json_body={"reason": reason},
+    )
+    console.print_json(data=res)
+
+
+@sequences_app.command("resume")
+def sequences_resume(
+    contact_id: str = typer.Argument(..., help="firm_contacts.id"),
+):
+    """Flip a paused sequence back to active. The next due step fires
+    on the scheduler's next tick (≤60s)."""
+    res = _post(f"/api/contacts/{contact_id}/sequence/resume")
+    console.print_json(data=res)
+
+
+@sequences_app.command("list")
+def sequences_list(
+    status: str = typer.Option("", "--status", help="active | paused | completed"),
+):
+    """List sequence rows. Reads the DB directly."""
+    async def _q():
+        from sqlalchemy import select
+        from app.db import AsyncSessionLocal
+        from app.db.models import EmailSequenceRow, FirmContactRow
+        async with AsyncSessionLocal() as session:
+            q = select(EmailSequenceRow, FirmContactRow).join(
+                FirmContactRow,
+                EmailSequenceRow.contact_id == FirmContactRow.id,
+            ).order_by(EmailSequenceRow.updated_at.desc())
+            if status:
+                q = q.where(EmailSequenceRow.status == status.strip().lower())
+            return list((await session.execute(q)).all())
+
+    rows = _run(_q())
+    if not rows:
+        console.print("[dim]No sequences match.[/dim]")
+        return
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("id", no_wrap=True)
+    table.add_column("contact")
+    table.add_column("email")
+    table.add_column("step", no_wrap=True)
+    table.add_column("variant", no_wrap=True)
+    table.add_column("status", no_wrap=True)
+    table.add_column("next due (UTC)", no_wrap=True)
+    for seq, contact in rows:
+        nd = seq.next_step_due_at
+        table.add_row(
+            seq.id[:8] + "…",
+            contact.full_name or "—",
+            contact.email or "—",
+            f"{seq.current_step}/{seq.steps_total}",
+            seq.variant,
+            seq.status,
+            (nd.isoformat()[:19] if nd else "—"),
+        )
+    console.print(table)
+    console.print(f"[dim]{len(rows)} sequence(s)[/dim]")
 
 
 if __name__ == "__main__":

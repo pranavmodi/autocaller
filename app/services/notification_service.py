@@ -15,6 +15,7 @@ from app.services.twilio_sms_service import (
     is_number_opted_out,
     is_twilio_opt_out_error,
 )
+from app.services.comms_log import log_sms
 
 logger = logging.getLogger(__name__)
 
@@ -99,11 +100,22 @@ class CallNotificationService:
 
             body = build_sms_message(message_type)
             sms_to = mock_phone if mock_mode and mock_phone else patient.phone
+            pif_id = getattr(patient, "pif_id", None)
             try:
                 sid = await asyncio.to_thread(send_sms, sms_to, body)
                 await call_log_provider.update_call(call.call_id, sms_sent=True)
                 call.sms_sent = True
                 self._sms_sent_call_ids.add(call.call_id)
+                await asyncio.to_thread(
+                    log_sms,
+                    recipient_phone=sms_to,
+                    body=body,
+                    message_sid=sid,
+                    status="sent",
+                    pif_id=pif_id,
+                    call_id=call.call_id,
+                    recipient_name=getattr(patient, "name", None),
+                )
                 mock_label = f" mock_mode=true redirect={sms_to}" if mock_mode and mock_phone else ""
                 await self._log_call_event(
                     call.call_id,
@@ -117,6 +129,16 @@ class CallNotificationService:
                 return True
             except Exception as e:
                 logger.warning("SMS send failed for call %s: %s", call.call_id, e)
+                await asyncio.to_thread(
+                    log_sms,
+                    recipient_phone=sms_to,
+                    body=body,
+                    status="failed",
+                    error=f"{type(e).__name__}: {str(e)[:300]}",
+                    pif_id=pif_id,
+                    call_id=call.call_id,
+                    recipient_name=getattr(patient, "name", None),
+                )
                 if is_twilio_opt_out_error(e):
                     await self._log_call_event(
                         call.call_id,

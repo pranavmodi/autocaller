@@ -85,6 +85,19 @@ async function put<T>(path: string, body: unknown): Promise<T> {
   return res.json();
 }
 
+async function del<T>(path: string): Promise<T> {
+  const res = await fetch(apiUrl(path), {
+    method: "DELETE",
+    credentials: "include",
+  });
+  if (res.status === 401) {
+    _handle401(path);
+    throw new Error(`DELETE ${path} 401`);
+  }
+  if (!res.ok) throw new Error(`DELETE ${path} ${res.status}`);
+  return res.json();
+}
+
 // ---- Dispatcher ----
 export const getDispatcherStatus = () =>
   get<DispatcherStatus>("/api/dispatcher/status");
@@ -316,7 +329,11 @@ export const setMockMode = (enabled: boolean, mock_phone = "") =>
 export const setVoiceProvider = (provider: "openai" | "gemini", model = "") =>
   put<Record<string, unknown>>("/api/settings/voice", { provider, model });
 
+// Voice-AI prompt style. "current" = long Sobczak-style cold-call
+// prompt; "minimal" = trimmed-down variant. DB-backed, hot-reloads
+// on the next call (no daemon restart needed).
 export type PromptStyle = "current" | "minimal";
+
 export const setPromptStyle = (style: PromptStyle) =>
   put<Record<string, unknown>>("/api/settings/prompt-style", { style });
 
@@ -454,6 +471,214 @@ export type FirmsSyncResult = {
 
 export const syncFirms = () =>
   post<FirmsSyncResult>("/api/firms/sync");
+
+
+// ---- Outbound communications dashboard ----
+export type CommsItem = {
+  id: string;
+  channel: "call" | "voicemail" | "email" | "sms";
+  occurred_at: string;
+  pif_id: string | null;
+  firm_name: string | null;
+  contact_name: string | null;
+  recipient: string | null;
+  summary: string;
+  status: string;
+  body_excerpt: string | null;
+  call_id: string | null;
+  duration_seconds: number | null;
+  message_type: string | null;
+};
+
+export type CommsResponse = {
+  items: CommsItem[];
+  total: number;
+};
+
+export type CommsListParams = {
+  channel?: "call" | "voicemail" | "email" | "sms";
+  status?: string;
+  since?: string;
+  until?: string;
+  q?: string;
+  limit?: number;
+};
+
+const _commsQuery = (params: CommsListParams) => {
+  const u = new URLSearchParams();
+  if (params.channel) u.set("channel", params.channel);
+  if (params.status) u.set("status", params.status);
+  if (params.since) u.set("since", params.since);
+  if (params.until) u.set("until", params.until);
+  if (params.q) u.set("q", params.q);
+  if (params.limit != null) u.set("limit", String(params.limit));
+  const qs = u.toString();
+  return qs ? `?${qs}` : "";
+};
+
+export const listCommunications = (params: CommsListParams = {}) =>
+  get<CommsResponse>(`/api/communications${_commsQuery(params)}`);
+
+export const listFirmCommunications = (
+  pifId: string,
+  params: Pick<CommsListParams, "channel" | "since" | "limit"> = {},
+) =>
+  get<CommsResponse>(
+    `/api/firms/${encodeURIComponent(pifId)}/communications${_commsQuery(params)}`,
+  );
+
+
+// ---- Email sequence dashboard ----
+export type FirmWithContacts = {
+  pif_id: string;
+  firm_name: string;
+  contact_count: number;
+  has_pain_quote: boolean;
+  extracted_at: string | null;
+};
+
+export type FirmContact = {
+  id: string;
+  pif_id: string;
+  full_name: string;
+  first_name: string;
+  email: string | null;
+  phone: string | null;
+  title: string | null;
+  source: string;
+};
+
+export type RenderedSequenceStep = {
+  step: number;
+  subject: string;
+  body: string;
+  message_type: string;
+};
+
+export type SequenceState = {
+  id: string;
+  contact_id: string;
+  template_key: string;
+  status: string;
+  current_step: number;
+  steps_total: number;
+  variant: string;
+  last_sent_at: string | null;
+  next_step_due_at: string | null;
+  paused_reason: string | null;
+  pain_point_key: string | null;
+  frozen_pain_quote: string | null;
+  frozen_reviewer_name: string | null;
+  frozen_review_date: string | null;
+};
+
+export type ContactDetail = {
+  contact: FirmContact;
+  pain: {
+    pain_quote: string | null;
+    reviewer_name: string | null;
+    review_date: string | null;
+    pain_point_key: string | null;
+  };
+  sequence: SequenceState | null;
+  sent_steps: Array<{
+    id: string;
+    message_type: string;
+    subject: string;
+    status: string;
+    sent_at: string | null;
+  }>;
+};
+
+export const listFirmsWithContacts = () =>
+  get<FirmWithContacts[]>("/api/firms/with-contacts");
+
+export const listContactsForFirm = (pifId: string) =>
+  get<FirmContact[]>(`/api/firms/${encodeURIComponent(pifId)}/contacts`);
+
+export const getContactDetail = (contactId: string) =>
+  get<ContactDetail>(`/api/contacts/${encodeURIComponent(contactId)}`);
+
+export const previewSequence = (contactId: string) =>
+  get<RenderedSequenceStep[]>(
+    `/api/contacts/${encodeURIComponent(contactId)}/sequence/preview`,
+  );
+
+export const startSequence = (contactId: string) =>
+  post<{
+    sequence_id: string;
+    variant: string;
+    steps_total: number;
+    next_step_due_at: string | null;
+  }>(`/api/contacts/${encodeURIComponent(contactId)}/sequence/start`);
+
+export type PauseResumeResponse = {
+  sequence_id: string;
+  status: string;
+  paused_reason: string | null;
+  next_step_due_at: string | null;
+};
+
+export const pauseSequence = (contactId: string, reason?: string) =>
+  post<PauseResumeResponse>(
+    `/api/contacts/${encodeURIComponent(contactId)}/sequence/pause`,
+    { reason: reason ?? "" },
+  );
+
+export const resumeSequence = (contactId: string) =>
+  post<PauseResumeResponse>(
+    `/api/contacts/${encodeURIComponent(contactId)}/sequence/resume`,
+  );
+
+export type DeleteContactResult = {
+  deleted: boolean;
+  contact_id: string;
+  sequences_deleted: number;
+};
+
+export const deleteContact = (contactId: string) =>
+  del<DeleteContactResult>(
+    `/api/contacts/${encodeURIComponent(contactId)}`,
+  );
+
+export type DeleteFirmResult = {
+  deleted: boolean;
+  pif_id: string;
+  patients: number;
+  cadence_entries: number;
+  firm_reviews: number;
+  firm_contacts: number;
+  patient_call_state: number;
+};
+
+export const deleteFirm = (pifId: string) =>
+  del<DeleteFirmResult>(`/api/firms/${encodeURIComponent(pifId)}`);
+
+export const backfillFirmContacts = () =>
+  post<{ firms: number; inserted: number; updated: number; skipped: number; errors: number }>(
+    "/api/firm-contacts/backfill",
+  );
+
+export type SequenceListItem = {
+  sequence_id: string;
+  contact_id: string;
+  contact_name: string;
+  contact_email: string | null;
+  pif_id: string;
+  firm_name: string | null;
+  status: string;
+  current_step: number;
+  steps_total: number;
+  variant: string;
+  last_sent_at: string | null;
+  next_step_due_at: string | null;
+  paused_reason: string | null;
+};
+
+export const listSequences = (status?: string) => {
+  const qs = status ? `?status=${encodeURIComponent(status)}` : "";
+  return get<SequenceListItem[]>(`/api/sequences${qs}`);
+};
 
 
 export const OPENAI_VOICES = [
