@@ -94,12 +94,20 @@ class TestSmsOptOutBlocking:
 class TestEmailDispatch:
     """Email dispatch for wrong_number and disconnected outcomes."""
 
+    @staticmethod
+    async def _immediate_to_thread(fn, *args, **kwargs):
+        return fn(*args, **kwargs)
+
     @pytest.mark.asyncio
     async def test_wrong_number_email(self, notification_service, call):
         with patch("app.services.notification_service.get_call_log_provider") as mock_clp:
             mock_clp.return_value = AsyncMock()
             with patch("app.services.notification_service.send_wrong_number_email", return_value="msg-1"):
-                await notification_service.maybe_send_issue_email(call, CallOutcome.WRONG_NUMBER)
+                with patch(
+                    "app.services.notification_service.asyncio.to_thread",
+                    self._immediate_to_thread,
+                ):
+                    await notification_service.maybe_send_issue_email(call, CallOutcome.WRONG_NUMBER)
         assert call.call_id in notification_service._email_sent_call_ids
 
     @pytest.mark.asyncio
@@ -110,7 +118,11 @@ class TestEmailDispatch:
         with patch("app.services.notification_service.get_call_log_provider") as mock_clp:
             mock_clp.return_value = AsyncMock()
             with patch("app.services.notification_service.send_disconnected_number_email", return_value="msg-2"):
-                await notification_service.maybe_send_issue_email(call, CallOutcome.FAILED)
+                with patch(
+                    "app.services.notification_service.asyncio.to_thread",
+                    self._immediate_to_thread,
+                ):
+                    await notification_service.maybe_send_issue_email(call, CallOutcome.FAILED)
         assert call.call_id in notification_service._email_sent_call_ids
 
     @pytest.mark.asyncio
@@ -128,19 +140,19 @@ class TestBuildSmsMessage:
     def test_appointment_reminder(self):
         from app.services.twilio_sms_service import build_sms_message
         msg = build_sms_message("appointment_reminder")
-        assert "Precise Imaging" in msg
+        assert "meeting" in msg.lower()
         assert "reminder" in msg.lower()
 
     def test_callback_info(self):
         from app.services.twilio_sms_service import build_sms_message
         msg = build_sms_message("callback_info")
-        assert "Precise Imaging" in msg
-        assert "imaging order" in msg.lower()
+        assert "personal injury firms" in msg
+        assert "Reply STOP" in msg
 
     def test_unknown_type_defaults(self):
         from app.services.twilio_sms_service import build_sms_message
         msg = build_sms_message("unknown_type")
-        assert "Precise Imaging" in msg
+        assert "personal injury firms" in msg
 
 
 class TestNoPatientPhone:

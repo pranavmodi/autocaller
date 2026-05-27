@@ -1,0 +1,23 @@
+[run]
+branch = True
+source = app
+omit =
+    app/prompts/*
+    app/ui/*
+    app/main.py
+    app/tts.py
+    app/stt.py
+    app/twilio_call.py
+    app/services/voice/openai_realtime.py
+    app/services/voice/gemini_live.py
+    app/services/twilio_voice_service.py
+    app/services/telnyx_voice_service.py
+
+[report]
+show_missing = True
+skip_covered = True
+precision = 2
+exclude_lines =
+    pragma: no cover
+    if TYPE_CHECKING:
+    if __name__ == .__main__.:
