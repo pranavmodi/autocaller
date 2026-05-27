@@ -490,6 +490,13 @@ export default function NowPage() {
                 <ChevronRight className="h-3 w-3" />
               </Link>
               <Link
+                href="/outreach"
+                className="flex items-center gap-0.5 text-[11px] font-medium text-neutral-500 hover:text-neutral-800 transition-colors"
+              >
+                Outreach
+                <ChevronRight className="h-3 w-3" />
+              </Link>
+              <Link
                 href="/comms"
                 className="flex items-center gap-0.5 text-[11px] font-medium text-neutral-500 hover:text-neutral-800 transition-colors"
               >

@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pathlib import Path
 
-from .api import dashboard_router, websocket_router, settings_router, dispatcher_router, scenarios_router, carrier_router, cadence_router, consults_router, call_lists_router, voice_preview_router, firm_reviews_router, comms_router, sequences_router
+from .api import dashboard_router, websocket_router, settings_router, dispatcher_router, scenarios_router, carrier_router, cadence_router, consults_router, call_lists_router, voice_preview_router, firm_reviews_router, comms_router, sequences_router, outreach_router, lead_gen_router, resend_webhooks_router
 from .api.auth import router as auth_router, SESSION_COOKIE, verify_session_token, auth_configured
 from .services.dispatcher import get_dispatcher
 from .services.daily_report_service import daily_report_loop
@@ -128,6 +128,7 @@ _AUTH_EXEMPT_PREFIXES = (
     "/api/auth/",
     "/api/twilio/",   # inbound Twilio webhooks
     "/api/telnyx/",   # inbound Telnyx webhooks (TeXML callbacks)
+    "/api/resend/webhook",  # inbound Resend delivery/engagement webhooks
     "/ws/twilio",     # Twilio media-stream websocket (/ws/twilio-media/...)
     "/ws/telnyx",     # Telnyx media-stream websocket (/ws/telnyx-media/...)
     "/health",
@@ -137,6 +138,10 @@ _AUTH_EXEMPT_PREFIXES = (
     # Only the book/slots paths are exempt; list/admin is still gated.
     "/api/consults/slots",
     "/api/consults/book",
+    # Outreach open-pixel + click-redirect — fetched by recipients' email
+    # clients, no session cookie possible.
+    "/t/o/",
+    "/t/c/",
 )
 
 class _AuthMiddleware:
@@ -219,6 +224,9 @@ app.include_router(voice_preview_router)
 app.include_router(firm_reviews_router)
 app.include_router(comms_router)
 app.include_router(sequences_router)
+app.include_router(outreach_router)
+app.include_router(lead_gen_router)
+app.include_router(resend_webhooks_router)
 
 # Legacy static (kept for compatibility)
 STATIC_DIR = Path("static")
@@ -233,4 +241,3 @@ app.mount("/audio", StaticFiles(directory=str(AUDIO_DIR)), name="audio")
 @app.get("/health", response_class=PlainTextResponse)
 def health() -> str:
     return "ok"
-

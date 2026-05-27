@@ -29,12 +29,14 @@ from app.db.models import (
     EmailSequenceRow, FirmContactRow, PatientRow,
 )
 from app.services.email_notification_service import _send_email
-from app.services.sequences.precise_pain_4step import (
-    TEMPLATE_KEY,
-    Ctx,
+from app.services.sequences.common import Ctx
+from app.services.sequences.registry import (
+    DEFAULT_TEMPLATE_KEY,
     cadence_for,
+    normalize_template_key,
     render_step,
     steps_total,
+    variant_for,
 )
 
 logger = logging.getLogger(__name__)
@@ -59,28 +61,30 @@ def _utcnow() -> datetime:
 async def start_sequence(
     *,
     contact_id: str,
+    template_key: str = DEFAULT_TEMPLATE_KEY,
     pain_quote: Optional[str],
     reviewer_name: Optional[str],
     review_date: Optional[str],
     pain_point_key: Optional[str],
     started_by: str = "operator",
+    first_step_due_at: Optional[datetime] = None,
 ) -> EmailSequenceRow:
-    """Create and persist a new sequence row. Variant is decided here:
-    `with_quote` if a non-empty pain_quote was passed, else
-    `without_quote`. Step 1 is queued for immediate dispatch by the
-    next scheduler tick (`next_step_due_at = now()`).
+    """Create and persist a new sequence row. Variant is decided by the
+    selected template. Step 1 is queued for immediate dispatch by the next
+    scheduler tick (`next_step_due_at = now()`).
 
     Raises ValueError if a sequence already exists for this
     (contact, template) — restarts are not supported in v1.
     """
-    variant = "with_quote" if (pain_quote or "").strip() else "without_quote"
+    template_key = normalize_template_key(template_key)
+    variant = variant_for(template_key, pain_quote=pain_quote)
     async with AsyncSessionLocal() as session:
         # Reject duplicates explicitly (the unique constraint would too,
         # but a clear message helps).
         existing = (await session.execute(
             select(EmailSequenceRow).where(
                 EmailSequenceRow.contact_id == contact_id,
-                EmailSequenceRow.template_key == TEMPLATE_KEY,
+                EmailSequenceRow.template_key == template_key,
             )
         )).scalar_one_or_none()
         if existing:
@@ -93,13 +97,13 @@ async def start_sequence(
         row = EmailSequenceRow(
             id=uuid.uuid4().hex,
             contact_id=contact_id,
-            template_key=TEMPLATE_KEY,
+            template_key=template_key,
             status="active",
             current_step=0,
-            steps_total=steps_total(variant),
+            steps_total=steps_total(template_key, variant),
             variant=variant,
             last_sent_at=None,
-            next_step_due_at=_utcnow(),       # fire step 1 next tick
+            next_step_due_at=first_step_due_at or _utcnow(),
             paused_reason=None,
             pain_point_key=pain_point_key if variant == "with_quote" else None,
             frozen_pain_quote=pain_quote if variant == "with_quote" else None,
@@ -118,7 +122,21 @@ async def get_active_sequence(contact_id: str) -> Optional[EmailSequenceRow]:
         return (await session.execute(
             select(EmailSequenceRow).where(
                 EmailSequenceRow.contact_id == contact_id,
-                EmailSequenceRow.template_key == TEMPLATE_KEY,
+                EmailSequenceRow.template_key == DEFAULT_TEMPLATE_KEY,
+            )
+        )).scalar_one_or_none()
+
+
+async def get_sequence(
+    contact_id: str,
+    template_key: str = DEFAULT_TEMPLATE_KEY,
+) -> Optional[EmailSequenceRow]:
+    template_key = normalize_template_key(template_key)
+    async with AsyncSessionLocal() as session:
+        return (await session.execute(
+            select(EmailSequenceRow).where(
+                EmailSequenceRow.contact_id == contact_id,
+                EmailSequenceRow.template_key == template_key,
             )
         )).scalar_one_or_none()
 
@@ -176,7 +194,7 @@ async def _process_one(seq_id: str, dry_run: bool = False) -> dict:
 
         try:
             ctx = _build_ctx(contact, firm_name, seq)
-            rendered = render_step(next_step, seq.variant, ctx)
+            rendered = render_step(seq.template_key, next_step, seq.variant, ctx)
         except Exception as e:
             seq.status = "paused"
             seq.paused_reason = f"render_failed: {type(e).__name__}: {e}"
@@ -216,7 +234,7 @@ async def _process_one(seq_id: str, dry_run: bool = False) -> dict:
             seq.status = "completed"
             seq.next_step_due_at = None
         else:
-            cadence = cadence_for(seq.variant)
+            cadence = cadence_for(seq.template_key, seq.variant)
             # cadence[i] = days from sequence start to send step (i+1).
             # next due = cadence[next_step] - cadence[next_step - 1] days from now.
             gap_days = cadence[next_step] - cadence[next_step - 1]
@@ -245,7 +263,7 @@ async def tick(limit: int = 25, dry_run: bool = False) -> list[dict]:
                 EmailSequenceRow.status == "active",
                 EmailSequenceRow.next_step_due_at != None,  # noqa: E711
                 EmailSequenceRow.next_step_due_at <= _utcnow(),
-            ).limit(limit)
+            ).order_by(EmailSequenceRow.next_step_due_at.asc()).limit(limit)
         )).scalars().all()
 
     results = []

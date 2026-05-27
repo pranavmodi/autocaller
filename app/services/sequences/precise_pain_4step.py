@@ -13,11 +13,17 @@ unit-testable.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Optional
+
+from app.services.sequences.common import Ctx, RenderedStep
 
 
 TEMPLATE_KEY = "precise_pain_4step"
+LABEL = "Precise pain 4-step"
+DESCRIPTION = (
+    "Original Precise-context sequence: opener, optional Yelp pain quote, "
+    "100-hour Precise proof point, and breakup."
+)
 
 CADENCE_DAYS_WITH_QUOTE = [0, 4, 10, 17]      # 4 sends
 CADENCE_DAYS_WITHOUT_QUOTE = [0, 7, 14]       # 3 sends, step 2 dropped
@@ -45,26 +51,6 @@ def _signature(rep_name: str) -> str:
     )
 
 
-@dataclass
-class Ctx:
-    """All the personalization a template ever sees. Fields that the
-    renderer treats as optional (reviewer_name, review_date) can be
-    None — the renderer adapts copy."""
-    first_name: str
-    firm_name: str
-    rep_name: str
-    pain_quote: Optional[str] = None
-    reviewer_name: Optional[str] = None
-    review_date: Optional[str] = None       # YYYY-MM-DD or human-readable, opaque to us
-
-
-@dataclass
-class RenderedStep:
-    subject: str
-    body: str
-    message_type: str        # 'sequence_step_1' .. 'sequence_step_4'
-
-
 # ---------------------------------------------------------------------------
 # step renderers
 # ---------------------------------------------------------------------------
@@ -77,8 +63,8 @@ def _step_1(ctx: Ctx) -> RenderedStep:
         f"Imaging — the status updates on imaging requests come from a "
         f"system we built for them.\n\n"
         f"I've been talking to PI firms that work with Precise, mostly to "
-        f"learn what eats the most staff time on the intake and records "
-        f"side.\n\n"
+        f"learn where new-client sign-ups and case velocity are getting "
+        f"stuck on the intake and records side.\n\n"
         f"Mind if I ask a few questions about how that runs at "
         f"{ctx.firm_name}? Genuinely just listening — not a pitch.\n\n"
         + _signature(ctx.rep_name)
@@ -114,14 +100,17 @@ def _step_2_with_quote(ctx: Ctx) -> RenderedStep:
         f"I went through {ctx.firm_name}'s Yelp recently. {attribution}\n\n"
         f"> \"{ctx.pain_quote}\"\n\n"
         f"The \"client called multiple times, never got an update\" pattern "
-        f"is one of the most common things we hear from PI firms. It's also "
-        f"one of the most fixable — it usually traces back to a case-manager "
-        f"queue that no one's quite owning, not anyone being lazy.\n\n"
+        f"is one of the most common things we hear from PI firms — usually "
+        f"a case-manager queue that no one's quite owning, not anyone being "
+        f"lazy. It's also the pattern with the most downstream cost: clients "
+        f"who feel current refer the next case, clients who don't shop their "
+        f"file mid-treatment, and a review like this cools the next lead who "
+        f"Googles the firm before calling back.\n\n"
         f"The system we built for Precise reads each attorney-office email, "
         f"pulls the answer from their case management software, and replies "
-        f"the same day. The PI-side equivalent — keeping clients informed "
-        f"without your team spending the time — is the same shape of "
-        f"problem.\n\n"
+        f"the same day. The PI-side equivalent moves the same numbers — "
+        f"referrals, retention, and lead-to-signed-client conversion on "
+        f"inbound calls.\n\n"
         f"If it's worth a 20-minute conversation, here's the link: "
         f"{CONSULT_LINK}. No pitch, just a real look at whether there's "
         f"something here.\n\n"
@@ -143,16 +132,20 @@ def _step_3(ctx: Ctx) -> RenderedStep:
         f"results. We built a system that reads each email, pulls the "
         f"answer from their case management system, and replies. They "
         f"reviewed every reply for two weeks, then handed it the keys.\n\n"
-        f"100 hours back. Same response quality. No headcount change.\n\n"
+        f"Same response quality, no headcount change — and the freed "
+        f"capacity went into work that actually moved their numbers.\n\n"
         f"The PI-side analog is \"client called for an update — here's the "
-        f"status, sent.\" Same shape, different system, our team builds it "
-        f"bespoke for each firm.\n\n"
+        f"status, sent.\" Same shape of system, built bespoke for each firm. "
+        f"On the PI side that capacity tends to show up as faster sign-ups "
+        f"on inbound leads, case managers carrying more open files without "
+        f"dropping balls, and demand packages going out sooner — not as a "
+        f"line item on payroll.\n\n"
         f"Two weeks of build, a 30-minute scoping call to see if it fits: "
         f"{CONSULT_LINK}.\n\n"
         + _signature(ctx.rep_name)
     )
     return RenderedStep(
-        subject="100 hours a week — what it actually looks like",
+        subject="What 100 staff-hours moved at Precise",
         body=body,
         message_type="sequence_step_3",
     )
@@ -163,9 +156,10 @@ def _step_4(ctx: Ctx) -> RenderedStep:
         f"{ctx.first_name},\n\n"
         f"Last note from me — I don't want to keep landing in your inbox "
         f"uninvited.\n\n"
-        f"If client communication or the records side is on your radar to "
-        f"fix this year, the link's still there: {CONSULT_LINK}. If it's "
-        f"not, no worries — I'll close the file and stop emailing.\n\n"
+        f"If sign-up rate, case velocity, or client retention is something "
+        f"you're trying to move this year, the link's still there: "
+        f"{CONSULT_LINK}. If it's not, no worries — I'll close the file "
+        f"and stop emailing.\n\n"
         f"Thanks for the time spent reading any of these.\n\n"
         + _signature(ctx.rep_name)
     )
@@ -221,3 +215,7 @@ def cadence_for(variant: str) -> list[int]:
 
 def steps_total(variant: str) -> int:
     return len(cadence_for(variant))
+
+
+def variant_for(*, pain_quote: Optional[str] = None) -> str:
+    return "with_quote" if (pain_quote or "").strip() else "without_quote"

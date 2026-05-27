@@ -21,6 +21,7 @@ import {
   backfillFirmContacts,
   deleteContact,
   getContactDetail,
+  listSequenceTemplates,
   listContactsForFirm,
   listFirmsWithContacts,
   listSequences,
@@ -31,6 +32,7 @@ import {
   type FirmContact,
   type FirmWithContacts,
   type SequenceListItem,
+  type SequenceTemplate,
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -44,6 +46,12 @@ export default function SequencesPage() {
 
   const [pifId, setPifId] = useState<string>("");
   const [contactId, setContactId] = useState<string>("");
+  const [templateKey, setTemplateKey] = useState<string>("precise_records_audit");
+
+  const templates = useQuery({
+    queryKey: ["sequence-templates"],
+    queryFn: listSequenceTemplates,
+  });
 
   const contacts = useQuery({
     queryKey: ["contacts-for-firm", pifId],
@@ -57,14 +65,14 @@ export default function SequencesPage() {
   }, [pifId]);
 
   const detail = useQuery({
-    queryKey: ["contact-detail", contactId],
-    queryFn: () => getContactDetail(contactId),
+    queryKey: ["contact-detail", contactId, templateKey],
+    queryFn: () => getContactDetail(contactId, templateKey),
     enabled: !!contactId,
   });
 
   const preview = useQuery({
-    queryKey: ["sequence-preview", contactId],
-    queryFn: () => previewSequence(contactId),
+    queryKey: ["sequence-preview", contactId, templateKey],
+    queryFn: () => previewSequence(contactId, templateKey),
     enabled: !!contactId,
   });
 
@@ -88,7 +96,7 @@ export default function SequencesPage() {
           Email Sequences
         </h1>
         <span className="text-xs text-neutral-400">
-          4-step Precise/pain/100hrs/breakup — one contact at a time
+          selectable templates — one contact at a time
         </span>
         <button
           onClick={() => backfill.mutate()}
@@ -108,6 +116,7 @@ export default function SequencesPage() {
 
       <ActiveSequencesPanel
         onJump={(s) => {
+          setTemplateKey(s.template_key);
           setPifId(s.pif_id);
           // Set contactId after pifId so the contact list has loaded.
           setTimeout(() => setContactId(s.contact_id), 0);
@@ -130,6 +139,12 @@ export default function SequencesPage() {
             value={contactId}
             onChange={setContactId}
           />
+          <TemplateDropdown
+            templates={templates.data ?? []}
+            isLoading={templates.isLoading}
+            value={templateKey}
+            onChange={setTemplateKey}
+          />
         </aside>
 
         {/* Right pane — contact + preview + start */}
@@ -145,8 +160,9 @@ export default function SequencesPage() {
             <ContactPanel
               detail={detail.data}
               steps={preview.data}
+              templateKey={templateKey}
               onStarted={() => {
-                qc.invalidateQueries({ queryKey: ["contact-detail", contactId] });
+                qc.invalidateQueries({ queryKey: ["contact-detail", contactId, templateKey] });
               }}
               onDeleted={() => {
                 qc.invalidateQueries({ queryKey: ["contacts-for-firm", pifId] });
@@ -183,15 +199,15 @@ function ActiveSequencesPanel({
   });
 
   const pause = useMutation({
-    mutationFn: (vars: { contactId: string; reason: string }) =>
-      pauseSequence(vars.contactId, vars.reason),
+    mutationFn: (vars: { contactId: string; reason: string; templateKey: string }) =>
+      pauseSequence(vars.contactId, vars.reason, vars.templateKey),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["all-sequences"] });
       qc.invalidateQueries({ queryKey: ["contact-detail"] });
     },
   });
   const resume = useMutation({
-    mutationFn: (contactId: string) => resumeSequence(contactId),
+    mutationFn: (s: SequenceListItem) => resumeSequence(s.contact_id, s.template_key),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["all-sequences"] });
       qc.invalidateQueries({ queryKey: ["contact-detail"] });
@@ -267,9 +283,10 @@ function ActiveSequencesPanel({
                   <td className="px-2 py-2 font-mono text-xs text-neutral-700">
                     {s.current_step}/{s.steps_total}
                   </td>
-                  <td className="px-2 py-2 text-xs text-neutral-600">
-                    {s.variant}
-                  </td>
+	                  <td className="px-2 py-2 text-xs text-neutral-600">
+	                    <div>{s.template_key}</div>
+	                    <div className="text-[10px] text-neutral-400">{s.variant}</div>
+	                  </td>
                   <td className="px-2 py-2 font-mono text-[11px] text-neutral-500">
                     {s.next_step_due_at
                       ? new Date(s.next_step_due_at).toLocaleString(undefined, {
@@ -312,7 +329,11 @@ function ActiveSequencesPanel({
                             "replied",
                           );
                           if (reason !== null) {
-                            pause.mutate({ contactId: s.contact_id, reason });
+	                            pause.mutate({
+	                              contactId: s.contact_id,
+	                              reason,
+	                              templateKey: s.template_key,
+	                            });
                           }
                         }}
                         disabled={pause.isPending}
@@ -323,7 +344,7 @@ function ActiveSequencesPanel({
                     )}
                     {s.status === "paused" && (
                       <button
-                        onClick={() => resume.mutate(s.contact_id)}
+	                        onClick={() => resume.mutate(s)}
                         disabled={resume.isPending}
                         className="rounded border border-emerald-300 bg-white px-2 py-0.5 text-[11px] font-medium text-emerald-800 hover:bg-emerald-50 disabled:opacity-60"
                       >
@@ -610,6 +631,49 @@ function ContactDropdown({
 }
 
 
+function TemplateDropdown({
+  templates,
+  isLoading,
+  value,
+  onChange,
+}: {
+  templates: SequenceTemplate[];
+  isLoading: boolean;
+  value: string;
+  onChange: (key: string) => void;
+}) {
+  return (
+    <div className="overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-sm">
+      <header className="flex items-center gap-2 border-b border-neutral-100 px-4 py-2.5">
+        <Mail className="h-3.5 w-3.5 text-neutral-400" />
+        <h2 className="text-[11px] font-semibold uppercase tracking-wider text-neutral-500">
+          Sequence template
+        </h2>
+      </header>
+      <div className="p-3">
+        <select
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          disabled={isLoading}
+          className="w-full rounded-md border border-neutral-200 bg-white px-2 py-2 text-xs text-neutral-800"
+        >
+          {templates.map((t) => (
+            <option key={t.template_key} value={t.template_key}>
+              {t.label} ({t.steps_total} steps)
+            </option>
+          ))}
+        </select>
+        {templates.find((t) => t.template_key === value)?.description && (
+          <p className="mt-2 text-[11px] leading-relaxed text-neutral-500">
+            {templates.find((t) => t.template_key === value)?.description}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+
 function humanAgo(iso: string | null | undefined): string {
   if (!iso) return "";
   const d = new Date(iso);
@@ -626,11 +690,13 @@ function humanAgo(iso: string | null | undefined): string {
 function ContactPanel({
   detail,
   steps,
+  templateKey,
   onStarted,
   onDeleted,
 }: {
   detail: import("@/lib/api").ContactDetail;
   steps: import("@/lib/api").RenderedSequenceStep[];
+  templateKey: string;
   onStarted: () => void;
   onDeleted: () => void;
 }) {
@@ -641,7 +707,7 @@ function ContactPanel({
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   const start = useMutation({
-    mutationFn: () => startSequence(contact.id),
+    mutationFn: () => startSequence(contact.id, templateKey),
     onSuccess: () => {
       setConfirming(false);
       onStarted();
@@ -692,10 +758,10 @@ function ContactPanel({
 
           <div className="text-right">
             <div className="text-[11px] uppercase tracking-wider text-neutral-400">
-              Sequence variant
+              Sequence
             </div>
             <div className="text-sm font-medium text-neutral-700">
-              {pain.pain_quote ? "with_quote (4 steps)" : "without_quote (3 steps)"}
+              {templateKey} · {sequence?.variant ?? steps.length + " steps"}
             </div>
           </div>
         </div>
@@ -797,7 +863,7 @@ function ContactPanel({
                   : "cursor-not-allowed bg-neutral-100 text-neutral-400",
               )}
             >
-              Start 4-step sequence
+              Start {steps.length}-step sequence
             </button>
             {noEmail && (
               <span className="flex items-center gap-1 text-xs text-red-600">
@@ -858,7 +924,12 @@ function ContactPanel({
         <ConfirmModal
           contact={contact}
           stepCount={steps.length}
-          variant={pain.pain_quote ? "with_quote" : "without_quote"}
+          templateKey={templateKey}
+          variant={
+            templateKey === "precise_records_audit"
+              ? "records_only"
+              : pain.pain_quote ? "with_quote" : "without_quote"
+          }
           onCancel={() => setConfirming(false)}
           onConfirm={() => start.mutate()}
           isPending={start.isPending}
@@ -886,14 +957,14 @@ function SequenceStatePanel({
   const isCompleted = sequence.status === "completed";
 
   const pause = useMutation({
-    mutationFn: (reason: string) => pauseSequence(contactId, reason),
+    mutationFn: (reason: string) => pauseSequence(contactId, reason, sequence.template_key),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["all-sequences"] });
       onMutated();
     },
   });
   const resume = useMutation({
-    mutationFn: () => resumeSequence(contactId),
+    mutationFn: () => resumeSequence(contactId, sequence.template_key),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["all-sequences"] });
       onMutated();
@@ -916,7 +987,7 @@ function SequenceStatePanel({
         </h3>
         <span className={cn("text-[11px]", tone.fg)}>
           {sequence.status} · step {sequence.current_step}/{sequence.steps_total} · variant:{" "}
-          {sequence.variant}
+          {sequence.variant} · {sequence.template_key}
         </span>
         <div className="ml-auto flex gap-2">
           {!isCompleted && !isPaused && (
@@ -985,6 +1056,7 @@ function SequenceStatePanel({
 function ConfirmModal({
   contact,
   stepCount,
+  templateKey,
   variant,
   onCancel,
   onConfirm,
@@ -993,6 +1065,7 @@ function ConfirmModal({
 }: {
   contact: FirmContact;
   stepCount: number;
+  templateKey: string;
   variant: string;
   onCancel: () => void;
   onConfirm: () => void;
@@ -1000,7 +1073,9 @@ function ConfirmModal({
   error: string | null;
 }) {
   const cadenceDescription =
-    variant === "with_quote"
+    templateKey === "precise_records_audit"
+      ? "Step 1 fires within ~1 minute. Steps 2 and 3 schedule for days 5 and 12."
+      : variant === "with_quote"
       ? "Step 1 fires within ~1 minute. Steps 2, 3, 4 schedule for days 4, 10, 17."
       : "Step 1 fires within ~1 minute. Steps 2, 3 schedule for days 7 and 14.";
   return (

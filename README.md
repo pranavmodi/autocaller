@@ -8,6 +8,14 @@ demand-letter generation, etc.), and books a demo via Cal.com.
 Built by adapting a FastAPI + Twilio + OpenAI-Realtime outbound-call engine
 originally designed for a medical-imaging scheduler.
 
+The Precise Imaging lead-generation workflow is now being implemented as a
+cybernetic function: the system recommends a bounded batch, executes approved
+email sequences, observes replies/delivery feedback/bookings, writes those
+observations back to durable state, and proposes policy/copy changes against
+the target metric of booked qualified conversations. See
+`docs/CYBERNETIC_LEAD_GEN_CONCEPT.md` for the current loop and ideal-state
+design.
+
 ## Quick start
 
 ```bash
@@ -26,6 +34,8 @@ bin/autocaller calls list               # review what happened
 
 - **[docs/cli.md](docs/cli.md)** — full CLI reference + AI-agent operator's guide.
   Command schemas, failure modes, recipes, REST API, DB schema.
+- **[docs/CYBERNETIC_LEAD_GEN_CONCEPT.md](docs/CYBERNETIC_LEAD_GEN_CONCEPT.md)** —
+  conceptual map of the lead-generation cybernetic function.
 - Legacy docs under `docs/` (`system-overview.md`, `requirements.md`, etc.)
   describe the original medical-imaging build and are partly superseded; read
   them for architectural context only.

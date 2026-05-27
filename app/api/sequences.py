@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Body, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import select
 
@@ -28,11 +28,18 @@ from app.services.firm_contacts_service import (
     list_contacts_for_firm,
     list_firms_with_contacts,
 )
-from app.services.sequences.precise_pain_4step import (
-    Ctx, TEMPLATE_KEY, render_step, steps_total, cadence_for,
+from app.services.sequences.common import Ctx
+from app.services.sequences.registry import (
+    DEFAULT_TEMPLATE_KEY,
+    list_templates,
+    normalize_template_key,
+    render_step,
+    steps_total,
+    variant_for,
 )
+from app.services.sequence_recommendations import recommend_sequence_contacts
 from app.services.sequence_scheduler import (
-    get_active_sequence,
+    get_sequence,
     start_sequence,
 )
 
@@ -66,6 +73,14 @@ class RenderedStepDTO(BaseModel):
     message_type: str
 
 
+class SequenceTemplateDTO(BaseModel):
+    template_key: str
+    label: str
+    description: str
+    steps_total: int
+    default_variant: str
+
+
 class SequenceStateDTO(BaseModel):
     id: str
     contact_id: str
@@ -90,7 +105,49 @@ class ContactDetailDTO(BaseModel):
     sent_steps: list[dict]
 
 
+class SequenceRecommendationDTO(BaseModel):
+    contact_id: str
+    pif_id: str
+    firm_name: str
+    contact_name: str
+    contact_email: str
+    contact_title: str
+    contact_source: str
+    persona: str
+    score: int
+    reason: str
+
+
+class SequenceRecommendationResponse(BaseModel):
+    template_key: str
+    limit: int
+    recommended: list[SequenceRecommendationDTO]
+    counts: dict
+
+
 # ---------------------------------------------------------------------------
+
+@router.get("/api/sequences/templates", response_model=list[SequenceTemplateDTO])
+async def get_sequence_templates():
+    return [SequenceTemplateDTO(**t.__dict__) for t in list_templates()]
+
+
+@router.get(
+    "/api/sequences/recommendations",
+    response_model=SequenceRecommendationResponse,
+)
+async def get_sequence_recommendations(
+    template_key: str = Query(DEFAULT_TEMPLATE_KEY),
+    limit: int = Query(50, ge=1, le=200),
+):
+    try:
+        data = await recommend_sequence_contacts(
+            template_key=template_key,
+            limit=limit,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return SequenceRecommendationResponse(**data)
 
 @router.get("/api/firms/with-contacts", response_model=list[FirmListItem])
 async def get_firms_with_contacts():
@@ -106,13 +163,20 @@ async def get_contacts_for_firm(pif_id: str):
 
 
 @router.get("/api/contacts/{contact_id}", response_model=ContactDetailDTO)
-async def get_contact_detail(contact_id: str):
+async def get_contact_detail(
+    contact_id: str,
+    template_key: str = Query(DEFAULT_TEMPLATE_KEY),
+):
+    try:
+        template_key = normalize_template_key(template_key)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     contact = await get_contact(contact_id)
     if not contact:
         raise HTTPException(status_code=404, detail="contact_not_found")
 
     pain = await fetch_pain_quote_for_firm(contact["pif_id"])
-    seq = await get_active_sequence(contact_id)
+    seq = await get_sequence(contact_id, template_key)
     sequence_dto = None
     sent_steps: list[dict] = []
     if seq:
@@ -139,10 +203,15 @@ async def get_contact_detail(contact_id: str):
         # filter is enough to recover the history.
         if contact.get("email"):
             async with AsyncSessionLocal() as session:
+                pattern = (
+                    "records_audit_step_%"
+                    if template_key == "precise_records_audit"
+                    else "sequence_step_%"
+                )
                 rows = (await session.execute(
                     select(EmailLogRow).where(
                         EmailLogRow.recipient_email == contact["email"].lower(),
-                        EmailLogRow.message_type.like("sequence_step_%"),
+                        EmailLogRow.message_type.like(pattern),
                     ).order_by(EmailLogRow.sent_at.asc())
                 )).scalars().all()
             for r in rows:
@@ -166,16 +235,23 @@ async def get_contact_detail(contact_id: str):
     "/api/contacts/{contact_id}/sequence/preview",
     response_model=list[RenderedStepDTO],
 )
-async def preview_sequence(contact_id: str):
+async def preview_sequence(
+    contact_id: str,
+    template_key: str = Query(DEFAULT_TEMPLATE_KEY),
+):
     """Render every step of the sequence as it would land for this
     contact's data. No DB write, no send."""
+    try:
+        template_key = normalize_template_key(template_key)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     contact = await get_contact(contact_id)
     if not contact:
         raise HTTPException(status_code=404, detail="contact_not_found")
 
     pain = await fetch_pain_quote_for_firm(contact["pif_id"])
-    variant = "with_quote" if pain.get("pain_quote") else "without_quote"
-    n = steps_total(variant)
+    variant = variant_for(template_key, pain_quote=pain.get("pain_quote"))
+    n = steps_total(template_key, variant)
 
     # Firm name lookup — resolves across pif-/mc- keying.
     from app.services.firm_contacts_service import resolve_firm_name
@@ -195,7 +271,7 @@ async def preview_sequence(contact_id: str):
 
     out = []
     for i in range(1, n + 1):
-        rendered = render_step(i, variant, ctx)
+        rendered = render_step(template_key, i, variant, ctx)
         out.append(RenderedStepDTO(
             step=i,
             subject=rendered.subject,
@@ -207,16 +283,30 @@ async def preview_sequence(contact_id: str):
 
 class StartSequenceResponse(BaseModel):
     sequence_id: str
+    template_key: str
     variant: str
     steps_total: int
     next_step_due_at: Optional[str]
+
+
+class StartSequenceRequest(BaseModel):
+    template_key: str = DEFAULT_TEMPLATE_KEY
 
 
 @router.post(
     "/api/contacts/{contact_id}/sequence/start",
     response_model=StartSequenceResponse,
 )
-async def start_sequence_endpoint(contact_id: str):
+async def start_sequence_endpoint(
+    contact_id: str,
+    body: Optional[StartSequenceRequest] = Body(default=None),
+):
+    try:
+        template_key = normalize_template_key(
+            body.template_key if body else DEFAULT_TEMPLATE_KEY
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     contact = await get_contact(contact_id)
     if not contact:
         raise HTTPException(status_code=404, detail="contact_not_found")
@@ -230,6 +320,7 @@ async def start_sequence_endpoint(contact_id: str):
     try:
         seq = await start_sequence(
             contact_id=contact_id,
+            template_key=template_key,
             pain_quote=pain.get("pain_quote"),
             reviewer_name=pain.get("reviewer_name"),
             review_date=pain.get("review_date"),
@@ -241,6 +332,7 @@ async def start_sequence_endpoint(contact_id: str):
         raise HTTPException(status_code=409, detail=str(e))
     return StartSequenceResponse(
         sequence_id=seq.id,
+        template_key=seq.template_key,
         variant=seq.variant,
         steps_total=seq.steps_total,
         next_step_due_at=seq.next_step_due_at.isoformat() if seq.next_step_due_at else None,
@@ -254,6 +346,7 @@ class SequenceListItem(BaseModel):
     contact_email: Optional[str]
     pif_id: str
     firm_name: Optional[str]
+    template_key: str
     status: str
     current_step: int
     steps_total: int
@@ -315,6 +408,7 @@ async def list_sequences(
             contact_email=c.email,
             pif_id=c.pif_id,
             firm_name=firm_map.get(c.pif_id),
+            template_key=seq.template_key,
             status=seq.status,
             current_step=seq.current_step,
             steps_total=seq.steps_total,
@@ -343,16 +437,24 @@ class PauseResumeResponse(BaseModel):
     "/api/contacts/{contact_id}/sequence/pause",
     response_model=PauseResumeResponse,
 )
-async def pause_sequence(contact_id: str, body: PauseRequest):
+async def pause_sequence(
+    contact_id: str,
+    body: PauseRequest,
+    template_key: str = Query(DEFAULT_TEMPLATE_KEY),
+):
     """Mark a sequence paused. Scheduler skips paused rows; no further
     sends fire. Idempotent — pausing an already-paused row updates
     paused_reason."""
+    try:
+        template_key = normalize_template_key(template_key)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     from datetime import datetime, timezone
     async with AsyncSessionLocal() as session:
         seq = (await session.execute(
             select(EmailSequenceRow).where(
                 EmailSequenceRow.contact_id == contact_id,
-                EmailSequenceRow.template_key == "precise_pain_4step",
+                EmailSequenceRow.template_key == template_key,
             )
         )).scalar_one_or_none()
         if not seq:
@@ -379,16 +481,23 @@ async def pause_sequence(contact_id: str, body: PauseRequest):
     "/api/contacts/{contact_id}/sequence/resume",
     response_model=PauseResumeResponse,
 )
-async def resume_sequence(contact_id: str):
+async def resume_sequence(
+    contact_id: str,
+    template_key: str = Query(DEFAULT_TEMPLATE_KEY),
+):
     """Flip a paused sequence back to active. The next due send fires
     on the scheduler's next tick (≤60s). If `next_step_due_at` was in
     the past while paused, step N goes out immediately."""
+    try:
+        template_key = normalize_template_key(template_key)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     from datetime import datetime, timezone
     async with AsyncSessionLocal() as session:
         seq = (await session.execute(
             select(EmailSequenceRow).where(
                 EmailSequenceRow.contact_id == contact_id,
-                EmailSequenceRow.template_key == "precise_pain_4step",
+                EmailSequenceRow.template_key == template_key,
             )
         )).scalar_one_or_none()
         if not seq:

@@ -1,8 +1,8 @@
 """SQLAlchemy ORM table models."""
 from datetime import datetime, timezone
 from sqlalchemy import (
-    String, Integer, Boolean, Text, Index, CheckConstraint,
-    ForeignKey,
+    String, Integer, BigInteger, Boolean, Text, Index, CheckConstraint,
+    ForeignKey, UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import JSONB, TIMESTAMP
 from sqlalchemy.orm import Mapped, mapped_column
@@ -518,4 +518,289 @@ class CadenceEntryRow(Base):
         Index("ix_cadence_stage", "cadence_stage"),
         Index("ix_cadence_outcome", "outcome"),
         Index("ix_cadence_next_due", "next_action_due"),
+    )
+
+
+class OutreachCampaignRow(Base):
+    """One blog-post blast. Holds the post snapshot + sender + composer
+    settings. Recipients live in OutreachSendRow joined by campaign_id."""
+    __tablename__ = "outreach_campaigns"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    post_slug: Mapped[str] = mapped_column(String(255), nullable=False)
+    post_url: Mapped[str] = mapped_column(String(1024), nullable=False)
+    post_title: Mapped[str] = mapped_column(String(512), nullable=False)
+    post_description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    post_category: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    post_tags: Mapped[list] = mapped_column(JSONB, default=list)
+    post_excerpts: Mapped[list] = mapped_column(JSONB, default=list)
+    intent: Mapped[str] = mapped_column(String(32), nullable=False, default="share")
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="draft")
+    sender_name: Mapped[str] = mapped_column(String(128), nullable=False)
+    sender_email: Mapped[str] = mapped_column(String(320), nullable=False)
+    sender_title: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    bcc_email: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    composer_model: Mapped[str] = mapped_column(String(64), nullable=False, default="openclaw")
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_by: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), default=_utcnow, onupdate=_utcnow,
+    )
+
+    __table_args__ = (
+        Index("ix_outreach_campaigns_status", "status"),
+        Index("ix_outreach_campaigns_post_slug", "post_slug"),
+        Index("ix_outreach_campaigns_created_at", "created_at"),
+    )
+
+
+class OutreachSendRow(Base):
+    """One row per (campaign, contact). Caches the LLM-composed email so
+    preview + send always see the same content; the operator can also
+    hand-edit (edited_* fields override composed_* at send time)."""
+    __tablename__ = "outreach_sends"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    campaign_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("outreach_campaigns.id", ondelete="CASCADE"), nullable=False,
+    )
+    contact_id: Mapped[str | None] = mapped_column(
+        String(64), ForeignKey("firm_contacts.id", ondelete="SET NULL"), nullable=True,
+    )
+    pif_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    recipient_email: Mapped[str] = mapped_column(String(320), nullable=False)
+    recipient_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    recipient_first_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    recipient_title: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    firm_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    token: Mapped[str] = mapped_column(String(64), nullable=False)
+
+    composed_subject: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    composed_preheader: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    composed_body_html: Mapped[str | None] = mapped_column(Text, nullable=True)
+    composed_plaintext: Mapped[str | None] = mapped_column(Text, nullable=True)
+    composed_reasoning: Mapped[str | None] = mapped_column(Text, nullable=True)
+    composed_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    composer_model: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+    edited_subject: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    edited_body_html: Mapped[str | None] = mapped_column(Text, nullable=True)
+    edited_plaintext: Mapped[str | None] = mapped_column(Text, nullable=True)
+    edited_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    edited_by: Mapped[str | None] = mapped_column(String(128), nullable=True)
+
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")
+    skip_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    failure_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    send_attempted_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    sent_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    message_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    transport: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("campaign_id", "contact_id", name="uq_outreach_sends_campaign_contact"),
+        UniqueConstraint("token", name="uq_outreach_sends_token"),
+        Index("ix_outreach_sends_campaign_id", "campaign_id"),
+        Index("ix_outreach_sends_status", "status"),
+        Index("ix_outreach_sends_recipient_email", "recipient_email"),
+        Index("ix_outreach_sends_sent_at", "sent_at"),
+    )
+
+
+class LinkEventRow(Base):
+    """Append-only event log for email opens (pixel fetches) and clicks
+    (link redirects). Joined to outreach_sends by send_id. Opens are
+    soft signals (Apple Mail Privacy Protection pre-fetches); clicks
+    are trustworthy."""
+    __tablename__ = "link_events"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    send_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("outreach_sends.id", ondelete="CASCADE"), nullable=False,
+    )
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
+    ip: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    user_agent: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    referer: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    ts: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow)
+
+    __table_args__ = (
+        CheckConstraint("kind IN ('open', 'click')", name="ck_link_events_kind"),
+        Index("ix_link_events_send_id", "send_id"),
+        Index("ix_link_events_kind_ts", "kind", "ts"),
+    )
+
+
+class LeadGenPolicyVersionRow(Base):
+    """Versioned, auditable scoring policy for cybernetic lead generation.
+
+    LLMs can propose changes, but the active policy is always explicit JSON
+    read by deterministic recommendation code.
+    """
+    __tablename__ = "lead_gen_policy_versions"
+
+    version: Mapped[str] = mapped_column(String(64), primary_key=True)
+    label: Mapped[str] = mapped_column(String(255), nullable=False)
+    target_metric: Mapped[str] = mapped_column(
+        String(64), nullable=False, default="booked_qualified_conversations",
+    )
+    weights_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    suppressions_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    created_by: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow)
+
+    __table_args__ = (
+        Index("ix_lead_gen_policy_versions_active", "active"),
+        Index("ix_lead_gen_policy_versions_created_at", "created_at"),
+    )
+
+
+class LeadGenBatchRow(Base):
+    """One recommendation/execution batch for the lead-generation loop."""
+    __tablename__ = "lead_gen_batches"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    target_metric: Mapped[str] = mapped_column(
+        String(64), nullable=False, default="booked_qualified_conversations",
+    )
+    template_key: Mapped[str] = mapped_column(String(64), nullable=False)
+    policy_version: Mapped[str] = mapped_column(
+        String(64), ForeignKey("lead_gen_policy_versions.version", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="recommended")
+    counts_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    created_by: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    approved_by: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    approved_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    started_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), default=_utcnow, onupdate=_utcnow,
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('recommended', 'approved', 'sequencing', 'observing', 'completed', 'archived')",
+            name="ck_lead_gen_batches_status",
+        ),
+        Index("ix_lead_gen_batches_status", "status"),
+        Index("ix_lead_gen_batches_template", "template_key"),
+        Index("ix_lead_gen_batches_created_at", "created_at"),
+    )
+
+
+class LeadGenBatchItemRow(Base):
+    """One recommended contact in a lead-generation batch."""
+    __tablename__ = "lead_gen_batch_items"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    batch_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("lead_gen_batches.id", ondelete="CASCADE"), nullable=False,
+    )
+    contact_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("firm_contacts.id", ondelete="CASCADE"), nullable=False,
+    )
+    pif_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    firm_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    contact_name: Mapped[str] = mapped_column(String(255), nullable=False, default="")
+    contact_email: Mapped[str] = mapped_column(String(320), nullable=False)
+    contact_title: Mapped[str] = mapped_column(String(255), nullable=False, default="")
+    persona: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    template_key: Mapped[str] = mapped_column(String(64), nullable=False)
+    score: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    reason_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    approval_status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")
+    sequence_id: Mapped[str | None] = mapped_column(
+        String(64), ForeignKey("email_sequences.id", ondelete="SET NULL"), nullable=True,
+    )
+    outcome: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    outcome_confidence: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), default=_utcnow, onupdate=_utcnow,
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "approval_status IN ('pending', 'approved', 'rejected', 'started', 'skipped')",
+            name="ck_lead_gen_batch_items_approval_status",
+        ),
+        UniqueConstraint("batch_id", "contact_id", name="uq_lead_gen_batch_items_batch_contact"),
+        Index("ix_lead_gen_batch_items_batch_id", "batch_id"),
+        Index("ix_lead_gen_batch_items_contact_id", "contact_id"),
+        Index("ix_lead_gen_batch_items_pif_id", "pif_id"),
+        Index("ix_lead_gen_batch_items_outcome", "outcome"),
+    )
+
+
+class LeadGenObservationRow(Base):
+    """Append-only observation log for feedback entering the loop."""
+    __tablename__ = "lead_gen_observations"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    batch_id: Mapped[str | None] = mapped_column(
+        String(64), ForeignKey("lead_gen_batches.id", ondelete="SET NULL"), nullable=True,
+    )
+    batch_item_id: Mapped[str | None] = mapped_column(
+        String(64), ForeignKey("lead_gen_batch_items.id", ondelete="SET NULL"), nullable=True,
+    )
+    contact_id: Mapped[str | None] = mapped_column(
+        String(64), ForeignKey("firm_contacts.id", ondelete="SET NULL"), nullable=True,
+    )
+    pif_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    event_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    raw_event_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    classified_outcome: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    confidence: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    next_action: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    llm_reasoning: Mapped[str | None] = mapped_column(Text, nullable=True)
+    llm_model: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    llm_raw_response: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow)
+
+    __table_args__ = (
+        Index("ix_lead_gen_observations_batch_id", "batch_id"),
+        Index("ix_lead_gen_observations_contact_id", "contact_id"),
+        Index("ix_lead_gen_observations_event_type", "event_type"),
+        Index("ix_lead_gen_observations_outcome", "classified_outcome"),
+        Index("ix_lead_gen_observations_created_at", "created_at"),
+    )
+
+
+class LeadGenPolicyProposalRow(Base):
+    """Human-reviewed policy/copy/scoring change proposal."""
+    __tablename__ = "lead_gen_policy_proposals"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    source_batch_id: Mapped[str | None] = mapped_column(
+        String(64), ForeignKey("lead_gen_batches.id", ondelete="SET NULL"), nullable=True,
+    )
+    proposal_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    proposed_change_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    evidence_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")
+    llm_model: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    created_by: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    reviewed_by: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    reviewed_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    applied_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow)
+
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('pending', 'approved', 'rejected', 'applied')",
+            name="ck_lead_gen_policy_proposals_status",
+        ),
+        Index("ix_lead_gen_policy_proposals_status", "status"),
+        Index("ix_lead_gen_policy_proposals_source_batch", "source_batch_id"),
+        Index("ix_lead_gen_policy_proposals_created_at", "created_at"),
     )

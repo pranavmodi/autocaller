@@ -12,6 +12,14 @@ Whenever you add a feature:
 4. **Update the skill** at `.claude/skills/autocaller/SKILL.md` **and** sync to `/root/.openclaw/workspace/skills/autocaller/SKILL.md` (or `cp` between them). The skill is what other AI agents load to know the system. If you added a command the skill doesn't mention, the next agent won't find it.
 5. **Update the vision / feature docs** in `docs/` where the change is material — `VISION.md`, `SELF_IMPROVEMENT.md`, `DISPOSITIONS.md`, `FRONTEND.md`, `SIMULATED_RECEIVER.md`, `VOICE_PROVIDERS.md`.
 
+Lead-generation changes have one additional documentation rule:
+update `docs/CYBERNETIC_LEAD_GEN_CONCEPT.md` whenever you add, remove, or
+materially change a lead-gen feedback source, learning step, policy lever,
+sequence behavior, suppression rule, routing action, or implemented capability.
+That document is the living model-facing map of the cybernetic function; keep
+its `What Exists Today`, feedback sources, degrees of freedom, and open gaps
+accurate.
+
 Concrete examples of features that **must** have CLI commands, not just REST:
 - Global on/off switches (`system on/off`, `mock on/off`)
 - Safety rails (`allowlist add/remove/list/clear`)

@@ -26,9 +26,17 @@ export function apiUrl(path: string): string {
 
 export function wsUrl(path: string): string {
   if (typeof window === "undefined") return "";
+  const configuredBase = process.env.NEXT_PUBLIC_API_URL;
+  const isLocalDevHost =
+    (window.location.hostname === "127.0.0.1" ||
+      window.location.hostname === "localhost") &&
+    window.location.port &&
+    window.location.port !== "8099";
   const base =
-    process.env.NEXT_PUBLIC_API_URL ||
-    `${window.location.protocol}//${window.location.host}`;
+    configuredBase ||
+    (isLocalDevHost
+      ? `${window.location.protocol}//${window.location.hostname}:8099`
+      : `${window.location.protocol}//${window.location.host}`);
   return base.replace(/^http/, "ws").replace(/\/$/, "") + path;
 }
 
@@ -82,6 +90,24 @@ async function put<T>(path: string, body: unknown): Promise<T> {
     throw new Error(`PUT ${path} 401`);
   }
   if (!res.ok) throw new Error(`PUT ${path} ${res.status}`);
+  return res.json();
+}
+
+async function patch<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(apiUrl(path), {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+    credentials: "include",
+  });
+  if (res.status === 401) {
+    _handle401(path);
+    throw new Error(`PATCH ${path} 401`);
+  }
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new Error(`PATCH ${path} ${res.status}${detail ? ` — ${detail}` : ""}`);
+  }
   return res.json();
 }
 
@@ -555,6 +581,14 @@ export type RenderedSequenceStep = {
   message_type: string;
 };
 
+export type SequenceTemplate = {
+  template_key: string;
+  label: string;
+  description: string;
+  steps_total: number;
+  default_variant: string;
+};
+
 export type SequenceState = {
   id: string;
   contact_id: string;
@@ -590,27 +624,64 @@ export type ContactDetail = {
   }>;
 };
 
+export type SequenceRecommendation = {
+  contact_id: string;
+  pif_id: string;
+  firm_name: string;
+  contact_name: string;
+  contact_email: string;
+  contact_title: string;
+  contact_source: string;
+  persona: string;
+  score: number;
+  reason: string;
+};
+
+export type SequenceRecommendationResponse = {
+  template_key: string;
+  limit: number;
+  recommended: SequenceRecommendation[];
+  counts: Record<string, number>;
+};
+
+export const listSequenceTemplates = () =>
+  get<SequenceTemplate[]>("/api/sequences/templates");
+
+export const recommendSequenceContacts = (templateKey: string, limit = 50) =>
+  get<SequenceRecommendationResponse>(
+    `/api/sequences/recommendations?template_key=${encodeURIComponent(templateKey)}&limit=${limit}`,
+  );
+
 export const listFirmsWithContacts = () =>
   get<FirmWithContacts[]>("/api/firms/with-contacts");
 
 export const listContactsForFirm = (pifId: string) =>
   get<FirmContact[]>(`/api/firms/${encodeURIComponent(pifId)}/contacts`);
 
-export const getContactDetail = (contactId: string) =>
-  get<ContactDetail>(`/api/contacts/${encodeURIComponent(contactId)}`);
+export const getContactDetail = (contactId: string, templateKey?: string) => {
+  const qs = templateKey ? `?template_key=${encodeURIComponent(templateKey)}` : "";
+  return get<ContactDetail>(`/api/contacts/${encodeURIComponent(contactId)}${qs}`);
+};
 
-export const previewSequence = (contactId: string) =>
+export const previewSequence = (contactId: string, templateKey?: string) => {
+  const qs = templateKey ? `?template_key=${encodeURIComponent(templateKey)}` : "";
+  return (
   get<RenderedSequenceStep[]>(
-    `/api/contacts/${encodeURIComponent(contactId)}/sequence/preview`,
-  );
+    `/api/contacts/${encodeURIComponent(contactId)}/sequence/preview${qs}`,
+  ));
+};
 
-export const startSequence = (contactId: string) =>
+export const startSequence = (contactId: string, templateKey?: string) =>
   post<{
     sequence_id: string;
+    template_key: string;
     variant: string;
     steps_total: number;
     next_step_due_at: string | null;
-  }>(`/api/contacts/${encodeURIComponent(contactId)}/sequence/start`);
+  }>(
+    `/api/contacts/${encodeURIComponent(contactId)}/sequence/start`,
+    { template_key: templateKey ?? "precise_pain_4step" },
+  );
 
 export type PauseResumeResponse = {
   sequence_id: string;
@@ -619,16 +690,22 @@ export type PauseResumeResponse = {
   next_step_due_at: string | null;
 };
 
-export const pauseSequence = (contactId: string, reason?: string) =>
+export const pauseSequence = (contactId: string, reason?: string, templateKey?: string) => {
+  const qs = templateKey ? `?template_key=${encodeURIComponent(templateKey)}` : "";
+  return (
   post<PauseResumeResponse>(
-    `/api/contacts/${encodeURIComponent(contactId)}/sequence/pause`,
+    `/api/contacts/${encodeURIComponent(contactId)}/sequence/pause${qs}`,
     { reason: reason ?? "" },
-  );
+  ));
+};
 
-export const resumeSequence = (contactId: string) =>
+export const resumeSequence = (contactId: string, templateKey?: string) => {
+  const qs = templateKey ? `?template_key=${encodeURIComponent(templateKey)}` : "";
+  return (
   post<PauseResumeResponse>(
-    `/api/contacts/${encodeURIComponent(contactId)}/sequence/resume`,
-  );
+    `/api/contacts/${encodeURIComponent(contactId)}/sequence/resume${qs}`,
+  ));
+};
 
 export type DeleteContactResult = {
   deleted: boolean;
@@ -666,6 +743,7 @@ export type SequenceListItem = {
   contact_email: string | null;
   pif_id: string;
   firm_name: string | null;
+  template_key: string;
   status: string;
   current_step: number;
   steps_total: number;
@@ -679,6 +757,146 @@ export const listSequences = (status?: string) => {
   const qs = status ? `?status=${encodeURIComponent(status)}` : "";
   return get<SequenceListItem[]>(`/api/sequences${qs}`);
 };
+
+// ---- Cybernetic lead generation loop ----
+export type LeadGenPolicy = {
+  version: string;
+  label: string;
+  target_metric: string;
+  weights: Record<string, unknown>;
+  suppressions: Record<string, unknown>;
+  active: boolean;
+  created_at: string | null;
+};
+
+export type LeadGenBatch = {
+  id: string;
+  name: string;
+  target_metric: string;
+  template_key: string;
+  policy_version: string;
+  status: string;
+  counts: Record<string, number>;
+  created_by: string | null;
+  approved_by: string | null;
+  approved_at: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+export type LeadGenBatchItem = {
+  id: string;
+  batch_id: string;
+  contact_id: string;
+  pif_id: string;
+  firm_name: string;
+  contact_name: string;
+  contact_email: string;
+  contact_title: string;
+  persona: string;
+  template_key: string;
+  score: number;
+  reason: Record<string, unknown>;
+  approval_status: string;
+  sequence_id: string | null;
+  outcome: string | null;
+  outcome_confidence: number | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+export type LeadGenObservation = {
+  id: string;
+  batch_id: string | null;
+  batch_item_id: string | null;
+  contact_id: string | null;
+  pif_id: string | null;
+  event_type: string;
+  raw_event: Record<string, unknown>;
+  classified_outcome: string | null;
+  confidence: number | null;
+  next_action: string | null;
+  llm_reasoning: string | null;
+  llm_model: string | null;
+  created_at: string | null;
+};
+
+export type LeadGenBatchDetail = {
+  batch: LeadGenBatch;
+  items: LeadGenBatchItem[];
+  observations: LeadGenObservation[];
+};
+
+export type LeadGenProposal = {
+  id: string;
+  source_batch_id: string | null;
+  proposal_type: string;
+  proposed_change: Record<string, unknown>;
+  evidence: Record<string, unknown>;
+  status: string;
+  created_at: string | null;
+};
+
+export const getLeadGenPolicy = () =>
+  get<LeadGenPolicy>("/api/lead-gen/policy/current");
+
+export const createLeadGenBatch = (args: {
+  name?: string;
+  template_key: string;
+  limit: number;
+  created_by?: string;
+}) => post<LeadGenBatchDetail>("/api/lead-gen/batches", args);
+
+export const listLeadGenBatches = (args: { status?: string; limit?: number } = {}) => {
+  const params = new URLSearchParams();
+  if (args.status && args.status !== "all") params.set("status", args.status);
+  if (args.limit) params.set("limit", String(args.limit));
+  const qs = params.toString();
+  return get<{ batches: LeadGenBatch[] }>(`/api/lead-gen/batches${qs ? `?${qs}` : ""}`);
+};
+
+export const getLeadGenBatch = (batchId: string, includeObservations = true) =>
+  get<LeadGenBatchDetail>(
+    `/api/lead-gen/batches/${encodeURIComponent(batchId)}?include_observations=${includeObservations ? "true" : "false"}`,
+  );
+
+export const approveLeadGenBatch = (
+  batchId: string,
+  args: {
+    approved_by?: string;
+    start_sequences?: boolean;
+    stagger_minutes?: number;
+    scheduled_start_at?: string;
+    scheduled_timezone?: string;
+  },
+) =>
+  post<LeadGenBatchDetail>(
+    `/api/lead-gen/batches/${encodeURIComponent(batchId)}/approve`,
+    {
+      approved_by: args.approved_by ?? "operator",
+      start_sequences: args.start_sequences ?? false,
+      stagger_minutes: args.stagger_minutes ?? 60,
+      scheduled_start_at: args.scheduled_start_at,
+      scheduled_timezone: args.scheduled_timezone ?? "America/Los_Angeles",
+    },
+  );
+
+export const classifyLeadGenObservation = (args: {
+  event_type: string;
+  raw_event: Record<string, unknown>;
+  batch_id?: string;
+  contact_id?: string;
+  batch_item_id?: string;
+  model?: string;
+}) => post<LeadGenObservation>("/api/lead-gen/observations/classify", args);
+
+export const createLeadGenProposal = (batchId: string, createdBy = "operator") =>
+  post<LeadGenProposal>(
+    `/api/lead-gen/batches/${encodeURIComponent(batchId)}/proposal`,
+    { created_by: createdBy },
+  );
 
 
 export const OPENAI_VOICES = [
@@ -776,3 +994,191 @@ export const getCarrier = () => get<CarrierStatus>("/api/carrier");
 
 export const setDefaultCarrier = (carrier: "twilio" | "telnyx") =>
   put<{ default_carrier: string }>("/api/carrier", { carrier });
+
+// ---- Outreach (blog-post campaigns, LLM-composed) -------------------------
+
+export interface OutreachCampaign {
+  id: number;
+  name: string;
+  post_slug: string;
+  post_title: string;
+  status: string;
+  intent: string;
+  sender_name: string;
+  sender_email: string;
+  bcc_email?: string | null;
+  created_at: string;
+}
+
+export interface OutreachStats {
+  campaign_id: number;
+  total: number;
+  pending: number;
+  composed: number;
+  sent: number;
+  skipped: number;
+  failed: number;
+  opens: number;
+  unique_opens: number;
+  clicks: number;
+  unique_clicks: number;
+}
+
+export interface OutreachCampaignDetail extends OutreachCampaign {
+  post_url: string;
+  post_description: string;
+  post_category: string | null;
+  post_tags: string[];
+  post_excerpts: string[];
+  sender_title: string | null;
+  composer_model: string;
+  notes: string | null;
+  updated_at: string;
+  stats: OutreachStats;
+}
+
+export interface OutreachSend {
+  id: number;
+  campaign_id: number;
+  contact_id: string | null;
+  pif_id: string | null;
+  recipient_email: string;
+  recipient_name: string | null;
+  recipient_first_name: string | null;
+  recipient_title: string | null;
+  firm_name: string | null;
+  token: string;
+  status: string;
+  composed_subject: string | null;
+  composed_preheader: string | null;
+  composed_body_html: string | null;
+  composed_plaintext: string | null;
+  composed_reasoning: string | null;
+  composed_at: string | null;
+  composer_model: string | null;
+  edited_subject: string | null;
+  edited_body_html: string | null;
+  edited_plaintext: string | null;
+  edited_by: string | null;
+  edited_at: string | null;
+  skip_reason: string | null;
+  failure_reason: string | null;
+  send_attempted_at: string | null;
+  sent_at: string | null;
+  message_id: string | null;
+  transport: string | null;
+  opens?: number;
+  clicks?: number;
+  last_event_at?: string | null;
+}
+
+export interface OutreachLinkEvent {
+  id: number;
+  send_id: number;
+  recipient_email: string;
+  kind: "open" | "click";
+  url: string | null;
+  ip: string | null;
+  user_agent: string | null;
+  ts: string;
+}
+
+export interface OutreachPreview {
+  send_id: number;
+  subject: string;
+  full_html: string;
+  full_plaintext: string;
+  from_header: string;
+  to: string;
+  tracked_click_url: string;
+  open_pixel_url: string;
+}
+
+export interface OutreachAudienceResult {
+  added: number;
+  skipped_no_email: number;
+  skipped_duplicate: number;
+  skipped_recent_outreach: number;
+}
+
+export const listOutreachCampaigns = (status?: string) => {
+  const q = status ? `?status=${encodeURIComponent(status)}` : "";
+  return get<OutreachCampaign[]>(`/api/outreach/campaigns${q}`);
+};
+
+export const getOutreachCampaign = (id: number) =>
+  get<OutreachCampaignDetail>(`/api/outreach/campaigns/${id}`);
+
+export const createOutreachCampaign = (body: {
+  post_slug: string;
+  name?: string;
+  sender_email?: string;
+  sender_name?: string;
+  sender_title?: string;
+  bcc_email?: string;
+  intent?: string;
+  notes?: string;
+  with_excerpts?: boolean;
+}) => post<OutreachCampaign>("/api/outreach/campaigns", body);
+
+export const listOutreachBlogPosts = () =>
+  get<{ slug: string }[]>("/api/outreach/blog-posts");
+
+export const updateOutreachCampaignBcc = (
+  campaignId: number,
+  bcc_email: string | null,
+) =>
+  patch<OutreachCampaign>(`/api/outreach/campaigns/${campaignId}/bcc`, {
+    bcc_email,
+  });
+
+export const addOutreachAudience = (
+  campaignId: number,
+  body: { contact_ids?: string[]; pif_ids?: string[]; exclude_recent_days?: number },
+) =>
+  post<OutreachAudienceResult>(
+    `/api/outreach/campaigns/${campaignId}/audience`,
+    body,
+  );
+
+export const listOutreachSends = (campaignId: number, status?: string) => {
+  const q = status ? `?status=${encodeURIComponent(status)}` : "";
+  return get<OutreachSend[]>(`/api/outreach/campaigns/${campaignId}/sends${q}`);
+};
+
+export const getNextOutreachSend = (campaignId: number) =>
+  get<OutreachSend | null>(`/api/outreach/campaigns/${campaignId}/next`);
+
+export const listOutreachEvents = (
+  campaignId: number,
+  opts?: { kind?: "open" | "click"; limit?: number },
+) => {
+  const params = new URLSearchParams();
+  if (opts?.kind) params.set("kind", opts.kind);
+  if (opts?.limit) params.set("limit", String(opts.limit));
+  const q = params.toString();
+  return get<OutreachLinkEvent[]>(
+    `/api/outreach/campaigns/${campaignId}/events${q ? `?${q}` : ""}`,
+  );
+};
+
+export const composeOutreachSend = (sendId: number, regenerate = false) =>
+  post<OutreachSend>(`/api/outreach/sends/${sendId}/compose`, {
+    regenerate,
+  });
+
+export const previewOutreachSend = (sendId: number) =>
+  get<OutreachPreview>(`/api/outreach/sends/${sendId}/preview`);
+
+export const sendOutreachSend = (sendId: number) =>
+  post<{ send_id: number; message_id: string; transport: string }>(
+    `/api/outreach/sends/${sendId}/send`,
+  );
+
+export const skipOutreachSend = (sendId: number, reason: string) =>
+  post<OutreachSend>(`/api/outreach/sends/${sendId}/skip`, { reason });
+
+export const editOutreachSend = (
+  sendId: number,
+  body: { subject?: string; body_html?: string; plaintext?: string; by?: string },
+) => post<OutreachSend>(`/api/outreach/sends/${sendId}/edit`, body);

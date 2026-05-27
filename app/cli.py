@@ -43,7 +43,13 @@ prompts_app = typer.Typer(help="Prompt-style selector (current | minimal). Paral
 email_app = typer.Typer(help="Outbound email — config check + manual sends (test, one-pager, VM follow-up, consult).", no_args_is_help=True)
 comms_app = typer.Typer(help="Outbound communications dashboard — calls, voicemails, SMS, emails (read-only).", no_args_is_help=True)
 contacts_app = typer.Typer(help="Per-firm contact roster (backfill from PIF Stats + patients).", no_args_is_help=True)
-sequences_app = typer.Typer(help="4-step email sequence — preview + start (one contact at a time).", no_args_is_help=True)
+sequences_app = typer.Typer(help="Email sequences — preview, start, and recommend contacts.", no_args_is_help=True)
+lead_gen_app = typer.Typer(help="Cybernetic lead-generation loop — batches, feedback, learning.", no_args_is_help=True)
+outreach_app = typer.Typer(help="Blog-post outreach campaigns — LLM-composed, per-recipient, tracked.", no_args_is_help=True)
+outreach_campaigns_app = typer.Typer(help="Create / list / show outreach campaigns.", no_args_is_help=True)
+outreach_audience_app = typer.Typer(help="Build a campaign's recipient list from firm contacts.", no_args_is_help=True)
+outreach_app.add_typer(outreach_campaigns_app, name="campaigns")
+outreach_app.add_typer(outreach_audience_app, name="audience")
 
 app.add_typer(leads_app, name="leads")
 app.add_typer(calls_app, name="calls")
@@ -61,6 +67,8 @@ app.add_typer(email_app, name="email")
 app.add_typer(comms_app, name="comms")
 app.add_typer(contacts_app, name="contacts")
 app.add_typer(sequences_app, name="sequences")
+app.add_typer(lead_gen_app, name="lead-gen")
+app.add_typer(outreach_app, name="outreach")
 
 console = Console()
 
@@ -85,9 +93,9 @@ def _get(path: str, **params) -> dict:
     return resp.json()
 
 
-def _post(path: str, json_body: Optional[dict] = None) -> dict:
+def _post(path: str, json_body: Optional[dict] = None, timeout: float = 30.0) -> dict:
     try:
-        resp = httpx.post(f"{_api_base()}{path}", json=json_body or {}, timeout=30.0)
+        resp = httpx.post(f"{_api_base()}{path}", json=json_body or {}, timeout=timeout)
         resp.raise_for_status()
     except httpx.HTTPError as e:
         console.print(f"[red]API request failed: {e}[/red]")
@@ -2466,10 +2474,19 @@ def contacts_list(
 @sequences_app.command("preview")
 def sequences_preview(
     contact_id: str = typer.Argument(..., help="firm_contacts.id"),
+    template_key: str = typer.Option(
+        "precise_pain_4step",
+        "--template-key",
+        "--template",
+        help="Sequence template key.",
+    ),
 ):
     """Render every step of the sequence for one contact, against their
     real personalization data. Read-only — no DB writes, no sends."""
-    data = _get(f"/api/contacts/{contact_id}/sequence/preview")
+    data = _get(
+        f"/api/contacts/{contact_id}/sequence/preview",
+        template_key=template_key,
+    )
     for step in data:
         console.print(f"[bold cyan]── Step {step['step']} ──[/bold cyan]")
         console.print(f"[dim]message_type: {step['message_type']}[/dim]")
@@ -2482,6 +2499,12 @@ def sequences_preview(
 @sequences_app.command("start")
 def sequences_start(
     contact_id: str = typer.Argument(..., help="firm_contacts.id"),
+    template_key: str = typer.Option(
+        "precise_pain_4step",
+        "--template-key",
+        "--template",
+        help="Sequence template key.",
+    ),
 ):
     """Start the 4-step sequence for one contact. Idempotent — second
     start returns 409 with current state.
@@ -2489,7 +2512,10 @@ def sequences_start(
     The scheduler picks step 1 up within ~60s. Sends are gated by
     ALLOW_SEQUENCE_SEND=true; without that env var, the row sits
     active and ticks no-op until the gate is opened."""
-    res = _post(f"/api/contacts/{contact_id}/sequence/start")
+    res = _post(
+        f"/api/contacts/{contact_id}/sequence/start",
+        json_body={"template_key": template_key},
+    )
     console.print_json(data=res)
 
 
@@ -2497,11 +2523,17 @@ def sequences_start(
 def sequences_pause(
     contact_id: str = typer.Argument(..., help="firm_contacts.id"),
     reason: str = typer.Option("", "--reason", "-r", help="Why you're pausing — recorded on the row."),
+    template_key: str = typer.Option(
+        "precise_pain_4step",
+        "--template-key",
+        "--template",
+        help="Sequence template key.",
+    ),
 ):
     """Pause an active sequence. Scheduler will skip it; no further
     sends fire until `sequences resume`."""
     res = _post(
-        f"/api/contacts/{contact_id}/sequence/pause",
+        f"/api/contacts/{contact_id}/sequence/pause?template_key={template_key}",
         json_body={"reason": reason},
     )
     console.print_json(data=res)
@@ -2510,11 +2542,92 @@ def sequences_pause(
 @sequences_app.command("resume")
 def sequences_resume(
     contact_id: str = typer.Argument(..., help="firm_contacts.id"),
+    template_key: str = typer.Option(
+        "precise_pain_4step",
+        "--template-key",
+        "--template",
+        help="Sequence template key.",
+    ),
 ):
     """Flip a paused sequence back to active. The next due step fires
     on the scheduler's next tick (≤60s)."""
-    res = _post(f"/api/contacts/{contact_id}/sequence/resume")
+    res = _post(f"/api/contacts/{contact_id}/sequence/resume?template_key={template_key}")
     console.print_json(data=res)
+
+
+@sequences_app.command("templates")
+def sequences_templates():
+    """List selectable sequence templates."""
+    rows = _get("/api/sequences/templates")
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("template_key", no_wrap=True)
+    table.add_column("label")
+    table.add_column("steps", no_wrap=True)
+    table.add_column("variant", no_wrap=True)
+    table.add_column("description")
+    for r in rows:
+        table.add_row(
+            r["template_key"],
+            r["label"],
+            str(r["steps_total"]),
+            r["default_variant"],
+            r.get("description") or "",
+        )
+    console.print(table)
+
+
+@sequences_app.command("recommend")
+def sequences_recommend(
+    template_key: str = typer.Option(
+        "precise_records_audit",
+        "--template-key",
+        "--template",
+        help="Sequence template key.",
+    ),
+    limit: int = typer.Option(50, "--limit", "-n", min=1, max=200),
+    json_output: bool = typer.Option(False, "--json", help="Print raw JSON."),
+):
+    """Recommend next contacts for human approval.
+
+    Suppresses firms already present in the comms feed and firms with any
+    existing sequence row. Returns one founder/COO-style contact per firm.
+    """
+    data = _get(
+        "/api/sequences/recommendations",
+        template_key=template_key,
+        limit=limit,
+    )
+    if json_output:
+        console.print_json(data=data)
+        return
+    counts = data.get("counts") or {}
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("#", justify="right", no_wrap=True)
+    table.add_column("firm")
+    table.add_column("contact")
+    table.add_column("title")
+    table.add_column("email")
+    table.add_column("score", justify="right", no_wrap=True)
+    table.add_column("reason")
+    for i, r in enumerate(data.get("recommended") or [], start=1):
+        table.add_row(
+            str(i),
+            r["firm_name"],
+            r["contact_name"] or "—",
+            r["contact_title"] or "—",
+            r["contact_email"],
+            str(r["score"]),
+            r["reason"],
+        )
+    console.print(table)
+    console.print(
+        "[dim]"
+        f"template={data.get('template_key')} returned={counts.get('returned')} "
+        f"eligible_firms={counts.get('eligible_firms')} "
+        f"contacted_firms={counts.get('contacted_firms')} "
+        f"sequenced_firms={counts.get('sequenced_firms')}"
+        "[/dim]"
+    )
 
 
 @sequences_app.command("list")
@@ -2543,6 +2656,7 @@ def sequences_list(
     table.add_column("id", no_wrap=True)
     table.add_column("contact")
     table.add_column("email")
+    table.add_column("template")
     table.add_column("step", no_wrap=True)
     table.add_column("variant", no_wrap=True)
     table.add_column("status", no_wrap=True)
@@ -2553,6 +2667,7 @@ def sequences_list(
             seq.id[:8] + "…",
             contact.full_name or "—",
             contact.email or "—",
+            seq.template_key,
             f"{seq.current_step}/{seq.steps_total}",
             seq.variant,
             seq.status,
@@ -2560,6 +2675,686 @@ def sequences_list(
         )
     console.print(table)
     console.print(f"[dim]{len(rows)} sequence(s)[/dim]")
+
+
+# ---------------------------------------------------------------------------
+# lead-gen — cybernetic lead-generation loop
+# ---------------------------------------------------------------------------
+
+@lead_gen_app.command("policy")
+def lead_gen_policy():
+    """Show the active lead-generation policy version."""
+    console.print_json(data=_get("/api/lead-gen/policy/current"))
+
+
+@lead_gen_app.command("recommend")
+def lead_gen_recommend(
+    template_key: str = typer.Option(
+        "precise_records_audit",
+        "--template-key",
+        "--template",
+        help="Sequence template key.",
+    ),
+    limit: int = typer.Option(50, "--limit", "-n", min=1, max=200),
+    name: str = typer.Option("", "--name", help="Operator-visible batch name."),
+    created_by: str = typer.Option("operator", "--created-by"),
+    json_output: bool = typer.Option(False, "--json", help="Print raw JSON."),
+):
+    """Create a persistent recommendation batch for approval.
+
+    This writes batch/item rows but does not start sequences or send email.
+    """
+    data = _post(
+        "/api/lead-gen/batches",
+        json_body={
+            "name": name or None,
+            "template_key": template_key,
+            "limit": limit,
+            "created_by": created_by,
+        },
+        timeout=120.0,
+    )
+    if json_output:
+        console.print_json(data=data)
+        return
+    batch = data["batch"]
+    items = data.get("items") or []
+    console.print(
+        f"[green]Created batch[/green] {batch['id']} "
+        f"({len(items)} item(s), template={batch['template_key']})"
+    )
+    _print_lead_gen_items(items)
+
+
+@lead_gen_app.command("batches")
+def lead_gen_batches(
+    status: str = typer.Option("", "--status", help="recommended | approved | sequencing | observing | completed | archived"),
+    limit: int = typer.Option(50, "--limit", "-n", min=1, max=200),
+    json_output: bool = typer.Option(False, "--json", help="Print raw JSON."),
+):
+    """List lead-generation batches."""
+    data = _get("/api/lead-gen/batches", status=status or None, limit=limit)
+    if json_output:
+        console.print_json(data=data)
+        return
+    rows = data.get("batches") or []
+    if not rows:
+        console.print("[dim]No batches.[/dim]")
+        return
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("id", no_wrap=True)
+    table.add_column("status", no_wrap=True)
+    table.add_column("template", no_wrap=True)
+    table.add_column("items", justify="right", no_wrap=True)
+    table.add_column("created", no_wrap=True)
+    table.add_column("name")
+    for r in rows:
+        counts = r.get("counts") or {}
+        table.add_row(
+            r["id"][:8] + "…",
+            r["status"],
+            r["template_key"],
+            str(counts.get("returned") or ""),
+            (r.get("created_at") or "")[:19],
+            r["name"],
+        )
+    console.print(table)
+
+
+@lead_gen_app.command("show")
+def lead_gen_show(
+    batch_id: str = typer.Argument(..., help="lead_gen_batches.id"),
+    observations: bool = typer.Option(False, "--observations", help="Include feedback observations."),
+    json_output: bool = typer.Option(False, "--json", help="Print raw JSON."),
+):
+    """Show one batch and its recommended contacts."""
+    data = _get(f"/api/lead-gen/batches/{batch_id}", include_observations=observations)
+    if json_output:
+        console.print_json(data=data)
+        return
+    batch = data["batch"]
+    console.print(
+        f"[bold]{batch['name']}[/bold] "
+        f"[dim]id={batch['id']} status={batch['status']} template={batch['template_key']}[/dim]"
+    )
+    _print_lead_gen_items(data.get("items") or [])
+    if observations:
+        _print_lead_gen_observations(data.get("observations") or [])
+
+
+@lead_gen_app.command("approve")
+def lead_gen_approve(
+    batch_id: str = typer.Argument(..., help="lead_gen_batches.id"),
+    approved_by: str = typer.Option("operator", "--approved-by"),
+    start_sequences: bool = typer.Option(
+        False,
+        "--start-sequences",
+        help="Also create email_sequence rows. Sending remains gated by ALLOW_SEQUENCE_SEND.",
+    ),
+    json_output: bool = typer.Option(False, "--json", help="Print raw JSON."),
+):
+    """Approve a batch. With --start-sequences, queue sequence rows."""
+    data = _post(
+        f"/api/lead-gen/batches/{batch_id}/approve",
+        json_body={"approved_by": approved_by, "start_sequences": start_sequences},
+        timeout=120.0,
+    )
+    if json_output:
+        console.print_json(data=data)
+        return
+    batch = data["batch"]
+    console.print(
+        f"[green]Batch {batch['id']} is {batch['status']}[/green] "
+        f"(start_sequences={start_sequences})"
+    )
+    _print_lead_gen_items(data.get("items") or [])
+
+
+@lead_gen_app.command("observe")
+def lead_gen_observe(
+    event_type: str = typer.Option(..., "--event-type", help="email_reply | email_bounce | booking | manual_note | etc."),
+    batch_id: str = typer.Option("", "--batch", help="Batch id."),
+    contact_id: str = typer.Option("", "--contact", help="Contact id."),
+    batch_item_id: str = typer.Option("", "--item", help="Batch item id."),
+    text: str = typer.Option("", "--text", help="Raw note/reply text."),
+    raw_json_file: str = typer.Option("", "--raw-json-file", help="Path to raw event JSON."),
+    model: str = typer.Option("", "--model", help="Override OpenClaw model id."),
+):
+    """Classify and store one feedback observation via the OpenClaw gateway."""
+    raw_event: dict
+    if raw_json_file:
+        raw_event = json.loads(Path(raw_json_file).read_text(encoding="utf-8"))
+    else:
+        raw_event = {"text": text}
+    data = _post(
+        "/api/lead-gen/observations/classify",
+        json_body={
+            "event_type": event_type,
+            "raw_event": raw_event,
+            "batch_id": batch_id or None,
+            "contact_id": contact_id or None,
+            "batch_item_id": batch_item_id or None,
+            "model": model or None,
+        },
+        timeout=180.0,
+    )
+    console.print_json(data=data)
+
+
+@lead_gen_app.command("propose")
+def lead_gen_propose(
+    batch_id: str = typer.Argument(..., help="lead_gen_batches.id"),
+    created_by: str = typer.Option("system", "--created-by"),
+):
+    """Create a human-reviewed policy proposal from stored observations."""
+    data = _post(
+        f"/api/lead-gen/batches/{batch_id}/proposal",
+        json_body={"created_by": created_by},
+        timeout=60.0,
+    )
+    console.print_json(data=data)
+
+
+def _print_lead_gen_items(items: list[dict]) -> None:
+    if not items:
+        console.print("[dim]No batch items.[/dim]")
+        return
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("#", justify="right", no_wrap=True)
+    table.add_column("item", no_wrap=True)
+    table.add_column("approval", no_wrap=True)
+    table.add_column("firm")
+    table.add_column("contact")
+    table.add_column("email")
+    table.add_column("persona", no_wrap=True)
+    table.add_column("score", justify="right", no_wrap=True)
+    table.add_column("outcome", no_wrap=True)
+    for i, item in enumerate(items, start=1):
+        table.add_row(
+            str(i),
+            item["id"][:8] + "…",
+            item["approval_status"],
+            item["firm_name"],
+            item["contact_name"] or "—",
+            item["contact_email"],
+            item["persona"] or "—",
+            str(item["score"]),
+            item.get("outcome") or "—",
+        )
+    console.print(table)
+
+
+def _print_lead_gen_observations(observations: list[dict]) -> None:
+    if not observations:
+        console.print("[dim]No observations.[/dim]")
+        return
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("when", no_wrap=True)
+    table.add_column("event", no_wrap=True)
+    table.add_column("outcome", no_wrap=True)
+    table.add_column("conf", justify="right", no_wrap=True)
+    table.add_column("next", no_wrap=True)
+    table.add_column("reasoning")
+    for obs in observations:
+        table.add_row(
+            (obs.get("created_at") or "")[:19],
+            obs.get("event_type") or "",
+            obs.get("classified_outcome") or "—",
+            str(obs.get("confidence") or ""),
+            obs.get("next_action") or "—",
+            (obs.get("llm_reasoning") or "")[:80],
+        )
+    console.print(table)
+
+
+# ===========================================================================
+# Outreach — LLM-composed blog-post outreach with per-recipient tracking
+# ===========================================================================
+#
+# Talks directly to outreach_service (no REST hop). Send commands have real
+# side effects (Resend API + DB writes) — keep them gated behind explicit
+# --send IDs or --auto flags, never run on a whole campaign by default.
+
+def _outreach_svc():
+    """Lazy import so the rest of the CLI doesn't pay the import cost."""
+    from app.services import outreach_service
+    return outreach_service
+
+
+@outreach_campaigns_app.command("create")
+def outreach_campaigns_create(
+    post_slug: str = typer.Option(..., "--post-slug", "-s", help="Blog post slug (e.g. musk-algorithm-ai-pi-firm)."),
+    name: str = typer.Option("", "--name", help="Campaign display name. Defaults to post title + date."),
+    sender_email: str = typer.Option("", "--sender-email", help="From: address. Defaults to OUTREACH_SENDER_EMAIL env."),
+    sender_name: str = typer.Option("", "--sender-name", help="Display name. Defaults to OUTREACH_SENDER_NAME env."),
+    sender_title: str = typer.Option("", "--sender-title", help="Signature title."),
+    intent: str = typer.Option("share", "--intent", help="share | nudge | book. Hint for the composer's framing."),
+    notes: str = typer.Option("", "--notes", help="Free-form operator notes (not sent to LLM)."),
+    no_excerpts: bool = typer.Option(False, "--no-excerpts", help="Skip live-fetch of post excerpts (uses index meta only)."),
+):
+    """Create a new outreach campaign for a published blog post. Fetches
+    post metadata (and live excerpts unless --no-excerpts) and freezes the
+    snapshot on the campaign — same post context for every recipient."""
+    svc = _outreach_svc()
+    summary = _run(svc.create_campaign(
+        post_slug=post_slug,
+        name=name or None,
+        sender_email=sender_email or None,
+        sender_name=sender_name or None,
+        sender_title=sender_title or None,
+        intent=intent,
+        notes=notes or None,
+        with_excerpts=not no_excerpts,
+    ))
+    console.print(f"[green]Created campaign #{summary.id}[/green]")
+    console.print(f"  name:    {summary.name}")
+    console.print(f"  post:    {summary.post_slug} — {summary.post_title}")
+    console.print(f"  sender:  {summary.sender_name} <{summary.sender_email}>")
+    console.print(f"  intent:  {summary.intent}")
+    console.print(f"  status:  {summary.status}")
+
+
+@outreach_campaigns_app.command("list")
+def outreach_campaigns_list(
+    status: str = typer.Option("", "--status", help="draft | ready | sending | paused | complete | archived"),
+    limit: int = typer.Option(50, "--limit", "-n", help="Max rows."),
+):
+    """List recent campaigns (newest first)."""
+    svc = _outreach_svc()
+    rows = _run(svc.list_campaigns(status=status or None, limit=limit))
+    if not rows:
+        console.print("[dim]No campaigns match.[/dim]")
+        return
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("id", no_wrap=True, justify="right")
+    table.add_column("name")
+    table.add_column("post slug")
+    table.add_column("intent", no_wrap=True)
+    table.add_column("status", no_wrap=True)
+    table.add_column("sender")
+    table.add_column("created (UTC)", no_wrap=True)
+    for r in rows:
+        table.add_row(
+            str(r.id),
+            r.name[:60] + ("…" if len(r.name) > 60 else ""),
+            r.post_slug,
+            r.intent,
+            r.status,
+            r.sender_email,
+            r.created_at.isoformat()[:19],
+        )
+    console.print(table)
+    console.print(f"[dim]{len(rows)} campaign(s)[/dim]")
+
+
+@outreach_campaigns_app.command("show")
+def outreach_campaigns_show(
+    campaign_id: int = typer.Argument(..., help="Campaign ID."),
+):
+    """Show a campaign's full row + per-status send counts."""
+    svc = _outreach_svc()
+    async def _both():
+        return await svc.get_campaign(campaign_id), await svc.campaign_stats(campaign_id)
+    camp, stats = _run(_both())
+    console.print(f"[bold]Campaign #{camp.id}[/bold] — {camp.name}")
+    console.print(f"  post:        {camp.post_slug}")
+    console.print(f"  post title:  {camp.post_title}")
+    console.print(f"  category:    {camp.post_category or '—'}")
+    console.print(f"  tags:        {', '.join(camp.post_tags or []) or '—'}")
+    console.print(f"  intent:      {camp.intent}")
+    console.print(f"  status:      {camp.status}")
+    console.print(f"  sender:      {camp.sender_name} <{camp.sender_email}>")
+    console.print(f"  model:       {camp.composer_model}")
+    console.print(f"  created:     {camp.created_at.isoformat()[:19]} UTC")
+    if camp.notes:
+        console.print(f"  notes:       {camp.notes}")
+    console.print()
+    console.print("[bold]Audience[/bold]")
+    console.print(
+        f"  total={stats.total}  pending={stats.pending}  composed={stats.composed}  "
+        f"sent={stats.sent}  skipped={stats.skipped}  failed={stats.failed}"
+    )
+    console.print(
+        f"  opens: {stats.opens} ({stats.unique_opens} unique)  "
+        f"clicks: {stats.clicks} ({stats.unique_clicks} unique)"
+    )
+
+
+@outreach_audience_app.command("add")
+def outreach_audience_add(
+    campaign_id: int = typer.Option(..., "--campaign", "-c", help="Campaign ID."),
+    contact_ids: str = typer.Option("", "--contact-ids", help="Comma-separated firm_contacts.id values."),
+    pif_ids: str = typer.Option("", "--pif-ids", help="Comma-separated PIF firm ids — expands to all contacts at those firms with an email."),
+    exclude_recent_days: int = typer.Option(14, "--exclude-recent-days", help="Skip contacts emailed in the last N days (across all campaigns). 0 disables."),
+):
+    """Add recipients to a campaign. Pass either --contact-ids directly,
+    or --pif-ids to expand a firm list into all its emailable contacts.
+    Skips contacts without an email and dedupes against the campaign."""
+    svc = _outreach_svc()
+    ids = [s.strip() for s in (contact_ids or "").split(",") if s.strip()]
+    if pif_ids:
+        firm_ids = [s.strip() for s in pif_ids.split(",") if s.strip()]
+        expanded = _run(svc.resolve_contacts_by_pif_ids(firm_ids))
+        ids.extend(expanded)
+        ids = list(dict.fromkeys(ids))  # de-dupe, preserve order
+    if not ids:
+        console.print("[red]No contacts to add — pass --contact-ids or --pif-ids.[/red]")
+        raise typer.Exit(code=2)
+    res = _run(svc.add_contacts_to_campaign(
+        campaign_id=campaign_id,
+        contact_ids=ids,
+        exclude_recent_days=exclude_recent_days,
+    ))
+    console.print(
+        f"[green]Added {res.added}[/green]  "
+        f"(skipped: {res.skipped_no_email} no-email, "
+        f"{res.skipped_duplicate} dup, "
+        f"{res.skipped_recent_outreach} recent)"
+    )
+
+
+@outreach_app.command("compose")
+def outreach_compose(
+    send_id: int = typer.Option(..., "--send", "-S", help="outreach_sends.id"),
+    regenerate: bool = typer.Option(False, "--regenerate", help="Force a re-render even if a composed body is cached."),
+    model: str = typer.Option("", "--model", help="Override composer model (default: campaign's composer_model)."),
+):
+    """Call the LLM composer for one send. Cached — second call is a no-op
+    unless --regenerate. Prints subject + reasoning + a plaintext preview."""
+    svc = _outreach_svc()
+    row = _run(svc.compose_for_send(send_id, regenerate=regenerate, model=model or None))
+    console.print(f"[bold]Send #{row.id}[/bold]  →  {row.recipient_email}  ({row.firm_name or '—'})")
+    console.print(f"[dim]model: {row.composer_model}  status: {row.status}[/dim]")
+    console.print(f"[bold]Subject:[/bold] {row.composed_subject}")
+    console.print(f"[bold]Preheader:[/bold] {row.composed_preheader}")
+    if row.composed_reasoning:
+        console.print()
+        console.print(f"[dim]Reasoning:[/dim] {row.composed_reasoning}")
+    console.print()
+    console.print("[bold]Plaintext preview[/bold]")
+    console.print(row.composed_plaintext)
+
+
+@outreach_app.command("compose-all")
+def outreach_compose_all(
+    campaign_id: int = typer.Option(..., "--campaign", "-c", help="Campaign ID."),
+    limit: int = typer.Option(0, "--limit", "-n", help="Stop after N composes (0 = all pending)."),
+    regenerate: bool = typer.Option(False, "--regenerate", help="Recompose rows that already have a composed body."),
+):
+    """Batch-compose every pending recipient in a campaign. Useful before
+    a step-through review session so previews don't block on the LLM."""
+    svc = _outreach_svc()
+    statuses = ("pending",) if not regenerate else ("pending", "composed", "failed")
+    rows = _run(svc.list_sends(campaign_id, limit=10_000))
+    targets = [r for r in rows if r.status in statuses]
+    if limit:
+        targets = targets[:limit]
+    if not targets:
+        console.print("[dim]Nothing to compose.[/dim]")
+        return
+    console.print(f"Composing {len(targets)} send(s)…")
+    ok = err = 0
+    for r in targets:
+        try:
+            _run(svc.compose_for_send(r.id, regenerate=regenerate))
+            ok += 1
+            console.print(f"  [green]✓[/green] #{r.id} {r.recipient_email}")
+        except Exception as e:
+            err += 1
+            console.print(f"  [red]✗[/red] #{r.id} {r.recipient_email} — {type(e).__name__}: {e}")
+    console.print(f"[bold]Done.[/bold]  composed={ok}  failed={err}")
+
+
+@outreach_app.command("preview")
+def outreach_preview(
+    send_id: int = typer.Option(..., "--send", "-S", help="outreach_sends.id"),
+    html_out: str = typer.Option("", "--html-out", help="Write the exact HTML that would be sent to this file path."),
+    show_plain: bool = typer.Option(True, "--plain/--no-plain", help="Print plaintext body to stdout."),
+):
+    """Render exactly what send_now would post to Resend — subject,
+    wrapped HTML with tracking pixel + signature, plaintext — without
+    sending. Pass --html-out=preview.html and open in a browser."""
+    svc = _outreach_svc()
+    rendered = _run(svc.render_send(send_id))
+    console.print(f"[bold]From:[/bold]    {rendered.from_header}")
+    console.print(f"[bold]To:[/bold]      {rendered.to}")
+    console.print(f"[bold]Subject:[/bold] {rendered.subject}")
+    console.print(f"[dim]click → {rendered.tracked_click_url}[/dim]")
+    console.print(f"[dim]pixel → {rendered.open_pixel_url}[/dim]")
+    if html_out:
+        Path(html_out).write_text(rendered.full_html, encoding="utf-8")
+        console.print(f"[green]Wrote {len(rendered.full_html)} chars to {html_out}[/green]")
+    if show_plain:
+        console.print()
+        console.print("[bold]Plaintext[/bold]")
+        console.print(rendered.full_plaintext)
+
+
+@outreach_app.command("next")
+def outreach_next(
+    campaign_id: int = typer.Option(..., "--campaign", "-c", help="Campaign ID."),
+):
+    """Show the next send the step-through UI would surface — composed
+    rows first, then pending. Prints `none` if the campaign is drained."""
+    svc = _outreach_svc()
+    row = _run(svc.get_next_for_review(campaign_id))
+    if not row:
+        console.print("[dim]none — campaign drained.[/dim]")
+        return
+    console.print(f"[bold]Send #{row.id}[/bold]  status={row.status}  to={row.recipient_email}  ({row.firm_name or '—'})")
+    if row.composed_subject:
+        console.print(f"[bold]Subject:[/bold] {row.composed_subject}")
+
+
+@outreach_app.command("send")
+def outreach_send(
+    send_id: int = typer.Option(..., "--send", "-S", help="outreach_sends.id"),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompt."),
+):
+    """Send ONE composed email (real Resend call). Confirms before firing
+    unless --yes. Use `outreach send-batch` for many at once."""
+    svc = _outreach_svc()
+    row = _run(svc.get_send(send_id))
+    if not yes:
+        confirm = typer.confirm(
+            f"Send email to {row.recipient_email} ({row.firm_name or '—'}) "
+            f"with subject {row.composed_subject!r}?",
+            default=False,
+        )
+        if not confirm:
+            console.print("[yellow]Aborted.[/yellow]")
+            raise typer.Exit(code=1)
+    res = _run(svc.send_now(send_id))
+    console.print(
+        f"[green]Sent #{res.send_id}[/green]  message_id={res.message_id}  transport={res.transport}"
+    )
+
+
+@outreach_app.command("send-batch")
+def outreach_send_batch(
+    campaign_id: int = typer.Option(..., "--campaign", "-c", help="Campaign ID."),
+    limit: int = typer.Option(10, "--limit", "-n", help="Max sends this batch (safety cap)."),
+    auto: bool = typer.Option(False, "--auto", help="Skip the per-send confirmation prompt."),
+    pause_seconds: float = typer.Option(0.0, "--pause", help="Sleep this many seconds between sends."),
+):
+    """Send all composed-but-not-sent rows in a campaign, up to --limit.
+    Without --auto, prompts before each send. Skips composed rows you
+    don't confirm — they stay composed for later review."""
+    svc = _outreach_svc()
+    rows = _run(svc.list_sends(campaign_id, status="composed", limit=limit))
+    if not rows:
+        console.print("[dim]Nothing composed-and-unsent in this campaign.[/dim]")
+        return
+    console.print(f"{len(rows)} composed send(s) up for delivery (limit={limit}).")
+    sent = skipped = failed = 0
+    for r in rows:
+        if not auto:
+            confirm = typer.confirm(
+                f"  → send #{r.id} to {r.recipient_email} — {r.composed_subject!r}?",
+                default=False,
+            )
+            if not confirm:
+                skipped += 1
+                continue
+        try:
+            res = _run(svc.send_now(r.id))
+            sent += 1
+            console.print(f"  [green]✓ sent[/green] #{r.id}  msg={res.message_id}")
+        except Exception as e:
+            failed += 1
+            console.print(f"  [red]✗ failed[/red] #{r.id} — {type(e).__name__}: {e}")
+        if pause_seconds > 0 and (sent + failed) < len(rows):
+            import time
+            time.sleep(pause_seconds)
+    console.print(f"[bold]Done.[/bold]  sent={sent}  skipped={skipped}  failed={failed}")
+    _run(svc.mark_campaign_complete_if_drained(campaign_id))
+
+
+@outreach_app.command("skip")
+def outreach_skip(
+    send_id: int = typer.Option(..., "--send", "-S", help="outreach_sends.id"),
+    reason: str = typer.Option(..., "--reason", "-r", help="Why you're skipping (recorded)."),
+):
+    """Mark a send as skipped — it won't be sent and won't surface in
+    `outreach next`. Already-sent rows can't be skipped."""
+    svc = _outreach_svc()
+    _run(svc.skip(send_id, reason=reason))
+    console.print(f"[yellow]Skipped #{send_id}[/yellow] — {reason}")
+
+
+@outreach_app.command("edit")
+def outreach_edit(
+    send_id: int = typer.Option(..., "--send", "-S", help="outreach_sends.id"),
+    subject: str = typer.Option("", "--subject", help="Override the subject. Empty string clears the override."),
+    body_html_file: str = typer.Option("", "--body-html-file", help="Read HTML body fragment from this file (must contain {{TRACKED_POST_URL}})."),
+    plaintext_file: str = typer.Option("", "--plaintext-file", help="Read plaintext body from this file (must contain {{TRACKED_POST_URL}})."),
+    editor: str = typer.Option("", "--by", help="Your name/handle — recorded as edited_by."),
+):
+    """Apply operator hand-edits over the composed body. Edited fields
+    override composed fields at send time. Body fields must still contain
+    the literal {{TRACKED_POST_URL}} placeholder so tracking survives."""
+    svc = _outreach_svc()
+    body_html = None
+    plaintext = None
+    if body_html_file:
+        body_html = Path(body_html_file).read_text(encoding="utf-8")
+    if plaintext_file:
+        plaintext = Path(plaintext_file).read_text(encoding="utf-8")
+    row = _run(svc.apply_edits(
+        send_id,
+        edited_subject=subject if subject != "" else None,
+        edited_body_html=body_html,
+        edited_plaintext=plaintext,
+        edited_by=editor or None,
+    ))
+    console.print(f"[green]Edits applied to #{row.id}[/green]")
+    if row.edited_subject:
+        console.print(f"  edited subject: {row.edited_subject}")
+    if row.edited_body_html:
+        console.print(f"  edited body_html: {len(row.edited_body_html)} chars")
+    if row.edited_plaintext:
+        console.print(f"  edited plaintext: {len(row.edited_plaintext)} chars")
+
+
+@outreach_app.command("stats")
+def outreach_stats(
+    campaign_id: int = typer.Option(..., "--campaign", "-c", help="Campaign ID."),
+):
+    """Per-status send counts plus open/click totals for a campaign."""
+    svc = _outreach_svc()
+    s = _run(svc.campaign_stats(campaign_id))
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("metric")
+    table.add_column("value", justify="right")
+    for k, v in (
+        ("total", s.total), ("pending", s.pending), ("composed", s.composed),
+        ("sent", s.sent), ("skipped", s.skipped), ("failed", s.failed),
+        ("opens (raw)", s.opens), ("opens (unique)", s.unique_opens),
+        ("clicks (raw)", s.clicks), ("clicks (unique)", s.unique_clicks),
+    ):
+        table.add_row(k, str(v))
+    console.print(f"[bold]Campaign #{s.campaign_id}[/bold]")
+    console.print(table)
+
+
+@outreach_app.command("sends")
+def outreach_sends(
+    campaign_id: int = typer.Option(..., "--campaign", "-c", help="Campaign ID."),
+    status: str = typer.Option("", "--status", help="pending | composed | sent | skipped | failed"),
+    limit: int = typer.Option(200, "--limit", "-n"),
+):
+    """List individual sends in a campaign."""
+    svc = _outreach_svc()
+    rows = _run(svc.list_sends(campaign_id, status=status or None, limit=limit))
+    if not rows:
+        console.print("[dim]No sends match.[/dim]")
+        return
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("id", no_wrap=True, justify="right")
+    table.add_column("status", no_wrap=True)
+    table.add_column("to")
+    table.add_column("firm")
+    table.add_column("subject")
+    table.add_column("sent (UTC)", no_wrap=True)
+    for r in rows:
+        subj = (r.edited_subject or r.composed_subject or "—")
+        table.add_row(
+            str(r.id),
+            r.status,
+            r.recipient_email,
+            (r.firm_name or "—")[:30],
+            subj[:50] + ("…" if len(subj) > 50 else ""),
+            r.sent_at.isoformat()[:19] if r.sent_at else "—",
+        )
+    console.print(table)
+    console.print(f"[dim]{len(rows)} send(s)[/dim]")
+
+
+@outreach_app.command("events")
+def outreach_events(
+    campaign_id: int = typer.Option(..., "--campaign", "-c", help="Campaign ID."),
+    send_id: int = typer.Option(0, "--send", "-S", help="Filter to one send (0 = all)."),
+    limit: int = typer.Option(100, "--limit", "-n"),
+):
+    """Show open/click events for a campaign — newest first."""
+    async def _q():
+        from sqlalchemy import select, desc
+        from app.db import AsyncSessionLocal
+        from app.db.models import LinkEventRow, OutreachSendRow
+        async with AsyncSessionLocal() as s:
+            q = (
+                select(LinkEventRow, OutreachSendRow.recipient_email)
+                .join(OutreachSendRow, LinkEventRow.send_id == OutreachSendRow.id)
+                .where(OutreachSendRow.campaign_id == campaign_id)
+                .order_by(desc(LinkEventRow.ts))
+                .limit(limit)
+            )
+            if send_id:
+                q = q.where(LinkEventRow.send_id == send_id)
+            return list((await s.execute(q)).all())
+
+    rows = _run(_q())
+    if not rows:
+        console.print("[dim]No events yet.[/dim]")
+        return
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("ts (UTC)", no_wrap=True)
+    table.add_column("kind", no_wrap=True)
+    table.add_column("send", no_wrap=True, justify="right")
+    table.add_column("to")
+    table.add_column("ip", no_wrap=True)
+    table.add_column("user agent")
+    for ev, recipient in rows:
+        table.add_row(
+            ev.ts.isoformat()[:19],
+            ev.kind,
+            str(ev.send_id),
+            recipient,
+            ev.ip or "—",
+            (ev.user_agent or "—")[:60],
+        )
+    console.print(table)
+    console.print(f"[dim]{len(rows)} event(s)[/dim]")
 
 
 if __name__ == "__main__":

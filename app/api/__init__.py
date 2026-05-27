@@ -12,11 +12,15 @@ from .voice_preview import router as voice_preview_router
 from .firm_reviews import router as firm_reviews_router
 from .comms import router as comms_router
 from .sequences import router as sequences_router
+from .outreach import router as outreach_router
+from .lead_gen import router as lead_gen_router
+from .resend_webhooks import router as resend_webhooks_router
 
 __all__ = [
     "dashboard_router", "websocket_router", "settings_router",
     "dispatcher_router", "scenarios_router", "carrier_router",
     "cadence_router", "consults_router", "call_lists_router",
     "voice_preview_router", "firm_reviews_router", "comms_router",
-    "sequences_router",
+    "sequences_router", "outreach_router", "lead_gen_router",
+    "resend_webhooks_router",
 ]

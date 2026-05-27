@@ -526,6 +526,38 @@ tmux kill-session -t autocaller
 
 ---
 
+### Recipe: "send blog-post outreach to a few firms"
+LLM composes a personalized email per recipient; you preview each one and send
+manually. No templates — voice is decided by the composer based on post + persona.
+```bash
+# 1. create the campaign (freezes post snapshot)
+bin/autocaller outreach campaigns create --post-slug=musk-algorithm-ai-pi-firm
+
+# 2. add audience — expand firm IDs into all emailable contacts
+bin/autocaller outreach audience add --campaign=1 \
+    --pif-ids=03382ee5-...,abcdef01-... --exclude-recent-days=14
+
+# 3. batch-compose so previews don't block on the LLM
+bin/autocaller outreach compose-all --campaign=1
+
+# 4. step through one at a time — preview, then send or skip
+bin/autocaller outreach next --campaign=1
+bin/autocaller outreach preview --send=42 --html-out=/tmp/preview.html
+bin/autocaller outreach send --send=42
+# or:
+bin/autocaller outreach skip --send=42 --reason="contact is on a competitor's payroll"
+
+# 5. report
+bin/autocaller outreach stats --campaign=1
+bin/autocaller outreach events --campaign=1   # opens + clicks
+```
+Real Resend calls — every `send` is confirm-gated unless you pass `--yes`.
+For tracking links (`/t/o/<token>.gif` opens, `/t/c/<token>` clicks) to reach
+the daemon from a recipient's email client, set `OUTREACH_PUBLIC_BASE_URL`
+to a public hostname before composing.
+
+---
+
 ## 11. REST API (used by the CLI — agents can call directly)
 
 Base URL: `http://127.0.0.1:${BACKEND_PORT:-8000}` (or `PUBLIC_BASE_URL` externally).
@@ -551,6 +583,23 @@ Relevant endpoints:
 | POST | `/api/twilio/twiml/{stream_id}` | Twilio webhook — do **not** call manually |
 | POST | `/api/twilio/status` | Twilio status callback |
 | POST | `/api/twilio/recording-status/{call_id}` | Twilio recording callback |
+| POST | `/api/resend/webhook` | Resend delivery/engagement webhook. Public ingress, no CLI wrapper; verifies Svix headers when `RESEND_WEBHOOK_SECRET` is set. |
+| GET  | `/api/outreach/campaigns` | list outreach campaigns (`?status=`) |
+| POST | `/api/outreach/campaigns` | create campaign (body: `post_slug`, optional sender/intent/notes) |
+| GET  | `/api/outreach/campaigns/{id}` | full campaign detail + stats |
+| GET  | `/api/outreach/campaigns/{id}/stats` | per-status + open/click counts |
+| POST | `/api/outreach/campaigns/{id}/audience` | body: `contact_ids[]` or `pif_ids[]` |
+| GET  | `/api/outreach/campaigns/{id}/sends` | list recipients (`?status=`) |
+| GET  | `/api/outreach/campaigns/{id}/next` | next composed/pending recipient (step-through UI) |
+| GET  | `/api/outreach/sends/{id}` | single recipient row |
+| POST | `/api/outreach/sends/{id}/compose` | LLM-compose; body `{regenerate, model}` |
+| GET  | `/api/outreach/sends/{id}/preview` | exact subject/HTML/plaintext that will be sent |
+| POST | `/api/outreach/sends/{id}/send` | fire the email via Resend (real side effect) |
+| POST | `/api/outreach/sends/{id}/skip` | body `{reason}` |
+| POST | `/api/outreach/sends/{id}/edit` | body `{subject?, body_html?, plaintext?, by?}` |
+| GET  | `/api/outreach/blog-posts` | known blog post slugs (for the UI builder) |
+| GET  | `/t/o/{token}.gif` | **public** — 1x1 pixel, logs open. No auth. |
+| GET  | `/t/c/{token}` | **public** — 302 to post URL, logs click. No auth. |
 
 An agent that doesn't want to shell out can drive the system entirely via
 these JSON endpoints. The CLI commands are thin wrappers around them, with
