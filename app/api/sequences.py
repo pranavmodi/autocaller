@@ -31,12 +31,14 @@ from app.services.firm_contacts_service import (
 from app.services.sequences.common import Ctx
 from app.services.sequences.registry import (
     DEFAULT_TEMPLATE_KEY,
+    is_dynamic_template,
     list_templates,
     normalize_template_key,
     render_step,
     steps_total,
     variant_for,
 )
+from app.services.sequences.possible_minds_dynamic import objective_for
 from app.services.sequence_recommendations import recommend_sequence_contacts
 from app.services.sequence_scheduler import (
     get_sequence,
@@ -271,6 +273,21 @@ async def preview_sequence(
 
     out = []
     for i in range(1, n + 1):
+        if is_dynamic_template(template_key):
+            objective = objective_for(i)
+            out.append(RenderedStepDTO(
+                step=i,
+                subject=f"Dynamic email: {objective}",
+                body=(
+                    "This strategy step is composed by the "
+                    "possible-minds-lead-email-composer skill at send time "
+                    "using current firm context, prior emails/replies, booked "
+                    "consult learnings, optional blog links, and the required "
+                    "consult signature."
+                ),
+                message_type="dynamic_lead_email",
+            ))
+            continue
         rendered = render_step(template_key, i, variant, ctx)
         out.append(RenderedStepDTO(
             step=i,

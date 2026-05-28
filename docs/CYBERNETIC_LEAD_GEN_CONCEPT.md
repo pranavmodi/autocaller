@@ -108,12 +108,15 @@ evolves.
   prior communication history, existing active sequences, unusable emails,
   duplicates, and obvious non-law-firm records.
 - **Batch approval gate:** sequences start only after operator approval.
-- **Sequence selection:** the Lead Gen UI and API can select a sequence template
-  instead of hardcoding one.
+- **Strategy/composer selection:** the Lead Gen UI and API can select a
+  strategy template instead of hardcoding copy. The default
+  `possible_minds_dynamic` strategy calls the
+  `possible-minds-lead-email-composer` skill at send time.
 - **Records-audit sequence:** `precise_records_audit`, a three-step records
-  workflow audit sequence.
-- **Per-contact preview:** the Lead Gen UI can preview the exact first email for
-  each recommended contact before queueing.
+  workflow audit sequence, remains as a legacy/fallback template.
+- **Per-contact preview:** fixed templates can preview exact copy. Dynamic
+  strategy steps preview their objective; exact copy is composed from current
+  context at send time.
 - **California scheduling:** approved batches can be queued with a California
   local start time.
 - **One-hour staggering:** batch starts are spread over a one-hour window.
@@ -407,11 +410,14 @@ and filters obvious bad records.
 
 ### Sequence Selection
 
-Choose records-audit sequence, pain-point sequence, referral ask, reactivation,
-follow-up from prior call, or manual-review path.
+Choose a strategy/composer path: dynamic Possible Minds outreach, records-audit
+fallback, pain-point fallback, referral ask, reactivation, follow-up from prior
+call, or manual-review path.
 
-Current status: UI/API can select sequence template; current live batch uses
-`precise_records_audit`.
+Current status: UI/API can select strategy templates. New default is
+`possible_minds_dynamic`, whose steps are composed by SKILL.md from current
+firm context, prior emails/replies, booked consult learnings, Front/Precise
+relationship signals, optional blog links, and active policy.
 
 ### Copy
 

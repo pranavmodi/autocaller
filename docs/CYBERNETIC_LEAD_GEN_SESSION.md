@@ -890,6 +890,44 @@ The modal follows the existing consult-booking acknowledgement pattern:
 acknowledgement is stored server-side, so the same notification does not repeat
 after a refresh or backend restart.
 
+## Dynamic Lead Email Composer
+
+Fixed email copy is now treated as a legacy/fallback path. The default
+lead-generation strategy is `possible_minds_dynamic`, whose sequence steps are
+objectives rather than fixed emails. At send time, the scheduler calls the
+tracked skill:
+
+```text
+app/skills/possible-minds-lead-email-composer/SKILL.md
+```
+
+The skill composes one plaintext email from current context:
+
+- firm and contact details
+- prior outbound emails
+- inbound replies
+- booked consult patterns from autocaller
+- future Front/Precise relationship signals
+- inferred pain points
+- optional `getpossibleminds.com` blog links
+- active policy and safety rules
+
+Every composed email must include the consult URL in the signature:
+
+```text
+https://getpossibleminds.com/consult
+```
+
+The OpenClaw workspace copy is installed at:
+
+```text
+/root/.openclaw/workspace/skills/possible-minds-lead-email-composer/SKILL.md
+```
+
+OpenClaw reports the skill as ready. Static templates such as
+`precise_records_audit` remain available for fallback/testing, but new lead-gen
+batches should default to the dynamic strategy.
+
 ## Second Live Send
 
 After the webhook implementation was loaded, one more email was sent from the

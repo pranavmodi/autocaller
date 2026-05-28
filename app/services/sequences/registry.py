@@ -5,11 +5,11 @@ from dataclasses import dataclass
 from types import ModuleType
 from typing import Optional
 
-from app.services.sequences import precise_pain_4step, precise_records_audit
+from app.services.sequences import possible_minds_dynamic, precise_pain_4step, precise_records_audit
 from app.services.sequences.common import Ctx, RenderedStep
 
 
-DEFAULT_TEMPLATE_KEY = precise_pain_4step.TEMPLATE_KEY
+DEFAULT_TEMPLATE_KEY = possible_minds_dynamic.TEMPLATE_KEY
 
 
 @dataclass(frozen=True)
@@ -24,6 +24,7 @@ class SequenceTemplateInfo:
 _MODULES: dict[str, ModuleType] = {
     precise_pain_4step.TEMPLATE_KEY: precise_pain_4step,
     precise_records_audit.TEMPLATE_KEY: precise_records_audit,
+    possible_minds_dynamic.TEMPLATE_KEY: possible_minds_dynamic,
 }
 
 
@@ -72,3 +73,7 @@ def render_step(
     ctx: Ctx,
 ) -> RenderedStep:
     return get_template_module(template_key).render_step(step_num, variant, ctx)
+
+
+def is_dynamic_template(template_key: Optional[str]) -> bool:
+    return normalize_template_key(template_key) == possible_minds_dynamic.TEMPLATE_KEY

@@ -29,10 +29,12 @@ from app.db.models import (
     EmailSequenceRow, FirmContactRow, PatientRow,
 )
 from app.services.email_notification_service import _send_email
+from app.services.lead_email_composer import LeadEmailComposerError, compose_lead_email
 from app.services.sequences.common import Ctx
 from app.services.sequences.registry import (
     DEFAULT_TEMPLATE_KEY,
     cadence_for,
+    is_dynamic_template,
     normalize_template_key,
     render_step,
     steps_total,
@@ -192,32 +194,75 @@ async def _process_one(seq_id: str, dry_run: bool = False) -> dict:
             await session.commit()
             return {"id": seq_id, "completed": True}
 
-        try:
-            ctx = _build_ctx(contact, firm_name, seq)
-            rendered = render_step(seq.template_key, next_step, seq.variant, ctx)
-        except Exception as e:
-            seq.status = "paused"
-            seq.paused_reason = f"render_failed: {type(e).__name__}: {e}"
-            await session.commit()
-            return {"id": seq_id, "paused": "render_failed", "error": str(e)}
+        if is_dynamic_template(seq.template_key):
+            try:
+                composed = await compose_lead_email(
+                    contact=contact,
+                    firm_name=firm_name,
+                    sequence=seq,
+                    step_num=next_step,
+                )
+                if composed.requires_human_review and not dry_run:
+                    seq.status = "paused"
+                    seq.paused_reason = (
+                        "composer_requires_human_review: "
+                        f"{'; '.join(composed.risk_flags)[:180]}"
+                    )
+                    await session.commit()
+                    return {
+                        "id": seq_id,
+                        "paused": "composer_requires_human_review",
+                        "subject": composed.subject,
+                        "reasoning": composed.reasoning,
+                        "risk_flags": composed.risk_flags,
+                    }
+                rendered_subject = composed.subject
+                rendered_body = composed.body
+                rendered_message_type = "dynamic_lead_email"
+                render_meta = {
+                    "angle": composed.angle,
+                    "cta": composed.cta,
+                    "blog_link_used": composed.blog_link_used,
+                    "reasoning": composed.reasoning,
+                    "model": composed.model,
+                }
+            except LeadEmailComposerError as e:
+                seq.status = "paused"
+                seq.paused_reason = f"compose_failed: {str(e)[:200]}"
+                await session.commit()
+                return {"id": seq_id, "paused": "compose_failed", "error": str(e)}
+        else:
+            try:
+                ctx = _build_ctx(contact, firm_name, seq)
+                rendered = render_step(seq.template_key, next_step, seq.variant, ctx)
+                rendered_subject = rendered.subject
+                rendered_body = rendered.body
+                rendered_message_type = rendered.message_type
+                render_meta = {}
+            except Exception as e:
+                seq.status = "paused"
+                seq.paused_reason = f"render_failed: {type(e).__name__}: {e}"
+                await session.commit()
+                return {"id": seq_id, "paused": "render_failed", "error": str(e)}
 
         if dry_run:
             return {
                 "id": seq_id,
                 "dry_run": True,
                 "next_step": next_step,
-                "subject": rendered.subject,
-                "body_chars": len(rendered.body),
+                "subject": rendered_subject,
+                "body_chars": len(rendered_body),
                 "to": contact.email,
+                "render_meta": render_meta,
             }
 
         try:
             await asyncio.to_thread(
                 _send_email,
-                rendered.subject,
-                rendered.body,
+                rendered_subject,
+                rendered_body,
                 to=contact.email,
-                message_type=rendered.message_type,
+                message_type=rendered_message_type,
                 pif_id=contact.pif_id,
                 recipient_name=contact.full_name,
             )

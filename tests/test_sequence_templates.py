@@ -7,7 +7,9 @@ from app.services.sequence_recommendations import (
 )
 from app.services.sequences.common import Ctx
 from app.services.sequences.registry import (
+    DEFAULT_TEMPLATE_KEY,
     cadence_for,
+    is_dynamic_template,
     list_templates,
     normalize_template_key,
     render_step,
@@ -38,8 +40,11 @@ def test_records_audit_template_renders_records_specific_first_step():
 def test_registry_lists_both_sequence_templates():
     keys = {t.template_key for t in list_templates()}
 
+    assert DEFAULT_TEMPLATE_KEY == "possible_minds_dynamic"
+    assert "possible_minds_dynamic" in keys
     assert "precise_pain_4step" in keys
     assert "precise_records_audit" in keys
+    assert is_dynamic_template("possible_minds_dynamic")
 
 
 def test_unknown_sequence_template_is_rejected():

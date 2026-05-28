@@ -35,7 +35,7 @@ import {
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
-const DEFAULT_TEMPLATE = "precise_records_audit";
+const DEFAULT_TEMPLATE = "possible_minds_dynamic";
 const CALIFORNIA_TIME_ZONE = "America/Los_Angeles";
 
 export default function LeadGenPage() {

@@ -144,6 +144,11 @@ Every command accepts `--help`. Exit code is `0` on success, `1` on any error
 | `inbound poll [--limit=N --classify --mark-seen]` | Poll Zoho IMAP for unread/recent replies, store inbound rows, match lead-gen contacts, and create observations. |
 | `inbound list [--matched=yes\|no]` | List stored inbound email messages. |
 
+Default lead-gen sequence strategy is now `possible_minds_dynamic`. It treats
+steps as objectives and composes the actual email at send time with
+`app/skills/possible-minds-lead-email-composer/SKILL.md`. Fixed templates such
+as `precise_records_audit` remain selectable fallback paths.
+
 ---
 
 ## 4. Daemon lifecycle

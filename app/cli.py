@@ -2593,10 +2593,10 @@ def sequences_templates():
 @sequences_app.command("recommend")
 def sequences_recommend(
     template_key: str = typer.Option(
-        "precise_records_audit",
+        "possible_minds_dynamic",
         "--template-key",
         "--template",
-        help="Sequence template key.",
+        help="Strategy/composer template key.",
     ),
     limit: int = typer.Option(50, "--limit", "-n", min=1, max=200),
     json_output: bool = typer.Option(False, "--json", help="Print raw JSON."),
@@ -2704,10 +2704,10 @@ def lead_gen_policy():
 @lead_gen_app.command("recommend")
 def lead_gen_recommend(
     template_key: str = typer.Option(
-        "precise_records_audit",
+        "possible_minds_dynamic",
         "--template-key",
         "--template",
-        help="Sequence template key.",
+        help="Strategy/composer template key.",
     ),
     limit: int = typer.Option(50, "--limit", "-n", min=1, max=200),
     name: str = typer.Option("", "--name", help="Operator-visible batch name."),

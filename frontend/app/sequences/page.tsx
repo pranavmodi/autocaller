@@ -46,7 +46,7 @@ export default function SequencesPage() {
 
   const [pifId, setPifId] = useState<string>("");
   const [contactId, setContactId] = useState<string>("");
-  const [templateKey, setTemplateKey] = useState<string>("precise_records_audit");
+  const [templateKey, setTemplateKey] = useState<string>("possible_minds_dynamic");
 
   const templates = useQuery({
     queryKey: ["sequence-templates"],
@@ -926,7 +926,9 @@ function ContactPanel({
           stepCount={steps.length}
           templateKey={templateKey}
           variant={
-            templateKey === "precise_records_audit"
+            templateKey === "possible_minds_dynamic"
+              ? "dynamic"
+              : templateKey === "precise_records_audit"
               ? "records_only"
               : pain.pain_quote ? "with_quote" : "without_quote"
           }
@@ -1073,7 +1075,9 @@ function ConfirmModal({
   error: string | null;
 }) {
   const cadenceDescription =
-    templateKey === "precise_records_audit"
+    templateKey === "possible_minds_dynamic"
+      ? "Each step is composed by the lead email composer skill at send time. Steps schedule for days 0, 3, 7, and 14."
+      : templateKey === "precise_records_audit"
       ? "Step 1 fires within ~1 minute. Steps 2 and 3 schedule for days 5 and 12."
       : variant === "with_quote"
       ? "Step 1 fires within ~1 minute. Steps 2, 3, 4 schedule for days 4, 10, 17."

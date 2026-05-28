@@ -752,7 +752,7 @@ export const startSequence = (contactId: string, templateKey?: string) =>
     next_step_due_at: string | null;
   }>(
     `/api/contacts/${encodeURIComponent(contactId)}/sequence/start`,
-    { template_key: templateKey ?? "precise_pain_4step" },
+    { template_key: templateKey ?? "possible_minds_dynamic" },
   );
 
 export type PauseResumeResponse = {
