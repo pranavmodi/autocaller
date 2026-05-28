@@ -45,6 +45,7 @@ comms_app = typer.Typer(help="Outbound communications dashboard — calls, voice
 contacts_app = typer.Typer(help="Per-firm contact roster (backfill from PIF Stats + patients).", no_args_is_help=True)
 sequences_app = typer.Typer(help="Email sequences — preview, start, and recommend contacts.", no_args_is_help=True)
 lead_gen_app = typer.Typer(help="Cybernetic lead-generation loop — batches, feedback, learning.", no_args_is_help=True)
+inbound_app = typer.Typer(help="Inbound email ingestion — Zoho IMAP reader for replies.", no_args_is_help=True)
 outreach_app = typer.Typer(help="Blog-post outreach campaigns — LLM-composed, per-recipient, tracked.", no_args_is_help=True)
 outreach_campaigns_app = typer.Typer(help="Create / list / show outreach campaigns.", no_args_is_help=True)
 outreach_audience_app = typer.Typer(help="Build a campaign's recipient list from firm contacts.", no_args_is_help=True)
@@ -68,6 +69,7 @@ app.add_typer(comms_app, name="comms")
 app.add_typer(contacts_app, name="contacts")
 app.add_typer(sequences_app, name="sequences")
 app.add_typer(lead_gen_app, name="lead-gen")
+app.add_typer(inbound_app, name="inbound")
 app.add_typer(outreach_app, name="outreach")
 
 console = Console()
@@ -2903,6 +2905,96 @@ def _print_lead_gen_observations(observations: list[dict]) -> None:
             str(obs.get("confidence") or ""),
             obs.get("next_action") or "—",
             (obs.get("llm_reasoning") or "")[:80],
+        )
+    console.print(table)
+
+
+# ---------------------------------------------------------------------------
+# inbound — Zoho IMAP reply ingestion
+# ---------------------------------------------------------------------------
+
+@inbound_app.command("status")
+def inbound_status():
+    """Show whether Zoho IMAP credentials are configured. Does not connect."""
+    console.print_json(data=_get("/api/inbound-email/config"))
+
+
+@inbound_app.command("poll")
+def inbound_poll(
+    limit: int = typer.Option(20, "--limit", "-n", min=1, max=200),
+    all_messages: bool = typer.Option(False, "--all", help="Poll all recent messages, not only unread."),
+    since_days: int = typer.Option(14, "--since-days", min=0, max=365),
+    classify: bool = typer.Option(False, "--classify", help="Use the OpenClaw gateway to classify matched replies."),
+    mark_seen: bool = typer.Option(False, "--mark-seen", help="Mark fetched Zoho messages as seen."),
+    json_output: bool = typer.Option(False, "--json", help="Print raw JSON."),
+):
+    """Fetch recent Zoho inbox messages, store them, and create lead-gen
+    observations for replies matched to known contacts.
+
+    By default this only reads unread messages and does not mark them seen.
+    """
+    data = _post(
+        "/api/inbound-email/poll",
+        json_body={
+            "limit": limit,
+            "unseen_only": not all_messages,
+            "since_days": since_days,
+            "classify": classify,
+            "mark_seen": mark_seen,
+        },
+        timeout=240.0,
+    )
+    if json_output:
+        console.print_json(data=data)
+        return
+    console.print(
+        f"[green]fetched={data['fetched']} stored={data['stored']} "
+        f"matched={data['matched']} observations={data['observations']}[/green]"
+    )
+    _print_inbound_messages(data.get("messages") or [])
+
+
+@inbound_app.command("list")
+def inbound_list(
+    limit: int = typer.Option(50, "--limit", "-n", min=1, max=200),
+    matched: str = typer.Option("all", "--matched", help="all | yes | no"),
+    json_output: bool = typer.Option(False, "--json", help="Print raw JSON."),
+):
+    """List stored inbound emails."""
+    matched_value = None
+    if matched.lower() in {"yes", "true", "1"}:
+        matched_value = "true"
+    elif matched.lower() in {"no", "false", "0"}:
+        matched_value = "false"
+    params = {"limit": limit}
+    if matched_value is not None:
+        params["matched"] = matched_value
+    data = _get("/api/inbound-email", **params)
+    if json_output:
+        console.print_json(data=data)
+        return
+    _print_inbound_messages(data.get("messages") or [])
+
+
+def _print_inbound_messages(messages: list[dict]) -> None:
+    if not messages:
+        console.print("[dim]No inbound messages.[/dim]")
+        return
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("received", no_wrap=True)
+    table.add_column("from")
+    table.add_column("subject")
+    table.add_column("matched", no_wrap=True)
+    table.add_column("status", no_wrap=True)
+    table.add_column("excerpt")
+    for msg in messages:
+        table.add_row(
+            (msg.get("received_at") or msg.get("ingested_at") or "")[:19],
+            msg.get("from_email") or "",
+            (msg.get("subject") or "")[:60],
+            "yes" if msg.get("matched_contact_id") else "no",
+            msg.get("classification_status") or "",
+            (msg.get("text_excerpt") or "").replace("\n", " ")[:80],
         )
     console.print(table)
 

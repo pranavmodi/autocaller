@@ -128,6 +128,19 @@ evolves.
 - **Resend webhook ingestion:** `POST /api/resend/webhook` updates
   `email_logs`, writes deterministic lead-gen observations, and pauses affected
   sequences for delivery risk events.
+- **Zoho inbound reply ingestion:** `POST /api/inbound-email/poll` reads the
+  Zoho inbox over IMAP, stores normalized inbound messages in `inbound_emails`,
+  matches replies by sender email to known firm contacts and lead-gen batch
+  items, creates `email_reply` observations, and pauses active matched
+  sequences for human/AI review.
+- **Operator notifications:** matched lead replies create durable
+  `operator_notifications` rows. The Autocaller UI polls
+  `GET /api/operator-notifications/pending` and shows a modal with the stimulus
+  email, matched firm/contact context, sequence state, classification, and a
+  suggested next action/draft response. The operator can edit and send the
+  draft as a threaded Resend/SMTP reply via
+  `POST /api/operator-notifications/{id}/send-draft`. Acknowledgement/action is
+  persisted so the alert does not repeat after refreshes or restarts.
 - **Policy proposal path:** `POST /api/lead-gen/batches/{batch_id}/proposal`
   summarizes observed batch outcomes into inspectable proposals without
   automatically applying them.
@@ -212,8 +225,10 @@ already-have-provider, and "send me more information." This is the richest
 semantic feedback source because it tells the system what the market actually
 understood and what blocked conversion.
 
-Current status: not automatically ingested. Manual/API observations can record
-these events today.
+Current status: Zoho inbound replies can be polled over IMAP. Matched replies
+create observations, pause sequences, and surface operator notification modals
+with suggested next actions. Manual/API observations can also record these
+events. Front/Gmail are not wired.
 
 ### Calendar Feedback
 
@@ -323,8 +338,8 @@ Action: store an append-only observation, classify outcome, update local state,
 and choose next action.
 
 Current status: observation storage exists. Resend deterministic events are
-handled. Manual/API observations exist. Automated reply and booking ingestion
-are not wired.
+handled. Manual/API observations exist. Zoho reply polling exists. Booking
+ingestion is not wired.
 
 ### Per-Contact Learning
 
@@ -490,6 +505,9 @@ adjustments.
 
 ## Open Gaps
 
+- Zoho reply ingestion exists through IMAP polling and creates operator
+  notifications for matched replies, but it is operator-triggered rather than a
+  continuous background job.
 - Front/Gmail reply ingestion is not wired.
 - Resend webhook endpoint is implemented, but the public Resend dashboard still
   needs to point at the deployed backend URL and store the signing secret in

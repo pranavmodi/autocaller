@@ -14,7 +14,12 @@ email sequences, observes replies/delivery feedback/bookings, writes those
 observations back to durable state, and proposes policy/copy changes against
 the target metric of booked qualified conversations. See
 `docs/CYBERNETIC_LEAD_GEN_CONCEPT.md` for the current loop and ideal-state
-design.
+design. Zoho Mail can remain the mailbox provider: the system reads inbound
+replies over Zoho IMAP when `ZOHO_IMAP_USER` and `ZOHO_IMAP_PASSWORD` are
+configured. Matched replies create operator notifications in the Autocaller UI
+with the stimulus email, proposed classification, paused sequence context, and
+suggested next action. The operator can edit the draft in the modal and send it
+back in the same thread through the approved send action.
 
 ## Quick start
 

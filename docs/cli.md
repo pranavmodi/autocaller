@@ -140,6 +140,9 @@ Every command accepts `--help`. Exit code is `0` on success, `1` on any error
 | `sequences preview <contact_id>` | Render the four (or three, if no Yelp quote) email drafts for one contact against their actual personalization data. Read-only. |
 | `sequences start <contact_id>` | Start the 4-step sequence for one contact. Idempotent — second start returns 409 with current state. Sends gated by `ALLOW_SEQUENCE_SEND=true`. |
 | `sequences list [--status=active\|paused\|completed]` | List sequence rows + which step each is on. |
+| `inbound status` | Show whether Zoho IMAP inbox reading is configured. Sensitive values masked. |
+| `inbound poll [--limit=N --classify --mark-seen]` | Poll Zoho IMAP for unread/recent replies, store inbound rows, match lead-gen contacts, and create observations. |
+| `inbound list [--matched=yes\|no]` | List stored inbound email messages. |
 
 ---
 
@@ -584,6 +587,12 @@ Relevant endpoints:
 | POST | `/api/twilio/status` | Twilio status callback |
 | POST | `/api/twilio/recording-status/{call_id}` | Twilio recording callback |
 | POST | `/api/resend/webhook` | Resend delivery/engagement webhook. Public ingress, no CLI wrapper; verifies Svix headers when `RESEND_WEBHOOK_SECRET` is set. |
+| GET  | `/api/inbound-email/config` | masked Zoho IMAP reader config |
+| POST | `/api/inbound-email/poll` | poll Zoho IMAP, store inbound replies, match lead-gen items, optionally classify |
+| GET  | `/api/inbound-email?matched=&limit=` | list stored inbound messages |
+| GET  | `/api/operator-notifications/pending` | pending persisted operator modal notifications |
+| POST | `/api/operator-notifications/{id}/acknowledge` | dismiss a notification so it does not pop again |
+| POST | `/api/operator-notifications/{id}/send-draft` | send the notification draft as a threaded Resend/SMTP reply and dismiss/action the notification |
 | GET  | `/api/outreach/campaigns` | list outreach campaigns (`?status=`) |
 | POST | `/api/outreach/campaigns` | create campaign (body: `post_slug`, optional sender/intent/notes) |
 | GET  | `/api/outreach/campaigns/{id}` | full campaign detail + stats |

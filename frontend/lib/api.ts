@@ -464,6 +464,78 @@ export const acknowledgeBooking = (id: number) =>
     `/api/consults/${id}/acknowledge`,
   );
 
+// Durable operator notifications — drives global action modals.
+export type OperatorNotification = {
+  id: number;
+  notification_type: string;
+  priority: string;
+  title: string;
+  body: string;
+  source_type: string;
+  source_id: string;
+  stimulus: {
+    from_email?: string;
+    from_name?: string | null;
+    subject?: string;
+    text_excerpt?: string;
+    body_text?: string;
+    received_at?: string | null;
+    [key: string]: unknown;
+  };
+  context: {
+    firm_name?: string;
+    contact_name?: string;
+    contact_email?: string;
+    contact_title?: string | null;
+    batch_id?: string;
+    batch_item_id?: string;
+    sequence_id?: string;
+    sequence_status?: string | null;
+    lead_gen_observation_id?: string;
+    [key: string]: unknown;
+  };
+  suggested_action: {
+    kind?: string;
+    label?: string;
+    outcome?: string;
+    confidence?: number;
+    reasoning?: string;
+    signals?: string[];
+    requires_human_review?: boolean;
+    draft_subject?: string;
+    draft_body?: string;
+    href?: string;
+    [key: string]: unknown;
+  };
+  status: string;
+  created_at: string | null;
+  updated_at: string | null;
+  acknowledged_at: string | null;
+  acknowledged_by: string | null;
+};
+
+export const getPendingOperatorNotifications = () =>
+  get<{ pending: OperatorNotification[] }>("/api/operator-notifications/pending");
+
+export const acknowledgeOperatorNotification = (id: number) =>
+  post<{ notification: OperatorNotification }>(
+    `/api/operator-notifications/${id}/acknowledge`,
+    { acknowledged_by: "operator" },
+  );
+
+export const sendOperatorNotificationDraft = (
+  id: number,
+  args: { subject?: string; body?: string; sent_by?: string },
+) =>
+  post<{ notification: OperatorNotification }>(
+    `/api/operator-notifications/${id}/send-draft`,
+    {
+      subject: args.subject,
+      body: args.body,
+      sent_by: args.sent_by ?? "operator",
+    },
+  );
+
 
 // ---- Firm reviews (operator-pasted, split by source) ----
 export type FirmReviews = {

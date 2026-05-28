@@ -830,6 +830,66 @@ The project-level conceptual overview now lives in
 `docs/CYBERNETIC_LEAD_GEN_CONCEPT.md`, and the README identifies lead
 generation as a cybernetic function rather than a standalone email sender.
 
+## Zoho Inbound Email Ingestion
+
+Zoho Mail remains the mailbox provider for inbound replies. Added an
+operator-triggered IMAP ingestion path:
+
+```text
+GET  /api/inbound-email/config
+POST /api/inbound-email/poll
+GET  /api/inbound-email
+```
+
+CLI:
+
+```bash
+bin/autocaller inbound status
+bin/autocaller inbound poll --limit 20
+bin/autocaller inbound poll --limit 20 --classify
+bin/autocaller inbound list --matched yes
+```
+
+Environment:
+
+```text
+ZOHO_IMAP_HOST=imappro.zoho.in
+ZOHO_IMAP_PORT=993
+ZOHO_IMAP_USER=pranav@possiblemindshq.com
+ZOHO_IMAP_PASSWORD=<Zoho app-specific password>
+ZOHO_IMAP_MAILBOX=INBOX
+ZOHO_IMAP_MARK_SEEN=false
+```
+
+The poller reads unread/recent messages without marking them seen by default,
+stores normalized messages in `inbound_emails`, matches replies by sender email
+to `firm_contacts` and recent lead-gen batch items, writes `email_reply`
+observations, and pauses active matched sequences for human/AI review.
+
+## Operator Notifications For Lead Replies
+
+Added a durable operator-notification channel for cybernetic lead-gen feedback:
+
+```text
+GET  /api/operator-notifications/pending
+POST /api/operator-notifications/{id}/acknowledge
+POST /api/operator-notifications/{id}/send-draft
+```
+
+Matched inbound lead replies now create `operator_notifications` rows. The
+global Autocaller UI polls pending notifications and shows a modal containing:
+
+- the stimulus email subject, sender, excerpt, and received time
+- matched firm/contact/batch/sequence context
+- the classified outcome, confidence, and next action
+- a suggested human-editable reply draft
+- an operator-approved send action that sends the draft as a threaded
+  Resend/SMTP reply using `In-Reply-To` and `References` from the inbound email
+
+The modal follows the existing consult-booking acknowledgement pattern:
+acknowledgement is stored server-side, so the same notification does not repeat
+after a refresh or backend restart.
+
 ## Second Live Send
 
 After the webhook implementation was loaded, one more email was sent from the

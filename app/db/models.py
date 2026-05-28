@@ -285,6 +285,46 @@ class ConsultBookingRow(Base):
     )
 
 
+class OperatorNotificationRow(Base):
+    """Persisted operator-facing notifications surfaced as dashboard modals.
+
+    These are durable control-loop alerts: a backend worker creates one when a
+    stimulus needs human attention, the UI polls for unacknowledged rows, and
+    acknowledgement prevents repeat popups after reloads or restarts.
+    """
+    __tablename__ = "operator_notifications"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    notification_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    priority: Mapped[str] = mapped_column(String(16), nullable=False, default="normal")
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    body: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    source_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    source_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    stimulus_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    context_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    suggested_action_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), default=_utcnow, onupdate=_utcnow,
+    )
+    acknowledged_at: Mapped[datetime | None] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=True,
+    )
+    acknowledged_by: Mapped[str | None] = mapped_column(String(128), nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint(
+            "notification_type", "source_type", "source_id",
+            name="uq_operator_notifications_source",
+        ),
+        Index("ix_operator_notifications_pending", "status", "acknowledged_at"),
+        Index("ix_operator_notifications_created_at", "created_at"),
+        Index("ix_operator_notifications_type", "notification_type"),
+    )
+
+
 class FirmReviewRow(Base):
     """Operator-pasted reviews for a firm, keyed on Mediflow pif_id.
 
@@ -340,6 +380,61 @@ class EmailLogRow(Base):
         Index("ix_email_logs_pif_id", "pif_id"),
         Index("ix_email_logs_call_id", "call_id"),
         Index("ix_email_logs_sent_at", "sent_at"),
+    )
+
+
+class InboundEmailRow(Base):
+    """Normalized inbound mailbox messages read from Zoho IMAP.
+
+    This is the incoming-email sensor for the lead-gen loop. Rows are
+    append-only/idempotent by provider account + mailbox UID; processing can
+    match a message to a contact, sequence, and lead-gen batch item.
+    """
+    __tablename__ = "inbound_emails"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    provider: Mapped[str] = mapped_column(String(32), nullable=False, default="zoho_imap")
+    account_email: Mapped[str] = mapped_column(String(320), nullable=False)
+    mailbox: Mapped[str] = mapped_column(String(255), nullable=False, default="INBOX")
+    uid: Mapped[str] = mapped_column(String(64), nullable=False)
+    message_id: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    in_reply_to: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    references_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    from_email: Mapped[str] = mapped_column(String(320), nullable=False)
+    from_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    to_json: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    cc_json: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    subject: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    text_excerpt: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    body_text: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    raw_headers_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    matched_contact_id: Mapped[str | None] = mapped_column(
+        String(64), ForeignKey("firm_contacts.id", ondelete="SET NULL"), nullable=True,
+    )
+    matched_pif_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    matched_batch_item_id: Mapped[str | None] = mapped_column(
+        String(64), ForeignKey("lead_gen_batch_items.id", ondelete="SET NULL"), nullable=True,
+    )
+    matched_sequence_id: Mapped[str | None] = mapped_column(
+        String(64), ForeignKey("email_sequences.id", ondelete="SET NULL"), nullable=True,
+    )
+    lead_gen_observation_id: Mapped[str | None] = mapped_column(
+        String(64), ForeignKey("lead_gen_observations.id", ondelete="SET NULL"), nullable=True,
+    )
+    classification_status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending")
+    received_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    ingested_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow)
+
+    __table_args__ = (
+        UniqueConstraint(
+            "provider", "account_email", "mailbox", "uid",
+            name="uq_inbound_emails_provider_account_mailbox_uid",
+        ),
+        Index("ix_inbound_emails_from_email", "from_email"),
+        Index("ix_inbound_emails_received_at", "received_at"),
+        Index("ix_inbound_emails_matched_contact", "matched_contact_id"),
+        Index("ix_inbound_emails_matched_batch_item", "matched_batch_item_id"),
+        Index("ix_inbound_emails_classification_status", "classification_status"),
     )
 
 
