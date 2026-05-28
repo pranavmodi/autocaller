@@ -928,6 +928,12 @@ OpenClaw reports the skill as ready. Static templates such as
 `precise_records_audit` remain available for fallback/testing, but new lead-gen
 batches should default to the dynamic strategy.
 
+Every outbound sequence email now requires operator approval. The scheduler
+composes/renders the email, creates a durable operator notification with the
+draft, rationale, angle, CTA, and metadata, then pauses the sequence. The modal
+lets the operator edit subject/body and only advances the sequence after
+`Approve & send`.
+
 ## Second Live Send
 
 After the webhook implementation was loaded, one more email was sent from the

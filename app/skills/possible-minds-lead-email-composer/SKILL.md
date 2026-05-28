@@ -7,6 +7,8 @@ description: Compose policy-controlled Possible Minds lead-generation emails for
 
 Compose one outbound lead-generation email at a time. The email is part of a
 cybernetic lead-gen loop whose target metric is booked qualified conversations.
+Every generated email is operator-approved before send; your job is to provide
+the best draft and rationale, not to decide that it may be sent automatically.
 
 The sequence step is a strategy objective, not fixed copy. Use the supplied
 context to decide the angle, subject, CTA, and whether a blog link helps.
@@ -112,4 +114,3 @@ If the sender title is missing, use `Founder`.
 - No hard calendar ask unless policy explicitly requests it.
 - If the context is sensitive, ambiguous, or there was a negative reply, set
   `requires_human_review` to true.
-

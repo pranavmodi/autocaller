@@ -13,6 +13,8 @@ The codebase already has the core loop skeleton:
 - strategy/composer template selection and batch approval
 - dynamic `possible_minds_dynamic` strategy steps that call the
   `possible-minds-lead-email-composer` skill at send time
+- manual approval modals for every generated outbound email, with editable
+  subject/body and rationale before send
 - staggered sequence starts over a configurable send window
 - Resend send logging and webhook ingestion
 - Zoho IMAP inbound reply ingestion
@@ -34,6 +36,8 @@ policy versions.
      booked consult learnings, Front/Precise relationship signals, inferred
      pain points, optional blog links, and active policy.
    - Always include `https://getpossibleminds.com/consult` in the signature.
+   - Every generated email must become a modal for operator approval before it
+     is sent.
    - Keep deterministic software in charge of fetching context, enforcing
      gates, logging, and sending.
 

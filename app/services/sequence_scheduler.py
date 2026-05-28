@@ -1,7 +1,7 @@
 """Email-sequence scheduler. Polls `email_sequences` for rows whose
-`next_step_due_at <= now()` and `status='active'`, renders the next
-step against the contact's data, sends via `_send_email` (which
-auto-logs into `email_logs`), and advances state.
+`next_step_due_at <= now()` and `status='active'`, renders or composes the next
+step against the contact's data, and creates an operator approval notification.
+The actual send happens only after the operator edits/approves the modal draft.
 
 Safety:
   - Gated by `ALLOW_SEQUENCE_SEND=true`. When closed, due rows are
@@ -15,11 +15,11 @@ Safety:
 """
 from __future__ import annotations
 
-import asyncio
 import logging
 import os
 import uuid
-from datetime import datetime, timedelta, timezone
+import asyncio
+from datetime import datetime, timezone
 from typing import Optional
 
 from sqlalchemy import select, update
@@ -28,12 +28,11 @@ from app.db import AsyncSessionLocal
 from app.db.models import (
     EmailSequenceRow, FirmContactRow, PatientRow,
 )
-from app.services.email_notification_service import _send_email
 from app.services.lead_email_composer import LeadEmailComposerError, compose_lead_email
+from app.services.operator_notifications import create_operator_notification
 from app.services.sequences.common import Ctx
 from app.services.sequences.registry import (
     DEFAULT_TEMPLATE_KEY,
-    cadence_for,
     is_dynamic_template,
     normalize_template_key,
     render_step,
@@ -256,42 +255,61 @@ async def _process_one(seq_id: str, dry_run: bool = False) -> dict:
                 "render_meta": render_meta,
             }
 
-        try:
-            await asyncio.to_thread(
-                _send_email,
-                rendered_subject,
-                rendered_body,
-                to=contact.email,
-                message_type=rendered_message_type,
-                pif_id=contact.pif_id,
-                recipient_name=contact.full_name,
-            )
-        except Exception as e:
-            seq.status = "paused"
-            seq.paused_reason = f"send_failed: {type(e).__name__}: {str(e)[:200]}"
-            await session.commit()
-            return {"id": seq_id, "paused": "send_failed", "error": str(e)}
-
-        # Advance state.
-        seq.current_step = next_step
-        seq.last_sent_at = _utcnow()
-        if next_step >= seq.steps_total:
-            seq.status = "completed"
-            seq.next_step_due_at = None
-        else:
-            cadence = cadence_for(seq.template_key, seq.variant)
-            # cadence[i] = days from sequence start to send step (i+1).
-            # next due = cadence[next_step] - cadence[next_step - 1] days from now.
-            gap_days = cadence[next_step] - cadence[next_step - 1]
-            seq.next_step_due_at = _utcnow() + timedelta(days=gap_days)
+        notification = await create_operator_notification(
+            session,
+            notification_type="lead_sequence_email_approval",
+            title=f"Approve email to {firm_name or contact.full_name}",
+            body=rendered_body,
+            source_type="email_sequence_step",
+            source_id=f"{seq.id}:{next_step}",
+            priority="normal",
+            stimulus={
+                "subject": rendered_subject,
+                "text_excerpt": rendered_body[:700],
+                "received_at": _utcnow().isoformat(),
+            },
+            context={
+                "pif_id": contact.pif_id,
+                "firm_name": firm_name,
+                "contact_id": contact.id,
+                "contact_name": contact.full_name,
+                "contact_email": contact.email,
+                "contact_title": contact.title,
+                "sequence_id": seq.id,
+                "sequence_status": "paused",
+                "template_key": seq.template_key,
+                "step_num": next_step,
+                "steps_total": seq.steps_total,
+            },
+            suggested_action={
+                "kind": "approve_send_email",
+                "label": "Review, edit, and approve send",
+                "outcome": "pending_operator_approval",
+                "confidence": 100,
+                "reasoning": render_meta.get("reasoning") or (
+                    "This email was rendered from the selected strategy and "
+                    "must be manually approved before sending."
+                ),
+                "angle": render_meta.get("angle"),
+                "cta": render_meta.get("cta"),
+                "blog_link_used": render_meta.get("blog_link_used"),
+                "composer_model": render_meta.get("model"),
+                "draft_subject": rendered_subject,
+                "draft_body": rendered_body,
+                "message_type": rendered_message_type,
+                "requires_human_review": True,
+                "href": "/lead-gen",
+            },
+        )
+        seq.status = "paused"
+        seq.paused_reason = f"awaiting_operator_send_approval:{notification.id}"
         await session.commit()
         return {
             "id": seq_id,
-            "step_sent": next_step,
-            "next_due": (
-                seq.next_step_due_at.isoformat() if seq.next_step_due_at else None
-            ),
-            "status": seq.status,
+            "paused": "awaiting_operator_send_approval",
+            "notification_id": notification.id,
+            "next_step": next_step,
+            "subject": rendered_subject,
         }
 
 

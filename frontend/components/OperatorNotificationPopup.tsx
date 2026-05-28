@@ -111,6 +111,12 @@ export function OperatorNotificationPopup() {
         minute: "2-digit",
       })
     : null;
+  const isSequenceApproval =
+    current.notification_type === "lead_sequence_email_approval";
+  const actionAngle = typeof action.angle === "string" ? action.angle : "";
+  const actionCta = typeof action.cta === "string" ? action.cta : "";
+  const actionBlogLink = typeof action.blog_link_used === "string" ? action.blog_link_used : "";
+  const actionComposerModel = typeof action.composer_model === "string" ? action.composer_model : "";
 
   const acknowledge = () => ack.mutate(current.id);
   const sendCurrentDraft = () =>
@@ -216,6 +222,34 @@ export function OperatorNotificationPopup() {
                   {action.reasoning}
                 </p>
               )}
+              {(actionAngle || actionCta || actionBlogLink || actionComposerModel) && (
+                <dl className="mt-3 grid grid-cols-[72px_minmax(0,1fr)] gap-x-2 gap-y-1 text-xs">
+                  {actionAngle && (
+                    <>
+                      <dt className="text-neutral-500">Angle</dt>
+                      <dd className="break-words text-neutral-800">{actionAngle}</dd>
+                    </>
+                  )}
+                  {actionCta && (
+                    <>
+                      <dt className="text-neutral-500">CTA</dt>
+                      <dd className="break-words text-neutral-800">{actionCta}</dd>
+                    </>
+                  )}
+                  {actionBlogLink && (
+                    <>
+                      <dt className="text-neutral-500">Blog</dt>
+                      <dd className="break-all text-neutral-800">{actionBlogLink}</dd>
+                    </>
+                  )}
+                  {actionComposerModel && (
+                    <>
+                      <dt className="text-neutral-500">Model</dt>
+                      <dd className="break-all text-neutral-800">{actionComposerModel}</dd>
+                    </>
+                  )}
+                </dl>
+              )}
             </div>
           </section>
 
@@ -235,7 +269,9 @@ export function OperatorNotificationPopup() {
                 className="min-h-40 w-full resize-y rounded-md border border-neutral-200 bg-white p-3 text-xs leading-relaxed text-neutral-800 outline-none focus:border-neutral-400"
               />
               <p className="mt-2 text-[11px] leading-relaxed text-neutral-500">
-                Sends to the inbound sender in the same email thread using reply headers.
+                {isSequenceApproval
+                  ? "Sends only after your approval, then advances the paused sequence to the next scheduled step."
+                  : "Sends to the inbound sender in the same email thread using reply headers."}
               </p>
             </section>
           )}
@@ -271,7 +307,7 @@ export function OperatorNotificationPopup() {
               className="inline-flex items-center gap-2 rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-700 disabled:opacity-60"
             >
               <Send className="h-4 w-4" />
-              {sendDraft.isPending ? "Sending..." : "Send draft"}
+              {sendDraft.isPending ? "Sending..." : isSequenceApproval ? "Approve & send" : "Send draft"}
             </button>
           )}
         </div>

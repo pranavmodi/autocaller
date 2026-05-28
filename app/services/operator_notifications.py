@@ -4,7 +4,7 @@ from __future__ import annotations
 import os
 import smtplib
 import asyncio
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
 from email.utils import make_msgid, parseaddr
 from typing import Any
@@ -14,9 +14,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import AsyncSessionLocal
-from app.db.models import InboundEmailRow, OperatorNotificationRow
+from app.db.models import EmailSequenceRow, FirmContactRow, InboundEmailRow, OperatorNotificationRow
 from app.services.comms_log import log_email
-from app.services.email_notification_service import _resolve_sender_address
+from app.services.email_notification_service import _resolve_sender_address, _send_email
+from app.services.sequences.registry import cadence_for
 
 
 def notification_to_dict(row: OperatorNotificationRow) -> dict[str, Any]:
@@ -293,6 +294,14 @@ async def send_notification_draft_reply(
         row = await session.get(OperatorNotificationRow, notification_id)
         if not row:
             return None
+        if row.notification_type == "lead_sequence_email_approval" and row.source_type == "email_sequence_step":
+            return await _send_sequence_draft_notification(
+                session,
+                row,
+                subject=subject,
+                body=body,
+                sent_by=sent_by,
+            )
         if row.notification_type != "lead_email_reply" or row.source_type != "inbound_email":
             raise ValueError("notification is not a lead email reply")
         if row.status != "pending" or row.acknowledged_at is not None:
@@ -343,3 +352,80 @@ async def send_notification_draft_reply(
             recipient_name=(row.context_json or {}).get("contact_name") if isinstance(row.context_json, dict) else None,
         )
         return notification_to_dict(row)
+
+
+async def _send_sequence_draft_notification(
+    session: AsyncSession,
+    row: OperatorNotificationRow,
+    *,
+    subject: str | None,
+    body: str | None,
+    sent_by: str,
+) -> dict[str, Any]:
+    if row.status != "pending" or row.acknowledged_at is not None:
+        raise ValueError("notification is no longer pending")
+
+    context = row.context_json or {}
+    suggested = dict(row.suggested_action_json or {})
+    sequence_id = str(context.get("sequence_id") or "")
+    contact_id = str(context.get("contact_id") or "")
+    step_num = int(context.get("step_num") or 0)
+    if not sequence_id or not contact_id or step_num <= 0:
+        raise ValueError("notification is missing sequence context")
+
+    seq = await session.get(EmailSequenceRow, sequence_id)
+    if not seq:
+        raise ValueError("source sequence not found")
+    if seq.current_step + 1 != step_num:
+        raise ValueError("sequence step has changed since this draft was created")
+
+    contact = await session.get(FirmContactRow, contact_id)
+    if not contact or not contact.email:
+        raise ValueError("sequence contact email not found")
+
+    draft_subject = subject if subject is not None else str(suggested.get("draft_subject") or "")
+    draft_body = body if body is not None else str(suggested.get("draft_body") or "")
+    if not draft_subject.strip():
+        raise RuntimeError("draft subject is empty")
+    if not draft_body.strip():
+        raise RuntimeError("draft body is empty")
+
+    msg_id = await asyncio.to_thread(
+        _send_email,
+        draft_subject,
+        draft_body,
+        to=contact.email,
+        message_type=str(suggested.get("message_type") or "dynamic_lead_email"),
+        pif_id=contact.pif_id,
+        recipient_name=contact.full_name,
+    )
+
+    sent_at = datetime.now(timezone.utc)
+    seq.current_step = step_num
+    seq.last_sent_at = sent_at
+    if step_num >= seq.steps_total:
+        seq.status = "completed"
+        seq.next_step_due_at = None
+    else:
+        cadence = cadence_for(seq.template_key, seq.variant)
+        gap_days = cadence[step_num] - cadence[step_num - 1]
+        seq.status = "active"
+        seq.next_step_due_at = sent_at + timedelta(days=gap_days)
+    seq.paused_reason = None
+
+    suggested.update({
+        "sent_at": sent_at.isoformat(),
+        "sent_by": sent_by or "operator",
+        "sent_message_id": msg_id,
+        "sent_transport": "configured_email_transport",
+        "sent_to": contact.email,
+        "sent_subject": draft_subject,
+        "sent_body": draft_body,
+    })
+    row.suggested_action_json = suggested
+    row.status = "actioned"
+    row.acknowledged_at = sent_at
+    row.acknowledged_by = sent_by[:128] if sent_by else "operator"
+    await session.commit()
+    await session.refresh(row)
+    return notification_to_dict(row)

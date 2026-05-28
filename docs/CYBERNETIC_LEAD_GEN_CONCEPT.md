@@ -120,6 +120,10 @@ evolves.
 - **California scheduling:** approved batches can be queued with a California
   local start time.
 - **One-hour staggering:** batch starts are spread over a one-hour window.
+- **Manual send approval:** every generated outbound sequence email creates an
+  operator notification modal with the draft, detailed rationale, angle, CTA,
+  and metadata. The operator can edit the text and must approve send before the
+  paused sequence advances.
 - **Execution gate:** actual sequence sends still require
   `ALLOW_SEQUENCE_SEND=true`.
 - **Send logging:** outbound emails write to `email_logs` with Resend
