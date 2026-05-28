@@ -4,6 +4,7 @@ import os
 import smtplib
 from datetime import datetime, timezone
 from email.message import EmailMessage
+from email.utils import parseaddr
 from typing import Optional
 
 import httpx
@@ -16,6 +17,48 @@ logger = logging.getLogger(__name__)
 
 def _is_truthy(value: str) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _sender_email_key(value: str) -> str:
+    parsed = parseaddr(value or "")[1]
+    return (parsed or value or "").strip().lower()
+
+
+def _sender_candidates() -> list[str]:
+    configured = [
+        os.getenv("SMTP_FROM_EMAIL", "").strip(),
+        os.getenv("SMTP_USERNAME", "").strip(),
+        os.getenv("RESEND_FALLBACK_FROM", "").strip(),
+    ]
+    extra = os.getenv("EMAIL_ALLOWED_FROM_ADDRESSES", "").strip()
+    if extra:
+        configured.extend(part.strip() for part in extra.split(","))
+    return [value for value in configured if value]
+
+
+def _resolve_sender_address(
+    sender_override: str | None = None,
+    *,
+    extra_allowed: list[str] | None = None,
+) -> str:
+    candidates = _sender_candidates()
+    default_sender = candidates[0] if candidates else ""
+    if extra_allowed:
+        candidates.extend(value.strip() for value in extra_allowed if value.strip())
+    requested = (sender_override or "").strip()
+    if not default_sender and not requested:
+        raise RuntimeError("Sender address not configured — set SMTP_FROM_EMAIL.")
+    if not requested:
+        return default_sender
+
+    allowed = {_sender_email_key(value) for value in candidates if _sender_email_key(value)}
+    requested_key = _sender_email_key(requested)
+    if allowed and requested_key not in allowed:
+        raise RuntimeError(
+            "Sender address is not allowed. Add it to SMTP_FROM_EMAIL, "
+            "SMTP_USERNAME, RESEND_FALLBACK_FROM, or EMAIL_ALLOWED_FROM_ADDRESSES."
+        )
+    return requested
 
 
 def _build_wrong_number_subject(patient_id: str) -> str:
@@ -164,6 +207,7 @@ def _send_email(
     pif_id: str | None = None,
     call_id: str | None = None,
     recipient_name: str | None = None,
+    from_addr: str | None = None,
 ) -> str:
     """Send an email. Prefers Resend (HTTPS) when RESEND_API_KEY is set,
     falls back to SMTP otherwise. Raises if neither is configured.
@@ -179,20 +223,14 @@ def _send_email(
     recipient = (to or os.getenv("EMAIL_NOTIFICATION_RECIPIENT", "")).strip()
     if not recipient:
         raise RuntimeError("Email recipient is not configured. Set EMAIL_NOTIFICATION_RECIPIENT.")
-    from_addr = (
-        os.getenv("SMTP_FROM_EMAIL", "").strip()
-        or os.getenv("SMTP_USERNAME", "").strip()
-        or os.getenv("RESEND_FALLBACK_FROM", "").strip()
-    )
-    if not from_addr:
-        raise RuntimeError("Sender address not configured — set SMTP_FROM_EMAIL.")
+    resolved_from_addr = _resolve_sender_address(from_addr)
 
     transport = "resend" if os.getenv("RESEND_API_KEY", "").strip() else "smtp"
     try:
         if transport == "resend":
             try:
                 msg_id = _send_via_resend(
-                    subject=subject, body=body, from_addr=from_addr, to=recipient,
+                    subject=subject, body=body, from_addr=resolved_from_addr, to=recipient,
                 )
             except Exception as e:
                 # Only fall back to SMTP if it's actually plausible to
@@ -201,11 +239,11 @@ def _send_email(
                 logger.warning("Resend send failed: %s — attempting SMTP", e)
                 transport = "smtp"
                 msg_id = _send_via_smtp(
-                    subject=subject, body=body, from_addr=from_addr, to=recipient,
+                    subject=subject, body=body, from_addr=resolved_from_addr, to=recipient,
                 )
         else:
             msg_id = _send_via_smtp(
-                subject=subject, body=body, from_addr=from_addr, to=recipient,
+                subject=subject, body=body, from_addr=resolved_from_addr, to=recipient,
             )
     except Exception as e:
         log_email(

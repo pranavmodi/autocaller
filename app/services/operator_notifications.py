@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db import AsyncSessionLocal
 from app.db.models import InboundEmailRow, OperatorNotificationRow
 from app.services.comms_log import log_email
+from app.services.email_notification_service import _resolve_sender_address
 
 
 def notification_to_dict(row: OperatorNotificationRow) -> dict[str, Any]:
@@ -149,12 +150,14 @@ def _send_thread_reply_sync(
     smtp_pass = os.getenv("SMTP_PASSWORD", "").strip()
     smtp_use_ssl = _truthy(os.getenv("SMTP_USE_SSL", "")) or smtp_port == 465
     smtp_use_tls = _truthy(os.getenv("SMTP_USE_TLS", "true")) and not smtp_use_ssl
-    from_addr = os.getenv("SMTP_FROM_EMAIL", "").strip() or smtp_user
+    thread_from = os.getenv("THREAD_REPLY_FROM_EMAIL", "").strip()
+    from_addr = _resolve_sender_address(
+        thread_from or None,
+        extra_allowed=[thread_from] if thread_from else None,
+    )
     reply_to = os.getenv("REPLY_TO_EMAIL", "").strip()
     if not smtp_host:
         raise RuntimeError("SMTP_HOST not set")
-    if not from_addr:
-        raise RuntimeError("SMTP_FROM_EMAIL or SMTP_USERNAME not set")
 
     msg = EmailMessage()
     msg["From"] = from_addr
@@ -204,13 +207,11 @@ def _send_thread_reply_resend_sync(
     if not body.strip():
         raise RuntimeError("draft body is empty")
 
-    from_addr = (
-        os.getenv("SMTP_FROM_EMAIL", "").strip()
-        or os.getenv("RESEND_FALLBACK_FROM", "").strip()
-        or os.getenv("SMTP_USERNAME", "").strip()
+    thread_from = os.getenv("THREAD_REPLY_FROM_EMAIL", "").strip()
+    from_addr = _resolve_sender_address(
+        thread_from or None,
+        extra_allowed=[thread_from] if thread_from else None,
     )
-    if not from_addr:
-        raise RuntimeError("sender address not configured")
     reply_to = os.getenv("REPLY_TO_EMAIL", "").strip()
 
     headers: dict[str, str] = {

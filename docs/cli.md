@@ -128,8 +128,8 @@ Every command accepts `--help`. Exit code is `0` on success, `1` on any error
 | `env` setup for carriers | **Twilio:** `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER`, optional `TWILIO_ACCOUNT_LABEL`. **Telnyx:** `TELNYX_API_KEY` (V2 bearer), `TELNYX_FROM_NUMBER`, optional `TELNYX_ACCOUNT_SID` (defaults to `"default"`), optional `TELNYX_ACCOUNT_LABEL`. Both carriers share the `ALLOW_TWILIO_CALLS=true` safety gate. |
 | `prompts show` / `prompts list` | Display the active prompt style + version. Two parallel styles exist: `current` (rules-heavy, `v1.61`) and `minimal` (intent-first, `v2.0-minimal`). Switch by setting `PROMPT_STYLE=current\|minimal` in `.env` and restarting the backend. Default = `current`. |
 | `prompts preview [--style=current\|minimal] [--lead-name=... --firm=... --state=...]` | Render the full system prompt against a sample lead — eyeball what each style sends to the model without placing a live call. |
-| `email status` | Show email transport (Resend vs SMTP), sender address, default recipient, BCC, reply-to, and the `ALLOW_VOICEMAIL_EMAIL` gate. Sensitive values masked. |
-| `email test [--to=... --subject=... --body=...]` | Send a plain test email end-to-end. Recipient defaults to `EMAIL_NOTIFICATION_RECIPIENT`. Verifies Resend/SMTP credentials without firing a templated follow-up. |
+| `email status` | Show email transport (Resend vs SMTP), sender address, allowed sender overrides, default recipient, BCC, reply-to, and the `ALLOW_VOICEMAIL_EMAIL` gate. Sensitive values masked. |
+| `email test [--to=... --from=... --subject=... --body=...]` | Send a plain test email end-to-end. Recipient defaults to `EMAIL_NOTIFICATION_RECIPIENT`; sender defaults to `SMTP_FROM_EMAIL` and can be overridden by a configured/allowed address. Verifies Resend/SMTP credentials without firing a templated follow-up. |
 | `email send-onepager --to=... [--name=... --firm=... --note=... --rep-name=... --rep-company=... --rep-email=...]` | Manually fire the post-call one-pager template (same as the AI's `send_followup_email`). Rep fields default to `SALES_REP_*` env. |
 | `email send-vm-followup --to=... [--first-name=...] [--no-vm]` | Manually fire the VM / no-reach follow-up template against an arbitrary address (no `call_id` needed — useful for previewing copy). Same `ALLOW_VOICEMAIL_EMAIL` gate as the automated path. `--no-vm` switches to the "tried to reach you" subject/opener. |
 | `email send-consult --to=... --name=... --slot="Wed Apr 30 at 2:00 PM PT" [--firm=... --notes=...]` | Manually fire the consult-booking confirmation (same template Cal.com booking flow uses). Includes the Google Meet link from `CONSULT_MEET_URL`. |
@@ -495,6 +495,8 @@ scripted mute (e.g., pause AI while an internal tool hands DTMF via Twilio REST)
 ```bash
 bin/autocaller email status                            # transport + gates
 bin/autocaller email test --to you@example.com         # plain end-to-end ping
+bin/autocaller email test --to you@example.com \
+    --from "Pranav Modi <pranav@possiblemindshq.com>"
 # preview the actual templates against a real address:
 bin/autocaller email send-onepager --to you@example.com --name "Jane" --firm "Test Firm"
 bin/autocaller email send-vm-followup --to you@example.com --first-name Jane
@@ -503,6 +505,11 @@ bin/autocaller email send-consult --to you@example.com --name "Jane Doe" \
 ```
 If `email status` shows "NOT CONFIGURED", set `RESEND_API_KEY` (preferred) or
 the `SMTP_*` block in `.env` and restart the daemon.
+Sender selection defaults to `SMTP_FROM_EMAIL`, then `SMTP_USERNAME`, then
+`RESEND_FALLBACK_FROM`. The `--from` test override must match one of those
+configured addresses, or an address listed in `EMAIL_ALLOWED_FROM_ADDRESSES`.
+Threaded lead-reply sends can use `THREAD_REPLY_FROM_EMAIL` to differ from the
+generic notification sender.
 
 ### Recipe: "review every outbound touch with one firm"
 ```bash

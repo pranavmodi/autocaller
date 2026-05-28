@@ -2083,6 +2083,8 @@ def email_status():
     smtp_pass = os.getenv("SMTP_PASSWORD", "").strip()
     smtp_from = os.getenv("SMTP_FROM_EMAIL", "").strip()
     fallback_from = os.getenv("RESEND_FALLBACK_FROM", "").strip()
+    allowed_from = os.getenv("EMAIL_ALLOWED_FROM_ADDRESSES", "").strip()
+    thread_from = os.getenv("THREAD_REPLY_FROM_EMAIL", "").strip()
     recipient = os.getenv("EMAIL_NOTIFICATION_RECIPIENT", "").strip()
     reply_to = os.getenv("REPLY_TO_EMAIL", "").strip()
     bcc = os.getenv("BCC_EMAIL", "").strip()
@@ -2105,6 +2107,8 @@ def email_status():
     table.add_row("SMTP_PASSWORD", _mask(smtp_pass, 0) or "—")
     table.add_row("SMTP_FROM_EMAIL", smtp_from or "—")
     table.add_row("RESEND_FALLBACK_FROM", fallback_from or "—")
+    table.add_row("EMAIL_ALLOWED_FROM_ADDRESSES", allowed_from or "—")
+    table.add_row("THREAD_REPLY_FROM_EMAIL", thread_from or "—")
     table.add_row("EMAIL_NOTIFICATION_RECIPIENT", recipient or "—")
     table.add_row("REPLY_TO_EMAIL", reply_to or "—")
     table.add_row("BCC_EMAIL", bcc or "—")
@@ -2120,6 +2124,14 @@ def email_status():
 @email_app.command("test")
 def email_test(
     to: str = typer.Option("", "--to", help="Recipient. Defaults to EMAIL_NOTIFICATION_RECIPIENT."),
+    from_addr: str = typer.Option(
+        "",
+        "--from",
+        help=(
+            "Optional From header. Must match a configured/allowed sender "
+            "address and be accepted by the active transport."
+        ),
+    ),
     subject: str = typer.Option("Autocaller test email", "--subject"),
     body: str = typer.Option(
         "If you can read this, the autocaller email pipeline works.",
@@ -2136,7 +2148,7 @@ def email_test(
         console.print("[red]No recipient. Pass --to or set EMAIL_NOTIFICATION_RECIPIENT.[/red]")
         raise typer.Exit(code=1)
     try:
-        msg_id = _send_email(subject, body, to=recipient)
+        msg_id = _send_email(subject, body, to=recipient, from_addr=from_addr or None)
     except Exception as e:
         console.print(f"[red]Send failed: {e}[/red]")
         raise typer.Exit(code=1) from e
