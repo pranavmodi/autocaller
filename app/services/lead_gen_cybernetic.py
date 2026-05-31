@@ -17,22 +17,32 @@ from sqlalchemy import desc, select
 from app.db import AsyncSessionLocal
 from app.db.models import (
     FirmContactRow,
+    EmailSequenceRow,
     LeadGenBatchItemRow,
     LeadGenBatchRow,
     LeadGenObservationRow,
     LeadGenPolicyProposalRow,
     LeadGenPolicyVersionRow,
+    OperatorNotificationRow,
 )
+from app.services.contact_selection import contact_selection_weights
 from app.services.firm_contacts_service import fetch_pain_quote_for_firm
+from app.services.lead_gen_action_planner import QUEUEABLE_ACTIONS, plan_daily_lead_gen_actions
+from app.services.lead_email_composer import _sanitize_email_copy
 from app.services.lead_feedback_classifier import classify_feedback_event
-from app.services.sequence_recommendations import recommend_sequence_contacts
-from app.services.sequence_scheduler import get_sequence, start_sequence
-from app.services.sequences.registry import DEFAULT_TEMPLATE_KEY, normalize_template_key
+from app.services.email_notification_service import _send_email
+from app.services.sequence_scheduler import (
+    create_sequence_approval_placeholder,
+    get_sequence,
+    start_sequence,
+)
+from app.services.sequences.registry import DEFAULT_TEMPLATE_KEY, cadence_for, normalize_template_key
 
 
 TARGET_METRIC = "booked_qualified_conversations"
 DEFAULT_POLICY_VERSION = "lead-gen-v1"
 DEFAULT_BATCH_STAGGER_MINUTES = 60
+DEFAULT_DAILY_SEND_BUDGET = 50
 
 
 def _new_id() -> str:
@@ -87,21 +97,32 @@ def parse_scheduled_start_at(
 
 
 def _default_weights() -> dict[str, Any]:
-    return {
-        "persona": {
-            "founder_owner": 100,
-            "coo": 98,
-            "managing_partner": 94,
-            "operations_leader": 88,
-            "partner": 82,
-            "known_decision_maker": 70,
-        },
+    weights = contact_selection_weights({
         "bonuses": {
             "pif_leadership": 3,
             "known_state": 2,
         },
         "target_metric": TARGET_METRIC,
-    }
+        "daily_send_budget": DEFAULT_DAILY_SEND_BUDGET,
+    })
+    return weights
+
+
+def _effective_weights(weights: dict[str, Any] | None) -> dict[str, Any]:
+    merged = contact_selection_weights(weights or {})
+    merged.setdefault("target_metric", TARGET_METRIC)
+    merged.setdefault("daily_send_budget", DEFAULT_DAILY_SEND_BUDGET)
+    return merged
+
+
+def daily_send_budget_from_policy(policy: LeadGenPolicyVersionRow) -> int:
+    weights = policy.weights_json or {}
+    raw = weights.get("daily_send_budget", DEFAULT_DAILY_SEND_BUDGET)
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        value = DEFAULT_DAILY_SEND_BUDGET
+    return max(1, min(200, value))
 
 
 async def ensure_default_policy() -> LeadGenPolicyVersionRow:
@@ -112,6 +133,11 @@ async def ensure_default_policy() -> LeadGenPolicyVersionRow:
             .order_by(desc(LeadGenPolicyVersionRow.created_at))
         )).scalars().first()
         if active:
+            effective = _effective_weights(active.weights_json)
+            if effective != (active.weights_json or {}):
+                active.weights_json = effective
+                await session.commit()
+                await session.refresh(active)
             return active
         existing = (await session.execute(
             select(LeadGenPolicyVersionRow).where(
@@ -120,6 +146,7 @@ async def ensure_default_policy() -> LeadGenPolicyVersionRow:
         )).scalar_one_or_none()
         if existing:
             existing.active = True
+            existing.weights_json = _effective_weights(existing.weights_json)
             await session.commit()
             await session.refresh(existing)
             return existing
@@ -145,6 +172,139 @@ async def ensure_default_policy() -> LeadGenPolicyVersionRow:
         return row
 
 
+async def set_daily_send_budget(*, budget: int, updated_by: str = "operator") -> LeadGenPolicyVersionRow:
+    safe_budget = max(1, min(200, int(budget)))
+    policy = await ensure_default_policy()
+    async with AsyncSessionLocal() as session:
+        row = (await session.execute(
+            select(LeadGenPolicyVersionRow).where(
+                LeadGenPolicyVersionRow.version == policy.version
+            )
+        )).scalar_one()
+        weights = dict(row.weights_json or {})
+        weights["daily_send_budget"] = safe_budget
+        weights["daily_send_budget_updated_by"] = updated_by
+        weights["daily_send_budget_updated_at"] = _utcnow().isoformat()
+        row.weights_json = weights
+        await session.commit()
+        await session.refresh(row)
+        return row
+
+
+async def send_batch_item_draft(
+    *,
+    batch_item_id: str,
+    subject: str,
+    body: str,
+    sent_by: str = "operator",
+) -> dict[str, Any]:
+    draft_subject = _sanitize_email_copy(subject)
+    draft_body = _sanitize_email_copy(body)
+    if not draft_subject:
+        raise ValueError("draft_subject_empty")
+    if not draft_body:
+        raise ValueError("draft_body_empty")
+
+    async with AsyncSessionLocal() as session:
+        item = await session.get(LeadGenBatchItemRow, batch_item_id)
+        if not item:
+            raise ValueError("batch_item_not_found")
+        contact = await session.get(FirmContactRow, item.contact_id)
+        if not contact or not contact.email:
+            raise ValueError("contact_email_not_found")
+
+    existing = await get_sequence(item.contact_id, item.template_key)
+    if existing:
+        seq = existing
+    else:
+        pain = await fetch_pain_quote_for_firm(item.pif_id)
+        seq = await start_sequence(
+            contact_id=item.contact_id,
+            template_key=item.template_key,
+            pain_quote=pain.get("quote"),
+            reviewer_name=pain.get("reviewer_name"),
+            review_date=pain.get("review_date"),
+            pain_point_key=pain.get("pain_point_key"),
+            started_by=f"lead_gen_preview_send:{item.batch_id}",
+            first_step_due_at=_utcnow(),
+        )
+
+    step_num = seq.current_step + 1
+    if step_num > seq.steps_total:
+        raise ValueError("sequence_completed")
+
+    msg_id = _send_email(
+        draft_subject,
+        draft_body,
+        to=contact.email,
+        message_type="dynamic_lead_email",
+        pif_id=contact.pif_id,
+        recipient_name=contact.full_name,
+        transport="zoho_api",
+    )
+
+    sent_at = _utcnow()
+    async with AsyncSessionLocal() as session:
+        item_row = await session.get(LeadGenBatchItemRow, batch_item_id)
+        seq_row = await session.get(EmailSequenceRow, seq.id)
+        if item_row:
+            item_row.sequence_id = seq.id
+            item_row.approval_status = "started"
+            reason = dict(item_row.reason_json or {})
+            reason["last_sent_by"] = sent_by or "operator"
+            reason["last_sent_at"] = sent_at.isoformat()
+            reason["last_sent_message_id"] = msg_id
+            reason["last_sent_subject"] = draft_subject
+            item_row.reason_json = reason
+        if seq_row:
+            seq_row.current_step = step_num
+            seq_row.last_sent_at = sent_at
+            if step_num >= seq_row.steps_total:
+                seq_row.status = "completed"
+                seq_row.next_step_due_at = None
+            else:
+                cadence = cadence_for(seq_row.template_key, seq_row.variant)
+                gap_days = cadence[step_num] - cadence[step_num - 1]
+                seq_row.status = "active"
+                seq_row.next_step_due_at = sent_at + timedelta(days=gap_days)
+            seq_row.paused_reason = None
+        notification = (await session.execute(
+            select(OperatorNotificationRow).where(
+                OperatorNotificationRow.notification_type == "lead_sequence_email_approval",
+                OperatorNotificationRow.source_type == "email_sequence_step",
+                OperatorNotificationRow.source_id == f"{seq.id}:{step_num}",
+                OperatorNotificationRow.status == "pending",
+                OperatorNotificationRow.acknowledged_at.is_(None),
+            )
+        )).scalar_one_or_none()
+        if notification:
+            suggested = dict(notification.suggested_action_json or {})
+            suggested.update({
+                "sent_at": sent_at.isoformat(),
+                "sent_by": sent_by or "operator",
+                "sent_message_id": msg_id,
+                "sent_transport": "zoho_api",
+                "sent_to": contact.email,
+                "sent_subject": draft_subject,
+                "sent_body": draft_body,
+            })
+            notification.suggested_action_json = suggested
+            notification.status = "actioned"
+            notification.acknowledged_at = sent_at
+            notification.acknowledged_by = (sent_by or "operator")[:128]
+        await session.commit()
+
+    return {
+        "batch_item_id": batch_item_id,
+        "sequence_id": seq.id,
+        "sent_to": contact.email,
+        "sent_subject": draft_subject,
+        "sent_message_id": msg_id,
+        "sent_at": sent_at.isoformat(),
+        "step": step_num,
+    }
+
+
 async def create_recommendation_batch(
     *,
     name: str | None = None,
@@ -154,9 +314,9 @@ async def create_recommendation_batch(
 ) -> dict[str, Any]:
     template_key = normalize_template_key(template_key)
     policy = await ensure_default_policy()
-    rec_data = await recommend_sequence_contacts(template_key=template_key, limit=limit)
+    rec_data = await plan_daily_lead_gen_actions(template_key=template_key, limit=limit)
     batch_id = _new_id()
-    batch_name = name or f"{template_key} recommendation batch"
+    batch_name = name or f"{template_key} daily action plan"
 
     async with AsyncSessionLocal() as session:
         batch = LeadGenBatchRow(
@@ -172,6 +332,27 @@ async def create_recommendation_batch(
         session.add(batch)
         await session.flush()
         for rec in rec_data.get("recommended") or []:
+            reason_json = {
+                "reason": rec.get("reason") or "",
+                "contact_source": rec.get("contact_source") or "",
+                "policy_version": policy.version,
+            }
+            reason_json.update({
+                "action_type": rec.get("action_type") or "first_touch",
+                "priority_bucket": rec.get("priority_bucket") or "new_conversation",
+                "source_type": rec.get("source_type") or "new_recommendation",
+                "source_id": rec.get("source_id") or rec.get("contact_id"),
+                "sequence_id": rec.get("sequence_id"),
+                "notification_id": rec.get("notification_id"),
+                "signals": rec.get("signals") or [],
+                "next_operator_action": rec.get("next_operator_action") or "review_and_approve",
+                "selection_policy_version": (
+                    rec.get("selection_policy_version") or rec.get("policy_version") or policy.version
+                ),
+                "score_breakdown": rec.get("score_breakdown") or {},
+                "selection_features": rec.get("selection_features") or {},
+                "suppressions": rec.get("suppressions") or [],
+            })
             session.add(LeadGenBatchItemRow(
                 id=_new_id(),
                 batch_id=batch_id,
@@ -184,12 +365,9 @@ async def create_recommendation_batch(
                 persona=rec.get("persona") or "",
                 template_key=template_key,
                 score=int(rec.get("score") or 0),
-                reason_json={
-                    "reason": rec.get("reason") or "",
-                    "contact_source": rec.get("contact_source") or "",
-                    "policy_version": policy.version,
-                },
+                reason_json=reason_json,
                 approval_status="pending",
+                sequence_id=rec.get("sequence_id"),
             ))
         await session.commit()
 
@@ -314,7 +492,11 @@ async def approve_batch(
             .where(LeadGenBatchItemRow.batch_id == batch_id)
             .order_by(desc(LeadGenBatchItemRow.score), LeadGenBatchItemRow.firm_name.asc())
         )).scalars().all()
-        batch.status = "sequencing" if start_sequences else "approved"
+        has_queueable_items = any(
+            (item.reason_json or {}).get("action_type", "first_touch") in QUEUEABLE_ACTIONS
+            for item in items
+        )
+        batch.status = "sequencing" if start_sequences and has_queueable_items else "approved"
         batch.approved_by = approved_by
         batch.approved_at = now
         if start_sequences:
@@ -325,12 +507,43 @@ async def approve_batch(
         await session.commit()
 
     if start_sequences:
-        total = len(items)
-        for idx, item in enumerate(items):
+        queueable_items = [
+            item for item in items
+            if (item.reason_json or {}).get("action_type", "first_touch") in QUEUEABLE_ACTIONS
+        ]
+        total = len(queueable_items)
+        for idx, item in enumerate(queueable_items):
+            action_type = (item.reason_json or {}).get("action_type", "first_touch")
+            create_approval_action = False
             existing = await get_sequence(item.contact_id, item.template_key)
             if existing:
                 seq_id = existing.id
+                create_approval_action = (existing.paused_reason or "").startswith(
+                    "awaiting_operator_send_approval:"
+                )
+                if action_type == "follow_up":
+                    first_step_due_at = staggered_due_at(
+                        start_at=queue_start_at,
+                        index=idx,
+                        total=total,
+                        window_minutes=stagger_minutes,
+                    )
+                    async with AsyncSessionLocal() as session:
+                        seq_row = await session.get(EmailSequenceRow, existing.id)
+                        if seq_row and seq_row.status == "active":
+                            seq_row.next_step_due_at = first_step_due_at
+                            await session.commit()
+                            create_approval_action = True
             else:
+                if action_type != "first_touch":
+                    seq_id = None
+                    async with AsyncSessionLocal() as session:
+                        row = (await session.execute(
+                            select(LeadGenBatchItemRow).where(LeadGenBatchItemRow.id == item.id)
+                        )).scalar_one()
+                        row.approval_status = "skipped"
+                        await session.commit()
+                    continue
                 pain = await fetch_pain_quote_for_firm(item.pif_id)
                 first_step_due_at = staggered_due_at(
                     start_at=queue_start_at,
@@ -350,6 +563,7 @@ async def approve_batch(
                         first_step_due_at=first_step_due_at,
                     )
                     seq_id = seq.id
+                    create_approval_action = True
                 except ValueError:
                     seq_id = None
             async with AsyncSessionLocal() as session:
@@ -359,6 +573,20 @@ async def approve_batch(
                 row.sequence_id = seq_id
                 row.approval_status = "started" if seq_id else "skipped"
                 await session.commit()
+            if seq_id and create_approval_action:
+                result = await create_sequence_approval_placeholder(seq_id)
+                if result.get("notification_id"):
+                    async with AsyncSessionLocal() as session:
+                        row = (await session.execute(
+                            select(LeadGenBatchItemRow).where(
+                                LeadGenBatchItemRow.id == item.id
+                            )
+                        )).scalar_one()
+                        reason = dict(row.reason_json or {})
+                        reason["operator_notification_id"] = result["notification_id"]
+                        reason["operator_notification_created_at"] = _utcnow().isoformat()
+                        row.reason_json = reason
+                        await session.commit()
 
     return await get_batch(batch_id)
 
@@ -470,21 +698,42 @@ async def create_policy_proposal_from_batch(
     }
     negative = {"not_interested", "do_not_contact", "bounce"}
     by_persona: dict[str, dict[str, int]] = {}
+    by_email_quality: dict[str, dict[str, int]] = {}
+    by_top_score_component: dict[str, dict[str, int]] = {}
     item_by_contact = {item["contact_id"]: item for item in items}
+
+    def bump(bucket_map: dict[str, dict[str, int]], key: str, outcome: str | None) -> None:
+        bucket = bucket_map.setdefault(key or "unknown", {"positive": 0, "negative": 0, "total": 0})
+        bucket["total"] += 1
+        if outcome in positive:
+            bucket["positive"] += 1
+        if outcome in negative:
+            bucket["negative"] += 1
+
     for obs in observations:
         item = item_by_contact.get(obs.get("contact_id") or "")
         if not item:
             continue
         persona = item.get("persona") or "unknown"
-        bucket = by_persona.setdefault(persona, {"positive": 0, "negative": 0, "total": 0})
-        bucket["total"] += 1
-        if obs.get("classified_outcome") in positive:
-            bucket["positive"] += 1
-        if obs.get("classified_outcome") in negative:
-            bucket["negative"] += 1
+        outcome = obs.get("classified_outcome")
+        bump(by_persona, persona, outcome)
+        reason = item.get("reason") or {}
+        features = reason.get("selection_features") or {}
+        if isinstance(features, dict):
+            bump(by_email_quality, str(features.get("email_quality") or "unknown"), outcome)
+        breakdown = reason.get("score_breakdown") or {}
+        if isinstance(breakdown, dict) and breakdown:
+            positive_components = {
+                str(k): int(v)
+                for k, v in breakdown.items()
+                if isinstance(v, (int, float)) and int(v) > 0
+            }
+            if positive_components:
+                top_component = max(positive_components.items(), key=lambda kv: kv[1])[0]
+                bump(by_top_score_component, top_component, outcome)
 
     proposed = {
-        "kind": "persona_weight_review",
+        "kind": "contact_selection_policy_review",
         "policy": "human_review_required",
         "suggestions": [],
     }
@@ -505,13 +754,52 @@ async def create_policy_proposal_from_batch(
                 "evidence": stats,
             })
 
+    for email_quality, stats in sorted(by_email_quality.items()):
+        total = stats["total"]
+        if total < 3:
+            continue
+        if stats["positive"] >= 2:
+            proposed["suggestions"].append({
+                "action": "consider_boost_email_quality",
+                "email_quality": email_quality,
+                "evidence": stats,
+            })
+        if stats["negative"] >= 3 and stats["positive"] == 0:
+            proposed["suggestions"].append({
+                "action": "consider_deprioritize_email_quality",
+                "email_quality": email_quality,
+                "evidence": stats,
+            })
+
+    for component, stats in sorted(by_top_score_component.items()):
+        total = stats["total"]
+        if total < 3:
+            continue
+        if stats["positive"] >= 2:
+            proposed["suggestions"].append({
+                "action": "consider_boost_score_component",
+                "component": component,
+                "evidence": stats,
+            })
+        if stats["negative"] >= 3 and stats["positive"] == 0:
+            proposed["suggestions"].append({
+                "action": "consider_deprioritize_score_component",
+                "component": component,
+                "evidence": stats,
+            })
+
     async with AsyncSessionLocal() as session:
         row = LeadGenPolicyProposalRow(
             id=_new_id(),
             source_batch_id=batch_id,
-            proposal_type="persona_weight_review",
+            proposal_type="contact_selection_policy_review",
             proposed_change_json=proposed,
-            evidence_json={"by_persona": by_persona, "observation_count": len(observations)},
+            evidence_json={
+                "by_persona": by_persona,
+                "by_email_quality": by_email_quality,
+                "by_top_score_component": by_top_score_component,
+                "observation_count": len(observations),
+            },
             status="pending",
             created_by=created_by,
         )

@@ -17,6 +17,7 @@ from app.db import AsyncSessionLocal
 from app.db.models import EmailSequenceRow, FirmContactRow, InboundEmailRow, OperatorNotificationRow
 from app.services.comms_log import log_email
 from app.services.email_notification_service import _resolve_sender_address, _send_email
+from app.services.lead_email_composer import _sanitize_email_copy
 from app.services.sequences.registry import cadence_for
 
 
@@ -259,7 +260,23 @@ def _send_thread_reply(
 ) -> tuple[str, str]:
     transport = os.getenv("THREAD_REPLY_TRANSPORT", "").strip().lower()
     if not transport:
-        transport = "resend" if os.getenv("RESEND_API_KEY", "").strip() else "smtp"
+        transport = "zoho_api" if os.getenv("ZOHO_MAIL_REFRESH_TOKEN", "").strip() else (
+            "smtp" if os.getenv("SMTP_HOST", "").strip() else "resend"
+        )
+    if transport == "zoho_api":
+        context = notification.context_json if isinstance(notification.context_json, dict) else {}
+        return (
+            _send_email(
+                _reply_subject(subject),
+                body,
+                to=inbound.from_email,
+                message_type="lead_reply_draft",
+                pif_id=context.get("pif_id"),
+                recipient_name=context.get("contact_name"),
+                transport="zoho_api",
+            ),
+            "zoho_api_thread",
+        )
     if transport == "resend":
         return (
             _send_thread_reply_resend_sync(
@@ -271,7 +288,7 @@ def _send_thread_reply(
             "resend_thread",
         )
     if transport != "smtp":
-        raise RuntimeError("THREAD_REPLY_TRANSPORT must be 'smtp' or 'resend'")
+        raise RuntimeError("THREAD_REPLY_TRANSPORT must be 'smtp', 'resend', or 'zoho_api'")
     return (
         _send_thread_reply_sync(
             inbound=inbound,
@@ -339,18 +356,19 @@ async def send_notification_draft_reply(
         await session.commit()
         await session.refresh(row)
 
-        await asyncio.to_thread(
-            log_email,
-            recipient_email=inbound.from_email,
-            subject=_reply_subject(draft_subject),
-            body=draft_body,
-            message_type="lead_reply_draft",
-            transport="resend" if transport.startswith("resend") else "smtp",
-            message_id=msg_id,
-            status="sent",
-            pif_id=row.context_json.get("pif_id") if isinstance(row.context_json, dict) else None,
-            recipient_name=(row.context_json or {}).get("contact_name") if isinstance(row.context_json, dict) else None,
-        )
+        if not transport.startswith("zoho_api"):
+            await asyncio.to_thread(
+                log_email,
+                recipient_email=inbound.from_email,
+                subject=_reply_subject(draft_subject),
+                body=draft_body,
+                message_type="lead_reply_draft",
+                transport="resend" if transport.startswith("resend") else "smtp",
+                message_id=msg_id,
+                status="sent",
+                pif_id=row.context_json.get("pif_id") if isinstance(row.context_json, dict) else None,
+                recipient_name=(row.context_json or {}).get("contact_name") if isinstance(row.context_json, dict) else None,
+            )
         return notification_to_dict(row)
 
 
@@ -383,8 +401,8 @@ async def _send_sequence_draft_notification(
     if not contact or not contact.email:
         raise ValueError("sequence contact email not found")
 
-    draft_subject = subject if subject is not None else str(suggested.get("draft_subject") or "")
-    draft_body = body if body is not None else str(suggested.get("draft_body") or "")
+    draft_subject = _sanitize_email_copy(subject if subject is not None else str(suggested.get("draft_subject") or ""))
+    draft_body = _sanitize_email_copy(body if body is not None else str(suggested.get("draft_body") or ""))
     if not draft_subject.strip():
         raise RuntimeError("draft subject is empty")
     if not draft_body.strip():
@@ -398,6 +416,7 @@ async def _send_sequence_draft_notification(
         message_type=str(suggested.get("message_type") or "dynamic_lead_email"),
         pif_id=contact.pif_id,
         recipient_name=contact.full_name,
+        transport="zoho_api",
     )
 
     sent_at = datetime.now(timezone.utc)

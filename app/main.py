@@ -10,17 +10,19 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pathlib import Path
 
-from .api import dashboard_router, websocket_router, settings_router, dispatcher_router, scenarios_router, carrier_router, cadence_router, consults_router, call_lists_router, voice_preview_router, firm_reviews_router, comms_router, sequences_router, outreach_router, lead_gen_router, resend_webhooks_router, inbound_email_router, operator_notifications_router
+from .api import dashboard_router, websocket_router, settings_router, dispatcher_router, scenarios_router, carrier_router, cadence_router, consults_router, call_lists_router, voice_preview_router, firm_reviews_router, comms_router, sequences_router, outreach_router, lead_gen_router, resend_webhooks_router, inbound_email_router, operator_notifications_router, seo_router, product_traces_router, learning_router, todos_router
 from .api.auth import router as auth_router, SESSION_COOKIE, verify_session_token, auth_configured
 from .services.dispatcher import get_dispatcher
 from .services.daily_report_service import daily_report_loop
 from .services.judge import judge_loop
 from .services.voicemail_followup_service import voicemail_followup_loop
 from .services.sequence_scheduler import sequence_loop
+from .services.product_traces import new_trace_id, request_id_var, trace_id_var
 from .providers import set_queue_source, set_patient_source
 from .providers.settings_provider import get_settings_provider
 from .db import AsyncSessionLocal, async_engine
 from .db.seed import seed_default_settings, seed_builtin_scenarios, seed_sample_patients
+from .services.todos import seed_default_todos
 
 
 @asynccontextmanager
@@ -31,6 +33,7 @@ async def lifespan(app: FastAPI):
         await seed_builtin_scenarios(session)
         await seed_sample_patients(session)
         await session.commit()
+    await seed_default_todos()
     # Apply persisted source settings
     settings = await get_settings_provider().get_settings()
     set_queue_source(settings.queue_source)
@@ -116,6 +119,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["x-possible-request-id", "x-possible-trace-id"],
 )
 
 
@@ -209,6 +213,53 @@ class _AuthMiddleware:
 
 app.add_middleware(_AuthMiddleware)
 
+
+class _TraceContextMiddleware:
+    """Attach request and trace IDs to every HTTP/WebSocket request."""
+
+    def __init__(self, app_):
+        self._app = app_
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] not in ("http", "websocket"):
+            return await self._app(scope, receive, send)
+
+        header_map = {k.lower(): v for k, v in scope.get("headers", [])}
+        request_id = (
+            header_map.get(b"x-possible-request-id", b"")
+            .decode("latin-1", errors="replace")
+            .strip()
+            or new_trace_id()
+        )[:64]
+        trace_id = (
+            header_map.get(b"x-possible-trace-id", b"")
+            .decode("latin-1", errors="replace")
+            .strip()
+            or new_trace_id()
+        )[:64]
+
+        request_token = request_id_var.set(request_id)
+        trace_token = trace_id_var.set(trace_id)
+        scope["possible_request_id"] = request_id
+        scope["possible_trace_id"] = trace_id
+
+        async def send_with_trace_headers(message):
+            if message["type"] == "http.response.start":
+                headers = list(message.get("headers", []))
+                headers.append((b"x-possible-request-id", request_id.encode("ascii", errors="ignore")))
+                headers.append((b"x-possible-trace-id", trace_id.encode("ascii", errors="ignore")))
+                message = {**message, "headers": headers}
+            await send(message)
+
+        try:
+            await self._app(scope, receive, send_with_trace_headers)
+        finally:
+            request_id_var.reset(request_token)
+            trace_id_var.reset(trace_token)
+
+
+app.add_middleware(_TraceContextMiddleware)
+
 # Include API routers
 app.include_router(auth_router)
 app.include_router(dashboard_router)
@@ -229,6 +280,10 @@ app.include_router(lead_gen_router)
 app.include_router(resend_webhooks_router)
 app.include_router(inbound_email_router)
 app.include_router(operator_notifications_router)
+app.include_router(seo_router)
+app.include_router(product_traces_router)
+app.include_router(learning_router)
+app.include_router(todos_router)
 
 # Legacy static (kept for compatibility)
 STATIC_DIR = Path("static")

@@ -6,6 +6,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
   BrainCircuit,
+  ChevronDown,
   CheckCircle2,
   ClipboardCheck,
   Eye,
@@ -25,21 +26,78 @@ import {
   getLeadGenBatch,
   getLeadGenPolicy,
   listLeadGenBatches,
-  listSequenceTemplates,
   previewSequence,
+  sendLeadGenBatchItemDraft,
+  updateLeadGenDailySendBudget,
   type LeadGenBatch,
   type LeadGenBatchItem,
   type LeadGenObservation,
   type RenderedSequenceStep,
-  type SequenceTemplate,
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 const DEFAULT_TEMPLATE = "possible_minds_dynamic";
 const CALIFORNIA_TIME_ZONE = "America/Los_Angeles";
+const DEFAULT_DAILY_EMAIL_BUDGET = 50;
 
 export default function LeadGenPage() {
+  const qc = useQueryClient();
   const [batchId, setBatchId] = useState<string>("");
+  const [dailyEmailBudget, setDailyEmailBudget] = useState(DEFAULT_DAILY_EMAIL_BUDGET);
+  const policy = useQuery({
+    queryKey: ["lead-gen-policy"],
+    queryFn: getLeadGenPolicy,
+  });
+  const batches = useQuery({
+    queryKey: ["lead-gen-batches", "recent"],
+    queryFn: () => listLeadGenBatches({ limit: 20 }),
+    refetchInterval: 30_000,
+  });
+
+  useEffect(() => {
+    if (policy.data?.daily_send_budget) {
+      setDailyEmailBudget(clampDailyEmailBudget(policy.data.daily_send_budget));
+    }
+  }, [policy.data?.daily_send_budget]);
+
+  useEffect(() => {
+    if (batchId) return;
+    const selectedBatch = selectBatchForDisplay(batches.data?.batches ?? []);
+    if (selectedBatch) {
+      setBatchId(selectedBatch.id);
+    }
+  }, [batchId, batches.data?.batches]);
+
+  const saveBudget = useMutation({
+    mutationFn: () => updateLeadGenDailySendBudget(dailyEmailBudget),
+    onSuccess: (data) => {
+      setDailyEmailBudget(clampDailyEmailBudget(data.daily_send_budget));
+      qc.invalidateQueries({ queryKey: ["lead-gen-policy"] });
+    },
+  });
+
+  const createToday = useMutation({
+    mutationFn: async () => {
+      const created = await createLeadGenBatch({
+        name: defaultDailyPlanName(dailyEmailBudget),
+        template_key: DEFAULT_TEMPLATE,
+        limit: dailyEmailBudget,
+        created_by: "operator",
+      });
+      return approveLeadGenBatch(created.batch.id, {
+        approved_by: "operator",
+        start_sequences: true,
+        stagger_minutes: 60,
+        scheduled_timezone: CALIFORNIA_TIME_ZONE,
+      });
+    },
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ["lead-gen-batches"] });
+      qc.invalidateQueries({ queryKey: ["operator-notifications-pending"] });
+      qc.invalidateQueries({ queryKey: ["all-sequences"] });
+      setBatchId(data.batch.id);
+    },
+  });
 
   return (
     <div className="mx-auto max-w-[1500px] px-6 py-8">
@@ -61,25 +119,172 @@ export default function LeadGenPage() {
       </div>
 
       <SafetyBand />
+      <LeadGenProcessExplanation />
 
       <div className="grid grid-cols-12 gap-4">
         <aside className="col-span-12 space-y-3 lg:col-span-4 xl:col-span-3">
-          <PolicyPanel />
-          <NewBatchPanel onCreated={(id) => setBatchId(id)} />
-          <BatchList selectedId={batchId} onSelect={setBatchId} />
+          <DailySendBudgetPanel
+            dailyEmailBudget={dailyEmailBudget}
+            onDailyEmailBudgetChange={setDailyEmailBudget}
+            onSave={() => saveBudget.mutate()}
+            isSaving={saveBudget.isPending}
+            saveError={saveBudget.isError}
+            onGenerate={() => createToday.mutate()}
+            isGenerating={createToday.isPending}
+            generateError={createToday.isError}
+          />
         </aside>
         <main className="col-span-12 lg:col-span-8 xl:col-span-9">
           {batchId ? (
-            <BatchDetail batchId={batchId} />
+            <BatchDetail batchId={batchId} dailyEmailBudget={dailyEmailBudget} />
+          ) : batches.isLoading ? (
+            <div className="flex items-center justify-center gap-2 rounded-xl border border-neutral-200 bg-white px-6 py-16 text-center text-sm text-neutral-500">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading the latest generated list...
+            </div>
+          ) : batches.isError ? (
+            <div className="rounded-xl border border-red-200 bg-red-50 px-6 py-16 text-center text-sm text-red-700">
+              Could not load generated lead-gen lists.
+            </div>
           ) : (
             <div className="rounded-xl border border-dashed border-neutral-200 bg-white px-6 py-16 text-center text-sm text-neutral-500">
-              Create or select a batch. The system will show recommended
-              contacts, approval state, observations, and learning proposals.
+              No generated list was found. Set the daily send budget, save it,
+              then generate today's actions.
             </div>
           )}
         </main>
       </div>
     </div>
+  );
+}
+
+const leadGenProcessSteps = [
+  {
+    step: "1",
+    title: "Select daily actions",
+    current:
+      "Today the planner spends the daily budget across pending replies, already-composed drafts, due follow-ups, and new first-touch contacts. New starts come from firm_contacts, require a usable email, skip firms with prior call/email/SMS history, skip existing outreach runs, filter obvious non-law records, and run an explainable contact-selection scorer using persona, firm-fit, relationship, email-quality, and history components. The selected item stores the score breakdown, features, policy version, suppressions, and reason trace.",
+    ideal:
+      "Add Front read-only relationship signals, booked consult patterns, firm size, website/leadership context, inferred operational pain, prior engagement, and suppression history so the daily batch is selected by likelihood of booked qualified conversation with richer evidence.",
+  },
+  {
+    step: "2",
+    title: "Create the batch",
+    current:
+      "Creating a batch stores lead_gen_batches and lead_gen_batch_items as a ranked daily action plan. Items carry an action type such as reply_to_inbound, approve_existing_draft, follow_up, or first_touch plus the contact-selection trace used to rank that item. No email can be sent at this stage.",
+    ideal:
+      "The daily runner should create a policy-explained batch automatically, attach recommendation evidence for each firm, and separate eligible, suppressed, already-contacted, and needs-review candidates.",
+  },
+  {
+    step: "3",
+    title: "Approve and queue",
+    current:
+      "Approving a batch can mark items approved. Approve-and-queue creates outreach run state for the approved contacts and staggers their first due time over the configured California-time send window.",
+    ideal:
+      "A daily operating policy should decide whether a batch is auto-created but still keep send approval manual. It should enforce daily caps, sender/domain limits, cooldowns, and first-class suppressions before any outreach run is queued.",
+  },
+  {
+    step: "4",
+    title: "Compose each email",
+    current:
+      "All lead-gen batches use the possible_minds_dynamic composer. When an outreach step becomes due, the backend builds context from the contact, firm, prior outbound emails, inbound replies, booked consult patterns, optional blog links, and policy, then calls app/skills/possible-minds-lead-email-composer/SKILL.md to choose the strategy and draft plaintext copy.",
+    ideal:
+      "The composer should also receive Front-derived workflow signals, CRM state, firm-size/leadership intelligence, website evidence, experiment assignment, known winning consult patterns, and skill-version history. The skill should be updated from reviewed feedback over time.",
+  },
+  {
+    step: "5",
+    title: "Review before send",
+    current:
+      "Every generated outbound email creates an operator notification. The outreach run pauses as awaiting_operator_send_approval. The non-blocking action center shows firm/contact context, editable subject/body, rationale, angle, CTA, blog link when used, and model metadata.",
+    ideal:
+      "The action center should also show the exact evidence packet used, policy constraints, risk flags, prior touches, deliverability warnings, and alternate draft options. Approval, edits, and rejection reasons should become learning observations.",
+  },
+  {
+    step: "6",
+    title: "Send and advance",
+    current:
+      "Only Approve & send sends the edited draft through the configured email transport, writes email_logs, marks the notification actioned, advances the outreach step, and schedules the next due step by cadence.",
+    ideal:
+      "The send path should attach experiment IDs, composer skill version, policy version, sender identity, selected blog link, and full render metadata so every outcome can be traced back to the decision that produced it.",
+  },
+  {
+    step: "7",
+    title: "Observe feedback",
+    current:
+      "The loop can ingest Zoho inbound replies, Resend delivery events when configured, manual observations, operator notifications, and booked consults in the Possible OS database. Replies pause outreach runs and create review tasks.",
+    ideal:
+      "Add automated polling jobs, production Resend webhook config, Front read-only ingestion, calendar lifecycle events, CRM/deal outcomes, landing-page analytics, and normalized observation records across all feedback sources.",
+  },
+  {
+    step: "8",
+    title: "Learn and update policy",
+    current:
+      "Observations and proposal generation exist, but scoring, copy doctrine, skill examples, sender strategy, suppression rules, and policy versions are not automatically updated from feedback.",
+    ideal:
+      "Aggregate feedback into human-reviewed proposals: change targeting weights, suppressions, cadence, blog-link choices, composer instructions, examples, and policy versions. Apply changes only after approval until the loop has enough evidence for low-risk automation.",
+  },
+];
+
+function LeadGenProcessExplanation() {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <section className="mb-4 overflow-hidden rounded-xl border border-neutral-200 bg-white">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        aria-expanded={open}
+        className="flex w-full flex-wrap items-center gap-2 border-b border-neutral-100 px-4 py-3 text-left hover:bg-neutral-50"
+      >
+        <BrainCircuit className="h-4 w-4 text-neutral-500" />
+        <h2 className="text-xs font-semibold uppercase tracking-wider text-neutral-500">
+          Lead generation control loop
+        </h2>
+        <span className="text-xs text-neutral-400">
+          current behavior and target state
+        </span>
+        <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-[11px] font-medium text-neutral-500">
+          {open ? "Hide details" : "Show details"}
+        </span>
+        <ChevronDown
+          className={cn(
+            "ml-auto h-4 w-4 text-neutral-400 transition-transform",
+            open && "rotate-180",
+          )}
+        />
+      </button>
+      {open && (
+        <div className="divide-y divide-neutral-100">
+          {leadGenProcessSteps.map((item) => (
+            <div
+              key={item.step}
+              className="grid gap-3 px-4 py-3 text-sm xl:grid-cols-[220px_minmax(0,1fr)_minmax(0,1fr)]"
+            >
+              <div className="flex min-w-0 items-start gap-3">
+                <span className="flex h-7 w-7 flex-none items-center justify-center rounded-full bg-neutral-900 text-xs font-semibold text-white">
+                  {item.step}
+                </span>
+                <div className="min-w-0">
+                  <div className="font-medium text-neutral-900">{item.title}</div>
+                </div>
+              </div>
+              <div className="min-w-0 rounded-md bg-neutral-50 px-3 py-2">
+                <div className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-neutral-400">
+                  Now
+                </div>
+                <p className="text-xs leading-relaxed text-neutral-700">{item.current}</p>
+              </div>
+              <div className="min-w-0 rounded-md bg-emerald-50 px-3 py-2">
+                <div className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-emerald-700">
+                  Ideal
+                </div>
+                <p className="text-xs leading-relaxed text-emerald-900">{item.ideal}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -89,139 +294,88 @@ function SafetyBand() {
       <ShieldCheck className="h-4 w-4" />
       <span className="font-medium">Human approval stays in the loop.</span>
       <span className="text-amber-800">
-        Approving can queue sequence rows, but email sending still requires
+        Approving can queue outreach runs, but email sending still requires
         ALLOW_SEQUENCE_SEND=true on the backend.
       </span>
     </div>
   );
 }
 
-function PolicyPanel() {
-  const q = useQuery({
-    queryKey: ["lead-gen-policy"],
-    queryFn: getLeadGenPolicy,
-  });
-
-  return (
-    <section className="rounded-xl border border-neutral-200 bg-white">
-      <div className="flex items-center gap-2 border-b border-neutral-100 px-4 py-2.5">
-        <BrainCircuit className="h-4 w-4 text-neutral-500" />
-        <h2 className="text-xs font-semibold uppercase tracking-wider text-neutral-400">
-          Active policy
-        </h2>
-        {q.isFetching && <Loader2 className="ml-auto h-3.5 w-3.5 animate-spin text-neutral-400" />}
-      </div>
-      <div className="space-y-2 px-4 py-3 text-sm">
-        {q.data ? (
-          <>
-            <div className="flex items-center justify-between gap-3">
-              <span className="font-medium text-neutral-900">{q.data.version}</span>
-              <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
-                active
-              </span>
-            </div>
-            <div className="text-xs text-neutral-500">{q.data.label}</div>
-            <div className="rounded-md bg-neutral-50 px-3 py-2 text-xs text-neutral-600">
-              Target: {q.data.target_metric.replaceAll("_", " ")}
-            </div>
-          </>
-        ) : q.isLoading ? (
-          <div className="text-xs text-neutral-400">Loading policy...</div>
-        ) : (
-          <div className="text-xs text-red-600">Policy unavailable.</div>
-        )}
-      </div>
-    </section>
-  );
-}
-
-function NewBatchPanel({ onCreated }: { onCreated: (id: string) => void }) {
-  const qc = useQueryClient();
-  const [templateKey, setTemplateKey] = useState(DEFAULT_TEMPLATE);
-  const [limit, setLimit] = useState(50);
-  const [name, setName] = useState("");
-
-  const templates = useQuery({
-    queryKey: ["sequence-templates"],
-    queryFn: listSequenceTemplates,
-  });
-
-  const create = useMutation({
-    mutationFn: () =>
-      createLeadGenBatch({
-        name: name.trim() || undefined,
-        template_key: templateKey,
-        limit,
-        created_by: "operator",
-      }),
-    onSuccess: (data) => {
-      qc.invalidateQueries({ queryKey: ["lead-gen-batches"] });
-      onCreated(data.batch.id);
-    },
-  });
-
+function DailySendBudgetPanel({
+  dailyEmailBudget,
+  onDailyEmailBudgetChange,
+  onSave,
+  isSaving,
+  saveError,
+  onGenerate,
+  isGenerating,
+  generateError,
+}: {
+  dailyEmailBudget: number;
+  onDailyEmailBudgetChange: (value: number) => void;
+  onSave: () => void;
+  isSaving: boolean;
+  saveError: boolean;
+  onGenerate: () => void;
+  isGenerating: boolean;
+  generateError: boolean;
+}) {
   return (
     <section className="rounded-xl border border-neutral-200 bg-white">
       <div className="flex items-center gap-2 border-b border-neutral-100 px-4 py-2.5">
         <MailPlus className="h-4 w-4 text-neutral-500" />
         <h2 className="text-xs font-semibold uppercase tracking-wider text-neutral-400">
-          New recommendation batch
+          Daily send budget
         </h2>
       </div>
       <div className="space-y-3 px-4 py-3">
-        <label className="block text-xs font-medium text-neutral-600">
-          Sequence template
-          <select
-            value={templateKey}
-            onChange={(e) => setTemplateKey(e.target.value)}
-            className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-2 py-1.5 text-sm text-neutral-900"
+        <div className="flex items-end gap-2">
+          <label
+            htmlFor="daily-email-budget"
+            className="block flex-1 text-xs font-medium text-neutral-600"
           >
-            {(templates.data ?? []).map((t: SequenceTemplate) => (
-              <option key={t.template_key} value={t.template_key}>
-                {t.label}
-              </option>
-            ))}
-            {templates.data?.length === 0 && (
-              <option value={DEFAULT_TEMPLATE}>Records audit</option>
-            )}
-          </select>
-        </label>
-        <label className="block text-xs font-medium text-neutral-600">
-          Batch name
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Optional"
-            className="mt-1 w-full rounded-md border border-neutral-200 px-2 py-1.5 text-sm text-neutral-900"
-          />
-        </label>
-        <label className="block text-xs font-medium text-neutral-600">
-          Contacts
-          <input
-            type="number"
-            min={1}
-            max={200}
-            value={limit}
-            onChange={(e) => setLimit(Number(e.target.value))}
-            className="mt-1 w-28 rounded-md border border-neutral-200 px-2 py-1.5 text-sm text-neutral-900"
-          />
-        </label>
+            Emails per day
+            <input
+              id="daily-email-budget"
+              type="number"
+              min={1}
+              max={200}
+              value={dailyEmailBudget}
+              onChange={(e) => onDailyEmailBudgetChange(clampDailyEmailBudget(Number(e.target.value)))}
+              className="mt-1 w-full rounded-md border border-neutral-200 px-2 py-1.5 text-sm text-neutral-900"
+            />
+          </label>
+          <button
+            type="button"
+            onClick={onSave}
+            disabled={isSaving}
+            className="inline-flex items-center justify-center gap-2 rounded-md border border-neutral-200 px-3 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50 disabled:opacity-60"
+          >
+            {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
+            Save
+          </button>
+        </div>
         <button
           type="button"
-          onClick={() => create.mutate()}
-          disabled={create.isPending}
+          onClick={onGenerate}
+          disabled={isGenerating}
           className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-neutral-900 px-3 py-2 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-60"
         >
-          {create.isPending ? (
+          {isGenerating ? (
             <Loader2 className="h-4 w-4 animate-spin" />
           ) : (
             <Sparkles className="h-4 w-4" />
           )}
-          Recommend next batch
+          Generate today's actions
         </button>
-        {create.isError && (
+        {saveError && (
           <div className="text-xs text-red-600">
-            Could not create batch. Check backend logs.
+            Could not save the daily budget.
+          </div>
+        )}
+        {generateError && (
+          <div className="text-xs text-red-600">
+            Could not generate today's list. Check backend logs.
           </div>
         )}
       </div>
@@ -229,84 +383,13 @@ function NewBatchPanel({ onCreated }: { onCreated: (id: string) => void }) {
   );
 }
 
-function BatchList({
-  selectedId,
-  onSelect,
+function BatchDetail({
+  batchId,
+  dailyEmailBudget,
 }: {
-  selectedId: string;
-  onSelect: (id: string) => void;
+  batchId: string;
+  dailyEmailBudget: number;
 }) {
-  const [status, setStatus] = useState("all");
-  const q = useQuery({
-    queryKey: ["lead-gen-batches", status],
-    queryFn: () => listLeadGenBatches({ status, limit: 50 }),
-    refetchInterval: 30_000,
-  });
-  const batches = q.data?.batches ?? [];
-
-  useEffect(() => {
-    const firstBatchId = batches[0]?.id;
-    if (!selectedId && firstBatchId) {
-      onSelect(firstBatchId);
-    }
-  }, [batches, onSelect, selectedId]);
-
-  return (
-    <section className="rounded-xl border border-neutral-200 bg-white">
-      <div className="flex items-center justify-between border-b border-neutral-100 px-4 py-2.5">
-        <h2 className="text-xs font-semibold uppercase tracking-wider text-neutral-400">
-          Batches
-        </h2>
-        {q.isFetching && <RefreshCw className="h-3.5 w-3.5 animate-spin text-neutral-400" />}
-      </div>
-      <div className="border-b border-neutral-100 px-4 py-2">
-        <select
-          value={status}
-          onChange={(e) => setStatus(e.target.value)}
-          className="w-full rounded-md border border-neutral-200 bg-white px-2 py-1.5 text-xs text-neutral-700"
-        >
-          <option value="all">All statuses</option>
-          <option value="recommended">Recommended</option>
-          <option value="approved">Approved</option>
-          <option value="sequencing">Sequencing</option>
-          <option value="observing">Observing</option>
-          <option value="completed">Completed</option>
-          <option value="archived">Archived</option>
-        </select>
-      </div>
-      <div className="max-h-[520px] overflow-y-auto">
-        {batches.map((b: LeadGenBatch) => (
-          <button
-            key={b.id}
-            type="button"
-            onClick={() => onSelect(b.id)}
-            className={cn(
-              "block w-full border-b border-neutral-100 px-4 py-3 text-left hover:bg-neutral-50",
-              selectedId === b.id && "bg-neutral-50",
-            )}
-          >
-            <div className="flex items-center justify-between gap-3">
-              <span className="truncate text-sm font-medium text-neutral-900">{b.name}</span>
-              <StatusPill status={b.status} />
-            </div>
-            <div className="mt-1 flex items-center justify-between text-xs text-neutral-500">
-              <span>{b.template_key}</span>
-              <span>{b.counts?.returned ?? 0} contacts</span>
-            </div>
-            <div className="mt-1 text-[11px] text-neutral-400">{formatDate(b.created_at)}</div>
-          </button>
-        ))}
-        {batches.length === 0 && (
-          <div className="px-4 py-6 text-center text-xs text-neutral-400">
-            No batches yet.
-          </div>
-        )}
-      </div>
-    </section>
-  );
-}
-
-function BatchDetail({ batchId }: { batchId: string }) {
   const qc = useQueryClient();
   const [observeItem, setObserveItem] = useState<LeadGenBatchItem | null>(null);
   const [previewItem, setPreviewItem] = useState<LeadGenBatchItem | null>(null);
@@ -363,9 +446,11 @@ function BatchDetail({ batchId }: { batchId: string }) {
   }
 
   const canApprove = data.batch.status === "recommended";
+  const isOlderPlan = !isCaliforniaToday(data.batch.created_at);
+  const hasQueueableItems = data.items.some(canPreviewItem);
   const canQueue =
     data.batch.status === "approved" &&
-    data.items.some((item) => item.approval_status === "approved" && !item.sequence_id);
+    data.items.some((item) => item.approval_status === "approved" && canPreviewItem(item));
 
   return (
     <div className="space-y-4">
@@ -374,13 +459,21 @@ function BatchDetail({ batchId }: { batchId: string }) {
           <div>
             <h2 className="text-base font-semibold text-neutral-900">{data.batch.name}</h2>
             <div className="mt-1 text-xs text-neutral-500">
-              {data.batch.id} - {data.batch.template_key} - {data.batch.policy_version}
+              {data.batch.id} - Composer: {formatComposerKey(data.batch.template_key)} - Policy: {data.batch.policy_version}
             </div>
           </div>
           <StatusPill status={data.batch.status} className="ml-auto" />
         </div>
-        <div className="grid gap-3 px-4 py-3 md:grid-cols-4">
-          <Metric label="Recommended" value={String(data.items.length)} />
+        {isOlderPlan && (
+          <div className="border-b border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            This is an older generated plan with {data.items.length} actions. The
+            current daily send budget is {dailyEmailBudget}; generate today's
+            action plan to create a fresh list for that budget.
+          </div>
+        )}
+        <div className="grid gap-3 px-4 py-3 md:grid-cols-5">
+          <Metric label="Daily budget" value={String(dailyEmailBudget)} />
+          <Metric label="Planned actions" value={String(data.items.length)} />
           <Metric label="Approved" value={String(counts.approved)} />
           <Metric label="Started" value={String(counts.started)} />
           <Metric label="Observed" value={String(counts.observed)} />
@@ -412,11 +505,11 @@ function BatchDetail({ batchId }: { batchId: string }) {
           <button
             type="button"
             onClick={() => {
-              if (window.confirm(`Queue sequence rows for every approved item starting ${scheduledStartAt || "now"} California time, staggered over a 60-minute sending window? Email sending still requires ALLOW_SEQUENCE_SEND=true.`)) {
+              if (window.confirm(`Queue queueable outreach runs starting ${scheduledStartAt || "now"} California time, staggered over a 60-minute sending window? Reply actions and existing approval drafts still use the operator action center. Email sending still requires ALLOW_SEQUENCE_SEND=true.`)) {
                 approve.mutate(true);
               }
             }}
-            disabled={!(canApprove || canQueue) || approve.isPending}
+            disabled={!((canApprove && hasQueueableItems) || canQueue) || approve.isPending}
             className="inline-flex items-center gap-2 rounded-md bg-neutral-900 px-3 py-2 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-50"
           >
             {approve.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
@@ -440,7 +533,7 @@ function BatchDetail({ batchId }: { batchId: string }) {
         </div>
       </section>
 
-      <ItemsTable
+      <DailyActionPlan
         items={data.items}
         onObserve={setObserveItem}
         onPreview={setPreviewItem}
@@ -469,7 +562,7 @@ function BatchDetail({ batchId }: { batchId: string }) {
   );
 }
 
-function ItemsTable({
+function DailyActionPlan({
   items,
   onObserve,
   onPreview,
@@ -482,9 +575,9 @@ function ItemsTable({
     <section className="overflow-hidden rounded-xl border border-neutral-200 bg-white">
       <div className="flex items-center justify-between border-b border-neutral-100 px-4 py-2.5">
         <h2 className="text-xs font-semibold uppercase tracking-wider text-neutral-400">
-          Recommended contacts
+          Today's action plan
         </h2>
-        <span className="text-xs text-neutral-400">{items.length} rows</span>
+        <span className="text-xs text-neutral-400">{items.length} actions</span>
       </div>
       <div className="divide-y divide-neutral-100">
         {items.map((item) => (
@@ -495,6 +588,10 @@ function ItemsTable({
             <div className="min-w-0">
               <div className="font-medium text-neutral-900">{item.firm_name}</div>
               <div className="mt-1 break-all text-xs text-neutral-400">{item.pif_id}</div>
+              <div className="mt-2 text-xs leading-relaxed text-neutral-600">
+                {reasonText(item)}
+              </div>
+              <ScoreBreakdown item={item} />
             </div>
 
             <div className="min-w-0">
@@ -505,17 +602,24 @@ function ItemsTable({
               <div className="mt-1 break-all text-xs text-neutral-500">
                 {item.contact_email}
               </div>
-              <button
-                type="button"
-                onClick={() => onPreview(item)}
-                className="mt-2 inline-flex items-center gap-1 rounded-md border border-neutral-200 px-2 py-1 text-xs font-medium text-neutral-600 hover:bg-neutral-50"
-              >
-                <MailPlus className="h-3.5 w-3.5" />
-                Preview email
-              </button>
+              {canPreviewItem(item) ? (
+                <button
+                  type="button"
+                  onClick={() => onPreview(item)}
+                  className="mt-2 inline-flex items-center gap-1 rounded-md border border-neutral-200 px-2 py-1 text-xs font-medium text-neutral-600 hover:bg-neutral-50"
+                >
+                  <MailPlus className="h-3.5 w-3.5" />
+                  {isDynamicComposer(item.template_key) ? "Generate preview" : "Preview email"}
+                </button>
+              ) : (
+                <div className="mt-2 text-xs text-neutral-400">
+                  Use the operator action center for the draft/reply.
+                </div>
+              )}
             </div>
 
             <div className="grid min-w-0 grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-2">
+              <MiniField label="Action" value={actionLabel(item)} />
               <MiniField label="Persona" value={item.persona || "-"} />
               <MiniField label="Score" value={String(item.score)} mono />
               <div>
@@ -526,7 +630,7 @@ function ItemsTable({
                   <StatusPill status={item.approval_status} />
                   {item.sequence_id && (
                     <div className="mt-1 text-[11px] text-neutral-400">
-                      seq {item.sequence_id.slice(0, 8)}
+                      run {item.sequence_id.slice(0, 8)}
                     </div>
                   )}
                 </div>
@@ -584,6 +688,90 @@ function MiniField({
   );
 }
 
+function ScoreBreakdown({ item }: { item: LeadGenBatchItem }) {
+  const entries = scoreBreakdownEntries(item);
+  if (entries.length === 0) return null;
+  const features = selectionFeatures(item);
+  const emailQuality = typeof features.email_quality === "string" ? features.email_quality : "";
+  return (
+    <div className="mt-2 space-y-1.5">
+      <div className="flex flex-wrap gap-1">
+        {entries.map(([key, value]) => (
+          <span
+            key={key}
+            className={cn(
+              "inline-flex max-w-full items-center rounded-md border px-1.5 py-0.5 text-[11px] leading-4",
+              value >= 0
+                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                : "border-amber-200 bg-amber-50 text-amber-700",
+            )}
+            title={key}
+          >
+            <span className="truncate">{formatScoreKey(key)}</span>
+            <span className="ml-1 font-mono">{value > 0 ? `+${value}` : value}</span>
+          </span>
+        ))}
+      </div>
+      {emailQuality && (
+        <div className="text-[11px] text-neutral-400">
+          Email quality: {formatScoreKey(emailQuality)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function reasonValue(item: LeadGenBatchItem, key: string) {
+  const value = item.reason?.[key];
+  return typeof value === "string" ? value : "";
+}
+
+function selectionFeatures(item: LeadGenBatchItem) {
+  const value = item.reason?.selection_features;
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function scoreBreakdownEntries(item: LeadGenBatchItem) {
+  const value = item.reason?.score_breakdown;
+  if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+  return Object.entries(value as Record<string, unknown>)
+    .filter((entry): entry is [string, number] => typeof entry[1] === "number")
+    .sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))
+    .slice(0, 4);
+}
+
+function formatScoreKey(value: string) {
+  const parts = value.split(":");
+  const label = value ? parts[parts.length - 1] : value;
+  return label.replaceAll("_", " ");
+}
+
+function actionLabel(item: LeadGenBatchItem) {
+  const labels: Record<string, string> = {
+    reply_to_inbound: "Reply",
+    approve_existing_draft: "Approve draft",
+    follow_up: "Follow-up",
+    first_touch: "New start",
+  };
+  const action = reasonValue(item, "action_type") || "first_touch";
+  return labels[action] ?? action.replaceAll("_", " ");
+}
+
+function canPreviewItem(item: LeadGenBatchItem) {
+  const action = reasonValue(item, "action_type") || "first_touch";
+  return action === "first_touch" || action === "follow_up";
+}
+
+function isDynamicComposer(templateKey: string) {
+  return templateKey === DEFAULT_TEMPLATE;
+}
+
+function reasonText(item: LeadGenBatchItem) {
+  return reasonValue(item, "reason") || "Selected by the daily lead-gen planner.";
+}
+
 function PreviewModal({
   item,
   onClose,
@@ -591,6 +779,12 @@ function PreviewModal({
   item: LeadGenBatchItem;
   onClose: () => void;
 }) {
+  const qc = useQueryClient();
+  const isDynamic = isDynamicComposer(item.template_key);
+  const [draftSubject, setDraftSubject] = useState("");
+  const [draftBody, setDraftBody] = useState("");
+  const [draftTouched, setDraftTouched] = useState(false);
+  const [isRegenerating, setIsRegenerating] = useState(false);
   const q = useQuery({
     queryKey: ["sequence-preview", item.contact_id, item.template_key],
     queryFn: () => previewSequence(item.contact_id, item.template_key),
@@ -606,6 +800,51 @@ function PreviewModal({
     const nextStepNumber = sequence ? sequence.current_step + 1 : 1;
     return steps.find((step) => step.step === nextStepNumber) ?? steps[0];
   }, [detail.data?.sequence, q.data]);
+  useEffect(() => {
+    if (nextStep) {
+      setDraftSubject(nextStep.subject);
+      setDraftBody(nextStep.body);
+      setDraftTouched(false);
+    }
+  }, [nextStep]);
+  const regeneratePreview = async () => {
+    if (
+      isDynamic &&
+      draftTouched &&
+      !window.confirm("Regenerate this draft and replace your current edits?")
+    ) {
+      return;
+    }
+    setIsRegenerating(true);
+    try {
+      const [previewResult, detailResult] = await Promise.all([q.refetch(), detail.refetch()]);
+      const steps = previewResult.data ?? q.data ?? [];
+      const sequence = detailResult.data?.sequence ?? detail.data?.sequence;
+      const nextStepNumber = sequence ? sequence.current_step + 1 : 1;
+      const freshStep = steps.find((step) => step.step === nextStepNumber) ?? steps[0];
+      if (freshStep) {
+        setDraftSubject(freshStep.subject);
+        setDraftBody(freshStep.body);
+        setDraftTouched(false);
+      }
+    } finally {
+      setIsRegenerating(false);
+    }
+  };
+  const sendDraft = useMutation({
+    mutationFn: () =>
+      sendLeadGenBatchItemDraft(item.id, {
+        subject: draftSubject,
+        body: draftBody,
+        sent_by: "operator",
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["lead-gen-batch", item.batch_id] });
+      qc.invalidateQueries({ queryKey: ["lead-gen-batches"] });
+      qc.invalidateQueries({ queryKey: ["all-sequences"] });
+      onClose();
+    },
+  });
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4">
@@ -615,47 +854,91 @@ function PreviewModal({
             Email preview for {item.contact_name || item.firm_name}
           </h3>
           <p className="mt-1 text-xs text-neutral-500">
-            {item.contact_email} - {item.firm_name} - {item.template_key}
+            {item.contact_email} - {item.firm_name} - Composer: {formatComposerKey(item.template_key)}
           </p>
         </div>
         <div className="overflow-y-auto px-5 py-4">
           {q.isLoading || detail.isLoading ? (
             <div className="flex items-center gap-2 text-sm text-neutral-500">
               <Loader2 className="h-4 w-4 animate-spin" />
-              Rendering preview...
+              {isDynamic ? "Generating draft with composer skill..." : "Rendering preview..."}
             </div>
           ) : q.isError || detail.isError ? (
             <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-              Could not render this email preview.
+              Could not generate this email preview.
             </div>
           ) : (
             <div className="space-y-4">
               <section className="rounded-lg border border-neutral-200">
                 <div className="border-b border-neutral-100 bg-neutral-50 px-3 py-2 text-xs font-semibold uppercase tracking-wider text-neutral-500">
-                  Next email to send
+                  {isDynamic ? "Generated draft" : "Next email to send"}
                 </div>
                 {nextStep ? (
-                  <RenderedEmail step={nextStep} />
+                  isDynamic ? (
+                    <EditableGeneratedDraft
+                      step={nextStep}
+                      subject={draftSubject}
+                      body={draftBody}
+                      onSubjectChange={(value) => {
+                        setDraftSubject(value);
+                        setDraftTouched(true);
+                      }}
+                      onBodyChange={(value) => {
+                        setDraftBody(value);
+                        setDraftTouched(true);
+                      }}
+                    />
+                  ) : (
+                    <RenderedEmail step={nextStep} />
+                  )
                 ) : (
                   <div className="px-3 py-4 text-sm text-neutral-500">
-                    No remaining email for this sequence.
+                    No remaining email for this outreach run.
                   </div>
                 )}
               </section>
-              <section className="rounded-lg border border-neutral-200">
-                <div className="border-b border-neutral-100 bg-neutral-50 px-3 py-2 text-xs font-semibold uppercase tracking-wider text-neutral-500">
-                  Full sequence
-                </div>
-                <div className="divide-y divide-neutral-100">
-                  {(q.data ?? []).map((step) => (
-                    <RenderedEmail key={step.step} step={step} compact />
-                  ))}
-                </div>
-              </section>
+              {!isDynamic && (
+                <section className="rounded-lg border border-neutral-200">
+                  <div className="border-b border-neutral-100 bg-neutral-50 px-3 py-2 text-xs font-semibold uppercase tracking-wider text-neutral-500">
+                    Full outreach run
+                  </div>
+                  <div className="divide-y divide-neutral-100">
+                    {(q.data ?? []).map((step) => (
+                      <RenderedEmail key={step.step} step={step} compact />
+                    ))}
+                  </div>
+                </section>
+              )}
             </div>
           )}
         </div>
-        <div className="flex justify-end border-t border-neutral-100 px-5 py-3">
+        <div className="flex flex-wrap justify-end gap-2 border-t border-neutral-100 px-5 py-3">
+          {nextStep && (
+            <button
+              type="button"
+              onClick={regeneratePreview}
+              disabled={isRegenerating || sendDraft.isPending}
+              className="mr-auto inline-flex items-center gap-2 rounded-md border border-neutral-200 px-3 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50 disabled:opacity-60"
+            >
+              {isRegenerating ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
+              {isDynamic ? "Regenerate draft" : "Refresh preview"}
+            </button>
+          )}
+          {isDynamic && nextStep && (
+            <button
+              type="button"
+              onClick={() => sendDraft.mutate()}
+              disabled={!draftSubject.trim() || !draftBody.trim() || sendDraft.isPending}
+              className="inline-flex items-center gap-2 rounded-md bg-neutral-900 px-3 py-2 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-60"
+            >
+              {sendDraft.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+              Send email
+            </button>
+          )}
           <button
             type="button"
             onClick={onClose}
@@ -663,8 +946,64 @@ function PreviewModal({
           >
             Close
           </button>
+          {sendDraft.isError && (
+            <div className="basis-full text-right text-xs text-red-600">
+              {sendDraft.error instanceof Error
+                ? sendDraft.error.message
+                : "Could not send this email."}
+            </div>
+          )}
         </div>
       </div>
+    </div>
+  );
+}
+
+function EditableGeneratedDraft({
+  step,
+  subject,
+  body,
+  onSubjectChange,
+  onBodyChange,
+}: {
+  step: RenderedSequenceStep;
+  subject: string;
+  body: string;
+  onSubjectChange: (value: string) => void;
+  onBodyChange: (value: string) => void;
+}) {
+  return (
+    <div className="space-y-4 px-3 py-3 text-sm">
+      <div className="rounded-md bg-neutral-50 px-3 py-2">
+        <div className="text-xs font-medium uppercase tracking-wider text-neutral-400">
+          Rationale
+        </div>
+        <p className="mt-1 text-sm leading-6 text-neutral-700">
+          {step.reasoning || "No rationale was returned by the composer."}
+        </p>
+        <div className="mt-2 flex flex-wrap gap-2 text-xs text-neutral-500">
+          {step.angle && <span>Angle: {step.angle}</span>}
+          {step.cta && <span>CTA: {step.cta}</span>}
+          {step.blog_link_used && <span>Blog: {step.blog_link_used}</span>}
+        </div>
+      </div>
+      <label className="block text-xs font-medium uppercase tracking-wider text-neutral-400">
+        Subject
+        <input
+          value={subject}
+          onChange={(e) => onSubjectChange(e.target.value)}
+          className="mt-1 w-full rounded-md border border-neutral-200 px-3 py-2 text-sm font-medium normal-case tracking-normal text-neutral-900"
+        />
+      </label>
+      <label className="block text-xs font-medium uppercase tracking-wider text-neutral-400">
+        Body
+        <textarea
+          value={body}
+          onChange={(e) => onBodyChange(e.target.value)}
+          rows={12}
+          className="mt-1 w-full rounded-md border border-neutral-200 px-3 py-2 font-sans text-sm normal-case leading-6 tracking-normal text-neutral-800"
+        />
+      </label>
     </div>
   );
 }
@@ -672,18 +1011,22 @@ function PreviewModal({
 function RenderedEmail({
   step,
   compact = false,
+  hideMeta = false,
 }: {
   step: RenderedSequenceStep;
   compact?: boolean;
+  hideMeta?: boolean;
 }) {
   return (
     <div className="space-y-2 px-3 py-3 text-sm">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs font-medium text-neutral-600">
-          Step {step.step}
-        </span>
-        <span className="text-xs text-neutral-400">{step.message_type}</span>
-      </div>
+      {!hideMeta && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs font-medium text-neutral-600">
+            Step {step.step}
+          </span>
+          <span className="text-xs text-neutral-400">{step.message_type}</span>
+        </div>
+      )}
       <div>
         <div className="text-xs font-medium uppercase tracking-wider text-neutral-400">
           Subject
@@ -850,6 +1193,9 @@ function StatusPill({ status, className }: { status: string; className?: string 
     skipped: "bg-neutral-100 text-neutral-500",
     rejected: "bg-red-50 text-red-700",
   };
+  const labels: Record<string, string> = {
+    sequencing: "queued",
+  };
   return (
     <span
       className={cn(
@@ -858,9 +1204,59 @@ function StatusPill({ status, className }: { status: string; className?: string 
         className,
       )}
     >
-      {status}
+      {labels[status] ?? status}
     </span>
   );
+}
+
+function formatComposerKey(value: string) {
+  return value.replaceAll("_", " ");
+}
+
+function clampDailyEmailBudget(value: number) {
+  if (!Number.isFinite(value)) return DEFAULT_DAILY_EMAIL_BUDGET;
+  return Math.max(1, Math.min(200, Math.trunc(value)));
+}
+
+function defaultDailyPlanName(dailyEmailBudget: number) {
+  return `Daily action plan - ${clampDailyEmailBudget(dailyEmailBudget)} emails`;
+}
+
+function californiaDateKey(value: Date | string | null | undefined) {
+  if (!value) return "";
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: CALIFORNIA_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const byType = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${byType.year}-${byType.month}-${byType.day}`;
+}
+
+function selectBatchForDisplay(batches: LeadGenBatch[]) {
+  const sorted = [...batches].sort(
+    (a, b) => dateTimeMs(b.created_at) - dateTimeMs(a.created_at),
+  );
+  return (
+    sorted.find((batch) => batch.template_key === DEFAULT_TEMPLATE && isCaliforniaToday(batch.created_at)) ??
+    sorted.find((batch) => isCaliforniaToday(batch.created_at)) ??
+    sorted.find((batch) => batch.template_key === DEFAULT_TEMPLATE) ??
+    sorted[0] ??
+    null
+  );
+}
+
+function dateTimeMs(value: string | null | undefined) {
+  if (!value) return 0;
+  const timestamp = new Date(value).getTime();
+  return Number.isNaN(timestamp) ? 0 : timestamp;
+}
+
+function isCaliforniaToday(value: string | null | undefined) {
+  return californiaDateKey(value) === californiaDateKey(new Date());
 }
 
 function summarizeItems(items: LeadGenBatchItem[]) {

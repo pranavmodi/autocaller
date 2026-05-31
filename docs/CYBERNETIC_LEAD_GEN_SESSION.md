@@ -1,5 +1,12 @@
 # Cybernetic Lead Generation Session Handoff
 
+Historical note: this is a session handoff/archive, not the active planning
+source. For current lead-gen documentation use:
+
+- `docs/CYBERNETIC_LEAD_GEN_CONCEPT.md` for conceptual design.
+- `/todos` or `bin/autocaller todos ...` for the active DB-backed backlog.
+- `docs/LEAD_GEN_CYBERNETIC_TECHNICAL.md` for current implementation details.
+
 Date: 2026-05-26
 Workspace: `/home/pranav/autocaller`
 
@@ -46,16 +53,16 @@ sequence execution, state transitions, and auditability.
 The initial prompt was to get grilled on making the organization
 self-learning, AI-legible, and cybernetic.
 
-The concrete function chosen was lead generation using the autocaller email
+The concrete function chosen was lead generation using the Possible OS email
 sequence functionality.
 
 Settled decisions:
 
 - Function: lead generation.
 - Target audience: personal injury firms whom Precise Imaging works with.
-- Initial channel: email sequences from the autocaller system.
+- Initial channel: email sequences from Possible OS.
 - Primary metric: booked qualified conversations.
-- Initial data source: autocaller DB.
+- Initial data source: Possible OS DB.
 - Future source of truth to consider: Front, because it contains raw comms.
 - V1 scope: records-only sequence.
 - Target persona: founder and/or COO, with managing partners, operations
@@ -64,13 +71,13 @@ Settled decisions:
   approves before sequence start.
 - Send gate: even after approval, sending remains gated by
   `ALLOW_SEQUENCE_SEND=true`.
-- Copy source: the first email in the autocaller email sequences was inspected
+- Copy source: the first email in the Possible OS email sequences was inspected
   conceptually and the new sequence was based on the records/imaging-status
   workflow rather than a generic AI pitch.
 
 Important product stance:
 
-- Autocaller DB is acceptable for v1 because it already contains contacts,
+- Possible OS DB is acceptable for v1 because it already contains contacts,
   comms logs, sequence rows, call logs, SMS logs, and bookings.
 - Front should be treated as a future upstream/raw comms source for richer
   reply and thread truth.
@@ -877,7 +884,7 @@ POST /api/operator-notifications/{id}/send-draft
 ```
 
 Matched inbound lead replies now create `operator_notifications` rows. The
-global Autocaller UI polls pending notifications and shows a modal containing:
+global Possible OS UI polls pending notifications and shows a modal containing:
 
 - the stimulus email subject, sender, excerpt, and received time
 - matched firm/contact/batch/sequence context
@@ -906,7 +913,7 @@ The skill composes one plaintext email from current context:
 - firm and contact details
 - prior outbound emails
 - inbound replies
-- booked consult patterns from autocaller
+- booked consult patterns from Possible OS
 - future Front/Precise relationship signals
 - inferred pain points
 - optional `getpossibleminds.com` blog links

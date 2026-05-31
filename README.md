@@ -1,4 +1,4 @@
-# Attorney Cold-Call Autocaller
+# Possible OS
 
 Headless, CLI-operable outbound voice system that cold-calls US personal-injury
 attorneys, runs a discovery conversation, identifies the firm's biggest
@@ -13,13 +13,15 @@ cybernetic function: the system recommends a bounded batch, executes approved
 email sequences, observes replies/delivery feedback/bookings, writes those
 observations back to durable state, and proposes policy/copy changes against
 the target metric of booked qualified conversations. See
-`docs/CYBERNETIC_LEAD_GEN_CONCEPT.md` for the current loop and ideal-state
-design. Zoho Mail can remain the mailbox provider: the system reads inbound
+`docs/CYBERNETIC_LEAD_GEN_CONCEPT.md` for the conceptual design,
+the `/todos` UI or `bin/autocaller todos ...` for the active DB-backed backlog,
+and `docs/LEAD_GEN_CYBERNETIC_TECHNICAL.md` for implementation details. Zoho Mail
+can remain the mailbox provider: the system reads inbound
 replies over Zoho IMAP when `ZOHO_IMAP_USER` and `ZOHO_IMAP_PASSWORD` are
-configured. Matched replies create operator notifications in the Autocaller UI
+configured. Matched replies create operator notifications in the Possible OS UI
 with the stimulus email, proposed classification, paused sequence context, and
-suggested next action. The operator can edit the draft in the modal and send it
-back in the same thread through the approved send action.
+suggested next action. The operator can edit the draft in the action center and
+send it back in the same thread through the approved send action.
 
 ## Quick start
 
@@ -40,7 +42,10 @@ bin/autocaller calls list               # review what happened
 - **[docs/cli.md](docs/cli.md)** — full CLI reference + AI-agent operator's guide.
   Command schemas, failure modes, recipes, REST API, DB schema.
 - **[docs/CYBERNETIC_LEAD_GEN_CONCEPT.md](docs/CYBERNETIC_LEAD_GEN_CONCEPT.md)** —
-  conceptual map of the lead-generation cybernetic function.
+  conceptual design of the lead-generation cybernetic function.
+- **`/todos` UI and `bin/autocaller todos ...`** — DB-backed active backlog.
+- **[docs/LEAD_GEN_CYBERNETIC_TECHNICAL.md](docs/LEAD_GEN_CYBERNETIC_TECHNICAL.md)** —
+  current lead-gen implementation, APIs, tables, services, and operations.
 - Legacy docs under `docs/` (`system-overview.md`, `requirements.md`, etc.)
   describe the original medical-imaging build and are partly superseded; read
   them for architectural context only.
@@ -49,7 +54,7 @@ bin/autocaller calls list               # review what happened
 
 Two processes:
 
-- **Daemon** (`autocaller serve`): long-running FastAPI app on port 8000.
+- **Daemon** (`autocaller serve`): long-running FastAPI app.
   Hosts the Twilio webhooks, bridges Twilio media streams to OpenAI Realtime,
   runs the dispatcher polling loop, and persists to Postgres.
 - **CLI** (`bin/autocaller`): thin client. Most commands hit the daemon on

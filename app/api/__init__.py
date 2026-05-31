@@ -17,6 +17,10 @@ from .lead_gen import router as lead_gen_router
 from .resend_webhooks import router as resend_webhooks_router
 from .inbound_email import router as inbound_email_router
 from .operator_notifications import router as operator_notifications_router
+from .seo import router as seo_router
+from .product_traces import router as product_traces_router
+from .learning import router as learning_router
+from .todos import router as todos_router
 
 __all__ = [
     "dashboard_router", "websocket_router", "settings_router",
@@ -25,5 +29,6 @@ __all__ = [
     "voice_preview_router", "firm_reviews_router", "comms_router",
     "sequences_router", "outreach_router", "lead_gen_router",
     "resend_webhooks_router", "inbound_email_router",
-    "operator_notifications_router",
+    "operator_notifications_router", "seo_router", "product_traces_router",
+    "learning_router", "todos_router",
 ]

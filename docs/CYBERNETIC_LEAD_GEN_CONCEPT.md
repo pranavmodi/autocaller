@@ -1,530 +1,535 @@
 # Cybernetic Lead Generation Concept
 
-This document describes the Precise Imaging lead-generation workflow as a
-cybernetic function: a closed loop that acts in the market, observes feedback,
-updates internal state, and improves future actions against an explicit metric.
+This is the conceptual design for the Possible Minds lead-generation function.
+It explains what the system is, what it optimizes, what it observes, how it
+learns, and what it is allowed to change.
 
-## Purpose
+Keep this file mostly mutually exclusive from the other lead-gen docs:
 
-The current target metric is booked qualified conversations with personal
-injury firms that could benefit from Precise Imaging's records, imaging, or
-case-support workflows.
+- Active implementation backlog: DB-backed todos in the `/todos` UI and
+  `bin/autocaller todos ...`.
+- Current code/API/schema/operations: `docs/LEAD_GEN_CYBERNETIC_TECHNICAL.md`.
+- Historical session handoff: `docs/CYBERNETIC_LEAD_GEN_SESSION.md`.
 
-The system is not just an email sender. It is intended to be a control loop:
+## Core Idea
 
-1. Select the next best firms and contacts under an explicit policy.
-2. Execute a human-approved outreach action.
-3. Observe reality through delivery events, replies, clicks, bookings, and
-   manual notes.
-4. Classify that feedback into structured outcomes.
-5. Adapt recommendations, suppressions, copy, and routing rules.
+Lead generation should operate as a cybernetic function: a closed loop that
+acts in the market, observes feedback, updates memory, and changes future
+behavior against an explicit objective.
 
-Core framing: outbound is the action, feedback is the sensorium, policy is the
-memory, and the next batch is the changed behavior.
+The current objective is:
 
-## Instructions For Future Agents
+```text
+booked qualified conversations
+```
 
-Treat this document as the living conceptual map for the lead-generation
-cybernetic function. When adding, removing, or materially changing a lead-gen
-feature, update this file in the same change set.
+The system should not optimize for raw email volume, raw reply rate, or open
+rate by themselves. Those are secondary signals. The primary question is:
 
-Required maintenance:
+```text
+Which actions create qualified conversations with firms that Possible Minds can
+help?
+```
 
-- Update `What Exists Today` when a feature becomes real in code or operations.
-- Update `Open Gaps` when a gap is closed, partially closed, or newly exposed.
-- Update `Feedback Sources` when a new signal enters the loop.
-- Update `Degrees Of Freedom` when the system gains a new way to change its
-  behavior.
-- Update `When The System Learns` if learning moves earlier, later, becomes
-  automated, or becomes human-reviewed.
-- Keep deterministic safety actions separate from LLM-mediated interpretation.
-- Do not describe aspirational capabilities as implemented. Label them as ideal
-  state or open gaps until code, routes, jobs, UI, and verification exist.
+## Control Loop
 
-## Current Loop
+The loop is:
 
-### Policy
+```text
+Sense -> Select -> Compose -> Approve -> Send -> Observe -> Classify
+-> Learn -> Propose Change -> Human Approves -> New Policy -> Next Action
+```
 
-The active v1 policy lives in the lead-generation tables and is surfaced by
-`GET /api/lead-gen/policy/current`. It currently optimizes for founder, owner,
-COO, managing partner, and operations-leader personas while suppressing
-contacts that already have communication history, active sequences, unusable
-emails, duplicates, or obvious non-law-firm signals.
+### Sense
 
-### Recommendation
+The system gathers available context about firms, contacts, previous
+conversations, delivery history, bookings, and operator feedback.
 
-`app/services/sequence_recommendations.py` reads the autocaller database and
-returns a bounded recommendation batch. The current batch is a records-audit
-campaign for firms in the Precise Imaging source data.
+### Select
 
-### Approval And Execution
+The system decides which limited set of contacts should receive attention
+today. Active conversations and due follow-ups should normally consume budget
+before new first-touch outreach.
 
-`app/services/lead_gen_cybernetic.py` creates batches and starts sequences only
-after operator approval. The Lead Gen UI can preview the email for each
-individual contact and queue an approved batch over a one-hour window in
-California time.
+### Compose
 
-Actual sending still runs through the existing email-sequence scheduler. The
-scheduler sends the next due step only when `ALLOW_SEQUENCE_SEND=true`, then
-advances sequence state.
+The system drafts one email for the selected contact using the current context,
+policy, and learning memory.
 
-### Observation
+### Approve
 
-The system now has three observation paths:
+A human operator reviews the generated draft, sees the rationale, edits the
+copy if needed, and explicitly approves sending.
 
-- Manual or API-submitted lead-gen observations through
-  `POST /api/lead-gen/observations/classify`.
-- Local send logs in `email_logs`, keyed by provider `message_id`.
-- Resend webhooks through `POST /api/resend/webhook`, which update
-  `email_logs`, create `lead_gen_observations`, and pause/suppress affected
-  sequences for delivery failures and complaints.
+### Send
 
-Resend webhook signing uses the Svix headers `svix-id`, `svix-timestamp`, and
-`svix-signature`. Production should set `RESEND_WEBHOOK_SECRET`; unsigned
-webhooks are accepted only for loopback/local testing unless explicitly allowed
-with `RESEND_WEBHOOK_ALLOW_UNSIGNED=true`.
+The system sends through the configured email channel and stores the trace of
+what was sent, why, to whom, and under which policy/version.
 
-### Learning
+### Observe
 
-Observed events are stored append-only in `lead_gen_observations`. The current
-proposal path can summarize batch outcomes into policy proposals without
-automatically applying them. This keeps the learning step inspectable and
-human-reviewable.
+The system watches for reality pushing back: delivery events, replies,
+bookings, rejections, referrals, manual edits, and operator decisions.
 
-## What Exists Today
+### Classify
 
-This section is the implementation inventory. Keep it current as the system
-evolves.
+Feedback is normalized into structured outcomes such as bounce, referral,
+positive reply, not interested, do-not-contact, booked qualified conversation,
+or wrong-person signal.
 
-### Implemented
+### Learn
 
-- **Target metric:** `booked_qualified_conversations`.
-- **Policy store:** `lead_gen_policy_versions`, with active v1 policy surfaced
-  by `GET /api/lead-gen/policy/current`.
-- **Recommendation batches:** `lead_gen_batches` and `lead_gen_batch_items`
-  store bounded recommendation sets.
-- **Recommendation service:** `app/services/sequence_recommendations.py`
-  recommends records-audit contacts from the autocaller database and suppresses
-  prior communication history, existing active sequences, unusable emails,
-  duplicates, and obvious non-law-firm records.
-- **Batch approval gate:** sequences start only after operator approval.
-- **Strategy/composer selection:** the Lead Gen UI and API can select a
-  strategy template instead of hardcoding copy. The default
-  `possible_minds_dynamic` strategy calls the
-  `possible-minds-lead-email-composer` skill at send time.
-- **Records-audit sequence:** `precise_records_audit`, a three-step records
-  workflow audit sequence, remains as a legacy/fallback template.
-- **Per-contact preview:** fixed templates can preview exact copy. Dynamic
-  strategy steps preview their objective; exact copy is composed from current
-  context at send time.
-- **California scheduling:** approved batches can be queued with a California
-  local start time.
-- **One-hour staggering:** batch starts are spread over a one-hour window.
-- **Manual send approval:** every generated outbound sequence email creates an
-  operator notification modal with the draft, detailed rationale, angle, CTA,
-  and metadata. The operator can edit the text and must approve send before the
-  paused sequence advances.
-- **Execution gate:** actual sequence sends still require
-  `ALLOW_SEQUENCE_SEND=true`.
-- **Send logging:** outbound emails write to `email_logs` with Resend
-  `message_id`.
-- **Observation log:** feedback is stored append-only in
-  `lead_gen_observations`.
-- **Manual/API observations:** `POST /api/lead-gen/observations/classify`
-  accepts feedback events and uses the LLM classifier for semantic feedback.
-- **Resend webhook ingestion:** `POST /api/resend/webhook` updates
-  `email_logs`, writes deterministic lead-gen observations, and pauses affected
-  sequences for delivery risk events.
-- **Zoho inbound reply ingestion:** `POST /api/inbound-email/poll` reads the
-  Zoho inbox over IMAP, stores normalized inbound messages in `inbound_emails`,
-  matches replies by sender email to known firm contacts and lead-gen batch
-  items, creates `email_reply` observations, and pauses active matched
-  sequences for human/AI review.
-- **Operator notifications:** matched lead replies create durable
-  `operator_notifications` rows. The Autocaller UI polls
-  `GET /api/operator-notifications/pending` and shows a modal with the stimulus
-  email, matched firm/contact context, sequence state, classification, and a
-  suggested next action/draft response. The operator can edit and send the
-  draft as a threaded Resend/SMTP reply via
-  `POST /api/operator-notifications/{id}/send-draft`. Acknowledgement/action is
-  persisted so the alert does not repeat after refreshes or restarts.
-- **Policy proposal path:** `POST /api/lead-gen/batches/{batch_id}/proposal`
-  summarizes observed batch outcomes into inspectable proposals without
-  automatically applying them.
-- **Operator UI:** `/lead-gen` shows policy, templates, recommendation batches,
-  contacts, approval state, observations, and learning proposals.
-- **Session trace:** `docs/CYBERNETIC_LEAD_GEN_SESSION.md` captures the build
-  history, current batch ids, live sends, and operational state from this
-  session.
+The system aggregates outcomes against the reasons behind previous choices.
+Learning is not just "what happened"; it is "what happened given the policy,
+contact, context, email, and rationale that produced the action."
 
-### Partially Implemented
+### Propose Change
 
-- **Learning:** observations and proposals exist, but policy/copy changes are
-  not automatically applied.
-- **Suppression:** sequence pausing and item outcomes exist, but there is no
-  first-class suppression table for email, contact, firm, domain, or category.
-- **Delivery feedback:** Resend webhook code exists, but production still needs
-  the deployed webhook URL configured in Resend and `RESEND_WEBHOOK_SECRET`
-  stored in the backend environment.
-- **Engagement feedback:** opens and clicks can be represented by the Resend
-  webhook path, but tracking depends on Resend/domain configuration and email
-  format.
-- **LLM classification:** the classifier exists for ambiguous feedback, but
-  deterministic provider events should not wait on it.
+The system proposes changes to contact selection, copy doctrine, suppressions,
+timing, routing, or policy weights. Proposals are inspectable and evidence
+backed.
 
-### Not Implemented Yet
+### Human Approves
 
-- Front/Gmail reply ingestion.
-- Cal.com booking, attended, canceled, no-show, and rescheduled feedback into
-  lead-gen observations.
-- Downstream CRM/deal outcomes.
-- First-class suppression records.
-- Automated policy version promotion from proposals.
-- Automated copy variant generation and experiment assignment.
-- Landing-page or booking-link analytics tied back to a specific sequence send.
-- Firm-level and domain-level reputation controls.
-- Source-of-truth sync from Front as raw comms history.
+Humans approve policy/copy/scoring changes until a future policy explicitly
+allows narrow, low-risk automation.
 
-## What Happens On Delivery Feedback
+## Human And System Responsibilities
 
-Provider submission and provider delivery are separate facts. A row can be
-`sent` locally because Resend accepted the API request, then later become
-`bounced`, `delayed`, `delivered`, `opened`, `clicked`, `failed`, or
-`complained` when the webhook arrives.
+The system should own:
 
-Current deterministic mapping:
+- gathering available evidence;
+- enforcing deterministic safety gates;
+- ranking candidates under explicit policy;
+- drafting context-aware emails;
+- storing traces;
+- normalizing observations;
+- aggregating learning signals;
+- proposing improvements.
 
-| Resend event | Email log status | Lead-gen outcome | Next action |
-| --- | --- | --- | --- |
-| `email.delivered` | `delivered` | `neutral` | `no_action` |
-| `email.delivery_delayed` | `delayed` | `neutral` | `pause_sequence` |
-| `email.bounced` | `bounced` | `bounce` | `suppress_email` |
-| `email.failed` | `failed` | `bounce` | `pause_sequence` |
-| `email.suppressed` | `suppressed` | `bounce` | `suppress_email` |
-| `email.complained` | `complained` | `do_not_contact` | `mark_do_not_contact` |
-| `email.opened` | `opened` | `opened_or_clicked` | `continue_sequence` |
-| `email.clicked` | `clicked` | `opened_or_clicked` | `continue_sequence` |
+The human operator should own:
+
+- final approval before outbound emails are sent;
+- judgment on ambiguous business changes;
+- approval of new policy versions;
+- approval of skill/prompt changes;
+- overrides when the system lacks enough evidence.
+
+The LLM should not silently steer production behavior. It may compose,
+classify, summarize, reason over ambiguous evidence, and propose changes. The
+applied policy remains explicit.
+
+## Memory Model
+
+The loop needs memory at several levels.
+
+### Contact Memory
+
+What has happened with this person?
+
+Examples:
+
+- prior outreach;
+- replies;
+- referrals;
+- do-not-contact requests;
+- bounces;
+- role confidence;
+- email quality;
+- manual edits or rejection history.
+
+### Firm Memory
+
+What has happened with this firm?
+
+Examples:
+
+- best known contact;
+- alternate contacts;
+- relationship to Precise Imaging;
+- operational pain hypotheses;
+- active or paused conversation state;
+- firm-level suppressions;
+- booked or failed consults.
+
+### Segment Memory
+
+What works for a class of firms or people?
+
+Examples:
+
+- founder/owner contacts vs COO contacts;
+- direct named emails vs generic inboxes;
+- firms with known Precise relationship vs cold firms;
+- PI firms vs healthcare providers;
+- small firms vs larger firms.
+
+### Policy Memory
+
+What rules govern action?
+
+Examples:
+
+- daily send budget;
+- scoring weights;
+- suppressions;
+- approval requirements;
+- safety gates;
+- allowed senders;
+- automation level.
+
+### Skill Memory
+
+What has the system learned about how to communicate?
+
+Examples:
+
+- copy doctrine;
+- winning examples;
+- rejected phrases;
+- CTA preferences;
+- how to mention Possible Minds;
+- when to mention Precise Imaging;
+- when to ask a question instead of asking for a call.
+
+## Contact Selection Philosophy
+
+Contact selection should answer:
+
+```text
+Who should receive attention today, given limited capacity and all known
+feedback?
+```
+
+The selector should consider:
+
+- active conversations needing response;
+- already-generated drafts awaiting approval;
+- due follow-ups;
+- new first-touch contacts;
+- role/persona fit;
+- firm fit;
+- relationship evidence;
+- email quality;
+- previous communication history;
+- existing sequences;
+- delivery risk;
+- similarity to booked qualified conversations;
+- similarity to failed or suppressed leads.
+
+Contact selection should be deterministic by default. LLMs can help synthesize
+ambiguous evidence, but final ranking should be explainable and traceable.
+
+Every selected contact should have a reason trace:
+
+- why this contact;
+- why now;
+- what policy version;
+- what score components;
+- what risks;
+- what data sources;
+- what expected next action.
+
+## Email Composition Philosophy
+
+Email composition should answer:
+
+```text
+What is the most useful, context-aware message to send this person now?
+```
+
+The composer should receive:
+
+- firm/contact profile;
+- previous outbound emails;
+- replies;
+- firm relationship context;
+- booked consult learnings;
+- inferred operational pain;
+- current policy;
+- relevant Possible Minds blog links;
+- recent successful and failed examples;
+- constraints from the approval/safety layer.
+
+The composer output should include:
+
+- subject;
+- body;
+- rationale;
+- angle;
+- CTA;
+- evidence used;
+- risk flags;
+- model/skill version;
+- expected next observation.
+
+The email should not feel like a fixed sequence. It should be a single
+appropriate next action in an ongoing market conversation.
 
 ## Feedback Sources
 
-The system should learn from every place reality pushes back on its
-assumptions.
+The system should learn from every place reality pushes back.
 
-### Email Delivery Feedback
+### Delivery Feedback
 
-Source: Resend.
+What it tells us:
 
-Signals include sent, delivered, delayed, bounced, suppressed, complained,
-opened, and clicked. These answer whether the channel is viable, whether the
-address is usable, whether the recipient engaged, and whether sender reputation
-is at risk.
+- whether the address works;
+- whether sender/domain reputation is at risk;
+- whether the channel is viable;
+- whether future sends should pause or suppress.
 
-Current status: delivery feedback ingestion is implemented through
-`POST /api/resend/webhook`; production configuration is still required.
+Signals:
+
+- sent;
+- delivered;
+- delayed;
+- bounced;
+- failed;
+- suppressed;
+- complained;
+- opened;
+- clicked.
 
 ### Human Replies
 
-Source: Front, Gmail, Resend inbound, or manual paste.
+What it tells us:
 
-Signals include positive interest, referral, wrong person, objection, not
-interested, do-not-contact, out-of-office, pricing question, vendor question,
-already-have-provider, and "send me more information." This is the richest
-semantic feedback source because it tells the system what the market actually
-understood and what blocked conversion.
+- whether the recipient understood the offer;
+- whether the pain hypothesis landed;
+- whether we reached the right person;
+- what objection or need exists;
+- whether follow-up should continue.
 
-Current status: Zoho inbound replies can be polled over IMAP. Matched replies
-create observations, pause sequences, and surface operator notification modals
-with suggested next actions. Manual/API observations can also record these
-events. Front/Gmail are not wired.
+Signals:
 
-### Calendar Feedback
+- positive interest;
+- referral;
+- wrong person;
+- pricing question;
+- vendor question;
+- already-have-provider;
+- send-more-info;
+- not interested;
+- do-not-contact;
+- out-of-office;
+- booking intent.
 
-Source: Cal.com or another scheduling system.
+### Operator Edits And Decisions
 
-Signals include booked, canceled, rescheduled, no-show, attended, qualified,
-and unqualified. This connects outreach behavior to the target metric instead
-of stopping at opens or replies.
+What it tells us:
 
-Current status: not normalized into lead-gen observations yet.
+- where the generated email was weak;
+- what language the operator consistently removes;
+- what framing the operator adds;
+- which drafts are not worth sending;
+- which system recommendations are distrusted.
 
-### Sales And Operator Notes
+Signals:
 
-Source: human review after replies, calls, meetings, or manual inspection.
+- approved unchanged;
+- edited lightly;
+- edited heavily;
+- rejected;
+- skipped;
+- manually sent;
+- manual note.
 
-Signals include "looked positive but was bad fit," "weak reply became a real
-opportunity," "generic inbox worked for this firm type," "founder was wrong
-persona," and "COO is the actual buyer." These notes are critical because they
-can correct what automated event streams cannot see.
+### Booking Feedback
 
-Current status: manual observations can represent these notes, but there is no
-dedicated operator-note workflow in the Lead Gen UI yet.
+What it tells us:
 
-### Autocaller And Comms History
+- whether the lead became a qualified business conversation;
+- whether the previous selection and composition choices produced real value;
+- which segments and angles produce useful calls.
 
-Source: `call_logs`, `email_logs`, `sms_logs`, outreach tables, sequence state,
-and firm communications views.
+Signals:
 
-Signals include previous calls, previous emails, SMS, voicemails, duplicate
-touches, previous no-answer outcomes, existing active sequences, and recent
-firm-level contact. This prevents repetitive or contradictory outreach and
-helps select the next best contact.
+- booked;
+- qualified;
+- unqualified;
+- attended;
+- no-show;
+- canceled;
+- rescheduled;
+- converted to next step.
 
-Current status: recommender already suppresses prior communication history and
-existing sequences.
+### CRM And Relationship Feedback
 
-### Firm And Contact Data Quality
+What it tells us:
 
-Source: Precise Imaging source data, autocaller contacts, Front, manual review,
-and enrichment.
+- whether the firm is already known;
+- whether there is an active relationship;
+- who at the firm actually owns the workflow;
+- whether outreach should be paused, escalated, or routed differently.
 
-Signals include invalid email, stale title, wrong firm, generic inbox, medical
-provider misclassified as a law firm, missing founder/COO, wrong state, or
-source fields that are repeatedly noisy. This teaches the system which source
-records and fields deserve trust.
+Signals:
 
-Current status: basic email usability and non-law-firm filters exist.
+- Front conversation history;
+- Precise relationship context;
+- CRM status;
+- owner assignment;
+- deal stage;
+- notes from human teams.
 
-### Engagement Behavior
+## Learning Cadence
 
-Source: Resend opens/clicks, tracked links, landing pages, booking links, and
-future site analytics.
-
-Signals include opens, repeated opens, clicks, booking-page visits, document
-views, reply-later behavior, or link engagement by a different person at the
-same firm. These are weak signals alone but useful when combined with persona,
-firm type, and eventual replies or bookings.
-
-Current status: Resend opens/clicks can enter through the webhook route; richer
-web analytics are not wired.
-
-### Deliverability And Reputation
-
-Source: Resend, DNS/domain monitoring, bounce and complaint aggregate rates,
-provider throttling, suppression list events, and mail authentication state.
-
-Signals include bounce rate, complaint rate, suppression rate, temporary
-failure rate, delivery delay, throttling, and domain health. These should affect
-volume, cadence, audience quality gates, and whether a batch pauses.
-
-Current status: per-message delivery risk events can pause sequences; aggregate
-batch/domain controls are not implemented.
-
-### Downstream Business Outcomes
-
-Source: CRM, sales notes, meeting outcomes, deal tracking, and invoice/revenue
-systems.
-
-Signals include qualified conversation, opportunity created, won deal, lost
-deal, deal value, sales-cycle stage, and bad-fit reason. This is the slowest
-feedback but the most important, because it distinguishes activity from value.
-
-Current status: not wired.
-
-## When The System Learns
-
-The loop should learn at several speeds.
+Not all learning should happen at the same speed.
 
 ### Immediate Safety Learning
 
-Trigger: bounce, suppression, complaint, do-not-contact, severe delivery risk,
-or obvious bad data.
+Applies quickly when risk is clear.
 
-Action: pause or suppress without waiting for an LLM. These are deterministic
-guardrail events.
+Examples:
 
-Current status: Resend bounce, suppression, delay, failure, and complaint
-events pause affected sequences. Do-not-contact from replies still requires
-reply ingestion or manual observation.
+- bounced email;
+- complaint;
+- do-not-contact request;
+- repeated delivery failure;
+- clearly wrong firm/contact.
 
-### Per-Event Learning
+Likely action:
 
-Trigger: every delivery event, open, click, reply, booking, call summary, or
-manual note.
+- suppress;
+- pause;
+- route to human review.
 
-Action: store an append-only observation, classify outcome, update local state,
-and choose next action.
+### Daily Tactical Learning
 
-Current status: observation storage exists. Resend deterministic events are
-handled. Manual/API observations exist. Zoho reply polling exists. Booking
-ingestion is not wired.
+Applies after enough daily feedback exists.
 
-### Per-Contact Learning
+Examples:
 
-Trigger: a contact produces a meaningful signal or fails as a channel.
+- today generated several reply tasks;
+- several drafts were heavily edited;
+- one contact source produced bad emails;
+- a daily send budget was too high or too low.
 
-Action: continue sequence, pause, suppress email, mark do-not-contact, ask for
-referral, find a better contact, or route to a human.
+Likely action:
 
-Current status: sequence pause exists; richer next-action execution is still
-mostly manual.
+- summarize;
+- propose contact-selection or copy adjustments;
+- update tomorrow's action plan after approval.
 
-### Per-Firm Learning
+### Weekly Policy Learning
 
-Trigger: one contact at a firm fails, refers, engages, books, or says the firm
-is not a fit.
+Applies after a larger pattern emerges.
 
-Action: switch persona, try another contact, pause the firm, route to manual
-review, or mark firm-level opportunity state.
+Examples:
 
-Current status: firm-level batch context exists; firm-level suppression and
-routing are not implemented.
+- founder/owner contacts outperform generic inboxes;
+- COO replies are rarer but more qualified;
+- one angle generates replies but not bookings;
+- a source produces stale contacts.
 
-### Per-Batch Learning
+Likely action:
 
-Trigger: enough sends in a batch have produced delivery, engagement, reply, or
-booking outcomes.
+- propose policy weight changes;
+- propose suppressions;
+- propose skill examples;
+- propose experiment variants.
 
-Action: compare delivery rate, bounce rate, complaint rate, reply quality,
-booking rate, persona performance, source quality, and copy performance.
+### Long-Term Strategic Learning
 
-Current status: batch observations and policy proposal endpoint exist; deeper
-aggregate dashboards and automatic decision thresholds are not implemented.
+Applies across segments and offers.
 
-### Per-Policy Learning
+Examples:
 
-Trigger: repeated evidence across batches.
+- a market segment is not worth pursuing;
+- a new offer is outperforming the original one;
+- a blog post consistently improves conversion;
+- a different buyer persona is more valuable.
 
-Action: propose or apply changes to scoring weights, suppressions, copy,
-sequence choice, timing, source trust, or experiment allocation.
+Likely action:
 
-Current status: proposals are inspectable and human-reviewed; automatic policy
-promotion is not implemented.
+- change targeting strategy;
+- change offer framing;
+- change content strategy;
+- change channel mix.
 
 ## Degrees Of Freedom
 
-These are the levers the system can change as it learns.
+The system can improve only by changing things it is allowed to change.
 
-### Suppression
+### Selection Levers
 
-Stop contacting an email, contact, firm, domain, persona category, source
-category, or segment. Safety suppressions should be immediate for complaints,
-do-not-contact requests, hard bounces, and repeated delivery failure.
+- which firms to include;
+- which firms to suppress;
+- which contact/persona to prioritize;
+- how to rank direct emails vs generic inboxes;
+- how to use relationship signals;
+- how much daily budget goes to active conversations vs new starts.
 
-Current status: sequence pausing and outcome marking exist. First-class
-suppression records are still needed.
+### Composition Levers
 
-### Recipient Selection
+- subject style;
+- opening line;
+- pain hypothesis;
+- offer angle;
+- CTA;
+- specificity level;
+- whether to include a blog link;
+- how to frame Possible Minds;
+- whether and how to mention Precise Imaging.
 
-Change who is selected: founder vs COO, managing partner vs operations leader,
-generic inbox vs named person, known Precise contact vs cold contact, or
-another person at the same firm.
+### Timing Levers
 
-Current status: v1 policy already weights founder/owner/COO/managing partner
-and filters obvious bad records.
+- daily send budget;
+- send window;
+- follow-up cadence;
+- cooldown after replies;
+- pause duration after delivery risk;
+- retry timing after temporary failures.
 
-### Sequence Selection
+### Routing Levers
 
-Choose a strategy/composer path: dynamic Possible Minds outreach, records-audit
-fallback, pain-point fallback, referral ask, reactivation, follow-up from prior
-call, or manual-review path.
+- continue sequence;
+- pause for human review;
+- ask for referral;
+- find another contact;
+- create draft reply;
+- suppress;
+- book directly;
+- escalate to operator.
 
-Current status: UI/API can select strategy templates. New default is
-`possible_minds_dynamic`, whose steps are composed by SKILL.md from current
-firm context, prior emails/replies, booked consult learnings, Front/Precise
-relationship signals, optional blog links, and active policy.
+### Policy Levers
 
-### Copy
+- scoring weights;
+- suppression rules;
+- safety thresholds;
+- approval requirements;
+- automation level;
+- source trust settings.
 
-Change subject line, opener, offer, proof point, CTA, specificity, tone,
-length, objection handling, and whether to reference Precise Imaging directly.
+## Safety Principles
 
-Current status: templates exist, but automated copy learning and variant
-assignment are not implemented.
+- Human approval is required before generated outbound emails are sent.
+- Provider events with deterministic meaning should not wait for an LLM.
+- LLM outputs should be stored with rationale and evidence.
+- Policy changes should be proposals before they become active.
+- Suppression and safety actions should be conservative.
+- Front should remain read-only unless explicitly redesigned otherwise.
+- Every outbound action should be traceable to the policy and context that
+  produced it.
 
-### Timing
+## Ideal End State
 
-Change send time, timezone, weekday, delay between steps, retry window, batch
-size, send spread, and stop conditions.
+In the ideal state, the system runs a daily closed loop:
 
-Current status: California start time and one-hour staggering exist.
+1. Ingest feedback from delivery, inboxes, Front, bookings, CRM, and operator
+   decisions.
+2. Normalize observations.
+3. Update contact, firm, segment, policy, and skill memory.
+4. Allocate the daily send budget.
+5. Select the best active-conversation and new-start actions.
+6. Compose context-aware drafts.
+7. Ask the operator to approve, edit, or reject.
+8. Send approved emails.
+9. Attribute outcomes back to selection and composition decisions.
+10. Propose policy, suppression, and skill improvements.
+11. Apply approved changes as explicit new versions.
 
-### Channel
-
-Choose email, call, SMS, manual task, Front reply, calendar invitation, or
-multi-channel sequence.
-
-Current status: lead-gen v1 uses email sequences. Calls/SMS exist elsewhere in
-the autocaller but are not yet integrated as lead-gen channel choices.
-
-### Routing
-
-Choose who or what handles the next step: continue automation, generate a human
-draft, assign a Front task, book directly, ask for referral, or escalate to an
-operator.
-
-Current status: observations can record next actions; automated routing beyond
-sequence pause is not implemented.
-
-### Scoring Policy
-
-Change weights for persona, firm type, geography, relationship strength, prior
-engagement, source reliability, data completeness, and recent communication
-history.
-
-Current status: v1 weights exist and policy proposals can be created.
-
-### Data Source Trust
-
-Learn which source fields and systems are reliable. For example, Front may be
-the raw truth for conversations, the autocaller DB may be normalized operating
-state, and source enrichment may require confidence thresholds.
-
-Current status: source trust is implicit in filters; it is not yet a modeled
-policy dimension.
-
-### Experiment Design
-
-Run controlled variants for subject lines, CTAs, personas, send times, sequence
-types, and target segments.
-
-Current status: not implemented for lead gen beyond template selection.
-
-## Ideal Loop
-
-The ideal system should make the feedback loop more complete and less
-operator-dependent:
-
-1. Front should remain the raw source of truth for contacts and all direct
-   human email conversations.
-2. The autocaller database should hold normalized operational state: contact
-   identity, sequence state, batches, observations, and suppressions.
-3. Resend should feed delivery, bounce, complaint, open, and click events into
-   the loop automatically.
-4. Front or Gmail webhooks should feed actual replies into the loop, including
-   referrals, wrong-person signals, do-not-contact requests, and bookings.
-5. Cal.com should feed booked, attended, no-show, and canceled meeting events.
-6. The LLM should classify ambiguous human language and propose policy/copy
-   changes, but deterministic provider events should not wait on an LLM.
-7. The system should separate applied policy from proposed policy. Humans
-   approve policy/copy changes until the loop has enough evidence to automate
-   low-risk adjustments.
-8. Every send should be traceable from recommendation reason to rendered copy,
-   provider message id, delivery event, reply, outcome, and next action.
-
-Operationally, the ideal loop is:
-
-```text
-Recommend -> Approve -> Send -> Observe -> Classify -> Act Immediately Where Safe
--> Aggregate -> Propose Learning -> Human Approves -> New Policy Version -> Next Batch
-```
-
-Not every learning should auto-apply. Safety actions can be automatic. Copy,
-scoring, segmentation, and policy changes should usually become proposals first,
-with human approval, until there is enough evidence to automate low-risk
-adjustments.
-
-## Open Gaps
-
-- Zoho reply ingestion exists through IMAP polling and creates operator
-  notifications for matched replies, but it is operator-triggered rather than a
-  continuous background job.
-- Front/Gmail reply ingestion is not wired.
-- Resend webhook endpoint is implemented, but the public Resend dashboard still
-  needs to point at the deployed backend URL and store the signing secret in
-  `RESEND_WEBHOOK_SECRET`.
-- Suppression is currently expressed by pausing sequences and marking outcomes;
-  a first-class suppression table would make cross-campaign exclusion cleaner.
-- The proposal generator summarizes outcomes but does not yet update scoring
-  weights or copy variants automatically.
-- Bookings are the target metric, but meeting lifecycle events still need to be
-  normalized into lead-gen observations.
+The system becomes self-improving not because it acts autonomously, but because
+every action creates evidence, every observation is linked back to the decision
+that caused it, and future behavior changes only through auditable policy or
+skill updates.

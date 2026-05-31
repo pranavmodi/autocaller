@@ -143,11 +143,33 @@ Every command accepts `--help`. Exit code is `0` on success, `1` on any error
 | `inbound status` | Show whether Zoho IMAP inbox reading is configured. Sensitive values masked. |
 | `inbound poll [--limit=N --classify --mark-seen]` | Poll Zoho IMAP for unread/recent replies, store inbound rows, match lead-gen contacts, and create observations. |
 | `inbound list [--matched=yes\|no]` | List stored inbound email messages. |
+| `todos list [--area=lead-gen] [--status=not_started] [--json]` | Show the DB-backed editable project backlog. |
+| `todos add <title> [--area=lead-gen --status=not_started --body=... --source-url=...]` | Add a DB-backed todo. |
+| `todos update <id> [--title=... --status=done --body=... --clear-source-url]` | Edit a DB-backed todo. |
+| `todos delete <id>` | Delete a DB-backed todo. |
 
-Default lead-gen sequence strategy is now `possible_minds_dynamic`. It treats
-steps as objectives and composes the actual email at send time with
-`app/skills/possible-minds-lead-email-composer/SKILL.md`. Fixed templates such
-as `precise_records_audit` remain selectable fallback paths.
+Default lead-gen batches now use `possible_minds_dynamic`. It treats steps as
+objectives and composes the actual email at send time with
+`app/skills/possible-minds-lead-email-composer/SKILL.md`. In the Lead Gen UI,
+the operator no longer selects a strategy; the composer skill chooses the
+per-contact angle from context and returns its rationale with the draft. Fixed
+templates such as `precise_records_audit` remain CLI/API fallback paths.
+
+Lead-gen batch creation now builds a daily action plan, not only a cold-start
+contact list. The planner first allocates the fixed daily budget to active
+conversation actions such as inbox replies, pending draft approvals, and due
+follow-ups, then fills remaining capacity with new first-touch contacts.
+New first-touch contacts are ranked by an explainable contact-selection scorer
+that stores persona, firm-fit, relationship, email-quality, history, score
+breakdown, suppressions, and policy version on each selected batch item.
+Reply/draft actions continue through the operator action center. When a batch is
+approved with queueing enabled, every queueable new start or due follow-up
+immediately creates an operator action and pauses the sequence as
+`awaiting_operator_send_approval`. Draft composition is lazy: opening the action
+center item generates the actual email draft and rationale, and the email sends
+only after the operator reviews/edits/clicks send. The daily send budget is
+persisted on the active lead-gen policy and can be saved from the Lead Gen UI
+before generating today's list.
 
 ---
 
@@ -602,7 +624,7 @@ Relevant endpoints:
 | GET  | `/api/inbound-email/config` | masked Zoho IMAP reader config |
 | POST | `/api/inbound-email/poll` | poll Zoho IMAP, store inbound replies, match lead-gen items, optionally classify |
 | GET  | `/api/inbound-email?matched=&limit=` | list stored inbound messages |
-| GET  | `/api/operator-notifications/pending` | pending persisted operator modal notifications |
+| GET  | `/api/operator-notifications/pending` | pending persisted operator action-center notifications |
 | POST | `/api/operator-notifications/{id}/acknowledge` | dismiss a notification so it does not pop again |
 | POST | `/api/operator-notifications/{id}/send-draft` | send the notification draft as a threaded Resend/SMTP reply and dismiss/action the notification |
 | GET  | `/api/outreach/campaigns` | list outreach campaigns (`?status=`) |

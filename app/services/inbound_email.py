@@ -243,6 +243,18 @@ def _imap_search_criteria(*, unseen_only: bool, since_days: int | None) -> str:
     return " ".join(terms)
 
 
+def _sent_mailbox() -> str:
+    return os.getenv("ZOHO_IMAP_SENT_MAILBOX", "Sent").strip() or "Sent"
+
+
+def _sent_search_criteria(*, recipient_email: str, since_days: int | None) -> str:
+    terms = [f'TO "{recipient_email.strip().lower()}"']
+    if since_days and since_days > 0:
+        since = datetime.now(timezone.utc) - timedelta(days=since_days)
+        terms.append(f'SINCE "{since.strftime("%d-%b-%Y")}"')
+    return " ".join(terms)
+
+
 def _fetch_from_zoho_sync(
     *,
     cfg: InboundEmailConfig,
@@ -314,6 +326,83 @@ async def fetch_zoho_messages(
             raw_message=raw,
             account_email=cfg.user,
             mailbox=cfg.mailbox,
+            uid=uid,
+        )
+        for uid, raw in raw_rows
+    ]
+
+
+def _fetch_sent_for_recipient_sync(
+    *,
+    cfg: InboundEmailConfig,
+    recipient_email: str,
+    mailbox: str,
+    limit: int,
+    since_days: int | None,
+) -> list[tuple[str, bytes]]:
+    if not cfg.configured:
+        raise RuntimeError("ZOHO_IMAP_USER and ZOHO_IMAP_PASSWORD must be configured")
+    imap = imaplib.IMAP4_SSL(cfg.host, cfg.port)
+    try:
+        imap.login(cfg.user, cfg.password)
+        typ, _ = imap.select(mailbox, readonly=True)
+        if typ != "OK":
+            raise RuntimeError(f"unable to select mailbox {mailbox!r}")
+        typ, data = imap.uid("SEARCH", None, _sent_search_criteria(
+            recipient_email=recipient_email,
+            since_days=since_days,
+        ))
+        if typ != "OK":
+            raise RuntimeError("imap sent search failed")
+        uids = (data[0] or b"").split()
+        selected = list(reversed(uids))[: max(1, limit)]
+        out: list[tuple[str, bytes]] = []
+        for uid_b in reversed(selected):
+            uid = uid_b.decode("ascii", errors="replace")
+            typ, fetched = imap.uid("FETCH", uid, "(BODY.PEEK[])")
+            if typ != "OK":
+                continue
+            raw = b""
+            for part in fetched:
+                if isinstance(part, tuple) and len(part) >= 2 and isinstance(part[1], bytes):
+                    raw = part[1]
+                    break
+            if raw:
+                out.append((uid, raw))
+        return out
+    finally:
+        try:
+            imap.close()
+        except Exception:
+            pass
+        try:
+            imap.logout()
+        except Exception:
+            pass
+
+
+async def fetch_zoho_sent_messages_for_recipient(
+    recipient_email: str,
+    *,
+    limit: int = 5,
+    since_days: int | None = 365,
+    mailbox: str | None = None,
+) -> list[ParsedInboundEmail]:
+    cfg = inbound_email_config()
+    sent_mailbox = mailbox or _sent_mailbox()
+    raw_rows = await asyncio.to_thread(
+        _fetch_sent_for_recipient_sync,
+        cfg=cfg,
+        recipient_email=recipient_email,
+        mailbox=sent_mailbox,
+        limit=max(1, min(limit, 50)),
+        since_days=since_days,
+    )
+    return [
+        parse_inbound_message(
+            raw_message=raw,
+            account_email=cfg.user,
+            mailbox=sent_mailbox,
             uid=uid,
         )
         for uid, raw in raw_rows

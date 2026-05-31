@@ -433,7 +433,7 @@ function FirmDangerZone({ pifId, firmName }: { pifId: string; firmName: string }
         Danger zone
       </h2>
       <p className="mt-2 text-xs text-rose-900/80">
-        Hard-deletes this firm&apos;s local autocaller data: lead row, cadence
+        Hard-deletes this firm&apos;s local Possible OS data: lead row, cadence
         entry, operator-pasted reviews, contacts (and their email sequences),
         and call-state. Outbound call / email / SMS history is preserved.
         The firm itself lives in PIF Stats and will remain in the firms list.

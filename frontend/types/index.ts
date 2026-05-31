@@ -97,7 +97,7 @@ export interface CallLog {
   call_disposition: CallDisposition;
   mock_mode: boolean;
   transcript: TranscriptEntry[];
-  // Autocaller capture
+  // Possible OS capture
   pain_point_summary: string | null;
   interest_level: number | null;
   is_decision_maker: boolean | null;

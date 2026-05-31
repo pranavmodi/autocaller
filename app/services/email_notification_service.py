@@ -2,10 +2,11 @@
 import logging
 import os
 import smtplib
+import time
 from datetime import datetime, timezone
 from email.message import EmailMessage
-from email.utils import parseaddr
-from typing import Optional
+from email.utils import make_msgid, parseaddr
+from typing import Any, Optional
 
 import httpx
 
@@ -13,6 +14,9 @@ from app.models import CallLog
 from app.services.comms_log import log_email
 
 logger = logging.getLogger(__name__)
+
+_zoho_access_token: str | None = None
+_zoho_access_token_expires_at: float = 0
 
 
 def _is_truthy(value: str) -> bool:
@@ -168,7 +172,8 @@ def _send_via_smtp(*, subject: str, body: str, from_addr: str, to: str) -> str:
     smtp_port = int(os.getenv("SMTP_PORT", "587").strip() or "587")
     smtp_user = os.getenv("SMTP_USERNAME", "").strip()
     smtp_pass = os.getenv("SMTP_PASSWORD", "").strip()
-    smtp_use_tls = _is_truthy(os.getenv("SMTP_USE_TLS", "true"))
+    smtp_use_ssl = _is_truthy(os.getenv("SMTP_USE_SSL", "")) or smtp_port == 465
+    smtp_use_tls = _is_truthy(os.getenv("SMTP_USE_TLS", "true")) and not smtp_use_ssl
     reply_to = os.getenv("REPLY_TO_EMAIL", "").strip()
     bcc = os.getenv("BCC_EMAIL", "").strip()
     if not smtp_host:
@@ -178,6 +183,7 @@ def _send_via_smtp(*, subject: str, body: str, from_addr: str, to: str) -> str:
     msg["From"] = from_addr
     msg["To"] = to
     msg["Subject"] = subject
+    msg["Message-ID"] = make_msgid()
     if reply_to:
         msg["Reply-To"] = reply_to
     msg.set_content(body)
@@ -188,14 +194,164 @@ def _send_via_smtp(*, subject: str, body: str, from_addr: str, to: str) -> str:
     if bcc and bcc.lower() != to.lower():
         envelope_to.append(bcc)
 
-    with smtplib.SMTP(smtp_host, smtp_port, timeout=20) as server:
-        if smtp_use_tls:
-            server.starttls()
-        if smtp_user and smtp_pass:
-            server.login(smtp_user, smtp_pass)
-        server.send_message(msg, to_addrs=envelope_to)
+    if smtp_use_ssl:
+        with smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=20) as server:
+            if smtp_user and smtp_pass:
+                server.login(smtp_user, smtp_pass)
+            server.send_message(msg, to_addrs=envelope_to)
+    else:
+        with smtplib.SMTP(smtp_host, smtp_port, timeout=20) as server:
+            if smtp_use_tls:
+                server.starttls()
+            if smtp_user and smtp_pass:
+                server.login(smtp_user, smtp_pass)
+            server.send_message(msg, to_addrs=envelope_to)
 
     return msg.get("Message-ID", "")
+
+
+def _zoho_accounts_base_url() -> str:
+    return os.getenv("ZOHO_ACCOUNTS_BASE_URL", "https://accounts.zoho.in").rstrip("/")
+
+
+def _zoho_mail_base_url() -> str:
+    return os.getenv("ZOHO_MAIL_API_BASE_URL", "https://mail.zoho.in").rstrip("/")
+
+
+def _zoho_refresh_access_token() -> str:
+    client_id = os.getenv("ZOHO_MAIL_CLIENT_ID", "").strip()
+    client_secret = os.getenv("ZOHO_MAIL_CLIENT_SECRET", "").strip()
+    refresh_token = os.getenv("ZOHO_MAIL_REFRESH_TOKEN", "").strip()
+    if not client_id or not client_secret or not refresh_token:
+        raise RuntimeError(
+            "Zoho Mail API is not configured. Set ZOHO_MAIL_CLIENT_ID, "
+            "ZOHO_MAIL_CLIENT_SECRET, and ZOHO_MAIL_REFRESH_TOKEN."
+        )
+    resp = httpx.post(
+        f"{_zoho_accounts_base_url()}/oauth/v2/token",
+        data={
+            "refresh_token": refresh_token,
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "grant_type": "refresh_token",
+        },
+        timeout=20.0,
+    )
+    if resp.status_code >= 300:
+        raise RuntimeError(f"Zoho OAuth HTTP {resp.status_code}: {resp.text[:300]}")
+    data = resp.json()
+    token = str(data.get("access_token") or "").strip()
+    if not token:
+        raise RuntimeError(f"Zoho OAuth response missing access_token: {str(data)[:300]}")
+    expires_in = int(data.get("expires_in") or 3600)
+    global _zoho_access_token, _zoho_access_token_expires_at
+    _zoho_access_token = token
+    _zoho_access_token_expires_at = time.time() + max(60, expires_in - 120)
+    return token
+
+
+def _zoho_access_header() -> dict[str, str]:
+    token = _zoho_access_token
+    if not token or time.time() >= _zoho_access_token_expires_at:
+        token = _zoho_refresh_access_token()
+    return {"Authorization": f"Zoho-oauthtoken {token}"}
+
+
+def _zoho_request(method: str, path: str, *, json_body: dict[str, Any] | None = None) -> dict[str, Any]:
+    url = f"{_zoho_mail_base_url()}{path}"
+    headers = {
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+        **_zoho_access_header(),
+    }
+    resp = httpx.request(method, url, headers=headers, json=json_body, timeout=25.0)
+    if resp.status_code == 401:
+        global _zoho_access_token, _zoho_access_token_expires_at
+        _zoho_access_token = None
+        _zoho_access_token_expires_at = 0
+        headers.update(_zoho_access_header())
+        resp = httpx.request(method, url, headers=headers, json=json_body, timeout=25.0)
+    if resp.status_code >= 300:
+        raise RuntimeError(f"Zoho Mail API HTTP {resp.status_code}: {resp.text[:300]}")
+    return resp.json() if resp.content else {}
+
+
+def _zoho_account_id() -> str:
+    configured = os.getenv("ZOHO_MAIL_ACCOUNT_ID", "").strip()
+    if configured:
+        return configured
+    data = _zoho_request("GET", "/api/accounts")
+    accounts = data.get("data") or []
+    if not isinstance(accounts, list) or not accounts:
+        raise RuntimeError("Zoho Mail API returned no accounts")
+    preferred = _sender_email_key(
+        os.getenv("ZOHO_MAIL_FROM_ADDRESS", "").strip()
+        or os.getenv("SMTP_FROM_EMAIL", "").strip()
+        or os.getenv("SMTP_USERNAME", "").strip()
+    )
+    selected = None
+    for account in accounts:
+        if not isinstance(account, dict):
+            continue
+        addresses = [
+            str(account.get("primaryEmailAddress") or "").lower(),
+            str(account.get("mailboxAddress") or "").lower(),
+            str(account.get("incomingUserName") or "").lower(),
+        ]
+        for item in account.get("emailAddress") or []:
+            if isinstance(item, dict):
+                addresses.append(str(item.get("mailId") or "").lower())
+        if preferred and preferred in addresses:
+            selected = account
+            break
+    if not selected:
+        selected = next((account for account in accounts if isinstance(account, dict)), None)
+    account_id = str((selected or {}).get("accountId") or "").strip()
+    if not account_id:
+        raise RuntimeError("Zoho Mail API account response missing accountId")
+    return account_id
+
+
+def _send_via_zoho_api(*, subject: str, body: str, from_addr: str, to: str) -> str:
+    account_id = _zoho_account_id()
+    from_address = _sender_email_key(os.getenv("ZOHO_MAIL_FROM_ADDRESS", "").strip() or from_addr)
+    if not from_address:
+        raise RuntimeError("Zoho Mail API from address is not configured")
+    bcc = os.getenv("BCC_EMAIL", "").strip()
+    payload: dict[str, Any] = {
+        "fromAddress": from_address,
+        "toAddress": to,
+        "subject": subject,
+        "content": body,
+        "mailFormat": "plaintext",
+    }
+    if bcc and bcc.lower() != to.lower():
+        payload["bccAddress"] = bcc
+    data = _zoho_request("POST", f"/api/accounts/{account_id}/messages", json_body=payload)
+    response_data = data.get("data")
+    if isinstance(response_data, dict):
+        for key in ("messageId", "messageID", "mailId", "id"):
+            if response_data.get(key):
+                return str(response_data[key])
+    for key in ("messageId", "messageID", "mailId", "id"):
+        if data.get(key):
+            return str(data[key])
+    return f"zoho-api:{account_id}:{int(time.time())}"
+
+
+def _choose_email_transport(transport: str | None = None) -> str:
+    requested = (transport or os.getenv("EMAIL_TRANSPORT", "")).strip().lower()
+    if requested:
+        if requested not in {"smtp", "resend", "zoho_api"}:
+            raise RuntimeError("EMAIL_TRANSPORT must be 'smtp', 'resend', or 'zoho_api'")
+        return requested
+    if os.getenv("ZOHO_MAIL_REFRESH_TOKEN", "").strip():
+        return "zoho_api"
+    if os.getenv("SMTP_HOST", "").strip():
+        return "smtp"
+    if os.getenv("RESEND_API_KEY", "").strip():
+        return "resend"
+    return "smtp"
 
 
 def _send_email(
@@ -208,9 +364,11 @@ def _send_email(
     call_id: str | None = None,
     recipient_name: str | None = None,
     from_addr: str | None = None,
+    transport: str | None = None,
 ) -> str:
-    """Send an email. Prefers Resend (HTTPS) when RESEND_API_KEY is set,
-    falls back to SMTP otherwise. Raises if neither is configured.
+    """Send an email. Prefers the Zoho Mail HTTPS API when configured, then
+    SMTP, and only uses Resend when explicitly selected or SMTP/API is
+    unavailable.
 
     `to` defaults to EMAIL_NOTIFICATION_RECIPIENT (the operator inbox).
     Pass `to` for a specific recipient (e.g. consult booker).
@@ -225,9 +383,13 @@ def _send_email(
         raise RuntimeError("Email recipient is not configured. Set EMAIL_NOTIFICATION_RECIPIENT.")
     resolved_from_addr = _resolve_sender_address(from_addr)
 
-    transport = "resend" if os.getenv("RESEND_API_KEY", "").strip() else "smtp"
+    transport = _choose_email_transport(transport)
     try:
-        if transport == "resend":
+        if transport == "zoho_api":
+            msg_id = _send_via_zoho_api(
+                subject=subject, body=body, from_addr=resolved_from_addr, to=recipient,
+            )
+        elif transport == "resend":
             try:
                 msg_id = _send_via_resend(
                     subject=subject, body=body, from_addr=resolved_from_addr, to=recipient,

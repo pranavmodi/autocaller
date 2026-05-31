@@ -5,7 +5,9 @@ cd "$(dirname "$0")"
 
 # Load .env if it exists
 if [ -f .env ]; then
-    export $(grep -v '^#' .env | xargs)
+    set -a
+    source .env
+    set +a
 fi
 
 FRONTEND_PORT=${FRONTEND_PORT:-3000}

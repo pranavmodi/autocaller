@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Activity, PhoneCall, Stethoscope, Building2, CalendarCheck, ListChecks, LogOut, MessageSquare, Mail, Film, Send, BrainCircuit } from "lucide-react";
+import { Activity, PhoneCall, Stethoscope, Building2, CalendarCheck, ListChecks, LogOut, MessageSquare, Mail, Send, BrainCircuit, Inbox, SearchCheck, GitBranch } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ConnectionBadge } from "@/components/ConnectionBadge";
 import { apiUrl } from "@/lib/api";
@@ -21,13 +21,16 @@ async function signOut() {
 
 const items = [
   { href: "/", label: "Now", icon: Activity },
+  { href: "/actions", label: "Actions", icon: Inbox },
+  { href: "/todos", label: "Todos", icon: ListChecks },
   { href: "/cadence", label: "Queue", icon: ListChecks },
   { href: "/calls", label: "Calls", icon: PhoneCall },
   { href: "/comms", label: "Comms", icon: MessageSquare },
   { href: "/sequences", label: "Sequences", icon: Mail },
   { href: "/lead-gen", label: "Lead Gen", icon: BrainCircuit },
+  { href: "/traces", label: "Traces", icon: GitBranch },
+  { href: "/seo", label: "SEO", icon: SearchCheck },
   { href: "/outreach", label: "Outreach", icon: Send },
-  { href: "/scripts", label: "Scripts", icon: Film },
   { href: "/calllists", label: "Call lists", icon: ListChecks },
   { href: "/consults", label: "Consults", icon: CalendarCheck },
   { href: "/firms", label: "Firms", icon: Building2 },
@@ -45,7 +48,7 @@ export function Nav() {
       <aside className="hidden md:fixed md:inset-y-0 md:left-0 md:flex md:w-56 md:flex-col md:border-r md:border-neutral-200 md:bg-white">
         <div className="flex h-14 items-center gap-2 border-b border-neutral-200 px-5">
           <div className="h-2 w-2 rounded-full bg-emerald-500" />
-          <span className="text-sm font-semibold">Autocaller</span>
+          <span className="text-sm font-semibold">Possible OS</span>
           <span className="ml-auto">
             <ConnectionBadge />
           </span>
@@ -84,7 +87,7 @@ export function Nav() {
       <header className="sticky top-0 z-20 flex h-12 items-center justify-between border-b border-neutral-200 bg-white px-4 md:hidden">
         <div className="flex items-center gap-2">
           <div className="h-2 w-2 rounded-full bg-emerald-500" />
-          <span className="text-sm font-semibold">Autocaller</span>
+          <span className="text-sm font-semibold">Possible OS</span>
         </div>
         <ConnectionBadge />
       </header>

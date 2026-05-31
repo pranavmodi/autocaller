@@ -166,15 +166,33 @@ async def _firm_name_for(pif_id: str) -> str:
     return await resolve_firm_name(pif_id)
 
 
-async def _process_one(seq_id: str, dry_run: bool = False) -> dict:
-    """Render + (optionally) send the next step for one sequence row.
-    Returns a dict describing what happened — useful for CLI output."""
+async def create_sequence_approval_notification(
+    seq_id: str,
+    *,
+    require_active: bool = True,
+    dry_run: bool = False,
+) -> dict:
+    """Render the next sequence step and create the operator approval action."""
     async with AsyncSessionLocal() as session:
         seq = (await session.execute(
             select(EmailSequenceRow).where(EmailSequenceRow.id == seq_id)
         )).scalar_one_or_none()
-        if not seq or seq.status != "active":
+        if not seq:
+            return {"id": seq_id, "skipped": "not_found"}
+        if require_active and seq.status != "active":
             return {"id": seq_id, "skipped": "not_active"}
+        if seq.status == "paused" and (seq.paused_reason or "").startswith(
+            "awaiting_operator_send_approval:"
+        ):
+            notification_id = seq.paused_reason.rsplit(":", 1)[-1]
+            return {
+                "id": seq_id,
+                "paused": "awaiting_operator_send_approval",
+                "notification_id": (
+                    int(notification_id) if notification_id.isdigit() else notification_id
+                ),
+                "existing": True,
+            }
 
         contact = (await session.execute(
             select(FirmContactRow).where(FirmContactRow.id == seq.contact_id)
@@ -311,6 +329,102 @@ async def _process_one(seq_id: str, dry_run: bool = False) -> dict:
             "next_step": next_step,
             "subject": rendered_subject,
         }
+
+
+async def create_sequence_approval_placeholder(seq_id: str) -> dict:
+    """Create an operator action for a sequence without composing its draft."""
+    async with AsyncSessionLocal() as session:
+        seq = (await session.execute(
+            select(EmailSequenceRow).where(EmailSequenceRow.id == seq_id)
+        )).scalar_one_or_none()
+        if not seq:
+            return {"id": seq_id, "skipped": "not_found"}
+        if seq.status == "paused" and (seq.paused_reason or "").startswith(
+            "awaiting_operator_send_approval:"
+        ):
+            notification_id = seq.paused_reason.rsplit(":", 1)[-1]
+            return {
+                "id": seq_id,
+                "paused": "awaiting_operator_send_approval",
+                "notification_id": (
+                    int(notification_id) if notification_id.isdigit() else notification_id
+                ),
+                "existing": True,
+            }
+
+        contact = (await session.execute(
+            select(FirmContactRow).where(FirmContactRow.id == seq.contact_id)
+        )).scalar_one_or_none()
+        if not contact or not contact.email:
+            seq.status = "paused"
+            seq.paused_reason = "no_email_on_contact"
+            await session.commit()
+            return {"id": seq_id, "paused": "no_email_on_contact"}
+
+        next_step = seq.current_step + 1
+        if next_step > seq.steps_total:
+            seq.status = "completed"
+            seq.next_step_due_at = None
+            await session.commit()
+            return {"id": seq_id, "completed": True}
+
+        firm_name = await _firm_name_for(contact.pif_id)
+        notification = await create_operator_notification(
+            session,
+            notification_type="lead_sequence_email_approval",
+            title=f"Approve email to {firm_name or contact.full_name}",
+            body="Draft will be generated when opened.",
+            source_type="email_sequence_step",
+            source_id=f"{seq.id}:{next_step}",
+            priority="normal",
+            stimulus={
+                "subject": "Draft pending",
+                "text_excerpt": "Open this action to generate the draft.",
+                "received_at": _utcnow().isoformat(),
+            },
+            context={
+                "pif_id": contact.pif_id,
+                "firm_name": firm_name,
+                "contact_id": contact.id,
+                "contact_name": contact.full_name,
+                "contact_email": contact.email,
+                "contact_title": contact.title,
+                "sequence_id": seq.id,
+                "sequence_status": "paused",
+                "template_key": seq.template_key,
+                "step_num": next_step,
+                "steps_total": seq.steps_total,
+            },
+            suggested_action={
+                "kind": "approve_send_email",
+                "label": "Generate, review, edit, and approve send",
+                "outcome": "pending_operator_approval",
+                "confidence": 100,
+                "reasoning": "The draft is generated lazily when the operator opens this action.",
+                "requires_human_review": True,
+                "draft_pending": True,
+                "href": "/lead-gen",
+            },
+        )
+        seq.status = "paused"
+        seq.paused_reason = f"awaiting_operator_send_approval:{notification.id}"
+        await session.commit()
+        return {
+            "id": seq_id,
+            "paused": "awaiting_operator_send_approval",
+            "notification_id": notification.id,
+            "next_step": next_step,
+            "draft_pending": True,
+        }
+
+
+async def _process_one(seq_id: str, dry_run: bool = False) -> dict:
+    """Render the next step into a pending approval notification."""
+    return await create_sequence_approval_notification(
+        seq_id,
+        require_active=True,
+        dry_run=dry_run,
+    )
 
 
 async def tick(limit: int = 25, dry_run: bool = False) -> list[dict]:

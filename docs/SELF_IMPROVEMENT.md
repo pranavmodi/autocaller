@@ -1,4 +1,4 @@
-# Self-improving autocaller — how to get to actual booked meetings
+# Self-improving Possible OS — how to get to actual booked meetings
 
 > Goal: the system learns from every call — gets better at reaching decision-makers, running good discovery, and closing a demo slot. Not "self-learning" as a marketing term. Concrete, debuggable feedback loops.
 

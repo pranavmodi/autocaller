@@ -12,13 +12,26 @@ const origin =
     ? ""
     : process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8099";
 
+function publicApiOrigin(): string {
+  const configured = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") || "";
+  if (!configured) return "";
+  try {
+    const url = new URL(configured);
+    if (["localhost", "127.0.0.1", "::1"].includes(url.hostname)) {
+      return "";
+    }
+    return configured;
+  } catch {
+    return "";
+  }
+}
+
 export function apiUrl(path: string): string {
   // Use window.location origin in the browser so relative paths work
   // whether we're served from the same domain as the API or not.
   if (typeof window !== "undefined") {
-    if (process.env.NEXT_PUBLIC_API_URL) {
-      return `${process.env.NEXT_PUBLIC_API_URL.replace(/\/$/, "")}${path}`;
-    }
+    const configured = publicApiOrigin();
+    if (configured) return `${configured}${path}`;
     return path;
   }
   return `${origin}${path}`;
@@ -53,8 +66,291 @@ function _handle401(path: string) {
   window.location.replace(url.toString());
 }
 
-async function get<T>(path: string): Promise<T> {
-  const res = await fetch(apiUrl(path), { credentials: "include" });
+type ApiRequestOptions = {
+  traceId?: string;
+};
+
+const TRACE_SESSION_KEY = "possible_os_trace_session_id";
+let memoryTraceSessionId = "";
+
+export function newProductTraceId(): string {
+  const randomUuid =
+    typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID()
+      : `${Date.now().toString(16)}${Math.random().toString(16).slice(2)}`;
+  return randomUuid.replace(/-/g, "").slice(0, 64);
+}
+
+export function getTraceSessionId(): string {
+  if (typeof window === "undefined") {
+    if (!memoryTraceSessionId) memoryTraceSessionId = newProductTraceId();
+    return memoryTraceSessionId;
+  }
+  const existing = window.localStorage.getItem(TRACE_SESSION_KEY);
+  if (existing) return existing;
+  const sessionId = newProductTraceId();
+  window.localStorage.setItem(TRACE_SESSION_KEY, sessionId);
+  return sessionId;
+}
+
+function traceHeaders(options?: ApiRequestOptions): Record<string, string> {
+  return {
+    "x-possible-request-id": newProductTraceId(),
+    "x-possible-trace-id": options?.traceId || newProductTraceId(),
+  };
+}
+
+export type ProductTracePayload = {
+  trace_id?: string;
+  session_id?: string;
+  request_id?: string;
+  actor_type?: string;
+  actor_id?: string;
+  event_type: string;
+  surface?: string;
+  entity_type?: string;
+  entity_id?: string;
+  parent_trace_id?: string;
+  input?: Record<string, unknown>;
+  output?: Record<string, unknown>;
+  diff?: Record<string, unknown>;
+  context?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
+};
+
+export type ProductTrace = {
+  id: number;
+  trace_id: string;
+  session_id: string | null;
+  request_id: string | null;
+  actor_type: string;
+  actor_id: string | null;
+  event_type: string;
+  surface: string;
+  entity_type: string | null;
+  entity_id: string | null;
+  parent_trace_id: string | null;
+  input: Record<string, unknown>;
+  output: Record<string, unknown>;
+  diff: Record<string, unknown>;
+  context: Record<string, unknown>;
+  metadata: Record<string, unknown>;
+  created_at: string | null;
+};
+
+export type Todo = {
+  id: number;
+  area: string;
+  section: string;
+  title: string;
+  status: string;
+  body: string;
+  source_url: string | null;
+  created_by: string | null;
+  updated_by: string | null;
+  completed_at: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+export type TodoPayload = {
+  title?: string;
+  area?: string;
+  section?: string;
+  status?: string;
+  body?: string;
+  source_url?: string | null;
+  actor?: string;
+};
+
+export const listTodos = (args: { area?: string; status?: string } = {}) => {
+  const params = new URLSearchParams();
+  if (args.area) params.set("area", args.area);
+  if (args.status) params.set("status", args.status);
+  const qs = params.toString();
+  return get<{ todos: Todo[] }>(`/api/todos${qs ? `?${qs}` : ""}`);
+};
+
+export const createTodo = (payload: TodoPayload & { title: string }) =>
+  post<{ todo: Todo }>("/api/todos", payload);
+
+export const updateTodo = (id: number, payload: TodoPayload) =>
+  patch<{ todo: Todo }>(`/api/todos/${id}`, payload);
+
+export const deleteTodo = (id: number) =>
+  del<{ deleted: boolean; id: number }>(`/api/todos/${id}`);
+
+export function recordProductTrace(payload: ProductTracePayload): Promise<void> {
+  if (typeof window === "undefined") return Promise.resolve();
+  const traceId = payload.trace_id || newProductTraceId();
+  const body = {
+    actor_type: "user",
+    surface: "frontend",
+    ...payload,
+    trace_id: traceId,
+    session_id: payload.session_id || getTraceSessionId(),
+  };
+  return fetch(apiUrl("/api/traces"), {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      ...traceHeaders({ traceId }),
+    },
+    body: JSON.stringify(body),
+    credentials: "include",
+    keepalive: true,
+  })
+    .then(() => undefined)
+    .catch(() => undefined);
+}
+
+export const getProductTraces = (args?: {
+  limit?: number;
+  trace_id?: string;
+  session_id?: string;
+  event_type?: string;
+  entity_type?: string;
+  entity_id?: string;
+}) => {
+  const params = new URLSearchParams();
+  if (args?.limit) params.set("limit", String(args.limit));
+  if (args?.trace_id) params.set("trace_id", args.trace_id);
+  if (args?.session_id) params.set("session_id", args.session_id);
+  if (args?.event_type) params.set("event_type", args.event_type);
+  if (args?.entity_type) params.set("entity_type", args.entity_type);
+  if (args?.entity_id) params.set("entity_id", args.entity_id);
+  const suffix = params.toString() ? `?${params}` : "";
+  return get<{ traces: ProductTrace[] }>(`/api/traces${suffix}`);
+};
+
+export type ImprovementFinding = {
+  id: string;
+  finding_key: string;
+  workflow: string;
+  finding_type: string;
+  summary: string;
+  details: string;
+  evidence_trace_ids: string[];
+  evidence: Record<string, unknown>;
+  severity: string;
+  confidence: number | null;
+  suggested_change: Record<string, unknown>;
+  status: string;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+export type EvalCase = {
+  id: string;
+  finding_id: string | null;
+  workflow: string;
+  name: string;
+  input: Record<string, unknown>;
+  expected: Record<string, unknown>;
+  status: string;
+  created_at: string | null;
+};
+
+export type CodexTaskPacket = {
+  id: string;
+  finding_id: string | null;
+  eval_case_id: string | null;
+  title: string;
+  status: string;
+  packet_path: string | null;
+  task_markdown: string;
+  traces: ProductTrace[];
+  eval_cases: EvalCase[];
+  relevant_files: string[];
+  validation_commands: string[];
+  created_at: string | null;
+  exported_at: string | null;
+};
+
+export type LearningMeasurementWindow = {
+  days: number;
+  since: string;
+  until: string;
+  manual_edit_rate: number | null;
+  edited_draft_count: number;
+  reviewed_draft_count: number;
+  bounce_rate: number | null;
+  bounced_email_count: number;
+  failed_email_count: number;
+  sent_email_count: number;
+  reply_rate: number | null;
+  matched_reply_count: number;
+  all_inbound_email_count: number;
+  booked_qualified_conversation_count: number;
+  consult_booking_count: number;
+  qualified_observation_count: number;
+};
+
+export type LearningMeasurements = {
+  generated_at: string;
+  windows: LearningMeasurementWindow[];
+  definitions: Record<string, string>;
+};
+
+export const getImprovementFindings = (args?: {
+  status?: string;
+  workflow?: string;
+  limit?: number;
+}) => {
+  const params = new URLSearchParams();
+  if (args?.status) params.set("status", args.status);
+  if (args?.workflow) params.set("workflow", args.workflow);
+  if (args?.limit) params.set("limit", String(args.limit));
+  const suffix = params.toString() ? `?${params}` : "";
+  return get<{ findings: ImprovementFinding[] }>(`/api/learning/findings${suffix}`);
+};
+
+export const getLearningMeasurements = () =>
+  get<LearningMeasurements>("/api/learning/measurements");
+
+export const analyzeLearningFindings = (limit = 500) =>
+  post<{ created_or_updated_count: number; findings: ImprovementFinding[] }>(
+    "/api/learning/analyze",
+    { limit },
+  );
+
+export const syncLearningOutcomes = (limit = 100) =>
+  post<{ created_count: number; limit: number }>("/api/learning/sync-outcomes", {
+    limit,
+  });
+
+export const reviewImprovementFinding = (
+  findingId: string,
+  status: "proposed" | "accepted" | "rejected" | "implemented",
+) =>
+  post<{ finding: ImprovementFinding }>(
+    `/api/learning/findings/${encodeURIComponent(findingId)}/review`,
+    { status, reviewed_by: "operator" },
+  );
+
+export const createEvalCaseForFinding = (findingId: string) =>
+  post<{ eval_case: EvalCase }>(
+    `/api/learning/findings/${encodeURIComponent(findingId)}/eval-case`,
+  );
+
+export const getEvalCases = (limit = 100) =>
+  get<{ eval_cases: EvalCase[] }>(`/api/learning/eval-cases?limit=${limit}`);
+
+export const createTaskPacketForFinding = (findingId: string) =>
+  post<{ task_packet: CodexTaskPacket }>(
+    `/api/learning/findings/${encodeURIComponent(findingId)}/task-packet`,
+  );
+
+export const getTaskPackets = (limit = 100) =>
+  get<{ task_packets: CodexTaskPacket[] }>(`/api/learning/task-packets?limit=${limit}`);
+
+async function get<T>(path: string, options?: ApiRequestOptions): Promise<T> {
+  const res = await fetch(apiUrl(path), {
+    credentials: "include",
+    headers: traceHeaders(options),
+  });
   if (res.status === 401) {
     _handle401(path);
     throw new Error(`GET ${path} 401`);
@@ -63,10 +359,31 @@ async function get<T>(path: string): Promise<T> {
   return res.json();
 }
 
-async function post<T>(path: string, body?: unknown): Promise<T> {
+async function errorDetail(res: Response): Promise<string> {
+  try {
+    const data = await res.json();
+    if (typeof data?.detail === "string") return data.detail;
+    if (data?.detail) return JSON.stringify(data.detail);
+  } catch {
+    try {
+      return await res.text();
+    } catch {
+      return "";
+    }
+  }
+  return "";
+}
+
+async function post<T>(
+  path: string,
+  body?: unknown,
+  options?: ApiRequestOptions,
+): Promise<T> {
   const res = await fetch(apiUrl(path), {
     method: "POST",
-    headers: body ? { "content-type": "application/json" } : undefined,
+    headers: body
+      ? { "content-type": "application/json", ...traceHeaders(options) }
+      : traceHeaders(options),
     body: body ? JSON.stringify(body) : undefined,
     credentials: "include",
   });
@@ -74,14 +391,21 @@ async function post<T>(path: string, body?: unknown): Promise<T> {
     _handle401(path);
     throw new Error(`POST ${path} 401`);
   }
-  if (!res.ok) throw new Error(`POST ${path} ${res.status}`);
+  if (!res.ok) {
+    const detail = await errorDetail(res);
+    throw new Error(`POST ${path} ${res.status}${detail ? ` - ${detail}` : ""}`);
+  }
   return res.json();
 }
 
-async function put<T>(path: string, body: unknown): Promise<T> {
+async function put<T>(
+  path: string,
+  body: unknown,
+  options?: ApiRequestOptions,
+): Promise<T> {
   const res = await fetch(apiUrl(path), {
     method: "PUT",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", ...traceHeaders(options) },
     body: JSON.stringify(body),
     credentials: "include",
   });
@@ -93,10 +417,14 @@ async function put<T>(path: string, body: unknown): Promise<T> {
   return res.json();
 }
 
-async function patch<T>(path: string, body: unknown): Promise<T> {
+async function patch<T>(
+  path: string,
+  body: unknown,
+  options?: ApiRequestOptions,
+): Promise<T> {
   const res = await fetch(apiUrl(path), {
     method: "PATCH",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", ...traceHeaders(options) },
     body: JSON.stringify(body),
     credentials: "include",
   });
@@ -111,10 +439,11 @@ async function patch<T>(path: string, body: unknown): Promise<T> {
   return res.json();
 }
 
-async function del<T>(path: string): Promise<T> {
+async function del<T>(path: string, options?: ApiRequestOptions): Promise<T> {
   const res = await fetch(apiUrl(path), {
     method: "DELETE",
     credentials: "include",
+    headers: traceHeaders(options),
   });
   if (res.status === 401) {
     _handle401(path);
@@ -514,18 +843,22 @@ export type OperatorNotification = {
   acknowledged_by: string | null;
 };
 
-export const getPendingOperatorNotifications = () =>
-  get<{ pending: OperatorNotification[] }>("/api/operator-notifications/pending");
+export const getPendingOperatorNotifications = (limit = 10) =>
+  get<{ pending: OperatorNotification[] }>(
+    `/api/operator-notifications/pending?limit=${encodeURIComponent(String(limit))}`,
+  );
 
-export const acknowledgeOperatorNotification = (id: number) =>
+export const acknowledgeOperatorNotification = (id: number, options?: ApiRequestOptions) =>
   post<{ notification: OperatorNotification }>(
     `/api/operator-notifications/${id}/acknowledge`,
     { acknowledged_by: "operator" },
+    options,
   );
 
 export const sendOperatorNotificationDraft = (
   id: number,
   args: { subject?: string; body?: string; sent_by?: string },
+  options?: ApiRequestOptions,
 ) =>
   post<{ notification: OperatorNotification }>(
     `/api/operator-notifications/${id}/send-draft`,
@@ -533,6 +866,79 @@ export const sendOperatorNotificationDraft = (
       subject: args.subject,
       body: args.body,
       sent_by: args.sent_by ?? "operator",
+    },
+    options,
+  );
+
+// ---- SEO and Agent Optimization ----
+export type SeoAuditAction = {
+  id: string;
+  action_type: string;
+  priority: "high" | "normal" | "low" | string;
+  title: string;
+  rationale: string;
+  suggested_change: string;
+  category: string;
+  page_url: string;
+};
+
+export type SeoAuditPage = {
+  url: string;
+  status_code: number | null;
+  title: string;
+  description: string;
+  canonical: string;
+  h1: string[];
+  h2: string[];
+  word_count: number;
+  internal_link_count: number;
+  consult_link_count: number;
+  schema_count: number;
+  missing_image_alt_count: number;
+  seo_score: number;
+  aeo_score: number;
+  score: number;
+  issues: string[];
+  opportunities: string[];
+  actions: SeoAuditAction[];
+};
+
+export type SeoAudit = {
+  site_url: string;
+  generated_at: string;
+  summary: {
+    page_count: number;
+    avg_seo_score: number;
+    avg_aeo_score: number;
+    avg_score: number;
+    issue_counts: Record<string, number>;
+    action_count: number;
+    high_priority_action_count: number;
+    top_actions: SeoAuditAction[];
+  };
+  pages: SeoAuditPage[];
+  actions: SeoAuditAction[];
+};
+
+export const getSeoAudit = (args?: { site_url?: string; limit?: number }) => {
+  const params = new URLSearchParams();
+  if (args?.site_url) params.set("site_url", args.site_url);
+  if (args?.limit) params.set("limit", String(args.limit));
+  const suffix = params.toString() ? `?${params}` : "";
+  return get<SeoAudit>(`/api/seo/audit${suffix}`);
+};
+
+export const generateSeoActions = (args?: {
+  site_url?: string;
+  limit?: number;
+  action_limit?: number;
+}) =>
+  post<{ created_count: number; created: Array<{ notification_id: number; status: string; action: SeoAuditAction }>; audit: SeoAudit }>(
+    "/api/seo/actions",
+    {
+      site_url: args?.site_url,
+      limit: args?.limit ?? 20,
+      action_limit: args?.action_limit ?? 20,
     },
   );
 
@@ -651,6 +1057,13 @@ export type RenderedSequenceStep = {
   subject: string;
   body: string;
   message_type: string;
+  reasoning?: string | null;
+  angle?: string | null;
+  cta?: string | null;
+  blog_link_used?: string | null;
+  model?: string | null;
+  requires_human_review?: boolean;
+  risk_flags?: string[];
 };
 
 export type SequenceTemplate = {
@@ -836,6 +1249,7 @@ export type LeadGenPolicy = {
   label: string;
   target_metric: string;
   weights: Record<string, unknown>;
+  daily_send_budget: number;
   suppressions: Record<string, unknown>;
   active: boolean;
   created_at: string | null;
@@ -914,6 +1328,16 @@ export type LeadGenProposal = {
 export const getLeadGenPolicy = () =>
   get<LeadGenPolicy>("/api/lead-gen/policy/current");
 
+export const updateLeadGenDailySendBudget = (budget: number) =>
+  put<{
+    daily_send_budget: number;
+    policy_version: string;
+    weights: Record<string, unknown>;
+  }>("/api/lead-gen/settings/daily-send-budget", {
+    budget,
+    updated_by: "operator",
+  });
+
 export const createLeadGenBatch = (args: {
   name?: string;
   template_key: string;
@@ -952,6 +1376,27 @@ export const approveLeadGenBatch = (
       stagger_minutes: args.stagger_minutes ?? 60,
       scheduled_start_at: args.scheduled_start_at,
       scheduled_timezone: args.scheduled_timezone ?? "America/Los_Angeles",
+    },
+  );
+
+export const sendLeadGenBatchItemDraft = (
+  batchItemId: string,
+  args: { subject: string; body: string; sent_by?: string },
+) =>
+  post<{
+    batch_item_id: string;
+    sequence_id: string;
+    sent_to: string;
+    sent_subject: string;
+    sent_message_id: string;
+    sent_at: string;
+    step: number;
+  }>(
+    `/api/lead-gen/batch-items/${encodeURIComponent(batchItemId)}/send-draft`,
+    {
+      subject: args.subject,
+      body: args.body,
+      sent_by: args.sent_by ?? "operator",
     },
   );
 

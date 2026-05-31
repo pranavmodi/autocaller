@@ -1,0 +1,541 @@
+# Lead Gen Cybernetic Technical Implementation
+
+This is the engineering map for the Possible Minds lead-generation cybernetic
+function. Keep this file focused on what exists, where it lives, how data
+moves, and how to operate or test it.
+
+Use the other lead-gen docs for different purposes:
+
+- Conceptual design: `docs/CYBERNETIC_LEAD_GEN_CONCEPT.md`.
+- Active backlog: DB-backed `todos` table, exposed through `/todos` and
+  `bin/autocaller todos ...`.
+- Historical session handoff: `docs/CYBERNETIC_LEAD_GEN_SESSION.md`.
+
+## Runtime Surfaces
+
+### Backend
+
+FastAPI serves the lead-gen APIs through `app/api/lead_gen.py` and related
+sensor routes.
+
+Important routes:
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `GET` | `/api/lead-gen/policy/current` | active policy, weights, suppressions, daily send budget |
+| `PUT` | `/api/lead-gen/settings/daily-send-budget` | persist daily send budget on active policy |
+| `POST` | `/api/lead-gen/batches` | create a daily action plan batch |
+| `GET` | `/api/lead-gen/batches` | list batches |
+| `GET` | `/api/lead-gen/batches/{batch_id}` | get batch, items, optional observations |
+| `POST` | `/api/lead-gen/batches/{batch_id}/approve` | approve batch and optionally queue sequences |
+| `POST` | `/api/lead-gen/batch-items/{batch_item_id}/send-draft` | send an approved edited draft for a batch item |
+| `POST` | `/api/lead-gen/observations/classify` | classify and store manual/API feedback |
+| `POST` | `/api/lead-gen/batches/{batch_id}/proposal` | create a human-reviewed learning proposal |
+| `POST` | `/api/inbound-email/poll` | poll Zoho IMAP and create reply observations/actions |
+| `GET` | `/api/inbound-email` | list stored inbound messages |
+| `GET` | `/api/inbound-email/config` | masked IMAP config |
+| `POST` | `/api/resend/webhook` | ingest Resend delivery/engagement events |
+| `GET` | `/api/operator-notifications/pending` | pending operator action-center notifications |
+| `POST` | `/api/operator-notifications/{id}/acknowledge` | dismiss/action a notification |
+| `POST` | `/api/operator-notifications/{id}/send-draft` | send a threaded notification draft |
+| `GET` | `/api/todos` | list DB-backed project todos, optionally filtered by area/status |
+| `POST` | `/api/todos` | create a DB-backed project todo |
+| `PATCH` | `/api/todos/{todo_id}` | edit a DB-backed project todo |
+| `DELETE` | `/api/todos/{todo_id}` | delete a DB-backed project todo |
+
+### CLI
+
+Lead-gen CLI commands live in `app/cli.py` under the `lead-gen` group.
+
+Primary commands:
+
+```bash
+bin/autocaller lead-gen policy
+bin/autocaller lead-gen recommend --template possible_minds_dynamic --limit 50
+bin/autocaller lead-gen batches
+bin/autocaller lead-gen show <batch_id> --observations
+bin/autocaller lead-gen approve <batch_id>
+bin/autocaller lead-gen approve <batch_id> --start-sequences
+bin/autocaller lead-gen observe --event-type email_reply --item <batch_item_id> --text "..."
+bin/autocaller lead-gen propose <batch_id>
+bin/autocaller inbound poll --limit 50 --classify
+bin/autocaller todos list --area lead-gen
+bin/autocaller todos add "Review new workflow idea" --area lead-gen --source-url https://...
+bin/autocaller todos update <id> --status done
+bin/autocaller todos delete <id>
+```
+
+The CLI reference remains in `docs/cli.md`.
+
+### Frontend
+
+The lead-gen operator UI is `frontend/app/lead-gen/page.tsx`. The editable
+project backlog is a separate page at `frontend/app/todos/page.tsx`; it has its
+own nav entry and syncs directly with the `todos` table through `/api/todos`.
+
+It currently supports:
+
+- active policy display;
+- daily send budget editing and saving;
+- generating today's action plan;
+- batch approval and one-hour queueing;
+- California-time scheduling;
+- per-contact generated preview;
+- editable draft send;
+- manual observation entry;
+- proposal generation;
+- row-level score component visibility.
+
+Global operator actions are in
+`frontend/components/OperatorNotificationPopup.tsx`. Despite the legacy file
+name, it is now a non-blocking action center with:
+
+- floating pending-action count;
+- dismissible toast;
+- side drawer;
+- pending action list;
+- stimulus and lead context;
+- rationale;
+- editable draft;
+- acknowledge and send actions.
+
+Frontend API bindings live in `frontend/lib/api.ts`.
+
+## Core Backend Services
+
+### Policy And Batch Control
+
+File: `app/services/lead_gen_cybernetic.py`
+
+Responsibilities:
+
+- ensure and backfill the active default policy;
+- read and update daily send budget;
+- create recommendation/action batches;
+- serialize batches, items, observations, and proposals;
+- approve batches;
+- schedule queueable sequence starts;
+- send edited batch-item drafts;
+- classify and store observations;
+- create learning proposals.
+
+Important constants:
+
+- `TARGET_METRIC = "booked_qualified_conversations"`
+- `DEFAULT_POLICY_VERSION = "lead-gen-v1"`
+- `DEFAULT_BATCH_STAGGER_MINUTES = 60`
+- `DEFAULT_DAILY_SEND_BUDGET = 50`
+
+### Daily Action Planner
+
+File: `app/services/lead_gen_action_planner.py`
+
+Responsibilities:
+
+- allocate the daily budget across existing conversations and new starts;
+- prioritize pending inbound reply notifications;
+- prioritize already-composed draft approval notifications;
+- include due follow-up sequences;
+- fill remaining capacity with scored new first-touch contacts;
+- dedupe by contact and email;
+- return explainable `LeadGenActionCandidate` rows.
+
+Action types:
+
+- `reply_to_inbound`
+- `approve_existing_draft`
+- `follow_up`
+- `first_touch`
+
+Queueable actions:
+
+- `first_touch`
+- `follow_up`
+
+Continuation actions that use the action center:
+
+- `reply_to_inbound`
+- `approve_existing_draft`
+- `follow_up`
+
+### New-Contact Recommendations
+
+File: `app/services/sequence_recommendations.py`
+
+Responsibilities:
+
+- read candidate contacts from `firm_contacts`;
+- enrich firm name/state from `patients`;
+- suppress firms with prior call/email/SMS history;
+- suppress firms with existing email sequences;
+- suppress unusable emails;
+- suppress obvious non-law-firm records;
+- select the best contact per firm;
+- dedupe by email;
+- return ranked new-start candidates.
+
+Primary source tables:
+
+- `firm_contacts`
+- `patients`
+- `email_logs`
+- `sms_logs`
+- `call_logs`
+- `email_sequences`
+
+### Contact-Selection Scoring
+
+File: `app/services/contact_selection.py`
+
+Responsibilities:
+
+- compute deterministic explainable scores for new-start contacts;
+- merge active policy weights with defaults;
+- classify persona;
+- classify email quality;
+- classify firm-fit signals;
+- detect non-law-firm records;
+- return score breakdown, features, signals, suppressions, and reason text.
+
+Current score dimensions:
+
+- `persona`
+- `firm_fit`
+- `relationship`
+- `email_quality`
+- `history`
+- `risk`
+
+Stored selection trace on `lead_gen_batch_items.reason_json`:
+
+- `score_breakdown`
+- `selection_features`
+- `selection_policy_version`
+- `suppressions`
+- `signals`
+- `reason`
+
+### Dynamic Email Composer
+
+File: `app/services/lead_email_composer.py`
+
+Skill:
+
+- `app/skills/possible-minds-lead-email-composer/SKILL.md`
+
+Responsibilities:
+
+- build the evidence packet for one email from firm/contact data, DB email logs,
+  stored inbound replies, booked consult patterns, and direct Zoho Sent mailbox
+  lookup for prior messages to the recipient;
+- call the local skill/LLM path;
+- produce subject, body, rationale, angle, CTA, blog link, model, and risk
+  metadata;
+- keep the email plaintext, remove disallowed dash punctuation, and require
+  human review.
+
+The skill payload intentionally does not include sequence/template internals.
+It receives `conversation_state` plus real conversation history, including
+`history.previous_emails`, `history.zoho_sent_emails`,
+`history.zoho_sent_lookup`, and `history.replies`.
+
+### Sequence Scheduling
+
+Files:
+
+- `app/services/sequence_scheduler.py`
+- `app/services/sequences/possible_minds_dynamic.py`
+- `app/services/sequences/registry.py`
+
+Responsibilities:
+
+- start sequence rows;
+- render or compose due steps;
+- create operator approval notifications for dynamic generated outbound emails;
+- send only when allowed by execution gates;
+- advance sequence state and cadence.
+
+Execution gate:
+
+- Actual scheduled sequence sending still requires `ALLOW_SEQUENCE_SEND=true`.
+
+### Inbound Email Sensor
+
+File: `app/services/inbound_email.py`
+
+Responsibilities:
+
+- read Zoho IMAP;
+- store normalized inbound email rows;
+- match inbound replies to firm contacts, sequences, and batch items;
+- optionally classify replies;
+- create lead-gen observations;
+- pause matched active sequences;
+- create operator notifications with suggested next action/draft.
+
+### Delivery Sensor
+
+File: `app/services/resend_webhooks.py`
+
+Responsibilities:
+
+- verify Resend webhook signatures when configured;
+- update `email_logs`;
+- create lead-gen observations from deterministic provider events;
+- pause affected sequences for delivery risk.
+
+Resend event mapping:
+
+| Resend event | Email log status | Lead-gen outcome | Next action |
+| --- | --- | --- | --- |
+| `email.delivered` | `delivered` | `neutral` | `no_action` |
+| `email.delivery_delayed` | `delayed` | `neutral` | `pause_sequence` |
+| `email.bounced` | `bounced` | `bounce` | `suppress_email` |
+| `email.failed` | `failed` | `bounce` | `pause_sequence` |
+| `email.suppressed` | `suppressed` | `bounce` | `suppress_email` |
+| `email.complained` | `complained` | `do_not_contact` | `mark_do_not_contact` |
+| `email.opened` | `opened` | `opened_or_clicked` | `continue_sequence` |
+| `email.clicked` | `clicked` | `opened_or_clicked` | `continue_sequence` |
+
+### Feedback Classifier
+
+File: `app/services/lead_feedback_classifier.py`
+
+Responsibilities:
+
+- classify ambiguous feedback into structured outcomes;
+- return confidence, reasoning, and proposed next action;
+- use deterministic outcomes for provider events where no LLM is needed.
+
+### Operator Notifications
+
+Files:
+
+- `app/api/operator_notifications.py`
+- `app/services/operator_notifications.py`
+- `frontend/components/OperatorNotificationPopup.tsx`
+
+Responsibilities:
+
+- persist pending operator actions;
+- show global action-center notifications;
+- send threaded replies or approved outbound drafts;
+- acknowledge/action notifications so they do not repeat after refresh.
+
+## Database Tables
+
+Lead-gen policy and planning:
+
+- `lead_gen_policy_versions`
+- `lead_gen_batches`
+- `lead_gen_batch_items`
+- `lead_gen_observations`
+- `lead_gen_policy_proposals`
+
+Email execution and feedback:
+
+- `email_sequences`
+- `email_logs`
+- `inbound_emails`
+- `operator_notifications`
+
+Contact and firm context:
+
+- `firm_contacts`
+- `patients`
+- `call_logs`
+- `sms_logs`
+
+Important stored JSON fields:
+
+- `lead_gen_policy_versions.weights_json`
+- `lead_gen_policy_versions.suppressions_json`
+- `lead_gen_batches.counts_json`
+- `lead_gen_batch_items.reason_json`
+- `lead_gen_observations.raw_event_json`
+- `lead_gen_policy_proposals.proposed_change_json`
+- `lead_gen_policy_proposals.evidence_json`
+- `operator_notifications.stimulus_json`
+- `operator_notifications.context_json`
+- `operator_notifications.suggested_action_json`
+
+## Data Flow
+
+### Generate Today's List
+
+1. Operator opens `/lead-gen`.
+2. UI loads `GET /api/lead-gen/policy/current`.
+3. Operator saves daily budget if needed.
+4. Operator clicks generate today's list.
+5. UI calls `POST /api/lead-gen/batches`.
+6. Backend calls `plan_daily_lead_gen_actions`.
+7. Planner ranks active conversation actions first.
+8. Planner fills remaining budget from `recommend_sequence_contacts`.
+9. New contacts are scored by `score_contact_selection`.
+10. Batch and item rows are stored.
+11. UI shows selected actions, reasons, scores, and score components.
+
+### Approve And Queue
+
+1. Operator approves a batch.
+2. UI calls `POST /api/lead-gen/batches/{batch_id}/approve`.
+3. If `start_sequences=false`, items are only approved.
+4. If `start_sequences=true`, queueable items start or update sequences.
+5. Each queued sequence immediately creates a lightweight operator action
+   notification and pauses as `awaiting_operator_send_approval`.
+6. Draft composition is lazy: the action center composes the email only when the
+   operator opens that notification.
+7. Actual sending remains manual: the operator must edit/review and click send
+   from the action center.
+
+### Compose And Approve Email
+
+1. An opened action-center item or due dynamic sequence step requests a composed
+   draft.
+2. Backend builds the context packet.
+3. Composer skill returns subject, body, rationale, angle, CTA, and metadata.
+4. Backend creates an operator notification.
+5. Sequence pauses as awaiting operator send approval.
+6. Operator edits and sends from the action center.
+7. Backend sends through configured email transport and advances sequence.
+
+### Observe Replies
+
+1. Zoho poll reads inbound messages.
+2. New messages are stored in `inbound_emails`.
+3. Matching logic links the message to a contact/sequence/batch item when
+   possible.
+4. The system creates `lead_gen_observations`.
+5. Matched active sequences pause.
+6. Operator action-center items are created for review/reply.
+
+### Observe Delivery Events
+
+1. Resend posts webhook event.
+2. Backend validates signature when configured.
+3. `email_logs` status updates.
+4. Deterministic lead-gen observation is created.
+5. Sequence state may pause for bounces, failures, suppressions, complaints,
+   or delays.
+
+### Learn
+
+1. Observations accumulate on batch items and contacts.
+2. Operator requests a proposal for a batch.
+3. Backend aggregates outcomes by persona, email quality, and top score
+   component.
+4. Proposal is stored for human review.
+5. No production policy changes automatically.
+
+## Configuration
+
+Email sending:
+
+- `ZOHO_MAIL_CLIENT_ID`
+- `ZOHO_MAIL_CLIENT_SECRET`
+- `ZOHO_MAIL_REFRESH_TOKEN`
+- `ZOHO_MAIL_ACCOUNT_ID` optional, otherwise fetched from `GET /api/accounts`
+- `ZOHO_MAIL_FROM_ADDRESS` optional, otherwise derived from configured sender
+- `ZOHO_ACCOUNTS_BASE_URL`, defaults to `https://accounts.zoho.in`
+- `ZOHO_MAIL_API_BASE_URL`, defaults to `https://mail.zoho.in`
+- `SMTP_HOST`
+- `SMTP_PORT`
+- `SMTP_USERNAME`
+- `SMTP_PASSWORD`
+- `SMTP_FROM_EMAIL`
+- `SMTP_FROM_NAME`
+- `SMTP_REPLY_TO`
+- `ALLOW_SEQUENCE_SEND`
+- `EMAIL_TRANSPORT` optional override, `zoho_api`, `smtp`, or `resend`
+- Resend-related configuration only if Resend is intentionally selected.
+
+Lead-gen draft sends and notification draft sends force `zoho_api`. The shared
+sender also prefers `zoho_api` when `ZOHO_MAIL_REFRESH_TOKEN` is configured.
+SMTP remains as a fallback for hosts that allow outbound SMTP.
+
+Zoho inbound:
+
+- `ZOHO_IMAP_USER`
+- `ZOHO_IMAP_PASSWORD`
+- `ZOHO_IMAP_HOST`
+- `ZOHO_IMAP_PORT`
+- `ZOHO_IMAP_SENT_MAILBOX` optional, defaults to `Sent`
+
+Resend webhook:
+
+- `RESEND_WEBHOOK_SECRET`
+- `RESEND_WEBHOOK_ALLOW_UNSIGNED`
+
+Frontend:
+
+- `NEXT_PUBLIC_API_URL`
+
+Front read-only:
+
+- Secret file currently referenced operationally:
+  `/root/.openclaw/workspace/secrets/front_precise.env`
+- Front must remain read-only for this lead-gen function.
+
+## Current Operational Notes
+
+- Backend service: `autocaller-backend.service`.
+- Frontend service: `autocaller-frontend.service`.
+- Frontend dev server listens on port `3099`.
+- Backend in this deployment listens on port `8099`.
+- Backend health: `GET /health` returns `ok`.
+- Use backend port `8099` for REST checks, not the Next.js frontend port.
+
+Useful checks:
+
+```bash
+systemctl is-active autocaller-backend.service
+systemctl is-active autocaller-frontend.service
+curl -sS http://127.0.0.1:8099/health
+curl -sS http://127.0.0.1:8099/api/lead-gen/policy/current
+curl -sS -I http://127.0.0.1:3099/login
+```
+
+## Tests And Validation
+
+Focused backend tests:
+
+```bash
+.venv/bin/pytest tests/test_contact_selection.py tests/test_lead_gen_action_planner.py tests/test_sequence_templates.py
+```
+
+Frontend type check:
+
+```bash
+cd frontend
+npx tsc --noEmit
+```
+
+Python compile check:
+
+```bash
+.venv/bin/python -m py_compile \
+  app/services/contact_selection.py \
+  app/services/sequence_recommendations.py \
+  app/services/lead_gen_action_planner.py \
+  app/services/lead_gen_cybernetic.py
+```
+
+Whitespace check:
+
+```bash
+git diff --check
+```
+
+## Known Technical Boundaries
+
+- Contact selection is deterministic code, not an LLM.
+- Email composition uses the composer skill/LLM after contact selection.
+- Every generated outbound email currently requires human approval.
+- Policy proposals do not apply themselves.
+- There is no first-class suppression table yet.
+- Front is not yet ingested into the production lead-gen selection flow.
+- Resend webhook code exists, but production must be configured with a deployed
+  webhook URL and `RESEND_WEBHOOK_SECRET`.
+- Booking lifecycle events are not yet normalized into lead-gen observations.
+- The file name `OperatorNotificationPopup.tsx` is legacy; the component is now
+  a non-blocking action center.

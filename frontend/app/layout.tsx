@@ -10,8 +10,8 @@ import { OperatorNotificationPopup } from "@/components/OperatorNotificationPopu
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Autocaller — Possible Minds",
-  description: "Headless outbound BD agent",
+  title: "Possible OS — Possible Minds",
+  description: "Operating system for AI-led growth and operations",
 };
 
 export default function RootLayout({

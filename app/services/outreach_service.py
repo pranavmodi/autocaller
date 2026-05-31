@@ -46,6 +46,8 @@ from app.services.outreach_composer import (
     substitute_tracked_url,
     TRACKED_URL_PLACEHOLDER,
 )
+from app.services.product_learning import link_event_trace_kwargs
+from app.services.product_traces import safe_record_product_trace
 
 
 logger = logging.getLogger(__name__)
@@ -777,19 +779,26 @@ async def record_open(
 ) -> None:
     """Log an open event for a token. Idempotent at the row level (each
     pixel fetch is its own event)."""
+    trace_kwargs = None
     async with AsyncSessionLocal() as session:
-        send_id = (await session.execute(
-            select(OutreachSendRow.id).where(OutreachSendRow.token == token)
+        send = (await session.execute(
+            select(OutreachSendRow).where(OutreachSendRow.token == token)
         )).scalar_one_or_none()
-        if send_id is None:
+        if send is None:
             return  # unknown token — silently drop (don't 404 the pixel)
-        session.add(LinkEventRow(
-            send_id=send_id,
+        campaign = await session.get(OutreachCampaignRow, send.campaign_id)
+        event = LinkEventRow(
+            send_id=send.id,
             kind="open",
             ip=(ip or "")[:64] or None,
             user_agent=(user_agent or "")[:512] or None,
-        ))
+        )
+        session.add(event)
+        await session.flush()
+        trace_kwargs = link_event_trace_kwargs(event, send=send, campaign=campaign)
         await session.commit()
+    if trace_kwargs:
+        await safe_record_product_trace(**trace_kwargs)
 
 
 async def record_click(
@@ -799,28 +808,32 @@ async def record_click(
     """Log a click event and return the destination URL the recipient
     should be redirected to (the canonical blog post URL). Returns
     None if the token is unknown."""
+    trace_kwargs = None
     async with AsyncSessionLocal() as session:
-        row = (await session.execute(
-            select(OutreachSendRow.id, OutreachSendRow.campaign_id)
-            .where(OutreachSendRow.token == token)
-        )).one_or_none()
-        if row is None:
+        send = (await session.execute(
+            select(OutreachSendRow).where(OutreachSendRow.token == token)
+        )).scalar_one_or_none()
+        if send is None:
             return None
-        send_id, campaign_id = row
-        campaign = await session.get(OutreachCampaignRow, campaign_id)
+        campaign = await session.get(OutreachCampaignRow, send.campaign_id)
         if not campaign:
             return None
         dest = campaign.post_url
-        session.add(LinkEventRow(
-            send_id=send_id,
+        event = LinkEventRow(
+            send_id=send.id,
             kind="click",
             url=dest[:2048],
             ip=(ip or "")[:64] or None,
             user_agent=(user_agent or "")[:512] or None,
             referer=(referer or "")[:1024] or None,
-        ))
+        )
+        session.add(event)
+        await session.flush()
+        trace_kwargs = link_event_trace_kwargs(event, send=send, campaign=campaign)
         await session.commit()
-        return dest
+    if trace_kwargs:
+        await safe_record_product_trace(**trace_kwargs)
+    return dest
 
 
 # --- Queries (for CLI + UI) ------------------------------------------------

@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import json
 import os
+import re
+import hashlib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -10,9 +12,9 @@ from typing import Any
 from sqlalchemy import desc, or_, select
 
 from app.db import AsyncSessionLocal
-from app.db.models import ConsultBookingRow, EmailLogRow, EmailSequenceRow, FirmContactRow, InboundEmailRow
+from app.db.models import ConsultBookingRow, EmailSequenceRow, FirmContactRow, InboundEmailRow
 from app.services.llm_gateway import LLMGatewayError, call_skill_json
-from app.services.sequences.possible_minds_dynamic import objective_for
+from app.services.product_traces import safe_record_product_trace
 
 
 DEFAULT_SKILL_PATH = (
@@ -20,6 +22,24 @@ DEFAULT_SKILL_PATH = (
     / "skills/possible-minds-lead-email-composer/SKILL.md"
 )
 CONSULT_URL = "https://getpossibleminds.com/consult"
+EMAIL_DASH_TRANSLATION = str.maketrans({"—": "-", "–": "-"})
+ORG_NAME_WORDS = {
+    "accident",
+    "center",
+    "centers",
+    "clinic",
+    "firm",
+    "group",
+    "imaging",
+    "injury",
+    "law",
+    "legal",
+    "medical",
+    "office",
+    "orthopedic",
+    "spine",
+}
+GENERIC_CONTACT_NAMES = {"admin", "contact", "hello", "info", "intake", "office", "team"}
 
 
 @dataclass
@@ -50,6 +70,26 @@ def _domain(email: str | None) -> str:
 def _excerpt(value: str | None, limit: int = 700) -> str:
     text = " ".join((value or "").split())
     return text[:limit]
+
+
+def _conversation_state(
+    *,
+    reply_count: int,
+    zoho_sent_count: int,
+) -> dict[str, Any]:
+    prior_outbound_count = zoho_sent_count
+    return {
+        "is_first_touch": prior_outbound_count == 0 and reply_count == 0,
+        "prior_outbound_count": prior_outbound_count,
+        "prior_reply_count": reply_count,
+        "has_replies": reply_count > 0,
+        "has_zoho_sent_history": zoho_sent_count > 0,
+        "prior_outbound_source": "zoho_sent",
+        "composer_goal": (
+            "Compose the next appropriate email from the real conversation "
+            "history and firm/contact context. Do not follow fixed template copy."
+        ),
+    }
 
 
 def _sender_payload() -> dict[str, str]:
@@ -86,6 +126,72 @@ def _ensure_consult_signature(body: str, sender: dict[str, str]) -> str:
     return f"{body}\n\n-- {name}\n{title}, Possible Minds\n{CONSULT_URL}".strip()
 
 
+def _sanitize_email_copy(value: str | None) -> str:
+    text = (value or "").strip().translate(EMAIL_DASH_TRANSLATION)
+    lines = []
+    for line in text.splitlines():
+        salutation = re.match(r"^(Hi|Hello|Hey)\s+(.+?)\s+-\s*$", line.strip(), re.IGNORECASE)
+        if salutation:
+            lines.append(f"{salutation.group(1)} {salutation.group(2)},")
+        else:
+            lines.append(line)
+    return "\n".join(lines).strip()
+
+
+def _file_sha256(path: str) -> str | None:
+    try:
+        return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+    except Exception:
+        return None
+
+
+def _sequence_snapshot(sequence: Any, *, step_num: int) -> dict[str, Any]:
+    return {
+        "template_key": getattr(sequence, "template_key", None),
+        "current_step": getattr(sequence, "current_step", None),
+        "steps_total": getattr(sequence, "steps_total", None),
+        "variant": getattr(sequence, "variant", None),
+        "step_num": step_num,
+    }
+
+
+def _normalize_name(value: str | None) -> str:
+    return re.sub(r"[^a-z0-9]+", " ", (value or "").lower()).strip()
+
+
+def _looks_like_org_name(value: str | None) -> bool:
+    normalized = _normalize_name(value)
+    return any(f" {word} " in f" {normalized} " for word in ORG_NAME_WORDS)
+
+
+def _has_usable_person_name(contact: FirmContactRow, firm_name: str) -> bool:
+    first_name = (contact.first_name or "").strip()
+    full_name = (contact.full_name or "").strip()
+    if not first_name:
+        return False
+    if _normalize_name(first_name) in GENERIC_CONTACT_NAMES:
+        return False
+    if _normalize_name(full_name) == _normalize_name(firm_name):
+        return False
+    if _looks_like_org_name(full_name):
+        return False
+    return True
+
+
+def _sanitize_body_salutation(body: str, *, contact: FirmContactRow, firm_name: str) -> str:
+    if _has_usable_person_name(contact, firm_name):
+        return body
+    lines = body.splitlines()
+    for index, line in enumerate(lines):
+        if not line.strip():
+            continue
+        salutation = re.match(r"^(Hi|Hello|Hey)(?:\s+[^,!.]+)?[,!.]\s*$", line.strip(), re.IGNORECASE)
+        if salutation:
+            lines[index] = f"{salutation.group(1)},"
+        break
+    return "\n".join(lines).strip()
+
+
 def _validate(parsed: dict[str, Any]) -> None:
     missing = [
         field for field in ("subject", "body", "angle", "cta", "reasoning", "requires_human_review")
@@ -104,22 +210,32 @@ async def build_lead_email_context(
     *,
     contact: FirmContactRow,
     firm_name: str,
-    sequence: EmailSequenceRow,
-    step_num: int,
 ) -> dict[str, Any]:
     contact_domain = _domain(contact.email)
-    async with AsyncSessionLocal() as session:
-        previous_emails = (await session.execute(
-            select(EmailLogRow)
-            .where(
-                or_(
-                    EmailLogRow.pif_id == contact.pif_id,
-                    EmailLogRow.recipient_email == (contact.email or "").strip().lower(),
-                )
+    zoho_sent_messages = []
+    zoho_sent_lookup: dict[str, Any] = {"status": "not_attempted"}
+    if contact.email:
+        try:
+            from app.services.inbound_email import fetch_zoho_sent_messages_for_recipient
+
+            zoho_sent_messages = await fetch_zoho_sent_messages_for_recipient(
+                contact.email,
+                limit=int(os.getenv("LEAD_EMAIL_ZOHO_SENT_LIMIT", "5")),
+                since_days=int(os.getenv("LEAD_EMAIL_ZOHO_SENT_SINCE_DAYS", "365")),
             )
-            .order_by(desc(EmailLogRow.sent_at))
-            .limit(8)
-        )).scalars().all()
+            zoho_sent_lookup = {
+                "status": "ok",
+                "source": "zoho_imap_sent",
+                "count": len(zoho_sent_messages),
+            }
+        except Exception as e:
+            zoho_sent_lookup = {
+                "status": "failed",
+                "source": "zoho_imap_sent",
+                "error": f"{type(e).__name__}: {str(e)[:160]}",
+            }
+
+    async with AsyncSessionLocal() as session:
         replies = (await session.execute(
             select(InboundEmailRow)
             .where(
@@ -167,25 +283,21 @@ async def build_lead_email_context(
             "title": contact.title,
             "source": contact.source,
         },
-        "sequence": {
-            "template_key": sequence.template_key,
-            "step_num": step_num,
-            "current_step": sequence.current_step,
-            "steps_total": sequence.steps_total,
-            "objective": objective_for(step_num),
-            "variant": sequence.variant,
-        },
         "history": {
-            "previous_emails": [
+            "previous_emails": [],
+            "zoho_sent_emails": [
                 {
-                    "subject": row.subject,
-                    "excerpt": _excerpt(row.body_excerpt),
-                    "message_type": row.message_type,
-                    "status": row.status,
-                    "sent_at": row.sent_at.isoformat() if row.sent_at else None,
+                    "subject": msg.subject,
+                    "to": msg.to,
+                    "cc": msg.cc,
+                    "excerpt": _excerpt(msg.body_text),
+                    "sent_at": msg.received_at.isoformat() if msg.received_at else None,
+                    "mailbox": msg.mailbox,
+                    "uid": msg.uid,
                 }
-                for row in previous_emails
+                for msg in zoho_sent_messages
             ],
+            "zoho_sent_lookup": zoho_sent_lookup,
             "replies": [
                 {
                     "subject": row.subject,
@@ -216,6 +328,10 @@ async def build_lead_email_context(
                 for row in recent_consults
             ],
         },
+        "conversation_state": _conversation_state(
+            reply_count=len(replies),
+            zoho_sent_count=len(zoho_sent_messages),
+        ),
         "front_signals": [],
         "inferred_pain_points": [],
         "blog_posts": _blog_posts(),
@@ -243,26 +359,63 @@ async def compose_lead_email(
     payload = await build_lead_email_context(
         contact=contact,
         firm_name=firm_name,
-        sequence=sequence,
-        step_num=step_num,
     )
     skill_path = os.getenv("LEAD_EMAIL_COMPOSER_SKILL_PATH", str(DEFAULT_SKILL_PATH))
+    selected_model = model or os.getenv("LEAD_EMAIL_COMPOSER_MODEL", "openclaw")
+    trace_context = {
+        "firm_name": firm_name,
+        "contact_id": contact.id,
+        "contact_email": contact.email,
+        "contact_name": contact.full_name,
+        "pif_id": contact.pif_id,
+        "sequence": _sequence_snapshot(sequence, step_num=step_num),
+        "skill_path": skill_path,
+        "skill_sha256": _file_sha256(skill_path),
+        "model": selected_model,
+    }
+    await safe_record_product_trace(
+        actor_type="system",
+        event_type="email_context_built",
+        surface="lead-gen",
+        entity_type="firm_contact",
+        entity_id=contact.id,
+        input_json={
+            "firm": payload.get("firm", {}),
+            "contact": payload.get("contact", {}),
+            "conversation_state": payload.get("conversation_state", {}),
+            "policy": payload.get("policy", {}),
+        },
+        output_json=payload,
+        context_json=trace_context,
+    )
     try:
         result = await call_skill_json(
             skill_path=skill_path,
             payload=payload,
             required_fields=["subject", "body", "angle", "cta", "reasoning", "requires_human_review"],
-            model=model or os.getenv("LEAD_EMAIL_COMPOSER_MODEL", "openclaw"),
+            model=selected_model,
             max_tokens=int(os.getenv("LEAD_EMAIL_COMPOSER_MAX_TOKENS", "1800")),
         )
     except LLMGatewayError as e:
+        await safe_record_product_trace(
+            actor_type="system",
+            event_type="email_composition_failed",
+            surface="lead-gen",
+            entity_type="firm_contact",
+            entity_id=contact.id,
+            input_json=payload,
+            output_json={"error": str(e)},
+            context_json=trace_context,
+        )
         raise LeadEmailComposerError(str(e)) from e
 
     parsed = result.parsed
     _validate(parsed)
-    body = _ensure_consult_signature(str(parsed.get("body") or ""), payload["sender"])
-    return LeadEmailComposition(
-        subject=str(parsed.get("subject") or "").strip()[:500],
+    body = _sanitize_email_copy(str(parsed.get("body") or ""))
+    body = _sanitize_body_salutation(body, contact=contact, firm_name=firm_name)
+    body = _ensure_consult_signature(body, payload["sender"])
+    composition = LeadEmailComposition(
+        subject=_sanitize_email_copy(str(parsed.get("subject") or ""))[:500],
         body=body,
         angle=str(parsed.get("angle") or "").strip(),
         cta=str(parsed.get("cta") or "").strip(),
@@ -273,3 +426,25 @@ async def compose_lead_email(
         model=result.model,
         raw_response=result.raw_response,
     )
+    await safe_record_product_trace(
+        actor_type="system",
+        event_type="email_composed",
+        surface="lead-gen",
+        entity_type="firm_contact",
+        entity_id=contact.id,
+        input_json=payload,
+        output_json={
+            "subject": composition.subject,
+            "body": composition.body,
+            "angle": composition.angle,
+            "cta": composition.cta,
+            "reasoning": composition.reasoning,
+            "risk_flags": composition.risk_flags,
+            "requires_human_review": composition.requires_human_review,
+            "blog_link_used": composition.blog_link_used,
+            "model": composition.model,
+        },
+        context_json=trace_context,
+        metadata_json={"raw_response_excerpt": _excerpt(composition.raw_response, 1200)},
+    )
+    return composition

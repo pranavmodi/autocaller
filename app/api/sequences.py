@@ -13,10 +13,11 @@ No pause/resume/restart/multi-contact-fanout in v1.
 """
 from __future__ import annotations
 
+from types import SimpleNamespace
 from typing import Optional
 
 from fastapi import APIRouter, Body, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from app.db import AsyncSessionLocal
@@ -28,6 +29,7 @@ from app.services.firm_contacts_service import (
     list_contacts_for_firm,
     list_firms_with_contacts,
 )
+from app.services.lead_email_composer import LeadEmailComposerError, compose_lead_email
 from app.services.sequences.common import Ctx
 from app.services.sequences.registry import (
     DEFAULT_TEMPLATE_KEY,
@@ -73,6 +75,13 @@ class RenderedStepDTO(BaseModel):
     subject: str
     body: str
     message_type: str
+    reasoning: Optional[str] = None
+    angle: Optional[str] = None
+    cta: Optional[str] = None
+    blog_link_used: Optional[str] = None
+    model: Optional[str] = None
+    requires_human_review: bool = False
+    risk_flags: list[str] = Field(default_factory=list)
 
 
 class SequenceTemplateDTO(BaseModel):
@@ -274,20 +283,43 @@ async def preview_sequence(
     out = []
     for i in range(1, n + 1):
         if is_dynamic_template(template_key):
-            objective = objective_for(i)
+            async with AsyncSessionLocal() as session:
+                contact_row = await session.get(FirmContactRow, contact_id)
+            if not contact_row:
+                raise HTTPException(status_code=404, detail="contact_not_found")
+            existing = await get_sequence(contact_id, template_key)
+            if existing and existing.current_step >= existing.steps_total:
+                return []
+            next_step = existing.current_step + 1 if existing else 1
+            sequence_context = existing or SimpleNamespace(
+                template_key=template_key,
+                current_step=0,
+                steps_total=n,
+                variant=variant,
+            )
+            try:
+                composed = await compose_lead_email(
+                    contact=contact_row,
+                    firm_name=firm_name,
+                    sequence=sequence_context,
+                    step_num=next_step,
+                )
+            except LeadEmailComposerError as e:
+                raise HTTPException(status_code=502, detail=f"compose_failed: {str(e)}")
             out.append(RenderedStepDTO(
-                step=i,
-                subject=f"Dynamic email: {objective}",
-                body=(
-                    "This strategy step is composed by the "
-                    "possible-minds-lead-email-composer skill at send time "
-                    "using current firm context, prior emails/replies, booked "
-                    "consult learnings, optional blog links, and the required "
-                    "consult signature."
-                ),
+                step=next_step,
+                subject=composed.subject,
+                body=composed.body,
                 message_type="dynamic_lead_email",
+                reasoning=composed.reasoning,
+                angle=composed.angle,
+                cta=composed.cta,
+                blog_link_used=composed.blog_link_used,
+                model=composed.model,
+                requires_human_review=composed.requires_human_review,
+                risk_flags=composed.risk_flags,
             ))
-            continue
+            return out
         rendered = render_step(template_key, i, variant, ctx)
         out.append(RenderedStepDTO(
             step=i,

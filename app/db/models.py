@@ -325,6 +325,159 @@ class OperatorNotificationRow(Base):
     )
 
 
+class TodoRow(Base):
+    """Editable operator/project todos stored in the database."""
+    __tablename__ = "todos"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    area: Mapped[str] = mapped_column(String(64), nullable=False, default="general")
+    section: Mapped[str] = mapped_column(String(64), nullable=False, default="Not Started")
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="not_started")
+    body: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    source_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    created_by: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    updated_by: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), default=_utcnow, onupdate=_utcnow,
+    )
+
+    __table_args__ = (
+        UniqueConstraint("area", "title", name="uq_todos_area_title"),
+        Index("ix_todos_area_status", "area", "status"),
+        Index("ix_todos_updated_at", "updated_at"),
+    )
+
+
+class ProductTraceRow(Base):
+    """Append-only AI-legible trace ledger for user and system actions."""
+    __tablename__ = "product_traces"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    trace_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    session_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    request_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    actor_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    actor_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    event_type: Mapped[str] = mapped_column(String(128), nullable=False)
+    surface: Mapped[str] = mapped_column(String(128), nullable=False, default="")
+    entity_type: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    entity_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    parent_trace_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    input_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    output_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    diff_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    context_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    metadata_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow)
+
+    __table_args__ = (
+        Index("ix_product_traces_trace_id", "trace_id"),
+        Index("ix_product_traces_session_id", "session_id"),
+        Index("ix_product_traces_request_id", "request_id"),
+        Index("ix_product_traces_event_type", "event_type"),
+        Index("ix_product_traces_surface", "surface"),
+        Index("ix_product_traces_entity", "entity_type", "entity_id"),
+        Index("ix_product_traces_created_at", "created_at"),
+    )
+
+
+class ImprovementFindingRow(Base):
+    """Repeated trace/outcome pattern that may justify changing the system."""
+    __tablename__ = "improvement_findings"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    finding_key: Mapped[str] = mapped_column(String(160), nullable=False, unique=True)
+    workflow: Mapped[str] = mapped_column(String(64), nullable=False)
+    finding_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    summary: Mapped[str] = mapped_column(Text, nullable=False)
+    details: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    evidence_trace_ids: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    evidence_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    severity: Mapped[str] = mapped_column(String(16), nullable=False, default="normal")
+    confidence: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    suggested_change_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="proposed")
+    reviewed_by: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    reviewed_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), default=_utcnow, onupdate=_utcnow,
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('proposed', 'accepted', 'rejected', 'implemented')",
+            name="ck_improvement_findings_status",
+        ),
+        Index("ix_improvement_findings_workflow", "workflow"),
+        Index("ix_improvement_findings_type", "finding_type"),
+        Index("ix_improvement_findings_status", "status"),
+        Index("ix_improvement_findings_created_at", "created_at"),
+    )
+
+
+class EvalCaseRow(Base):
+    """Small behavior test derived from an accepted improvement finding."""
+    __tablename__ = "eval_cases"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    finding_id: Mapped[str | None] = mapped_column(
+        String(64), ForeignKey("improvement_findings.id", ondelete="SET NULL"), nullable=True,
+    )
+    workflow: Mapped[str] = mapped_column(String(64), nullable=False)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    input_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    expected_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="active")
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow)
+
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('active', 'archived')",
+            name="ck_eval_cases_status",
+        ),
+        Index("ix_eval_cases_finding_id", "finding_id"),
+        Index("ix_eval_cases_workflow", "workflow"),
+        Index("ix_eval_cases_created_at", "created_at"),
+    )
+
+
+class CodexTaskPacketRow(Base):
+    """Focused implementation packet generated from a reviewed finding."""
+    __tablename__ = "codex_task_packets"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    finding_id: Mapped[str | None] = mapped_column(
+        String(64), ForeignKey("improvement_findings.id", ondelete="SET NULL"), nullable=True,
+    )
+    eval_case_id: Mapped[str | None] = mapped_column(
+        String(64), ForeignKey("eval_cases.id", ondelete="SET NULL"), nullable=True,
+    )
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="draft")
+    packet_path: Mapped[str | None] = mapped_column(Text, nullable=True)
+    task_markdown: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    traces_json: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    eval_cases_json: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    relevant_files_json: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    validation_commands_json: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow)
+    exported_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('draft', 'approved', 'exported')",
+            name="ck_codex_task_packets_status",
+        ),
+        Index("ix_codex_task_packets_finding_id", "finding_id"),
+        Index("ix_codex_task_packets_status", "status"),
+        Index("ix_codex_task_packets_created_at", "created_at"),
+    )
+
+
 class FirmReviewRow(Base):
     """Operator-pasted reviews for a firm, keyed on Mediflow pif_id.
 

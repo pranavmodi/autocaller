@@ -2,18 +2,25 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import Any, Optional
 
-from sqlalchemy import select
+from sqlalchemy import desc, select
 
 from app.db import AsyncSessionLocal
 from app.db.models import (
     CallLogRow,
-    EmailLogRow,
     EmailSequenceRow,
     FirmContactRow,
+    LeadGenPolicyVersionRow,
     PatientRow,
     SmsLogRow,
+)
+from app.services.contact_selection import (
+    ContactSelectionInput,
+    DEFAULT_CONTACT_SELECTION_WEIGHTS,
+    has_usable_email,
+    looks_like_non_law_firm,
+    score_contact_selection,
 )
 from app.services.sequences.registry import normalize_template_key
 
@@ -30,6 +37,11 @@ class Recommendation:
     persona: str
     score: int
     reason: str
+    score_breakdown: dict[str, int] | None = None
+    selection_features: dict[str, Any] | None = None
+    selection_signals: list[str] | None = None
+    suppressions: list[str] | None = None
+    policy_version: str = "contact-selection-default"
 
 
 def _pif_from_patient_id(patient_id: str | None) -> Optional[str]:
@@ -42,79 +54,19 @@ def _pif_from_patient_id(patient_id: str | None) -> Optional[str]:
     return None
 
 
-def _persona_score(title: str | None, source: str | None) -> tuple[int, str]:
-    t = (title or "").lower()
-    if any(x in t for x in ("founder", "co-founder", "owner")):
-        return 100, "founder/owner"
-    if "chief operating" in t or "coo" in t:
-        return 98, "COO"
-    if "managing partner" in t or "principal" in t:
-        return 94, "managing partner"
-    if "operations" in t or "office manager" in t:
-        return 88, "operations leader"
-    if "partner" in t:
-        return 82, "partner"
-    if source == "patients_dm":
-        return 70, "known decision-maker contact"
-    return 0, ""
+_has_usable_email = has_usable_email
+_looks_like_non_law_firm = looks_like_non_law_firm
 
 
-def _has_usable_email(email: str | None) -> bool:
-    value = (email or "").strip().lower()
-    if not value or value in {"null", "none", "n/a", "na"}:
-        return False
-    if "email protected" in value or "[email" in value:
-        return False
-    return "@" in value and "." in value.rsplit("@", 1)[-1]
-
-
-def _looks_like_non_law_firm(firm_name: str, title: str | None) -> bool:
-    """Suppress obvious non-law providers that share the same PIF contact table."""
-    name = firm_name.lower()
-    title_text = (title or "").lower()
-    strong_non_law_markers = (
-        "attorney service",
-        "chiropractor",
-        "chiropractic",
-        "doctor of chiropractic",
-        "lien services",
-        "mri",
-        "radiologist",
-        "releasepoint",
-        "synergy",
-    )
-    if any(marker in name or marker in title_text for marker in strong_non_law_markers):
-        return True
-    legal_markers = (
-        "law",
-        "legal",
-        "attorney",
-        "trial",
-        "injury",
-        "llp",
-        "aplc",
-        "plc",
-        "p.c.",
-        " pc",
-    )
-    if any(marker in name or marker in title_text for marker in legal_markers):
-        return False
-    non_law_markers = (
-        "chiro",
-        "clinic",
-        "diagnostic",
-        "financial",
-        "health",
-        "hospital",
-        "imaging",
-        "insurance",
-        "medical",
-        "radiology",
-        "registry",
-        "spine",
-        "wellness",
-    )
-    return any(marker in name or marker in title_text for marker in non_law_markers)
+async def _active_policy_context(session) -> tuple[str, dict[str, Any]]:
+    row = (await session.execute(
+        select(LeadGenPolicyVersionRow)
+        .where(LeadGenPolicyVersionRow.active.is_(True))
+        .order_by(desc(LeadGenPolicyVersionRow.created_at))
+    )).scalars().first()
+    if not row:
+        return "contact-selection-default", DEFAULT_CONTACT_SELECTION_WEIGHTS
+    return row.version, row.weights_json or {}
 
 
 async def recommend_sequence_contacts(
@@ -124,19 +76,16 @@ async def recommend_sequence_contacts(
 ) -> dict:
     """Return one founder/COO-style contact per untouched firm.
 
-    "Untouched" uses the same backing tables as the comms feed: call_logs,
-    email_logs, and sms_logs. Any comms history suppresses the firm for v1.
-    Existing sequence rows also suppress the firm so we do not multi-thread.
+    "Untouched" deliberately does not use `email_logs` as prior-email truth.
+    The lead-gen loop now treats Zoho Sent as authoritative for previous
+    outbound email. Existing sequence rows still suppress the firm so we do not
+    multi-thread active workflow state, and non-email call/SMS history still
+    suppresses the firm for v1.
     """
     template_key = normalize_template_key(template_key)
     limit = max(1, min(limit, 200))
     async with AsyncSessionLocal() as session:
-        email_pifs = {
-            p for p in (await session.execute(
-                select(EmailLogRow.pif_id).where(EmailLogRow.pif_id.isnot(None))
-            )).scalars().all()
-            if p
-        }
+        policy_version, policy_weights = await _active_policy_context(session)
         sms_pifs = {
             p for p in (await session.execute(
                 select(SmsLogRow.pif_id).where(SmsLogRow.pif_id.isnot(None))
@@ -152,7 +101,7 @@ async def recommend_sequence_contacts(
             )
             if p
         }
-        contacted_pifs = email_pifs | sms_pifs | call_pifs
+        contacted_pifs = sms_pifs | call_pifs
 
         sequence_contact_ids = (await session.execute(
             select(EmailSequenceRow.contact_id)
@@ -207,7 +156,7 @@ async def recommend_sequence_contacts(
     for c in contacts:
         if not c.pif_id:
             continue
-        if not _has_usable_email(c.email):
+        if not has_usable_email(c.email):
             counts["suppressed_unusable_email"] += 1
             continue
         if c.pif_id in contacted_pifs:
@@ -216,22 +165,32 @@ async def recommend_sequence_contacts(
         if c.pif_id in sequenced_pifs:
             counts["suppressed_existing_sequence"] += 1
             continue
-        score, persona = _persona_score(c.title, c.source)
-        if score <= 0:
-            counts["suppressed_non_persona"] += 1
-            continue
         firm_name = firm_names.get(c.pif_id, "")
         if not firm_name:
             counts["suppressed_missing_firm_name"] += 1
             continue
-        if _looks_like_non_law_firm(firm_name, c.title):
+        if looks_like_non_law_firm(firm_name, c.title):
             counts["suppressed_non_law_firm"] += 1
             continue
-        if states.get(c.pif_id):
-            score += 2
-        if c.source == "pif_leadership":
-            score += 3
-        reason = f"{persona}; no comms history found; no existing sequence"
+        scored = score_contact_selection(
+            ContactSelectionInput(
+                contact_id=c.id,
+                pif_id=c.pif_id,
+                firm_name=firm_name,
+                contact_name=c.full_name,
+                contact_email=c.email or "",
+                contact_title=c.title or "",
+                contact_source=c.source or "",
+                state=states.get(c.pif_id),
+                has_prior_comms=False,
+                has_existing_sequence=False,
+            ),
+            policy_weights=policy_weights,
+        )
+        if "missing_persona" in scored.suppressions or scored.score <= 0:
+            counts["suppressed_non_persona"] += 1
+            continue
+        reason = scored.reason
         rec = Recommendation(
             contact_id=c.id,
             pif_id=c.pif_id,
@@ -240,9 +199,14 @@ async def recommend_sequence_contacts(
             contact_email=c.email or "",
             contact_title=c.title or "",
             contact_source=c.source,
-            persona=persona,
-            score=score,
+            persona=scored.persona,
+            score=scored.score,
             reason=reason,
+            score_breakdown=scored.score_breakdown,
+            selection_features=scored.features,
+            selection_signals=scored.signals,
+            suppressions=scored.suppressions,
+            policy_version=policy_version,
         )
         current = best_by_firm.get(c.pif_id)
         if not current or rec.score > current.score:

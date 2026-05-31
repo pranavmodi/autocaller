@@ -4,6 +4,7 @@ from app.services.inbound_email import (
     _draft_reply_body,
     _imap_search_criteria,
     _reply_subject,
+    _sent_search_criteria,
     parse_inbound_message,
 )
 
@@ -71,6 +72,13 @@ def test_imap_search_criteria_defaults_to_unseen_recent():
     assert _imap_search_criteria(unseen_only=True, since_days=None) == "UNSEEN"
     assert _imap_search_criteria(unseen_only=False, since_days=None) == "ALL"
     assert 'SINCE "' in _imap_search_criteria(unseen_only=True, since_days=14)
+
+
+def test_sent_search_criteria_targets_recipient_and_since_window():
+    criteria = _sent_search_criteria(recipient_email="Lead@Example.com", since_days=30)
+
+    assert 'TO "lead@example.com"' in criteria
+    assert "SINCE" in criteria
 
 
 def test_reply_notification_helpers_prepare_human_action_copy():

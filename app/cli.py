@@ -1,4 +1,4 @@
-"""Autocaller CLI — headless ops over the FastAPI backend + DB.
+"""Possible OS CLI — headless ops over the FastAPI backend + DB.
 
 The CLI is a thin client: call-related commands talk to the running FastAPI
 daemon on loopback, while bulk-lead and config commands touch the DB / .env
@@ -23,7 +23,7 @@ from rich.console import Console
 from rich.table import Table
 
 app = typer.Typer(
-    help="Headless autocaller CLI — cold-call PI attorneys via Twilio + OpenAI + Cal.com.",
+    help="Headless Possible OS CLI — cold-call PI attorneys via Twilio + OpenAI + Cal.com.",
     add_completion=False,
     no_args_is_help=True,
 )
@@ -47,6 +47,7 @@ sequences_app = typer.Typer(help="Email sequences — preview, start, and recomm
 lead_gen_app = typer.Typer(help="Cybernetic lead-generation loop — batches, feedback, learning.", no_args_is_help=True)
 inbound_app = typer.Typer(help="Inbound email ingestion — Zoho IMAP reader for replies.", no_args_is_help=True)
 outreach_app = typer.Typer(help="Blog-post outreach campaigns — LLM-composed, per-recipient, tracked.", no_args_is_help=True)
+todos_app = typer.Typer(help="Editable project todo backlog.", no_args_is_help=True)
 outreach_campaigns_app = typer.Typer(help="Create / list / show outreach campaigns.", no_args_is_help=True)
 outreach_audience_app = typer.Typer(help="Build a campaign's recipient list from firm contacts.", no_args_is_help=True)
 outreach_app.add_typer(outreach_campaigns_app, name="campaigns")
@@ -71,6 +72,7 @@ app.add_typer(sequences_app, name="sequences")
 app.add_typer(lead_gen_app, name="lead-gen")
 app.add_typer(inbound_app, name="inbound")
 app.add_typer(outreach_app, name="outreach")
+app.add_typer(todos_app, name="todos")
 
 console = Console()
 
@@ -98,6 +100,26 @@ def _get(path: str, **params) -> dict:
 def _post(path: str, json_body: Optional[dict] = None, timeout: float = 30.0) -> dict:
     try:
         resp = httpx.post(f"{_api_base()}{path}", json=json_body or {}, timeout=timeout)
+        resp.raise_for_status()
+    except httpx.HTTPError as e:
+        console.print(f"[red]API request failed: {e}[/red]")
+        raise typer.Exit(code=1) from e
+    return resp.json() if resp.content else {}
+
+
+def _patch(path: str, json_body: Optional[dict] = None, timeout: float = 30.0) -> dict:
+    try:
+        resp = httpx.patch(f"{_api_base()}{path}", json=json_body or {}, timeout=timeout)
+        resp.raise_for_status()
+    except httpx.HTTPError as e:
+        console.print(f"[red]API request failed: {e}[/red]")
+        raise typer.Exit(code=1) from e
+    return resp.json() if resp.content else {}
+
+
+def _delete(path: str, timeout: float = 30.0) -> dict:
+    try:
+        resp = httpx.delete(f"{_api_base()}{path}", timeout=timeout)
         resp.raise_for_status()
     except httpx.HTTPError as e:
         console.print(f"[red]API request failed: {e}[/red]")
@@ -392,7 +414,7 @@ _MISSION_API = os.getenv(
 ).rstrip("/")
 
 # Titles that typically indicate a gatekeeper / non-decision-maker. We skip these
-# by default so the autocaller starts on actual partners/owners.
+# by default so Possible OS starts on actual partners/owners.
 def _best_phone(firm: dict, contact: Optional[dict]) -> str:
     """Fallback phone picker used when the LLM extraction fails."""
     if contact and contact.get("phone"):
@@ -1511,7 +1533,7 @@ def doctor():
     else:
         checks.append(("public_base_url", False, "unset — Twilio callbacks will fail"))
 
-    table = Table(title="autocaller doctor")
+    table = Table(title="Possible OS doctor")
     table.add_column("check")
     table.add_column("ok")
     table.add_column("detail", overflow="fold")
@@ -1809,7 +1831,7 @@ def leads_sync_pifstats(
         help="Only pull firms researched in the last N days (0 = no filter)",
     ),
 ):
-    """Pull researched firms from PIF Stats into the autocaller leads table.
+    """Pull researched firms from PIF Stats into the Possible OS leads table.
 
     Only imports firms that have been researched (leadership data available)
     and have a phone number. Picks the best decision-maker contact from
@@ -2073,10 +2095,16 @@ def _mask(value: str, keep: int = 4) -> str:
 
 @email_app.command("status")
 def email_status():
-    """Show email transport config: which provider is active (Resend vs SMTP),
-    sender address, default recipient, BCC, reply-to, and the gates that
+    """Show email transport config: which provider is active, sender address,
+    default recipient, BCC, reply-to, and the gates that
     govern automated sends.
     """
+    email_transport = os.getenv("EMAIL_TRANSPORT", "").strip()
+    zoho_refresh = os.getenv("ZOHO_MAIL_REFRESH_TOKEN", "").strip()
+    zoho_client = os.getenv("ZOHO_MAIL_CLIENT_ID", "").strip()
+    zoho_secret = os.getenv("ZOHO_MAIL_CLIENT_SECRET", "").strip()
+    zoho_account = os.getenv("ZOHO_MAIL_ACCOUNT_ID", "").strip()
+    zoho_from = os.getenv("ZOHO_MAIL_FROM_ADDRESS", "").strip()
     resend_key = os.getenv("RESEND_API_KEY", "").strip()
     smtp_host = os.getenv("SMTP_HOST", "").strip()
     smtp_user = os.getenv("SMTP_USERNAME", "").strip()
@@ -2090,10 +2118,14 @@ def email_status():
     bcc = os.getenv("BCC_EMAIL", "").strip()
     vm_gate = os.getenv("ALLOW_VOICEMAIL_EMAIL", "false").strip().lower() in {"1", "true", "yes", "on"}
 
-    if resend_key:
-        transport = "resend (HTTPS)"
+    if email_transport:
+        transport = email_transport
+    elif zoho_refresh:
+        transport = "zoho_api (HTTPS)"
     elif smtp_host:
         transport = f"smtp ({smtp_host}:{os.getenv('SMTP_PORT','587')})"
+    elif resend_key:
+        transport = "resend (HTTPS)"
     else:
         transport = "[red]NOT CONFIGURED[/red]"
 
@@ -2101,6 +2133,12 @@ def email_status():
     table.add_column("key", style="dim")
     table.add_column("value")
     table.add_row("transport", transport)
+    table.add_row("EMAIL_TRANSPORT", email_transport or "—")
+    table.add_row("ZOHO_MAIL_CLIENT_ID", _mask(zoho_client, 6) or "—")
+    table.add_row("ZOHO_MAIL_CLIENT_SECRET", _mask(zoho_secret, 0) or "—")
+    table.add_row("ZOHO_MAIL_REFRESH_TOKEN", _mask(zoho_refresh, 6) or "—")
+    table.add_row("ZOHO_MAIL_ACCOUNT_ID", zoho_account or "—")
+    table.add_row("ZOHO_MAIL_FROM_ADDRESS", zoho_from or "—")
     table.add_row("RESEND_API_KEY", _mask(resend_key, 6) or "—")
     table.add_row("SMTP_HOST", smtp_host or "—")
     table.add_row("SMTP_USERNAME", smtp_user or "—")
@@ -2115,8 +2153,8 @@ def email_status():
     table.add_row("ALLOW_VOICEMAIL_EMAIL", "[green]true[/green]" if vm_gate else "[yellow]false[/yellow] (VM follow-ups blocked)")
     console.print(table)
 
-    if not (resend_key or smtp_host):
-        console.print("[yellow]No transport configured — set RESEND_API_KEY or SMTP_HOST in .env.[/yellow]")
+    if not (zoho_refresh or resend_key or smtp_host):
+        console.print("[yellow]No transport configured — set Zoho API, RESEND_API_KEY, or SMTP_HOST in .env.[/yellow]")
     if not recipient:
         console.print("[yellow]EMAIL_NOTIFICATION_RECIPIENT unset — `email test` needs --to or this var.[/yellow]")
 
@@ -2132,9 +2170,9 @@ def email_test(
             "address and be accepted by the active transport."
         ),
     ),
-    subject: str = typer.Option("Autocaller test email", "--subject"),
+    subject: str = typer.Option("Possible OS test email", "--subject"),
     body: str = typer.Option(
-        "If you can read this, the autocaller email pipeline works.",
+        "If you can read this, the Possible OS email pipeline works.",
         "--body",
     ),
 ):
@@ -2429,7 +2467,7 @@ def comms_show(
 def contacts_backfill(
     limit: int = typer.Option(0, "--limit", help="Cap firms processed (0 = all)."),
 ):
-    """Pull leadership rosters from PIF Stats + the autocaller DM rows
+    """Pull leadership rosters from PIF Stats + the Possible OS DM rows
     into `firm_contacts`. Idempotent — re-running is a near-no-op."""
     from app.services.firm_contacts_service import backfill_all
     res = _run(backfill_all(limit=limit or None))
@@ -2689,6 +2727,98 @@ def sequences_list(
         )
     console.print(table)
     console.print(f"[dim]{len(rows)} sequence(s)[/dim]")
+
+
+# ---------------------------------------------------------------------------
+# todos — editable project backlog
+# ---------------------------------------------------------------------------
+
+@todos_app.command("list")
+def todos_list(
+    area: str = typer.Option("", "--area", help="Filter by area, e.g. lead-gen."),
+    status: str = typer.Option("", "--status", help="Filter by status."),
+    json_output: bool = typer.Option(False, "--json", help="Print raw JSON."),
+):
+    """List DB-backed project todos."""
+    data = _get("/api/todos", area=area or None, status=status or None)
+    if json_output:
+        console.print_json(data=data)
+        return
+    rows = data.get("todos") or []
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("id", no_wrap=True)
+    table.add_column("area", no_wrap=True)
+    table.add_column("status", no_wrap=True)
+    table.add_column("title")
+    for row in rows:
+        table.add_row(str(row.get("id") or ""), row.get("area") or "", row.get("status") or "", row.get("title") or "")
+    console.print(table)
+
+
+@todos_app.command("add")
+def todos_add(
+    title: str = typer.Argument(...),
+    area: str = typer.Option("general", "--area"),
+    section: str = typer.Option("Not Started", "--section"),
+    status: str = typer.Option("not_started", "--status"),
+    body: str = typer.Option("", "--body"),
+    source_url: str = typer.Option("", "--source-url"),
+    actor: str = typer.Option("operator", "--actor"),
+):
+    """Add a DB-backed project todo."""
+    data = _post(
+        "/api/todos",
+        json_body={
+            "title": title,
+            "area": area,
+            "section": section,
+            "status": status,
+            "body": body,
+            "source_url": source_url or None,
+            "actor": actor,
+        },
+    )
+    console.print_json(data=data)
+
+
+@todos_app.command("update")
+def todos_update(
+    todo_id: int = typer.Argument(...),
+    title: str = typer.Option("", "--title"),
+    area: str = typer.Option("", "--area"),
+    section: str = typer.Option("", "--section"),
+    status: str = typer.Option("", "--status"),
+    body: str = typer.Option("", "--body"),
+    source_url: str = typer.Option("", "--source-url"),
+    clear_source_url: bool = typer.Option(False, "--clear-source-url"),
+    actor: str = typer.Option("operator", "--actor"),
+):
+    """Update a DB-backed project todo."""
+    payload = {"actor": actor}
+    if title:
+        payload["title"] = title
+    if area:
+        payload["area"] = area
+    if section:
+        payload["section"] = section
+    if status:
+        payload["status"] = status
+    if body:
+        payload["body"] = body
+    if clear_source_url:
+        payload["source_url"] = None
+    elif source_url:
+        payload["source_url"] = source_url
+    data = _patch(f"/api/todos/{todo_id}", json_body=payload)
+    console.print_json(data=data)
+
+
+@todos_app.command("delete")
+def todos_delete(
+    todo_id: int = typer.Argument(...),
+):
+    """Delete a DB-backed project todo."""
+    console.print_json(data=_delete(f"/api/todos/{todo_id}"))
 
 
 # ---------------------------------------------------------------------------

@@ -41,6 +41,8 @@ def test_send_thread_reply_defaults_to_resend_when_configured(monkeypatch):
     notification = type("Notification", (), {"id": 7})()
 
     monkeypatch.delenv("THREAD_REPLY_TRANSPORT", raising=False)
+    monkeypatch.delenv("SMTP_HOST", raising=False)
+    monkeypatch.delenv("ZOHO_MAIL_REFRESH_TOKEN", raising=False)
     monkeypatch.setenv("RESEND_API_KEY", "test-key")
     monkeypatch.setattr(
         operator_notifications,
@@ -57,3 +59,70 @@ def test_send_thread_reply_defaults_to_resend_when_configured(monkeypatch):
 
     assert message_id == "resend-id"
     assert transport == "resend_thread"
+
+
+def test_send_thread_reply_prefers_smtp_when_zoho_is_configured(monkeypatch):
+    inbound = InboundEmailRow(
+        id="in_3",
+        provider="zoho_imap",
+        account_email="pranav@example.com",
+        mailbox="INBOX",
+        uid="44",
+        from_email="lead@example.com",
+        subject="Re: Quick question",
+        message_id="<reply@example.com>",
+    )
+    notification = type("Notification", (), {"id": 8})()
+
+    monkeypatch.delenv("THREAD_REPLY_TRANSPORT", raising=False)
+    monkeypatch.delenv("ZOHO_MAIL_REFRESH_TOKEN", raising=False)
+    monkeypatch.setenv("SMTP_HOST", "smtppro.zoho.in")
+    monkeypatch.setenv("RESEND_API_KEY", "test-key")
+    monkeypatch.setattr(
+        operator_notifications,
+        "_send_thread_reply_sync",
+        lambda **kwargs: "smtp-id",
+    )
+
+    message_id, transport = _send_thread_reply(
+        inbound=inbound,
+        notification=notification,
+        subject="Quick question",
+        body="Thanks",
+    )
+
+    assert message_id == "smtp-id"
+    assert transport == "smtp_thread"
+
+
+def test_send_thread_reply_prefers_zoho_api_when_configured(monkeypatch):
+    inbound = InboundEmailRow(
+        id="in_4",
+        provider="zoho_imap",
+        account_email="pranav@example.com",
+        mailbox="INBOX",
+        uid="45",
+        from_email="lead@example.com",
+        subject="Re: Quick question",
+        message_id="<reply@example.com>",
+    )
+    notification = type("Notification", (), {"id": 9, "context_json": {"pif_id": "p1", "contact_name": "Lead"}})()
+
+    monkeypatch.delenv("THREAD_REPLY_TRANSPORT", raising=False)
+    monkeypatch.setenv("SMTP_HOST", "smtppro.zoho.in")
+    monkeypatch.setenv("ZOHO_MAIL_REFRESH_TOKEN", "refresh-token")
+    monkeypatch.setattr(
+        operator_notifications,
+        "_send_email",
+        lambda *args, **kwargs: "zoho-id",
+    )
+
+    message_id, transport = _send_thread_reply(
+        inbound=inbound,
+        notification=notification,
+        subject="Quick question",
+        body="Thanks",
+    )
+
+    assert message_id == "zoho-id"
+    assert transport == "zoho_api_thread"

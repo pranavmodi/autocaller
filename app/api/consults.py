@@ -2,7 +2,7 @@
 
 Public (unauth'd) POST /api/consults/book + GET /api/consults/slots power
 the getpossibleminds.com/consult page. Authenticated GET /api/consults
-lists bookings for the autocaller admin UI.
+lists bookings for the Possible OS admin UI.
 
 Slot model: fixed 30-minute slots during business hours (weekdays, 9am-
 5pm local). Booked slots are excluded from the picker. No overlap

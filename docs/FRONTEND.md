@@ -1,4 +1,4 @@
-# Autocaller Frontend — Feature List (Minimal)
+# Possible OS Frontend — Feature List
 
 A read-mostly web UI for observability. The CLI stays the source of truth
 for operations; the frontend exists so Pranav can glance at what's happening

@@ -9,6 +9,7 @@ from app.services.operator_notifications import (
     list_pending_notifications,
     send_notification_draft_reply,
 )
+from app.services.product_traces import safe_record_product_trace
 
 
 router = APIRouter(prefix="/api/operator-notifications", tags=["operator-notifications"])
@@ -40,6 +41,19 @@ async def acknowledge_operator_notification(
     )
     if result is None:
         raise HTTPException(status_code=404, detail="notification not found")
+    await safe_record_product_trace(
+        actor_type="system",
+        event_type="operator_notification_acknowledged",
+        surface="operator_notifications",
+        entity_type="operator_notification",
+        entity_id=str(notification_id),
+        input_json={"acknowledged_by": payload.acknowledged_by if payload else "operator"},
+        output_json={"status": result.get("status"), "acknowledged_at": result.get("acknowledged_at")},
+        context_json={
+            "notification_type": result.get("notification_type"),
+            "source_type": result.get("source_type"),
+        },
+    )
     return {"notification": result}
 
 
@@ -61,4 +75,25 @@ async def send_operator_notification_draft(
         raise HTTPException(status_code=400, detail=str(e))
     if result is None:
         raise HTTPException(status_code=404, detail="notification not found")
+    await safe_record_product_trace(
+        actor_type="system",
+        event_type="operator_notification_draft_sent",
+        surface="operator_notifications",
+        entity_type="operator_notification",
+        entity_id=str(notification_id),
+        input_json={
+            "subject": payload.subject,
+            "body": payload.body,
+            "sent_by": payload.sent_by,
+        },
+        output_json={
+            "status": result.get("status"),
+            "acknowledged_at": result.get("acknowledged_at"),
+            "suggested_action": result.get("suggested_action"),
+        },
+        context_json={
+            "notification_type": result.get("notification_type"),
+            "source_type": result.get("source_type"),
+        },
+    )
     return {"notification": result}

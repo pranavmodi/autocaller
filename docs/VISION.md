@@ -1,4 +1,4 @@
-# Autocaller — Product Vision
+# Possible OS — Product Vision
 
 > **An always-on business development agent that finds the right law firms,
 > discovers their operational pain, pitches what Possible Minds can actually
@@ -20,7 +20,7 @@ Hiring SDRs is expensive, slow to train, and fragile. Buying lead lists is
 noise. Running outbound ourselves pulls Pranav out of the work that actually
 wins deals.
 
-**The autocaller is the SDR team.** Its entire existence is to produce
+**Possible OS is the operating loop for growth and operations.** Its current outbound function exists to produce
 qualified 20-minute demo slots on Pranav's calendar — as few or as many per
 week as the business needs — with enough context that Pranav walks into each
 call knowing the firm's name, their top pain, and why Possible Minds is the

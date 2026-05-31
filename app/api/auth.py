@@ -1,4 +1,4 @@
-"""Operator password auth for the autocaller UI + API.
+"""Operator password auth for the Possible OS UI + API.
 
 Single shared password, HMAC-signed session cookie, 30-day expiry. No
 user accounts — this is a one-operator tool. When the ops footprint
