@@ -82,8 +82,8 @@ export default function SequencesPage() {
   });
 
   return (
-    <div className="mx-auto max-w-[1400px] px-6 py-8">
-      <div className="mb-6 flex items-center gap-3">
+    <div className="mx-auto min-w-0 max-w-[1400px] space-y-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <Link
           href="/"
           className="inline-flex items-center gap-1 text-sm text-neutral-500 hover:text-neutral-800"
@@ -101,7 +101,7 @@ export default function SequencesPage() {
         <button
           onClick={() => backfill.mutate()}
           disabled={backfill.isPending}
-          className="ml-auto rounded-md border border-neutral-200 px-2.5 py-1 text-[11px] font-medium text-neutral-600 hover:bg-neutral-50 disabled:opacity-60"
+          className="rounded-md border border-neutral-200 px-2.5 py-1 text-[11px] font-medium text-neutral-600 hover:bg-neutral-50 disabled:opacity-60 sm:ml-auto"
         >
           {backfill.isPending ? "backfilling…" : "Refresh contacts"}
         </button>
@@ -123,7 +123,7 @@ export default function SequencesPage() {
         }}
       />
 
-      <div className="grid grid-cols-12 gap-4">
+      <div className="grid gap-4 lg:grid-cols-12">
         {/* Left rail — firm + contact dropdowns */}
         <aside className="col-span-12 space-y-3 lg:col-span-4 xl:col-span-3">
           <FirmDropdown
@@ -249,7 +249,7 @@ function ActiveSequencesPanel({
         </div>
       )}
       {items.length > 0 && (
-        <div className="max-h-72 overflow-y-auto">
+        <div className="mobile-table-card max-h-72 overflow-y-auto md:overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="border-b border-neutral-100 text-[11px] uppercase tracking-wider text-neutral-500">
               <tr>
@@ -269,7 +269,7 @@ function ActiveSequencesPanel({
                   className="cursor-pointer border-b border-neutral-100 hover:bg-neutral-50"
                   onClick={() => onJump(s)}
                 >
-                  <td className="px-4 py-2">
+                  <td data-label="Contact" className="px-4 py-2">
                     <div className="font-medium text-neutral-800">
                       {s.contact_name || "—"}
                     </div>
@@ -277,17 +277,17 @@ function ActiveSequencesPanel({
                       {s.contact_email || "no email"}
                     </div>
                   </td>
-                  <td className="px-2 py-2 text-xs text-neutral-700">
+                  <td data-label="Firm" className="px-2 py-2 text-xs text-neutral-700">
                     {s.firm_name || s.pif_id.slice(0, 8)}
                   </td>
-                  <td className="px-2 py-2 font-mono text-xs text-neutral-700">
+                  <td data-label="Step" className="px-2 py-2 font-mono text-xs text-neutral-700">
                     {s.current_step}/{s.steps_total}
                   </td>
-	                  <td className="px-2 py-2 text-xs text-neutral-600">
+	                  <td data-label="Variant" className="px-2 py-2 text-xs text-neutral-600">
 	                    <div>{s.template_key}</div>
 	                    <div className="text-[10px] text-neutral-400">{s.variant}</div>
 	                  </td>
-                  <td className="px-2 py-2 font-mono text-[11px] text-neutral-500">
+                  <td data-label="Next due" className="px-2 py-2 font-mono text-[11px] text-neutral-500">
                     {s.next_step_due_at
                       ? new Date(s.next_step_due_at).toLocaleString(undefined, {
                           month: "short",
@@ -297,7 +297,7 @@ function ActiveSequencesPanel({
                         })
                       : "—"}
                   </td>
-                  <td className="px-2 py-2">
+                  <td data-label="Status" className="px-2 py-2">
                     <span
                       className={cn(
                         "rounded px-1.5 py-0.5 text-[11px] font-medium",
@@ -318,6 +318,7 @@ function ActiveSequencesPanel({
                     )}
                   </td>
                   <td
+                    data-label="Action"
                     className="px-2 py-2 text-right"
                     onClick={(e) => e.stopPropagation()}
                   >

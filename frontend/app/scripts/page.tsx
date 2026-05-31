@@ -219,6 +219,7 @@ function BeverlyLoomScript() {
       </ScriptSection>
 
       <Section title="Delivery notes" icon={<Camera className="h-4 w-4" />}>
+        <div className="mobile-table-card md:overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="text-[11px] uppercase tracking-wider text-neutral-500">
             <tr>
@@ -257,6 +258,7 @@ function BeverlyLoomScript() {
             />
           </tbody>
         </table>
+        </div>
       </Section>
 
       <Section title="Two judgment calls before you record" icon={<Clock className="h-4 w-4" />}>
@@ -372,8 +374,8 @@ function Badge({ children }: { children: React.ReactNode }) {
 function DoDontRow({ dos, donts }: { dos: string; donts: string }) {
   return (
     <tr className="align-top">
-      <td className="py-2 pr-4 text-emerald-800">{dos}</td>
-      <td className="py-2 text-red-700">{donts}</td>
+      <td data-label="Do" className="py-2 pr-4 text-emerald-800">{dos}</td>
+      <td data-label="Don't" className="py-2 text-red-700">{donts}</td>
     </tr>
   );
 }

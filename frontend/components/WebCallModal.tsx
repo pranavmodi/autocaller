@@ -17,8 +17,8 @@ export function WebCallModal({
   const [muted, setMuted] = useState(false);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-3 pb-[calc(0.75rem_+_env(safe-area-inset-bottom))] backdrop-blur-sm sm:items-center">
+      <div className="max-h-[calc(100dvh_-_2rem)] w-full max-w-md overflow-y-auto rounded-2xl bg-white shadow-2xl">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-neutral-100 px-6 py-4">
           <div>

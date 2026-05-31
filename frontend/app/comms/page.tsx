@@ -49,8 +49,8 @@ export default function CommsPage() {
   const items = comms.data?.items ?? [];
 
   return (
-    <div className="mx-auto max-w-[1400px] px-6 py-8">
-      <div className="mb-6 flex items-center gap-3">
+    <div className="mx-auto min-w-0 max-w-[1400px] space-y-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <Link
           href="/"
           className="inline-flex items-center gap-1 text-sm text-neutral-500 hover:text-neutral-800"

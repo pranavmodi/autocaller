@@ -113,7 +113,7 @@ export default function CallsPage() {
       </div>
 
       {/* Table */}
-      <div className="overflow-hidden rounded-lg border border-neutral-200 bg-white">
+      <div className="mobile-table-card overflow-hidden rounded-lg border border-neutral-200 bg-white md:overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-neutral-50 text-[11px] uppercase text-neutral-500">
             <tr>
@@ -149,14 +149,14 @@ export default function CallsPage() {
                 key={c.call_id}
                 className="cursor-pointer border-t border-neutral-100 hover:bg-neutral-50"
               >
-                <td className="px-4 py-2.5 align-top">
+                <td data-label="When" className="px-4 py-2.5 align-top">
                   <Link href={`/calls/${c.call_id}`} className="block text-xs text-neutral-600">
                     {c.started_at
                       ? formatDistanceToNow(new Date(c.started_at), { addSuffix: true })
                       : "—"}
                   </Link>
                 </td>
-                <td className="px-4 py-2.5 align-top">
+                <td data-label="Mode" className="px-4 py-2.5 align-top">
                   <Link href={`/calls/${c.call_id}`} className="flex gap-1">
                     {(c as any).call_mode === "web" ? (
                       <span className="rounded-full bg-violet-50 px-2 py-0.5 text-[10px] font-semibold text-violet-700 ring-1 ring-inset ring-violet-200">
@@ -173,23 +173,23 @@ export default function CallsPage() {
                     )}
                   </Link>
                 </td>
-                <td className="px-4 py-2.5 align-top">
+                <td data-label="Lead" className="px-4 py-2.5 align-top">
                   <Link href={`/calls/${c.call_id}`} className="font-medium text-neutral-900">
                     {c.patient_name || "(unknown)"}
                   </Link>
                 </td>
-                <td className="px-4 py-2.5 align-top text-neutral-700">
+                <td data-label="Firm" className="px-4 py-2.5 align-top text-neutral-700">
                   <Link href={`/calls/${c.call_id}`}>{c.firm_name || "—"}</Link>
                 </td>
-                <td className="px-4 py-2.5 align-top text-neutral-500">
+                <td data-label="State" className="px-4 py-2.5 align-top text-neutral-500">
                   <Link href={`/calls/${c.call_id}`}>{c.lead_state ?? "—"}</Link>
                 </td>
-                <td className="px-4 py-2.5 align-top">
+                <td data-label="Outcome" className="px-4 py-2.5 align-top">
                   <Link href={`/calls/${c.call_id}`}>
                     <OutcomePill outcome={c.outcome} />
                   </Link>
                 </td>
-                <td className="px-4 py-2.5 align-top">
+                <td data-label="Disposition" className="px-4 py-2.5 align-top">
                   <Link href={`/calls/${c.call_id}`} className="text-xs text-neutral-600">
                     {c.gtm_disposition ? (
                       <span className="font-mono">{c.gtm_disposition}</span>
@@ -198,7 +198,7 @@ export default function CallsPage() {
                     )}
                   </Link>
                 </td>
-                <td className="px-4 py-2.5 align-top text-center">
+                <td data-label="Score" className="px-4 py-2.5 align-top text-center">
                   <Link href={`/calls/${c.call_id}`}>
                     {c.judge_score != null ? (
                       <span className={cn(
@@ -214,10 +214,10 @@ export default function CallsPage() {
                     )}
                   </Link>
                 </td>
-                <td className="px-4 py-2.5 align-top text-right text-neutral-600">
+                <td data-label="Duration" className="px-4 py-2.5 align-top text-right text-neutral-600">
                   <Link href={`/calls/${c.call_id}`}>{c.duration_seconds}s</Link>
                 </td>
-                <td className="px-4 py-2.5 align-top text-center text-neutral-500">
+                <td data-label="Audio" className="px-4 py-2.5 align-top text-center text-neutral-500">
                   <Link href={`/calls/${c.call_id}`}>{c.has_recording ? "🎙" : "—"}</Link>
                 </td>
               </tr>

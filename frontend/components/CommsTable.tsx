@@ -13,7 +13,7 @@ export function CommsTable({
 }) {
   const [openId, setOpenId] = useState<string | null>(null);
   return (
-    <div className="overflow-x-auto">
+    <div className="mobile-table-card md:overflow-x-auto">
       <table className="w-full text-sm">
         <thead className="border-b border-neutral-200 text-[11px] uppercase tracking-wider text-neutral-500">
           <tr>
@@ -40,27 +40,27 @@ export function CommsTable({
                   )}
                   onClick={() => setOpenId(open ? null : it.id)}
                 >
-                  <td className="py-2 pr-3 font-mono text-[11px] text-neutral-500 whitespace-nowrap">
+                  <td data-label="When" className="py-2 pr-3 font-mono text-[11px] text-neutral-500 whitespace-nowrap">
                     {formatCommsDate(it.occurred_at)}
                   </td>
-                  <td className="py-2 pr-3">
+                  <td data-label="Channel" className="py-2 pr-3">
                     <ChannelPill channel={it.channel} />
                   </td>
                   {!hideFirm && (
-                    <td className="py-2 pr-3 max-w-[12rem] truncate text-neutral-700">
+                    <td data-label="Firm" className="py-2 pr-3 max-w-[12rem] truncate text-neutral-700">
                       {it.firm_name ?? "—"}
                     </td>
                   )}
-                  <td className="py-2 pr-3 max-w-[10rem] truncate text-neutral-700">
+                  <td data-label="Contact" className="py-2 pr-3 max-w-[10rem] truncate text-neutral-700">
                     {it.contact_name ?? "—"}
                   </td>
-                  <td className="py-2 pr-3 font-mono text-[11px] text-neutral-600">
+                  <td data-label="Recipient" className="py-2 pr-3 font-mono text-[11px] text-neutral-600">
                     {it.recipient ?? "—"}
                   </td>
-                  <td className="py-2 pr-3 max-w-[24rem] truncate text-neutral-700">
+                  <td data-label="Summary" className="py-2 pr-3 max-w-[24rem] truncate text-neutral-700">
                     {it.summary || "—"}
                   </td>
-                  <td className="py-2 pr-0">
+                  <td data-label="Status" className="py-2 pr-0">
                     <StatusPill status={it.status} channel={it.channel} />
                   </td>
                 </tr>
