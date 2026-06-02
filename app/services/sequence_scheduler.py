@@ -25,17 +25,12 @@ from typing import Optional
 from sqlalchemy import select, update
 
 from app.db import AsyncSessionLocal
-from app.db.models import (
-    EmailSequenceRow, FirmContactRow, PatientRow,
-)
+from app.db.models import EmailSequenceRow, FirmContactRow, PatientRow
 from app.services.lead_email_composer import LeadEmailComposerError, compose_lead_email
 from app.services.operator_notifications import create_operator_notification
-from app.services.sequences.common import Ctx
 from app.services.sequences.registry import (
     DEFAULT_TEMPLATE_KEY,
-    is_dynamic_template,
     normalize_template_key,
-    render_step,
     steps_total,
     variant_for,
 )
@@ -146,19 +141,6 @@ async def get_sequence(
 # tick: pick due rows, render + send, advance state
 # ---------------------------------------------------------------------------
 
-def _build_ctx(contact: FirmContactRow, firm_name: str, seq: EmailSequenceRow) -> Ctx:
-    rep_name = os.getenv("SALES_REP_NAME", "").strip() or "Alex"
-    return Ctx(
-        first_name=(contact.first_name or "").strip()
-            or (contact.full_name or "there").split()[0],
-        firm_name=firm_name or "your firm",
-        rep_name=rep_name,
-        pain_quote=seq.frozen_pain_quote,
-        reviewer_name=seq.frozen_reviewer_name,
-        review_date=seq.frozen_review_date,
-    )
-
-
 async def _firm_name_for(pif_id: str) -> str:
     """Best-effort firm name. Walks both `pif-{id}` and `mc-{id}`
     patient rows, since the two sync paths use different prefixes."""
@@ -193,6 +175,12 @@ async def create_sequence_approval_notification(
                 ),
                 "existing": True,
             }
+        if seq.template_key != DEFAULT_TEMPLATE_KEY:
+            seq.status = "paused"
+            seq.next_step_due_at = None
+            seq.paused_reason = "legacy_fixed_sequence_disabled"
+            await session.commit()
+            return {"id": seq_id, "paused": "legacy_fixed_sequence_disabled"}
 
         contact = (await session.execute(
             select(FirmContactRow).where(FirmContactRow.id == seq.contact_id)
@@ -203,6 +191,13 @@ async def create_sequence_approval_notification(
             await session.commit()
             return {"id": seq_id, "paused": "no_email_on_contact"}
 
+        if seq.template_key != DEFAULT_TEMPLATE_KEY:
+            seq.status = "paused"
+            seq.next_step_due_at = None
+            seq.paused_reason = "legacy_fixed_sequence_disabled"
+            await session.commit()
+            return {"id": seq_id, "paused": "legacy_fixed_sequence_disabled"}
+
         firm_name = await _firm_name_for(contact.pif_id)
         next_step = seq.current_step + 1
         if next_step > seq.steps_total:
@@ -211,56 +206,42 @@ async def create_sequence_approval_notification(
             await session.commit()
             return {"id": seq_id, "completed": True}
 
-        if is_dynamic_template(seq.template_key):
-            try:
-                composed = await compose_lead_email(
-                    contact=contact,
-                    firm_name=firm_name,
-                    sequence=seq,
-                    step_num=next_step,
+        try:
+            composed = await compose_lead_email(
+                contact=contact,
+                firm_name=firm_name,
+                sequence=seq,
+                step_num=next_step,
+            )
+            if composed.requires_human_review and not dry_run:
+                seq.status = "paused"
+                seq.paused_reason = (
+                    "composer_requires_human_review: "
+                    f"{'; '.join(composed.risk_flags)[:180]}"
                 )
-                if composed.requires_human_review and not dry_run:
-                    seq.status = "paused"
-                    seq.paused_reason = (
-                        "composer_requires_human_review: "
-                        f"{'; '.join(composed.risk_flags)[:180]}"
-                    )
-                    await session.commit()
-                    return {
-                        "id": seq_id,
-                        "paused": "composer_requires_human_review",
-                        "subject": composed.subject,
-                        "reasoning": composed.reasoning,
-                        "risk_flags": composed.risk_flags,
-                    }
-                rendered_subject = composed.subject
-                rendered_body = composed.body
-                rendered_message_type = "dynamic_lead_email"
-                render_meta = {
-                    "angle": composed.angle,
-                    "cta": composed.cta,
-                    "blog_link_used": composed.blog_link_used,
+                await session.commit()
+                return {
+                    "id": seq_id,
+                    "paused": "composer_requires_human_review",
+                    "subject": composed.subject,
                     "reasoning": composed.reasoning,
-                    "model": composed.model,
+                    "risk_flags": composed.risk_flags,
                 }
-            except LeadEmailComposerError as e:
-                seq.status = "paused"
-                seq.paused_reason = f"compose_failed: {str(e)[:200]}"
-                await session.commit()
-                return {"id": seq_id, "paused": "compose_failed", "error": str(e)}
-        else:
-            try:
-                ctx = _build_ctx(contact, firm_name, seq)
-                rendered = render_step(seq.template_key, next_step, seq.variant, ctx)
-                rendered_subject = rendered.subject
-                rendered_body = rendered.body
-                rendered_message_type = rendered.message_type
-                render_meta = {}
-            except Exception as e:
-                seq.status = "paused"
-                seq.paused_reason = f"render_failed: {type(e).__name__}: {e}"
-                await session.commit()
-                return {"id": seq_id, "paused": "render_failed", "error": str(e)}
+            rendered_subject = composed.subject
+            rendered_body = composed.body
+            rendered_message_type = "dynamic_lead_email"
+            render_meta = {
+                "angle": composed.angle,
+                "cta": composed.cta,
+                "blog_link_used": composed.blog_link_used,
+                "reasoning": composed.reasoning,
+                "model": composed.model,
+            }
+        except LeadEmailComposerError as e:
+            seq.status = "paused"
+            seq.paused_reason = f"compose_failed: {str(e)[:200]}"
+            await session.commit()
+            return {"id": seq_id, "paused": "compose_failed", "error": str(e)}
 
         if dry_run:
             return {
@@ -351,6 +332,12 @@ async def create_sequence_approval_placeholder(seq_id: str) -> dict:
                 ),
                 "existing": True,
             }
+        if seq.template_key != DEFAULT_TEMPLATE_KEY:
+            seq.status = "paused"
+            seq.next_step_due_at = None
+            seq.paused_reason = "legacy_fixed_sequence_disabled"
+            await session.commit()
+            return {"id": seq_id, "paused": "legacy_fixed_sequence_disabled"}
 
         contact = (await session.execute(
             select(FirmContactRow).where(FirmContactRow.id == seq.contact_id)

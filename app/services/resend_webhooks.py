@@ -224,12 +224,6 @@ def _provider_error(event_type: str, data: dict[str, Any]) -> str | None:
 
 
 def _template_from_message_type(message_type: str | None) -> str | None:
-    if not message_type:
-        return None
-    if message_type.startswith("records_audit_"):
-        return "precise_records_audit"
-    if message_type.startswith("pain_") or message_type.startswith("precise_pain"):
-        return "precise_pain_4step"
     return None
 
 

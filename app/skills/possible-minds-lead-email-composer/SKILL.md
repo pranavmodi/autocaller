@@ -24,13 +24,16 @@ do not imply endorsement.
 
 Good first-touch subject patterns:
 
-- `Quick question about Precise Imaging status updates`
+- `Precise Imaging status updates`
 - `Precise Imaging updates and PI workflow`
 - `Question from the team behind Precise Imaging updates`
 - `Precise Imaging follow-up workflows`
 
 Avoid generic subjects like `Quick question about PI workflow bottlenecks`
 when a Precise-based first-touch opener would be appropriate.
+Also avoid weak filler openings like `Quick question about Precise Imaging
+status updates`; use the cleaner direct version `Precise Imaging status
+updates` instead.
 
 ## Output Contract
 

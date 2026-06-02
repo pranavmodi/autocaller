@@ -23,8 +23,9 @@ from app.db.models import (
     OperatorNotificationRow,
 )
 from app.services.firm_contacts_service import resolve_firm_name
+from app.services.contact_selection import is_target_lead_persona
 from app.services.sequence_recommendations import recommend_sequence_contacts
-from app.services.sequences.registry import normalize_template_key
+from app.services.sequences.registry import DEFAULT_TEMPLATE_KEY, normalize_template_key
 
 
 CONTINUATION_ACTIONS = {
@@ -153,9 +154,14 @@ async def _candidates_from_pending_notifications(
         payload = _contact_payload(contact)
         if not contact or not payload.get("contact_email"):
             continue
+        if not is_target_lead_persona(contact.title, contact.source):
+            continue
 
         action_type, base_score, bucket = _notification_action_type(row)
         suggested = row.suggested_action_json or {}
+        context_template_key = _clean(context.get("template_key"))
+        if context_template_key and context_template_key != DEFAULT_TEMPLATE_KEY:
+            continue
         firm_name = _clean(context.get("firm_name")) or (item.firm_name if item else "")
         reason = _clean(suggested.get("reasoning")) or row.title
         out.append(LeadGenActionCandidate(
@@ -210,6 +216,8 @@ async def _candidates_from_due_sequences(
     for seq in rows:
         contact = await session.get(FirmContactRow, seq.contact_id)
         if not contact or not contact.email:
+            continue
+        if not is_target_lead_persona(contact.title, contact.source):
             continue
         firm_name = await resolve_firm_name(contact.pif_id)
         next_step = seq.current_step + 1

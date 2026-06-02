@@ -21,7 +21,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from app.db import AsyncSessionLocal
-from app.db.models import EmailSequenceRow, FirmContactRow, EmailLogRow
+from app.db.models import EmailSequenceRow, FirmContactRow, EmailLogRow, OperatorNotificationRow
 from app.services.firm_contacts_service import (
     backfill_all,
     fetch_pain_quote_for_firm,
@@ -30,13 +30,10 @@ from app.services.firm_contacts_service import (
     list_firms_with_contacts,
 )
 from app.services.lead_email_composer import LeadEmailComposerError, compose_lead_email
-from app.services.sequences.common import Ctx
 from app.services.sequences.registry import (
     DEFAULT_TEMPLATE_KEY,
-    is_dynamic_template,
     list_templates,
     normalize_template_key,
-    render_step,
     steps_total,
     variant_for,
 )
@@ -214,15 +211,13 @@ async def get_contact_detail(
         # filter is enough to recover the history.
         if contact.get("email"):
             async with AsyncSessionLocal() as session:
-                pattern = (
-                    "records_audit_step_%"
-                    if template_key == "precise_records_audit"
-                    else "sequence_step_%"
-                )
                 rows = (await session.execute(
                     select(EmailLogRow).where(
                         EmailLogRow.recipient_email == contact["email"].lower(),
-                        EmailLogRow.message_type.like(pattern),
+                        EmailLogRow.message_type.in_([
+                            "dynamic_lead_email",
+                            "lead_reply_draft",
+                        ]),
                     ).order_by(EmailLogRow.sent_at.asc())
                 )).scalars().all()
             for r in rows:
@@ -249,6 +244,8 @@ async def get_contact_detail(
 async def preview_sequence(
     contact_id: str,
     template_key: str = Query(DEFAULT_TEMPLATE_KEY),
+    notification_id: int | None = Query(None),
+    source_id: str | None = Query(None),
 ):
     """Render every step of the sequence as it would land for this
     contact's data. No DB write, no send."""
@@ -268,65 +265,96 @@ async def preview_sequence(
     from app.services.firm_contacts_service import resolve_firm_name
     firm_name = await resolve_firm_name(contact['pif_id'])
 
-    import os
-    rep_name = os.getenv("SALES_REP_NAME", "").strip() or "Alex"
-    ctx = Ctx(
-        first_name=(contact.get("first_name") or "").strip()
-            or (contact.get("full_name") or "there").split()[0],
-        firm_name=firm_name or "your firm",
-        rep_name=rep_name,
-        pain_quote=pain.get("pain_quote"),
-        reviewer_name=pain.get("reviewer_name"),
-        review_date=pain.get("review_date"),
-    )
-
     out = []
-    for i in range(1, n + 1):
-        if is_dynamic_template(template_key):
-            async with AsyncSessionLocal() as session:
-                contact_row = await session.get(FirmContactRow, contact_id)
-            if not contact_row:
-                raise HTTPException(status_code=404, detail="contact_not_found")
-            existing = await get_sequence(contact_id, template_key)
-            if existing and existing.current_step >= existing.steps_total:
-                return []
-            next_step = existing.current_step + 1 if existing else 1
-            sequence_context = existing or SimpleNamespace(
-                template_key=template_key,
-                current_step=0,
-                steps_total=n,
-                variant=variant,
+    async with AsyncSessionLocal() as session:
+        contact_row = await session.get(FirmContactRow, contact_id)
+    if not contact_row:
+        raise HTTPException(status_code=404, detail="contact_not_found")
+    existing = await get_sequence(contact_id, template_key)
+    if existing and existing.current_step >= existing.steps_total:
+        return []
+    next_step = existing.current_step + 1 if existing else 1
+    sequence_context = existing or SimpleNamespace(
+        template_key=template_key,
+        current_step=0,
+        steps_total=n,
+        variant=variant,
+    )
+    async with AsyncSessionLocal() as session:
+        notification_filters = [
+            OperatorNotificationRow.notification_type == "lead_sequence_email_approval",
+            OperatorNotificationRow.source_type == "email_sequence_step",
+            OperatorNotificationRow.status == "pending",
+            OperatorNotificationRow.acknowledged_at.is_(None),
+        ]
+        if notification_id:
+            notification_filters.append(OperatorNotificationRow.id == notification_id)
+        elif source_id:
+            notification_filters.append(OperatorNotificationRow.source_id == source_id)
+        elif existing:
+            notification_filters.append(
+                OperatorNotificationRow.source_id == f"{existing.id}:{next_step}"
             )
-            try:
-                composed = await compose_lead_email(
-                    contact=contact_row,
-                    firm_name=firm_name,
-                    sequence=sequence_context,
-                    step_num=next_step,
-                )
-            except LeadEmailComposerError as e:
-                raise HTTPException(status_code=502, detail=f"compose_failed: {str(e)}")
-            out.append(RenderedStepDTO(
-                step=next_step,
-                subject=composed.subject,
-                body=composed.body,
-                message_type="dynamic_lead_email",
-                reasoning=composed.reasoning,
-                angle=composed.angle,
-                cta=composed.cta,
-                blog_link_used=composed.blog_link_used,
-                model=composed.model,
-                requires_human_review=composed.requires_human_review,
-                risk_flags=composed.risk_flags,
-            ))
-            return out
-        rendered = render_step(template_key, i, variant, ctx)
-        out.append(RenderedStepDTO(
-            step=i,
-            subject=rendered.subject,
-            body=rendered.body,
-            message_type=rendered.message_type,
-        ))
+        else:
+            notification_filters = []
+
+        stored_notification = None
+        if notification_filters:
+            stored_notification = (await session.execute(
+                select(OperatorNotificationRow).where(
+                    *notification_filters,
+                ).order_by(OperatorNotificationRow.created_at.desc())
+            )).scalars().first()
+    if stored_notification:
+        suggested = stored_notification.suggested_action_json or {}
+        notification_context = stored_notification.context_json or {}
+        context_contact_id = str(notification_context.get("contact_id") or "").strip()
+        context_template_key = str(notification_context.get("template_key") or "").strip()
+        if (
+            (context_contact_id and context_contact_id != contact_id)
+            or (context_template_key and context_template_key != DEFAULT_TEMPLATE_KEY)
+        ):
+            stored_notification = None
+        else:
+            draft_subject = str(suggested.get("draft_subject") or "").strip()
+            draft_body = str(suggested.get("draft_body") or "").strip()
+            if draft_subject and draft_body:
+                out.append(RenderedStepDTO(
+                    step=next_step,
+                    subject=draft_subject,
+                    body=draft_body,
+                    message_type=str(suggested.get("message_type") or "dynamic_lead_email"),
+                    reasoning=suggested.get("reasoning"),
+                    angle=suggested.get("angle"),
+                    cta=suggested.get("cta"),
+                    blog_link_used=suggested.get("blog_link_used"),
+                    model=suggested.get("composer_model"),
+                    requires_human_review=bool(suggested.get("requires_human_review", True)),
+                    risk_flags=suggested.get("risk_flags") or [],
+                ))
+                return out
+    try:
+        composed = await compose_lead_email(
+            contact=contact_row,
+            firm_name=firm_name,
+            sequence=sequence_context,
+            step_num=next_step,
+        )
+    except LeadEmailComposerError as e:
+        raise HTTPException(status_code=502, detail=f"compose_failed: {str(e)}")
+    out.append(RenderedStepDTO(
+        step=next_step,
+        subject=composed.subject,
+        body=composed.body,
+        message_type="dynamic_lead_email",
+        reasoning=composed.reasoning,
+        angle=composed.angle,
+        cta=composed.cta,
+        blog_link_used=composed.blog_link_used,
+        model=composed.model,
+        requires_human_review=composed.requires_human_review,
+        risk_flags=composed.risk_flags,
+    ))
     return out
 
 

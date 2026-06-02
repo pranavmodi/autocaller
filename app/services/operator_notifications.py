@@ -18,7 +18,7 @@ from app.db.models import EmailSequenceRow, FirmContactRow, InboundEmailRow, Ope
 from app.services.comms_log import log_email
 from app.services.email_notification_service import _resolve_sender_address, _send_email
 from app.services.lead_email_composer import _sanitize_email_copy
-from app.services.sequences.registry import cadence_for
+from app.services.sequences.registry import DEFAULT_TEMPLATE_KEY, cadence_for
 
 
 def notification_to_dict(row: OperatorNotificationRow) -> dict[str, Any]:
@@ -90,7 +90,7 @@ async def list_pending_notifications(limit: int = 10) -> list[dict[str, Any]]:
                 OperatorNotificationRow.status == "pending",
                 OperatorNotificationRow.acknowledged_at.is_(None),
             )
-            .order_by(OperatorNotificationRow.created_at.asc())
+            .order_by(OperatorNotificationRow.created_at.desc(), OperatorNotificationRow.id.desc())
             .limit(limit)
         )).scalars().all())
     return [notification_to_dict(row) for row in rows]
@@ -394,6 +394,8 @@ async def _send_sequence_draft_notification(
     seq = await session.get(EmailSequenceRow, sequence_id)
     if not seq:
         raise ValueError("source sequence not found")
+    if seq.template_key != DEFAULT_TEMPLATE_KEY:
+        raise ValueError("legacy fixed sequence drafts are disabled")
     if seq.current_step + 1 != step_num:
         raise ValueError("sequence step has changed since this draft was created")
 

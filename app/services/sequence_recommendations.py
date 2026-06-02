@@ -19,10 +19,12 @@ from app.services.contact_selection import (
     ContactSelectionInput,
     DEFAULT_CONTACT_SELECTION_WEIGHTS,
     has_usable_email,
+    is_target_lead_persona,
     looks_like_non_law_firm,
     score_contact_selection,
 )
 from app.services.sequences.registry import normalize_template_key
+from app.services.sequences.registry import DEFAULT_TEMPLATE_KEY
 
 
 @dataclass
@@ -55,6 +57,7 @@ def _pif_from_patient_id(patient_id: str | None) -> Optional[str]:
 
 
 _has_usable_email = has_usable_email
+_is_target_lead_persona = is_target_lead_persona
 _looks_like_non_law_firm = looks_like_non_law_firm
 
 
@@ -104,7 +107,9 @@ async def recommend_sequence_contacts(
         contacted_pifs = sms_pifs | call_pifs
 
         sequence_contact_ids = (await session.execute(
-            select(EmailSequenceRow.contact_id)
+            select(EmailSequenceRow.contact_id).where(
+                EmailSequenceRow.template_key == DEFAULT_TEMPLATE_KEY,
+            )
         )).scalars().all()
         sequenced_pifs: set[str] = set()
         if sequence_contact_ids:
@@ -171,6 +176,9 @@ async def recommend_sequence_contacts(
             continue
         if looks_like_non_law_firm(firm_name, c.title):
             counts["suppressed_non_law_firm"] += 1
+            continue
+        if not is_target_lead_persona(c.title, c.source):
+            counts["suppressed_non_persona"] += 1
             continue
         scored = score_contact_selection(
             ContactSelectionInput(

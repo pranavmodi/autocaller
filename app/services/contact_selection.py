@@ -50,6 +50,13 @@ DEFAULT_CONTACT_SELECTION_WEIGHTS: dict[str, Any] = {
     },
 }
 
+TARGET_LEAD_PERSONA_KEYS = {
+    "founder_owner",
+    "coo",
+    "managing_partner",
+    "partner",
+}
+
 GENERIC_LOCAL_PARTS = {
     "admin",
     "contact",
@@ -125,11 +132,23 @@ def has_usable_email(email: str | None) -> bool:
 
 def classify_persona(title: str | None, source: str | None) -> tuple[str, str]:
     t = (title or "").lower()
-    if any(x in t for x in ("founder", "co-founder", "owner")):
+    if any(x in t for x in (
+        "founder",
+        "co-founder",
+        "owner",
+        "chief executive",
+        "ceo",
+        "president",
+    )):
         return "founder_owner", "founder/owner"
     if "chief operating" in t or "coo" in t:
         return "coo", "COO"
-    if "managing partner" in t or "principal" in t:
+    if any(x in t for x in (
+        "managing partner",
+        "principal",
+        "managing attorney",
+        "shareholder",
+    )):
         return "managing_partner", "managing partner"
     if "operations" in t or "office manager" in t:
         return "operations_leader", "operations leader"
@@ -138,6 +157,11 @@ def classify_persona(title: str | None, source: str | None) -> tuple[str, str]:
     if source == "patients_dm":
         return "known_decision_maker", "known decision-maker contact"
     return "missing_persona", ""
+
+
+def is_target_lead_persona(title: str | None, source: str | None = None) -> bool:
+    persona_key, _ = classify_persona(title, source)
+    return persona_key in TARGET_LEAD_PERSONA_KEYS
 
 
 def classify_email_quality(email: str | None, contact_name: str | None) -> str:
@@ -292,6 +316,7 @@ def score_contact_selection(
     features = {
         "persona_key": persona_key,
         "persona": persona_label,
+        "is_target_lead_persona": persona_key in TARGET_LEAD_PERSONA_KEYS,
         "email_quality": email_quality,
         "firm_fit_signals": firm_signals,
         "contact_source": candidate.contact_source,

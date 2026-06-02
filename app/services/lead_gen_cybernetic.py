@@ -12,7 +12,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from sqlalchemy import desc, select
+from sqlalchemy import desc, or_, select
 
 from app.db import AsyncSessionLocal
 from app.db.models import (
@@ -209,6 +209,7 @@ async def send_batch_item_draft(
         item = await session.get(LeadGenBatchItemRow, batch_item_id)
         if not item:
             raise ValueError("batch_item_not_found")
+        original_reason = dict(item.reason_json or {})
         contact = await session.get(FirmContactRow, item.contact_id)
         if not contact or not contact.email:
             raise ValueError("contact_email_not_found")
@@ -276,7 +277,32 @@ async def send_batch_item_draft(
                 OperatorNotificationRow.status == "pending",
                 OperatorNotificationRow.acknowledged_at.is_(None),
             )
-        )).scalar_one_or_none()
+        )).scalars().first()
+        if not notification:
+            notification_id = original_reason.get("notification_id") or original_reason.get("operator_notification_id")
+            source_id = str(original_reason.get("source_id") or "").strip()
+            notification_filters = [
+                OperatorNotificationRow.notification_type == "lead_sequence_email_approval",
+                OperatorNotificationRow.status == "pending",
+                OperatorNotificationRow.acknowledged_at.is_(None),
+            ]
+            explicit_matches = []
+            if notification_id:
+                try:
+                    explicit_matches.append(OperatorNotificationRow.id == int(notification_id))
+                except (TypeError, ValueError):
+                    pass
+            if source_id:
+                explicit_matches.append(OperatorNotificationRow.source_id == source_id)
+            explicit_matches.append(
+                OperatorNotificationRow.context_json["batch_item_id"].as_string() == batch_item_id
+            )
+            notification = (await session.execute(
+                select(OperatorNotificationRow).where(
+                    *notification_filters,
+                    or_(*explicit_matches),
+                ).order_by(OperatorNotificationRow.created_at.desc())
+            )).scalars().first()
         if notification:
             suggested = dict(notification.suggested_action_json or {})
             suggested.update({
@@ -586,6 +612,15 @@ async def approve_batch(
                         reason["operator_notification_id"] = result["notification_id"]
                         reason["operator_notification_created_at"] = _utcnow().isoformat()
                         row.reason_json = reason
+                        notification = await session.get(
+                            OperatorNotificationRow,
+                            int(result["notification_id"]),
+                        )
+                        if notification:
+                            context = dict(notification.context_json or {})
+                            context["batch_id"] = batch_id
+                            context["batch_item_id"] = item.id
+                            notification.context_json = context
                         await session.commit()
 
     return await get_batch(batch_id)

@@ -2527,7 +2527,7 @@ def contacts_list(
 def sequences_preview(
     contact_id: str = typer.Argument(..., help="firm_contacts.id"),
     template_key: str = typer.Option(
-        "precise_pain_4step",
+        "possible_minds_dynamic",
         "--template-key",
         "--template",
         help="Sequence template key.",
@@ -2552,7 +2552,7 @@ def sequences_preview(
 def sequences_start(
     contact_id: str = typer.Argument(..., help="firm_contacts.id"),
     template_key: str = typer.Option(
-        "precise_pain_4step",
+        "possible_minds_dynamic",
         "--template-key",
         "--template",
         help="Sequence template key.",
@@ -2576,7 +2576,7 @@ def sequences_pause(
     contact_id: str = typer.Argument(..., help="firm_contacts.id"),
     reason: str = typer.Option("", "--reason", "-r", help="Why you're pausing — recorded on the row."),
     template_key: str = typer.Option(
-        "precise_pain_4step",
+        "possible_minds_dynamic",
         "--template-key",
         "--template",
         help="Sequence template key.",
@@ -2595,7 +2595,7 @@ def sequences_pause(
 def sequences_resume(
     contact_id: str = typer.Argument(..., help="firm_contacts.id"),
     template_key: str = typer.Option(
-        "precise_pain_4step",
+        "possible_minds_dynamic",
         "--template-key",
         "--template",
         help="Sequence template key.",

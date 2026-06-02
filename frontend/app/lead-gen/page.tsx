@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
@@ -39,11 +40,32 @@ import { cn } from "@/lib/utils";
 const DEFAULT_TEMPLATE = "possible_minds_dynamic";
 const CALIFORNIA_TIME_ZONE = "America/Los_Angeles";
 const DEFAULT_DAILY_EMAIL_BUDGET = 50;
+type DraftGenerationStatus = "generating" | "completed" | "failed";
 
 export default function LeadGenPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center gap-2 px-6 py-16 text-center text-sm text-neutral-500">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Loading lead generation...
+        </div>
+      }
+    >
+      <LeadGenPageContent />
+    </Suspense>
+  );
+}
+
+function LeadGenPageContent() {
   const qc = useQueryClient();
+  const searchParams = useSearchParams();
   const [batchId, setBatchId] = useState<string>("");
   const [dailyEmailBudget, setDailyEmailBudget] = useState(DEFAULT_DAILY_EMAIL_BUDGET);
+  const requestedBatchId = searchParams.get("batch") || "";
+  const requestedItemId = searchParams.get("item") || "";
+  const requestedContactId = searchParams.get("contact") || "";
+  const requestedNotificationId = searchParams.get("notification") || "";
   const policy = useQuery({
     queryKey: ["lead-gen-policy"],
     queryFn: getLeadGenPolicy,
@@ -62,11 +84,20 @@ export default function LeadGenPage() {
 
   useEffect(() => {
     if (batchId) return;
-    const selectedBatch = selectBatchForDisplay(batches.data?.batches ?? []);
+    const availableBatches = batches.data?.batches ?? [];
+    const selectedBatch =
+      availableBatches.find((batch) => batch.id === requestedBatchId) ??
+      selectBatchForDisplay(availableBatches);
     if (selectedBatch) {
       setBatchId(selectedBatch.id);
     }
-  }, [batchId, batches.data?.batches]);
+  }, [batchId, batches.data?.batches, requestedBatchId]);
+
+  useEffect(() => {
+    if (requestedBatchId && requestedBatchId !== batchId) {
+      setBatchId(requestedBatchId);
+    }
+  }, [batchId, requestedBatchId]);
 
   const saveBudget = useMutation({
     mutationFn: () => updateLeadGenDailySendBudget(dailyEmailBudget),
@@ -136,7 +167,13 @@ export default function LeadGenPage() {
         </aside>
         <main className="col-span-12 lg:col-span-8 xl:col-span-9">
           {batchId ? (
-            <BatchDetail batchId={batchId} dailyEmailBudget={dailyEmailBudget} />
+            <BatchDetail
+              batchId={batchId}
+              dailyEmailBudget={dailyEmailBudget}
+              requestedItemId={requestedItemId}
+              requestedContactId={requestedContactId}
+              requestedNotificationId={requestedNotificationId}
+            />
           ) : batches.isLoading ? (
             <div className="flex items-center justify-center gap-2 rounded-xl border border-neutral-200 bg-white px-6 py-16 text-center text-sm text-neutral-500">
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -386,13 +423,23 @@ function DailySendBudgetPanel({
 function BatchDetail({
   batchId,
   dailyEmailBudget,
+  requestedItemId,
+  requestedContactId,
+  requestedNotificationId,
 }: {
   batchId: string;
   dailyEmailBudget: number;
+  requestedItemId: string;
+  requestedContactId: string;
+  requestedNotificationId: string;
 }) {
   const qc = useQueryClient();
   const [observeItem, setObserveItem] = useState<LeadGenBatchItem | null>(null);
   const [previewItem, setPreviewItem] = useState<LeadGenBatchItem | null>(null);
+  const [draftStatuses, setDraftStatuses] = useState<Record<string, DraftGenerationStatus>>({});
+  const [isGeneratingAllDrafts, setIsGeneratingAllDrafts] = useState(false);
+  const [bulkDraftError, setBulkDraftError] = useState<string | null>(null);
+  const openedRequestKey = useRef("");
   const [scheduledStartAt, setScheduledStartAt] = useState(() =>
     defaultCaliforniaDateTimeLocal(),
   );
@@ -428,6 +475,61 @@ function BatchDetail({
 
   const data = q.data;
   const counts = useMemo(() => summarizeItems(data?.items ?? []), [data?.items]);
+  const previewableItems = useMemo(
+    () => (data?.items ?? []).filter(canPreviewItem),
+    [data?.items],
+  );
+  const sentItems = useMemo(
+    () => (data?.items ?? []).filter(isEmailSent),
+    [data?.items],
+  );
+  const completedDraftCount = previewableItems.filter(
+    (item) => draftStatuses[item.id] === "completed",
+  ).length;
+  const requestedPreviewKey = [
+    batchId,
+    requestedItemId,
+    requestedContactId,
+    requestedNotificationId,
+  ].join(":");
+
+  useEffect(() => {
+    if (!data || !requestedPreviewKey || openedRequestKey.current === requestedPreviewKey) return;
+    if (!requestedItemId && !requestedContactId && !requestedNotificationId) return;
+    const item = data.items.find((candidate) => {
+      if (requestedItemId && candidate.id === requestedItemId) return true;
+      if (requestedContactId && candidate.contact_id === requestedContactId) return true;
+      if (
+        requestedNotificationId &&
+        (
+          String(candidate.reason?.operator_notification_id || "") === requestedNotificationId ||
+          String(candidate.reason?.notification_id || "") === requestedNotificationId
+        )
+      ) {
+        return true;
+      }
+      return false;
+    });
+    openedRequestKey.current = requestedPreviewKey;
+    if (item && canPreviewItem(item)) {
+      setPreviewItem(item);
+    }
+  }, [
+    data,
+    requestedContactId,
+    requestedItemId,
+    requestedNotificationId,
+    requestedPreviewKey,
+  ]);
+
+  useEffect(() => {
+    if (!data || !previewItem) return;
+    const latestItem = data.items.find((candidate) => candidate.id === previewItem.id);
+    if (!latestItem) return;
+    if (latestItem !== previewItem) {
+      setPreviewItem(latestItem);
+    }
+  }, [data, previewItem]);
 
   if (q.isLoading) {
     return (
@@ -447,10 +549,58 @@ function BatchDetail({
 
   const canApprove = data.batch.status === "recommended";
   const isOlderPlan = !isCaliforniaToday(data.batch.created_at);
-  const hasQueueableItems = data.items.some(canPreviewItem);
+  const hasQueueableItems = data.items.some(canQueueItem);
   const canQueue =
     data.batch.status === "approved" &&
-    data.items.some((item) => item.approval_status === "approved" && canPreviewItem(item));
+    data.items.some((item) => item.approval_status === "approved" && canQueueItem(item));
+  const generateAllDrafts = async () => {
+    const remaining = previewableItems.filter(
+      (item) => !isEmailSent(item) && draftStatuses[item.id] !== "completed",
+    );
+    if (remaining.length === 0) return;
+    setIsGeneratingAllDrafts(true);
+    setBulkDraftError(null);
+    let failed = 0;
+    let nextIndex = 0;
+    const workerCount = Math.min(3, remaining.length);
+    const generateOne = async (item: LeadGenBatchItem) => {
+      setDraftStatuses((prev) => ({ ...prev, [item.id]: "generating" }));
+      try {
+        await Promise.all([
+          qc.fetchQuery({
+            queryKey: sequencePreviewQueryKey(item),
+            queryFn: () => previewSequence(
+              item.contact_id,
+              item.template_key,
+              sequencePreviewOptions(item),
+            ),
+            staleTime: 5 * 60_000,
+          }),
+          qc.fetchQuery({
+            queryKey: contactDetailQueryKey(item),
+            queryFn: () => getContactDetail(item.contact_id, item.template_key),
+            staleTime: 5 * 60_000,
+          }),
+        ]);
+        setDraftStatuses((prev) => ({ ...prev, [item.id]: "completed" }));
+      } catch {
+        failed += 1;
+        setDraftStatuses((prev) => ({ ...prev, [item.id]: "failed" }));
+      }
+    };
+    const runWorker = async () => {
+      while (nextIndex < remaining.length) {
+        const item = remaining[nextIndex];
+        nextIndex += 1;
+        await generateOne(item);
+      }
+    };
+    await Promise.all(Array.from({ length: workerCount }, runWorker));
+    if (failed > 0) {
+      setBulkDraftError(`${failed} draft${failed === 1 ? "" : "s"} could not be generated.`);
+    }
+    setIsGeneratingAllDrafts(false);
+  };
 
   return (
     <div className="space-y-4">
@@ -524,10 +674,39 @@ function BatchDetail({
             {propose.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <BrainCircuit className="h-4 w-4" />}
             Generate learning proposal
           </button>
+          <button
+            type="button"
+            onClick={generateAllDrafts}
+            disabled={isGeneratingAllDrafts || previewableItems.length === 0}
+            className="inline-flex items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800 hover:bg-emerald-100 disabled:opacity-50"
+          >
+            {isGeneratingAllDrafts ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <MailPlus className="h-4 w-4" />
+            )}
+            Generate all email drafts
+          </button>
+          {previewableItems.length > 0 && (
+            <span className="inline-flex items-center text-xs text-neutral-500">
+              {completedDraftCount}/{previewableItems.length} drafts generated
+            </span>
+          )}
+          {sentItems.length > 0 && (
+            <span className="inline-flex items-center gap-1 text-xs text-sky-700">
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              {sentItems.length} sent
+            </span>
+          )}
           {propose.data && (
             <span className="inline-flex items-center gap-1 text-xs text-emerald-700">
               <CheckCircle2 className="h-3.5 w-3.5" />
               Proposal {propose.data.id.slice(0, 8)} created
+            </span>
+          )}
+          {bulkDraftError && (
+            <span className="inline-flex items-center text-xs text-red-600">
+              {bulkDraftError}
             </span>
           )}
         </div>
@@ -535,6 +714,8 @@ function BatchDetail({
 
       <DailyActionPlan
         items={data.items}
+        draftStatuses={draftStatuses}
+        sentItems={sentItems}
         onObserve={setObserveItem}
         onPreview={setPreviewItem}
       />
@@ -564,13 +745,18 @@ function BatchDetail({
 
 function DailyActionPlan({
   items,
+  draftStatuses,
+  sentItems,
   onObserve,
   onPreview,
 }: {
   items: LeadGenBatchItem[];
+  draftStatuses: Record<string, DraftGenerationStatus>;
+  sentItems: LeadGenBatchItem[];
   onObserve: (item: LeadGenBatchItem) => void;
   onPreview: (item: LeadGenBatchItem) => void;
 }) {
+  const sentItemIds = useMemo(() => new Set(sentItems.map((item) => item.id)), [sentItems]);
   return (
     <section className="overflow-hidden rounded-xl border border-neutral-200 bg-white">
       <div className="flex items-center justify-between border-b border-neutral-100 px-4 py-2.5">
@@ -583,7 +769,13 @@ function DailyActionPlan({
         {items.map((item) => (
           <article
             key={item.id}
-            className="grid min-w-0 gap-3 px-4 py-3 text-sm lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1.35fr)_minmax(180px,0.9fr)_minmax(130px,auto)]"
+            className={cn(
+              "grid min-w-0 gap-3 px-4 py-3 text-sm lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1.35fr)_minmax(180px,0.9fr)_minmax(130px,auto)]",
+              sentItemIds.has(item.id) && "bg-sky-50",
+              !sentItemIds.has(item.id) && draftStatuses[item.id] === "completed" && "bg-emerald-50",
+              draftStatuses[item.id] === "generating" && "bg-amber-50",
+              draftStatuses[item.id] === "failed" && "bg-red-50",
+            )}
           >
             <div className="min-w-0">
               <div className="font-medium text-neutral-900">{item.firm_name}</div>
@@ -602,18 +794,45 @@ function DailyActionPlan({
               <div className="mt-1 break-all text-xs text-neutral-500">
                 {item.contact_email}
               </div>
-              {canPreviewItem(item) ? (
+              {isEmailSent(item) ? (
+                <div className="mt-2 inline-flex items-center gap-1 rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-medium text-sky-800">
+                  <CheckCircle2 className="h-3 w-3" />
+                  Email sent
+                </div>
+              ) : canPreviewItem(item) ? (
                 <button
                   type="button"
                   onClick={() => onPreview(item)}
                   className="mt-2 inline-flex items-center gap-1 rounded-md border border-neutral-200 px-2 py-1 text-xs font-medium text-neutral-600 hover:bg-neutral-50"
                 >
                   <MailPlus className="h-3.5 w-3.5" />
-                  {isDynamicComposer(item.template_key) ? "Generate preview" : "Preview email"}
+                  {previewButtonLabel(item)}
                 </button>
               ) : (
                 <div className="mt-2 text-xs text-neutral-400">
-                  Use the operator action center for the draft/reply.
+                  This action opens in its owning workflow.
+                </div>
+              )}
+              {isEmailSent(item) && reasonValue(item, "last_sent_subject") && (
+                <div className="mt-1 line-clamp-2 text-[11px] text-sky-700">
+                  {reasonValue(item, "last_sent_subject")}
+                </div>
+              )}
+              {!isEmailSent(item) && draftStatuses[item.id] === "completed" && (
+                <div className="mt-2 inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-800">
+                  <CheckCircle2 className="h-3 w-3" />
+                  Draft generated
+                </div>
+              )}
+              {draftStatuses[item.id] === "generating" && (
+                <div className="mt-2 inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  Generating draft
+                </div>
+              )}
+              {draftStatuses[item.id] === "failed" && (
+                <div className="mt-2 inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700">
+                  Draft failed
                 </div>
               )}
             </div>
@@ -755,13 +974,62 @@ function actionLabel(item: LeadGenBatchItem) {
     follow_up: "Follow-up",
     first_touch: "New start",
   };
-  const action = reasonValue(item, "action_type") || "first_touch";
+  const action = actionType(item);
   return labels[action] ?? action.replaceAll("_", " ");
 }
 
-function canPreviewItem(item: LeadGenBatchItem) {
-  const action = reasonValue(item, "action_type") || "first_touch";
+function actionType(item: LeadGenBatchItem) {
+  return reasonValue(item, "action_type") || "first_touch";
+}
+
+function canQueueItem(item: LeadGenBatchItem) {
+  const action = actionType(item);
   return action === "first_touch" || action === "follow_up";
+}
+
+function canPreviewItem(item: LeadGenBatchItem) {
+  const action = actionType(item);
+  if (isEmailSent(item)) return false;
+  return action === "first_touch" || action === "follow_up" || action === "approve_existing_draft";
+}
+
+function previewButtonLabel(item: LeadGenBatchItem) {
+  const action = actionType(item);
+  if (action === "approve_existing_draft") return "Open draft";
+  if (action === "follow_up") return "Open follow-up";
+  if (isDynamicComposer(item.template_key)) return "Generate preview";
+  return "Preview email";
+}
+
+function canSendFromPreview(item: LeadGenBatchItem) {
+  const action = reasonValue(item, "action_type") || "first_touch";
+  if (isEmailSent(item)) return false;
+  return action === "first_touch" || action === "follow_up" || action === "approve_existing_draft";
+}
+
+function isEmailSent(item: LeadGenBatchItem) {
+  return Boolean(reasonValue(item, "last_sent_at") || reasonValue(item, "last_sent_message_id"));
+}
+
+function sequencePreviewQueryKey(item: LeadGenBatchItem) {
+  return [
+    "sequence-preview",
+    item.contact_id,
+    item.template_key,
+    reasonValue(item, "notification_id") || reasonValue(item, "operator_notification_id") || "",
+    reasonValue(item, "source_id") || "",
+  ] as const;
+}
+
+function contactDetailQueryKey(item: LeadGenBatchItem) {
+  return ["contact-detail", item.contact_id, item.template_key] as const;
+}
+
+function sequencePreviewOptions(item: LeadGenBatchItem) {
+  return {
+    notificationId: reasonValue(item, "notification_id") || reasonValue(item, "operator_notification_id"),
+    sourceId: reasonValue(item, "source_id"),
+  };
 }
 
 function isDynamicComposer(templateKey: string) {
@@ -781,17 +1049,23 @@ function PreviewModal({
 }) {
   const qc = useQueryClient();
   const isDynamic = isDynamicComposer(item.template_key);
+  const alreadySent = isEmailSent(item);
+  const canSendDraft = canSendFromPreview(item);
   const [draftSubject, setDraftSubject] = useState("");
   const [draftBody, setDraftBody] = useState("");
   const [draftTouched, setDraftTouched] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
   const q = useQuery({
-    queryKey: ["sequence-preview", item.contact_id, item.template_key],
-    queryFn: () => previewSequence(item.contact_id, item.template_key),
+    queryKey: sequencePreviewQueryKey(item),
+    queryFn: () => previewSequence(item.contact_id, item.template_key, sequencePreviewOptions(item)),
+    enabled: !alreadySent,
+    staleTime: 5 * 60_000,
   });
   const detail = useQuery({
-    queryKey: ["contact-detail", item.contact_id, item.template_key],
+    queryKey: contactDetailQueryKey(item),
     queryFn: () => getContactDetail(item.contact_id, item.template_key),
+    enabled: !alreadySent,
+    staleTime: 5 * 60_000,
   });
   const nextStep = useMemo(() => {
     const steps = q.data ?? [];
@@ -858,7 +1132,21 @@ function PreviewModal({
           </p>
         </div>
         <div className="overflow-y-auto px-5 py-4">
-          {q.isLoading || detail.isLoading ? (
+          {alreadySent ? (
+            <div className="rounded-md border border-sky-200 bg-sky-50 px-3 py-3 text-sm text-sky-900">
+              <div className="font-medium">This email has already been sent.</div>
+              {reasonValue(item, "last_sent_subject") && (
+                <div className="mt-2 text-xs">
+                  Subject: {reasonValue(item, "last_sent_subject")}
+                </div>
+              )}
+              {reasonValue(item, "last_sent_at") && (
+                <div className="mt-1 text-xs">
+                  Sent at: {formatDate(reasonValue(item, "last_sent_at"))}
+                </div>
+              )}
+            </div>
+          ) : q.isLoading || detail.isLoading ? (
             <div className="flex items-center gap-2 text-sm text-neutral-500">
               <Loader2 className="h-4 w-4 animate-spin" />
               {isDynamic ? "Generating draft with composer skill..." : "Rendering preview..."}
@@ -928,7 +1216,7 @@ function PreviewModal({
               {isDynamic ? "Regenerate draft" : "Refresh preview"}
             </button>
           )}
-          {isDynamic && nextStep && (
+          {canSendDraft && nextStep && (
             <button
               type="button"
               onClick={() => sendDraft.mutate()}
@@ -1189,7 +1477,7 @@ function StatusPill({ status, className }: { status: string; className?: string 
     completed: "bg-neutral-100 text-neutral-700",
     archived: "bg-neutral-100 text-neutral-500",
     pending: "bg-blue-50 text-blue-700",
-    started: "bg-emerald-50 text-emerald-700",
+    started: "bg-sky-50 text-sky-700",
     skipped: "bg-neutral-100 text-neutral-500",
     rejected: "bg-red-50 text-red-700",
   };

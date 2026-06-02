@@ -7,6 +7,7 @@ from app.services.lead_email_composer import (
     _ensure_consult_signature,
     _sanitize_body_salutation,
     _sanitize_email_copy,
+    _sanitize_subject,
     _sender_payload,
 )
 
@@ -44,6 +45,13 @@ def test_sanitize_email_copy_removes_generated_dash_punctuation():
     assert "–" not in sanitized
     assert sanitized.startswith("Hi Sean,")
     assert "Precise Imaging - now" in sanitized
+
+
+def test_sanitize_subject_removes_weak_precise_quick_question_prefix():
+    assert (
+        _sanitize_subject("Quick question about Precise Imaging status updates")
+        == "Precise Imaging status updates"
+    )
 
 
 def test_sanitize_body_salutation_removes_firm_name_greeting():

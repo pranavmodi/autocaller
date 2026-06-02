@@ -1148,8 +1148,16 @@ export const getContactDetail = (contactId: string, templateKey?: string) => {
   return get<ContactDetail>(`/api/contacts/${encodeURIComponent(contactId)}${qs}`);
 };
 
-export const previewSequence = (contactId: string, templateKey?: string) => {
-  const qs = templateKey ? `?template_key=${encodeURIComponent(templateKey)}` : "";
+export const previewSequence = (
+  contactId: string,
+  templateKey?: string,
+  options: { notificationId?: number | string | null; sourceId?: string | null } = {},
+) => {
+  const params = new URLSearchParams();
+  if (templateKey) params.set("template_key", templateKey);
+  if (options.notificationId) params.set("notification_id", String(options.notificationId));
+  if (options.sourceId) params.set("source_id", options.sourceId);
+  const qs = params.toString() ? `?${params.toString()}` : "";
   return (
   get<RenderedSequenceStep[]>(
     `/api/contacts/${encodeURIComponent(contactId)}/sequence/preview${qs}`,

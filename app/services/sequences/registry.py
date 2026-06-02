@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from types import ModuleType
 from typing import Optional
 
-from app.services.sequences import possible_minds_dynamic, precise_pain_4step, precise_records_audit
+from app.services.sequences import possible_minds_dynamic
 from app.services.sequences.common import Ctx, RenderedStep
 
 
@@ -22,8 +22,6 @@ class SequenceTemplateInfo:
 
 
 _MODULES: dict[str, ModuleType] = {
-    precise_pain_4step.TEMPLATE_KEY: precise_pain_4step,
-    precise_records_audit.TEMPLATE_KEY: precise_records_audit,
     possible_minds_dynamic.TEMPLATE_KEY: possible_minds_dynamic,
 }
 

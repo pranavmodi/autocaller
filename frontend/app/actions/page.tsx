@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import {
   ArrowLeft,
   CheckCircle2,
@@ -12,20 +12,16 @@ import {
   Loader2,
   Mail,
   RefreshCw,
-  Send,
 } from "lucide-react";
 import {
-  acknowledgeOperatorNotification,
   getPendingOperatorNotifications,
-  newProductTraceId,
-  previewSequence,
   recordProductTrace,
-  sendOperatorNotificationDraft,
   type OperatorNotification,
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
-const ACTIONS_QUERY_KEY = ["operator-notifications-pending"] as const;
+const ACTIONS_PENDING_LIMIT = 50;
+const ACTIONS_QUERY_KEY = ["operator-notifications-pending", ACTIONS_PENDING_LIMIT] as const;
 
 function stringValue(value: unknown) {
   return typeof value === "string" ? value : "";
@@ -55,7 +51,22 @@ function actionCategory(notification: OperatorNotification) {
 }
 
 function linkedHref(notification: OperatorNotification) {
-  return stringValue(notification.suggested_action?.href) || "/lead-gen";
+  const explicitHref = stringValue(notification.suggested_action?.href);
+  if (
+    notification.notification_type === "lead_sequence_email_approval" ||
+    notification.notification_type === "lead_email_reply"
+  ) {
+    const params = new URLSearchParams();
+    params.set("notification", String(notification.id));
+    const batchId = stringValue(notification.context?.batch_id);
+    const batchItemId = stringValue(notification.context?.batch_item_id);
+    const contactId = stringValue(notification.context?.contact_id);
+    if (batchId) params.set("batch", batchId);
+    if (batchItemId) params.set("item", batchItemId);
+    if (contactId) params.set("contact", contactId);
+    return `/lead-gen?${params.toString()}`;
+  }
+  return explicitHref || "/lead-gen";
 }
 
 function isEmailAction(notification: OperatorNotification) {
@@ -87,56 +98,38 @@ function actionTraceContext(notification: OperatorNotification) {
 }
 
 export default function ActionsPage() {
-  const qc = useQueryClient();
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center gap-2 px-4 py-10 text-sm text-neutral-500">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Loading actions...
+        </div>
+      }
+    >
+      <ActionsPageContent />
+    </Suspense>
+  );
+}
+
+function ActionsPageContent() {
   const searchParams = useSearchParams();
   const requestedId = Number(searchParams.get("notification") || 0) || null;
   const [selectedId, setSelectedId] = useState<number | null>(requestedId);
-  const [removedIds, setRemovedIds] = useState<Set<number>>(() => new Set());
-  const [draftSubject, setDraftSubject] = useState("");
-  const [draftBody, setDraftBody] = useState("");
   const viewedActionIds = useRef<Set<number>>(new Set());
-  const generatedDraftKeys = useRef<Set<string>>(new Set());
-  const draftBaseline = useRef<{ id: number; subject: string; body: string } | null>(null);
 
   const pending = useQuery({
     queryKey: ACTIONS_QUERY_KEY,
-    queryFn: () => getPendingOperatorNotifications(50),
+    queryFn: () => getPendingOperatorNotifications(ACTIONS_PENDING_LIMIT),
     refetchInterval: 5_000,
     refetchIntervalInBackground: true,
   });
 
-  const queue = useMemo(
-    () => (pending.data?.pending ?? []).filter((item) => !removedIds.has(item.id)),
-    [pending.data?.pending, removedIds],
-  );
+  const queue = useMemo(() => pending.data?.pending ?? [], [pending.data?.pending]);
   const current = useMemo(() => {
     if (queue.length === 0) return undefined;
     return queue.find((item) => item.id === selectedId) ?? queue[0];
   }, [queue, selectedId]);
-
-  const shouldComposeDraft = Boolean(
-    current?.notification_type === "lead_sequence_email_approval" &&
-      !stringValue(current.suggested_action?.draft_body) &&
-      stringValue(current.context?.contact_id),
-  );
-  const draftPreview = useQuery({
-    queryKey: [
-      "operator-notification-draft-preview",
-      current?.id,
-      current?.context?.contact_id,
-      current?.context?.template_key,
-    ],
-    queryFn: async () => {
-      const steps = await previewSequence(
-        stringValue(current?.context?.contact_id),
-        stringValue(current?.context?.template_key) || undefined,
-      );
-      return steps[0];
-    },
-    enabled: shouldComposeDraft,
-    staleTime: 0,
-    retry: false,
-  });
 
   useEffect(() => {
     if (requestedId) setSelectedId(requestedId);
@@ -147,53 +140,6 @@ export default function ActionsPage() {
       setSelectedId(queue[0].id);
     }
   }, [current, queue]);
-
-  useEffect(() => {
-    if (!current) {
-      setDraftSubject("");
-      setDraftBody("");
-      draftBaseline.current = null;
-      return;
-    }
-    const subject =
-      stringValue(current.suggested_action?.draft_subject) ||
-      stringValue(current.stimulus?.subject);
-    const body = stringValue(current.suggested_action?.draft_body);
-    setDraftSubject(subject);
-    setDraftBody(body);
-    draftBaseline.current = { id: current.id, subject, body };
-  }, [current?.id]);
-
-  useEffect(() => {
-    if (!draftPreview.data || !current) return;
-    const generatedKey = `${current.id}:${draftPreview.data.subject}:${draftPreview.data.body}`;
-    setDraftSubject(draftPreview.data.subject);
-    setDraftBody(draftPreview.data.body);
-    draftBaseline.current = {
-      id: current.id,
-      subject: draftPreview.data.subject,
-      body: draftPreview.data.body,
-    };
-    if (generatedDraftKeys.current.has(generatedKey)) return;
-    generatedDraftKeys.current.add(generatedKey);
-    recordProductTrace({
-      event_type: "email_draft_generated",
-      surface: "actions",
-      entity_type: "operator_notification",
-      entity_id: String(current.id),
-      output: {
-        subject: draftPreview.data.subject,
-        body: draftPreview.data.body,
-        reasoning: draftPreview.data.reasoning,
-        angle: draftPreview.data.angle,
-        cta: draftPreview.data.cta,
-        blog_link_used: draftPreview.data.blog_link_used,
-        model: draftPreview.data.model,
-      },
-      context: actionTraceContext(current),
-      metadata: { source: "previewSequence" },
-    });
-  }, [current, draftPreview.data]);
 
   useEffect(() => {
     if (!current || viewedActionIds.current.has(current.id)) return;
@@ -211,152 +157,6 @@ export default function ActionsPage() {
     });
   }, [current]);
 
-  const recordDraftEdited = () => {
-    if (!current || !isEmailAction(current)) return;
-    const baseline = draftBaseline.current;
-    if (!baseline || baseline.id !== current.id) return;
-    if (baseline.subject === draftSubject && baseline.body === draftBody) return;
-    recordProductTrace({
-      event_type: "email_draft_edited",
-      surface: "actions",
-      entity_type: "operator_notification",
-      entity_id: String(current.id),
-      input: {
-        subject: baseline.subject,
-        body: baseline.body,
-      },
-      output: {
-        subject: draftSubject,
-        body: draftBody,
-      },
-      diff: {
-        subject_changed: baseline.subject !== draftSubject,
-        body_changed: baseline.body !== draftBody,
-        subject_length_before: baseline.subject.length,
-        subject_length_after: draftSubject.length,
-        body_length_before: baseline.body.length,
-        body_length_after: draftBody.length,
-      },
-      context: actionTraceContext(current),
-    });
-    draftBaseline.current = { id: current.id, subject: draftSubject, body: draftBody };
-  };
-
-  const removeFromList = (id: number) => {
-    setRemovedIds((prev) => new Set([...Array.from(prev), id]));
-    const next = queue.find((item) => item.id !== id);
-    setSelectedId(next?.id ?? null);
-  };
-
-  const acknowledge = useMutation({
-    mutationFn: (args: { id: number; traceId: string }) =>
-      acknowledgeOperatorNotification(args.id, { traceId: args.traceId }),
-    onSuccess: (_data, args) => {
-      recordProductTrace({
-        trace_id: args.traceId,
-        event_type: "action_marked_done",
-        surface: "actions",
-        entity_type: "operator_notification",
-        entity_id: String(args.id),
-        output: { status: "acknowledged" },
-      });
-      removeFromList(args.id);
-      qc.invalidateQueries({ queryKey: ACTIONS_QUERY_KEY });
-    },
-    onError: (error, args) => {
-      recordProductTrace({
-        trace_id: args.traceId,
-        event_type: "action_mark_done_failed",
-        surface: "actions",
-        entity_type: "operator_notification",
-        entity_id: String(args.id),
-        output: { error: error instanceof Error ? error.message : String(error) },
-      });
-    },
-  });
-  const sendDraft = useMutation({
-    mutationFn: (args: { id: number; subject: string; body: string; traceId: string }) =>
-      sendOperatorNotificationDraft(
-        args.id,
-        {
-          subject: args.subject,
-          body: args.body,
-          sent_by: "operator",
-        },
-        { traceId: args.traceId },
-      ),
-    onSuccess: (_data, args) => {
-      recordProductTrace({
-        trace_id: args.traceId,
-        event_type: "email_sent",
-        surface: "actions",
-        entity_type: "operator_notification",
-        entity_id: String(args.id),
-        input: {
-          subject: args.subject,
-          body: args.body,
-        },
-        output: { status: "sent" },
-      });
-      removeFromList(args.id);
-      qc.invalidateQueries({ queryKey: ACTIONS_QUERY_KEY });
-      qc.invalidateQueries({ queryKey: ["lead-gen-batches"] });
-      qc.invalidateQueries({ queryKey: ["all-sequences"] });
-    },
-    onError: (error, args) => {
-      recordProductTrace({
-        trace_id: args.traceId,
-        event_type: "email_send_failed",
-        surface: "actions",
-        entity_type: "operator_notification",
-        entity_id: String(args.id),
-        input: {
-          subject: args.subject,
-          body: args.body,
-        },
-        output: { error: error instanceof Error ? error.message : String(error) },
-      });
-    },
-  });
-
-  const markDone = () => {
-    if (!current) return;
-    const traceId = newProductTraceId();
-    recordProductTrace({
-      trace_id: traceId,
-      event_type: "action_mark_done_requested",
-      surface: "actions",
-      entity_type: "operator_notification",
-      entity_id: String(current.id),
-      context: actionTraceContext(current),
-    });
-    acknowledge.mutate({ id: current.id, traceId });
-  };
-
-  const requestSendDraft = () => {
-    if (!current) return;
-    recordDraftEdited();
-    const traceId = newProductTraceId();
-    recordProductTrace({
-      trace_id: traceId,
-      event_type: "email_send_requested",
-      surface: "actions",
-      entity_type: "operator_notification",
-      entity_id: String(current.id),
-      input: {
-        subject: draftSubject,
-        body: draftBody,
-      },
-      context: actionTraceContext(current),
-    });
-    sendDraft.mutate({
-      id: current.id,
-      subject: draftSubject,
-      body: draftBody,
-      traceId,
-    });
-  };
-
   return (
     <div className="mx-auto max-w-[1500px] space-y-4">
       <div className="flex flex-wrap items-center gap-3">
@@ -370,7 +170,7 @@ export default function ActionsPage() {
         <span className="text-neutral-300">/</span>
         <h1 className="text-lg font-semibold text-neutral-900">Actions</h1>
         <span className="text-xs text-neutral-400">
-          review, edit, send, mark done
+          pointers to the right execution surface
         </span>
       </div>
 
@@ -419,16 +219,6 @@ export default function ActionsPage() {
             {current && (
               <ActionDetail
                 notification={current}
-                draftSubject={draftSubject}
-                draftBody={draftBody}
-                draftLoading={draftPreview.isFetching}
-                draftFailed={draftPreview.isError}
-                sendPending={sendDraft.isPending}
-                sendFailed={sendDraft.isError}
-                acknowledgePending={acknowledge.isPending}
-                onDraftSubjectChange={setDraftSubject}
-                onDraftBodyChange={setDraftBody}
-                onDraftBlur={recordDraftEdited}
                 onOpenLinkedPage={() =>
                   recordProductTrace({
                     event_type: "action_link_opened",
@@ -439,8 +229,6 @@ export default function ActionsPage() {
                     context: actionTraceContext(current),
                   })
                 }
-                onSendDraft={requestSendDraft}
-                onMarkDone={markDone}
               />
             )}
           </div>
@@ -517,39 +305,14 @@ function ActionList({
 
 function ActionDetail({
   notification,
-  draftSubject,
-  draftBody,
-  draftLoading,
-  draftFailed,
-  sendPending,
-  sendFailed,
-  acknowledgePending,
-  onDraftSubjectChange,
-  onDraftBodyChange,
-  onDraftBlur,
   onOpenLinkedPage,
-  onSendDraft,
-  onMarkDone,
 }: {
   notification: OperatorNotification;
-  draftSubject: string;
-  draftBody: string;
-  draftLoading: boolean;
-  draftFailed: boolean;
-  sendPending: boolean;
-  sendFailed: boolean;
-  acknowledgePending: boolean;
-  onDraftSubjectChange: (value: string) => void;
-  onDraftBodyChange: (value: string) => void;
-  onDraftBlur: () => void;
   onOpenLinkedPage: () => void;
-  onSendDraft: () => void;
-  onMarkDone: () => void;
 }) {
   const stimulus = notification.stimulus ?? {};
   const context = notification.context ?? {};
   const action = notification.suggested_action ?? {};
-  const canSendDraft = isEmailAction(notification) && Boolean(draftBody.trim()) && !draftLoading;
   const fromLine =
     stimulus.from_name && stimulus.from_email
       ? `${stimulus.from_name} <${stimulus.from_email}>`
@@ -687,47 +450,28 @@ function ActionDetail({
           <section className="rounded-lg border border-neutral-200 p-3">
             <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-neutral-500">
               <Mail className="h-3.5 w-3.5" />
-              Draft
+              Execution location
             </div>
-            {draftLoading ? (
-              <div className="flex items-center gap-2 rounded-md border border-neutral-200 bg-neutral-50 px-3 py-4 text-xs text-neutral-600">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Generating draft...
+            <p className="text-sm leading-relaxed text-neutral-700">
+              Email review, editing, and sending happens in Cybernetic Lead Gen.
+              This page only points to the work item so execution stays in the
+              workflow that owns the outreach run.
+            </p>
+            {(action.draft_subject || action.draft_body || stimulus.text_excerpt) && (
+              <div className="mt-3 rounded-md border border-neutral-200 bg-neutral-50 p-3">
+                {stringValue(action.draft_subject || stimulus.subject) && (
+                  <div className="text-sm font-medium text-neutral-900">
+                    {stringValue(action.draft_subject || stimulus.subject)}
+                  </div>
+                )}
+                {stringValue(action.draft_body || stimulus.text_excerpt) && (
+                  <pre className="mt-2 max-h-56 overflow-y-auto whitespace-pre-wrap font-sans text-xs leading-relaxed text-neutral-700">
+                    {stringValue(action.draft_body || stimulus.text_excerpt)}
+                  </pre>
+                )}
               </div>
-            ) : draftFailed ? (
-              <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
-                Could not generate this draft. Check backend logs.
-              </div>
-            ) : (
-              <>
-                <label className="block text-xs font-medium uppercase tracking-wide text-neutral-500">
-                  Subject
-                  <input
-                    value={draftSubject}
-                    onChange={(event) => onDraftSubjectChange(event.target.value)}
-                    onBlur={onDraftBlur}
-                    className="mt-1 w-full rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm font-medium normal-case tracking-normal text-neutral-900 outline-none focus:border-neutral-400"
-                  />
-                </label>
-                <label className="mt-3 block text-xs font-medium uppercase tracking-wide text-neutral-500">
-                  Body
-                  <textarea
-                    value={draftBody}
-                    onChange={(event) => onDraftBodyChange(event.target.value)}
-                    onBlur={onDraftBlur}
-                    rows={14}
-                    className="mt-1 w-full resize-y rounded-md border border-neutral-200 bg-white p-3 font-sans text-sm normal-case leading-6 tracking-normal text-neutral-800 outline-none focus:border-neutral-400"
-                  />
-                </label>
-              </>
             )}
           </section>
-        )}
-
-        {sendFailed && (
-          <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-            Could not send this email. Check backend logs.
-          </div>
         )}
 
         <div className="flex flex-wrap justify-end gap-2 border-t border-neutral-100 pt-4">
@@ -737,36 +481,8 @@ function ActionDetail({
             className="inline-flex items-center gap-2 rounded-md border border-neutral-200 px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50"
           >
             <ExternalLink className="h-4 w-4" />
-            Open linked page
+            Open where this is executed
           </Link>
-          <button
-            type="button"
-            onClick={onMarkDone}
-            disabled={acknowledgePending || sendPending}
-            className="inline-flex items-center gap-2 rounded-md border border-neutral-200 px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50 disabled:opacity-60"
-          >
-            {acknowledgePending ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <CheckCircle2 className="h-4 w-4" />
-            )}
-            Mark done
-          </button>
-          {canSendDraft && (
-            <button
-              type="button"
-              onClick={onSendDraft}
-              disabled={sendPending || acknowledgePending || !draftBody.trim()}
-              className="inline-flex items-center gap-2 rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-60"
-            >
-              {sendPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Send className="h-4 w-4" />
-              )}
-              Send email
-            </button>
-          )}
         </div>
       </div>
     </div>

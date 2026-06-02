@@ -138,6 +138,15 @@ def _sanitize_email_copy(value: str | None) -> str:
     return "\n".join(lines).strip()
 
 
+def _sanitize_subject(value: str | None) -> str:
+    subject = _sanitize_email_copy(value)
+    precise_prefix = "quick question about precise imaging"
+    if subject.lower().startswith(precise_prefix):
+        cleaned = subject[len("Quick question about "):].strip()
+        return cleaned[:1].upper() + cleaned[1:]
+    return subject
+
+
 def _file_sha256(path: str) -> str | None:
     try:
         return hashlib.sha256(Path(path).read_bytes()).hexdigest()
@@ -415,7 +424,7 @@ async def compose_lead_email(
     body = _sanitize_body_salutation(body, contact=contact, firm_name=firm_name)
     body = _ensure_consult_signature(body, payload["sender"])
     composition = LeadEmailComposition(
-        subject=_sanitize_email_copy(str(parsed.get("subject") or ""))[:500],
+        subject=_sanitize_subject(str(parsed.get("subject") or ""))[:500],
         body=body,
         angle=str(parsed.get("angle") or "").strip(),
         cta=str(parsed.get("cta") or "").strip(),

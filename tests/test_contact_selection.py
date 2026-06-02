@@ -1,6 +1,7 @@
 from app.services.contact_selection import (
     ContactSelectionInput,
     contact_selection_weights,
+    is_target_lead_persona,
     score_contact_selection,
 )
 
@@ -65,3 +66,33 @@ def test_contact_selection_policy_override_changes_component_weight():
     )
 
     assert scored.score_breakdown["email_quality:generic_inbox"] == -55
+
+
+def test_target_lead_persona_only_allows_owner_partner_coo_equivalents():
+    allowed_titles = [
+        "Founder & Trial Attorney",
+        "Managing Partner",
+        "Partner",
+        "Principal Attorney",
+        "Managing Attorney",
+        "Shareholder",
+        "CEO",
+        "President",
+        "COO",
+        "Chief Operating Officer",
+        "Owner",
+    ]
+    blocked_titles = [
+        "",
+        "Operations Manager",
+        "Office Manager",
+        "Intake Manager",
+        "Personal Injury Department Manager",
+        "Attorney",
+    ]
+
+    for title in allowed_titles:
+        assert is_target_lead_persona(title)
+    for title in blocked_titles:
+        assert not is_target_lead_persona(title)
+    assert not is_target_lead_persona("", "patients_dm")

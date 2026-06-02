@@ -925,13 +925,6 @@ function ContactPanel({
           contact={contact}
           stepCount={steps.length}
           templateKey={templateKey}
-          variant={
-            templateKey === "possible_minds_dynamic"
-              ? "dynamic"
-              : templateKey === "precise_records_audit"
-              ? "records_only"
-              : pain.pain_quote ? "with_quote" : "without_quote"
-          }
           onCancel={() => setConfirming(false)}
           onConfirm={() => start.mutate()}
           isPending={start.isPending}
@@ -1059,7 +1052,6 @@ function ConfirmModal({
   contact,
   stepCount,
   templateKey,
-  variant,
   onCancel,
   onConfirm,
   isPending,
@@ -1068,20 +1060,13 @@ function ConfirmModal({
   contact: FirmContact;
   stepCount: number;
   templateKey: string;
-  variant: string;
   onCancel: () => void;
   onConfirm: () => void;
   isPending: boolean;
   error: string | null;
 }) {
   const cadenceDescription =
-    templateKey === "possible_minds_dynamic"
-      ? "Each step is composed by the lead email composer skill at send time. Steps schedule for days 0, 3, 7, and 14."
-      : templateKey === "precise_records_audit"
-      ? "Step 1 fires within ~1 minute. Steps 2 and 3 schedule for days 5 and 12."
-      : variant === "with_quote"
-      ? "Step 1 fires within ~1 minute. Steps 2, 3, 4 schedule for days 4, 10, 17."
-      : "Step 1 fires within ~1 minute. Steps 2, 3 schedule for days 7 and 14.";
+    "Each step is composed by the lead email composer skill at send time. Steps schedule for days 0, 3, 7, and 14.";
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
