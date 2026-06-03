@@ -74,7 +74,7 @@ export function OperatorNotificationPopup() {
   return (
     <>
       {showToast && (
-        <div className="fixed bottom-24 right-4 z-[980] w-[calc(100vw-2rem)] max-w-sm rounded-lg border border-neutral-200 bg-white shadow-xl md:bottom-24 md:right-6">
+        <div className="fixed bottom-[calc(8.75rem_+_env(safe-area-inset-bottom))] left-3 right-3 z-[980] rounded-lg border border-neutral-200 bg-white shadow-xl sm:left-auto sm:right-4 sm:w-[calc(100vw_-_2rem)] sm:max-w-sm md:bottom-24 md:right-6">
           <div className="flex items-start gap-3 p-4">
             <span className="mt-0.5 rounded-full bg-amber-100 p-2 text-amber-700">
               <BellRing className="h-4 w-4" />
@@ -119,7 +119,7 @@ export function OperatorNotificationPopup() {
       <Link
         href="/actions"
         onClick={() => setDismissedToastId(latest.id)}
-        className="fixed bottom-4 right-4 z-[970] inline-flex h-12 items-center gap-2 rounded-full border border-neutral-200 bg-white px-4 text-sm font-semibold text-neutral-900 shadow-xl transition hover:bg-neutral-50 md:bottom-6 md:right-6"
+        className="fixed bottom-[calc(5.5rem_+_env(safe-area-inset-bottom))] right-3 z-[970] inline-flex h-12 items-center gap-2 rounded-full border border-neutral-200 bg-white px-4 text-sm font-semibold text-neutral-900 shadow-xl transition hover:bg-neutral-50 md:bottom-6 md:right-6"
         aria-label="Open operator action center"
       >
         <span className="relative rounded-full bg-neutral-900 p-2 text-white">

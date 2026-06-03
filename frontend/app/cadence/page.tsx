@@ -35,7 +35,7 @@ export default function CadencePage() {
   const total = queue.data?.total ?? 0;
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-6">
+    <div className="mx-auto min-w-0 max-w-7xl space-y-5">
       <header className="mb-5">
         <h1 className="text-2xl font-semibold">Call queue</h1>
         <p className="mt-1 text-sm text-neutral-600">
@@ -49,7 +49,7 @@ export default function CadencePage() {
 
       <SummaryStrip data={summary.data} />
 
-      <div className="mt-6 overflow-x-auto rounded-lg border border-neutral-200 bg-white shadow-sm">
+      <div className="mobile-table-card rounded-lg border border-neutral-200 bg-white shadow-sm md:overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-neutral-50 text-xs uppercase tracking-wide text-neutral-500">
             <tr>
@@ -86,12 +86,12 @@ export default function CadencePage() {
         </table>
       </div>
 
-      <footer className="mt-3 flex items-center justify-between text-xs text-neutral-500">
+      <footer className="mt-3 flex flex-col gap-3 text-xs text-neutral-500 sm:flex-row sm:items-center sm:justify-between">
         <span>
           Showing {items.length} of {total} active cadence entries.
           Refresh every 30s; autorespond signals cache 60s server-side.
         </span>
-        <span className="flex items-center gap-2">
+        <span className="flex flex-wrap items-center gap-2">
           Show
           {[25, 50, 100, 200].map((n) => (
             <button
@@ -140,7 +140,7 @@ function SummaryStrip({ data }: { data?: ReturnType<typeof getAutorespondSummary
     },
   ];
   return (
-    <div className="grid grid-cols-3 gap-3">
+    <div className="grid gap-3 sm:grid-cols-3">
       {cards.map((c) => (
         <div
           key={c.label}
@@ -193,8 +193,8 @@ function QueueRow({ index, row }: { index: number; row: CadencePriorityRow }) {
 
   return (
     <tr className="hover:bg-neutral-50">
-      <td className="px-3 py-2 text-right text-xs text-neutral-400">{index}</td>
-      <td className="px-3 py-2 text-right">
+      <td data-label="#" className="px-3 py-2 text-right text-xs text-neutral-400">{index}</td>
+      <td data-label="Score" className="px-3 py-2 text-right">
         <span
           className={`inline-block rounded px-2 py-0.5 text-xs font-mono tabular-nums ${
             row.priority_score >= 30
@@ -207,7 +207,7 @@ function QueueRow({ index, row }: { index: number; row: CadencePriorityRow }) {
           {row.priority_score}
         </span>
       </td>
-      <td className="px-3 py-2">
+      <td data-label="Firm" className="px-3 py-2">
         <Link
           href={`/firms/${row.pif_id}`}
           className="font-medium text-neutral-900 hover:text-blue-600 hover:underline"
@@ -222,14 +222,14 @@ function QueueRow({ index, row }: { index: number; row: CadencePriorityRow }) {
           </div>
         )}
       </td>
-      <td className="px-3 py-2 text-center">
+      <td data-label="Tier" className="px-3 py-2 text-center">
         <span
           className={`inline-block w-6 rounded text-center text-xs font-semibold ${tierColor}`}
         >
           {row.icp_tier || "–"}
         </span>
       </td>
-      <td className="px-3 py-2">
+      <td data-label="Recent" className="px-3 py-2">
         {ar.events_24h > 0 || ar.events_7d > 0 ? (
           <div>
             <span className="font-mono text-xs">
@@ -247,7 +247,7 @@ function QueueRow({ index, row }: { index: number; row: CadencePriorityRow }) {
           <span className="text-xs text-neutral-400">no events</span>
         )}
       </td>
-      <td className="px-3 py-2">
+      <td data-label="Signal" className="px-3 py-2">
         {ar.top_agent_types.length > 0 ? (
           <div className="flex flex-wrap gap-1">
             {ar.top_agent_types.map((t) => (
@@ -271,15 +271,15 @@ function QueueRow({ index, row }: { index: number; row: CadencePriorityRow }) {
           </div>
         )}
       </td>
-      <td className="px-3 py-2 text-xs text-neutral-600">{lastCallAge}</td>
-      <td className="px-3 py-2">
+      <td data-label="Last contact" className="px-3 py-2 text-xs text-neutral-600">{lastCallAge}</td>
+      <td data-label="Stage" className="px-3 py-2">
         <span
           className={`inline-block rounded px-2 py-0.5 text-[10px] font-mono ${stageColor}`}
         >
           {row.cadence_stage}
         </span>
       </td>
-      <td className="px-3 py-2 text-right text-xs">
+      <td data-label="Actions" className="px-3 py-2 text-right text-xs">
         <Link
           href={`/firms/${row.pif_id}`}
           className="text-blue-600 hover:underline"

@@ -171,7 +171,7 @@ export default function FirmsPage() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-xl font-semibold">Firms</h1>
           <p className="text-sm text-neutral-500">
@@ -179,7 +179,7 @@ export default function FirmsPage() {
             person name, email, or website.
           </p>
         </div>
-        <div className="flex flex-col items-end gap-1">
+        <div className="flex flex-col items-start gap-1 sm:items-end">
           <button
             type="button"
             onClick={() => sync.mutate()}
@@ -672,7 +672,7 @@ function AutorespondFirmsList({
         most-recent event first. Click a firm name for the full detail
         page (research, contacts, calls, reviews).
       </p>
-      <div className="overflow-hidden rounded-xl border border-neutral-200 bg-white">
+      <div className="mobile-table-card overflow-hidden rounded-xl border border-neutral-200 bg-white md:overflow-x-auto">
         {loading && (
           <div className="px-5 py-8 text-center text-xs text-neutral-400">
             Loading autorespond activity…
@@ -699,10 +699,10 @@ function AutorespondFirmsList({
             <tbody className="divide-y divide-neutral-100">
               {rows.map((r, idx) => (
                 <tr key={r.pif_id} className="hover:bg-neutral-50">
-                  <td className="px-3 py-2 text-right text-xs text-neutral-400">
+                  <td data-label="#" className="px-3 py-2 text-right text-xs text-neutral-400">
                     {idx + 1}
                   </td>
-                  <td className="px-3 py-2">
+                  <td data-label="Firm" className="px-3 py-2">
                     <Link
                       href={`/firms/${r.pif_id}`}
                       className="font-medium text-neutral-900 hover:text-blue-600 hover:underline"
@@ -711,12 +711,12 @@ function AutorespondFirmsList({
                       {r.firm_name || "(unnamed firm)"}
                     </Link>
                   </td>
-                  <td className="px-3 py-2 text-xs text-neutral-600">
+                  <td data-label="Latest event" className="px-3 py-2 text-xs text-neutral-600">
                     {r.latest_event_at
                       ? humanAgo(r.latest_event_at)
                       : "—"}
                   </td>
-                  <td className="px-3 py-2">
+                  <td data-label="24h / 7d" className="px-3 py-2">
                     <span className="font-mono text-xs">
                       <span className="font-semibold text-emerald-700">
                         {r.events_24h}
@@ -725,7 +725,7 @@ function AutorespondFirmsList({
                       <span className="text-neutral-700">{r.events_7d}</span>
                     </span>
                   </td>
-                  <td className="px-3 py-2">
+                  <td data-label="Agent types" className="px-3 py-2">
                     {r.top_agent_types.length > 0 ? (
                       <div className="flex flex-wrap gap-1">
                         {r.top_agent_types.map((t) => (
@@ -741,10 +741,11 @@ function AutorespondFirmsList({
                       <span className="text-xs text-neutral-400">—</span>
                     )}
                   </td>
-                  <td className="px-3 py-2 text-right text-xs tabular-nums">
+                  <td data-label="Contacts" className="px-3 py-2 text-right text-xs tabular-nums">
                     {r.distinct_contact_count}
                   </td>
                   <td
+                    data-label="Latest subject"
                     className="max-w-[24rem] truncate px-3 py-2 text-[11px] text-neutral-500"
                     title={r.latest_subject}
                   >
@@ -788,7 +789,7 @@ function WithReviewsFirmsList({
         match shown in one view, sorted by most-recent review-paste
         first. Click a firm name for the full detail page.
       </p>
-      <div className="overflow-hidden rounded-xl border border-neutral-200 bg-white">
+      <div className="mobile-table-card overflow-hidden rounded-xl border border-neutral-200 bg-white md:overflow-x-auto">
         {loading && (
           <div className="px-5 py-8 text-center text-xs text-neutral-400">
             Loading firms with reviews…
@@ -817,10 +818,10 @@ function WithReviewsFirmsList({
             <tbody className="divide-y divide-neutral-100">
               {rows.map((r, idx) => (
                 <tr key={r.pif_id} className="hover:bg-neutral-50">
-                  <td className="px-3 py-2 text-right text-xs text-neutral-400">
+                  <td data-label="#" className="px-3 py-2 text-right text-xs text-neutral-400">
                     {idx + 1}
                   </td>
-                  <td className="px-3 py-2">
+                  <td data-label="Firm" className="px-3 py-2">
                     {r.missing ? (
                       <span className="text-neutral-400">
                         (PIF Stats record unavailable)
@@ -840,7 +841,7 @@ function WithReviewsFirmsList({
                       </span>
                     )}
                   </td>
-                  <td className="px-3 py-2 text-center">
+                  <td data-label="Tier" className="px-3 py-2 text-center">
                     <span
                       className={cn(
                         "inline-block w-6 rounded text-center text-xs font-semibold",
@@ -850,10 +851,10 @@ function WithReviewsFirmsList({
                       {r.icp_tier || "–"}
                     </span>
                   </td>
-                  <td className="px-3 py-2 font-mono text-[11px] text-neutral-600">
+                  <td data-label="Phone" className="px-3 py-2 font-mono text-[11px] text-neutral-600">
                     {(r.phones && r.phones[0]) || "—"}
                   </td>
-                  <td className="px-3 py-2 text-right">
+                  <td data-label="Google" className="px-3 py-2 text-right">
                     {r.google_chars > 0 ? (
                       <span className="rounded bg-emerald-50 px-1.5 py-0.5 font-mono text-[10px] tabular-nums text-emerald-800">
                         {r.google_chars.toLocaleString()} chars
@@ -862,7 +863,7 @@ function WithReviewsFirmsList({
                       <span className="text-xs text-neutral-300">—</span>
                     )}
                   </td>
-                  <td className="px-3 py-2 text-right">
+                  <td data-label="Yelp" className="px-3 py-2 text-right">
                     {r.yelp_chars > 0 ? (
                       <span className="rounded bg-rose-50 px-1.5 py-0.5 font-mono text-[10px] tabular-nums text-rose-800">
                         {r.yelp_chars.toLocaleString()} chars
@@ -871,12 +872,12 @@ function WithReviewsFirmsList({
                       <span className="text-xs text-neutral-300">—</span>
                     )}
                   </td>
-                  <td className="px-3 py-2 text-xs text-neutral-600">
+                  <td data-label="Reviews updated" className="px-3 py-2 text-xs text-neutral-600">
                     {r.reviews_updated_at
                       ? humanAgo(r.reviews_updated_at)
                       : "—"}
                   </td>
-                  <td className="px-3 py-2 text-right text-xs tabular-nums">
+                  <td data-label="Contacts" className="px-3 py-2 text-right text-xs tabular-nums">
                     {r.contacts_count + r.leadership_count}
                   </td>
                 </tr>

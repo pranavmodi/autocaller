@@ -80,7 +80,7 @@ export default function CallListsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-end justify-between">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <h1 className="text-xl font-semibold">Call lists</h1>
         {vm.data && (
           <span className="text-xs text-neutral-500">
@@ -186,7 +186,7 @@ function VMListSection({
           <p className="mt-2 text-sm text-neutral-600">None.</p>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-lg border border-neutral-200 bg-white">
+        <div className="mobile-table-card overflow-hidden rounded-lg border border-neutral-200 bg-white md:overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-neutral-50 text-xs uppercase text-neutral-500">
               <tr>
@@ -210,7 +210,7 @@ function VMListSection({
                     variant === "unblasted" ? "bg-white" : "bg-neutral-50/50",
                   )}
                 >
-                  <td className="px-4 py-3">
+                  <td data-label="Lead" className="px-4 py-3">
                     <div className="font-medium text-neutral-900">
                       {r.patient_name}
                     </div>
@@ -220,13 +220,13 @@ function VMListSection({
                       </div>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-neutral-700">
+                  <td data-label="Firm" className="px-4 py-3 text-neutral-700">
                     {r.firm_name || "—"}
                   </td>
-                  <td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-neutral-700">
+                  <td data-label="Phone" className="whitespace-nowrap px-4 py-3 font-mono text-xs text-neutral-700">
                     {r.phone}
                   </td>
-                  <td className="whitespace-nowrap px-4 py-3 text-xs text-neutral-600">
+                  <td data-label="Last call" className="whitespace-nowrap px-4 py-3 text-xs text-neutral-600">
                     {r.started_at
                       ? formatDistanceToNow(new Date(r.started_at), {
                           addSuffix: true,
@@ -238,11 +238,11 @@ function VMListSection({
                       </span>
                     ) : null}
                   </td>
-                  <td className="whitespace-nowrap px-4 py-3 text-xs text-neutral-500">
+                  <td data-label="Prompt" className="whitespace-nowrap px-4 py-3 text-xs text-neutral-500">
                     {r.prompt_version || "—"}
                   </td>
-                  <td className="whitespace-nowrap px-4 py-3 text-right">
-                    <div className="flex items-center justify-end gap-3">
+                  <td data-label="Actions" className="whitespace-nowrap px-4 py-3 text-right">
+                    <div className="flex flex-wrap items-center justify-start gap-3 md:justify-end">
                       <button
                         type="button"
                         onClick={() => onDial(r.patient_id)}

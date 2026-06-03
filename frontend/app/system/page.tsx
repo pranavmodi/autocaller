@@ -222,7 +222,7 @@ export default function HealthPage() {
 
       <VoiceSettingsPanel />
 
-      <section className="overflow-hidden rounded-lg border border-neutral-200 bg-white">
+      <section className="mobile-table-card overflow-hidden rounded-lg border border-neutral-200 bg-white md:overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-neutral-50 text-xs uppercase text-neutral-500">
             <tr>
@@ -241,15 +241,15 @@ export default function HealthPage() {
             )}
             {checks.data?.checks.map((c) => (
               <tr key={c.name} className="border-t border-neutral-100">
-                <td className="px-4 py-2.5 font-mono text-xs text-neutral-700">{c.name}</td>
-                <td className="px-4 py-2.5">
+                <td data-label="Check" className="px-4 py-2.5 font-mono text-xs text-neutral-700">{c.name}</td>
+                <td data-label="Status" className="px-4 py-2.5">
                   {c.ok ? (
                     <Check className="h-4 w-4 text-emerald-600" />
                   ) : (
                     <X className="h-4 w-4 text-rose-600" />
                   )}
                 </td>
-                <td className="px-4 py-2.5 text-xs text-neutral-600">{c.detail}</td>
+                <td data-label="Detail" className="px-4 py-2.5 text-xs text-neutral-600">{c.detail}</td>
               </tr>
             ))}
           </tbody>

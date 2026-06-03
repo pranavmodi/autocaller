@@ -121,7 +121,7 @@ export function ActiveCallOverlay() {
     // opted in. Otherwise render nothing.
     if (!listener.autoReconnect) return null;
     return (
-      <div className="fixed bottom-4 right-4 z-50 flex items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm shadow-lg">
+      <div className="fixed bottom-[calc(5.5rem_+_env(safe-area-inset-bottom))] left-3 right-3 z-50 flex items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm shadow-lg sm:left-auto sm:right-4 md:bottom-4">
         <Headphones className="h-4 w-4 text-amber-800" />
         <span className="text-amber-900">
           Auto-listen is on — waiting for next call…
@@ -148,7 +148,7 @@ export function ActiveCallOverlay() {
     return (
       <button
         onClick={toggleExpanded}
-        className="fixed bottom-4 right-4 z-50 flex items-center gap-3 rounded-full border border-emerald-200 bg-white px-4 py-2 text-sm shadow-lg transition hover:bg-emerald-50"
+        className="fixed bottom-[calc(5.5rem_+_env(safe-area-inset-bottom))] left-3 right-3 z-50 flex items-center gap-3 rounded-full border border-emerald-200 bg-white px-4 py-2 text-sm shadow-lg transition hover:bg-emerald-50 sm:left-auto sm:right-4 md:bottom-4"
       >
         <span className="flex h-2.5 w-2.5 items-center justify-center">
           <span className="absolute h-2.5 w-2.5 animate-ping rounded-full bg-emerald-500 opacity-75" />
@@ -165,7 +165,7 @@ export function ActiveCallOverlay() {
 
   // -- Expanded panel --
   return (
-    <div className="fixed bottom-4 right-4 z-50 w-[min(420px,calc(100vw-2rem))] overflow-hidden rounded-xl border border-emerald-200 bg-white shadow-2xl">
+    <div className="fixed bottom-[calc(5.5rem_+_env(safe-area-inset-bottom))] left-3 right-3 z-50 max-h-[calc(100dvh_-_7rem)] overflow-hidden rounded-xl border border-emerald-200 bg-white shadow-2xl sm:left-auto sm:right-4 sm:w-[min(420px,calc(100vw_-_2rem))] md:bottom-4 md:max-h-[calc(100dvh_-_2rem)]">
       {/* Header */}
       <div className="flex items-start justify-between gap-3 border-b border-emerald-100 bg-emerald-50 p-3">
         <div className="min-w-0 flex-1">

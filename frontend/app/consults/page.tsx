@@ -39,7 +39,7 @@ export default function ConsultsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-end justify-between">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <h1 className="text-xl font-semibold">Consult bookings</h1>
         <span className="text-xs text-neutral-500">
           {bookings.length} total · {upcoming.length} upcoming
@@ -98,7 +98,7 @@ function BookingList({
       <h2 className="text-sm font-medium uppercase tracking-wide text-neutral-500">
         {title}
       </h2>
-      <div className="overflow-hidden rounded-lg border border-neutral-200 bg-white">
+      <div className="mobile-table-card overflow-hidden rounded-lg border border-neutral-200 bg-white md:overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-neutral-50 text-xs uppercase text-neutral-500">
             <tr>
@@ -147,7 +147,7 @@ function BookingRow({
         variant === "upcoming" ? "bg-white" : "bg-neutral-50/50",
       )}
     >
-      <td className="whitespace-nowrap px-4 py-3">
+      <td data-label="When" className="whitespace-nowrap px-4 py-3">
         <div className="font-medium text-neutral-900">
           {dateFmt.format(slot)}
         </div>
@@ -156,7 +156,7 @@ function BookingRow({
           {timeFmt.format(slot)}
         </div>
       </td>
-      <td className="px-4 py-3">
+      <td data-label="Contact" className="px-4 py-3">
         <div className="font-medium text-neutral-900">{b.name}</div>
         <div className="mt-0.5 flex items-center gap-1.5 text-xs text-neutral-600">
           <Mail className="h-3 w-3" />
@@ -179,15 +179,15 @@ function BookingRow({
           </div>
         )}
       </td>
-      <td className="px-4 py-3 text-neutral-700">{b.firm_name || "—"}</td>
-      <td className="max-w-xs px-4 py-3 text-neutral-700">
+      <td data-label="Firm" className="px-4 py-3 text-neutral-700">{b.firm_name || "—"}</td>
+      <td data-label="Notes" className="max-w-xs px-4 py-3 text-neutral-700">
         {b.notes ? (
           <span className="line-clamp-3 whitespace-pre-wrap">{b.notes}</span>
         ) : (
           <span className="text-neutral-400">—</span>
         )}
       </td>
-      <td className="whitespace-nowrap px-4 py-3 text-xs text-neutral-500">
+      <td data-label="Booked" className="whitespace-nowrap px-4 py-3 text-xs text-neutral-500">
         {formatDistanceToNow(new Date(b.created_at), { addSuffix: true })}
       </td>
     </tr>

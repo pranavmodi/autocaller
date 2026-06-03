@@ -133,7 +133,7 @@ function LeadGenPageContent() {
   });
 
   return (
-    <div className="mx-auto max-w-[1500px] px-6 py-8">
+    <div className="mx-auto min-w-0 max-w-[1500px] space-y-6">
       <div className="mb-6 flex flex-wrap items-center gap-3">
         <Link
           href="/"
@@ -154,7 +154,7 @@ function LeadGenPageContent() {
       <SafetyBand />
       <LeadGenProcessExplanation />
 
-      <div className="grid grid-cols-12 gap-4">
+      <div className="grid gap-4 lg:grid-cols-12">
         <aside className="col-span-12 space-y-3 lg:col-span-4 xl:col-span-3">
           <DailySendBudgetPanel
             dailyEmailBudget={dailyEmailBudget}

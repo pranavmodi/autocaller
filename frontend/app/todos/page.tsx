@@ -231,7 +231,7 @@ export default function TodosPage() {
   const createDisabled = create.isPending || !createForm.title.trim();
 
   return (
-    <div className="mx-auto max-w-[1500px] space-y-4 px-6 py-8">
+    <div className="mx-auto min-w-0 max-w-[1500px] space-y-4">
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="text-lg font-semibold text-neutral-900">Todos</h1>
         <span className="text-xs text-neutral-400">DB-backed operator backlog</span>
@@ -239,7 +239,7 @@ export default function TodosPage() {
           type="button"
           onClick={() => todos.refetch()}
           disabled={todos.isFetching}
-          className="ml-auto inline-flex items-center gap-2 rounded-md border border-neutral-200 px-3 py-1.5 text-xs font-medium text-neutral-700 hover:bg-neutral-50 disabled:opacity-60"
+          className="inline-flex items-center gap-2 rounded-md border border-neutral-200 px-3 py-1.5 text-xs font-medium text-neutral-700 hover:bg-neutral-50 disabled:opacity-60 sm:ml-auto"
         >
           {todos.isFetching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
           Refresh

@@ -9,8 +9,8 @@ without opening a terminal.
 1. **Observability > control.** Every mutation is available via CLI/REST;
    the UI exposes a narrow subset of mutations only when obviously safe
    (toggle dispatcher, clear active-call marker). No CRUD screens.
-2. **Minimal, opinionated.** Five screens total. No settings pages, no
-   lead editor, no prompt editor. You want those, open the repo.
+2. **Minimal, opinionated.** Keep operator workflows focused and avoid
+   duplicating backend or CLI behavior unnecessarily.
 3. **Live by default.** Anything that changes in the backend (active call,
    transcript, dispatcher state) streams in real-time. No manual refresh.
 4. **Mobile-first.** Pranav checks this between meetings on a phone.
@@ -20,7 +20,25 @@ without opening a terminal.
 
 ---
 
-## The five screens
+## Mobile-native baseline
+
+The frontend is now expected to work as a phone-native operator console, not
+as a desktop page that merely shrinks.
+
+- The desktop sidebar remains for `md` and wider screens.
+- Mobile uses a five-slot bottom nav: Now, Actions, Todos, Calls, and More.
+  Secondary routes live in the More sheet so the tab bar stays tappable.
+- Root layout must keep `viewportFit: "cover"` and safe-area padding for iOS
+  and Android browser chrome.
+- Floating overlays must sit above the mobile tab bar and respect
+  `env(safe-area-inset-bottom)`.
+- Dense data tables should use the shared `mobile-table-card` wrapper and
+  `data-label` on every useful cell. Desktop may still use normal tables.
+- New screens should start as one column on mobile, then opt into two-column
+  or rail layouts at `lg` or wider.
+- Avoid route-level `px-6 py-8` shells. The root layout owns page padding.
+
+## Core screens
 
 ### 1. `/` — Now
 What's happening *right now*. Single screen, glanceable in 2 seconds.

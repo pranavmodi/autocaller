@@ -99,16 +99,25 @@ function actionTraceContext(notification: OperatorNotification) {
 
 export default function ActionsPage() {
   return (
-    <Suspense
-      fallback={
-        <div className="flex items-center gap-2 px-4 py-10 text-sm text-neutral-500">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          Loading actions...
-        </div>
-      }
-    >
+    <Suspense fallback={<ActionsPageShell />}>
       <ActionsPageContent />
     </Suspense>
+  );
+}
+
+function ActionsPageShell() {
+  return (
+    <div className="mx-auto min-w-0 max-w-[1500px] space-y-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <h1 className="text-lg font-semibold text-neutral-900">Actions</h1>
+        <span className="text-xs text-neutral-400">
+          review, edit, send, mark done
+        </span>
+      </div>
+      <section className="rounded-xl border border-neutral-200 bg-white px-4 py-10 text-sm text-neutral-500">
+        Loading actions...
+      </section>
+    </div>
   );
 }
 
@@ -158,7 +167,7 @@ function ActionsPageContent() {
   }, [current]);
 
   return (
-    <div className="mx-auto max-w-[1500px] space-y-4">
+    <div className="mx-auto min-w-0 max-w-[1500px] space-y-4">
       <div className="flex flex-wrap items-center gap-3">
         <Link
           href="/"
@@ -189,7 +198,7 @@ function ActionsPageContent() {
             type="button"
             onClick={() => pending.refetch()}
             disabled={pending.isFetching}
-            className="ml-auto inline-flex items-center gap-2 rounded-md border border-neutral-200 px-3 py-1.5 text-xs font-medium text-neutral-700 hover:bg-neutral-50 disabled:opacity-60"
+            className="inline-flex items-center gap-2 rounded-md border border-neutral-200 px-3 py-1.5 text-xs font-medium text-neutral-700 hover:bg-neutral-50 disabled:opacity-60 sm:ml-auto"
           >
             {pending.isFetching ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -210,7 +219,7 @@ function ActionsPageContent() {
             No pending actions.
           </div>
         ) : (
-          <div className="grid min-h-[640px] grid-cols-1 lg:grid-cols-[360px_minmax(0,1fr)]">
+          <div className="grid min-h-[640px] min-w-0 grid-cols-1 lg:grid-cols-[360px_minmax(0,1fr)]">
             <ActionList
               queue={queue}
               selectedId={current?.id ?? null}

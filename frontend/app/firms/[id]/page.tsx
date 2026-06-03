@@ -535,7 +535,7 @@ function FirmCallsPanel({ pifId }: { pifId: string }) {
         </div>
       )}
       {(calls.data?.items?.length ?? 0) > 0 && (
-        <div className="mt-3 overflow-x-auto">
+        <div className="mobile-table-card mt-3 md:overflow-x-auto">
           <table className="w-full text-xs">
             <thead className="text-[10px] uppercase tracking-wide text-neutral-400">
               <tr className="text-left">
@@ -558,7 +558,7 @@ function FirmCallsPanel({ pifId }: { pifId: string }) {
                   key={c.call_id}
                   className="text-neutral-700 hover:bg-neutral-50"
                 >
-                  <td className="px-2 py-1.5 whitespace-nowrap">
+                  <td data-label="When" className="px-2 py-1.5 whitespace-nowrap">
                     <Link
                       href={`/calls/${c.call_id}`}
                       className="text-blue-600 hover:underline"
@@ -574,13 +574,13 @@ function FirmCallsPanel({ pifId }: { pifId: string }) {
                         : "—"}
                     </Link>
                   </td>
-                  <td className="px-2 py-1.5 max-w-[14rem] truncate">
+                  <td data-label="Contact" className="px-2 py-1.5 max-w-[14rem] truncate">
                     {c.patient_name || "—"}
                   </td>
-                  <td className="px-2 py-1.5 font-mono text-[11px] text-neutral-500">
+                  <td data-label="Phone" className="px-2 py-1.5 font-mono text-[11px] text-neutral-500">
                     {c.phone || "—"}
                   </td>
-                  <td className="px-2 py-1.5">
+                  <td data-label="Outcome" className="px-2 py-1.5">
                     <span
                       className={cn(
                         "rounded px-1.5 py-0.5 text-[10px] font-medium",
@@ -590,7 +590,7 @@ function FirmCallsPanel({ pifId }: { pifId: string }) {
                       {c.outcome}
                     </span>
                   </td>
-                  <td className="px-2 py-1.5 text-[11px] text-neutral-600">
+                  <td data-label="Disposition" className="px-2 py-1.5 text-[11px] text-neutral-600">
                     {c.call_disposition}
                     {c.ended_by ? (
                       <span className="ml-1 text-[10px] text-neutral-400">
@@ -598,20 +598,20 @@ function FirmCallsPanel({ pifId }: { pifId: string }) {
                       </span>
                     ) : null}
                   </td>
-                  <td className="px-2 py-1.5 text-right tabular-nums">
+                  <td data-label="Duration" className="px-2 py-1.5 text-right tabular-nums">
                     {c.duration_seconds}s
                   </td>
-                  <td className="px-2 py-1.5">
+                  <td data-label="Judge" className="px-2 py-1.5">
                     {c.judge_score != null ? c.judge_score : "—"}
                   </td>
-                  <td className="px-2 py-1.5">{c.voicemail_left ? "✓" : ""}</td>
-                  <td className="px-2 py-1.5 text-[10px] text-neutral-500">
+                  <td data-label="VM" className="px-2 py-1.5">{c.voicemail_left ? "✓" : ""}</td>
+                  <td data-label="IVR" className="px-2 py-1.5 text-[10px] text-neutral-500">
                     {c.ivr_detected ? c.ivr_outcome ?? "yes" : ""}
                   </td>
-                  <td className="px-2 py-1.5 text-[10px] text-neutral-500">
+                  <td data-label="Voice" className="px-2 py-1.5 text-[10px] text-neutral-500">
                     {c.voice_provider ?? "—"}
                   </td>
-                  <td className="px-2 py-1.5 text-[10px] text-neutral-500">
+                  <td data-label="Prompt" className="px-2 py-1.5 text-[10px] text-neutral-500">
                     {c.prompt_version ?? "—"}
                   </td>
                 </tr>

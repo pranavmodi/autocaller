@@ -52,8 +52,8 @@ export default function OutreachPage() {
   const [campaignId, setCampaignId] = useState<number | null>(null);
 
   return (
-    <div className="mx-auto max-w-[1400px] px-6 py-8">
-      <div className="mb-6 flex items-center gap-3">
+    <div className="mx-auto min-w-0 max-w-[1400px] space-y-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <Link
           href="/"
           className="inline-flex items-center gap-1 text-sm text-neutral-500 hover:text-neutral-800"
@@ -70,7 +70,7 @@ export default function OutreachPage() {
         </span>
       </div>
 
-      <div className="grid grid-cols-12 gap-4">
+      <div className="grid gap-4 lg:grid-cols-12">
         <aside className="col-span-12 space-y-3 lg:col-span-4">
           <CampaignsList
             selectedId={campaignId}
