@@ -5,6 +5,24 @@ description: Compose policy-controlled Possible Minds lead-generation emails for
 
 # Possible Minds Lead Email Composer
 
+## Variant Hypothesis
+
+This variant tests whether shorter, reply-first first-touch emails outperform
+broader diagnostic emails. Optimize for getting a simple reply from founders,
+managing partners, partners, CEOs, presidents, principals, shareholders,
+managing attorneys, and COOs.
+
+For first-touch Precise-led emails:
+
+- Prefer subject `the Precise autoresponders`.
+- Keep the body to 90-130 words when possible.
+- Lead with the Precise autoresponder proof.
+- Use the 600 inbound emails/day triage proof.
+- Pick exactly one pain, usually intake leakage or records/status follow-up.
+- End with a binary or one-word reply CTA.
+- Do not include a hard meeting ask in the body.
+- Do not list multiple capabilities.
+
 Compose one outbound lead-generation email at a time. The email is part of a
 cybernetic lead-gen loop whose target metric is booked qualified conversations.
 Every generated email is operator-approved before send; your job is to provide

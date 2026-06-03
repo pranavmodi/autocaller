@@ -61,6 +61,10 @@ class SendBatchItemDraftRequest(BaseModel):
     subject: str = Field(..., min_length=1, max_length=500)
     body: str = Field(..., min_length=1, max_length=20000)
     sent_by: str = Field("operator", max_length=128)
+    composer_experiment_key: Optional[str] = None
+    composer_variant_key: Optional[str] = None
+    skill_path: Optional[str] = None
+    skill_sha256: Optional[str] = None
 
 
 @router.get("/api/lead-gen/policy/current")
@@ -148,6 +152,10 @@ async def send_batch_item_preview_draft(
             subject=req.subject,
             body=req.body,
             sent_by=req.sent_by,
+            composer_experiment_key=req.composer_experiment_key,
+            composer_variant_key=req.composer_variant_key,
+            skill_path=req.skill_path,
+            skill_sha256=req.skill_sha256,
         )
     except ValueError as e:
         detail = str(e)

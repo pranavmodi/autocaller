@@ -24,6 +24,7 @@ import {
   createLeadGenBatch,
   createLeadGenProposal,
   getContactDetail,
+  getComposerVariants,
   getLeadGenBatch,
   getLeadGenPolicy,
   listLeadGenBatches,
@@ -34,6 +35,7 @@ import {
   type LeadGenBatchItem,
   type LeadGenObservation,
   type RenderedSequenceStep,
+  type ComposerSkillVariant,
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -439,6 +441,7 @@ function BatchDetail({
   const [draftStatuses, setDraftStatuses] = useState<Record<string, DraftGenerationStatus>>({});
   const [isGeneratingAllDrafts, setIsGeneratingAllDrafts] = useState(false);
   const [bulkDraftError, setBulkDraftError] = useState<string | null>(null);
+  const [selectedComposerVariantKey, setSelectedComposerVariantKey] = useState("");
   const openedRequestKey = useRef("");
   const [scheduledStartAt, setScheduledStartAt] = useState(() =>
     defaultCaliforniaDateTimeLocal(),
@@ -448,6 +451,11 @@ function BatchDetail({
     queryKey: ["lead-gen-batch", batchId],
     queryFn: () => getLeadGenBatch(batchId, true),
     refetchInterval: 30_000,
+  });
+  const composerVariants = useQuery({
+    queryKey: ["composer-variants"],
+    queryFn: getComposerVariants,
+    staleTime: 60_000,
   });
 
   const approve = useMutation({
@@ -482,6 +490,14 @@ function BatchDetail({
   const sentItems = useMemo(
     () => (data?.items ?? []).filter(isEmailSent),
     [data?.items],
+  );
+  const activeComposerVariants = useMemo(
+    () => (composerVariants.data?.variants ?? []).filter((variant) => variant.active),
+    [composerVariants.data?.variants],
+  );
+  const selectedComposerVariant = useMemo(
+    () => activeComposerVariants.find((variant) => variant.key === selectedComposerVariantKey),
+    [activeComposerVariants, selectedComposerVariantKey],
   );
   const completedDraftCount = previewableItems.filter(
     (item) => draftStatuses[item.id] === "completed",
@@ -531,6 +547,16 @@ function BatchDetail({
     }
   }, [data, previewItem]);
 
+  useEffect(() => {
+    if (
+      selectedComposerVariantKey &&
+      activeComposerVariants.length > 0 &&
+      !activeComposerVariants.some((variant) => variant.key === selectedComposerVariantKey)
+    ) {
+      setSelectedComposerVariantKey("");
+    }
+  }, [activeComposerVariants, selectedComposerVariantKey]);
+
   if (q.isLoading) {
     return (
       <div className="flex items-center gap-2 rounded-xl border border-neutral-200 bg-white px-6 py-8 text-sm text-neutral-500">
@@ -568,11 +594,11 @@ function BatchDetail({
       try {
         await Promise.all([
           qc.fetchQuery({
-            queryKey: sequencePreviewQueryKey(item),
+            queryKey: sequencePreviewQueryKey(item, selectedComposerVariantKey),
             queryFn: () => previewSequence(
               item.contact_id,
               item.template_key,
-              sequencePreviewOptions(item),
+              sequencePreviewOptions(item, selectedComposerVariantKey),
             ),
             staleTime: 5 * 60_000,
           }),
@@ -643,6 +669,30 @@ function BatchDetail({
           </div>
         </div>
         <div className="flex flex-wrap gap-2 border-t border-neutral-100 px-4 py-3">
+          <label className="flex min-w-[260px] max-w-sm flex-1 flex-col gap-1 text-xs font-medium text-neutral-600">
+            Composer variant for drafts
+            <select
+              value={selectedComposerVariantKey}
+              onChange={(event) => {
+                setSelectedComposerVariantKey(event.target.value);
+                setBulkDraftError(null);
+              }}
+              disabled={composerVariants.isLoading}
+              className="rounded-md border border-neutral-200 bg-white px-2 py-2 text-sm font-medium text-neutral-800 disabled:opacity-60"
+            >
+              <option value="">Auto A/B assignment</option>
+              {activeComposerVariants.map((variant) => (
+                <option key={variant.key} value={variant.key}>
+                  {variant.label}
+                </option>
+              ))}
+            </select>
+            <span className="font-normal text-neutral-400">
+              {selectedComposerVariant
+                ? `Uses ${selectedComposerVariant.key} for previews and bulk draft generation.`
+                : "Uses deterministic A/B assignment per contact."}
+            </span>
+          </label>
           <button
             type="button"
             onClick={() => approve.mutate(false)}
@@ -724,6 +774,7 @@ function BatchDetail({
       {previewItem && (
         <PreviewModal
           item={previewItem}
+          composerVariantKey={selectedComposerVariantKey}
           onClose={() => setPreviewItem(null)}
         />
       )}
@@ -1011,13 +1062,14 @@ function isEmailSent(item: LeadGenBatchItem) {
   return Boolean(reasonValue(item, "last_sent_at") || reasonValue(item, "last_sent_message_id"));
 }
 
-function sequencePreviewQueryKey(item: LeadGenBatchItem) {
+function sequencePreviewQueryKey(item: LeadGenBatchItem, composerVariantKey = "") {
   return [
     "sequence-preview",
     item.contact_id,
     item.template_key,
     reasonValue(item, "notification_id") || reasonValue(item, "operator_notification_id") || "",
     reasonValue(item, "source_id") || "",
+    composerVariantKey || "auto",
   ] as const;
 }
 
@@ -1025,10 +1077,11 @@ function contactDetailQueryKey(item: LeadGenBatchItem) {
   return ["contact-detail", item.contact_id, item.template_key] as const;
 }
 
-function sequencePreviewOptions(item: LeadGenBatchItem) {
+function sequencePreviewOptions(item: LeadGenBatchItem, composerVariantKey = "") {
   return {
     notificationId: reasonValue(item, "notification_id") || reasonValue(item, "operator_notification_id"),
     sourceId: reasonValue(item, "source_id"),
+    composerVariantKey: composerVariantKey || undefined,
   };
 }
 
@@ -1042,9 +1095,11 @@ function reasonText(item: LeadGenBatchItem) {
 
 function PreviewModal({
   item,
+  composerVariantKey,
   onClose,
 }: {
   item: LeadGenBatchItem;
+  composerVariantKey: string;
   onClose: () => void;
 }) {
   const qc = useQueryClient();
@@ -1056,8 +1111,8 @@ function PreviewModal({
   const [draftTouched, setDraftTouched] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
   const q = useQuery({
-    queryKey: sequencePreviewQueryKey(item),
-    queryFn: () => previewSequence(item.contact_id, item.template_key, sequencePreviewOptions(item)),
+    queryKey: sequencePreviewQueryKey(item, composerVariantKey),
+    queryFn: () => previewSequence(item.contact_id, item.template_key, sequencePreviewOptions(item, composerVariantKey)),
     enabled: !alreadySent,
     staleTime: 5 * 60_000,
   });
@@ -1111,6 +1166,10 @@ function PreviewModal({
         subject: draftSubject,
         body: draftBody,
         sent_by: "operator",
+        composer_experiment_key: nextStep?.composer_experiment_key,
+        composer_variant_key: nextStep?.composer_variant_key,
+        skill_path: nextStep?.skill_path,
+        skill_sha256: nextStep?.skill_sha256,
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["lead-gen-batch", item.batch_id] });
@@ -1130,6 +1189,11 @@ function PreviewModal({
           <p className="mt-1 text-xs text-neutral-500">
             {item.contact_email} - {item.firm_name} - Composer: {formatComposerKey(item.template_key)}
           </p>
+          {nextStep?.composer_variant_key && (
+            <p className="mt-1 text-xs text-neutral-400">
+              Skill variant: {nextStep.composer_variant_key}
+            </p>
+          )}
         </div>
         <div className="overflow-y-auto px-5 py-4">
           {alreadySent ? (

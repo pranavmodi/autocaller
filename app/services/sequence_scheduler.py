@@ -236,6 +236,10 @@ async def create_sequence_approval_notification(
                 "blog_link_used": composed.blog_link_used,
                 "reasoning": composed.reasoning,
                 "model": composed.model,
+                "composer_experiment_key": composed.composer_experiment_key,
+                "composer_variant_key": composed.composer_variant_key,
+                "skill_path": composed.skill_path,
+                "skill_sha256": composed.skill_sha256,
             }
         except LeadEmailComposerError as e:
             seq.status = "paused"
@@ -293,6 +297,10 @@ async def create_sequence_approval_notification(
                 "cta": render_meta.get("cta"),
                 "blog_link_used": render_meta.get("blog_link_used"),
                 "composer_model": render_meta.get("model"),
+                "composer_experiment_key": render_meta.get("composer_experiment_key"),
+                "composer_variant_key": render_meta.get("composer_variant_key"),
+                "skill_path": render_meta.get("skill_path"),
+                "skill_sha256": render_meta.get("skill_sha256"),
                 "draft_subject": rendered_subject,
                 "draft_body": rendered_body,
                 "message_type": rendered_message_type,

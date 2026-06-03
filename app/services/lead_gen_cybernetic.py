@@ -197,6 +197,10 @@ async def send_batch_item_draft(
     subject: str,
     body: str,
     sent_by: str = "operator",
+    composer_experiment_key: str | None = None,
+    composer_variant_key: str | None = None,
+    skill_path: str | None = None,
+    skill_sha256: str | None = None,
 ) -> dict[str, Any]:
     draft_subject = _sanitize_email_copy(subject)
     draft_body = _sanitize_email_copy(body)
@@ -256,6 +260,14 @@ async def send_batch_item_draft(
             reason["last_sent_at"] = sent_at.isoformat()
             reason["last_sent_message_id"] = msg_id
             reason["last_sent_subject"] = draft_subject
+            if composer_experiment_key:
+                reason["last_sent_composer_experiment_key"] = composer_experiment_key
+            if composer_variant_key:
+                reason["last_sent_composer_variant_key"] = composer_variant_key
+            if skill_path:
+                reason["last_sent_skill_path"] = skill_path
+            if skill_sha256:
+                reason["last_sent_skill_sha256"] = skill_sha256
             item_row.reason_json = reason
         if seq_row:
             seq_row.current_step = step_num
@@ -313,12 +325,46 @@ async def send_batch_item_draft(
                 "sent_to": contact.email,
                 "sent_subject": draft_subject,
                 "sent_body": draft_body,
+                "composer_experiment_key": composer_experiment_key,
+                "composer_variant_key": composer_variant_key,
+                "skill_path": skill_path,
+                "skill_sha256": skill_sha256,
             })
             notification.suggested_action_json = suggested
             notification.status = "actioned"
             notification.acknowledged_at = sent_at
             notification.acknowledged_by = (sent_by or "operator")[:128]
         await session.commit()
+
+    from app.services.product_traces import safe_record_product_trace
+
+    await safe_record_product_trace(
+        actor_type="user",
+        actor_id=sent_by or "operator",
+        event_type="email_sent",
+        surface="lead-gen",
+        entity_type="lead_gen_batch_item",
+        entity_id=batch_item_id,
+        input_json={
+            "subject": draft_subject,
+            "body": draft_body,
+        },
+        output_json={
+            "message_id": msg_id,
+            "sent_at": sent_at.isoformat(),
+            "sent_to": contact.email,
+        },
+        context_json={
+            "batch_id": item.batch_id,
+            "contact_id": item.contact_id,
+            "contact_email": contact.email,
+            "firm_name": item.firm_name,
+            "composer_experiment_key": composer_experiment_key,
+            "composer_variant_key": composer_variant_key,
+            "skill_path": skill_path,
+            "skill_sha256": skill_sha256,
+        },
+    )
 
     return {
         "batch_item_id": batch_item_id,
@@ -328,6 +374,8 @@ async def send_batch_item_draft(
         "sent_message_id": msg_id,
         "sent_at": sent_at.isoformat(),
         "step": step_num,
+        "composer_experiment_key": composer_experiment_key,
+        "composer_variant_key": composer_variant_key,
     }
 
 

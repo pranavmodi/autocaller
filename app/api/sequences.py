@@ -77,6 +77,10 @@ class RenderedStepDTO(BaseModel):
     cta: Optional[str] = None
     blog_link_used: Optional[str] = None
     model: Optional[str] = None
+    composer_experiment_key: Optional[str] = None
+    composer_variant_key: Optional[str] = None
+    skill_path: Optional[str] = None
+    skill_sha256: Optional[str] = None
     requires_human_review: bool = False
     risk_flags: list[str] = Field(default_factory=list)
 
@@ -246,6 +250,7 @@ async def preview_sequence(
     template_key: str = Query(DEFAULT_TEMPLATE_KEY),
     notification_id: int | None = Query(None),
     source_id: str | None = Query(None),
+    composer_variant_key: str | None = Query(None),
 ):
     """Render every step of the sequence as it would land for this
     contact's data. No DB write, no send."""
@@ -329,6 +334,10 @@ async def preview_sequence(
                     cta=suggested.get("cta"),
                     blog_link_used=suggested.get("blog_link_used"),
                     model=suggested.get("composer_model"),
+                    composer_experiment_key=suggested.get("composer_experiment_key"),
+                    composer_variant_key=suggested.get("composer_variant_key"),
+                    skill_path=suggested.get("skill_path"),
+                    skill_sha256=suggested.get("skill_sha256"),
                     requires_human_review=bool(suggested.get("requires_human_review", True)),
                     risk_flags=suggested.get("risk_flags") or [],
                 ))
@@ -339,6 +348,7 @@ async def preview_sequence(
             firm_name=firm_name,
             sequence=sequence_context,
             step_num=next_step,
+            composer_variant_key=composer_variant_key,
         )
     except LeadEmailComposerError as e:
         raise HTTPException(status_code=502, detail=f"compose_failed: {str(e)}")
@@ -352,6 +362,10 @@ async def preview_sequence(
         cta=composed.cta,
         blog_link_used=composed.blog_link_used,
         model=composed.model,
+        composer_experiment_key=composed.composer_experiment_key,
+        composer_variant_key=composed.composer_variant_key,
+        skill_path=composed.skill_path,
+        skill_sha256=composed.skill_sha256,
         requires_human_review=composed.requires_human_review,
         risk_flags=composed.risk_flags,
     ))

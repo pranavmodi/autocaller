@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Activity, PhoneCall, Stethoscope, Building2, CalendarCheck, ListChecks, LogOut, MessageSquare, Mail, Send, BrainCircuit, Inbox, SearchCheck, GitBranch } from "lucide-react";
+import { Activity, PhoneCall, Stethoscope, Building2, CalendarCheck, ListChecks, LogOut, MessageSquare, Mail, Send, BrainCircuit, Inbox, SearchCheck, GitBranch, FlaskConical } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ConnectionBadge } from "@/components/ConnectionBadge";
 import { apiUrl } from "@/lib/api";
@@ -28,6 +28,7 @@ const items = [
   { href: "/comms", label: "Comms", icon: MessageSquare },
   { href: "/sequences", label: "Sequences", icon: Mail },
   { href: "/lead-gen", label: "Lead Gen", icon: BrainCircuit },
+  { href: "/composer-ab", label: "Composer A/B", icon: FlaskConical },
   { href: "/traces", label: "Traces", icon: GitBranch },
   { href: "/seo", label: "SEO", icon: SearchCheck },
   { href: "/outreach", label: "Outreach", icon: Send },

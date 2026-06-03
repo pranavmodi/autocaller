@@ -1,0 +1,7 @@
+{
+  "active": true,
+  "allocation_weight": 100,
+  "description": "Tests shorter first-touch emails that lead with the Precise autoresponder proof and use a binary or one-word reply CTA.",
+  "key": "reply-first-precise-proof",
+  "label": "Reply-First Precise Proof"
+}

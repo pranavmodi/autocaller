@@ -1062,6 +1062,10 @@ export type RenderedSequenceStep = {
   cta?: string | null;
   blog_link_used?: string | null;
   model?: string | null;
+  composer_experiment_key?: string | null;
+  composer_variant_key?: string | null;
+  skill_path?: string | null;
+  skill_sha256?: string | null;
   requires_human_review?: boolean;
   risk_flags?: string[];
 };
@@ -1151,12 +1155,17 @@ export const getContactDetail = (contactId: string, templateKey?: string) => {
 export const previewSequence = (
   contactId: string,
   templateKey?: string,
-  options: { notificationId?: number | string | null; sourceId?: string | null } = {},
+  options: {
+    notificationId?: number | string | null;
+    sourceId?: string | null;
+    composerVariantKey?: string | null;
+  } = {},
 ) => {
   const params = new URLSearchParams();
   if (templateKey) params.set("template_key", templateKey);
   if (options.notificationId) params.set("notification_id", String(options.notificationId));
   if (options.sourceId) params.set("source_id", options.sourceId);
+  if (options.composerVariantKey) params.set("composer_variant_key", options.composerVariantKey);
   const qs = params.toString() ? `?${params.toString()}` : "";
   return (
   get<RenderedSequenceStep[]>(
@@ -1389,7 +1398,15 @@ export const approveLeadGenBatch = (
 
 export const sendLeadGenBatchItemDraft = (
   batchItemId: string,
-  args: { subject: string; body: string; sent_by?: string },
+  args: {
+    subject: string;
+    body: string;
+    sent_by?: string;
+    composer_experiment_key?: string | null;
+    composer_variant_key?: string | null;
+    skill_path?: string | null;
+    skill_sha256?: string | null;
+  },
 ) =>
   post<{
     batch_item_id: string;
@@ -1399,13 +1416,114 @@ export const sendLeadGenBatchItemDraft = (
     sent_message_id: string;
     sent_at: string;
     step: number;
+    composer_experiment_key?: string | null;
+    composer_variant_key?: string | null;
   }>(
     `/api/lead-gen/batch-items/${encodeURIComponent(batchItemId)}/send-draft`,
     {
       subject: args.subject,
       body: args.body,
       sent_by: args.sent_by ?? "operator",
+      composer_experiment_key: args.composer_experiment_key,
+      composer_variant_key: args.composer_variant_key,
+      skill_path: args.skill_path,
+      skill_sha256: args.skill_sha256,
     },
+  );
+
+export type ComposerSkillVariantStats = {
+  key: string;
+  label: string;
+  description: string;
+  skill_path: string;
+  skill_sha256: string | null;
+  allocation_weight: number;
+  active: boolean;
+  is_baseline: boolean;
+  compose_count: number;
+  send_count: number;
+  manual_edit_count: number;
+  regenerate_count: number;
+  bounce_count: number;
+  reply_count: number;
+  booked_qualified_conversation_count: number;
+  manual_edit_rate: number | null;
+  send_rate: number | null;
+  reply_rate: number | null;
+  bounce_rate: number | null;
+  booked_qualified_conversation_rate: number | null;
+  first_seen_at: string | null;
+  last_seen_at: string | null;
+};
+
+export type ComposerSkillVariant = {
+  key: string;
+  label: string;
+  description: string;
+  skill_path: string;
+  skill_sha256: string | null;
+  allocation_weight: number;
+  active: boolean;
+  is_baseline: boolean;
+};
+
+export type ComposerVariantsResponse = {
+  variants: ComposerSkillVariant[];
+};
+
+export type ComposerVariantStatsResponse = {
+  experiment_key: string;
+  days: number;
+  variants_dir: string;
+  variants: ComposerSkillVariantStats[];
+};
+
+export const getComposerVariants = () =>
+  get<ComposerVariantsResponse>("/api/lead-email-composer/variants");
+
+export const updateComposerVariant = (
+  variantKey: string,
+  args: { label: string; description?: string | null },
+) =>
+  patch<ComposerSkillVariant>(
+    `/api/lead-email-composer/variants/${encodeURIComponent(variantKey)}`,
+    args,
+  );
+
+export async function uploadComposerVariant(args: {
+  file: File;
+  label: string;
+  description?: string;
+  allocationWeight?: number;
+  active?: boolean;
+}) {
+  const form = new FormData();
+  form.set("file", args.file);
+  form.set("label", args.label);
+  form.set("description", args.description ?? "");
+  form.set("allocation_weight", String(args.allocationWeight ?? 100));
+  form.set("active", String(args.active ?? true));
+  const path = "/api/lead-email-composer/variants/upload";
+  const res = await fetch(apiUrl(path), {
+    method: "POST",
+    body: form,
+    credentials: "include",
+    headers: traceHeaders(),
+  });
+  if (res.status === 401) {
+    _handle401(path);
+    throw new Error(`POST ${path} 401`);
+  }
+  if (!res.ok) {
+    const detail = await errorDetail(res);
+    throw new Error(`POST ${path} ${res.status}${detail ? ` - ${detail}` : ""}`);
+  }
+  return res.json() as Promise<ComposerSkillVariant>;
+}
+
+export const getComposerVariantStats = (days = 30) =>
+  get<ComposerVariantStatsResponse>(
+    `/api/lead-email-composer/variant-stats?days=${encodeURIComponent(String(days))}`,
   );
 
 export const classifyLeadGenObservation = (args: {

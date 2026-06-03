@@ -14,6 +14,11 @@ from sqlalchemy import desc, or_, select
 from app.db import AsyncSessionLocal
 from app.db.models import ConsultBookingRow, EmailSequenceRow, FirmContactRow, InboundEmailRow
 from app.services.llm_gateway import LLMGatewayError, call_skill_json
+from app.services.lead_email_composer_variants import (
+    EXPERIMENT_KEY,
+    choose_composer_skill_variant,
+    get_composer_skill_variant,
+)
 from app.services.product_traces import safe_record_product_trace
 
 
@@ -54,6 +59,10 @@ class LeadEmailComposition:
     blog_link_used: str | None
     model: str
     raw_response: str
+    composer_experiment_key: str
+    composer_variant_key: str
+    skill_path: str
+    skill_sha256: str | None
 
 
 class LeadEmailComposerError(RuntimeError):
@@ -364,12 +373,30 @@ async def compose_lead_email(
     sequence: EmailSequenceRow,
     step_num: int,
     model: str | None = None,
+    composer_variant_key: str | None = None,
 ) -> LeadEmailComposition:
     payload = await build_lead_email_context(
         contact=contact,
         firm_name=firm_name,
     )
-    skill_path = os.getenv("LEAD_EMAIL_COMPOSER_SKILL_PATH", str(DEFAULT_SKILL_PATH))
+    env_skill_path = os.getenv("LEAD_EMAIL_COMPOSER_SKILL_PATH", "").strip()
+    if env_skill_path:
+        skill_path = env_skill_path
+        composer_experiment_key = "env_override"
+        composer_variant_key = "env_override"
+        skill_sha256 = _file_sha256(skill_path)
+    else:
+        selected_variant = (
+            get_composer_skill_variant(composer_variant_key)
+            if composer_variant_key
+            else choose_composer_skill_variant(contact.id)
+        )
+        if composer_variant_key and selected_variant is None:
+            raise LeadEmailComposerError(f"unknown composer variant: {composer_variant_key}")
+        skill_path = selected_variant.skill_path
+        composer_experiment_key = EXPERIMENT_KEY
+        composer_variant_key = selected_variant.key
+        skill_sha256 = selected_variant.skill_sha256
     selected_model = model or os.getenv("LEAD_EMAIL_COMPOSER_MODEL", "openclaw")
     trace_context = {
         "firm_name": firm_name,
@@ -379,7 +406,9 @@ async def compose_lead_email(
         "pif_id": contact.pif_id,
         "sequence": _sequence_snapshot(sequence, step_num=step_num),
         "skill_path": skill_path,
-        "skill_sha256": _file_sha256(skill_path),
+        "skill_sha256": skill_sha256,
+        "composer_experiment_key": composer_experiment_key,
+        "composer_variant_key": composer_variant_key,
         "model": selected_model,
     }
     await safe_record_product_trace(
@@ -434,6 +463,10 @@ async def compose_lead_email(
         blog_link_used=(str(parsed.get("blog_link_used") or "").strip() or None),
         model=result.model,
         raw_response=result.raw_response,
+        composer_experiment_key=composer_experiment_key,
+        composer_variant_key=composer_variant_key,
+        skill_path=skill_path,
+        skill_sha256=skill_sha256,
     )
     await safe_record_product_trace(
         actor_type="system",
@@ -452,6 +485,10 @@ async def compose_lead_email(
             "requires_human_review": composition.requires_human_review,
             "blog_link_used": composition.blog_link_used,
             "model": composition.model,
+            "composer_experiment_key": composition.composer_experiment_key,
+            "composer_variant_key": composition.composer_variant_key,
+            "skill_path": composition.skill_path,
+            "skill_sha256": composition.skill_sha256,
         },
         context_json=trace_context,
         metadata_json={"raw_response_excerpt": _excerpt(composition.raw_response, 1200)},
