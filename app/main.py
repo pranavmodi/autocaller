@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pathlib import Path
 
 from .api import dashboard_router, websocket_router, settings_router, dispatcher_router, scenarios_router, carrier_router, cadence_router, consults_router, call_lists_router, voice_preview_router, firm_reviews_router, comms_router, sequences_router, outreach_router, lead_gen_router, resend_webhooks_router, inbound_email_router, operator_notifications_router, seo_router, product_traces_router, learning_router, todos_router, composer_variants_router
+from .api.agents import router as agents_router
 from .api.auth import router as auth_router, SESSION_COOKIE, verify_session_token, auth_configured
 from .services.dispatcher import get_dispatcher
 from .services.daily_report_service import daily_report_loop
@@ -77,6 +78,21 @@ async def lifespan(app: FastAPI):
     # Start the 4-step email sequence scheduler. Gated by
     # ALLOW_SEQUENCE_SEND=true — loop ticks but no-ops without the flag.
     sequence_task = asyncio.create_task(sequence_loop(interval_seconds=60))
+    from .services.master_agent import (
+        heartbeat_interval_seconds,
+        master_heartbeat_loop,
+        subagent_runner_enabled,
+        subagent_runner_interval_seconds,
+        subagent_runner_loop,
+    )
+    master_heartbeat_task = asyncio.create_task(
+        master_heartbeat_loop(interval_seconds=heartbeat_interval_seconds())
+    )
+    master_subagent_runner_task = None
+    if subagent_runner_enabled():
+        master_subagent_runner_task = asyncio.create_task(
+            subagent_runner_loop(interval_seconds=subagent_runner_interval_seconds())
+        )
     # Start the carrier-state reconciler — enforces the invariant
     # `ended_at IS NOT NULL ⟺ carrier confirmed terminal`. Sweeps
     # non-terminal call_log rows every 60s and force-hangs-up any
@@ -87,8 +103,18 @@ async def lifespan(app: FastAPI):
     yield
     # Shutdown: stop the dispatcher, cancel background tasks, dispose engine
     get_dispatcher().stop()
-    for t in (daily_report_task, judge_task, cadence_task, vm_followup_task,
-              sequence_task, reconciler_task):
+    tasks_to_cancel = [
+        daily_report_task,
+        judge_task,
+        cadence_task,
+        vm_followup_task,
+        sequence_task,
+        reconciler_task,
+    ]
+    tasks_to_cancel.append(master_heartbeat_task)
+    if master_subagent_runner_task is not None:
+        tasks_to_cancel.append(master_subagent_runner_task)
+    for t in tasks_to_cancel:
         t.cancel()
         try:
             await t
@@ -285,6 +311,7 @@ app.include_router(product_traces_router)
 app.include_router(learning_router)
 app.include_router(todos_router)
 app.include_router(composer_variants_router)
+app.include_router(agents_router)
 
 # Legacy static (kept for compatibility)
 STATIC_DIR = Path("static")

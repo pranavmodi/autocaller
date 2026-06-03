@@ -202,6 +202,7 @@ class SystemSettingsRow(Base):
     mock_mode: Mapped[bool] = mapped_column(Boolean, default=False)
     mock_phone: Mapped[str] = mapped_column(String(32), default="")
     daily_report: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    agent_config: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
 
     # -- Autocaller-specific configuration --
     calcom_config: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
@@ -381,6 +382,101 @@ class ProductTraceRow(Base):
         Index("ix_product_traces_surface", "surface"),
         Index("ix_product_traces_entity", "entity_type", "entity_id"),
         Index("ix_product_traces_created_at", "created_at"),
+    )
+
+
+class AgentTaskRow(Base):
+    """Durable task packet delegated by the Possible OS master agent."""
+    __tablename__ = "agent_tasks"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    parent_task_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    assigned_agent: Mapped[str] = mapped_column(String(128), nullable=False)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    objective: Mapped[str] = mapped_column(Text, nullable=False)
+    context_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    allowed_tools_json: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    forbidden_actions_json: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    expected_output_schema_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    acceptance_criteria_json: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    verification_commands_json: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    artifacts_json: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    risk_level: Mapped[str] = mapped_column(String(16), nullable=False, default="low")
+    requires_human_approval: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="queued")
+    priority: Mapped[int] = mapped_column(Integer, nullable=False, default=50)
+    heartbeat_interval_seconds: Mapped[int] = mapped_column(Integer, nullable=False, default=300)
+    last_heartbeat_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    claimed_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    deadline_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    created_by: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), default=_utcnow, onupdate=_utcnow,
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('queued', 'accepted', 'running', 'waiting_on_tool', "
+            "'waiting_on_user', 'blocked', 'completed', 'failed', 'cancelled', 'stale')",
+            name="ck_agent_tasks_status",
+        ),
+        Index("ix_agent_tasks_status", "status"),
+        Index("ix_agent_tasks_agent_status", "assigned_agent", "status"),
+        Index("ix_agent_tasks_updated_at", "updated_at"),
+        Index("ix_agent_tasks_last_heartbeat", "last_heartbeat_at"),
+    )
+
+
+class AgentTaskEventRow(Base):
+    """Append-only lifecycle events for master/subagent task coordination."""
+    __tablename__ = "agent_task_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    task_id: Mapped[str | None] = mapped_column(
+        String(64), ForeignKey("agent_tasks.id", ondelete="CASCADE"), nullable=True,
+    )
+    agent_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    event_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    message: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    input_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    output_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    metadata_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow)
+
+    __table_args__ = (
+        Index("ix_agent_task_events_task_id", "task_id"),
+        Index("ix_agent_task_events_agent_type", "agent_id", "event_type"),
+        Index("ix_agent_task_events_created_at", "created_at"),
+    )
+
+
+class AgentReportRow(Base):
+    """Structured report-back artifact created by a subagent or master heartbeat."""
+    __tablename__ = "agent_reports"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    task_id: Mapped[str | None] = mapped_column(
+        String(64), ForeignKey("agent_tasks.id", ondelete="CASCADE"), nullable=True,
+    )
+    agent_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="reported")
+    summary: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    key_findings_json: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    actions_taken_json: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    artifacts_json: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    evidence_json: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    verification_json: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    risks_json: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    open_questions_json: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    recommended_next_actions_json: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow)
+
+    __table_args__ = (
+        Index("ix_agent_reports_task_id", "task_id"),
+        Index("ix_agent_reports_agent_status", "agent_id", "status"),
+        Index("ix_agent_reports_created_at", "created_at"),
     )
 
 

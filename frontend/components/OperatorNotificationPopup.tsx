@@ -74,7 +74,7 @@ export function OperatorNotificationPopup() {
   return (
     <>
       {showToast && (
-        <div className="fixed bottom-[calc(8.75rem_+_env(safe-area-inset-bottom))] left-3 right-3 z-[980] rounded-lg border border-neutral-200 bg-white shadow-xl sm:left-auto sm:right-4 sm:w-[calc(100vw_-_2rem)] sm:max-w-sm md:bottom-24 md:right-6">
+        <div className="fixed bottom-24 right-6 z-[980] hidden w-[calc(100vw_-_2rem)] max-w-sm rounded-lg border border-neutral-200 bg-white shadow-xl md:block">
           <div className="flex items-start gap-3 p-4">
             <span className="mt-0.5 rounded-full bg-amber-100 p-2 text-amber-700">
               <BellRing className="h-4 w-4" />

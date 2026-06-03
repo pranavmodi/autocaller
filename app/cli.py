@@ -48,6 +48,7 @@ lead_gen_app = typer.Typer(help="Cybernetic lead-generation loop — batches, fe
 inbound_app = typer.Typer(help="Inbound email ingestion — Zoho IMAP reader for replies.", no_args_is_help=True)
 outreach_app = typer.Typer(help="Blog-post outreach campaigns — LLM-composed, per-recipient, tracked.", no_args_is_help=True)
 todos_app = typer.Typer(help="Editable project todo backlog.", no_args_is_help=True)
+agents_app = typer.Typer(help="Possible OS master-agent heartbeat and subagent tasks.", no_args_is_help=True)
 outreach_campaigns_app = typer.Typer(help="Create / list / show outreach campaigns.", no_args_is_help=True)
 outreach_audience_app = typer.Typer(help="Build a campaign's recipient list from firm contacts.", no_args_is_help=True)
 outreach_app.add_typer(outreach_campaigns_app, name="campaigns")
@@ -73,6 +74,7 @@ app.add_typer(lead_gen_app, name="lead-gen")
 app.add_typer(inbound_app, name="inbound")
 app.add_typer(outreach_app, name="outreach")
 app.add_typer(todos_app, name="todos")
+app.add_typer(agents_app, name="agents")
 
 console = Console()
 
@@ -2819,6 +2821,270 @@ def todos_delete(
 ):
     """Delete a DB-backed project todo."""
     console.print_json(data=_delete(f"/api/todos/{todo_id}"))
+
+
+# ---------------------------------------------------------------------------
+# agents — master-agent heartbeat and durable subagent task board
+# ---------------------------------------------------------------------------
+
+@agents_app.command("status")
+def agents_status(json_output: bool = typer.Option(False, "--json", help="Print raw JSON.")):
+    """Show master-agent heartbeat configuration and last heartbeat result."""
+    data = _get("/api/agents/status")
+    if json_output:
+        console.print_json(data=data)
+        return
+    console.print(f"heartbeat_enabled: {data.get('heartbeat_enabled')}")
+    console.print(f"heartbeat_interval_seconds: {data.get('heartbeat_interval_seconds')}")
+    last = data.get("last_heartbeat") or {}
+    if last:
+        console.print(f"last_completed_at: {last.get('completed_at')}")
+        console.print(f"active_task_count: {last.get('active_task_count')}")
+        console.print(f"stale_task_ids: {', '.join(last.get('stale_task_ids') or []) or '-'}")
+    else:
+        console.print("last_heartbeat: none recorded in this process")
+
+
+@agents_app.command("heartbeat")
+def agents_heartbeat(json_output: bool = typer.Option(False, "--json", help="Print raw JSON.")):
+    """Run one master-agent heartbeat tick now."""
+    data = _post("/api/agents/heartbeat/run", timeout=60.0)
+    if json_output:
+        console.print_json(data=data)
+        return
+    hb = data.get("heartbeat") or {}
+    console.print(f"[green]heartbeat {hb.get('status')}[/green]")
+    console.print(f"active_task_count: {hb.get('active_task_count')}")
+    console.print(f"queued_task_count: {hb.get('queued_task_count')}")
+    console.print(f"blocked_task_count: {hb.get('blocked_task_count')}")
+    console.print(f"stale_task_ids: {', '.join(hb.get('stale_task_ids') or []) or '-'}")
+
+
+@agents_app.command("config")
+def agents_config(
+    interval_seconds: Optional[int] = typer.Option(
+        None,
+        "--interval-seconds",
+        "--period",
+        min=60,
+        max=3600,
+        help="Set the master heartbeat period in seconds.",
+    ),
+    enabled: Optional[bool] = typer.Option(
+        None,
+        "--enabled/--disabled",
+        help="Enable or disable the master heartbeat loop.",
+    ),
+    json_output: bool = typer.Option(False, "--json", help="Print raw JSON."),
+):
+    """Update master-agent heartbeat settings without restarting the backend."""
+    payload: dict[str, object] = {"actor": "operator"}
+    if interval_seconds is not None:
+        payload["heartbeat_interval_seconds"] = interval_seconds
+    if enabled is not None:
+        payload["heartbeat_enabled"] = enabled
+    if len(payload) == 1:
+        data = _get("/api/agents/status")
+        if json_output:
+            console.print_json(data=data)
+            return
+        console.print(f"heartbeat_enabled: {data.get('heartbeat_enabled')}")
+        console.print(f"heartbeat_interval_seconds: {data.get('heartbeat_interval_seconds')}")
+        return
+    data = _patch("/api/agents/config", json_body=payload)
+    if json_output:
+        console.print_json(data=data)
+        return
+    config = data.get("config") or {}
+    console.print("[green]updated master-agent config[/green]")
+    console.print(f"heartbeat_enabled: {config.get('heartbeat_enabled')}")
+    console.print(f"heartbeat_interval_seconds: {config.get('heartbeat_interval_seconds')}")
+
+
+@agents_app.command("list")
+def agents_list(
+    status: str = typer.Option("all", "--status", help="Filter by task status."),
+    assigned_agent: str = typer.Option("", "--agent", help="Filter by assigned agent."),
+    limit: int = typer.Option(100, "--limit", min=1, max=500),
+    json_output: bool = typer.Option(False, "--json", help="Print raw JSON."),
+):
+    """List durable master/subagent tasks."""
+    data = _get(
+        "/api/agents/tasks",
+        status=status if status != "all" else None,
+        assigned_agent=assigned_agent or None,
+        limit=limit,
+    )
+    if json_output:
+        console.print_json(data=data)
+        return
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("id", no_wrap=True)
+    table.add_column("agent", no_wrap=True)
+    table.add_column("status", no_wrap=True)
+    table.add_column("priority", no_wrap=True)
+    table.add_column("title")
+    for row in data.get("tasks") or []:
+        table.add_row(
+            row.get("id") or "",
+            row.get("assigned_agent") or "",
+            row.get("status") or "",
+            str(row.get("priority") or ""),
+            row.get("title") or "",
+        )
+    console.print(table)
+
+
+@agents_app.command("show")
+def agents_show(task_id: str = typer.Argument(...), json_output: bool = typer.Option(False, "--json")):
+    """Show one task with recent events and reports."""
+    data = _get(f"/api/agents/tasks/{task_id}")
+    if json_output:
+        console.print_json(data=data)
+        return
+    task = data.get("task") or {}
+    console.print(f"[bold]{task.get('title')}[/bold]")
+    console.print(f"id: {task.get('id')}")
+    console.print(f"agent: {task.get('assigned_agent')}")
+    console.print(f"status: {task.get('status')}")
+    console.print(f"objective: {task.get('objective')}")
+    console.print(f"last_heartbeat_at: {task.get('last_heartbeat_at') or '-'}")
+    console.print(f"reports: {len(data.get('reports') or [])}")
+    console.print(f"events: {len(data.get('events') or [])}")
+
+
+@agents_app.command("create")
+def agents_create(
+    assigned_agent: str = typer.Option(..., "--agent", help="Assigned subagent name."),
+    title: str = typer.Option(..., "--title", help="Task title."),
+    objective: str = typer.Option(..., "--objective", help="Task objective."),
+    priority: int = typer.Option(50, "--priority", min=0, max=1000),
+    risk_level: str = typer.Option("low", "--risk"),
+    created_by: str = typer.Option("operator", "--created-by"),
+    json_output: bool = typer.Option(False, "--json"),
+):
+    """Create a minimal durable subagent task."""
+    data = _post(
+        "/api/agents/tasks",
+        json_body={
+            "assigned_agent": assigned_agent,
+            "title": title,
+            "objective": objective,
+            "priority": priority,
+            "risk_level": risk_level,
+            "created_by": created_by,
+        },
+    )
+    if json_output:
+        console.print_json(data=data)
+        return
+    task = data.get("task") or {}
+    console.print(f"[green]created[/green] {task.get('id')} {task.get('title')}")
+
+
+@agents_app.command("create-research-scout")
+def agents_create_research_scout(json_output: bool = typer.Option(False, "--json")):
+    """Create the first safe web-learning subagent task."""
+    data = _post("/api/agents/tasks/research-scout")
+    if json_output:
+        console.print_json(data=data)
+        return
+    task = data.get("task") or {}
+    console.print(f"[green]created[/green] {task.get('id')} {task.get('title')}")
+
+
+@agents_app.command("run-research-scout")
+def agents_run_research_scout(
+    task_id: str = typer.Option("", "--task", help="Specific ResearchScout task id. Defaults to next queued task."),
+    json_output: bool = typer.Option(False, "--json"),
+):
+    """Run one ResearchScoutAgent task now and write its learning note/report."""
+    data = _post(
+        "/api/agents/tasks/research-scout/run",
+        json_body={},
+        timeout=90.0,
+    ) if not task_id else _post(
+        f"/api/agents/tasks/research-scout/run?task_id={task_id}",
+        json_body={},
+        timeout=90.0,
+    )
+    if json_output:
+        console.print_json(data=data)
+        return
+    report = data.get("report")
+    if not report:
+        console.print("[yellow]No queued ResearchScoutAgent task found.[/yellow]")
+        return
+    console.print(f"[green]completed[/green] {report.get('id')}: {report.get('summary')}")
+
+
+@agents_app.command("set-status")
+def agents_set_status(
+    task_id: str = typer.Argument(...),
+    status: str = typer.Argument(...),
+    message: str = typer.Option("", "--message"),
+    actor: str = typer.Option("operator", "--actor"),
+):
+    """Set a subagent task status."""
+    console.print_json(data=_patch(
+        f"/api/agents/tasks/{task_id}/status",
+        json_body={"status": status, "message": message, "actor": actor},
+    ))
+
+
+@agents_app.command("task-heartbeat")
+def agents_task_heartbeat(
+    task_id: str = typer.Argument(...),
+    agent_id: str = typer.Option(..., "--agent"),
+    message: str = typer.Option("", "--message"),
+    status: str = typer.Option("", "--status"),
+):
+    """Record a heartbeat from a subagent task."""
+    console.print_json(data=_post(
+        f"/api/agents/tasks/{task_id}/heartbeat",
+        json_body={
+            "agent_id": agent_id,
+            "message": message,
+            "status": status or None,
+            "metadata": {},
+        },
+    ))
+
+
+@agents_app.command("report")
+def agents_report(
+    task_id: str = typer.Argument(...),
+    agent_id: str = typer.Option(..., "--agent"),
+    summary: str = typer.Option(..., "--summary"),
+    status: str = typer.Option("reported", "--status"),
+):
+    """Create a structured report for a task."""
+    console.print_json(data=_post(
+        f"/api/agents/tasks/{task_id}/reports",
+        json_body={
+            "agent_id": agent_id,
+            "status": status,
+            "summary": summary,
+        },
+    ))
+
+
+@agents_app.command("events")
+def agents_events(
+    task_id: str = typer.Option("", "--task"),
+    limit: int = typer.Option(100, "--limit", min=1, max=500),
+):
+    """List recent master/subagent events."""
+    console.print_json(data=_get("/api/agents/events", task_id=task_id or None, limit=limit))
+
+
+@agents_app.command("reports")
+def agents_reports(
+    task_id: str = typer.Option("", "--task"),
+    limit: int = typer.Option(100, "--limit", min=1, max=500),
+):
+    """List recent subagent reports."""
+    console.print_json(data=_get("/api/agents/reports", task_id=task_id or None, limit=limit))
 
 
 # ---------------------------------------------------------------------------

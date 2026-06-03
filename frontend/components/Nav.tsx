@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import {
   Activity,
   BrainCircuit,
+  Bot,
   Building2,
   CalendarCheck,
   FlaskConical,
@@ -55,6 +56,7 @@ const items = [
   { href: "/sequences", label: "Sequences", icon: Mail },
   { href: "/lead-gen", label: "Lead Gen", icon: BrainCircuit },
   { href: "/composer-ab", label: "Composer A/B", icon: FlaskConical },
+  { href: "/agents", label: "Agents", icon: Bot },
   { href: "/traces", label: "Traces", icon: GitBranch },
   { href: "/seo", label: "SEO", icon: SearchCheck },
   { href: "/outreach", label: "Outreach", icon: Send },

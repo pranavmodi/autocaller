@@ -269,6 +269,137 @@ export type CodexTaskPacket = {
   exported_at: string | null;
 };
 
+export type AgentTask = {
+  id: string;
+  parent_task_id: string | null;
+  assigned_agent: string;
+  title: string;
+  objective: string;
+  context: Record<string, unknown>;
+  allowed_tools: unknown[];
+  forbidden_actions: unknown[];
+  expected_output_schema: Record<string, unknown>;
+  acceptance_criteria: unknown[];
+  verification_commands: unknown[];
+  artifacts: unknown[];
+  risk_level: string;
+  requires_human_approval: boolean;
+  status: string;
+  priority: number;
+  heartbeat_interval_seconds: number;
+  last_heartbeat_at: string | null;
+  claimed_at: string | null;
+  deadline_at: string | null;
+  completed_at: string | null;
+  created_by: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+export type AgentTaskEvent = {
+  id: number;
+  task_id: string | null;
+  agent_id: string;
+  event_type: string;
+  message: string;
+  input: Record<string, unknown>;
+  output: Record<string, unknown>;
+  metadata: Record<string, unknown>;
+  created_at: string | null;
+};
+
+export type AgentReport = {
+  id: string;
+  task_id: string | null;
+  agent_id: string;
+  status: string;
+  summary: string;
+  key_findings: unknown[];
+  actions_taken: unknown[];
+  artifacts: unknown[];
+  evidence: unknown[];
+  verification: unknown[];
+  risks: unknown[];
+  open_questions: unknown[];
+  recommended_next_actions: unknown[];
+  created_at: string | null;
+};
+
+export type MasterHeartbeat = {
+  status: string;
+  started_at: string;
+  completed_at: string;
+  active_task_count: number;
+  queued_task_count: number;
+  blocked_task_count: number;
+  stale_task_ids: string[];
+  soul: Record<string, unknown>;
+  next_recommended_slice: string;
+};
+
+export type AgentsStatus = {
+  heartbeat_enabled: boolean;
+  heartbeat_interval_seconds: number;
+  last_heartbeat: MasterHeartbeat | null;
+};
+
+export const getAgentsStatus = () => get<AgentsStatus>("/api/agents/status");
+
+export const updateAgentConfig = (payload: {
+  heartbeat_enabled?: boolean;
+  heartbeat_interval_seconds?: number;
+}) =>
+  patch<{ config: { heartbeat_enabled: boolean; heartbeat_interval_seconds: number } }>(
+    "/api/agents/config",
+    {
+      ...payload,
+      actor: "operator",
+    },
+  );
+
+export const runMasterHeartbeat = () =>
+  post<{ heartbeat: MasterHeartbeat }>("/api/agents/heartbeat/run");
+
+export const listAgentTasks = (args?: {
+  status?: string;
+  assigned_agent?: string;
+  limit?: number;
+}) => {
+  const params = new URLSearchParams();
+  if (args?.status && args.status !== "all") params.set("status", args.status);
+  if (args?.assigned_agent) params.set("assigned_agent", args.assigned_agent);
+  if (args?.limit) params.set("limit", String(args.limit));
+  const suffix = params.toString() ? `?${params}` : "";
+  return get<{ tasks: AgentTask[] }>(`/api/agents/tasks${suffix}`);
+};
+
+export const getAgentTask = (taskId: string) =>
+  get<{ task: AgentTask; events: AgentTaskEvent[]; reports: AgentReport[] }>(
+    `/api/agents/tasks/${encodeURIComponent(taskId)}`,
+  );
+
+export const listAgentEvents = (args?: { task_id?: string; limit?: number }) => {
+  const params = new URLSearchParams();
+  if (args?.task_id) params.set("task_id", args.task_id);
+  if (args?.limit) params.set("limit", String(args.limit));
+  const suffix = params.toString() ? `?${params}` : "";
+  return get<{ events: AgentTaskEvent[] }>(`/api/agents/events${suffix}`);
+};
+
+export const createResearchScoutTask = () =>
+  post<{ task: AgentTask }>("/api/agents/tasks/research-scout");
+
+export const updateAgentTaskStatus = (
+  taskId: string,
+  status: string,
+  message = "",
+) =>
+  patch<{ task: AgentTask }>(`/api/agents/tasks/${encodeURIComponent(taskId)}/status`, {
+    status,
+    message,
+    actor: "operator",
+  });
+
 export type LearningMeasurementWindow = {
   days: number;
   since: string;

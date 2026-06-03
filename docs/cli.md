@@ -147,6 +147,19 @@ Every command accepts `--help`. Exit code is `0` on success, `1` on any error
 | `todos add <title> [--area=lead-gen --status=not_started --body=... --source-url=...]` | Add a DB-backed todo. |
 | `todos update <id> [--title=... --status=done --body=... --clear-source-url]` | Edit a DB-backed todo. |
 | `todos delete <id>` | Delete a DB-backed todo. |
+| `agents status [--json]` | Show the Possible OS master-agent heartbeat configuration and the last heartbeat result in the current backend process. |
+| `agents config [--interval-seconds=300] [--enabled/--disabled] [--json]` | Update the persisted master-agent heartbeat settings. The running loop reads this setting every tick, so changing the period does not require a backend restart. |
+| `agents heartbeat [--json]` | Run one master-agent heartbeat tick immediately. V1 reads `soul.md` as protected read-only context, records traces, checks active subagent tasks, and marks stale workers. |
+| `agents list [--status=all --agent=ResearchScoutAgent --limit=100 --json]` | List durable master/subagent task packets. |
+| `agents show <task_id> [--json]` | Show one subagent task with recent lifecycle events and reports. |
+| `agents create --agent=... --title=... --objective=... [--priority=50 --risk=low]` | Create a minimal durable subagent task packet. |
+| `agents create-research-scout [--json]` | Create the first safe web-learning task for ResearchScoutAgent. It is proposal-only and must not edit code, send email, or modify mailboxes. |
+| `agents run-research-scout [--task=<task_id> --json]` | Run one ResearchScoutAgent task now. Fetches official sources where reachable, writes `docs/learning-notes/...`, and creates an `agent_reports` row. |
+| `agents set-status <task_id> <status> [--message=...]` | Set a subagent task status. |
+| `agents task-heartbeat <task_id> --agent=... [--message=... --status=running]` | Record a heartbeat/progress ping from a subagent. |
+| `agents report <task_id> --agent=... --summary=... [--status=reported]` | Attach a structured report-back artifact to a subagent task. |
+| `agents events [--task=<task_id> --limit=100]` | List recent master/subagent lifecycle events. |
+| `agents reports [--task=<task_id> --limit=100]` | List recent subagent reports. |
 
 Default lead-gen batches now use `possible_minds_dynamic`. It treats steps as
 objectives and composes the actual email at send time with
