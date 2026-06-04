@@ -188,6 +188,15 @@ export default function AgentsPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [heartbeatEnabledDraft, setHeartbeatEnabledDraft] = useState(true);
   const [heartbeatIntervalDraft, setHeartbeatIntervalDraft] = useState("300");
+  const [jsonModal, setJsonModal] = useState<{
+    eventId: number;
+    createdAt: string | null;
+    agentId: string;
+    summary: string;
+    input: unknown;
+    output: unknown;
+    metadata?: Record<string, unknown>;
+  } | null>(null);
 
   const status = useQuery({
     queryKey: ["agents-status"],
@@ -796,14 +805,36 @@ export default function AgentsPage() {
                 </div>
                 <p className="mt-1 truncate text-sm text-neutral-700">{activitySummary(event)}</p>
               </div>
-              <details className="text-xs text-neutral-500">
-                <summary className="cursor-pointer select-none text-right font-medium text-neutral-600">
-                  JSON
-                </summary>
-                <pre className="mt-2 max-h-48 overflow-auto rounded-md bg-neutral-50 p-2 text-left">
-                  {jsonPreview({ input: event.input, output: event.output, metadata: event.metadata })}
-                </pre>
-              </details>
+              {event.event_type === "master_heartbeat_completed" ? (
+                <div className="flex flex-wrap justify-start gap-2 sm:justify-end">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setJsonModal({
+                        eventId: event.id,
+                        createdAt: event.created_at,
+                        agentId: event.agent_id,
+                        summary: activitySummary(event),
+                        input: event.input || {},
+                        output: event.output || {},
+                        metadata: event.metadata || {},
+                      })
+                    }
+                    className="inline-flex items-center justify-center rounded-md border border-neutral-900 bg-neutral-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-neutral-800"
+                  >
+                    View JSON
+                  </button>
+                </div>
+              ) : (
+                <details className="text-xs text-neutral-500">
+                  <summary className="cursor-pointer select-none text-right font-medium text-neutral-600">
+                    JSON
+                  </summary>
+                  <pre className="mt-2 max-h-48 overflow-auto rounded-md bg-neutral-50 p-2 text-left">
+                    {jsonPreview({ input: event.input, output: event.output, metadata: event.metadata })}
+                  </pre>
+                </details>
+              )}
             </div>
           ))}
         </div>
@@ -962,6 +993,80 @@ export default function AgentsPage() {
           )}
         </section>
       </div>
+      {jsonModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-3">
+          <div className="flex max-h-[92vh] w-full max-w-7xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
+            <div className="border-b border-neutral-100 px-4 py-3">
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h2 className="text-sm font-semibold text-neutral-950">Heartbeat JSON</h2>
+                    <span className="rounded-full border border-neutral-200 bg-neutral-50 px-2 py-0.5 font-mono text-[11px] text-neutral-500">
+                      event #{jsonModal.eventId}
+                    </span>
+                    <span className="rounded-full border border-neutral-200 bg-neutral-50 px-2 py-0.5 text-[11px] text-neutral-500">
+                      {jsonModal.agentId}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs text-neutral-500">
+                    {shortDate(jsonModal.createdAt)} · input is what the heartbeat received; output is what it reported.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setJsonModal(null)}
+                  className="rounded-md border border-neutral-200 px-3 py-1.5 text-xs font-medium text-neutral-700 hover:bg-neutral-50"
+                >
+                  Close
+                </button>
+              </div>
+              <div className="mt-3 rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-xs leading-5 text-neutral-600">
+                {jsonModal.summary}
+              </div>
+            </div>
+            <div className="grid min-h-0 flex-1 gap-0 bg-neutral-100 lg:grid-cols-2">
+              <section className="flex min-h-0 flex-col border-b border-neutral-200 bg-white lg:border-b-0 lg:border-r">
+                <div className="flex items-center justify-between gap-2 border-b border-neutral-100 px-4 py-2.5">
+                  <div>
+                    <h3 className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Input</h3>
+                    <p className="mt-0.5 text-xs text-neutral-400">Context packet loaded before the status decision.</p>
+                  </div>
+                  <span className="rounded-full bg-neutral-100 px-2 py-0.5 font-mono text-[10px] text-neutral-500">
+                    event.input
+                  </span>
+                </div>
+                <div className="min-h-[300px] flex-1 overflow-auto bg-neutral-50 p-3">
+                  <JsonTree value={jsonModal.input || {}} label="input" />
+                </div>
+              </section>
+              <section className="flex min-h-0 flex-col bg-white">
+                <div className="flex items-center justify-between gap-2 border-b border-neutral-100 px-4 py-2.5">
+                  <div>
+                    <h3 className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Output</h3>
+                    <p className="mt-0.5 text-xs text-neutral-400">Counts, active goal, human status, and execution result.</p>
+                  </div>
+                  <span className="rounded-full bg-neutral-100 px-2 py-0.5 font-mono text-[10px] text-neutral-500">
+                    event.output
+                  </span>
+                </div>
+                <div className="min-h-[300px] flex-1 overflow-auto bg-neutral-50 p-3">
+                  <JsonTree value={jsonModal.output || {}} label="output" />
+                </div>
+              </section>
+            </div>
+            {jsonModal.metadata && Object.keys(jsonModal.metadata).length > 0 && (
+              <details className="border-t border-neutral-100 bg-white px-4 py-2 text-xs">
+                <summary className="cursor-pointer select-none font-semibold text-neutral-700">
+                  Metadata
+                </summary>
+                <div className="mt-2 max-h-52 overflow-auto rounded-md bg-neutral-50 p-2">
+                  <JsonTree value={jsonModal.metadata} label="metadata" />
+                </div>
+              </details>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
