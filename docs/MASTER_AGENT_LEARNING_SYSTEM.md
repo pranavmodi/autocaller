@@ -59,13 +59,41 @@ working loop:
 Then add breadth, nuance, autonomy, and optimization only after the simple loop
 has proven that it works.
 
+It should be prompt-cache aware. Large language model calls should be organized
+so stable context appears first and changes as little as possible across runs.
+This reduces cost/latency where the provider supports prompt caching and also
+makes the system easier to reason about.
+
+For master-agent and subagent calls, structure context in this order:
+
+1. stable identity and operating principles;
+2. stable skill or role instructions;
+3. stable schemas, output contracts, and safety boundaries;
+4. slowly changing project docs or policy summaries;
+5. compact memory summaries and pointers;
+6. current task packet;
+7. fresh observations, traces, logs, emails, or user messages.
+
+Do not place volatile timestamps, random IDs, raw logs, large trace blobs, or
+one-off observations before stable instructions. Put volatile material near the
+end of the prompt or pass it as a separate current-input payload. When creating
+subagent task packets, keep the shared prefix stable across similar tasks and
+vary only the final task-specific section.
+
+Prompt-cache awareness is not a reason to overstuff prompts. It works together
+with progressive disclosure: keep the stable prefix lean, point to large docs,
+and expand only the references needed for the current decision.
+
 It should also use progressive disclosure. LLMs have limited context windows, so
 the system should not stuff every document, trace, and policy into every prompt.
 Instead:
 
-- load `soul.md` as protected constitutional context only when the master agent
-  is making strategic or self-improvement decisions;
-- pass compact summaries, hashes, and pointers by default;
+- load full `soul.md` as protected constitutional context only when the master
+  agent is making strategic or self-improvement decisions;
+- pass `soul.compact.md` as compact constitutional guidance for frequent
+  heartbeat/status calls;
+- pass full `soul.md` hashes and pointers by default so changes are detectable
+  without stuffing the full protected document into every prompt;
 - expand into detailed docs, traces, or artifacts only when the current decision
   needs them;
 - keep `SKILL.md` files lean and procedural;
@@ -177,6 +205,23 @@ Important lesson for Possible OS:
 Use heartbeat for frequent situational awareness and opportunistic background
 work. Use durable scheduled jobs for exact sends, exact audits, and long-running
 isolated tasks.
+
+## Current Heartbeat Context
+
+As of 2026-06-04, the master heartbeat status call uses:
+
+- `app/skills/master-agent-status/SKILL.md` as the stable system prompt;
+- `soul.compact.md` in `stable_context.compact_soul` at the beginning of the
+  JSON user payload;
+- volatile task-board, report, event, config, and wake-time state after the
+  stable context;
+- full `soul.md` only as protected metadata: path, loaded flag, hash, character
+  count, and non-edit rule.
+
+This gives the status writer actual constitutional guidance while keeping the
+full soul protected and avoiding repeated full-document prompt stuffing. It also
+keeps the stable prefix more cache-friendly: skill instructions and compact soul
+come before fast-changing heartbeat observations.
 
 OpenClaw's memory-core plugin also has a pre-compaction memory flush pattern:
 store durable notes in the current daily memory file, append-only, while keeping
@@ -793,6 +838,25 @@ Weekly:
 - prune/merge stale docs;
 - compare before/after metrics for shipped improvements.
 ```
+
+Current heartbeat status implementation:
+
+- builds a bounded wake context packet on every heartbeat;
+- calls the OpenClaw gateway with
+  `app/skills/master-agent-status/SKILL.md`;
+- asks the model for JSON containing state, goal, current focus, intended next
+  steps, what Pranav needs to do, confidence, and reasoning;
+- records whether the status was written by the LLM or by fallback logic;
+- if the gateway fails, records the error and keeps the heartbeat alive with a
+  deterministic fallback status;
+- may auto-delegate one safe internal next-slice task when the task board is
+  idle. Current V1 delegates a queued SystemsHealthAgent observation/delegation
+  task but does not run that worker or edit code;
+- shows the human status and full wake context in `/agents`.
+
+The current goal in the wake context comes from a bootstrap mission inside
+`app/services/master_agent.py::_build_wake_context`. The durable version should
+load the goal from `master_plans` and `master_plan_items` once those exist.
 
 ### Heartbeat State
 

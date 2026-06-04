@@ -6,15 +6,20 @@ import {
   AlertTriangle,
   Bot,
   CheckCircle2,
+  ChevronDown,
+  ChevronRight,
   Clock3,
   FileText,
   HeartPulse,
+  ListChecks,
   Loader2,
   RefreshCw,
   Search,
+  Target,
 } from "lucide-react";
 import {
   createResearchScoutTask,
+  createSystemsHealthTask,
   getAgentTask,
   getAgentsStatus,
   listAgentEvents,
@@ -24,6 +29,7 @@ import {
   updateAgentTaskStatus,
   type AgentTaskEvent,
   type AgentTask,
+  type AgentsStatus,
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -52,9 +58,80 @@ function jsonPreview(value: unknown) {
   return JSON.stringify(value ?? {}, null, 2);
 }
 
+function jsonNodeSummary(value: unknown) {
+  if (Array.isArray(value)) return `Array(${value.length})`;
+  if (value && typeof value === "object") return `Object(${Object.keys(value).length})`;
+  if (typeof value === "string") return `"${value}"`;
+  if (value === null) return "null";
+  return String(value);
+}
+
+function JsonTree({
+  value,
+  label = "root",
+  depth = 0,
+  defaultOpen = true,
+}: {
+  value: unknown;
+  label?: string;
+  depth?: number;
+  defaultOpen?: boolean;
+}) {
+  const expandable = value !== null && typeof value === "object";
+  if (!expandable) {
+    return (
+      <div className="grid grid-cols-[minmax(120px,0.25fr)_minmax(0,1fr)] gap-3 border-b border-neutral-100 py-1.5">
+        <span className="truncate font-medium text-neutral-600">{label}</span>
+        <span className="min-w-0 whitespace-pre-wrap break-words font-mono text-[11px] leading-5 text-neutral-800">
+          {jsonNodeSummary(value)}
+        </span>
+      </div>
+    );
+  }
+
+  const entries = Array.isArray(value)
+    ? value.map((item, index) => [String(index), item] as const)
+    : Object.entries(value as Record<string, unknown>);
+
+  return (
+    <details
+      className={cn("group rounded-md border border-neutral-100 bg-white", depth > 0 ? "mt-1" : "")}
+      open={defaultOpen}
+    >
+      <summary className="flex cursor-pointer select-none items-center gap-2 px-2 py-1.5 text-xs hover:bg-neutral-50">
+        <ChevronRight className="h-3.5 w-3.5 text-neutral-400 group-open:hidden" />
+        <ChevronDown className="hidden h-3.5 w-3.5 text-neutral-400 group-open:block" />
+        <span className="font-semibold text-neutral-800">{label}</span>
+        <span className="rounded-full bg-neutral-100 px-1.5 py-0.5 font-mono text-[10px] text-neutral-500">
+          {jsonNodeSummary(value)}
+        </span>
+      </summary>
+      <div className="space-y-1 border-t border-neutral-100 px-2 py-2" style={{ marginLeft: Math.min(depth, 4) * 10 }}>
+        {entries.length === 0 ? (
+          <div className="font-mono text-[11px] text-neutral-400">empty</div>
+        ) : (
+          entries.map(([key, child]) => (
+            <JsonTree
+              key={`${depth}-${key}`}
+              label={key}
+              value={child}
+              depth={depth + 1}
+              defaultOpen={depth === 0 && ["mission", "configuration", "current_tasks"].includes(key)}
+            />
+          ))
+        )}
+      </div>
+    </details>
+  );
+}
+
 function activitySummary(event: AgentTaskEvent) {
   const output = event.output || {};
   if (event.event_type === "master_heartbeat_completed") {
+    const humanStatus = output.human_status as { state?: unknown } | undefined;
+    if (typeof humanStatus?.state === "string" && humanStatus.state.trim()) {
+      return humanStatus.state;
+    }
     return `active ${output.active_task_count ?? 0}, queued ${output.queued_task_count ?? 0}, blocked ${output.blocked_task_count ?? 0}`;
   }
   if (event.event_type === "task_created") {
@@ -154,8 +231,33 @@ export default function AgentsPage() {
     },
   });
 
+  const updateHeartbeatEnabled = useMutation({
+    mutationFn: (enabled: boolean) => updateAgentConfig({ heartbeat_enabled: enabled }),
+    onSuccess: (data) => {
+      qc.setQueryData(["agents-status"], (current: AgentsStatus | undefined) => {
+        if (!current) return current;
+        return {
+          ...current,
+          heartbeat_enabled: data.config.heartbeat_enabled,
+          heartbeat_interval_seconds: data.config.heartbeat_interval_seconds,
+        };
+      });
+      qc.invalidateQueries({ queryKey: ["agents-status"] });
+      qc.invalidateQueries({ queryKey: ["agent-events"] });
+    },
+  });
+
   const createScout = useMutation({
     mutationFn: createResearchScoutTask,
+    onSuccess: (data) => {
+      setSelectedTaskId(data.task.id);
+      qc.invalidateQueries({ queryKey: ["agent-tasks"] });
+      qc.invalidateQueries({ queryKey: ["agent-events"] });
+    },
+  });
+
+  const createSystemsHealth = useMutation({
+    mutationFn: createSystemsHealthTask,
     onSuccess: (data) => {
       setSelectedTaskId(data.task.id);
       qc.invalidateQueries({ queryKey: ["agent-tasks"] });
@@ -185,6 +287,9 @@ export default function AgentsPage() {
   }, [allTasks]);
 
   const heartbeat = status.data?.last_heartbeat;
+  const humanStatus = heartbeat?.human_status;
+  const wakeContext = heartbeat?.wake_context;
+  const statusLlm = heartbeat?.status_llm;
   useEffect(() => {
     if (!status.data) return;
     setHeartbeatEnabledDraft(status.data.heartbeat_enabled);
@@ -254,6 +359,15 @@ export default function AgentsPage() {
               {createScout.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
               Create ResearchScout task
             </button>
+            <button
+              type="button"
+              onClick={() => createSystemsHealth.mutate()}
+              disabled={createSystemsHealth.isPending}
+              className="inline-flex items-center gap-2 rounded-md border border-neutral-200 px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50 disabled:opacity-60"
+            >
+              {createSystemsHealth.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ListChecks className="h-4 w-4" />}
+              Create SystemsHealth task
+            </button>
           </div>
         </div>
 
@@ -264,7 +378,9 @@ export default function AgentsPage() {
               {status.data?.heartbeat_enabled ? "enabled" : "disabled"}
             </div>
             <div className="mt-1 text-xs text-neutral-500">
-              every {status.data?.heartbeat_interval_seconds ?? "-"}s
+              {status.data?.heartbeat_enabled
+                ? `every ${status.data?.heartbeat_interval_seconds ?? "-"}s`
+                : "periodic loop stopped"}
             </div>
           </div>
           <div className="rounded-lg border border-neutral-200 p-3 sm:col-span-2 lg:col-span-2">
@@ -273,10 +389,18 @@ export default function AgentsPage() {
                 <input
                   type="checkbox"
                   checked={heartbeatEnabledDraft}
-                  onChange={(event) => setHeartbeatEnabledDraft(event.target.checked)}
+                  onChange={(event) => {
+                    const nextEnabled = event.target.checked;
+                    setHeartbeatEnabledDraft(nextEnabled);
+                    updateHeartbeatEnabled.mutate(nextEnabled);
+                  }}
+                  disabled={updateHeartbeatEnabled.isPending}
                   className="h-4 w-4 rounded border-neutral-300"
                 />
                 Enabled
+                {updateHeartbeatEnabled.isPending ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-neutral-400" />
+                ) : null}
               </label>
               <label className="min-w-[180px] flex-1 text-xs font-medium text-neutral-700">
                 Period seconds
@@ -301,17 +425,25 @@ export default function AgentsPage() {
               </button>
             </div>
             <div className="mt-2 text-xs text-neutral-500">
-              Applies to the running heartbeat loop without a backend restart. Allowed range: 60-3600 seconds.
+              The Enabled checkbox saves immediately. Period changes use Save. Allowed range: 60-3600 seconds.
             </div>
+            {status.data?.heartbeat_enabled === false ? (
+              <div className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                Periodic heartbeat is disabled. The Run heartbeat button still performs one manual check.
+              </div>
+            ) : null}
           </div>
           <div className="rounded-lg border border-neutral-200 p-3">
-            <div className="text-xs text-neutral-500">Last run</div>
+            <div className="text-xs text-neutral-500">Last run historical</div>
             <div className="mt-1 text-sm font-semibold text-neutral-950">
               {shortDate(heartbeat?.completed_at)}
             </div>
             <div className="mt-1 text-xs text-neutral-500">
               {heartbeat?.status ?? "no heartbeat yet"}
             </div>
+            {status.data?.heartbeat_enabled === false && heartbeat ? (
+              <div className="mt-1 text-xs text-amber-700">scheduler disabled after this run</div>
+            ) : null}
           </div>
           <div className="rounded-lg border border-neutral-200 p-3">
             <div className="text-xs text-neutral-500">Active tasks</div>
@@ -333,12 +465,147 @@ export default function AgentsPage() {
           </div>
         </div>
 
-        {(runHeartbeat.isError || createScout.isError || saveAgentConfig.isError) && (
+        {(runHeartbeat.isError || createScout.isError || createSystemsHealth.isError || saveAgentConfig.isError) && (
           <div className="mt-3 flex items-center gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
             <AlertTriangle className="h-4 w-4" />
             Agent operation failed. Check backend logs.
           </div>
         )}
+      </section>
+
+      <section className="rounded-xl border border-neutral-200 bg-white">
+        <div className="flex flex-wrap items-center gap-2 border-b border-neutral-100 px-4 py-3">
+          <h2 className="text-sm font-semibold text-neutral-950">Human status update</h2>
+          <span className="text-xs text-neutral-400">state, goal, intent, and required help</span>
+          <span
+            className={cn(
+              "ml-auto rounded-full border px-2 py-0.5 text-[11px] font-medium",
+              statusLlm?.used_llm
+                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                : "border-amber-200 bg-amber-50 text-amber-700",
+            )}
+          >
+            {statusLlm?.used_llm ? `OpenClaw ${statusLlm.model || "LLM"}` : "fallback"}
+          </span>
+        </div>
+        <div className="grid gap-4 p-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
+          <div className="space-y-4">
+            <div>
+              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-neutral-500">
+                <HeartPulse className="h-4 w-4" />
+                State
+              </div>
+              <p className="mt-2 text-base font-semibold leading-7 text-neutral-950">
+                {humanStatus?.state || "No heartbeat status has been recorded yet."}
+              </p>
+            </div>
+            <div>
+              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-neutral-500">
+                <Target className="h-4 w-4" />
+                Goal
+              </div>
+              <p className="mt-2 text-sm leading-6 text-neutral-700">
+                {humanStatus?.goal || "Run a heartbeat to load the current master-agent goal."}
+              </p>
+            </div>
+            <div>
+              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-neutral-500">
+                <Bot className="h-4 w-4" />
+                Current focus
+              </div>
+              <p className="mt-2 text-sm leading-6 text-neutral-700">
+                {humanStatus?.current_focus || "Waiting for a current heartbeat."}
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <div>
+              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-neutral-500">
+                <ListChecks className="h-4 w-4" />
+                Intended next moves
+              </div>
+              <ul className="mt-2 space-y-2 text-sm leading-6 text-neutral-700">
+                {(humanStatus?.intended_next_steps?.length
+                  ? humanStatus.intended_next_steps
+                  : ["Run a heartbeat to load the current intent."]).map((step) => (
+                  <li key={step} className="flex gap-2">
+                    <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-neutral-400" />
+                    <span>{step}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-3">
+              <div className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
+                What I need from Pranav
+              </div>
+              <p className="mt-2 text-sm leading-6 text-neutral-700">
+                {humanStatus?.needs_from_user || "Nothing yet. Run a heartbeat to refresh this."}
+              </p>
+            </div>
+            <div className="text-xs leading-5 text-neutral-500">
+              {humanStatus?.confidence || "Confidence will appear after the first heartbeat with the new status packet."}
+            </div>
+            {statusLlm?.error && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-800">
+                OpenClaw status call failed, so this update used deterministic fallback: {statusLlm.error}
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
+
+      <section className="rounded-xl border border-neutral-200 bg-white">
+        <div className="flex flex-wrap items-center gap-2 border-b border-neutral-100 px-4 py-3">
+          <h2 className="text-sm font-semibold text-neutral-950">Wake-up context</h2>
+          <span className="text-xs text-neutral-400">
+            complete V1 context packet loaded by the heartbeat
+          </span>
+        </div>
+        <div className="grid gap-4 p-4 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
+          <div className="space-y-3 text-sm leading-6 text-neutral-700">
+            <p>
+              This is the context the heartbeat builds when it wakes up. The status writer receives this
+              packet, plus stable compact soul context, through the OpenClaw gateway when enabled.
+            </p>
+            <div className="grid gap-2 text-xs">
+              <div className="rounded-lg border border-neutral-200 p-3">
+                <div className="font-semibold text-neutral-800">Mission</div>
+                <div className="mt-1 text-neutral-500">
+                  {typeof wakeContext?.mission === "object" && wakeContext?.mission !== null
+                    ? String((wakeContext.mission as Record<string, unknown>).goal || "-")
+                    : "-"}
+                </div>
+                <div className="mt-2 text-[11px] text-neutral-400">
+                  {typeof wakeContext?.mission === "object" && wakeContext?.mission !== null
+                    ? String((wakeContext.mission as Record<string, unknown>).goal_source || "")
+                    : ""}
+                </div>
+              </div>
+              <div className="rounded-lg border border-neutral-200 p-3">
+                <div className="font-semibold text-neutral-800">Loaded at</div>
+                <div className="mt-1 text-neutral-500">
+                  {typeof wakeContext?.woke_at === "string" ? shortDate(wakeContext.woke_at) : "-"}
+                </div>
+              </div>
+              <div className="rounded-lg border border-neutral-200 p-3">
+                <div className="font-semibold text-neutral-800">Protected context</div>
+                <div className="mt-1 text-neutral-500">
+                  {heartbeat?.soul?.loaded === true ? "soul.md loaded read-only" : "soul.md not loaded"}
+                </div>
+              </div>
+            </div>
+          </div>
+          <details className="rounded-lg border border-neutral-200 bg-neutral-50 p-3 text-xs text-neutral-600" open>
+            <summary className="cursor-pointer select-none font-semibold text-neutral-800">
+              Parsed context JSON
+            </summary>
+            <div className="mt-3 max-h-[520px] overflow-auto rounded-md bg-white p-2">
+              <JsonTree value={wakeContext || {}} label="wake_context" />
+            </div>
+          </details>
+        </div>
       </section>
 
       <section className="rounded-xl border border-neutral-200 bg-white">

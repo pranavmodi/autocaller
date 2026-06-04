@@ -10,6 +10,7 @@ from app.services.master_agent import (
     create_agent_report,
     create_agent_task,
     create_research_scout_task,
+    create_systems_health_agent_task,
     get_agent_config,
     get_agent_task,
     last_heartbeat_result,
@@ -128,6 +129,11 @@ async def post_task(req: AgentTaskCreateRequest):
 @router.post("/tasks/research-scout")
 async def post_research_scout_task(created_by: str = "operator"):
     return {"task": await create_research_scout_task(created_by=created_by)}
+
+
+@router.post("/tasks/systems-health")
+async def post_systems_health_task(created_by: str = "operator"):
+    return {"task": await create_systems_health_agent_task(created_by=created_by)}
 
 
 @router.post("/tasks/research-scout/run")

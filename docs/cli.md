@@ -154,12 +154,30 @@ Every command accepts `--help`. Exit code is `0` on success, `1` on any error
 | `agents show <task_id> [--json]` | Show one subagent task with recent lifecycle events and reports. |
 | `agents create --agent=... --title=... --objective=... [--priority=50 --risk=low]` | Create a minimal durable subagent task packet. |
 | `agents create-research-scout [--json]` | Create the first safe web-learning task for ResearchScoutAgent. It is proposal-only and must not edit code, send email, or modify mailboxes. |
+| `agents create-systems-health [--json]` | Create the next safe SystemsHealthAgent observation/delegation task. This is a queued task packet; the worker implementation still needs to be built. |
 | `agents run-research-scout [--task=<task_id> --json]` | Run one ResearchScoutAgent task now. Fetches official sources where reachable, writes `docs/learning-notes/...`, and creates an `agent_reports` row. |
 | `agents set-status <task_id> <status> [--message=...]` | Set a subagent task status. |
 | `agents task-heartbeat <task_id> --agent=... [--message=... --status=running]` | Record a heartbeat/progress ping from a subagent. |
 | `agents report <task_id> --agent=... --summary=... [--status=reported]` | Attach a structured report-back artifact to a subagent task. |
 | `agents events [--task=<task_id> --limit=100]` | List recent master/subagent lifecycle events. |
 | `agents reports [--task=<task_id> --limit=100]` | List recent subagent reports. |
+
+Heartbeat status uses `app/skills/master-agent-status/SKILL.md`,
+`soul.compact.md`, and the shared OpenClaw gateway client when available. The
+skill is the stable status-writing behavior; `soul.compact.md` is passed as
+compact constitutional guidance near the beginning of the LLM payload; volatile
+task, report, event, and config state comes after it. Full `soul.md` remains
+protected and is included only as metadata/hash unless a deeper strategic task
+explicitly needs it. If the gateway fails, the heartbeat still completes with a
+deterministic fallback status and records the gateway error in the event
+metadata.
+
+When the board is idle, the heartbeat may auto-delegate one safe internal next
+slice as a queued task. Current V1 auto-delegates the SystemsHealthAgent
+log-observation/delegation task once, but it does not run that worker or edit
+code. The current master goal is a bootstrap mission from
+`app/services/master_agent.py::_build_wake_context`; durable master plans are a
+future step.
 
 Default lead-gen batches now use `possible_minds_dynamic`. It treats steps as
 objectives and composes the actual email at send time with

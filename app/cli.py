@@ -2841,6 +2841,16 @@ def agents_status(json_output: bool = typer.Option(False, "--json", help="Print 
         console.print(f"last_completed_at: {last.get('completed_at')}")
         console.print(f"active_task_count: {last.get('active_task_count')}")
         console.print(f"stale_task_ids: {', '.join(last.get('stale_task_ids') or []) or '-'}")
+        human_status = last.get("human_status") or {}
+        status_llm = last.get("status_llm") or {}
+        if human_status:
+            console.print(f"state: {human_status.get('state')}")
+            console.print(f"goal: {human_status.get('goal')}")
+            console.print(f"current_focus: {human_status.get('current_focus')}")
+            console.print(f"needs_from_user: {human_status.get('needs_from_user')}")
+        writer = "openclaw" if status_llm.get("used_llm") else "fallback"
+        model_suffix = f" ({status_llm.get('model')})" if status_llm.get("model") else ""
+        console.print(f"status_writer: {writer}{model_suffix}")
     else:
         console.print("last_heartbeat: none recorded in this process")
 
@@ -2986,6 +2996,17 @@ def agents_create(
 def agents_create_research_scout(json_output: bool = typer.Option(False, "--json")):
     """Create the first safe web-learning subagent task."""
     data = _post("/api/agents/tasks/research-scout")
+    if json_output:
+        console.print_json(data=data)
+        return
+    task = data.get("task") or {}
+    console.print(f"[green]created[/green] {task.get('id')} {task.get('title')}")
+
+
+@agents_app.command("create-systems-health")
+def agents_create_systems_health(json_output: bool = typer.Option(False, "--json")):
+    """Create the next safe SystemsHealthAgent observation/delegation task."""
+    data = _post("/api/agents/tasks/systems-health")
     if json_output:
         console.print_json(data=data)
         return

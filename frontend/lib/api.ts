@@ -333,6 +333,25 @@ export type MasterHeartbeat = {
   queued_task_count: number;
   blocked_task_count: number;
   stale_task_ids: string[];
+  heartbeat_enabled: boolean;
+  heartbeat_interval_seconds: number;
+  human_status?: {
+    state?: string;
+    goal?: string;
+    current_focus?: string;
+    intended_next_steps?: string[];
+    needs_from_user?: string;
+    confidence?: string;
+  };
+  wake_context?: Record<string, unknown>;
+  status_llm?: {
+    used_llm?: boolean;
+    model?: string;
+    skill_path?: string;
+    error?: string;
+    disabled?: boolean;
+    raw_response?: string;
+  };
   soul: Record<string, unknown>;
   next_recommended_slice: string;
 };
@@ -388,6 +407,9 @@ export const listAgentEvents = (args?: { task_id?: string; limit?: number }) => 
 
 export const createResearchScoutTask = () =>
   post<{ task: AgentTask }>("/api/agents/tasks/research-scout");
+
+export const createSystemsHealthTask = () =>
+  post<{ task: AgentTask }>("/api/agents/tasks/systems-health");
 
 export const updateAgentTaskStatus = (
   taskId: string,

@@ -17,6 +17,7 @@ from sqlalchemy import select
 
 from app.db import AsyncSessionLocal, async_engine
 from app.db.models import AgentReportRow, AgentTaskEventRow, AgentTaskRow, SystemSettingsRow
+from app.services.llm_gateway import LLMGatewayError, call_skill_json
 from app.services.product_traces import safe_record_product_trace
 
 
@@ -42,10 +43,24 @@ TERMINAL_TASK_STATUSES = {"completed", "failed", "cancelled"}
 _agent_tables_checked = False
 _last_heartbeat_result: dict[str, Any] | None = None
 
+MASTER_STATUS_SKILL_PATH = Path(os.getenv(
+    "MASTER_AGENT_STATUS_SKILL_PATH",
+    str(Path(__file__).resolve().parents[2] / "app/skills/master-agent-status/SKILL.md"),
+))
+MASTER_STATUS_MODEL = os.getenv("MASTER_AGENT_STATUS_MODEL", "openclaw")
+SOUL_COMPACT_PATH = Path(os.getenv(
+    "MASTER_AGENT_COMPACT_SOUL_PATH",
+    str(Path(__file__).resolve().parents[2] / "soul.compact.md"),
+))
+
 DEFAULT_AGENT_CONFIG = {
     "heartbeat_enabled": True,
     "heartbeat_interval_seconds": 300,
+    "status_llm_enabled": True,
+    "auto_delegate_next_slice_enabled": True,
 }
+
+SYSTEMS_HEALTH_AGENT_TITLE = "Add SystemsHealthAgent log observation and bug-fix delegation"
 
 RESEARCH_SCOUT_SOURCES = [
     {
@@ -132,6 +147,31 @@ def _soul_context() -> dict[str, Any]:
     }
 
 
+def _compact_soul_context() -> dict[str, Any]:
+    path = SOUL_COMPACT_PATH
+    if not path.exists():
+        return {
+            "soul_compact_path": str(path),
+            "loaded": False,
+            "rule": (
+                "soul.compact.md should provide compact constitutional guidance "
+                "for frequent master-agent LLM calls."
+            ),
+        }
+    text = path.read_text(encoding="utf-8", errors="replace")
+    return {
+        "soul_compact_path": str(path),
+        "loaded": True,
+        "sha256": hashlib.sha256(text.encode("utf-8")).hexdigest(),
+        "char_count": len(text),
+        "content": text,
+        "rule": (
+            "Use this compact soul as constitutional guidance. The full soul.md "
+            "remains protected and must not be edited by heartbeat."
+        ),
+    }
+
+
 def _env_heartbeat_enabled() -> bool:
     raw = os.getenv("MASTER_AGENT_HEARTBEAT_ENABLED", "true").strip().lower()
     return raw in {"1", "true", "yes", "on"}
@@ -149,6 +189,8 @@ def _normalize_agent_config(raw: dict[str, Any] | None) -> dict[str, Any]:
     config = dict(DEFAULT_AGENT_CONFIG)
     config["heartbeat_enabled"] = _env_heartbeat_enabled()
     config["heartbeat_interval_seconds"] = _env_heartbeat_interval_seconds()
+    raw_status_llm = os.getenv("MASTER_AGENT_STATUS_LLM_ENABLED", "true").strip().lower()
+    config["status_llm_enabled"] = raw_status_llm in {"1", "true", "yes", "on"}
     if isinstance(raw, dict):
         if "heartbeat_enabled" in raw:
             config["heartbeat_enabled"] = bool(raw.get("heartbeat_enabled"))
@@ -160,6 +202,10 @@ def _normalize_agent_config(raw: dict[str, Any] | None) -> dict[str, Any]:
                 )
             except (TypeError, ValueError):
                 pass
+        if "status_llm_enabled" in raw:
+            config["status_llm_enabled"] = bool(raw.get("status_llm_enabled"))
+        if "auto_delegate_next_slice_enabled" in raw:
+            config["auto_delegate_next_slice_enabled"] = bool(raw.get("auto_delegate_next_slice_enabled"))
     return config
 
 
@@ -433,6 +479,219 @@ def report_to_dict(row: AgentReportRow) -> dict[str, Any]:
     }
 
 
+def _short_task_snapshot(row: AgentTaskRow) -> dict[str, Any]:
+    return {
+        "id": row.id,
+        "assigned_agent": row.assigned_agent,
+        "title": row.title,
+        "status": row.status,
+        "priority": row.priority,
+        "last_heartbeat_at": row.last_heartbeat_at.isoformat() if row.last_heartbeat_at else None,
+        "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+    }
+
+
+def _short_event_snapshot(row: AgentTaskEventRow) -> dict[str, Any]:
+    output = row.output_json if isinstance(row.output_json, dict) else {}
+    return {
+        "id": row.id,
+        "task_id": row.task_id,
+        "agent_id": row.agent_id,
+        "event_type": row.event_type,
+        "message": row.message,
+        "output_summary": {
+            "status": output.get("status"),
+            "active_task_count": output.get("active_task_count"),
+            "queued_task_count": output.get("queued_task_count"),
+            "blocked_task_count": output.get("blocked_task_count"),
+        },
+        "created_at": row.created_at.isoformat() if row.created_at else None,
+    }
+
+
+def _build_wake_context(
+    *,
+    started_at: datetime,
+    actor: str,
+    agent_config: dict[str, Any],
+    active_tasks: list[dict[str, Any]],
+    recent_reports: list[dict[str, Any]],
+    recent_events: list[dict[str, Any]],
+) -> dict[str, Any]:
+    return {
+        "kind": "master_agent_wake_context_v1",
+        "note": (
+            "This is the complete context packet loaded by the heartbeat before "
+            "the optional OpenClaw status-writing call."
+        ),
+        "actor": actor,
+        "woke_at": started_at.isoformat(),
+        "mission": {
+            "state": "Build and operate Possible OS as a self-improving operating system for Possible Minds.",
+            "goal": "Keep the system observable, delegate bounded work, report status clearly, and improve through traces, reports, evals, and approved code or skill changes.",
+            "goal_source": "bootstrap mission in app/services/master_agent.py::_build_wake_context; future version should load durable master plans",
+            "protected_context": "soul.md is read as constitutional context and must not be edited by heartbeat.",
+        },
+        "soul_compact": _compact_soul_context(),
+        "configuration": agent_config,
+        "capabilities_today": [
+            "record heartbeat traces",
+            "inspect durable subagent tasks",
+            "auto-delegate one safe next-slice task when the board is idle",
+            "mark stale subagent tasks",
+            "run queued ResearchScoutAgent tasks through the subagent runner",
+            "show task events and reports in the Agents UI",
+        ],
+        "current_tasks": active_tasks,
+        "recent_reports": recent_reports[:5],
+        "recent_events": recent_events[:8],
+        "constraints": [
+            "No automatic code edits from heartbeat.",
+            "No email, mailbox, or external business action from heartbeat.",
+            "No destructive git action without explicit human approval.",
+            "Subagent reports are evidence, not final truth.",
+        ],
+        "next_recommended_slice": (
+            "Add SystemsHealthAgent log observation and bug-fix delegation, then "
+            "connect reports to reviewable improvement findings."
+        ),
+        "soul": _soul_context(),
+    }
+
+
+def _build_human_status(
+    *,
+    active_count: int,
+    queued_count: int,
+    blocked_count: int,
+    stale_ids: list[str],
+    active_tasks: list[dict[str, Any]],
+    recent_reports: list[dict[str, Any]],
+) -> dict[str, Any]:
+    if stale_ids:
+        state = f"I found {len(stale_ids)} stale task{'s' if len(stale_ids) != 1 else ''} that need attention."
+    elif blocked_count:
+        state = f"I am watching {blocked_count} blocked task{'s' if blocked_count != 1 else ''}."
+    elif queued_count:
+        state = f"I have {queued_count} queued task{'s' if queued_count != 1 else ''} ready for a worker."
+    elif active_count:
+        state = f"I am monitoring {active_count} active task{'s' if active_count != 1 else ''}."
+    else:
+        state = "I am idle right now. No active, queued, blocked, or stale subagent tasks need intervention."
+
+    if active_tasks:
+        focus = active_tasks[0]["title"]
+    elif recent_reports:
+        focus = recent_reports[0].get("summary") or "Review the latest subagent report."
+    else:
+        focus = "Keep the master-agent loop healthy and prepare the next useful development slice."
+
+    intent = [
+        "Keep checking the task board on the configured heartbeat period.",
+        "Surface stale, blocked, or newly reported work in the Agents UI.",
+        "Use the next approved slice to add log observation and bug-fix delegation.",
+    ]
+    if queued_count:
+        intent.insert(0, "Let the subagent runner claim queued work when its worker type is supported.")
+    if stale_ids:
+        intent.insert(0, "Show the stale task IDs so an operator can decide whether to restart, cancel, or reassign them.")
+
+    needs = (
+        "Nothing required from Pranav right now."
+        if not stale_ids and not blocked_count
+        else "Review the stale or blocked tasks and decide whether to unblock, cancel, or reassign them."
+    )
+
+    return {
+        "state": state,
+        "goal": "Operate Possible OS as a self-improving system: observe work, delegate bounded tasks, report clearly, learn from evidence, and improve only through reviewable changes.",
+        "current_focus": focus,
+        "intended_next_steps": intent,
+        "needs_from_user": needs,
+        "confidence": "High for task-board status. Limited for app health until SystemsHealthAgent gets log access.",
+    }
+
+
+def _normalize_status_list(value: Any) -> list[str]:
+    if isinstance(value, list):
+        return [str(item).strip() for item in value if str(item).strip()][:5]
+    if isinstance(value, str) and value.strip():
+        return [value.strip()]
+    return []
+
+
+def _validate_llm_human_status(parsed: dict[str, Any], fallback: dict[str, Any]) -> dict[str, Any]:
+    status = {
+        "state": str(parsed.get("state") or fallback["state"]).strip(),
+        "goal": str(parsed.get("goal") or fallback["goal"]).strip(),
+        "current_focus": str(parsed.get("current_focus") or fallback["current_focus"]).strip(),
+        "intended_next_steps": _normalize_status_list(parsed.get("intended_next_steps"))
+        or list(fallback["intended_next_steps"]),
+        "needs_from_user": str(parsed.get("needs_from_user") or fallback["needs_from_user"]).strip(),
+        "confidence": str(parsed.get("confidence") or fallback["confidence"]).strip(),
+        "reasoning": str(parsed.get("reasoning") or "").strip(),
+    }
+    for key in ("state", "goal", "current_focus", "needs_from_user", "confidence", "reasoning"):
+        if len(status[key]) > 1200:
+            status[key] = status[key][:1197].rstrip() + "..."
+    return status
+
+
+async def _compose_human_status_with_llm(
+    *,
+    wake_context: dict[str, Any],
+    fallback_status: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    payload = {
+        "stable_context": {
+            "compact_soul": _compact_soul_context(),
+            "output_contract": {
+                "required_fields": [
+                    "state",
+                    "goal",
+                    "current_focus",
+                    "intended_next_steps",
+                    "needs_from_user",
+                    "confidence",
+                    "reasoning",
+                ],
+            },
+        },
+        "wake_context": wake_context,
+        "fallback_status": fallback_status,
+        "instructions": {
+            "return_json_only": True,
+            "do_not_execute_tools": True,
+            "do_not_invent_external_observations": True,
+        },
+    }
+    result = await call_skill_json(
+        skill_path=MASTER_STATUS_SKILL_PATH,
+        payload=payload,
+        required_fields=[
+            "state",
+            "goal",
+            "current_focus",
+            "intended_next_steps",
+            "needs_from_user",
+            "confidence",
+            "reasoning",
+        ],
+        model=MASTER_STATUS_MODEL,
+        max_tokens=int(os.getenv("MASTER_AGENT_STATUS_MAX_TOKENS", "1200")),
+        timeout_s=int(os.getenv("MASTER_AGENT_STATUS_TIMEOUT_S", "60")),
+        retries=int(os.getenv("MASTER_AGENT_STATUS_RETRIES", "1")),
+    )
+    status = _validate_llm_human_status(result.parsed, fallback_status)
+    metadata = {
+        "used_llm": True,
+        "model": result.model,
+        "skill_path": str(MASTER_STATUS_SKILL_PATH),
+        "raw_response": result.raw_response[:4000],
+    }
+    return status, metadata
+
+
 async def ensure_agent_tables() -> None:
     """Create agent tables on demand if Alembic has not been applied yet."""
     global _agent_tables_checked
@@ -648,6 +907,167 @@ async def create_research_scout_task(*, created_by: str = "operator") -> dict[st
         heartbeat_interval_seconds=300,
         created_by=created_by,
     )
+
+
+def _systems_health_task_kwargs(*, created_by: str) -> dict[str, Any]:
+    return {
+        "assigned_agent": "SystemsHealthAgent",
+        "title": SYSTEMS_HEALTH_AGENT_TITLE,
+        "objective": (
+            "Design and implement the first safe SystemsHealthAgent slice. The agent should "
+            "observe Possible OS operational health through bounded read-only sources, summarize "
+            "bugs or anomalies, redact secrets, and produce reviewable bug-fix delegation packets. "
+            "This task must start with observation and reporting before any code-changing autonomy."
+        ),
+        "context": {
+            "source_doc": "docs/MASTER_AGENT_LEARNING_SYSTEM.md",
+            "trigger": "master heartbeat next recommended slice",
+            "horizontal_slice": "observe/report first; execute/fix later after review",
+            "candidate_log_sources": [
+                "systemctl status autocaller-backend.service",
+                "systemctl status autocaller-frontend.service",
+                "journalctl -u autocaller-backend.service",
+                "journalctl -u autocaller-frontend.service",
+                "product_traces",
+                "agent_task_events",
+                "backend health endpoint",
+                "frontend route health",
+            ],
+        },
+        "allowed_tools": [
+            "read_logs",
+            "read_product_traces",
+            "read_agent_events",
+            "read_git_status",
+            "run_validation_commands",
+            "write_agent_report",
+            "create_bug_finding",
+            "create_coding_subagent_task_packet",
+        ],
+        "forbidden_actions": [
+            "edit soul.md",
+            "send email",
+            "modify mailboxes",
+            "modify Front/Zoho/Gmail state",
+            "run destructive git commands",
+            "restart services without explicit operator approval",
+            "apply code changes without explicit operator approval",
+            "force push",
+        ],
+        "expected_output_schema": {
+            "summary": "string",
+            "observed_sources": ["string"],
+            "anomalies": ["string"],
+            "bug_findings": ["object"],
+            "recommended_delegations": ["object"],
+            "validation_commands": ["string"],
+            "risks": ["string"],
+        },
+        "acceptance_criteria": [
+            "Defines bounded read-only log and health sources.",
+            "Produces a human-readable health report before proposing any fix.",
+            "Redacts secrets and avoids dumping raw logs into LLM context.",
+            "Creates reviewable bug-fix delegation packets with exact evidence and validation commands.",
+            "Does not edit code, restart services, or run destructive git commands without approval.",
+        ],
+        "verification_commands": [
+            ".venv/bin/python -m py_compile app/services/master_agent.py app/api/agents.py app/cli.py",
+            ".venv/bin/pytest tests/test_master_agent.py tests/test_product_traces.py -q",
+            "cd frontend && npx tsc --noEmit",
+        ],
+        "risk_level": "medium",
+        "requires_human_approval": True,
+        "priority": 90,
+        "heartbeat_interval_seconds": 300,
+        "created_by": created_by,
+    }
+
+
+async def create_systems_health_agent_task(*, created_by: str = "operator") -> dict[str, Any]:
+    return await create_agent_task(**_systems_health_task_kwargs(created_by=created_by))
+
+
+async def maybe_auto_delegate_next_slice(*, actor: str) -> dict[str, Any] | None:
+    """Create one safe next-slice task when the board is otherwise idle.
+
+    This is delegation only. It does not run the worker or mutate app code.
+    """
+    await ensure_agent_tables()
+    now = _utcnow()
+    kwargs = _systems_health_task_kwargs(created_by="master-agent-heartbeat")
+    task_id = _new_id("task")
+    async with AsyncSessionLocal() as session:
+        active_existing = (await session.execute(
+            select(AgentTaskRow)
+            .where(AgentTaskRow.status.in_(list(ACTIVE_TASK_STATUSES)))
+            .limit(1)
+        )).scalar_one_or_none()
+        if active_existing:
+            return None
+        prior_systems_health = (await session.execute(
+            select(AgentTaskRow)
+            .where(AgentTaskRow.assigned_agent == "SystemsHealthAgent")
+            .where(AgentTaskRow.title == SYSTEMS_HEALTH_AGENT_TITLE)
+            .limit(1)
+        )).scalar_one_or_none()
+        if prior_systems_health:
+            return None
+        row = AgentTaskRow(
+            id=task_id,
+            assigned_agent=kwargs["assigned_agent"],
+            title=kwargs["title"],
+            objective=kwargs["objective"],
+            context_json=kwargs["context"],
+            allowed_tools_json=kwargs["allowed_tools"],
+            forbidden_actions_json=kwargs["forbidden_actions"],
+            expected_output_schema_json=kwargs["expected_output_schema"],
+            acceptance_criteria_json=kwargs["acceptance_criteria"],
+            verification_commands_json=kwargs["verification_commands"],
+            risk_level=kwargs["risk_level"],
+            requires_human_approval=kwargs["requires_human_approval"],
+            priority=kwargs["priority"],
+            heartbeat_interval_seconds=kwargs["heartbeat_interval_seconds"],
+            created_by=kwargs["created_by"],
+        )
+        session.add(row)
+        await session.flush()
+        session.add(AgentTaskEventRow(
+            task_id=task_id,
+            agent_id="master-agent",
+            event_type="task_created",
+            message="Auto-delegated next safe slice to SystemsHealthAgent.",
+            input_json={
+                "reason": "task board was idle and next recommended slice was internal observation/delegation",
+                "actor": actor,
+                "created_at": now.isoformat(),
+            },
+            output_json={"status": "queued", "assigned_agent": "SystemsHealthAgent"},
+            metadata_json={"auto_delegated": True},
+        ))
+        session.add(AgentTaskEventRow(
+            task_id=None,
+            agent_id="master-agent",
+            event_type="next_slice_delegated",
+            message="Created SystemsHealthAgent task from heartbeat next recommended slice.",
+            input_json={"actor": actor, "started_at": now.isoformat()},
+            output_json={"task_id": task_id, "status": "queued"},
+            metadata_json={"requires_human_approval": True},
+        ))
+        await session.commit()
+        await session.refresh(row)
+        task = task_to_dict(row)
+    await safe_record_product_trace(
+        actor_type="agent",
+        actor_id="master-agent",
+        event_type="next_slice_delegated",
+        surface="agents",
+        entity_type="agent_task",
+        entity_id=task_id,
+        input_json={"actor": actor, "title": SYSTEMS_HEALTH_AGENT_TITLE},
+        output_json={"status": "queued", "assigned_agent": "SystemsHealthAgent"},
+        context_json={"reason": "idle board; internal observation slice"},
+    )
+    return task
 
 
 async def list_agent_tasks(
@@ -1024,10 +1444,19 @@ async def run_master_heartbeat(*, actor: str = "master-agent") -> dict[str, Any]
         context_json={"soul": _soul_context()},
         metadata_json={"started_at": started_at.isoformat()},
     )
+    auto_delegated_task: dict[str, Any] | None = None
+    if agent_config.get("auto_delegate_next_slice_enabled", True):
+        auto_delegated_task = await maybe_auto_delegate_next_slice(actor=actor)
     stale_ids: list[str] = []
     active_count = 0
     blocked_count = 0
     queued_count = 0
+    active_task_snapshots: list[dict[str, Any]] = []
+    recent_report_snapshots: list[dict[str, Any]] = []
+    recent_event_snapshots: list[dict[str, Any]] = []
+    human_status: dict[str, Any] = {}
+    wake_context: dict[str, Any] = {}
+    status_metadata: dict[str, Any] = {"used_llm": False}
     async with AsyncSessionLocal() as session:
         rows = (await session.execute(
             select(AgentTaskRow).where(AgentTaskRow.status.in_(list(ACTIVE_TASK_STATUSES)))
@@ -1035,6 +1464,7 @@ async def run_master_heartbeat(*, actor: str = "master-agent") -> dict[str, Any]
         active_count = len(rows)
         blocked_count = sum(1 for row in rows if row.status == "blocked")
         queued_count = sum(1 for row in rows if row.status == "queued")
+        active_task_snapshots = [_short_task_snapshot(row) for row in rows[:20]]
         now = _utcnow()
         for row in rows:
             if row.status not in STALE_CHECK_STATUSES:
@@ -1056,19 +1486,79 @@ async def run_master_heartbeat(*, actor: str = "master-agent") -> dict[str, Any]
                     },
                     output_json={"status": "stale"},
                 ))
+        recent_report_rows = (await session.execute(
+            select(AgentReportRow).order_by(AgentReportRow.created_at.desc()).limit(5)
+        )).scalars().all()
+        recent_event_rows = (await session.execute(
+            select(AgentTaskEventRow).order_by(AgentTaskEventRow.created_at.desc()).limit(8)
+        )).scalars().all()
+        recent_report_snapshots = [report_to_dict(row) for row in recent_report_rows]
+        recent_event_snapshots = [_short_event_snapshot(row) for row in recent_event_rows]
+        fallback_status = _build_human_status(
+            active_count=active_count,
+            queued_count=queued_count,
+            blocked_count=blocked_count,
+            stale_ids=stale_ids,
+            active_tasks=active_task_snapshots,
+            recent_reports=recent_report_snapshots,
+        )
+        wake_context = _build_wake_context(
+            started_at=started_at,
+            actor=actor,
+            agent_config=agent_config,
+            active_tasks=active_task_snapshots,
+            recent_reports=recent_report_snapshots,
+            recent_events=recent_event_snapshots,
+        )
+        wake_context["auto_delegated_task"] = auto_delegated_task or {}
+        if agent_config.get("status_llm_enabled", True):
+            try:
+                human_status, status_metadata = await _compose_human_status_with_llm(
+                    wake_context=wake_context,
+                    fallback_status=fallback_status,
+                )
+            except LLMGatewayError as exc:
+                human_status = {
+                    **fallback_status,
+                    "reasoning": "OpenClaw gateway status call failed; using deterministic fallback.",
+                }
+                status_metadata = {
+                    "used_llm": False,
+                    "error": str(exc),
+                    "skill_path": str(MASTER_STATUS_SKILL_PATH),
+                    "model": MASTER_STATUS_MODEL,
+                }
+                logger.warning("master-agent status LLM call failed: %s", exc)
+        else:
+            human_status = {
+                **fallback_status,
+                "reasoning": "Status LLM is disabled in agent_config; using deterministic fallback.",
+            }
+            status_metadata = {"used_llm": False, "disabled": True}
+        wake_context["llm_call"] = {
+            "enabled": bool(agent_config.get("status_llm_enabled", True)),
+            "model": MASTER_STATUS_MODEL,
+            "skill_path": str(MASTER_STATUS_SKILL_PATH),
+            "status": "succeeded" if status_metadata.get("used_llm") else "fallback",
+        }
         session.add(AgentTaskEventRow(
             task_id=None,
             agent_id="master-agent",
             event_type="master_heartbeat_completed",
-            message="Heartbeat checked active subagent tasks.",
-            input_json={"started_at": started_at.isoformat()},
+            message=human_status["state"],
+            input_json=wake_context,
             output_json={
                 "active_task_count": active_count,
                 "queued_task_count": queued_count,
                 "blocked_task_count": blocked_count,
                 "stale_task_ids": stale_ids,
+                "human_status": human_status,
+                "auto_delegated_task": auto_delegated_task or {},
             },
-            metadata_json={"trace_id": trace.get("trace_id") if trace else None},
+            metadata_json={
+                "trace_id": trace.get("trace_id") if trace else None,
+                "status_llm": status_metadata,
+            },
         ))
         await session.commit()
     completed_at = _utcnow()
@@ -1082,10 +1572,14 @@ async def run_master_heartbeat(*, actor: str = "master-agent") -> dict[str, Any]
         "stale_task_ids": stale_ids,
         "heartbeat_enabled": agent_config["heartbeat_enabled"],
         "heartbeat_interval_seconds": agent_config["heartbeat_interval_seconds"],
+        "human_status": human_status,
+        "wake_context": wake_context,
+        "status_llm": status_metadata,
+        "auto_delegated_task": auto_delegated_task,
         "soul": _soul_context(),
         "next_recommended_slice": (
-            "Create and run ResearchScoutAgent against official OpenAI/Anthropic sources, "
-            "then turn its report into a reviewable improvement finding."
+            "Add SystemsHealthAgent log observation and bug-fix delegation, then "
+            "connect reports to reviewable improvement findings."
         ),
     }
     _last_heartbeat_result = result
