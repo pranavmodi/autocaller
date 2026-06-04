@@ -399,10 +399,10 @@ Approval should mean "send this exact thing," not "send whatever the system curr
 
 ## Execution Policy For Email
 
-The first high-value action type should be:
+The first high-value action type is:
 
 ```text
-send_approved_email
+send_approved_lead_gen_draft
 ```
 
 It should only send when:
@@ -436,10 +436,10 @@ bin/autocaller actions run-next
 bin/autocaller actions policy-check <action_id>
 ```
 
-For lead-gen email specifically:
+For lead-gen email specifically, current V1 command is:
 
 ```text
-bin/autocaller lead-gen send-approved-action --notification-id <id>
+bin/autocaller actions send-approved-lead-gen-draft --item=<batch_item_id> --subject=... --body=...
 ```
 
 or:
@@ -722,13 +722,29 @@ As of this document:
 - Product traces exist.
 - Lead-gen email send exists through the lead-gen/operator flow.
 - Operator notifications exist.
-- The action execution queue described here does not yet exist.
+- The first durable action execution queue exists:
+  - `agent_actions`
+  - `agent_action_events`
+  - `app/services/action_execution.py`
+  - `GET /api/actions`
+  - `GET /api/actions/{id}`
+  - `POST /api/actions/{id}/policy-check`
+  - `POST /api/actions/{id}/execute`
+  - `POST /api/actions/lead-gen/send-approved-draft`
+  - `bin/autocaller actions list`
+  - `bin/autocaller actions show`
+  - `bin/autocaller actions policy-check`
+  - `bin/autocaller actions execute`
+  - `bin/autocaller actions send-approved-lead-gen-draft`
+- The first action type is `send_approved_lead_gen_draft`.
+- The existing lead-gen `/send-draft` endpoint now creates and executes a durable action row, then calls the existing Zoho-backed send path.
 - The master agent cannot yet execute arbitrary CLI actions.
 - The master agent cannot yet send emails.
+  It can only observe this execution system until a future policy-approved master-agent action-request path is added.
 
 ## What To Build First
 
-Build the smallest working action loop:
+The first smallest working action loop is now implemented:
 
 ```text
 manual approved lead-gen draft
@@ -739,7 +755,7 @@ manual approved lead-gen draft
 -> mark action done
 ```
 
-After that works, add:
+Next, add:
 
 1. master-agent action proposal
 2. autonomous low-risk execution
@@ -759,4 +775,3 @@ After that works, add:
 - Keep `soul.md` protected.
 - Use progressive disclosure for agent context.
 - Skillify repeated action procedures.
-

@@ -480,6 +480,67 @@ class AgentReportRow(Base):
     )
 
 
+class AgentActionRow(Base):
+    """Durable execution request for a bounded Possible OS action."""
+    __tablename__ = "agent_actions"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    action_type: Mapped[str] = mapped_column(String(96), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="proposed")
+    risk_level: Mapped[str] = mapped_column(String(16), nullable=False, default="low")
+    requested_by: Mapped[str] = mapped_column(String(128), nullable=False, default="operator")
+    approved_by: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    entity_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    entity_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    input_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    policy_result_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    execution_result_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    trace_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    scheduled_for: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    started_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), default=_utcnow, onupdate=_utcnow,
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('proposed', 'waiting_for_approval', 'approved', 'queued', "
+            "'running', 'succeeded', 'failed', 'cancelled', 'expired', 'blocked', 'observed')",
+            name="ck_agent_actions_status",
+        ),
+        Index("ix_agent_actions_status", "status"),
+        Index("ix_agent_actions_type_status", "action_type", "status"),
+        Index("ix_agent_actions_entity", "entity_type", "entity_id"),
+        Index("ix_agent_actions_created_at", "created_at"),
+    )
+
+
+class AgentActionEventRow(Base):
+    """Append-only event timeline for durable action execution."""
+    __tablename__ = "agent_action_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    action_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("agent_actions.id", ondelete="CASCADE"), nullable=False,
+    )
+    event_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    actor: Mapped[str] = mapped_column(String(128), nullable=False, default="system")
+    message: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    input_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    output_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    metadata_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow)
+
+    __table_args__ = (
+        Index("ix_agent_action_events_action_id", "action_id"),
+        Index("ix_agent_action_events_type", "event_type"),
+        Index("ix_agent_action_events_created_at", "created_at"),
+    )
+
+
 class AgentCapabilityRow(Base):
     """Discovered or declared tool/capability available to the master agent."""
     __tablename__ = "agent_capabilities"

@@ -18,6 +18,8 @@ from sqlalchemy import desc, select
 from app.db import AsyncSessionLocal, async_engine
 from app.db.models import (
     AgentCapabilityRow,
+    AgentActionEventRow,
+    AgentActionRow,
     AgentReportRow,
     AgentTaskEventRow,
     AgentTaskRow,
@@ -94,6 +96,49 @@ CAPABILITY_DEFINITIONS = [
         "requires_approval": False,
         "autonomous_allowed": True,
         "command_json": {"argv": ["bin/autocaller", "agents", "heartbeat", "--json"], "safe_probe": False},
+    },
+    {
+        "name": "actions list",
+        "capability_type": "cli",
+        "source": "bin/autocaller actions list --json",
+        "purpose": "Inspect durable Possible OS action execution records.",
+        "risk_level": "low",
+        "requires_approval": False,
+        "autonomous_allowed": True,
+        "command_json": {"argv": ["bin/autocaller", "actions", "list", "--json"], "safe_probe": True},
+    },
+    {
+        "name": "actions policy-check",
+        "capability_type": "cli",
+        "source": "bin/autocaller actions policy-check <action_id> --json",
+        "purpose": "Run reusable action policy checks without execution.",
+        "risk_level": "low",
+        "requires_approval": False,
+        "autonomous_allowed": True,
+        "command_json": {"argv": ["bin/autocaller", "actions", "policy-check", "<action_id>", "--json"], "safe_probe": False},
+    },
+    {
+        "name": "actions execute",
+        "capability_type": "cli",
+        "source": "bin/autocaller actions execute <action_id> --json",
+        "purpose": "Execute one policy-approved durable action through a narrow adapter.",
+        "risk_level": "high",
+        "requires_approval": True,
+        "autonomous_allowed": False,
+        "command_json": {"argv": ["bin/autocaller", "actions", "execute", "<action_id>", "--json"], "safe_probe": False},
+    },
+    {
+        "name": "send approved lead-gen draft action",
+        "capability_type": "cli",
+        "source": "bin/autocaller actions send-approved-lead-gen-draft --item=<id> --subject=... --body=...",
+        "purpose": "Create and optionally execute an exact approved lead-gen email draft action via Zoho-backed send path.",
+        "risk_level": "high",
+        "requires_approval": True,
+        "autonomous_allowed": False,
+        "command_json": {
+            "argv": ["bin/autocaller", "actions", "send-approved-lead-gen-draft", "--item", "<batch_item_id>", "--subject", "<subject>", "--body", "<body>"],
+            "safe_probe": False,
+        },
     },
     {
         "name": "run research scout",
@@ -924,6 +969,8 @@ async def ensure_agent_tables() -> None:
         await conn.run_sync(AgentTaskRow.__table__.create, checkfirst=True)
         await conn.run_sync(AgentTaskEventRow.__table__.create, checkfirst=True)
         await conn.run_sync(AgentReportRow.__table__.create, checkfirst=True)
+        await conn.run_sync(AgentActionRow.__table__.create, checkfirst=True)
+        await conn.run_sync(AgentActionEventRow.__table__.create, checkfirst=True)
         await conn.run_sync(AgentCapabilityRow.__table__.create, checkfirst=True)
         await conn.run_sync(MasterGoalRow.__table__.create, checkfirst=True)
     _agent_tables_checked = True

@@ -1,0 +1,83 @@
+"""Durable action execution endpoints for Possible OS."""
+from __future__ import annotations
+
+from typing import Any
+
+from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel, Field
+
+from app.services.action_execution import (
+    check_action_policy,
+    create_and_execute_send_approved_lead_gen_draft,
+    create_send_approved_lead_gen_draft_action,
+    execute_action,
+    get_action,
+    list_actions,
+)
+
+
+router = APIRouter(prefix="/api/actions", tags=["actions"])
+
+
+class LeadGenDraftActionRequest(BaseModel):
+    batch_item_id: str = Field(..., min_length=1, max_length=64)
+    subject: str = Field(..., min_length=1)
+    body: str = Field(..., min_length=1)
+    requested_by: str = Field("operator", max_length=128)
+    approved_by: str = Field("operator", max_length=128)
+    composer_experiment_key: str | None = None
+    composer_variant_key: str | None = None
+    skill_path: str | None = None
+    skill_sha256: str | None = None
+
+
+class ExecuteActionRequest(BaseModel):
+    actor: str = Field("operator", max_length=128)
+
+
+@router.get("")
+async def actions(
+    status: str | None = Query(None),
+    action_type: str | None = Query(None),
+    limit: int = Query(100, ge=1, le=500),
+):
+    return {"actions": await list_actions(status=status, action_type=action_type, limit=limit)}
+
+
+@router.get("/{action_id}")
+async def action(action_id: str):
+    result = await get_action(action_id)
+    if not result:
+        raise HTTPException(status_code=404, detail="action_not_found")
+    return result
+
+
+@router.post("/{action_id}/policy-check")
+async def policy_check(action_id: str, req: ExecuteActionRequest | None = None):
+    try:
+        return {"policy": await check_action_policy(action_id, actor=(req.actor if req else "operator"))}
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+@router.post("/{action_id}/execute")
+async def execute(action_id: str, req: ExecuteActionRequest | None = None):
+    try:
+        return await execute_action(action_id, actor=(req.actor if req else "operator"))
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"{type(exc).__name__}: {str(exc)[:500]}")
+
+
+@router.post("/lead-gen/send-approved-draft")
+async def create_lead_gen_send_action(req: LeadGenDraftActionRequest, execute_now: bool = Query(False)):
+    kwargs: dict[str, Any] = req.model_dump()
+    try:
+        if execute_now:
+            return await create_and_execute_send_approved_lead_gen_draft(**kwargs)
+        return {"action": await create_send_approved_lead_gen_draft_action(**kwargs)}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"{type(exc).__name__}: {str(exc)[:500]}")

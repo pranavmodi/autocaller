@@ -147,6 +147,11 @@ Every command accepts `--help`. Exit code is `0` on success, `1` on any error
 | `todos add <title> [--area=lead-gen --status=not_started --body=... --source-url=...]` | Add a DB-backed todo. |
 | `todos update <id> [--title=... --status=done --body=... --clear-source-url]` | Edit a DB-backed todo. |
 | `todos delete <id>` | Delete a DB-backed todo. |
+| `actions list [--status=approved --type=send_approved_lead_gen_draft --json]` | List durable Possible OS action execution records. |
+| `actions show <action_id> [--json]` | Show one action with its append-only event timeline. |
+| `actions policy-check <action_id> [--actor=operator --json]` | Run the reusable policy checker without executing the action. |
+| `actions execute <action_id> [--actor=operator --json]` | Execute one policy-approved action through its narrow executor. |
+| `actions send-approved-lead-gen-draft --item=<batch_item_id> --subject=... --body=... [--approved-by=operator] [--no-execute]` | Create and optionally execute the first high-risk action slice: an exact approved lead-gen email draft sent through the existing Zoho-backed lead-gen path. |
 | `agents status [--json]` | Show the Possible OS master-agent heartbeat configuration and the last heartbeat result in the current backend process. |
 | `agents config [--interval-seconds=300] [--enabled/--disabled] [--json]` | Update the persisted master-agent heartbeat settings. The running loop reads this setting every tick, so changing the period does not require a backend restart. |
 | `agents heartbeat [--json]` | Run one master-agent heartbeat tick immediately. V1 reads `soul.md` as protected read-only context, records traces, checks active subagent tasks, and marks stale workers. |

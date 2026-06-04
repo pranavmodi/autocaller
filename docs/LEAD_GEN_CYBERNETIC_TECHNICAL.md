@@ -28,9 +28,14 @@ Important routes:
 | `GET` | `/api/lead-gen/batches` | list batches |
 | `GET` | `/api/lead-gen/batches/{batch_id}` | get batch, items, optional observations |
 | `POST` | `/api/lead-gen/batches/{batch_id}/approve` | approve batch and optionally queue sequences |
-| `POST` | `/api/lead-gen/batch-items/{batch_item_id}/send-draft` | send an approved edited draft for a batch item |
+| `POST` | `/api/lead-gen/batch-items/{batch_item_id}/send-draft` | create and execute a durable approved-draft action, then send through the existing Zoho-backed batch-item path |
 | `POST` | `/api/lead-gen/observations/classify` | classify and store manual/API feedback |
 | `POST` | `/api/lead-gen/batches/{batch_id}/proposal` | create a human-reviewed learning proposal |
+| `GET` | `/api/actions` | list durable Possible OS action execution records |
+| `GET` | `/api/actions/{action_id}` | show one action and its event timeline |
+| `POST` | `/api/actions/{action_id}/policy-check` | run reusable action policy checks without execution |
+| `POST` | `/api/actions/{action_id}/execute` | execute one policy-approved action |
+| `POST` | `/api/actions/lead-gen/send-approved-draft` | create, and optionally execute, a high-risk approved lead-gen email action |
 | `POST` | `/api/inbound-email/poll` | poll Zoho IMAP and create reply observations/actions |
 | `GET` | `/api/inbound-email` | list stored inbound messages |
 | `GET` | `/api/inbound-email/config` | masked IMAP config |
@@ -58,6 +63,11 @@ bin/autocaller lead-gen approve <batch_id>
 bin/autocaller lead-gen approve <batch_id> --start-sequences
 bin/autocaller lead-gen observe --event-type email_reply --item <batch_item_id> --text "..."
 bin/autocaller lead-gen propose <batch_id>
+bin/autocaller actions list --type send_approved_lead_gen_draft
+bin/autocaller actions show <action_id>
+bin/autocaller actions policy-check <action_id>
+bin/autocaller actions execute <action_id>
+bin/autocaller actions send-approved-lead-gen-draft --item <batch_item_id> --subject "..." --body "..."
 bin/autocaller inbound poll --limit 50 --classify
 bin/autocaller todos list --area lead-gen
 bin/autocaller todos add "Review new workflow idea" --area lead-gen --source-url https://...
@@ -115,9 +125,47 @@ Responsibilities:
 - serialize batches, items, observations, and proposals;
 - approve batches;
 - schedule queueable sequence starts;
-- send edited batch-item drafts;
+- send edited batch-item drafts through the durable action execution slice;
 - classify and store observations;
 - create learning proposals.
+
+### Durable Action Execution
+
+File: `app/services/action_execution.py`
+
+The first horizontal action-execution slice wraps lead-gen email sending.
+
+Current action type:
+
+- `send_approved_lead_gen_draft`
+
+Execution flow:
+
+1. The operator approves an exact subject/body in the lead-gen draft modal or CLI.
+2. The backend creates an `agent_actions` row with:
+   - `action_type = send_approved_lead_gen_draft`
+   - `risk_level = high`
+   - `entity_type = lead_gen_batch_item`
+   - `entity_id = <batch_item_id>`
+   - subject/body hashes in `input_json`
+   - approval metadata in `input_json.approval`
+3. The policy checker verifies:
+   - action status allows execution;
+   - approval metadata exists;
+   - subject/body are present;
+   - subject/body hashes match the approved version;
+   - Zoho API transport is configured;
+   - the batch item exists;
+   - the batch item has not already started;
+   - the contact has an email address;
+   - no prior successful action exists for the same batch item.
+4. If allowed, the executor marks the action `running`.
+5. The executor calls `send_batch_item_draft`, preserving the existing Zoho-backed send behavior.
+6. The executor marks the action `succeeded` or `failed`.
+7. `agent_action_events` and `product_traces` record approval, policy check, start, success, or failure.
+
+The master agent does not yet create or execute this high-risk action by itself.
+That requires a future policy-approved action-request path.
 
 Important constants:
 

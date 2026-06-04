@@ -6,6 +6,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from app.services.action_execution import create_and_execute_send_approved_lead_gen_draft
 from app.services.lead_gen_cybernetic import (
     approve_batch,
     classify_and_store_observation,
@@ -15,7 +16,6 @@ from app.services.lead_gen_cybernetic import (
     ensure_default_policy,
     get_batch,
     list_batches,
-    send_batch_item_draft,
     set_daily_send_budget,
 )
 from app.services.sequences.registry import DEFAULT_TEMPLATE_KEY
@@ -147,16 +147,21 @@ async def send_batch_item_preview_draft(
     req: SendBatchItemDraftRequest,
 ):
     try:
-        return await send_batch_item_draft(
+        execution = await create_and_execute_send_approved_lead_gen_draft(
             batch_item_id=batch_item_id,
             subject=req.subject,
             body=req.body,
-            sent_by=req.sent_by,
+            requested_by=req.sent_by,
+            approved_by=req.sent_by,
             composer_experiment_key=req.composer_experiment_key,
             composer_variant_key=req.composer_variant_key,
             skill_path=req.skill_path,
             skill_sha256=req.skill_sha256,
         )
+        result = dict(execution.get("result") or {})
+        result["agent_action"] = execution.get("action")
+        result["agent_action_policy"] = execution.get("policy")
+        return result
     except ValueError as e:
         detail = str(e)
         if detail in {"batch_item_not_found", "contact_email_not_found"}:

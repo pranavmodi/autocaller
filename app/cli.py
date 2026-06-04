@@ -49,6 +49,7 @@ inbound_app = typer.Typer(help="Inbound email ingestion — Zoho IMAP reader for
 outreach_app = typer.Typer(help="Blog-post outreach campaigns — LLM-composed, per-recipient, tracked.", no_args_is_help=True)
 todos_app = typer.Typer(help="Editable project todo backlog.", no_args_is_help=True)
 agents_app = typer.Typer(help="Possible OS master-agent heartbeat and subagent tasks.", no_args_is_help=True)
+actions_app = typer.Typer(help="Durable Possible OS action execution queue.", no_args_is_help=True)
 outreach_campaigns_app = typer.Typer(help="Create / list / show outreach campaigns.", no_args_is_help=True)
 outreach_audience_app = typer.Typer(help="Build a campaign's recipient list from firm contacts.", no_args_is_help=True)
 outreach_app.add_typer(outreach_campaigns_app, name="campaigns")
@@ -75,6 +76,7 @@ app.add_typer(inbound_app, name="inbound")
 app.add_typer(outreach_app, name="outreach")
 app.add_typer(todos_app, name="todos")
 app.add_typer(agents_app, name="agents")
+app.add_typer(actions_app, name="actions")
 
 console = Console()
 
@@ -2821,6 +2823,144 @@ def todos_delete(
 ):
     """Delete a DB-backed project todo."""
     console.print_json(data=_delete(f"/api/todos/{todo_id}"))
+
+
+# ---------------------------------------------------------------------------
+# actions — durable Possible OS action execution
+# ---------------------------------------------------------------------------
+
+@actions_app.command("list")
+def actions_list(
+    status: str = typer.Option("", "--status", help="Filter by action status."),
+    action_type: str = typer.Option("", "--type", help="Filter by action type."),
+    limit: int = typer.Option(50, "--limit", "-n", min=1, max=500),
+    json_output: bool = typer.Option(False, "--json", help="Print raw JSON."),
+):
+    """List durable action execution records."""
+    data = _get(
+        "/api/actions",
+        status=status or None,
+        action_type=action_type or None,
+        limit=limit,
+    )
+    if json_output:
+        console.print_json(data=data)
+        return
+    rows = data.get("actions") or []
+    table = Table(title=f"Actions ({len(rows)})")
+    for col in ["id", "type", "status", "risk", "entity", "requested", "approved", "created"]:
+        table.add_column(col, overflow="fold")
+    for row in rows:
+        table.add_row(
+            str(row.get("id") or ""),
+            str(row.get("action_type") or ""),
+            str(row.get("status") or ""),
+            str(row.get("risk_level") or ""),
+            f"{row.get('entity_type') or ''}:{row.get('entity_id') or ''}",
+            str(row.get("requested_by") or ""),
+            str(row.get("approved_by") or ""),
+            str(row.get("created_at") or ""),
+        )
+    console.print(table)
+
+
+@actions_app.command("show")
+def actions_show(action_id: str = typer.Argument(...), json_output: bool = typer.Option(False, "--json")):
+    """Show one action and its event timeline."""
+    data = _get(f"/api/actions/{action_id}")
+    if json_output:
+        console.print_json(data=data)
+        return
+    console.print_json(data=data.get("action") or {})
+    events = data.get("events") or []
+    table = Table(title=f"Action events ({len(events)})")
+    for col in ["id", "type", "actor", "message", "created"]:
+        table.add_column(col, overflow="fold")
+    for event in events:
+        table.add_row(
+            str(event.get("id") or ""),
+            str(event.get("event_type") or ""),
+            str(event.get("actor") or ""),
+            str(event.get("message") or ""),
+            str(event.get("created_at") or ""),
+        )
+    console.print(table)
+
+
+@actions_app.command("policy-check")
+def actions_policy_check(
+    action_id: str = typer.Argument(...),
+    actor: str = typer.Option("operator", "--actor"),
+    json_output: bool = typer.Option(False, "--json"),
+):
+    """Run policy checks for an action without executing it."""
+    data = _post(f"/api/actions/{action_id}/policy-check", json_body={"actor": actor})
+    if json_output:
+        console.print_json(data=data)
+        return
+    policy = data.get("policy") or {}
+    console.print(f"allowed={policy.get('allowed')} reason={policy.get('reason')}")
+    table = Table(title="Policy checks")
+    for col in ["check", "passed", "detail"]:
+        table.add_column(col, overflow="fold")
+    for check in policy.get("checks") or []:
+        table.add_row(
+            str(check.get("name") or ""),
+            "yes" if check.get("passed") else "no",
+            str(check.get("detail") or ""),
+        )
+    console.print(table)
+
+
+@actions_app.command("execute")
+def actions_execute(
+    action_id: str = typer.Argument(...),
+    actor: str = typer.Option("operator", "--actor"),
+    json_output: bool = typer.Option(False, "--json"),
+):
+    """Execute one policy-approved action."""
+    data = _post(f"/api/actions/{action_id}/execute", json_body={"actor": actor}, timeout=120.0)
+    if json_output:
+        console.print_json(data=data)
+        return
+    action = data.get("action") or {}
+    policy = data.get("policy") or {}
+    console.print(
+        f"executed={data.get('executed')} status={action.get('status')} "
+        f"policy={policy.get('reason')}"
+    )
+
+
+@actions_app.command("send-approved-lead-gen-draft")
+def actions_send_approved_lead_gen_draft(
+    batch_item_id: str = typer.Option(..., "--item", help="Lead-gen batch item id."),
+    subject: str = typer.Option(..., "--subject", help="Approved subject."),
+    body: str = typer.Option(..., "--body", help="Approved body."),
+    approved_by: str = typer.Option("operator", "--approved-by"),
+    execute_now: bool = typer.Option(True, "--execute/--no-execute", help="Execute immediately after creating the action."),
+    json_output: bool = typer.Option(False, "--json"),
+):
+    """Create, policy-check, and optionally execute an approved lead-gen email draft."""
+    data = _post(
+        f"/api/actions/lead-gen/send-approved-draft?execute_now={'true' if execute_now else 'false'}",
+        json_body={
+            "batch_item_id": batch_item_id,
+            "subject": subject,
+            "body": body,
+            "requested_by": approved_by,
+            "approved_by": approved_by,
+        },
+        timeout=120.0,
+    )
+    if json_output:
+        console.print_json(data=data)
+        return
+    action = data.get("action") or {}
+    result = data.get("result") or {}
+    console.print(
+        f"action={action.get('id')} status={action.get('status')} "
+        f"sent_to={result.get('sent_to', '—')} message_id={result.get('sent_message_id', '—')}"
+    )
 
 
 # ---------------------------------------------------------------------------
