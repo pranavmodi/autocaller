@@ -480,6 +480,57 @@ class AgentReportRow(Base):
     )
 
 
+class AgentCapabilityRow(Base):
+    """Discovered or declared tool/capability available to the master agent."""
+    __tablename__ = "agent_capabilities"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    name: Mapped[str] = mapped_column(String(160), nullable=False)
+    capability_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    source: Mapped[str] = mapped_column(String(255), nullable=False, default="")
+    purpose: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    risk_level: Mapped[str] = mapped_column(String(16), nullable=False, default="low")
+    requires_approval: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    autonomous_allowed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    command_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    metadata_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    last_verified_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    last_status: Mapped[str] = mapped_column(String(32), nullable=False, default="unknown")
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), default=_utcnow, onupdate=_utcnow,
+    )
+
+    __table_args__ = (
+        UniqueConstraint("name", "source", name="uq_agent_capabilities_name_source"),
+        Index("ix_agent_capabilities_type", "capability_type"),
+        Index("ix_agent_capabilities_risk", "risk_level"),
+        Index("ix_agent_capabilities_status", "last_status"),
+    )
+
+
+class MasterGoalRow(Base):
+    """Durable adaptive operating goal synthesized by the master agent."""
+    __tablename__ = "master_goals"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="active")
+    goal: Mapped[str] = mapped_column(Text, nullable=False)
+    why: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    time_horizon: Mapped[str] = mapped_column(String(64), nullable=False, default="current heartbeat")
+    success_metric: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    next_actions_json: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    source_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    confidence: Mapped[str] = mapped_column(String(32), nullable=False, default="medium")
+    created_by: Mapped[str] = mapped_column(String(128), nullable=False, default="master-agent")
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow)
+    expires_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+
+    __table_args__ = (
+        Index("ix_master_goals_status_created", "status", "created_at"),
+    )
+
+
 class ImprovementFindingRow(Base):
     """Repeated trace/outcome pattern that may justify changing the system."""
     __tablename__ = "improvement_findings"

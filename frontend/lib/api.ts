@@ -325,6 +325,38 @@ export type AgentReport = {
   created_at: string | null;
 };
 
+export type AgentCapability = {
+  id: string;
+  name: string;
+  capability_type: string;
+  source: string;
+  purpose: string;
+  risk_level: string;
+  requires_approval: boolean;
+  autonomous_allowed: boolean;
+  command: Record<string, unknown>;
+  metadata: Record<string, unknown>;
+  last_verified_at: string | null;
+  last_status: string;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+export type MasterGoal = {
+  id: string;
+  status: string;
+  goal: string;
+  why: string;
+  time_horizon: string;
+  success_metric: string;
+  next_actions: string[];
+  source: Record<string, unknown>;
+  confidence: string;
+  created_by: string;
+  created_at: string | null;
+  expires_at: string | null;
+};
+
 export type MasterHeartbeat = {
   status: string;
   started_at: string;
@@ -352,6 +384,8 @@ export type MasterHeartbeat = {
     disabled?: boolean;
     raw_response?: string;
   };
+  active_goal?: MasterGoal | null;
+  queue_analysis?: Record<string, unknown>;
   soul: Record<string, unknown>;
   next_recommended_slice: string;
 };
@@ -410,6 +444,29 @@ export const createResearchScoutTask = () =>
 
 export const createSystemsHealthTask = () =>
   post<{ task: AgentTask }>("/api/agents/tasks/systems-health");
+
+export const runSystemsHealthTask = (taskId?: string) => {
+  const suffix = taskId ? `?task_id=${encodeURIComponent(taskId)}` : "";
+  return post<{ report: AgentReport | null }>(`/api/agents/tasks/systems-health/run${suffix}`);
+};
+
+export const listAgentCapabilities = (args?: { limit?: number }) => {
+  const params = new URLSearchParams();
+  if (args?.limit) params.set("limit", String(args.limit));
+  const suffix = params.toString() ? `?${params}` : "";
+  return get<{ capabilities: AgentCapability[] }>(`/api/agents/capabilities${suffix}`);
+};
+
+export const refreshAgentCapabilities = (probe = true) =>
+  post<{ capabilities: AgentCapability[] }>(`/api/agents/capabilities/refresh?probe=${probe ? "true" : "false"}`);
+
+export const listMasterGoals = (args?: { status?: string; limit?: number }) => {
+  const params = new URLSearchParams();
+  if (args?.status && args.status !== "all") params.set("status", args.status);
+  if (args?.limit) params.set("limit", String(args.limit));
+  const suffix = params.toString() ? `?${params}` : "";
+  return get<{ goals: MasterGoal[] }>(`/api/agents/goals${suffix}`);
+};
 
 export const updateAgentTaskStatus = (
   taskId: string,

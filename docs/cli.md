@@ -154,8 +154,11 @@ Every command accepts `--help`. Exit code is `0` on success, `1` on any error
 | `agents show <task_id> [--json]` | Show one subagent task with recent lifecycle events and reports. |
 | `agents create --agent=... --title=... --objective=... [--priority=50 --risk=low]` | Create a minimal durable subagent task packet. |
 | `agents create-research-scout [--json]` | Create the first safe web-learning task for ResearchScoutAgent. It is proposal-only and must not edit code, send email, or modify mailboxes. |
-| `agents create-systems-health [--json]` | Create the next safe SystemsHealthAgent observation/delegation task. This is a queued task packet; the worker implementation still needs to be built. |
+| `agents create-systems-health [--json]` | Create the next safe SystemsHealthAgent observation/delegation task. The first worker slice is read-only observe/report. |
 | `agents run-research-scout [--task=<task_id> --json]` | Run one ResearchScoutAgent task now. Fetches official sources where reachable, writes `docs/learning-notes/...`, and creates an `agent_reports` row. |
+| `agents run-systems-health [--task=<task_id> --json]` | Run one SystemsHealthAgent read-only health observation task now. Reads bounded service status, recent journals, `/health`, recent traces, and recent agent events; writes an `agent_reports` row. It does not edit code, restart services, send mail, or modify external state. |
+| `agents capabilities [--refresh] [--no-probe] [--json]` | List or refresh the master-agent capability registry. Refresh runs only safe probes; actionful capabilities are declared without execution. |
+| `agents goals [--status=active --json]` | List durable adaptive master-agent goals synthesized from queue state, capabilities, reports, and current context. |
 | `agents set-status <task_id> <status> [--message=...]` | Set a subagent task status. |
 | `agents task-heartbeat <task_id> --agent=... [--message=... --status=running]` | Record a heartbeat/progress ping from a subagent. |
 | `agents report <task_id> --agent=... --summary=... [--status=reported]` | Attach a structured report-back artifact to a subagent task. |
@@ -174,10 +177,17 @@ metadata.
 
 When the board is idle, the heartbeat may auto-delegate one safe internal next
 slice as a queued task. Current V1 auto-delegates the SystemsHealthAgent
-log-observation/delegation task once, but it does not run that worker or edit
-code. The current master goal is a bootstrap mission from
-`app/services/master_agent.py::_build_wake_context`; durable master plans are a
-future step.
+log-observation/delegation task once. The SystemsHealthAgent worker now supports
+the first read-only slice: observe and report only. It reads bounded local
+health/log/trace sources, redacts likely secrets, and writes a report. It does
+not edit code, restart services, send emails, place calls, or modify external
+state.
+
+The heartbeat now creates a durable adaptive goal in `master_goals` on each run.
+It filters prior `master_heartbeat_completed` prose out of `recent_events` and
+passes a compressed `recent_heartbeat_summary` instead, reducing status echo.
+It also adds `queue_analysis` so old queued work is visible as stale-by-age or
+blocked-by-missing-runner instead of being treated as indefinitely ready.
 
 Default lead-gen batches now use `possible_minds_dynamic`. It treats steps as
 objectives and composes the actual email at send time with

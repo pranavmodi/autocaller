@@ -223,6 +223,74 @@ full soul protected and avoiding repeated full-document prompt stuffing. It also
 keeps the stable prefix more cache-friendly: skill instructions and compact soul
 come before fast-changing heartbeat observations.
 
+The heartbeat context now avoids feeding prior heartbeat prose directly back
+into the LLM. Recent `master_heartbeat_completed` messages are compressed into
+`recent_heartbeat_summary`, while `recent_events` is reserved for operational
+events such as config changes, task creation, reports, and worker status
+changes. This reduces status echo.
+
+The context also includes `queue_analysis`, which marks queued work that has
+exceeded a queue-age threshold and identifies tasks assigned to agents without a
+registered runner. A queued task should not be described as simply "ready" after
+it has aged past the threshold without being claimed.
+
+The heartbeat now writes a durable `master_goals` row on each run. This first
+goal synthesizer is deterministic: it prioritizes stale queued work, missing
+runner capabilities, SystemsHealth observation, report-to-finding conversion,
+and then general discovery. Later versions can replace this with an LLM-backed
+goal synthesizer once evals and guardrails exist.
+
+## Current SystemsHealthAgent Slice
+
+As of 2026-06-04, SystemsHealthAgent has a first read-only worker:
+
+- claims one queued SystemsHealthAgent task;
+- checks backend/frontend service state;
+- reads bounded recent backend/frontend journals;
+- checks the backend `/health` endpoint;
+- reads recent `agent_task_events`;
+- reads recent `product_traces`;
+- reads `git status --short`;
+- redacts likely secrets from command samples;
+- writes an `agent_reports` row;
+- marks the task completed through the report path.
+
+It must not:
+
+- edit code;
+- restart services;
+- send emails;
+- place calls;
+- modify mailboxes;
+- modify external systems;
+- run destructive git commands.
+
+This is intentionally an observe/report slice. Coding-task creation from health
+findings remains a later reviewed slice.
+
+## Current Capability Registry Slice
+
+The master agent now has a first durable capability registry in
+`agent_capabilities`.
+
+Capabilities are currently declared from a conservative static list and can be
+refreshed with safe probes. Actionful commands, such as running a heartbeat or
+running a worker, are declared but not executed as probes. Each capability
+records:
+
+- name;
+- type;
+- source;
+- purpose;
+- risk level;
+- whether approval is required;
+- whether autonomous use is allowed;
+- command metadata;
+- last verification status and time.
+
+This is the first step toward replacing hardcoded `capabilities_today` with a
+live, discoverable tool inventory.
+
 OpenClaw's memory-core plugin also has a pre-compaction memory flush pattern:
 store durable notes in the current daily memory file, append-only, while keeping
 bootstrap/source files read-only.

@@ -16,7 +16,15 @@ import httpx
 from sqlalchemy import select
 
 from app.db import AsyncSessionLocal, async_engine
-from app.db.models import AgentReportRow, AgentTaskEventRow, AgentTaskRow, SystemSettingsRow
+from app.db.models import (
+    AgentCapabilityRow,
+    AgentReportRow,
+    AgentTaskEventRow,
+    AgentTaskRow,
+    MasterGoalRow,
+    ProductTraceRow,
+    SystemSettingsRow,
+)
 from app.services.llm_gateway import LLMGatewayError, call_skill_json
 from app.services.product_traces import safe_record_product_trace
 
@@ -61,6 +69,83 @@ DEFAULT_AGENT_CONFIG = {
 }
 
 SYSTEMS_HEALTH_AGENT_TITLE = "Add SystemsHealthAgent log observation and bug-fix delegation"
+SUPPORTED_RUNNER_AGENTS = {"ResearchScoutAgent", "SystemsHealthAgent"}
+MASTER_GOAL_TTL_SECONDS = 6 * 60 * 60
+STALE_QUEUE_MIN_SECONDS = 30 * 60
+
+
+CAPABILITY_DEFINITIONS = [
+    {
+        "name": "agents status",
+        "capability_type": "cli",
+        "source": "bin/autocaller agents status --json",
+        "purpose": "Inspect master-agent heartbeat config and last heartbeat result.",
+        "risk_level": "low",
+        "requires_approval": False,
+        "autonomous_allowed": True,
+        "command_json": {"argv": ["bin/autocaller", "agents", "status", "--json"], "safe_probe": True},
+    },
+    {
+        "name": "agents heartbeat",
+        "capability_type": "cli",
+        "source": "bin/autocaller agents heartbeat --json",
+        "purpose": "Run one manual master-agent heartbeat.",
+        "risk_level": "low",
+        "requires_approval": False,
+        "autonomous_allowed": True,
+        "command_json": {"argv": ["bin/autocaller", "agents", "heartbeat", "--json"], "safe_probe": False},
+    },
+    {
+        "name": "run research scout",
+        "capability_type": "cli",
+        "source": "bin/autocaller agents run-research-scout --json",
+        "purpose": "Execute one queued ResearchScoutAgent task and write a learning report.",
+        "risk_level": "low",
+        "requires_approval": False,
+        "autonomous_allowed": True,
+        "command_json": {"argv": ["bin/autocaller", "agents", "run-research-scout", "--json"], "safe_probe": False},
+    },
+    {
+        "name": "run systems health",
+        "capability_type": "cli",
+        "source": "bin/autocaller agents run-systems-health --json",
+        "purpose": "Execute one queued SystemsHealthAgent read-only health observation task.",
+        "risk_level": "medium",
+        "requires_approval": False,
+        "autonomous_allowed": True,
+        "command_json": {"argv": ["bin/autocaller", "agents", "run-systems-health", "--json"], "safe_probe": False},
+    },
+    {
+        "name": "backend health endpoint",
+        "capability_type": "api",
+        "source": "GET http://127.0.0.1:8099/health",
+        "purpose": "Check whether the backend is responding.",
+        "risk_level": "low",
+        "requires_approval": False,
+        "autonomous_allowed": True,
+        "command_json": {"method": "GET", "url": "http://127.0.0.1:8099/health", "safe_probe": True},
+    },
+    {
+        "name": "frontend service status",
+        "capability_type": "system",
+        "source": "systemctl is-active autocaller-frontend.service",
+        "purpose": "Check whether the frontend systemd service is active.",
+        "risk_level": "low",
+        "requires_approval": False,
+        "autonomous_allowed": True,
+        "command_json": {"argv": ["systemctl", "is-active", "autocaller-frontend.service"], "safe_probe": True},
+    },
+    {
+        "name": "backend service status",
+        "capability_type": "system",
+        "source": "systemctl is-active autocaller-backend.service",
+        "purpose": "Check whether the backend systemd service is active.",
+        "risk_level": "low",
+        "requires_approval": False,
+        "autonomous_allowed": True,
+        "command_json": {"argv": ["systemctl", "is-active", "autocaller-backend.service"], "safe_probe": True},
+    },
+]
 
 RESEARCH_SCOUT_SOURCES = [
     {
@@ -479,7 +564,49 @@ def report_to_dict(row: AgentReportRow) -> dict[str, Any]:
     }
 
 
+def capability_to_dict(row: AgentCapabilityRow) -> dict[str, Any]:
+    return {
+        "id": row.id,
+        "name": row.name,
+        "capability_type": row.capability_type,
+        "source": row.source,
+        "purpose": row.purpose,
+        "risk_level": row.risk_level,
+        "requires_approval": row.requires_approval,
+        "autonomous_allowed": row.autonomous_allowed,
+        "command": row.command_json or {},
+        "metadata": row.metadata_json or {},
+        "last_verified_at": row.last_verified_at.isoformat() if row.last_verified_at else None,
+        "last_status": row.last_status,
+        "created_at": row.created_at.isoformat() if row.created_at else None,
+        "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+    }
+
+
+def goal_to_dict(row: MasterGoalRow) -> dict[str, Any]:
+    return {
+        "id": row.id,
+        "status": row.status,
+        "goal": row.goal,
+        "why": row.why,
+        "time_horizon": row.time_horizon,
+        "success_metric": row.success_metric,
+        "next_actions": row.next_actions_json or [],
+        "source": row.source_json or {},
+        "confidence": row.confidence,
+        "created_by": row.created_by,
+        "created_at": row.created_at.isoformat() if row.created_at else None,
+        "expires_at": row.expires_at.isoformat() if row.expires_at else None,
+    }
+
+
 def _short_task_snapshot(row: AgentTaskRow) -> dict[str, Any]:
+    now = _utcnow()
+    queued_age_seconds = None
+    if row.status == "queued":
+        anchor = row.created_at or row.updated_at
+        if anchor:
+            queued_age_seconds = max(0, int((now - anchor).total_seconds()))
     return {
         "id": row.id,
         "assigned_agent": row.assigned_agent,
@@ -487,7 +614,10 @@ def _short_task_snapshot(row: AgentTaskRow) -> dict[str, Any]:
         "status": row.status,
         "priority": row.priority,
         "last_heartbeat_at": row.last_heartbeat_at.isoformat() if row.last_heartbeat_at else None,
+        "created_at": row.created_at.isoformat() if row.created_at else None,
         "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+        "queued_age_seconds": queued_age_seconds,
+        "runner_supported": row.assigned_agent in SUPPORTED_RUNNER_AGENTS,
     }
 
 
@@ -509,6 +639,79 @@ def _short_event_snapshot(row: AgentTaskEventRow) -> dict[str, Any]:
     }
 
 
+def _queue_age_analysis(rows: list[AgentTaskRow]) -> dict[str, Any]:
+    now = _utcnow()
+    stale_queue_items: list[dict[str, Any]] = []
+    blocked_capabilities: list[dict[str, Any]] = []
+    for row in rows:
+        if row.status != "queued":
+            continue
+        anchor = row.created_at or row.updated_at
+        age_seconds = max(0, int((now - anchor).total_seconds())) if anchor else 0
+        threshold_seconds = max(row.heartbeat_interval_seconds * 2, STALE_QUEUE_MIN_SECONDS)
+        if age_seconds >= threshold_seconds:
+            stale_queue_items.append({
+                "task_id": row.id,
+                "assigned_agent": row.assigned_agent,
+                "title": row.title,
+                "queued_age_seconds": age_seconds,
+                "threshold_seconds": threshold_seconds,
+                "runner_supported": row.assigned_agent in SUPPORTED_RUNNER_AGENTS,
+            })
+        if row.assigned_agent not in SUPPORTED_RUNNER_AGENTS:
+            blocked_capabilities.append({
+                "task_id": row.id,
+                "assigned_agent": row.assigned_agent,
+                "reason": "No runner is registered for this assigned_agent.",
+            })
+    return {
+        "stale_queue_items": stale_queue_items,
+        "blocked_capabilities": blocked_capabilities,
+    }
+
+
+def _heartbeat_history_summary(rows: list[AgentTaskEventRow]) -> dict[str, Any]:
+    heartbeat_rows = [row for row in rows if row.event_type == "master_heartbeat_completed"]
+    if not heartbeat_rows:
+        return {"count": 0}
+    newest = heartbeat_rows[0]
+    oldest = heartbeat_rows[-1]
+    repeated_states: dict[str, int] = {}
+    for row in heartbeat_rows:
+        message = (row.message or "").strip()
+        if message:
+            repeated_states[message] = repeated_states.get(message, 0) + 1
+    top_repeated = sorted(repeated_states.items(), key=lambda item: item[1], reverse=True)[:3]
+    return {
+        "count": len(heartbeat_rows),
+        "newest_at": newest.created_at.isoformat() if newest.created_at else None,
+        "oldest_at": oldest.created_at.isoformat() if oldest.created_at else None,
+        "repeated_state_summaries": [
+            {"state": state, "count": count}
+            for state, count in top_repeated
+            if count > 1
+        ],
+        "note": "Prior heartbeat prose is summarized here to avoid feeding old status text back into the next LLM call.",
+    }
+
+
+def _capabilities_context(capabilities: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        {
+            "name": cap.get("name"),
+            "capability_type": cap.get("capability_type"),
+            "source": cap.get("source"),
+            "purpose": cap.get("purpose"),
+            "risk_level": cap.get("risk_level"),
+            "requires_approval": cap.get("requires_approval"),
+            "autonomous_allowed": cap.get("autonomous_allowed"),
+            "last_status": cap.get("last_status"),
+            "last_verified_at": cap.get("last_verified_at"),
+        }
+        for cap in capabilities[:25]
+    ]
+
+
 def _build_wake_context(
     *,
     started_at: datetime,
@@ -517,6 +720,10 @@ def _build_wake_context(
     active_tasks: list[dict[str, Any]],
     recent_reports: list[dict[str, Any]],
     recent_events: list[dict[str, Any]],
+    heartbeat_history: dict[str, Any],
+    queue_analysis: dict[str, Any],
+    capabilities: list[dict[str, Any]],
+    active_goal: dict[str, Any] | None,
 ) -> dict[str, Any]:
     return {
         "kind": "master_agent_wake_context_v1",
@@ -533,18 +740,14 @@ def _build_wake_context(
             "protected_context": "soul.md is read as constitutional context and must not be edited by heartbeat.",
         },
         "soul_compact": _compact_soul_context(),
+        "active_goal": active_goal or {},
         "configuration": agent_config,
-        "capabilities_today": [
-            "record heartbeat traces",
-            "inspect durable subagent tasks",
-            "auto-delegate one safe next-slice task when the board is idle",
-            "mark stale subagent tasks",
-            "run queued ResearchScoutAgent tasks through the subagent runner",
-            "show task events and reports in the Agents UI",
-        ],
+        "capabilities_today": _capabilities_context(capabilities),
         "current_tasks": active_tasks,
+        "queue_analysis": queue_analysis,
         "recent_reports": recent_reports[:5],
         "recent_events": recent_events[:8],
+        "recent_heartbeat_summary": heartbeat_history,
         "constraints": [
             "No automatic code edits from heartbeat.",
             "No email, mailbox, or external business action from heartbeat.",
@@ -565,11 +768,19 @@ def _build_human_status(
     queued_count: int,
     blocked_count: int,
     stale_ids: list[str],
+    queue_analysis: dict[str, Any],
     active_tasks: list[dict[str, Any]],
     recent_reports: list[dict[str, Any]],
+    active_goal: dict[str, Any] | None,
 ) -> dict[str, Any]:
+    stale_queue_items = queue_analysis.get("stale_queue_items") or []
+    blocked_capabilities = queue_analysis.get("blocked_capabilities") or []
     if stale_ids:
         state = f"I found {len(stale_ids)} stale task{'s' if len(stale_ids) != 1 else ''} that need attention."
+    elif stale_queue_items:
+        state = f"I found {len(stale_queue_items)} queued task{'s' if len(stale_queue_items) != 1 else ''} older than the queue-age threshold."
+    elif blocked_capabilities:
+        state = f"I found {len(blocked_capabilities)} task capability gap{'s' if len(blocked_capabilities) != 1 else ''}."
     elif blocked_count:
         state = f"I am watching {blocked_count} blocked task{'s' if blocked_count != 1 else ''}."
     elif queued_count:
@@ -579,7 +790,9 @@ def _build_human_status(
     else:
         state = "I am idle right now. No active, queued, blocked, or stale subagent tasks need intervention."
 
-    if active_tasks:
+    if active_goal and active_goal.get("goal"):
+        focus = str(active_goal.get("goal"))
+    elif active_tasks:
         focus = active_tasks[0]["title"]
     elif recent_reports:
         focus = recent_reports[0].get("summary") or "Review the latest subagent report."
@@ -593,20 +806,30 @@ def _build_human_status(
     ]
     if queued_count:
         intent.insert(0, "Let the subagent runner claim queued work when its worker type is supported.")
+    if stale_queue_items:
+        intent.insert(0, "Escalate or run queued work that has exceeded the queue-age threshold.")
     if stale_ids:
         intent.insert(0, "Show the stale task IDs so an operator can decide whether to restart, cancel, or reassign them.")
 
     needs = (
         "Nothing required from Pranav right now."
-        if not stale_ids and not blocked_count
+        if not stale_ids and not blocked_count and not stale_queue_items and not blocked_capabilities
         else "Review the stale or blocked tasks and decide whether to unblock, cancel, or reassign them."
     )
 
     return {
         "state": state,
-        "goal": "Operate Possible OS as a self-improving system: observe work, delegate bounded tasks, report clearly, learn from evidence, and improve only through reviewable changes.",
+        "goal": (
+            str(active_goal.get("goal"))
+            if active_goal and active_goal.get("goal")
+            else "Operate Possible OS as a self-improving system: observe work, delegate bounded tasks, report clearly, learn from evidence, and improve only through reviewable changes."
+        ),
         "current_focus": focus,
-        "intended_next_steps": intent,
+        "intended_next_steps": (
+            list(active_goal.get("next_actions") or [])
+            if active_goal and active_goal.get("next_actions")
+            else intent
+        ),
         "needs_from_user": needs,
         "confidence": "High for task-board status. Limited for app health until SystemsHealthAgent gets log access.",
     }
@@ -701,7 +924,239 @@ async def ensure_agent_tables() -> None:
         await conn.run_sync(AgentTaskRow.__table__.create, checkfirst=True)
         await conn.run_sync(AgentTaskEventRow.__table__.create, checkfirst=True)
         await conn.run_sync(AgentReportRow.__table__.create, checkfirst=True)
+        await conn.run_sync(AgentCapabilityRow.__table__.create, checkfirst=True)
+        await conn.run_sync(MasterGoalRow.__table__.create, checkfirst=True)
     _agent_tables_checked = True
+
+
+async def _probe_capability(definition: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+    command = definition.get("command_json") or {}
+    if command.get("safe_probe") is False:
+        return "declared", {"reason": "Capability is actionful; discovery does not execute it as a probe."}
+    if command.get("method") == "GET" and command.get("url"):
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                response = await client.get(str(command["url"]))
+            return (
+                "ok" if response.status_code < 400 else "failed",
+                {"status_code": response.status_code, "sample": _compact_text(response.text, limit=160)},
+            )
+        except Exception as exc:
+            return "failed", {"error": f"{type(exc).__name__}: {exc}"}
+    argv = command.get("argv")
+    if isinstance(argv, list) and argv:
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                *[str(part) for part in argv],
+                cwd=str(_repo_root()),
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=8.0)
+            status = "ok" if proc.returncode == 0 else "failed"
+            return status, {
+                "returncode": proc.returncode,
+                "stdout_sample": _compact_text(stdout.decode("utf-8", errors="replace"), limit=240),
+                "stderr_sample": _compact_text(stderr.decode("utf-8", errors="replace"), limit=240),
+            }
+        except Exception as exc:
+            return "failed", {"error": f"{type(exc).__name__}: {exc}"}
+    return "unknown", {"reason": "No safe probe is defined."}
+
+
+async def refresh_agent_capabilities(*, probe: bool = True, actor: str = "operator") -> list[dict[str, Any]]:
+    await ensure_agent_tables()
+    now = _utcnow()
+    refreshed: list[dict[str, Any]] = []
+    async with AsyncSessionLocal() as session:
+        for definition in CAPABILITY_DEFINITIONS:
+            status = "declared"
+            metadata: dict[str, Any] = {"definition_version": 1}
+            verified_at = None
+            if probe:
+                status, probe_metadata = await _probe_capability(definition)
+                metadata.update({"probe": probe_metadata})
+                verified_at = now
+            existing = (await session.execute(
+                select(AgentCapabilityRow)
+                .where(AgentCapabilityRow.name == definition["name"])
+                .where(AgentCapabilityRow.source == definition["source"])
+                .limit(1)
+            )).scalar_one_or_none()
+            if existing is None:
+                existing = AgentCapabilityRow(
+                    id=_new_id("cap"),
+                    name=definition["name"],
+                    source=definition["source"],
+                )
+            existing.capability_type = definition["capability_type"]
+            existing.purpose = definition["purpose"]
+            existing.risk_level = definition["risk_level"]
+            existing.requires_approval = bool(definition["requires_approval"])
+            existing.autonomous_allowed = bool(definition["autonomous_allowed"])
+            existing.command_json = definition.get("command_json") or {}
+            existing.metadata_json = metadata
+            existing.last_status = status
+            existing.last_verified_at = verified_at
+            existing.updated_at = now
+            session.add(existing)
+            refreshed.append(capability_to_dict(existing))
+        await session.commit()
+    await safe_record_product_trace(
+        actor_type="agent" if actor != "operator" else "user",
+        actor_id=actor,
+        event_type="agent_capabilities_refreshed",
+        surface="agents",
+        entity_type="agent_capability",
+        entity_id="registry",
+        output_json={"count": len(refreshed), "probed": probe},
+    )
+    return await list_agent_capabilities(limit=100)
+
+
+async def list_agent_capabilities(*, limit: int = 100) -> list[dict[str, Any]]:
+    await ensure_agent_tables()
+    async with AsyncSessionLocal() as session:
+        rows = (await session.execute(
+            select(AgentCapabilityRow)
+            .order_by(AgentCapabilityRow.capability_type.asc(), AgentCapabilityRow.name.asc())
+            .limit(max(1, min(limit, 500)))
+        )).scalars().all()
+        if not rows:
+            return await refresh_agent_capabilities(probe=False, actor="master-agent")
+        return [capability_to_dict(row) for row in rows]
+
+
+async def synthesize_master_goal(
+    *,
+    actor: str,
+    queue_analysis: dict[str, Any],
+    active_tasks: list[dict[str, Any]],
+    capabilities: list[dict[str, Any]],
+    recent_reports: list[dict[str, Any]],
+) -> dict[str, Any]:
+    await ensure_agent_tables()
+    stale_queue_items = queue_analysis.get("stale_queue_items") or []
+    blocked_capabilities = queue_analysis.get("blocked_capabilities") or []
+    systems_health_ready = any(
+        task.get("assigned_agent") == "SystemsHealthAgent" and task.get("status") == "queued"
+        for task in active_tasks
+    )
+    if stale_queue_items:
+        goal = "Resolve stale queued agent work before expanding autonomy."
+        why = "At least one queued task has exceeded the queue-age threshold, so the control loop needs escalation or execution."
+        next_actions = [
+            "Run supported queued work if a safe worker exists.",
+            "Mark unsupported queued work blocked with the missing capability.",
+            "Record the outcome as an agent report or task event.",
+        ]
+        success_metric = "No high-priority queued task remains beyond the stale queue threshold without a runner or explicit blocked state."
+        confidence = "high"
+    elif blocked_capabilities:
+        goal = "Expose missing runner capabilities and ask for the smallest implementation slice."
+        why = "A queued task names an agent that the current runner cannot execute."
+        next_actions = [
+            "Create a bounded worker implementation for the missing agent.",
+            "Keep the task queued or blocked until the worker can report safely.",
+        ]
+        success_metric = "Every queued task is either supported by a runner or clearly marked blocked."
+        confidence = "high"
+    elif systems_health_ready:
+        goal = "Run the read-only SystemsHealthAgent observation slice."
+        why = "System health observation is the next missing sensory layer for Possible OS."
+        next_actions = [
+            "Claim the SystemsHealthAgent task.",
+            "Inspect bounded read-only health sources.",
+            "Create a health report with anomalies, risks, and recommended delegations.",
+        ]
+        success_metric = "A SystemsHealthAgent report exists with observed sources and no unauthorized mutations."
+        confidence = "medium"
+    elif recent_reports:
+        goal = "Convert latest agent reports into reviewable improvement findings."
+        why = "A report exists; the learning loop should not stop at an artifact."
+        next_actions = [
+            "Review the latest report evidence.",
+            "Create improvement findings or todos where appropriate.",
+            "Decide whether an eval or coding task packet is justified.",
+        ]
+        success_metric = "Each useful report produces an accepted finding, todo, eval, or explicit no-action decision."
+        confidence = "medium"
+    else:
+        goal = "Maintain observability and discover the next highest-leverage operating gap."
+        why = "No active queued work or recent report requires immediate action."
+        next_actions = [
+            "Refresh capabilities.",
+            "Inspect recent traces and business workflow state.",
+            "Delegate the smallest safe next slice.",
+        ]
+        success_metric = "A verified next action is selected from live state rather than a hardcoded mission."
+        confidence = "low"
+
+    active_capabilities = [
+        cap.get("name")
+        for cap in capabilities
+        if cap.get("autonomous_allowed") and cap.get("last_status") in {"ok", "declared"}
+    ][:10]
+    now = _utcnow()
+    row = MasterGoalRow(
+        id=_new_id("goal"),
+        status="active",
+        goal=goal,
+        why=why,
+        time_horizon="current operating slice",
+        success_metric=success_metric,
+        next_actions_json=next_actions,
+        source_json={
+            "actor": actor,
+            "stale_queue_items": stale_queue_items,
+            "blocked_capabilities": blocked_capabilities,
+            "active_task_count": len(active_tasks),
+            "available_autonomous_capabilities": active_capabilities,
+        },
+        confidence=confidence,
+        created_by=actor,
+        expires_at=now + timedelta(seconds=MASTER_GOAL_TTL_SECONDS),
+    )
+    async with AsyncSessionLocal() as session:
+        old_goals = (await session.execute(
+            select(MasterGoalRow).where(MasterGoalRow.status == "active")
+        )).scalars().all()
+        for old in old_goals:
+            old.status = "superseded"
+            session.add(old)
+        session.add(row)
+        session.add(AgentTaskEventRow(
+            task_id=None,
+            agent_id="master-agent",
+            event_type="master_goal_synthesized",
+            message=goal,
+            input_json=row.source_json,
+            output_json={"goal_id": row.id, "goal": goal, "next_actions": next_actions},
+            metadata_json={"confidence": confidence},
+        ))
+        await session.commit()
+        await session.refresh(row)
+        result = goal_to_dict(row)
+    await safe_record_product_trace(
+        actor_type="agent",
+        actor_id=actor,
+        event_type="master_goal_synthesized",
+        surface="agents",
+        entity_type="master_goal",
+        entity_id=result["id"],
+        output_json=result,
+    )
+    return result
+
+
+async def list_master_goals(*, status: str | None = None, limit: int = 20) -> list[dict[str, Any]]:
+    await ensure_agent_tables()
+    async with AsyncSessionLocal() as session:
+        stmt = select(MasterGoalRow).order_by(MasterGoalRow.created_at.desc()).limit(max(1, min(limit, 100)))
+        if status and status != "all":
+            stmt = stmt.where(MasterGoalRow.status == status)
+        rows = (await session.execute(stmt)).scalars().all()
+        return [goal_to_dict(row) for row in rows]
 
 
 async def get_agent_config() -> dict[str, Any]:
@@ -1287,6 +1742,236 @@ async def run_research_scout_task(task_id: str | None = None) -> dict[str, Any] 
         return None
 
 
+def _redact_operational_text(value: str) -> str:
+    patterns = [
+        (re.compile(r"(?i)(api[_-]?key|token|secret|password|authorization)(['\"=: ]+)([^\\s'\";,]+)"), r"\1\2[REDACTED]"),
+        (re.compile(r"Bearer\s+[A-Za-z0-9._~+/=-]+"), "Bearer [REDACTED]"),
+        (re.compile(r"postgresql://[^\\s]+"), "postgresql://[REDACTED]"),
+    ]
+    redacted = value
+    for pattern, replacement in patterns:
+        redacted = pattern.sub(replacement, redacted)
+    return redacted
+
+
+async def _run_read_only_command(argv: list[str], *, timeout: float = 8.0, limit: int = 1200) -> dict[str, Any]:
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *argv,
+            cwd=str(_repo_root()),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+        stdout_text = _redact_operational_text(stdout.decode("utf-8", errors="replace"))
+        stderr_text = _redact_operational_text(stderr.decode("utf-8", errors="replace"))
+        return {
+            "argv": argv,
+            "returncode": proc.returncode,
+            "status": "ok" if proc.returncode == 0 else "failed",
+            "stdout_sample": _compact_text(stdout_text, limit=limit),
+            "stderr_sample": _compact_text(stderr_text, limit=limit),
+        }
+    except Exception as exc:
+        return {
+            "argv": argv,
+            "status": "failed",
+            "error": f"{type(exc).__name__}: {exc}",
+        }
+
+
+async def _collect_systems_health_observations() -> dict[str, Any]:
+    observations: list[dict[str, Any]] = []
+    commands = [
+        ["systemctl", "is-active", "autocaller-backend.service"],
+        ["systemctl", "is-active", "autocaller-frontend.service"],
+        ["systemctl", "status", "autocaller-backend.service", "--no-pager", "--lines=20"],
+        ["systemctl", "status", "autocaller-frontend.service", "--no-pager", "--lines=20"],
+        ["journalctl", "-u", "autocaller-backend.service", "--no-pager", "-n", "60"],
+        ["journalctl", "-u", "autocaller-frontend.service", "--no-pager", "-n", "60"],
+        ["git", "status", "--short"],
+    ]
+    for argv in commands:
+        observations.append(await _run_read_only_command(argv))
+
+    backend_health: dict[str, Any]
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.get("http://127.0.0.1:8099/health")
+        backend_health = {
+            "source": "GET /health",
+            "status": "ok" if response.status_code < 400 else "failed",
+            "status_code": response.status_code,
+            "body_sample": _compact_text(response.text, limit=240),
+        }
+    except Exception as exc:
+        backend_health = {
+            "source": "GET /health",
+            "status": "failed",
+            "error": f"{type(exc).__name__}: {exc}",
+        }
+
+    async with AsyncSessionLocal() as session:
+        recent_agent_events = (await session.execute(
+            select(AgentTaskEventRow).order_by(AgentTaskEventRow.created_at.desc()).limit(10)
+        )).scalars().all()
+        recent_traces = (await session.execute(
+            select(ProductTraceRow).order_by(ProductTraceRow.created_at.desc()).limit(10)
+        )).scalars().all()
+
+    event_summary = [
+        {
+            "id": row.id,
+            "agent_id": row.agent_id,
+            "event_type": row.event_type,
+            "message": _compact_text(row.message or "", limit=240),
+            "created_at": row.created_at.isoformat() if row.created_at else None,
+        }
+        for row in recent_agent_events
+    ]
+    trace_summary = [
+        {
+            "trace_id": row.trace_id,
+            "event_type": row.event_type,
+            "surface": row.surface,
+            "entity_type": row.entity_type,
+            "entity_id": row.entity_id,
+            "created_at": row.created_at.isoformat() if row.created_at else None,
+        }
+        for row in recent_traces
+    ]
+
+    anomalies: list[str] = []
+    for observation in observations:
+        argv = " ".join(observation.get("argv") or [])
+        if observation.get("status") != "ok":
+            anomalies.append(f"Command failed: {argv}")
+        sample = f"{observation.get('stdout_sample', '')} {observation.get('stderr_sample', '')}".lower()
+        if any(token in sample for token in ["traceback", "exception", "error", "failed"]):
+            anomalies.append(f"Recent error-like log signal in: {argv}")
+    if backend_health.get("status") != "ok":
+        anomalies.append("Backend /health endpoint is not healthy.")
+
+    return {
+        "observed_sources": [
+            "systemctl is-active/status for backend and frontend",
+            "journalctl recent backend/frontend logs",
+            "backend /health endpoint",
+            "git status --short",
+            "recent agent_task_events",
+            "recent product_traces",
+        ],
+        "command_observations": observations,
+        "backend_health": backend_health,
+        "recent_agent_events": event_summary,
+        "recent_product_traces": trace_summary,
+        "anomalies": anomalies[:20],
+    }
+
+
+async def claim_next_systems_health_task() -> dict[str, Any] | None:
+    await ensure_agent_tables()
+    now = _utcnow()
+    async with AsyncSessionLocal() as session:
+        row = (await session.execute(
+            select(AgentTaskRow)
+            .where(AgentTaskRow.assigned_agent == "SystemsHealthAgent")
+            .where(AgentTaskRow.status == "queued")
+            .order_by(AgentTaskRow.priority.desc(), AgentTaskRow.created_at.asc())
+            .limit(1)
+        )).scalar_one_or_none()
+        if not row:
+            return None
+        row.status = "running"
+        row.claimed_at = now
+        row.last_heartbeat_at = now
+        row.updated_at = now
+        session.add(AgentTaskEventRow(
+            task_id=row.id,
+            agent_id="SystemsHealthAgent",
+            event_type="task_claimed",
+            message="SystemsHealthAgent claimed queued read-only health observation task.",
+            output_json={"status": "running", "claimed_at": now.isoformat()},
+        ))
+        await session.commit()
+        await session.refresh(row)
+        return task_to_dict(row)
+
+
+async def run_systems_health_task(task_id: str | None = None) -> dict[str, Any] | None:
+    """Execute one read-only SystemsHealthAgent observation task."""
+    await ensure_agent_tables()
+    if task_id:
+        task = await update_agent_task_status(
+            task_id,
+            status="running",
+            message="SystemsHealthAgent manually started.",
+            actor="SystemsHealthAgent",
+        )
+    else:
+        task = await claim_next_systems_health_task()
+    if not task:
+        return None
+
+    await record_agent_heartbeat(
+        task["id"],
+        agent_id="SystemsHealthAgent",
+        message="Collecting bounded read-only service, log, trace, and git health observations.",
+        status="running",
+        metadata={"mode": "read_only"},
+    )
+    observations = await _collect_systems_health_observations()
+    anomalies = observations["anomalies"]
+    key_findings = anomalies or ["No obvious bounded health anomalies found in this read-only pass."]
+    report = await create_agent_report(
+        task_id=task["id"],
+        agent_id="SystemsHealthAgent",
+        status="completed",
+        summary=(
+            "Read-only systems health pass completed. "
+            f"Observed {len(observations['observed_sources'])} source categories and found {len(anomalies)} anomaly note(s)."
+        ),
+        key_findings=key_findings,
+        actions_taken=[
+            "Read backend/frontend service state.",
+            "Read bounded recent backend/frontend journals.",
+            "Checked backend health endpoint.",
+            "Read recent agent events and product traces.",
+            "Redacted likely secrets from command samples.",
+        ],
+        artifacts=[],
+        evidence=[observations],
+        verification=[
+            "No code edits were made by SystemsHealthAgent.",
+            "No services were restarted by SystemsHealthAgent.",
+            "No mailbox, email, call, or external business action was taken.",
+        ],
+        risks=[
+            "Journal snippets are bounded and redacted, but should still be reviewed before sharing externally.",
+            "This v1 health pass detects obvious signals only; it does not yet diagnose root cause automatically.",
+        ],
+        open_questions=[
+            "Which anomaly types should automatically become improvement findings?",
+            "Should the health pass run periodically after the report format stabilizes?",
+        ],
+        recommended_next_actions=[
+            "Review anomalies in the report.",
+            "Create a bounded coding task packet only for reproducible bugs with evidence.",
+            "Add more specific checks for lead-gen, email sending, and frontend route health.",
+        ],
+    )
+    await safe_record_product_trace(
+        actor_type="agent",
+        actor_id="SystemsHealthAgent",
+        event_type="systems_health_completed",
+        surface="agents",
+        entity_type="agent_task",
+        entity_id=task["id"],
+        output_json={"report_id": report["id"], "anomaly_count": len(anomalies)},
+    )
+    return report
+
+
 async def update_agent_task_status(
     task_id: str,
     *,
@@ -1454,6 +2139,10 @@ async def run_master_heartbeat(*, actor: str = "master-agent") -> dict[str, Any]
     active_task_snapshots: list[dict[str, Any]] = []
     recent_report_snapshots: list[dict[str, Any]] = []
     recent_event_snapshots: list[dict[str, Any]] = []
+    heartbeat_history: dict[str, Any] = {}
+    queue_analysis: dict[str, Any] = {}
+    capabilities: list[dict[str, Any]] = []
+    active_goal: dict[str, Any] | None = None
     human_status: dict[str, Any] = {}
     wake_context: dict[str, Any] = {}
     status_metadata: dict[str, Any] = {"used_llm": False}
@@ -1465,6 +2154,7 @@ async def run_master_heartbeat(*, actor: str = "master-agent") -> dict[str, Any]
         blocked_count = sum(1 for row in rows if row.status == "blocked")
         queued_count = sum(1 for row in rows if row.status == "queued")
         active_task_snapshots = [_short_task_snapshot(row) for row in rows[:20]]
+        queue_analysis = _queue_age_analysis(list(rows))
         now = _utcnow()
         for row in rows:
             if row.status not in STALE_CHECK_STATUSES:
@@ -1490,17 +2180,32 @@ async def run_master_heartbeat(*, actor: str = "master-agent") -> dict[str, Any]
             select(AgentReportRow).order_by(AgentReportRow.created_at.desc()).limit(5)
         )).scalars().all()
         recent_event_rows = (await session.execute(
-            select(AgentTaskEventRow).order_by(AgentTaskEventRow.created_at.desc()).limit(8)
+            select(AgentTaskEventRow).order_by(AgentTaskEventRow.created_at.desc()).limit(30)
         )).scalars().all()
         recent_report_snapshots = [report_to_dict(row) for row in recent_report_rows]
-        recent_event_snapshots = [_short_event_snapshot(row) for row in recent_event_rows]
+        heartbeat_history = _heartbeat_history_summary(list(recent_event_rows))
+        recent_event_snapshots = [
+            _short_event_snapshot(row)
+            for row in recent_event_rows
+            if row.event_type != "master_heartbeat_completed"
+        ][:8]
+        capabilities = await list_agent_capabilities(limit=100)
+        active_goal = await synthesize_master_goal(
+            actor=actor,
+            queue_analysis=queue_analysis,
+            active_tasks=active_task_snapshots,
+            capabilities=capabilities,
+            recent_reports=recent_report_snapshots,
+        )
         fallback_status = _build_human_status(
             active_count=active_count,
             queued_count=queued_count,
             blocked_count=blocked_count,
             stale_ids=stale_ids,
+            queue_analysis=queue_analysis,
             active_tasks=active_task_snapshots,
             recent_reports=recent_report_snapshots,
+            active_goal=active_goal,
         )
         wake_context = _build_wake_context(
             started_at=started_at,
@@ -1509,6 +2214,10 @@ async def run_master_heartbeat(*, actor: str = "master-agent") -> dict[str, Any]
             active_tasks=active_task_snapshots,
             recent_reports=recent_report_snapshots,
             recent_events=recent_event_snapshots,
+            heartbeat_history=heartbeat_history,
+            queue_analysis=queue_analysis,
+            capabilities=capabilities,
+            active_goal=active_goal,
         )
         wake_context["auto_delegated_task"] = auto_delegated_task or {}
         if agent_config.get("status_llm_enabled", True):
@@ -1552,8 +2261,10 @@ async def run_master_heartbeat(*, actor: str = "master-agent") -> dict[str, Any]
                 "queued_task_count": queued_count,
                 "blocked_task_count": blocked_count,
                 "stale_task_ids": stale_ids,
+                "queue_analysis": queue_analysis,
                 "human_status": human_status,
                 "auto_delegated_task": auto_delegated_task or {},
+                "active_goal": active_goal or {},
             },
             metadata_json={
                 "trace_id": trace.get("trace_id") if trace else None,
@@ -1570,12 +2281,14 @@ async def run_master_heartbeat(*, actor: str = "master-agent") -> dict[str, Any]
         "queued_task_count": queued_count,
         "blocked_task_count": blocked_count,
         "stale_task_ids": stale_ids,
+        "queue_analysis": queue_analysis,
         "heartbeat_enabled": agent_config["heartbeat_enabled"],
         "heartbeat_interval_seconds": agent_config["heartbeat_interval_seconds"],
         "human_status": human_status,
         "wake_context": wake_context,
         "status_llm": status_metadata,
         "auto_delegated_task": auto_delegated_task,
+        "active_goal": active_goal,
         "soul": _soul_context(),
         "next_recommended_slice": (
             "Add SystemsHealthAgent log observation and bug-fix delegation, then "
@@ -1639,6 +2352,7 @@ async def subagent_runner_loop(interval_seconds: int = 60) -> None:
     while True:
         try:
             await run_research_scout_task()
+            await run_systems_health_task()
         except Exception:
             logger.exception("subagent runner loop failed")
         await asyncio.sleep(interval_seconds)

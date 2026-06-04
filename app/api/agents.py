@@ -14,12 +14,16 @@ from app.services.master_agent import (
     get_agent_config,
     get_agent_task,
     last_heartbeat_result,
+    list_agent_capabilities,
     list_agent_events,
     list_agent_reports,
     list_agent_tasks,
+    list_master_goals,
     record_agent_heartbeat,
     run_research_scout_task,
+    run_systems_health_task,
     run_master_heartbeat,
+    refresh_agent_capabilities,
     update_agent_config,
     update_agent_task_status,
 )
@@ -139,6 +143,29 @@ async def post_systems_health_task(created_by: str = "operator"):
 @router.post("/tasks/research-scout/run")
 async def run_research_scout(task_id: str | None = None):
     return {"report": await run_research_scout_task(task_id=task_id)}
+
+
+@router.post("/tasks/systems-health/run")
+async def run_systems_health(task_id: str | None = None):
+    return {"report": await run_systems_health_task(task_id=task_id)}
+
+
+@router.get("/capabilities")
+async def capabilities(limit: int = Query(100, ge=1, le=500)):
+    return {"capabilities": await list_agent_capabilities(limit=limit)}
+
+
+@router.post("/capabilities/refresh")
+async def refresh_capabilities(probe: bool = Query(True)):
+    return {"capabilities": await refresh_agent_capabilities(probe=probe, actor="operator")}
+
+
+@router.get("/goals")
+async def goals(
+    status: str | None = Query(None),
+    limit: int = Query(20, ge=1, le=100),
+):
+    return {"goals": await list_master_goals(status=status, limit=limit)}
 
 
 @router.get("/tasks/{task_id}")

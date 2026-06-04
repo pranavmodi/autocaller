@@ -22,8 +22,12 @@ import {
   createSystemsHealthTask,
   getAgentTask,
   getAgentsStatus,
+  listAgentCapabilities,
   listAgentEvents,
   listAgentTasks,
+  listMasterGoals,
+  refreshAgentCapabilities,
+  runSystemsHealthTask,
   runMasterHeartbeat,
   updateAgentConfig,
   updateAgentTaskStatus,
@@ -203,6 +207,18 @@ export default function AgentsPage() {
     refetchInterval: 15_000,
   });
 
+  const capabilities = useQuery({
+    queryKey: ["agent-capabilities"],
+    queryFn: () => listAgentCapabilities({ limit: 100 }),
+    refetchInterval: 60_000,
+  });
+
+  const goals = useQuery({
+    queryKey: ["master-goals", "active"],
+    queryFn: () => listMasterGoals({ status: "active", limit: 5 }),
+    refetchInterval: 30_000,
+  });
+
   const selectedTask = useQuery({
     queryKey: ["agent-task", selectedTaskId],
     queryFn: () => getAgentTask(selectedTaskId),
@@ -265,6 +281,24 @@ export default function AgentsPage() {
     },
   });
 
+  const runSystemsHealth = useMutation({
+    mutationFn: (taskId?: string) => runSystemsHealthTask(taskId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["agents-status"] });
+      qc.invalidateQueries({ queryKey: ["agent-tasks"] });
+      qc.invalidateQueries({ queryKey: ["agent-events"] });
+      qc.invalidateQueries({ queryKey: ["agent-task", selectedTaskId] });
+    },
+  });
+
+  const refreshCapabilities = useMutation({
+    mutationFn: () => refreshAgentCapabilities(true),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["agent-capabilities"] });
+      qc.invalidateQueries({ queryKey: ["agent-events"] });
+    },
+  });
+
   const setDone = useMutation({
     mutationFn: (taskId: string) =>
       updateAgentTaskStatus(taskId, "completed", "Marked completed by operator."),
@@ -290,6 +324,12 @@ export default function AgentsPage() {
   const humanStatus = heartbeat?.human_status;
   const wakeContext = heartbeat?.wake_context;
   const statusLlm = heartbeat?.status_llm;
+  const activeGoal = heartbeat?.active_goal || goals.data?.goals?.[0] || null;
+  const queueAnalysis = heartbeat?.queue_analysis || {};
+  const staleQueueItems = Array.isArray(queueAnalysis.stale_queue_items)
+    ? queueAnalysis.stale_queue_items
+    : [];
+  const capabilityRows = capabilities.data?.capabilities ?? [];
   useEffect(() => {
     if (!status.data) return;
     setHeartbeatEnabledDraft(status.data.heartbeat_enabled);
@@ -367,6 +407,15 @@ export default function AgentsPage() {
             >
               {createSystemsHealth.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ListChecks className="h-4 w-4" />}
               Create SystemsHealth task
+            </button>
+            <button
+              type="button"
+              onClick={() => runSystemsHealth.mutate(undefined)}
+              disabled={runSystemsHealth.isPending}
+              className="inline-flex items-center gap-2 rounded-md border border-neutral-200 px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50 disabled:opacity-60"
+            >
+              {runSystemsHealth.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <HeartPulse className="h-4 w-4" />}
+              Run SystemsHealth
             </button>
           </div>
         </div>
@@ -465,12 +514,100 @@ export default function AgentsPage() {
           </div>
         </div>
 
-        {(runHeartbeat.isError || createScout.isError || createSystemsHealth.isError || saveAgentConfig.isError) && (
+        {(runHeartbeat.isError || createScout.isError || createSystemsHealth.isError || runSystemsHealth.isError || saveAgentConfig.isError) && (
           <div className="mt-3 flex items-center gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
             <AlertTriangle className="h-4 w-4" />
             Agent operation failed. Check backend logs.
           </div>
         )}
+      </section>
+
+      <section className="rounded-xl border border-neutral-200 bg-white">
+        <div className="flex flex-wrap items-center gap-2 border-b border-neutral-100 px-4 py-3">
+          <h2 className="text-sm font-semibold text-neutral-950">Adaptive goal</h2>
+          <span className="text-xs text-neutral-400">durable goal synthesized from current state</span>
+        </div>
+        <div className="grid gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.9fr)]">
+          <div>
+            <div className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Current goal</div>
+            <p className="mt-2 text-base font-semibold leading-7 text-neutral-950">
+              {activeGoal?.goal || "No adaptive goal has been synthesized yet."}
+            </p>
+            {activeGoal?.why && (
+              <p className="mt-2 text-sm leading-6 text-neutral-600">{activeGoal.why}</p>
+            )}
+            {activeGoal?.success_metric && (
+              <div className="mt-3 rounded-lg border border-neutral-200 bg-neutral-50 p-3 text-sm text-neutral-700">
+                <span className="font-medium text-neutral-900">Success:</span> {activeGoal.success_metric}
+              </div>
+            )}
+          </div>
+          <div>
+            <div className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Next actions</div>
+            <ul className="mt-2 space-y-2 text-sm leading-6 text-neutral-700">
+              {(activeGoal?.next_actions?.length ? activeGoal.next_actions : ["Run a heartbeat to synthesize the next goal."]).map((action) => (
+                <li key={action} className="flex gap-2">
+                  <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-neutral-400" />
+                  <span>{action}</span>
+                </li>
+              ))}
+            </ul>
+            <div className="mt-3 text-xs text-neutral-500">
+              {activeGoal ? `${activeGoal.confidence} confidence - ${activeGoal.time_horizon}` : ""}
+            </div>
+          </div>
+        </div>
+        {staleQueueItems.length > 0 && (
+          <div className="border-t border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            {staleQueueItems.length} queued task{staleQueueItems.length === 1 ? "" : "s"} exceeded the queue-age threshold.
+          </div>
+        )}
+      </section>
+
+      <section className="rounded-xl border border-neutral-200 bg-white">
+        <div className="flex flex-wrap items-center gap-2 border-b border-neutral-100 px-4 py-3">
+          <h2 className="text-sm font-semibold text-neutral-950">Capability registry</h2>
+          <span className="text-xs text-neutral-400">known tools, risk, and verification state</span>
+          <button
+            type="button"
+            onClick={() => refreshCapabilities.mutate()}
+            disabled={refreshCapabilities.isPending}
+            className="ml-auto inline-flex items-center gap-2 rounded-md border border-neutral-200 px-3 py-1.5 text-xs font-medium text-neutral-700 hover:bg-neutral-50 disabled:opacity-60"
+          >
+            {refreshCapabilities.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+            Refresh capabilities
+          </button>
+        </div>
+        <div className="grid gap-2 p-4 md:grid-cols-2 xl:grid-cols-3">
+          {capabilities.isLoading && (
+            <div className="text-sm text-neutral-500">Loading capabilities...</div>
+          )}
+          {!capabilities.isLoading && capabilityRows.length === 0 && (
+            <div className="text-sm text-neutral-500">No capabilities discovered yet.</div>
+          )}
+          {capabilityRows.map((capability) => (
+            <div key={capability.id} className="rounded-lg border border-neutral-200 p-3">
+              <div className="flex items-start gap-2">
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-semibold text-neutral-950">{capability.name}</div>
+                  <div className="mt-1 text-xs text-neutral-500">{capability.capability_type} - {capability.risk_level}</div>
+                </div>
+                <span className={cn(
+                  "rounded-full border px-2 py-0.5 text-[11px] font-medium",
+                  capability.last_status === "ok"
+                    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                    : capability.last_status === "failed"
+                      ? "border-red-200 bg-red-50 text-red-700"
+                      : "border-neutral-200 bg-neutral-50 text-neutral-700",
+                )}>
+                  {capability.last_status}
+                </span>
+              </div>
+              <p className="mt-2 text-xs leading-5 text-neutral-600">{capability.purpose}</p>
+              <div className="mt-2 break-words font-mono text-[10px] text-neutral-400">{capability.source}</div>
+            </div>
+          ))}
+        </div>
       </section>
 
       <section className="rounded-xl border border-neutral-200 bg-white">

@@ -73,6 +73,15 @@ Return only JSON with these fields:
   honestly.
 - Use `stable_context.compact_soul` when interpreting goals, tradeoffs,
   unknown unknowns, risk, and next steps.
+- Treat `wake_context.active_goal` as the current synthesized operating goal
+  unless direct evidence in the wake context contradicts it.
+- Use `wake_context.queue_analysis` to identify queued tasks that are stale by
+  age or blocked by missing runner capability.
+- `wake_context.recent_heartbeat_summary` is a compressed history included to
+  avoid echoing old heartbeat prose. Do not restate repeated old heartbeat
+  messages as if they are fresh observations.
+- `wake_context.capabilities_today` is the current capability registry view.
+  Do not claim abilities not listed there or evidenced elsewhere in context.
 - Do not claim that logs, git history, mailboxes, or external systems were
   inspected unless the wake context explicitly includes that evidence.
 - Do not claim a subagent is working unless there is an active or queued task in

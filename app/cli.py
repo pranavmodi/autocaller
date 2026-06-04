@@ -3039,6 +3039,90 @@ def agents_run_research_scout(
     console.print(f"[green]completed[/green] {report.get('id')}: {report.get('summary')}")
 
 
+@agents_app.command("run-systems-health")
+def agents_run_systems_health(
+    task_id: str = typer.Option("", "--task", help="Specific SystemsHealth task id. Defaults to next queued task."),
+    json_output: bool = typer.Option(False, "--json"),
+):
+    """Run one SystemsHealthAgent read-only observation task now."""
+    data = _post(
+        "/api/agents/tasks/systems-health/run",
+        json_body={},
+        timeout=90.0,
+    ) if not task_id else _post(
+        f"/api/agents/tasks/systems-health/run?task_id={task_id}",
+        json_body={},
+        timeout=90.0,
+    )
+    if json_output:
+        console.print_json(data=data)
+        return
+    report = data.get("report")
+    if not report:
+        console.print("[yellow]No queued SystemsHealthAgent task found.[/yellow]")
+        return
+    console.print(f"[green]completed[/green] {report.get('id')}: {report.get('summary')}")
+
+
+@agents_app.command("capabilities")
+def agents_capabilities(
+    refresh: bool = typer.Option(False, "--refresh", help="Refresh the registry before listing."),
+    no_probe: bool = typer.Option(False, "--no-probe", help="Do not run safe verification probes on refresh."),
+    limit: int = typer.Option(100, "--limit", min=1, max=500),
+    json_output: bool = typer.Option(False, "--json"),
+):
+    """List or refresh the master-agent capability registry."""
+    data = (
+        _post(f"/api/agents/capabilities/refresh?probe={'false' if no_probe else 'true'}", json_body={}, timeout=60.0)
+        if refresh
+        else _get("/api/agents/capabilities", limit=limit)
+    )
+    if json_output:
+        console.print_json(data=data)
+        return
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("name")
+    table.add_column("type", no_wrap=True)
+    table.add_column("risk", no_wrap=True)
+    table.add_column("status", no_wrap=True)
+    table.add_column("source")
+    for cap in data.get("capabilities") or []:
+        table.add_row(
+            cap.get("name") or "",
+            cap.get("capability_type") or "",
+            cap.get("risk_level") or "",
+            cap.get("last_status") or "",
+            cap.get("source") or "",
+        )
+    console.print(table)
+
+
+@agents_app.command("goals")
+def agents_goals(
+    status: str = typer.Option("all", "--status", help="Filter by goal status."),
+    limit: int = typer.Option(20, "--limit", min=1, max=100),
+    json_output: bool = typer.Option(False, "--json"),
+):
+    """List durable adaptive master-agent goals."""
+    data = _get("/api/agents/goals", status=status if status != "all" else None, limit=limit)
+    if json_output:
+        console.print_json(data=data)
+        return
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("created", no_wrap=True)
+    table.add_column("status", no_wrap=True)
+    table.add_column("confidence", no_wrap=True)
+    table.add_column("goal")
+    for goal in data.get("goals") or []:
+        table.add_row(
+            goal.get("created_at") or "",
+            goal.get("status") or "",
+            goal.get("confidence") or "",
+            goal.get("goal") or "",
+        )
+    console.print(table)
+
+
 @agents_app.command("set-status")
 def agents_set_status(
     task_id: str = typer.Argument(...),
