@@ -24,6 +24,7 @@ from app.services.master_agent import (
     run_systems_health_task,
     run_master_heartbeat,
     refresh_agent_capabilities,
+    set_master_goal,
     update_agent_config,
     update_agent_task_status,
 )
@@ -82,6 +83,17 @@ class AgentConfigRequest(BaseModel):
     heartbeat_enabled: bool | None = None
     heartbeat_interval_seconds: int | None = Field(None, ge=60, le=3600)
     actor: str = Field("operator", max_length=128)
+
+
+class MasterGoalSetRequest(BaseModel):
+    goal: str = Field(..., min_length=1)
+    why: str = ""
+    next_actions: list[Any] = Field(default_factory=list)
+    success_metric: str = ""
+    time_horizon: str = "manual operating slice"
+    confidence: str = Field("high", max_length=32)
+    created_by: str = Field("operator", max_length=128)
+    expires_hours: int = Field(24, ge=1, le=168)
 
 
 @router.get("/status")
@@ -166,6 +178,14 @@ async def goals(
     limit: int = Query(20, ge=1, le=100),
 ):
     return {"goals": await list_master_goals(status=status, limit=limit)}
+
+
+@router.post("/goals/set")
+async def set_goal(req: MasterGoalSetRequest):
+    try:
+        return {"goal": await set_master_goal(**req.model_dump())}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
 @router.get("/tasks/{task_id}")

@@ -164,6 +164,7 @@ Every command accepts `--help`. Exit code is `0` on success, `1` on any error
 | `agents run-systems-health [--task=<task_id> --json]` | Run one SystemsHealthAgent read-only health observation task now. Reads bounded service status, recent journals, `/health`, recent traces, and recent agent events; writes an `agent_reports` row. It does not edit code, restart services, send mail, or modify external state. |
 | `agents capabilities [--refresh] [--no-probe] [--json]` | List or refresh the master-agent capability registry. Refresh runs only safe probes; actionful capabilities are declared without execution. |
 | `agents goals [--status=active --json]` | List durable adaptive master-agent goals synthesized from queue state, capabilities, reports, and current context. |
+| `agents set-goal "..." [--why=... --next-action=... --success-metric=... --expires-hours=24 --json]` | Set a manual active master-agent goal that heartbeat respects until expiry instead of immediately synthesizing over it. |
 | `agents set-status <task_id> <status> [--message=...]` | Set a subagent task status. |
 | `agents task-heartbeat <task_id> --agent=... [--message=... --status=running]` | Record a heartbeat/progress ping from a subagent. |
 | `agents report <task_id> --agent=... --summary=... [--status=reported]` | Attach a structured report-back artifact to a subagent task. |

@@ -3263,6 +3263,39 @@ def agents_goals(
     console.print(table)
 
 
+@agents_app.command("set-goal")
+def agents_set_goal(
+    goal: str = typer.Argument(..., help="Manual master-agent goal."),
+    why: str = typer.Option("", "--why"),
+    next_action: list[str] = typer.Option([], "--next-action", help="Repeat for each next action."),
+    success_metric: str = typer.Option("", "--success-metric"),
+    time_horizon: str = typer.Option("manual operating slice", "--time-horizon"),
+    confidence: str = typer.Option("high", "--confidence"),
+    created_by: str = typer.Option("operator", "--created-by"),
+    expires_hours: int = typer.Option(24, "--expires-hours", min=1, max=168),
+    json_output: bool = typer.Option(False, "--json"),
+):
+    """Set a manual master-agent goal that heartbeat respects until expiry."""
+    data = _post(
+        "/api/agents/goals/set",
+        json_body={
+            "goal": goal,
+            "why": why,
+            "next_actions": list(next_action),
+            "success_metric": success_metric,
+            "time_horizon": time_horizon,
+            "confidence": confidence,
+            "created_by": created_by,
+            "expires_hours": expires_hours,
+        },
+    )
+    if json_output:
+        console.print_json(data=data)
+        return
+    row = data.get("goal") or {}
+    console.print(f"[green]Set active goal[/green] {row.get('id')}: {row.get('goal')}")
+
+
 @agents_app.command("set-status")
 def agents_set_status(
     task_id: str = typer.Argument(...),

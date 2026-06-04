@@ -1083,6 +1083,15 @@ async def synthesize_master_goal(
     recent_reports: list[dict[str, Any]],
 ) -> dict[str, Any]:
     await ensure_agent_tables()
+    now = _utcnow()
+    async with AsyncSessionLocal() as session:
+        active_rows = (await session.execute(
+            select(MasterGoalRow).where(MasterGoalRow.status == "active").order_by(MasterGoalRow.created_at.desc())
+        )).scalars().all()
+        for existing in active_rows:
+            source = existing.source_json or {}
+            if source.get("manual") and (existing.expires_at is None or existing.expires_at > now):
+                return goal_to_dict(existing)
     stale_queue_items = queue_analysis.get("stale_queue_items") or []
     blocked_capabilities = queue_analysis.get("blocked_capabilities") or []
     systems_health_ready = any(
@@ -1144,7 +1153,6 @@ async def synthesize_master_goal(
         for cap in capabilities
         if cap.get("autonomous_allowed") and cap.get("last_status") in {"ok", "declared"}
     ][:10]
-    now = _utcnow()
     row = MasterGoalRow(
         id=_new_id("goal"),
         status="active",
@@ -1191,6 +1199,77 @@ async def synthesize_master_goal(
         surface="agents",
         entity_type="master_goal",
         entity_id=result["id"],
+        output_json=result,
+    )
+    return result
+
+
+async def set_master_goal(
+    *,
+    goal: str,
+    why: str = "",
+    next_actions: list[Any] | None = None,
+    success_metric: str = "",
+    time_horizon: str = "manual operating slice",
+    confidence: str = "high",
+    created_by: str = "operator",
+    expires_hours: int = 24,
+) -> dict[str, Any]:
+    """Set a manual active goal that heartbeat respects until it expires or is superseded."""
+    await ensure_agent_tables()
+    cleaned_goal = goal.strip()
+    if not cleaned_goal:
+        raise ValueError("goal_required")
+    now = _utcnow()
+    row = MasterGoalRow(
+        id=_new_id("goal"),
+        status="active",
+        goal=cleaned_goal,
+        why=why.strip(),
+        time_horizon=time_horizon.strip() or "manual operating slice",
+        success_metric=success_metric.strip(),
+        next_actions_json=_json_list(next_actions),
+        source_json={
+            "manual": True,
+            "actor": created_by,
+            "set_at": now.isoformat(),
+        },
+        confidence=confidence.strip() or "high",
+        created_by=created_by[:128] if created_by else "operator",
+        expires_at=now + timedelta(hours=max(1, min(int(expires_hours), 168))),
+    )
+    async with AsyncSessionLocal() as session:
+        old_goals = (await session.execute(
+            select(MasterGoalRow).where(MasterGoalRow.status == "active")
+        )).scalars().all()
+        for old in old_goals:
+            old.status = "superseded"
+            session.add(old)
+        session.add(row)
+        session.add(AgentTaskEventRow(
+            task_id=None,
+            agent_id="master-agent",
+            event_type="master_goal_set",
+            message=cleaned_goal,
+            input_json={"actor": created_by, "manual": True},
+            output_json={
+                "goal_id": row.id,
+                "goal": cleaned_goal,
+                "next_actions": row.next_actions_json,
+            },
+            metadata_json={"confidence": row.confidence, "expires_hours": expires_hours},
+        ))
+        await session.commit()
+        await session.refresh(row)
+        result = goal_to_dict(row)
+    await safe_record_product_trace(
+        actor_type="user" if created_by == "operator" else "agent",
+        actor_id=created_by,
+        event_type="master_goal_set",
+        surface="agents",
+        entity_type="master_goal",
+        entity_id=result["id"],
+        input_json={"manual": True},
         output_json=result,
     )
     return result
