@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 import httpx
-from sqlalchemy import select
+from sqlalchemy import desc, select
 
 from app.db import AsyncSessionLocal, async_engine
 from app.db.models import (
@@ -2311,6 +2311,27 @@ async def run_master_heartbeat(*, actor: str = "master-agent") -> dict[str, Any]
 
 def last_heartbeat_result() -> dict[str, Any] | None:
     return _last_heartbeat_result
+
+
+async def get_last_heartbeat_result() -> dict[str, Any] | None:
+    """Return the latest heartbeat packet, including persisted fallback after restarts."""
+    if _last_heartbeat_result:
+        return _last_heartbeat_result
+    async with AsyncSessionLocal() as session:
+        row = (await session.execute(
+            select(ProductTraceRow)
+            .where(
+                ProductTraceRow.event_type == "master_heartbeat_completed",
+                ProductTraceRow.surface == "agents",
+                ProductTraceRow.entity_type == "master_agent",
+                ProductTraceRow.entity_id == "heartbeat",
+            )
+            .order_by(desc(ProductTraceRow.created_at))
+            .limit(1)
+        )).scalar_one_or_none()
+    if not row or not isinstance(row.output_json, dict):
+        return None
+    return row.output_json
 
 
 async def master_heartbeat_loop(interval_seconds: int = 300) -> None:

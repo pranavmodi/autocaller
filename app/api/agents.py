@@ -13,7 +13,7 @@ from app.services.master_agent import (
     create_systems_health_agent_task,
     get_agent_config,
     get_agent_task,
-    last_heartbeat_result,
+    get_last_heartbeat_result,
     list_agent_capabilities,
     list_agent_events,
     list_agent_reports,
@@ -90,7 +90,7 @@ async def agents_status():
     return {
         "heartbeat_enabled": config["heartbeat_enabled"],
         "heartbeat_interval_seconds": config["heartbeat_interval_seconds"],
-        "last_heartbeat": last_heartbeat_result(),
+        "last_heartbeat": await get_last_heartbeat_result(),
     }
 
 
