@@ -141,6 +141,19 @@ CAPABILITY_DEFINITIONS = [
         },
     },
     {
+        "name": "send email action",
+        "capability_type": "cli",
+        "source": "bin/autocaller actions send-email --mode=test --to=<email> --subject=... --body=...",
+        "purpose": "Create and optionally execute an exact approved email through the durable action executor. V1 supports mode=test.",
+        "risk_level": "high",
+        "requires_approval": True,
+        "autonomous_allowed": False,
+        "command_json": {
+            "argv": ["bin/autocaller", "actions", "send-email", "--mode", "test", "--to", "<email>", "--subject", "<subject>", "--body", "<body>"],
+            "safe_probe": False,
+        },
+    },
+    {
         "name": "run research scout",
         "capability_type": "cli",
         "source": "bin/autocaller agents run-research-scout --json",
@@ -684,6 +697,113 @@ def _short_event_snapshot(row: AgentTaskEventRow) -> dict[str, Any]:
     }
 
 
+def _short_action_event_snapshot(row: AgentActionEventRow) -> dict[str, Any]:
+    return {
+        "id": row.id,
+        "event_type": row.event_type,
+        "actor": row.actor,
+        "message": _compact_text(row.message or "", limit=220),
+        "created_at": row.created_at.isoformat() if row.created_at else None,
+    }
+
+
+def _short_action_snapshot(row: AgentActionRow, events: list[AgentActionEventRow]) -> dict[str, Any]:
+    payload = row.input_json if isinstance(row.input_json, dict) else {}
+    result = row.execution_result_json if isinstance(row.execution_result_json, dict) else {}
+    policy = row.policy_result_json if isinstance(row.policy_result_json, dict) else {}
+    failed_checks = [
+        str(check.get("name") or "")
+        for check in (policy.get("checks") or [])
+        if isinstance(check, dict) and not check.get("passed")
+    ][:5]
+    return {
+        "id": row.id,
+        "action_type": row.action_type,
+        "status": row.status,
+        "risk_level": row.risk_level,
+        "entity_type": row.entity_type,
+        "entity_id": row.entity_id,
+        "requested_by": row.requested_by,
+        "approved_by": row.approved_by,
+        "created_at": row.created_at.isoformat() if row.created_at else None,
+        "started_at": row.started_at.isoformat() if row.started_at else None,
+        "completed_at": row.completed_at.isoformat() if row.completed_at else None,
+        "input_summary": {
+            "to": payload.get("to"),
+            "batch_item_id": payload.get("batch_item_id"),
+            "subject": _compact_text(str(payload.get("subject") or ""), limit=180),
+            "test_email": payload.get("test_email"),
+            "subject_sha256": payload.get("subject_sha256"),
+            "body_sha256": payload.get("body_sha256"),
+            "composer_variant_key": payload.get("composer_variant_key"),
+        },
+        "policy_summary": {
+            "allowed": policy.get("allowed"),
+            "reason": policy.get("reason"),
+            "failed_checks": failed_checks,
+        },
+        "result_summary": {
+            "sent_to": result.get("sent_to"),
+            "sent_subject": _compact_text(str(result.get("sent_subject") or ""), limit=180),
+            "sent_message_id": result.get("sent_message_id"),
+            "sent_at": result.get("sent_at"),
+            "message_type": result.get("message_type"),
+        },
+        "error": _compact_text(row.error or "", limit=260),
+        "recent_events": [_short_action_event_snapshot(event) for event in events[:5]],
+    }
+
+
+async def _recent_action_snapshots(session, *, limit: int = 8) -> list[dict[str, Any]]:
+    action_rows = (await session.execute(
+        select(AgentActionRow).order_by(AgentActionRow.created_at.desc()).limit(limit)
+    )).scalars().all()
+    if not action_rows:
+        return []
+    action_ids = [row.id for row in action_rows]
+    event_rows = (await session.execute(
+        select(AgentActionEventRow)
+        .where(AgentActionEventRow.action_id.in_(action_ids))
+        .order_by(AgentActionEventRow.created_at.desc(), AgentActionEventRow.id.desc())
+    )).scalars().all()
+    events_by_action: dict[str, list[AgentActionEventRow]] = {action_id: [] for action_id in action_ids}
+    for event in event_rows:
+        events_by_action.setdefault(event.action_id, []).append(event)
+    return [
+        _short_action_snapshot(row, events_by_action.get(row.id, []))
+        for row in action_rows
+    ]
+
+
+def _goal_evidence(active_goal: dict[str, Any] | None, recent_actions: list[dict[str, Any]]) -> dict[str, Any]:
+    if not active_goal or not active_goal.get("goal"):
+        return {}
+    goal_text = str(active_goal.get("goal") or "").lower()
+    success_metric = str(active_goal.get("success_metric") or "").lower()
+    if "test email" not in f"{goal_text} {success_metric}":
+        return {}
+    for action in recent_actions:
+        result = action.get("result_summary") or {}
+        if (
+            action.get("action_type") == "send_test_email"
+            and action.get("status") == "succeeded"
+            and str(result.get("sent_to") or "").lower() == "pranav.modi@gmail.com"
+        ):
+            return {
+                "status": "satisfied",
+                "matched_action_id": action.get("id"),
+                "matched_action_type": action.get("action_type"),
+                "sent_to": result.get("sent_to"),
+                "sent_message_id": result.get("sent_message_id"),
+                "sent_at": result.get("sent_at"),
+                "reason": "Recent durable action succeeded for the active test-email goal recipient.",
+            }
+    return {
+        "status": "not_yet_satisfied",
+        "reason": "No recent succeeded send_test_email action matched the active test-email goal.",
+    }
+
+
 def _queue_age_analysis(rows: list[AgentTaskRow]) -> dict[str, Any]:
     now = _utcnow()
     stale_queue_items: list[dict[str, Any]] = []
@@ -769,7 +889,9 @@ def _build_wake_context(
     queue_analysis: dict[str, Any],
     capabilities: list[dict[str, Any]],
     active_goal: dict[str, Any] | None,
+    recent_actions: list[dict[str, Any]],
 ) -> dict[str, Any]:
+    goal_evidence = _goal_evidence(active_goal, recent_actions)
     return {
         "kind": "master_agent_wake_context_v1",
         "note": (
@@ -789,6 +911,8 @@ def _build_wake_context(
         "configuration": agent_config,
         "capabilities_today": _capabilities_context(capabilities),
         "current_tasks": active_tasks,
+        "recent_actions": recent_actions,
+        "goal_evidence": goal_evidence,
         "queue_analysis": queue_analysis,
         "recent_reports": recent_reports[:5],
         "recent_events": recent_events[:8],
@@ -1015,6 +1139,10 @@ async def refresh_agent_capabilities(*, probe: bool = True, actor: str = "operat
     await ensure_agent_tables()
     now = _utcnow()
     refreshed: list[dict[str, Any]] = []
+    active_definition_keys = {
+        (str(definition["name"]), str(definition["source"]))
+        for definition in CAPABILITY_DEFINITIONS
+    }
     async with AsyncSessionLocal() as session:
         for definition in CAPABILITY_DEFINITIONS:
             status = "declared"
@@ -1048,6 +1176,20 @@ async def refresh_agent_capabilities(*, probe: bool = True, actor: str = "operat
             existing.updated_at = now
             session.add(existing)
             refreshed.append(capability_to_dict(existing))
+        existing_rows = (await session.execute(select(AgentCapabilityRow))).scalars().all()
+        for row in existing_rows:
+            if (row.name, row.source) in active_definition_keys:
+                continue
+            row.last_status = "deprecated"
+            row.autonomous_allowed = False
+            metadata = row.metadata_json if isinstance(row.metadata_json, dict) else {}
+            row.metadata_json = {
+                **metadata,
+                "deprecated_at": now.isoformat(),
+                "reason": "Capability definition is no longer present in CAPABILITY_DEFINITIONS.",
+            }
+            row.updated_at = now
+            session.add(row)
         await session.commit()
     await safe_record_product_trace(
         actor_type="agent" if actor != "operator" else "user",
@@ -1066,6 +1208,7 @@ async def list_agent_capabilities(*, limit: int = 100) -> list[dict[str, Any]]:
     async with AsyncSessionLocal() as session:
         rows = (await session.execute(
             select(AgentCapabilityRow)
+            .where(AgentCapabilityRow.last_status != "deprecated")
             .order_by(AgentCapabilityRow.capability_type.asc(), AgentCapabilityRow.name.asc())
             .limit(max(1, min(limit, 500)))
         )).scalars().all()
@@ -2265,6 +2408,7 @@ async def run_master_heartbeat(*, actor: str = "master-agent") -> dict[str, Any]
     active_task_snapshots: list[dict[str, Any]] = []
     recent_report_snapshots: list[dict[str, Any]] = []
     recent_event_snapshots: list[dict[str, Any]] = []
+    recent_action_snapshots: list[dict[str, Any]] = []
     heartbeat_history: dict[str, Any] = {}
     queue_analysis: dict[str, Any] = {}
     capabilities: list[dict[str, Any]] = []
@@ -2309,6 +2453,7 @@ async def run_master_heartbeat(*, actor: str = "master-agent") -> dict[str, Any]
             select(AgentTaskEventRow).order_by(AgentTaskEventRow.created_at.desc()).limit(30)
         )).scalars().all()
         recent_report_snapshots = [report_to_dict(row) for row in recent_report_rows]
+        recent_action_snapshots = await _recent_action_snapshots(session, limit=8)
         heartbeat_history = _heartbeat_history_summary(list(recent_event_rows))
         recent_event_snapshots = [
             _short_event_snapshot(row)
@@ -2344,6 +2489,7 @@ async def run_master_heartbeat(*, actor: str = "master-agent") -> dict[str, Any]
             queue_analysis=queue_analysis,
             capabilities=capabilities,
             active_goal=active_goal,
+            recent_actions=recent_action_snapshots,
         )
         wake_context["auto_delegated_task"] = auto_delegated_task or {}
         if agent_config.get("status_llm_enabled", True):

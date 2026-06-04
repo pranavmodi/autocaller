@@ -2963,6 +2963,82 @@ def actions_send_approved_lead_gen_draft(
     )
 
 
+@actions_app.command("send-test-email")
+def actions_send_test_email(
+    to: str = typer.Option(..., "--to", help="Approved test recipient."),
+    subject: str = typer.Option("Possible OS durable action test", "--subject", help="Approved subject."),
+    body: str = typer.Option(
+        "This is a controlled test email sent through the Possible OS durable action executor.",
+        "--body",
+        help="Approved body.",
+    ),
+    approved_by: str = typer.Option("operator", "--approved-by"),
+    from_addr: str = typer.Option("", "--from", help="Optional configured From override."),
+    execute_now: bool = typer.Option(True, "--execute/--no-execute", help="Execute immediately after creating the action."),
+    json_output: bool = typer.Option(False, "--json"),
+):
+    """Create, policy-check, and optionally execute a controlled test email action."""
+    data = _post(
+        f"/api/actions/email/send?execute_now={'true' if execute_now else 'false'}",
+        json_body={
+            "mode": "test",
+            "to": to,
+            "subject": subject,
+            "body": body,
+            "requested_by": approved_by,
+            "approved_by": approved_by,
+            "from_addr": from_addr or None,
+        },
+        timeout=120.0,
+    )
+    if json_output:
+        console.print_json(data=data)
+        return
+    action = data.get("action") or {}
+    result = data.get("result") or {}
+    console.print(
+        f"action={action.get('id')} status={action.get('status')} "
+        f"sent_to={result.get('sent_to', '—')} message_id={result.get('sent_message_id', '—')}"
+    )
+
+
+@actions_app.command("send-email")
+def actions_send_email(
+    to: str = typer.Option(..., "--to", help="Approved recipient."),
+    subject: str = typer.Option(..., "--subject", help="Approved subject."),
+    body: str = typer.Option(..., "--body", help="Approved body."),
+    mode: str = typer.Option("test", "--mode", help="Email mode. Current supported value: test."),
+    approved_by: str = typer.Option("operator", "--approved-by"),
+    from_addr: str = typer.Option("", "--from", help="Optional configured From override."),
+    execute_now: bool = typer.Option(True, "--execute/--no-execute", help="Execute immediately after creating the action."),
+    json_output: bool = typer.Option(False, "--json"),
+):
+    """Create, policy-check, and optionally execute a durable email action."""
+    data = _post(
+        f"/api/actions/email/send?execute_now={'true' if execute_now else 'false'}",
+        json_body={
+            "mode": mode,
+            "to": to,
+            "subject": subject,
+            "body": body,
+            "requested_by": approved_by,
+            "approved_by": approved_by,
+            "from_addr": from_addr or None,
+        },
+        timeout=120.0,
+    )
+    if json_output:
+        console.print_json(data=data)
+        return
+    action = data.get("action") or {}
+    result = data.get("result") or {}
+    console.print(
+        f"action={action.get('id')} status={action.get('status')} "
+        f"mode={mode} sent_to={result.get('sent_to', '—')} "
+        f"message_id={result.get('sent_message_id', '—')}"
+    )
+
+
 # ---------------------------------------------------------------------------
 # agents — master-agent heartbeat and durable subagent task board
 # ---------------------------------------------------------------------------

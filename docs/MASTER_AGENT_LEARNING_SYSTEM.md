@@ -910,6 +910,8 @@ Weekly:
 Current heartbeat status implementation:
 
 - builds a bounded wake context packet on every heartbeat;
+- includes current tasks, recent reports, recent task events, capabilities,
+  recent durable action records, and goal evidence derived from those actions;
 - calls the OpenClaw gateway with
   `app/skills/master-agent-status/SKILL.md`;
 - asks the model for JSON containing state, goal, current focus, intended next
@@ -922,9 +924,10 @@ Current heartbeat status implementation:
   task but does not run that worker or edit code;
 - shows the human status and full wake context in `/agents`.
 
-The current goal in the wake context comes from a bootstrap mission inside
-`app/services/master_agent.py::_build_wake_context`. The durable version should
-load the goal from `master_plans` and `master_plan_items` once those exist.
+The current goal in the wake context comes from durable `master_goals` rows.
+Manual goals set with `bin/autocaller agents set-goal` override synthesized
+goals until expiry. The future long-range planning layer should still add
+`master_plans` and `master_plan_items` for parallel multi-day work.
 
 ### Heartbeat State
 

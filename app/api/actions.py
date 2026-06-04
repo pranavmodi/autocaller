@@ -9,7 +9,10 @@ from pydantic import BaseModel, Field
 from app.services.action_execution import (
     check_action_policy,
     create_and_execute_send_approved_lead_gen_draft,
+    create_send_email_action,
+    create_and_execute_send_test_email,
     create_send_approved_lead_gen_draft_action,
+    create_send_test_email_action,
     execute_action,
     get_action,
     list_actions,
@@ -29,6 +32,19 @@ class LeadGenDraftActionRequest(BaseModel):
     composer_variant_key: str | None = None
     skill_path: str | None = None
     skill_sha256: str | None = None
+
+
+class TestEmailActionRequest(BaseModel):
+    to: str = Field(..., min_length=3, max_length=320)
+    subject: str = Field(..., min_length=1)
+    body: str = Field(..., min_length=1)
+    requested_by: str = Field("operator", max_length=128)
+    approved_by: str = Field("operator", max_length=128)
+    from_addr: str | None = None
+
+
+class EmailActionRequest(TestEmailActionRequest):
+    mode: str = Field("test", max_length=32)
 
 
 class ExecuteActionRequest(BaseModel):
@@ -77,6 +93,33 @@ async def create_lead_gen_send_action(req: LeadGenDraftActionRequest, execute_no
         if execute_now:
             return await create_and_execute_send_approved_lead_gen_draft(**kwargs)
         return {"action": await create_send_approved_lead_gen_draft_action(**kwargs)}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"{type(exc).__name__}: {str(exc)[:500]}")
+
+
+@router.post("/email/send")
+async def create_email_action(req: EmailActionRequest, execute_now: bool = Query(False)):
+    kwargs: dict[str, Any] = req.model_dump()
+    try:
+        if execute_now:
+            action = await create_send_email_action(**kwargs)
+            return await execute_action(action["id"], actor=kwargs.get("approved_by") or "operator")
+        return {"action": await create_send_email_action(**kwargs)}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"{type(exc).__name__}: {str(exc)[:500]}")
+
+
+@router.post("/email/send-test")
+async def create_test_email_action(req: TestEmailActionRequest, execute_now: bool = Query(False)):
+    kwargs: dict[str, Any] = req.model_dump()
+    try:
+        if execute_now:
+            return await create_and_execute_send_test_email(**kwargs)
+        return {"action": await create_send_test_email_action(**kwargs)}
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:

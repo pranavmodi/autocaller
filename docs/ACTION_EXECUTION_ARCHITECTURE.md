@@ -399,7 +399,7 @@ Approval should mean "send this exact thing," not "send whatever the system curr
 
 ## Execution Policy For Email
 
-The first high-value action type is:
+The first high-value production action type is:
 
 ```text
 send_approved_lead_gen_draft
@@ -419,6 +419,32 @@ It should only send when:
 It should never accept arbitrary body text from the master agent at execution time.
 
 The body should come from the approved draft object.
+
+The regular durable email action type is:
+
+```text
+send_email
+```
+
+In V1, `send_email` supports only:
+
+```text
+mode=test
+```
+
+It should only send when:
+
+- the recipient, subject, and body are present
+- the mode is supported
+- for `mode=test`, the action is explicitly marked as a test email
+- a human approval object exists for that exact recipient and content hash
+- the approved hashes still match the execution payload
+- an email transport is configured
+- the same test recipient has not already had a successful durable test action
+
+Rationale:
+
+This gives the master-agent system one regular email action family instead of a one-off test tool. Test sends validate the executor without borrowing the lead-gen workflow or sending mail through arbitrary shell commands. Future modes should extend the same action family for lead-gen, inbox replies, and transactional mail.
 
 ## CLI Contract
 
@@ -441,6 +467,14 @@ For lead-gen email specifically, current V1 command is:
 ```text
 bin/autocaller actions send-approved-lead-gen-draft --item=<batch_item_id> --subject=... --body=...
 ```
+
+For a controlled test email of the durable executor:
+
+```text
+bin/autocaller actions send-email --mode=test --to=<email> --subject=... --body=...
+```
+
+`bin/autocaller actions send-test-email ...` remains a convenience alias.
 
 or:
 
@@ -731,16 +765,23 @@ As of this document:
   - `POST /api/actions/{id}/policy-check`
   - `POST /api/actions/{id}/execute`
   - `POST /api/actions/lead-gen/send-approved-draft`
+  - `POST /api/actions/email/send`
+  - `POST /api/actions/email/send-test`
   - `bin/autocaller actions list`
   - `bin/autocaller actions show`
   - `bin/autocaller actions policy-check`
   - `bin/autocaller actions execute`
   - `bin/autocaller actions send-approved-lead-gen-draft`
-- The first action type is `send_approved_lead_gen_draft`.
+  - `bin/autocaller actions send-email`
+  - `bin/autocaller actions send-test-email`
+- The current action types are:
+  - `send_approved_lead_gen_draft`
+  - `send_email`
 - The existing lead-gen `/send-draft` endpoint now creates and executes a durable action row, then calls the existing Zoho-backed send path.
+- The controlled `send_email` `mode=test` path validates the same policy/executor/trace path without depending on a lead-gen batch item.
 - The master agent cannot yet execute arbitrary CLI actions.
-- The master agent cannot yet send emails.
-  It can only observe this execution system until a future policy-approved master-agent action-request path is added.
+- The master agent cannot autonomously send emails.
+  It can only use email execution when a typed action has exact approval and passes policy.
 
 ## What To Build First
 

@@ -82,6 +82,13 @@ Return only JSON with these fields:
   messages as if they are fresh observations.
 - `wake_context.capabilities_today` is the current capability registry view.
   Do not claim abilities not listed there or evidenced elsewhere in context.
+- `wake_context.recent_actions` is the recent durable action-execution record.
+  Use it to identify completed, failed, approved, or blocked actions. If it
+  shows a successful send or other execution result, treat that as real
+  evidence.
+- `wake_context.goal_evidence` summarizes whether recent actions satisfy the
+  active goal. If it says `satisfied`, report the goal as completed or ready to
+  close, and do not say the action has not happened.
 - Do not claim that logs, git history, mailboxes, or external systems were
   inspected unless the wake context explicitly includes that evidence.
 - Do not claim a subagent is working unless there is an active or queued task in
