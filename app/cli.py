@@ -50,6 +50,7 @@ outreach_app = typer.Typer(help="Blog-post outreach campaigns — LLM-composed, 
 todos_app = typer.Typer(help="Editable project todo backlog.", no_args_is_help=True)
 agents_app = typer.Typer(help="Possible OS master-agent heartbeat and subagent tasks.", no_args_is_help=True)
 actions_app = typer.Typer(help="Durable Possible OS action execution queue.", no_args_is_help=True)
+fs_app = typer.Typer(help="Read-only repo filesystem inspection for Possible OS agents.", no_args_is_help=True)
 outreach_campaigns_app = typer.Typer(help="Create / list / show outreach campaigns.", no_args_is_help=True)
 outreach_audience_app = typer.Typer(help="Build a campaign's recipient list from firm contacts.", no_args_is_help=True)
 outreach_app.add_typer(outreach_campaigns_app, name="campaigns")
@@ -77,6 +78,7 @@ app.add_typer(outreach_app, name="outreach")
 app.add_typer(todos_app, name="todos")
 app.add_typer(agents_app, name="agents")
 app.add_typer(actions_app, name="actions")
+app.add_typer(fs_app, name="fs")
 
 console = Console()
 
@@ -119,6 +121,34 @@ def _patch(path: str, json_body: Optional[dict] = None, timeout: float = 30.0) -
         console.print(f"[red]API request failed: {e}[/red]")
         raise typer.Exit(code=1) from e
     return resp.json() if resp.content else {}
+
+
+def _run_fs_payload(payload: dict, *, actor: str = "operator") -> dict:
+    from app.services.filesystem_read import run_filesystem_read
+
+    return asyncio.run(run_filesystem_read(payload, actor=actor))
+
+
+def _print_fs_result(data: dict, *, json_output: bool) -> None:
+    if json_output:
+        console.print_json(data=data)
+        return
+    result = data.get("result") or {}
+    if not data.get("allowed"):
+        console.print(f"[red]rejected[/red] {result.get('error') or result.get('summary') or 'request rejected'}")
+        return
+    operation = result.get("operation") or "filesystem_read"
+    console.print(f"[green]{operation}[/green] {result.get('summary') or ''}")
+    if "files" in result:
+        for path in result.get("files") or []:
+            console.print(path)
+    elif "matches" in result:
+        for match in result.get("matches") or []:
+            console.print(f"{match.get('path')}:{match.get('line')}: {match.get('text')}")
+    elif "content" in result:
+        console.print(result.get("content") or "")
+    elif "output" in result:
+        console.print(result.get("output") or "")
 
 
 def _delete(path: str, timeout: float = 30.0) -> dict:
@@ -3087,7 +3117,11 @@ def agents_status(json_output: bool = typer.Option(False, "--json", help="Print 
         console.print(f"active_task_count: {last.get('active_task_count')}")
         console.print(f"stale_task_ids: {', '.join(last.get('stale_task_ids') or []) or '-'}")
         human_status = last.get("human_status") or {}
+        objective_status = last.get("objective_status") or {}
         status_llm = last.get("status_llm") or {}
+        if objective_status:
+            console.print(f"objective_status: {objective_status.get('status')}")
+            console.print(f"objective_next: {objective_status.get('next_best_action')}")
         if human_status:
             console.print(f"state: {human_status.get('state')}")
             console.print(f"goal: {human_status.get('goal')}")
@@ -3372,6 +3406,120 @@ def agents_capabilities(
             cap.get("source") or "",
         )
     console.print(table)
+
+
+@fs_app.command("list")
+def fs_list(
+    path: str = typer.Argument(".", help="Repo-relative path to list."),
+    pattern: str = typer.Option("", "--pattern", help="Optional glob pattern."),
+    limit: int = typer.Option(200, "--limit", min=1, max=1000),
+    actor: str = typer.Option("operator", "--actor"),
+    json_output: bool = typer.Option(False, "--json"),
+):
+    """List repo files through the read-only filesystem service."""
+    data = _run_fs_payload(
+        {"operation": "list_files", "path": path, "pattern": pattern or None, "limit": limit},
+        actor=actor,
+    )
+    _print_fs_result(data, json_output=json_output)
+
+
+@fs_app.command("read")
+def fs_read(
+    path: str = typer.Argument(..., help="Repo-relative file path."),
+    start: int = typer.Option(1, "--start", min=1, help="First line to read."),
+    end: int | None = typer.Option(None, "--end", min=1, help="Last line to read."),
+    max_bytes: int = typer.Option(50_000, "--max-bytes", min=1, max=50_000),
+    actor: str = typer.Option("operator", "--actor"),
+    json_output: bool = typer.Option(False, "--json"),
+):
+    """Read a text file with line numbers through the read-only service."""
+    data = _run_fs_payload(
+        {
+            "operation": "read_file",
+            "path": path,
+            "start_line": start,
+            "end_line": end,
+            "max_bytes": max_bytes,
+        },
+        actor=actor,
+    )
+    _print_fs_result(data, json_output=json_output)
+
+
+@fs_app.command("search")
+def fs_search(
+    query: str = typer.Argument(..., help="Literal text to search for."),
+    path: str = typer.Argument(".", help="Repo-relative path to search."),
+    glob: str = typer.Option("", "--glob", help="Optional rg-style glob, e.g. '*.py'."),
+    limit: int = typer.Option(100, "--limit", min=1, max=100),
+    actor: str = typer.Option("operator", "--actor"),
+    json_output: bool = typer.Option(False, "--json"),
+):
+    """Search repo text through the read-only service."""
+    data = _run_fs_payload(
+        {
+            "operation": "search_text",
+            "query": query,
+            "path": path,
+            "glob": glob or None,
+            "limit": limit,
+        },
+        actor=actor,
+    )
+    _print_fs_result(data, json_output=json_output)
+
+
+@fs_app.command("git-status")
+def fs_git_status(
+    actor: str = typer.Option("operator", "--actor"),
+    json_output: bool = typer.Option(False, "--json"),
+):
+    """Show read-only git status."""
+    data = _run_fs_payload({"operation": "git_status"}, actor=actor)
+    _print_fs_result(data, json_output=json_output)
+
+
+@fs_app.command("git-diff")
+def fs_git_diff(
+    path: str = typer.Option("", "--path", help="Optional repo-relative path."),
+    max_bytes: int = typer.Option(50_000, "--max-bytes", min=1, max=50_000),
+    actor: str = typer.Option("operator", "--actor"),
+    json_output: bool = typer.Option(False, "--json"),
+):
+    """Show read-only git diff."""
+    data = _run_fs_payload(
+        {"operation": "git_diff", "path": path or None, "max_bytes": max_bytes},
+        actor=actor,
+    )
+    _print_fs_result(data, json_output=json_output)
+
+
+@fs_app.command("git-log")
+def fs_git_log(
+    limit: int = typer.Option(20, "--limit", min=1, max=20),
+    actor: str = typer.Option("operator", "--actor"),
+    json_output: bool = typer.Option(False, "--json"),
+):
+    """Show recent git commits."""
+    data = _run_fs_payload({"operation": "git_log", "limit": limit}, actor=actor)
+    _print_fs_result(data, json_output=json_output)
+
+
+@fs_app.command("git-show")
+def fs_git_show(
+    ref: str = typer.Argument("HEAD", help="Git ref to show."),
+    path: str = typer.Option("", "--path", help="Optional repo-relative path."),
+    max_bytes: int = typer.Option(50_000, "--max-bytes", min=1, max=50_000),
+    actor: str = typer.Option("operator", "--actor"),
+    json_output: bool = typer.Option(False, "--json"),
+):
+    """Show a git ref or file at a ref."""
+    data = _run_fs_payload(
+        {"operation": "git_show", "ref": ref, "path": path or None, "max_bytes": max_bytes},
+        actor=actor,
+    )
+    _print_fs_result(data, json_output=json_output)
 
 
 @agents_app.command("goals")

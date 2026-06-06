@@ -184,6 +184,22 @@ CAPABILITY_DEFINITIONS = [
         },
     },
     {
+        "name": "read-only filesystem inspection",
+        "capability_type": "cli",
+        "source": "bin/autocaller fs <list|read|search|git-status|git-diff|git-log|git-show> --json",
+        "purpose": "Inspect code, docs, config, and git state inside the Possible OS repo without modifying files or running arbitrary shell.",
+        "risk_level": "medium",
+        "requires_approval": False,
+        "autonomous_allowed": True,
+        "command_json": {
+            "argv": ["bin/autocaller", "fs", "search", "_build_wake_context", "app/services", "--limit", "3", "--actor", "master-agent", "--json"],
+            "safe_probe": True,
+            "allowed_root": str(Path(__file__).resolve().parents[2]),
+            "operations": ["list_files", "read_file", "search_text", "git_status", "git_diff", "git_log", "git_show"],
+            "forbidden": ["writes", "deletes", "installs", "service_restarts", "network_calls", "arbitrary_shell"],
+        },
+    },
+    {
         "name": "run research scout",
         "capability_type": "cli",
         "source": "bin/autocaller agents run-research-scout --json",
@@ -994,6 +1010,162 @@ def _goal_evidence(active_goal: dict[str, Any] | None, recent_actions: list[dict
     }
 
 
+def _action_is_relevant_to_goal(action: dict[str, Any], active_goal: dict[str, Any]) -> bool:
+    goal_text = " ".join([
+        str(active_goal.get("goal") or ""),
+        str(active_goal.get("success_metric") or ""),
+        " ".join(str(item) for item in (active_goal.get("next_actions") or [])[:5]),
+    ]).lower()
+    action_type = str(action.get("action_type") or "").lower()
+    entity_type = str(action.get("entity_type") or "").lower()
+    input_summary = action.get("input_summary") or {}
+    result_summary = action.get("result_summary") or {}
+    subject = " ".join([
+        str(input_summary.get("subject") or ""),
+        str(result_summary.get("sent_subject") or ""),
+    ]).lower()
+    if "test email" in goal_text:
+        return bool(input_summary.get("test_email")) or "test" in action_type
+    if "email" in goal_text or "send" in goal_text or "lead-gen" in goal_text or "lead gen" in goal_text:
+        return "email" in action_type or "lead_gen" in entity_type
+    if "health" in goal_text:
+        return "health" in action_type or "health" in entity_type
+    if subject and any(token for token in goal_text.split() if len(token) > 5 and token in subject):
+        return True
+    return False
+
+
+def _objective_status_context(
+    active_goal: dict[str, Any] | None,
+    recent_actions: list[dict[str, Any]],
+    active_tasks: list[dict[str, Any]],
+    recent_reports: list[dict[str, Any]],
+    *,
+    queue_analysis: dict[str, Any] | None = None,
+    goal_evidence: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    if not active_goal or not active_goal.get("goal"):
+        return {
+            "active_goal_id": None,
+            "goal": "",
+            "status": "missing_goal",
+            "evidence": [{
+                "type": "missing_goal",
+                "summary": "No active or synthesized master goal is available for this heartbeat.",
+            }],
+            "remaining_work": ["Set or synthesize a current operating goal."],
+            "next_best_action": "Create a bounded operating goal before deciding or delegating work.",
+        }
+
+    goal_evidence = goal_evidence or _goal_evidence(active_goal, recent_actions)
+    remaining_work = [
+        str(item).strip()
+        for item in (active_goal.get("next_actions") or [])
+        if str(item).strip()
+    ]
+    evidence: list[dict[str, Any]] = []
+    status = "in_progress"
+    next_best_action = remaining_work[0] if remaining_work else "Continue collecting evidence toward the active goal."
+
+    if goal_evidence.get("status") == "satisfied":
+        evidence.append({
+            "type": "goal_satisfied",
+            "summary": goal_evidence.get("reason") or "Recent durable evidence satisfies the active goal.",
+            "action_id": goal_evidence.get("matched_action_id"),
+            "sent_to": goal_evidence.get("sent_to"),
+            "sent_message_id": goal_evidence.get("sent_message_id"),
+            "sent_at": goal_evidence.get("sent_at"),
+        })
+        return {
+            "active_goal_id": active_goal.get("id"),
+            "goal": active_goal.get("goal") or "",
+            "status": "satisfied",
+            "evidence": evidence,
+            "remaining_work": [],
+            "next_best_action": "Close or supersede the satisfied goal, then select the next highest-leverage objective.",
+        }
+
+    waiting_tasks = [
+        task for task in active_tasks
+        if task.get("status") == "waiting_on_user"
+    ]
+    if waiting_tasks:
+        status = "waiting_on_user"
+        for task in waiting_tasks[:3]:
+            evidence.append({
+                "type": "task_waiting_on_user",
+                "task_id": task.get("id"),
+                "title": task.get("title"),
+                "assigned_agent": task.get("assigned_agent"),
+            })
+        next_best_action = "Ask or answer the blocking question, then resume the related task."
+
+    stale_tasks = [
+        task for task in active_tasks
+        if task.get("status") == "stale"
+    ]
+    stale_queue_items = []
+    if isinstance(queue_analysis, dict):
+        stale_queue_items = list(queue_analysis.get("stale_queue_items") or [])
+    if status == "in_progress" and (stale_tasks or stale_queue_items):
+        status = "stale"
+        for task in stale_tasks[:3]:
+            evidence.append({
+                "type": "task_stale",
+                "task_id": task.get("id"),
+                "title": task.get("title"),
+                "assigned_agent": task.get("assigned_agent"),
+            })
+        for item in stale_queue_items[:3]:
+            evidence.append({
+                "type": "queued_task_stale",
+                "task_id": item.get("task_id"),
+                "title": item.get("title"),
+                "queued_age_seconds": item.get("queued_age_seconds"),
+                "threshold_seconds": item.get("threshold_seconds"),
+            })
+        next_best_action = "Resolve stale queued or running work before expanding autonomy."
+
+    failed_relevant_actions = [
+        action for action in recent_actions
+        if action.get("status") == "failed" and _action_is_relevant_to_goal(action, active_goal)
+    ]
+    if status == "in_progress" and failed_relevant_actions:
+        status = "blocked"
+        for action in failed_relevant_actions[:3]:
+            evidence.append({
+                "type": "failed_relevant_action",
+                "action_id": action.get("id"),
+                "action_type": action.get("action_type"),
+                "entity_type": action.get("entity_type"),
+                "entity_id": action.get("entity_id"),
+                "error": action.get("error"),
+            })
+        next_best_action = "Inspect the failed relevant action and fix or replace the blocked execution path."
+
+    if status == "in_progress":
+        if goal_evidence:
+            evidence.append({
+                "type": "goal_evidence",
+                "summary": goal_evidence.get("reason") or "No satisfying evidence found yet.",
+                "status": goal_evidence.get("status") or "unknown",
+            })
+        else:
+            evidence.append({
+                "type": "no_satisfying_evidence",
+                "summary": "No durable evidence yet shows the active objective is complete, blocked, stale, or waiting on the user.",
+            })
+
+    return {
+        "active_goal_id": active_goal.get("id"),
+        "goal": active_goal.get("goal") or "",
+        "status": status,
+        "evidence": evidence,
+        "remaining_work": remaining_work,
+        "next_best_action": next_best_action,
+    }
+
+
 def _queue_age_analysis(rows: list[AgentTaskRow]) -> dict[str, Any]:
     now = _utcnow()
     stale_queue_items: list[dict[str, Any]] = []
@@ -1302,16 +1474,20 @@ def _volatile_wake_state(
     recent_actions: list[dict[str, Any]],
     goal_evidence: dict[str, Any],
 ) -> dict[str, Any]:
+    objective_status = _objective_status_context(
+        active_goal,
+        recent_actions,
+        active_tasks,
+        recent_reports,
+        queue_analysis=queue_analysis,
+        goal_evidence=goal_evidence,
+    )
     return {
         "woke_at": started_at.isoformat(),
         "actor": actor,
         "goal_stack": _goal_stack_context(active_goal),
         "active_goal": active_goal or {},
-        "objective_status": {
-            "status": goal_evidence.get("status") or "in_progress",
-            "evidence": goal_evidence,
-            "remaining_work": list((active_goal or {}).get("next_actions") or []),
-        },
+        "objective_status": objective_status,
         "current_state": _current_state_context(
             agent_config=agent_config,
             active_tasks=active_tasks,
@@ -2942,7 +3118,6 @@ async def run_master_heartbeat(*, actor: str = "master-agent") -> dict[str, Any]
         active_count = len(rows)
         blocked_count = sum(1 for row in rows if row.status == "blocked")
         queued_count = sum(1 for row in rows if row.status == "queued")
-        active_task_snapshots = [_short_task_snapshot(row) for row in rows[:20]]
         queue_analysis = _queue_age_analysis(list(rows))
         now = _utcnow()
         for row in rows:
@@ -2965,6 +3140,7 @@ async def run_master_heartbeat(*, actor: str = "master-agent") -> dict[str, Any]
                     },
                     output_json={"status": "stale"},
                 ))
+        active_task_snapshots = [_short_task_snapshot(row) for row in rows[:20]]
         recent_report_rows = (await session.execute(
             select(AgentReportRow).order_by(AgentReportRow.created_at.desc()).limit(5)
         )).scalars().all()
@@ -3014,6 +3190,11 @@ async def run_master_heartbeat(*, actor: str = "master-agent") -> dict[str, Any]
         if isinstance(volatile_wake_state, dict):
             volatile_wake_state["auto_delegated_task"] = auto_delegated_task or {}
             volatile_wake_state["auto_executed_lead_gen_sends"] = auto_executed_lead_gen_sends or {}
+        objective_status = (
+            volatile_wake_state.get("objective_status")
+            if isinstance(volatile_wake_state.get("objective_status"), dict)
+            else {}
+        )
         if agent_config.get("status_llm_enabled", True):
             try:
                 human_status, status_metadata = await _compose_human_status_with_llm(
@@ -3058,6 +3239,7 @@ async def run_master_heartbeat(*, actor: str = "master-agent") -> dict[str, Any]
                 "stale_task_ids": stale_ids,
                 "queue_analysis": queue_analysis,
                 "human_status": human_status,
+                "objective_status": objective_status,
                 "auto_delegated_task": auto_delegated_task or {},
                 "auto_executed_lead_gen_sends": auto_executed_lead_gen_sends or {},
                 "active_goal": active_goal or {},
@@ -3081,6 +3263,7 @@ async def run_master_heartbeat(*, actor: str = "master-agent") -> dict[str, Any]
         "heartbeat_enabled": agent_config["heartbeat_enabled"],
         "heartbeat_interval_seconds": agent_config["heartbeat_interval_seconds"],
         "human_status": human_status,
+        "objective_status": objective_status,
         "wake_context": wake_context,
         "status_llm": status_metadata,
         "auto_delegated_task": auto_delegated_task,

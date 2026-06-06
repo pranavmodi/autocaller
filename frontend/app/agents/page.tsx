@@ -64,6 +64,15 @@ function statusTone(status: string) {
   return "border-neutral-200 bg-neutral-50 text-neutral-700";
 }
 
+function objectiveTone(status: string) {
+  if (status === "satisfied") return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  if (status === "waiting_on_user") return "border-amber-200 bg-amber-50 text-amber-700";
+  if (status === "blocked" || status === "stale" || status === "missing_goal") {
+    return "border-red-200 bg-red-50 text-red-700";
+  }
+  return "border-sky-200 bg-sky-50 text-sky-700";
+}
+
 function objectValue(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
@@ -125,6 +134,7 @@ const JSON_KEY_ORDER: Record<string, string[]> = {
     "stale_task_ids",
     "queue_analysis",
     "human_status",
+    "objective_status",
     "auto_delegated_task",
     "auto_executed_lead_gen_sends",
     "active_goal",
@@ -141,6 +151,7 @@ const JSON_KEY_ORDER: Record<string, string[]> = {
     "heartbeat_enabled",
     "heartbeat_interval_seconds",
     "human_status",
+    "objective_status",
     "wake_context",
     "status_llm",
     "auto_delegated_task",
@@ -167,10 +178,10 @@ const JSON_KEY_ORDER: Record<string, string[]> = {
     "confidence",
     "reasoning",
   ],
+  objective_status: ["active_goal_id", "goal", "status", "evidence", "remaining_work", "next_best_action"],
   prompt_cache: ["strategy", "provider", "cache_key", "cache_retention", "passthrough_enabled"],
   llm_call: ["enabled", "model", "skill_path", "status"],
   goal_stack: ["short_term", "medium_term", "long_term"],
-  objective_status: ["status", "evidence", "remaining_work"],
 };
 
 function jsonOrderKey(label: string, value: Record<string, unknown>) {
@@ -660,6 +671,12 @@ export default function AgentsPage() {
   const statusLlm = heartbeat?.status_llm;
   const activeGoal = heartbeat?.active_goal || goals.data?.goals?.[0] || null;
   const queueAnalysis = heartbeat?.queue_analysis || {};
+  const objectiveStatus = objectValue(heartbeat?.objective_status || volatileWakeState.objective_status);
+  const objectiveEvidence = arrayValue(objectiveStatus.evidence).map((row) => objectValue(row));
+  const objectiveRemainingWork = arrayValue(objectiveStatus.remaining_work)
+    .map((item) => stringValue(item))
+    .filter(Boolean);
+  const objectiveStatusValue = stringValue(objectiveStatus.status) || "unknown";
   const recentActionRows = arrayValue(volatileWakeState.recent_actions)
     .map((row) => objectValue(row))
     .filter((row) => row.id || row.action_type);
@@ -943,6 +960,68 @@ export default function AgentsPage() {
             {staleQueueItems.length} queued task{staleQueueItems.length === 1 ? "" : "s"} exceeded the queue-age threshold.
           </div>
         )}
+      </section>
+
+      <section className="rounded-xl border border-neutral-200 bg-white">
+        <div className="flex flex-wrap items-center gap-2 border-b border-neutral-100 px-4 py-3">
+          <h2 className="text-sm font-semibold text-neutral-950">Objective status</h2>
+          <span className="text-xs text-neutral-400">deterministic read on whether the current goal is done, blocked, stale, or moving</span>
+          <span className={cn("ml-auto rounded-full border px-2 py-0.5 text-[11px] font-medium", objectiveTone(objectiveStatusValue))}>
+            {objectiveStatusValue}
+          </span>
+        </div>
+        <div className="grid gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.9fr)]">
+          <div className="space-y-4">
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Goal being interpreted</div>
+              <p className="mt-2 text-sm leading-6 text-neutral-700">
+                {stringValue(objectiveStatus.goal) || activeGoal?.goal || "Run a heartbeat to load objective status."}
+              </p>
+            </div>
+            <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-3">
+              <div className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Next best action</div>
+              <p className="mt-2 text-sm leading-6 text-neutral-700">
+                {stringValue(objectiveStatus.next_best_action) || "Run a heartbeat to compute the next best action."}
+              </p>
+            </div>
+          </div>
+          <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-1">
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Evidence</div>
+              <div className="mt-2 space-y-2">
+                {objectiveEvidence.length === 0 && (
+                  <div className="rounded-lg border border-dashed border-neutral-200 p-3 text-sm text-neutral-500">
+                    No objective evidence has been computed yet.
+                  </div>
+                )}
+                {objectiveEvidence.slice(0, 4).map((item, index) => (
+                  <div key={`${stringValue(item.type) || "evidence"}-${index}`} className="rounded-lg border border-neutral-200 p-3 text-xs leading-5 text-neutral-600">
+                    <div className="font-semibold text-neutral-800">{stringValue(item.type) || "evidence"}</div>
+                    <div className="mt-1">
+                      {stringValue(item.summary)
+                        || stringValue(item.title)
+                        || stringValue(item.error)
+                        || stringValue(item.action_id)
+                        || stringValue(item.task_id)
+                        || "Evidence available in the heartbeat JSON."}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Remaining work</div>
+              <ul className="mt-2 space-y-2 text-sm leading-6 text-neutral-700">
+                {(objectiveRemainingWork.length ? objectiveRemainingWork : ["No remaining work listed for this objective."]).slice(0, 5).map((item) => (
+                  <li key={item} className="flex gap-2">
+                    <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-neutral-400" />
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </div>
       </section>
 
       <section className="rounded-xl border border-neutral-200 bg-white">

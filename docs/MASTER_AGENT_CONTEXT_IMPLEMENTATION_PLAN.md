@@ -37,14 +37,13 @@ Already exists:
 - lead-gen email-agent slice;
 - OpenClaw gateway status-writing call;
 - compact recent action summaries in heartbeat context.
+- objective-status v1 in heartbeat context and `/agents` UI.
 
 Main gaps:
 
-- no first-class `prime_directives` field in wake context;
-- no OpenAI prompt-cache-aware split between stable prefix and volatile wake
-  state;
-- no explicit goal stack by horizon;
-- no generic objective-status interpreter;
+- no generic read-only filesystem inspection capability;
+- no bounded multi-iteration LLM/tool runner loop inside a heartbeat;
+- no durable continuation record for multi-heartbeat work;
 - no durable way for the agent to ask the user questions;
 - no dedicated knowledge base for the agent's system model;
 - no retrieval path that loads relevant knowledge pages into heartbeat context;
@@ -69,6 +68,11 @@ Main gaps:
 - Keep the cached prefix deterministic: stable ordering, stable keys, stable
   knowledge summaries, no timestamps or request IDs.
 - Log `cached_tokens` when available from OpenAI usage metadata.
+- Give the master agent generic sensory capabilities before specialized agents.
+- Do not let the heartbeat run arbitrary shell commands. Use structured,
+  policy-checked read-only operations.
+- Multi-step heartbeat work should run through a bounded LLM/tool loop with
+  iteration, time, token, and output limits.
 
 ## Slice 1: Prompt-Cache-Aware Wake Context V2 Skeleton
 
@@ -282,7 +286,366 @@ Run heartbeat with an open manual goal and no evidence and verify status stays
 - The LLM status writer receives `objective_status`.
 - The agent no longer relies only on prose from previous heartbeats.
 
-## Slice 3: Ask User Data Model And Backend
+## Slice 3: Read-Only Filesystem Capability V1
+
+### Outcome
+
+The master agent can safely inspect the local repo through structured,
+read-only operations. It cannot modify files, restart services, install
+packages, access the network, or execute arbitrary shell commands.
+
+This gives the agent eyes, not hands.
+
+### Why This Comes Next
+
+The current active goal is for the master agent to build a durable understanding
+of its own codebase. Another heartbeat already showed that the agent understands
+the goal but lacks a capability to read files. Running more heartbeats would only
+repeat that limitation.
+
+Build the generic read-only filesystem capability before specialized codebase
+agents. The same capability can later support debugging, documentation, planning,
+system-model updates, and self-improvement.
+
+### Build
+
+Add a service:
+
+```text
+app/services/filesystem_read.py
+```
+
+Supported structured operations:
+
+```text
+list_files
+read_file
+search_text
+git_status
+git_diff
+git_log
+git_show
+```
+
+Suggested Python API:
+
+```python
+list_files(path=".", pattern=None, limit=200)
+read_file(path, start_line=None, end_line=None, max_bytes=50000)
+search_text(query, path=".", glob=None, limit=100)
+git_status()
+git_diff(path=None, max_bytes=50000)
+git_log(limit=20)
+git_show(ref, path=None, max_bytes=50000)
+```
+
+Inputs must be structured JSON, not raw shell strings.
+
+Example accepted request:
+
+```json
+{
+  "operation": "read_file",
+  "path": "app/services/master_agent.py",
+  "start_line": 1200,
+  "end_line": 1400,
+  "reason": "Understand how heartbeat context is constructed."
+}
+```
+
+Example rejected request:
+
+```json
+{
+  "command": "cat app/services/master_agent.py && rm -rf /"
+}
+```
+
+### Policy
+
+Enforce:
+
+- allowed root: `/home/pranav/autocaller`;
+- repo-relative paths only in public API/CLI;
+- no path traversal outside the repo;
+- no writes;
+- no redirects;
+- no arbitrary command strings;
+- no package installs;
+- no service restarts;
+- no network calls;
+- binary files rejected;
+- max output size enforced;
+- large results return `truncated=true` and a narrowing hint.
+
+Suggested limits:
+
+```text
+read_file max 50 KB
+search_text max 100 matches
+git_diff max 50 KB
+git_log max 20 commits
+git_show max 50 KB
+```
+
+### Durable Action Integration
+
+Add a durable action type:
+
+```text
+filesystem_read
+```
+
+Action input:
+
+```json
+{
+  "operation": "search_text",
+  "path": "app/services",
+  "query": "_build_wake_context",
+  "reason": "Find wake-context implementation."
+}
+```
+
+Execution result:
+
+```json
+{
+  "operation": "search_text",
+  "files_touched": ["app/services/master_agent.py"],
+  "result_summary": "3 matches",
+  "output": {},
+  "truncated": false
+}
+```
+
+Every execution should write:
+
+- `agent_action_events`;
+- `product_traces`;
+- result summary and output size;
+- files touched;
+- whether output was truncated.
+
+### CLI
+
+Add:
+
+```bash
+bin/autocaller fs list app/services
+bin/autocaller fs read app/services/master_agent.py --start 1200 --end 1400
+bin/autocaller fs search _build_wake_context app/services
+bin/autocaller fs git-status
+bin/autocaller fs git-diff
+bin/autocaller fs git-log --limit 10
+bin/autocaller fs git-show HEAD --path app/services/master_agent.py
+```
+
+### Capability Registry
+
+Add a capability:
+
+```text
+name: read-only filesystem inspection
+purpose: inspect code, docs, config, and git state without modifying files
+risk: medium
+requires_approval: false
+autonomous_allowed: true
+command shape: bin/autocaller fs <operation> ...
+allowed root: /home/pranav/autocaller
+forbidden: writes, deletes, installs, restarts, network calls, arbitrary shell
+```
+
+### UI
+
+No new UI required for the first slice.
+
+The capability should appear in the `/agents` capability registry after refresh.
+
+### Validation
+
+Run:
+
+```bash
+python3 -m py_compile app/services/filesystem_read.py app/services/master_agent.py app/cli.py
+.venv/bin/pytest tests/test_filesystem_read.py tests/test_master_agent.py -q
+bin/autocaller fs search _build_wake_context app/services --json
+bin/autocaller fs read app/services/master_agent.py --start 1200 --end 1220 --json
+```
+
+### Done When
+
+- read-only operations work from CLI;
+- policy rejects path traversal and unsupported operations;
+- output limits and truncation work;
+- operation results are traceable;
+- capability registry exposes read-only filesystem inspection;
+- heartbeat context can see the capability.
+
+### Implementation Note: 2026-06-06
+
+Implemented the first horizontal slice of this capability:
+
+- added `app/services/filesystem_read.py`;
+- added structured operations:
+  - `list_files`;
+  - `read_file`;
+  - `search_text`;
+  - `git_status`;
+  - `git_diff`;
+  - `git_log`;
+  - `git_show`;
+- added `bin/autocaller fs ...` CLI commands for the same operations;
+- added policy checks for repo-relative paths, traversal, sensitive files,
+  binary files, unsafe globs, unsupported operations, and output limits;
+- added product traces for accepted and rejected read attempts;
+- added the `read-only filesystem inspection` capability registry entry;
+- added `tests/test_filesystem_read.py`.
+
+Durable `filesystem_read` action rows were not added in this slice. The current
+safe surface is the structured service plus CLI wrapper. If the bounded
+heartbeat runner needs durable queued reads, add the action-row wrapper then,
+without exposing arbitrary shell.
+
+## Slice 4: Bounded Heartbeat Tool Runner Loop V1
+
+### Outcome
+
+The heartbeat can run a short, bounded multi-step loop:
+
+```text
+wake up
+-> build context
+-> ask LLM what to do next
+-> LLM requests a structured read-only tool call
+-> backend validates and executes it
+-> tool result is appended to working context
+-> LLM decides next step
+-> repeat within budget
+-> write report and continuation note
+-> sleep
+```
+
+This lets the agent inspect files and reason across multiple tool calls during a
+single heartbeat without granting arbitrary shell access.
+
+### Build
+
+Add a runner module:
+
+```text
+app/services/master_agent_runner.py
+```
+
+V1 loop contract:
+
+```python
+run_master_agent_tool_loop(
+    wake_context,
+    active_goal,
+    allowed_tools,
+    max_iterations=5,
+    max_runtime_seconds=90,
+    actor="master-agent",
+)
+```
+
+Allowed LLM decisions:
+
+```json
+{
+  "decision": "tool_call",
+  "tool": "filesystem_read",
+  "operation": "search_text",
+  "path": "app/services",
+  "query": "_build_wake_context",
+  "reason": "Find wake-context code."
+}
+```
+
+```json
+{
+  "decision": "finish",
+  "summary": "Inspected heartbeat context construction.",
+  "continuation_note": "Next heartbeat should inspect action execution.",
+  "recommended_document_updates": [
+    {
+      "path": "docs/agent-kb/system-model/master-agent.md",
+      "section": "Heartbeat context",
+      "summary": "..."
+    }
+  ]
+}
+```
+
+```json
+{
+  "decision": "blocked",
+  "reason": "Need permission to write the Markdown document."
+}
+```
+
+### Limits
+
+- max tool calls per heartbeat: 5;
+- max runtime: 90 seconds;
+- max tool output per call: 50 KB;
+- max accumulated tool context: bounded and summarized;
+- only allow `filesystem_read` in V1;
+- no file modifications in this runner slice;
+- every tool call is traced;
+- if budget ends before finish, write continuation state.
+
+### Continuation State
+
+Create durable continuation state in an agent report or dedicated event:
+
+```json
+{
+  "goal_id": "...",
+  "status": "in_progress",
+  "files_read": [],
+  "facts_learned": [],
+  "remaining_questions": [],
+  "next_suggested_tool_call": {},
+  "document_target": "docs/agent-kb/system-model/master-agent.md"
+}
+```
+
+This is how the next heartbeat knows what happened without relying on the LLM's
+hidden memory.
+
+### First Use Case
+
+For the current manual goal, the runner should be able to:
+
+1. search for heartbeat/context functions;
+2. read relevant snippets;
+3. summarize what it learned;
+4. propose the first Markdown document sections;
+5. write continuation state.
+
+Writing the Markdown document can be a later approved write capability unless
+the user explicitly authorizes a narrow document-write path.
+
+### Validation
+
+Run a heartbeat with the active codebase-understanding goal and verify:
+
+- runner calls at least one read-only filesystem operation;
+- tool call and result are traced;
+- heartbeat output includes runner iterations;
+- an agent report or event records continuation state;
+- no files are modified by the runner.
+
+### Done When
+
+- the master agent can perform multiple read-only tool calls in one heartbeat;
+- the loop stops at limits;
+- failures are recorded as blocked evidence;
+- continuation state is durable and visible to future heartbeats.
+
+## Slice 5: Ask User Data Model And Backend
 
 ### Outcome
 
@@ -377,7 +740,7 @@ Unit tests:
 - Related tasks can be blocked by user questions.
 - Heartbeat can include pending questions in context.
 
-## Slice 4: Ask User CLI
+## Slice 6: Ask User CLI
 
 ### Outcome
 
@@ -415,7 +778,7 @@ bin/autocaller agents answer-question <id> --answer "confirmed" --json
 - CLI covers create/list/answer/dismiss.
 - Output is useful in both table and JSON modes.
 
-## Slice 5: Questions UI
+## Slice 7: Questions UI
 
 ### Outcome
 
@@ -468,7 +831,7 @@ cd frontend && npm run build
 - The user can answer a question from the browser.
 - Blocking questions are visually distinct.
 
-## Slice 6: Questions In Wake Context
+## Slice 8: Questions In Wake Context
 
 ### Outcome
 
@@ -518,7 +881,7 @@ Create a blocking question linked to an active goal, run heartbeat, verify:
 - The agent can pause safely instead of guessing.
 - Open questions survive across heartbeat runs.
 
-## Slice 7: Knowledge Base File Skeleton
+## Slice 9: Knowledge Base File Skeleton
 
 ### Outcome
 
@@ -576,7 +939,7 @@ No code validation needed beyond checking files exist.
 - A human can read the current system model in docs.
 - The master-agent mental model is no longer only in code or traces.
 
-## Slice 8: Knowledge Base DB Index
+## Slice 10: Knowledge Base DB Index
 
 ### Outcome
 
@@ -668,7 +1031,7 @@ Tests:
 - Knowledge pages are queryable through API and CLI.
 - The DB index can be rebuilt from files.
 
-## Slice 9: Knowledge In Wake Context
+## Slice 11: Knowledge In Wake Context
 
 ### Outcome
 
@@ -718,7 +1081,7 @@ Run heartbeat and verify loaded pages appear in input JSON and UI.
 - The agent has a compact mental model at wake.
 - It does not need to read all docs every time.
 
-## Slice 10: Knowledge UI
+## Slice 12: Knowledge UI
 
 ### Outcome
 
@@ -747,7 +1110,7 @@ Frontend build and manual route smoke check.
 - The system model is visible in the app.
 - Knowledge is not hidden in Markdown files only.
 
-## Slice 11: Proposed Knowledge Updates
+## Slice 13: Proposed Knowledge Updates
 
 ### Outcome
 
@@ -805,7 +1168,7 @@ recorded.
 
 - The agent can identify stale knowledge without silently rewriting docs.
 
-## Slice 12: Apply Knowledge Updates
+## Slice 14: Apply Knowledge Updates
 
 ### Outcome
 
@@ -842,7 +1205,7 @@ Tests:
 - The KB can evolve with approval.
 - Updates are traceable.
 
-## Slice 13: System Model Drift Detector
+## Slice 15: System Model Drift Detector
 
 ### Outcome
 
@@ -871,7 +1234,7 @@ verify proposal created.
 
 - The master agent can maintain its mental model, not just read it.
 
-## Slice 14: Ask User From Agent Decisions
+## Slice 16: Ask User From Agent Decisions
 
 ### Outcome
 
@@ -909,7 +1272,7 @@ every heartbeat.
 - The agent can ask for help only when needed.
 - Duplicate spam is prevented.
 
-## Slice 15: Human-In-The-Loop Action Integration
+## Slice 17: Human-In-The-Loop Action Integration
 
 ### Outcome
 
@@ -946,7 +1309,7 @@ End-to-end:
 - The user sees pending decisions in one place.
 - The agent can resume after user input.
 
-## Slice 16: Documentation And Skill Sync
+## Slice 18: Documentation And Skill Sync
 
 ### Outcome
 
@@ -983,24 +1346,39 @@ Do these first:
 
 1. Slice 1: Wake Context V2 Skeleton.
 2. Slice 2: Objective Status V1.
-3. Slice 3: Ask User Data Model And Backend.
-4. Slice 4: Ask User CLI.
-5. Slice 5: Questions UI.
-6. Slice 6: Questions In Wake Context.
+3. Slice 3: Read-Only Filesystem Capability V1.
+4. Slice 4: Bounded Heartbeat Tool Runner Loop V1.
 
 Why:
 
 - They directly improve the master agent's ability to move toward user goals.
-- They let the agent stop safely when it needs the user.
 - They make objective status explicit.
+- They give the agent a safe sensory layer for inspecting its own codebase.
+- They let the agent perform bounded multi-step inspection within one
+  heartbeat.
 - They do not require the full knowledge base yet.
+- They avoid creating overly specific agents before the generic capability
+  exists.
 
 Then:
 
-1. Slice 7: Knowledge Base File Skeleton.
-2. Slice 8: Knowledge Base DB Index.
-3. Slice 9: Knowledge In Wake Context.
-4. Slice 10: Knowledge UI.
+1. Slice 5: Ask User Data Model And Backend.
+2. Slice 6: Ask User CLI.
+3. Slice 7: Questions UI.
+4. Slice 8: Questions In Wake Context.
+
+Why:
+
+- They let the agent stop safely when it needs the user.
+- They make blocking questions durable instead of hidden in heartbeat prose.
+- They let user answers steer future heartbeats.
+
+Then:
+
+1. Slice 9: Knowledge Base File Skeleton.
+2. Slice 10: Knowledge Base DB Index.
+3. Slice 11: Knowledge In Wake Context.
+4. Slice 12: Knowledge UI.
 
 Why:
 
@@ -1010,12 +1388,12 @@ Why:
 
 Finally:
 
-1. Slice 11: Proposed Knowledge Updates.
-2. Slice 12: Apply Knowledge Updates.
-3. Slice 13: System Model Drift Detector.
-4. Slice 14: Ask User From Agent Decisions.
-5. Slice 15: Human-In-The-Loop Action Integration.
-6. Slice 16: Documentation And Skill Sync.
+1. Slice 13: Proposed Knowledge Updates.
+2. Slice 14: Apply Knowledge Updates.
+3. Slice 15: System Model Drift Detector.
+4. Slice 16: Ask User From Agent Decisions.
+5. Slice 17: Human-In-The-Loop Action Integration.
+6. Slice 18: Documentation And Skill Sync.
 
 Why:
 
@@ -1029,6 +1407,10 @@ The plan is complete when:
 - every heartbeat starts with the two prime directives;
 - every heartbeat includes a goal stack;
 - every heartbeat includes objective status;
+- the agent has a structured read-only filesystem inspection capability;
+- read-only inspection is rooted, output-limited, policy-checked, and traced;
+- the heartbeat can run a bounded multi-iteration LLM/tool loop;
+- multi-heartbeat work writes durable continuation state;
 - the agent can create durable questions for the user;
 - the user can answer questions from `/agents`;
 - blocking questions pause related tasks;
@@ -1042,6 +1424,21 @@ The plan is complete when:
 - the system can distinguish raw events, interpreted objective status, and
   durable knowledge.
 
+## Architecture And Plan Sync Rule
+
+Keep this implementation plan and
+`docs/MASTER_AGENT_CONTEXT_ARCHITECTURE.md` in sync.
+
+When a feature is implemented, update both files with a short note:
+
+- what now exists;
+- what behavior changed;
+- what validation proved it;
+- what remains.
+
+The architecture file should explain the conceptual shape. The implementation
+plan should explain concrete slices, validation, and current status.
+
 ## Stop Conditions
 
 Pause and ask the user before:
@@ -1051,6 +1448,10 @@ Pause and ask the user before:
 - adding vector/embedding infrastructure;
 - allowing LLM-generated questions to create user notifications without
   deterministic guardrails;
+- allowing arbitrary shell commands from heartbeat or LLM output;
+- allowing filesystem writes from the read-only inspection capability;
+- allowing the heartbeat runner to exceed iteration, runtime, token, or output
+  limits;
 - allowing the agent to execute new external actions beyond already-approved
   paths;
 - making schema changes that risk existing data without a migration/backfill

@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from app.db.models import AgentReportRow, AgentTaskEventRow, AgentTaskRow
 from app.services.master_agent import (
     _build_wake_context,
+    _objective_status_context,
     event_summary_to_dict,
     event_to_dict,
     report_to_dict,
@@ -170,3 +171,120 @@ def test_wake_context_v2_does_not_duplicate_legacy_top_level_fields():
         "soul",
     ):
         assert legacy_key not in context
+
+
+def test_objective_status_detects_satisfied_test_email_goal():
+    active_goal = {
+        "id": "goal_1",
+        "goal": "Test the durable action execution path by sending a test email to pranav.modi@gmail.com.",
+        "success_metric": "A test email is sent to pranav.modi@gmail.com.",
+        "next_actions": ["Send the test email."],
+        "source": {"manual": True},
+    }
+    recent_actions = [{
+        "id": "action_1",
+        "action_type": "send_email",
+        "status": "succeeded",
+        "input_summary": {"test_email": True},
+        "result_summary": {
+            "sent_to": "pranav.modi@gmail.com",
+            "sent_message_id": "msg_123",
+            "sent_at": "2026-06-05T12:00:00+00:00",
+        },
+    }]
+
+    status = _objective_status_context(active_goal, recent_actions, [], [])
+
+    assert status["status"] == "satisfied"
+    assert status["remaining_work"] == []
+    assert status["evidence"][0]["action_id"] == "action_1"
+
+
+def test_objective_status_detects_failed_relevant_action_as_blocked():
+    active_goal = {
+        "id": "goal_2",
+        "goal": "Send approved lead-gen emails through the durable action path.",
+        "success_metric": "Approved lead-gen email sends succeed.",
+        "next_actions": ["Inspect failed sends."],
+    }
+    recent_actions = [{
+        "id": "action_2",
+        "action_type": "send_email",
+        "entity_type": "lead_gen_email",
+        "status": "failed",
+        "input_summary": {"subject": "the Precise autoresponders"},
+        "result_summary": {},
+        "error": "Zoho API rejected the request.",
+    }]
+
+    status = _objective_status_context(active_goal, recent_actions, [], [])
+
+    assert status["status"] == "blocked"
+    assert status["evidence"][0]["type"] == "failed_relevant_action"
+    assert status["evidence"][0]["action_id"] == "action_2"
+
+
+def test_objective_status_detects_stale_task():
+    active_goal = {
+        "id": "goal_3",
+        "goal": "Run the read-only SystemsHealthAgent observation slice.",
+        "next_actions": ["Resolve the stale task."],
+    }
+    active_tasks = [{
+        "id": "task_1",
+        "assigned_agent": "SystemsHealthAgent",
+        "title": "Read-only health observation",
+        "status": "stale",
+    }]
+
+    status = _objective_status_context(active_goal, [], active_tasks, [])
+
+    assert status["status"] == "stale"
+    assert status["evidence"][0]["type"] == "task_stale"
+    assert status["next_best_action"] == "Resolve stale queued or running work before expanding autonomy."
+
+
+def test_objective_status_waits_only_on_explicit_user_waiting_task():
+    active_goal = {
+        "id": "goal_4",
+        "goal": "Resolve a task that requires user input.",
+        "next_actions": ["Answer the blocking question."],
+    }
+    active_tasks = [{
+        "id": "task_2",
+        "assigned_agent": "ResearchScoutAgent",
+        "title": "Needs user clarification",
+        "status": "waiting_on_user",
+    }]
+    recent_reports = [{
+        "id": "report_2",
+        "open_questions": ["Non-blocking report question."],
+    }]
+
+    status = _objective_status_context(active_goal, [], active_tasks, recent_reports)
+
+    assert status["status"] == "waiting_on_user"
+    assert status["evidence"][0]["type"] == "task_waiting_on_user"
+
+
+def test_objective_status_report_questions_do_not_block_without_waiting_task():
+    active_goal = {
+        "id": "goal_5",
+        "goal": "Convert latest agent reports into reviewable improvement findings.",
+        "next_actions": ["Review the latest report evidence."],
+    }
+    recent_reports = [{
+        "id": "report_3",
+        "open_questions": ["Could create a finding, but not blocking."],
+    }]
+
+    status = _objective_status_context(active_goal, [], [], recent_reports)
+
+    assert status["status"] == "in_progress"
+
+
+def test_objective_status_missing_goal():
+    status = _objective_status_context(None, [], [], [])
+
+    assert status["status"] == "missing_goal"
+    assert status["active_goal_id"] is None

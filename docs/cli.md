@@ -157,7 +157,7 @@ Every command accepts `--help`. Exit code is `0` on success, `1` on any error
 | `actions send-email --mode=test --to=<email> --subject=... --body=... [--approved-by=operator --from=... --no-execute --json]` | Create, policy-check, and optionally execute a regular durable test email action. |
 | `actions send-email --mode=lead_gen --to=<email> --subject=... --body=... --contact=<contact_id> --item=<batch_item_id> [--pif=<pif_id> --firm=... --approved-by=operator --no-execute --json]` | Create, policy-check, and optionally execute an exact approved lead-gen email action. Policy verifies recipient/contact match, approval hashes, consult link, Zoho transport, no suppression, and no prior successful send for the same item/recipient. |
 | `actions send-test-email --to=<email> [--subject=... --body=... --approved-by=operator --from=... --no-execute --json]` | Convenience alias for `actions send-email --mode=test`. Use the regular email action family for master-agent execution-path tests instead of free-form email shell commands. |
-| `agents status [--json]` | Show the Possible OS master-agent heartbeat configuration and the last heartbeat result in the current backend process. |
+| `agents status [--json]` | Show the Possible OS master-agent heartbeat configuration, objective status, and last heartbeat result in the current backend process. |
 | `agents config [--interval-seconds=300] [--enabled/--disabled] [--auto-send-approved-lead-gen\|--no-auto-send-approved-lead-gen --auto-send-limit=1 --json]` | Update persisted master-agent heartbeat settings. The approved-send toggle lets heartbeat execute exact approved lead-gen email actions through the policy gate. |
 | `agents heartbeat [--json]` | Run one master-agent heartbeat tick immediately. V1 reads `soul.md` as protected read-only context, records traces, checks active subagent tasks, marks stale workers, and, only when enabled, executes already-approved lead-gen email actions. |
 | `agents list [--status=all --agent=ResearchScoutAgent --limit=100 --json]` | List durable master/subagent task packets. |
@@ -718,7 +718,28 @@ hit the DB directly.
 
 ---
 
-## 12. Common failure modes and fixes
+## 12. Read-only filesystem inspection
+
+Possible OS exposes a narrow read-only filesystem surface for the master agent
+and operators. It is not arbitrary shell. It only reads inside the repo root,
+blocks traversal and sensitive files, and records product traces.
+
+```bash
+bin/autocaller fs list app/services --json
+bin/autocaller fs read app/services/master_agent.py --start 1200 --end 1220 --json
+bin/autocaller fs search _build_wake_context app/services --json
+bin/autocaller fs git-status --json
+bin/autocaller fs git-diff --path app/services/master_agent.py --json
+bin/autocaller fs git-log --limit 10 --json
+bin/autocaller fs git-show HEAD --path app/services/master_agent.py --json
+```
+
+Use this for codebase inspection, debugging context, and system understanding.
+Do not replace it with raw shell in the heartbeat runner.
+
+---
+
+## 13. Common failure modes and fixes
 
 | symptom | likely cause | fix |
 |---------|--------------|-----|
@@ -732,7 +753,7 @@ hit the DB directly.
 
 ---
 
-## 13. Data model cheat sheet (for agents composing queries)
+## 14. Data model cheat sheet (for agents composing queries)
 
 Tables (Postgres, via SQLAlchemy):
 
@@ -755,7 +776,7 @@ SQL is fine for read-only reporting.
 
 ---
 
-## 14. The AI's system prompt (what the caller actually says)
+## 15. The AI's system prompt (what the caller actually says)
 
 Rendered from `app/prompts/attorney_cold_call.py::render_system_prompt`.
 The slots are filled at call time from the lead + `system_settings.sales_context`:
@@ -782,7 +803,7 @@ All five are implemented in `call_orchestrator.py::_autocaller_*` and
 
 ---
 
-## 15. Commit hygiene
+## 16. Commit hygiene
 
 This codebase is on branch `feature/attorney-autocaller`. Don't push to `main`
 until you've done at least one successful live demo-booking call end-to-end

@@ -651,15 +651,143 @@ The agent should not only know that something happened. It should know:
 - what remains;
 - what the next best move is.
 
+## Read-Only Filesystem Capability And Runner Loop
+
+The master agent should have a generic sensory capability for inspecting its own
+environment.
+
+Do not create overly specific agents first, such as a one-off
+`CodebaseInspectorAgent`. The better abstraction is:
+
+```text
+read-only filesystem inspection
+```
+
+This gives the master agent safe eyes that can be reused for codebase
+understanding, debugging, documentation, planning, system-model updates, and
+self-improvement.
+
+### Read-Only Filesystem Inspection
+
+The capability should expose structured operations, not arbitrary shell:
+
+```text
+list_files
+read_file
+search_text
+git_status
+git_diff
+git_log
+git_show
+```
+
+Inputs should be JSON-shaped operation requests:
+
+```json
+{
+  "operation": "read_file",
+  "path": "app/services/master_agent.py",
+  "start_line": 1200,
+  "end_line": 1400,
+  "reason": "Understand heartbeat context construction."
+}
+```
+
+The backend should reject raw command strings:
+
+```json
+{
+  "command": "cat app/services/master_agent.py && rm -rf /"
+}
+```
+
+Policy rules:
+
+- root reads under `/home/pranav/autocaller`;
+- use repo-relative paths at API and CLI boundaries;
+- reject path traversal;
+- reject binary files;
+- reject writes, deletes, moves, redirects, package installs, service restarts,
+  network calls, and arbitrary shell;
+- cap output size;
+- return `truncated=true` with a narrowing hint when output is too large;
+- trace every operation, including actor, reason, paths, output size, and
+  truncation.
+
+This capability should appear in the capability registry as a medium-risk,
+autonomous, read-only capability.
+
+### Bounded Heartbeat Tool Runner Loop
+
+Some heartbeat goals require multiple LLM/tool iterations in one wake cycle.
+
+The architecture should support:
+
+```text
+wake up
+-> build context
+-> ask LLM what to do next
+-> LLM requests structured read-only tool call
+-> backend validates and executes tool call
+-> tool result is appended to working context
+-> LLM decides next step
+-> repeat within budget
+-> write report and continuation note
+-> sleep
+```
+
+The heartbeat remains the scheduler. The runner loop is the bounded work engine.
+
+V1 limits:
+
+- only `filesystem_read` tool calls;
+- no file modifications;
+- max 5 tool calls per heartbeat;
+- max 90 seconds runtime;
+- max 50 KB output per tool call;
+- bounded accumulated context;
+- every tool call is traced;
+- if the loop cannot finish, write continuation state and stop.
+
+Continuation state should record:
+
+```json
+{
+  "goal_id": "...",
+  "status": "in_progress",
+  "files_read": [],
+  "facts_learned": [],
+  "remaining_questions": [],
+  "next_suggested_tool_call": {},
+  "document_target": "docs/agent-kb/system-model/master-agent.md"
+}
+```
+
+This is how the next heartbeat knows what happened without relying on hidden LLM
+memory.
+
+For the current codebase-understanding goal, the runner should be able to:
+
+1. search for heartbeat and context functions;
+2. read bounded snippets;
+3. summarize what it learned;
+4. propose first Markdown document sections;
+5. write durable continuation state.
+
+Writing or modifying Markdown should be a separate, explicitly approved write
+capability unless the user authorizes a narrow document-write path.
+
 ## Human Question Capability And Knowledge Base Design
 
 Yes, this makes sense.
 
-The master agent needs two missing capabilities:
+The master agent needs four missing capabilities:
 
-1. A way to ask the user for clarification, information, approval, or a real
+1. A generic read-only filesystem inspection capability.
+2. A bounded multi-iteration LLM/tool runner loop inside heartbeat.
+3. A way to ask the user for clarification, information, approval, or a real
    world action the agent cannot perform.
-2. A knowledge base that stores and updates the agent's mental model of how
+4. A knowledge base that stores and updates the agent's mental model of how
    Possible OS works.
 
 These should be first-class system components, not just chat messages.
@@ -1167,9 +1295,74 @@ Do not promote:
 
 ## Best First Horizontal Slice
 
-Build this in a small complete slice:
+Build this in small complete slices:
 
-### Slice 1: Ask User Capability
+### Slice 1: Read-Only Filesystem Capability
+
+1. Add `app/services/filesystem_read.py`.
+2. Support structured operations:
+
+```text
+list_files
+read_file
+search_text
+git_status
+git_diff
+git_log
+git_show
+```
+
+3. Add CLI commands:
+
+```bash
+bin/autocaller fs list ...
+bin/autocaller fs read ...
+bin/autocaller fs search ...
+bin/autocaller fs git-status
+bin/autocaller fs git-diff
+bin/autocaller fs git-log
+bin/autocaller fs git-show
+```
+
+4. Add the capability registry entry:
+
+```text
+read-only filesystem inspection
+```
+
+5. Enforce repo-root policy, output limits, and tracing.
+6. Verify the heartbeat context can see the new capability.
+
+Implementation note, 2026-06-06:
+
+This slice now exists as a structured read-only service and CLI wrapper:
+
+- `app/services/filesystem_read.py`;
+- `bin/autocaller fs list`;
+- `bin/autocaller fs read`;
+- `bin/autocaller fs search`;
+- `bin/autocaller fs git-status`;
+- `bin/autocaller fs git-diff`;
+- `bin/autocaller fs git-log`;
+- `bin/autocaller fs git-show`;
+- master-agent capability registry entry:
+  `read-only filesystem inspection`.
+
+The capability is deliberately not arbitrary shell. It enforces repo-relative
+paths, root containment, sensitive-file blocking, binary-file blocking, output
+limits, and product traces. Durable filesystem-read action rows remain deferred
+until the bounded runner needs queued read operations.
+
+### Slice 2: Bounded Heartbeat Tool Runner
+
+1. Add `app/services/master_agent_runner.py`.
+2. Allow the LLM to request structured `filesystem_read` tool calls.
+3. Validate and execute tool calls through the read-only service.
+4. Feed tool results back into the next LLM iteration.
+5. Stop at iteration, runtime, token, and output limits.
+6. Write an agent report or event with continuation state.
+
+### Slice 3: Ask User Capability
 
 1. Add `agent_questions` table.
 2. Add backend service:
@@ -1210,7 +1403,7 @@ Questions for Pranav
 
 7. If a question is blocking, set related task status to `waiting_on_user`.
 
-### Slice 2: Knowledge Base V1
+### Slice 4: Knowledge Base V1
 
 1. Create `docs/agent-kb/`.
 2. Add initial pages:
@@ -1229,7 +1422,7 @@ goals/current-goal-stack.md
 6. Add wake context summary with the most relevant system-model pages.
 7. Add "propose knowledge update" as an agent finding type.
 
-### Slice 3: Knowledge Maintenance Loop
+### Slice 5: Knowledge Maintenance Loop
 
 1. On heartbeat, check if recent evidence contradicts known model.
 2. If yes, create a proposed knowledge update.
@@ -1237,6 +1430,21 @@ goals/current-goal-stack.md
 4. User approves/rejects.
 5. Approved update patches Markdown and syncs DB.
 6. Trace the update.
+
+## Architecture And Plan Sync Rule
+
+Keep this architecture file and
+`docs/MASTER_AGENT_CONTEXT_IMPLEMENTATION_PLAN.md` in sync.
+
+When a feature is implemented, update both files with a short note:
+
+- what now exists;
+- what behavior changed;
+- what validation proved it;
+- what remains.
+
+The architecture file should explain the conceptual shape. The implementation
+plan should explain concrete slices, validation, and current status.
 
 ## Design Principle
 

@@ -387,6 +387,14 @@ export type MasterHeartbeat = {
     needs_from_user?: string;
     confidence?: string;
   };
+  objective_status?: {
+    active_goal_id?: string | null;
+    goal?: string;
+    status?: string;
+    evidence?: unknown[];
+    remaining_work?: string[];
+    next_best_action?: string;
+  };
   wake_context?: Record<string, unknown>;
   status_llm?: {
     used_llm?: boolean;
