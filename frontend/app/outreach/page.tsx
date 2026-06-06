@@ -43,6 +43,7 @@ import {
   type OutreachCampaignDetail,
   type OutreachSend,
 } from "@/lib/api";
+import { cn } from "@/lib/utils";
 
 // ============================================================================
 // Outreach — LLM-composed blog-post emails, step-through one-at-a-time UI.
@@ -829,7 +830,7 @@ function StepThroughComposer({
 
   if (!current) {
     return (
-      <div className="space-y-4">
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px] xl:items-start">
         <section className="rounded-xl border border-neutral-200 bg-white p-8 text-center text-sm text-neutral-500">
           <CheckCircle2 className="mx-auto h-6 w-6 text-emerald-500" />
           <p className="mt-2">All recipients drained.</p>
@@ -837,143 +838,143 @@ function StepThroughComposer({
             Add more contacts via the audience panel, or pick another campaign.
           </p>
         </section>
-        <QueuePanel sends={sendsQ.data ?? []} currentId={null} />
+        <QueuePanel sends={sendsQ.data ?? []} currentId={null} sticky />
       </div>
     );
   }
 
   return (
-    <div className="space-y-4">
-    <section className="rounded-xl border border-neutral-200 bg-white p-5">
-      <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-neutral-800">
-          Next recipient
-        </h2>
-        <span className="text-[11px] text-neutral-400">
-          {remaining} of {totalActionable} remaining
-        </span>
-      </div>
-
-      <RecipientCard send={current} />
-
-      {current.status === "pending" && (
-        <div className="mt-3 rounded border border-dashed border-neutral-200 px-3 py-3 text-center text-xs text-neutral-500">
-          <p>Not yet composed.</p>
-          <button
-            disabled={compose.isPending}
-            onClick={() => compose.mutate(false)}
-            className="mt-2 inline-flex items-center gap-1.5 rounded bg-neutral-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-neutral-900 disabled:opacity-60"
-          >
-            {compose.isPending ? (
-              <>
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                Composing… {composeElapsed}s
-              </>
-            ) : (
-              <>
-                <RefreshCw className="h-3.5 w-3.5" />
-                Compose now (calls LLM gateway)
-              </>
-            )}
-          </button>
-          {compose.isPending && (
-            <p className="mt-2 text-[11px] text-neutral-400">
-              LLM calls usually take 30–90s. Don&apos;t refresh.
-            </p>
-          )}
-          {compose.error && !compose.isPending && (
-            <p className="mt-2 rounded border border-red-200 bg-red-50 px-2 py-1.5 text-[11px] text-red-700">
-              Compose failed: {(compose.error as Error).message}
-            </p>
-          )}
+    <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px] xl:items-start">
+      <section className="rounded-xl border border-neutral-200 bg-white p-5">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-neutral-800">
+            Next recipient
+          </h2>
+          <span className="text-[11px] text-neutral-400">
+            {remaining} of {totalActionable} remaining
+          </span>
         </div>
-      )}
 
-      {current.status === "composed" && (
-        <>
-          <ComposedCard send={current} />
-          <PreviewPanel sendId={current.id} />
+        <RecipientCard send={current} />
 
-          <div className="mt-4 flex flex-wrap items-center gap-2">
-            <button
-              disabled={send.isPending}
-              onClick={() => {
-                if (
-                  confirm(
-                    `Really send to ${current.recipient_email}?\nSubject: ${current.composed_subject}`,
-                  )
-                ) {
-                  send.mutate();
-                }
-              }}
-              className="inline-flex items-center gap-1.5 rounded bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-60"
-            >
-              {send.isPending ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Send className="h-3.5 w-3.5" />
-              )}
-              Send now
-            </button>
+        {current.status === "pending" && (
+          <div className="mt-3 rounded border border-dashed border-neutral-200 px-3 py-3 text-center text-xs text-neutral-500">
+            <p>Not yet composed.</p>
             <button
               disabled={compose.isPending}
-              onClick={() => compose.mutate(true)}
-              className="inline-flex items-center gap-1.5 rounded border border-neutral-200 px-3 py-1.5 text-xs font-medium text-neutral-700 hover:bg-neutral-50 disabled:opacity-60"
+              onClick={() => compose.mutate(false)}
+              className="mt-2 inline-flex items-center gap-1.5 rounded bg-neutral-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-neutral-900 disabled:opacity-60"
             >
               {compose.isPending ? (
                 <>
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  Regenerating… {composeElapsed}s
+                  Composing… {composeElapsed}s
                 </>
               ) : (
                 <>
                   <RefreshCw className="h-3.5 w-3.5" />
-                  Regenerate
+                  Compose now (calls LLM gateway)
                 </>
               )}
             </button>
-            <div className="ml-auto flex items-center gap-1.5">
-              <input
-                value={skipReason}
-                onChange={(e) => setSkipReason(e.target.value)}
-                placeholder="skip reason"
-                className="rounded border border-neutral-200 px-2 py-1 text-xs"
-              />
-              <button
-                disabled={!skipReason.trim() || skip.isPending}
-                onClick={() => skip.mutate(skipReason.trim())}
-                className="inline-flex items-center gap-1.5 rounded border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-800 hover:bg-amber-100 disabled:opacity-60"
-              >
-                <SkipForward className="h-3.5 w-3.5" />
-                Skip
-              </button>
-            </div>
+            {compose.isPending && (
+              <p className="mt-2 text-[11px] text-neutral-400">
+                LLM calls usually take 30–90s. Don&apos;t refresh.
+              </p>
+            )}
+            {compose.error && !compose.isPending && (
+              <p className="mt-2 rounded border border-red-200 bg-red-50 px-2 py-1.5 text-[11px] text-red-700">
+                Compose failed: {(compose.error as Error).message}
+              </p>
+            )}
           </div>
+        )}
 
-          {send.data && (
-            <p className="mt-3 rounded border border-emerald-200 bg-emerald-50 px-2 py-1.5 text-[11px] text-emerald-700">
-              Sent · message_id={send.data.message_id} · transport={send.data.transport}
-            </p>
-          )}
-          {send.error && (
-            <p className="mt-3 rounded border border-red-200 bg-red-50 px-2 py-1.5 text-[11px] text-red-700">
-              Send failed: {(send.error as Error).message}
-            </p>
-          )}
-          {compose.isPending && (
-            <p className="mt-3 rounded border border-neutral-200 bg-neutral-50 px-2 py-1.5 text-[11px] text-neutral-600">
-              Regenerating with LLM… {composeElapsed}s elapsed (usually 30–90s).
-            </p>
-          )}
-          {compose.error && !compose.isPending && (
-            <p className="mt-3 rounded border border-red-200 bg-red-50 px-2 py-1.5 text-[11px] text-red-700">
-              Regenerate failed: {(compose.error as Error).message}
-            </p>
-          )}
-        </>
-      )}
-    </section>
-    <QueuePanel sends={sendsQ.data ?? []} currentId={current.id} />
+        {current.status === "composed" && (
+          <>
+            <ComposedCard send={current} />
+            <PreviewPanel sendId={current.id} />
+
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              <button
+                disabled={send.isPending}
+                onClick={() => {
+                  if (
+                    confirm(
+                      `Really send to ${current.recipient_email}?\nSubject: ${current.composed_subject}`,
+                    )
+                  ) {
+                    send.mutate();
+                  }
+                }}
+                className="inline-flex items-center gap-1.5 rounded bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-60"
+              >
+                {send.isPending ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Send className="h-3.5 w-3.5" />
+                )}
+                Send now
+              </button>
+              <button
+                disabled={compose.isPending}
+                onClick={() => compose.mutate(true)}
+                className="inline-flex items-center gap-1.5 rounded border border-neutral-200 px-3 py-1.5 text-xs font-medium text-neutral-700 hover:bg-neutral-50 disabled:opacity-60"
+              >
+                {compose.isPending ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    Regenerating… {composeElapsed}s
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="h-3.5 w-3.5" />
+                    Regenerate
+                  </>
+                )}
+              </button>
+              <div className="ml-auto flex items-center gap-1.5">
+                <input
+                  value={skipReason}
+                  onChange={(e) => setSkipReason(e.target.value)}
+                  placeholder="skip reason"
+                  className="rounded border border-neutral-200 px-2 py-1 text-xs"
+                />
+                <button
+                  disabled={!skipReason.trim() || skip.isPending}
+                  onClick={() => skip.mutate(skipReason.trim())}
+                  className="inline-flex items-center gap-1.5 rounded border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-800 hover:bg-amber-100 disabled:opacity-60"
+                >
+                  <SkipForward className="h-3.5 w-3.5" />
+                  Skip
+                </button>
+              </div>
+            </div>
+
+            {send.data && (
+              <p className="mt-3 rounded border border-emerald-200 bg-emerald-50 px-2 py-1.5 text-[11px] text-emerald-700">
+                Sent · message_id={send.data.message_id} · transport={send.data.transport}
+              </p>
+            )}
+            {send.error && (
+              <p className="mt-3 rounded border border-red-200 bg-red-50 px-2 py-1.5 text-[11px] text-red-700">
+                Send failed: {(send.error as Error).message}
+              </p>
+            )}
+            {compose.isPending && (
+              <p className="mt-3 rounded border border-neutral-200 bg-neutral-50 px-2 py-1.5 text-[11px] text-neutral-600">
+                Regenerating with LLM… {composeElapsed}s elapsed (usually 30–90s).
+              </p>
+            )}
+            {compose.error && !compose.isPending && (
+              <p className="mt-3 rounded border border-red-200 bg-red-50 px-2 py-1.5 text-[11px] text-red-700">
+                Regenerate failed: {(compose.error as Error).message}
+              </p>
+            )}
+          </>
+        )}
+      </section>
+      <QueuePanel sends={sendsQ.data ?? []} currentId={current.id} sticky />
     </div>
   );
 }
@@ -981,9 +982,11 @@ function StepThroughComposer({
 function QueuePanel({
   sends,
   currentId,
+  sticky = false,
 }: {
   sends: OutreachSend[];
   currentId: number | null;
+  sticky?: boolean;
 }) {
   // Active items (pending/composed) first in insertion order; everything
   // else (sent/skipped/failed) below, also in insertion order. Same order
@@ -1008,7 +1011,12 @@ function QueuePanel({
   }
 
   return (
-    <section className="rounded-xl border border-neutral-200 bg-white">
+    <section
+      className={cn(
+        "rounded-xl border border-neutral-200 bg-white",
+        sticky && "xl:sticky xl:top-4",
+      )}
+    >
       <div className="flex items-center justify-between px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-neutral-500">
         <span>Queue ({sends.length})</span>
         <span className="text-[10px] font-normal normal-case tracking-normal text-neutral-400">

@@ -13,12 +13,18 @@ from app.db import AsyncSessionLocal
 from app.db.models import (
     AgentActionEventRow,
     AgentActionRow,
+    EmailLogRow,
     FirmContactRow,
     LeadGenBatchItemRow,
 )
+from app.services.contact_selection import has_usable_email
 from app.services.email_notification_service import _send_email
 from app.services.lead_email_composer import _sanitize_email_copy
-from app.services.lead_gen_cybernetic import send_batch_item_draft
+from app.services.lead_gen_cybernetic import (
+    daily_send_budget_from_policy,
+    ensure_default_policy,
+    send_batch_item_draft,
+)
 from app.services.master_agent import ensure_agent_tables
 from app.services.product_traces import safe_record_product_trace
 
@@ -44,6 +50,25 @@ def _sha256(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
+def _email_log_snapshot(row: EmailLogRow | None) -> dict[str, Any]:
+    if row is None:
+        return {}
+    return {
+        "email_log_id": row.id,
+        "recipient_email": row.recipient_email,
+        "recipient_name": row.recipient_name,
+        "subject": row.subject,
+        "message_type": row.message_type,
+        "transport": row.transport,
+        "message_id": row.message_id,
+        "status": row.status,
+        "error": row.error,
+        "sent_at": row.sent_at.isoformat() if row.sent_at else None,
+        "pif_id": row.pif_id,
+        "call_id": row.call_id,
+    }
+
+
 def action_to_dict(row: AgentActionRow) -> dict[str, Any]:
     return {
         "id": row.id,
@@ -65,6 +90,72 @@ def action_to_dict(row: AgentActionRow) -> dict[str, Any]:
         "created_at": row.created_at.isoformat() if row.created_at else None,
         "updated_at": row.updated_at.isoformat() if row.updated_at else None,
     }
+
+
+async def _enrich_action_email_log_evidence_in_session(session, row: AgentActionRow) -> bool:
+    """Backfill durable email-log evidence for older successful send actions."""
+    if row.action_type != SEND_EMAIL or row.status != "succeeded":
+        return False
+    payload = row.input_json if isinstance(row.input_json, dict) else {}
+    result = row.execution_result_json if isinstance(row.execution_result_json, dict) else {}
+    if result.get("email_log_id"):
+        return False
+    recipient = str(result.get("sent_to") or payload.get("to") or "").strip().lower()
+    if not recipient:
+        return False
+    subject = str(result.get("sent_subject") or payload.get("subject") or "").strip()
+    message_type = str(result.get("message_type") or f"possible_os_action_{payload.get('mode') or 'test'}").strip()
+    msg_id = str(result.get("sent_message_id") or "").strip()
+
+    email_log: EmailLogRow | None = None
+    if msg_id:
+        email_log = (await session.execute(
+            select(EmailLogRow)
+            .where(
+                EmailLogRow.recipient_email == recipient,
+                EmailLogRow.message_id == msg_id,
+            )
+            .order_by(desc(EmailLogRow.sent_at))
+            .limit(1)
+        )).scalar_one_or_none()
+    if email_log is None and subject:
+        email_log = (await session.execute(
+            select(EmailLogRow)
+            .where(
+                EmailLogRow.recipient_email == recipient,
+                EmailLogRow.subject == subject,
+            )
+            .order_by(desc(EmailLogRow.sent_at))
+            .limit(1)
+        )).scalar_one_or_none()
+    if email_log is None:
+        return False
+
+    email_log_data = _email_log_snapshot(email_log)
+    updated = dict(result)
+    updated.update({
+        "transport": email_log_data.get("transport"),
+        "email_log_id": email_log_data.get("email_log_id"),
+        "email_log_status": email_log_data.get("status"),
+        "email_log": email_log_data,
+    })
+    if not updated.get("sent_at") and email_log_data.get("sent_at"):
+        updated["sent_at"] = email_log_data["sent_at"]
+    if not updated.get("sent_message_id") and email_log_data.get("message_id"):
+        updated["sent_message_id"] = email_log_data["message_id"]
+    if not updated.get("message_type") and message_type:
+        updated["message_type"] = message_type
+    row.execution_result_json = updated
+    row.updated_at = _utcnow()
+    await _record_action_event(
+        session,
+        action_id=row.id,
+        event_type="action_email_log_evidence_linked",
+        actor="system",
+        message="Linked existing email log evidence to successful send action.",
+        output_json=email_log_data,
+    )
+    return True
 
 
 def action_event_to_dict(row: AgentActionEventRow) -> dict[str, Any]:
@@ -119,6 +210,11 @@ async def list_actions(
         if action_type:
             stmt = stmt.where(AgentActionRow.action_type == action_type)
         rows = (await session.execute(stmt)).scalars().all()
+        changed = False
+        for row in rows:
+            changed = await _enrich_action_email_log_evidence_in_session(session, row) or changed
+        if changed:
+            await session.commit()
         return [action_to_dict(row) for row in rows]
 
 
@@ -128,6 +224,10 @@ async def get_action(action_id: str) -> dict[str, Any] | None:
         row = await session.get(AgentActionRow, action_id)
         if not row:
             return None
+        changed = await _enrich_action_email_log_evidence_in_session(session, row)
+        if changed:
+            await session.commit()
+            await session.refresh(row)
         events = (await session.execute(
             select(AgentActionEventRow)
             .where(AgentActionEventRow.action_id == action_id)
@@ -232,15 +332,23 @@ async def create_send_email_action(
     body: str,
     mode: str = "test",
     requested_by: str = "operator",
-    approved_by: str = "operator",
+    approved_by: str | None = "operator",
     from_addr: str | None = None,
+    contact_id: str | None = None,
+    batch_item_id: str | None = None,
+    pif_id: str | None = None,
+    firm_name: str | None = None,
+    composer_experiment_key: str | None = None,
+    composer_variant_key: str | None = None,
+    skill_path: str | None = None,
+    skill_sha256: str | None = None,
 ) -> dict[str, Any]:
     await ensure_agent_tables()
     email_mode = (mode or "test").strip().lower()
     recipient = to.strip().lower()
     draft_subject = _sanitize_email_copy(subject)
     draft_body = _sanitize_email_copy(body)
-    if email_mode not in {"test"}:
+    if email_mode not in {"test", "lead_gen"}:
         raise ValueError("email_mode_not_supported")
     if not recipient or "@" not in recipient:
         raise ValueError("recipient_email_invalid")
@@ -249,33 +357,47 @@ async def create_send_email_action(
     if not draft_body:
         raise ValueError("draft_body_empty")
     action_id = _new_id("action")
+    approved_actor = (approved_by or "").strip()
+    approval_json = None
+    if approved_actor:
+        approval_json = {
+            "approved_by": approved_actor,
+            "approved_at": _utcnow().isoformat(),
+            "recipient": recipient,
+            "subject_sha256": _sha256(draft_subject),
+            "body_sha256": _sha256(draft_body),
+        }
     input_json = {
         "to": recipient,
         "subject": draft_subject,
         "body": draft_body,
         "mode": email_mode,
         "from_addr": (from_addr or "").strip() or None,
+        "contact_id": (contact_id or "").strip() or None,
+        "batch_item_id": (batch_item_id or "").strip() or None,
+        "pif_id": (pif_id or "").strip() or None,
+        "firm_name": (firm_name or "").strip() or None,
+        "composer_experiment_key": composer_experiment_key,
+        "composer_variant_key": composer_variant_key,
+        "skill_path": skill_path,
+        "skill_sha256": skill_sha256,
         "subject_sha256": _sha256(draft_subject),
         "body_sha256": _sha256(draft_body),
         "test_email": email_mode == "test",
-        "approval": {
-            "approved_by": approved_by or "operator",
-            "approved_at": _utcnow().isoformat(),
-            "recipient": recipient,
-            "subject_sha256": _sha256(draft_subject),
-            "body_sha256": _sha256(draft_body),
-        },
+        "approval": approval_json,
     }
+    entity_type = "test_email" if email_mode == "test" else "lead_gen_email"
+    entity_id = recipient if email_mode == "test" else (batch_item_id or contact_id or recipient)
     async with AsyncSessionLocal() as session:
         action = AgentActionRow(
             id=action_id,
             action_type=SEND_EMAIL,
-            status="approved",
+            status="approved" if approved_actor else "waiting_for_approval",
             risk_level="high",
             requested_by=(requested_by or "operator")[:128],
-            approved_by=(approved_by or "operator")[:128],
-            entity_type="test_email",
-            entity_id=recipient,
+            approved_by=approved_actor[:128] or None,
+            entity_type=entity_type,
+            entity_id=entity_id,
             input_json=input_json,
         )
         session.add(action)
@@ -283,12 +405,18 @@ async def create_send_email_action(
         await _record_action_event(
             session,
             action_id=action_id,
-            event_type="action_approved",
-            actor=approved_by or requested_by or "operator",
-            message=f"Approved exact {email_mode} email for execution.",
+            event_type="action_approved" if approved_actor else "action_created",
+            actor=approved_actor or requested_by or "operator",
+            message=(
+                f"Approved exact {email_mode} email for execution."
+                if approved_actor
+                else f"Created {email_mode} email action awaiting approval."
+            ),
             input_json={
                 "mode": email_mode,
                 "to": recipient,
+                "contact_id": input_json["contact_id"],
+                "batch_item_id": input_json["batch_item_id"],
                 "subject_sha256": input_json["subject_sha256"],
                 "body_sha256": input_json["body_sha256"],
             },
@@ -297,9 +425,9 @@ async def create_send_email_action(
         await session.refresh(action)
         result = action_to_dict(action)
     await safe_record_product_trace(
-        actor_type="user" if (approved_by or "operator") == "operator" else "agent",
-        actor_id=approved_by or requested_by or "operator",
-        event_type="action_approved",
+        actor_type="user" if (approved_actor or "operator") == "operator" else "agent",
+        actor_id=approved_actor or requested_by or "operator",
+        event_type="action_approved" if approved_actor else "action_created",
         surface="actions",
         entity_type="agent_action",
         entity_id=action_id,
@@ -307,6 +435,8 @@ async def create_send_email_action(
             "action_type": SEND_EMAIL,
             "mode": email_mode,
             "to": recipient,
+            "contact_id": input_json["contact_id"],
+            "batch_item_id": input_json["batch_item_id"],
         },
         output_json={"status": result["status"]},
         context_json={
@@ -443,7 +573,7 @@ async def _check_send_email_policy_in_session(session, action: AgentActionRow) -
 
     add("status_allows_execution", action.status in {"approved", "queued"}, action.status)
     add("human_approval_present", bool(action.approved_by and approval.get("approved_by")), str(action.approved_by or ""))
-    add("email_mode_supported", mode in {"test"}, mode)
+    add("email_mode_supported", mode in {"test", "lead_gen"}, mode)
     if mode == "test":
         add("marked_as_test_email", bool(payload.get("test_email") is True), "")
     add("recipient_present", bool(recipient and "@" in recipient), recipient)
@@ -454,16 +584,70 @@ async def _check_send_email_policy_in_session(session, action: AgentActionRow) -
     add("body_hash_matches_approval", _sha256(body) == approval.get("body_sha256"), "")
     add("email_transport_configured", transport_configured, "")
 
-    existing_success = (await session.execute(
-        select(AgentActionRow).where(
-            AgentActionRow.id != action.id,
-            AgentActionRow.action_type.in_([SEND_EMAIL, SEND_TEST_EMAIL]),
-            AgentActionRow.entity_type == "test_email",
-            AgentActionRow.entity_id == recipient,
-            AgentActionRow.status == "succeeded",
-        ).limit(1)
-    )).scalar_one_or_none()
-    add("no_prior_successful_test_action_for_recipient", existing_success is None, existing_success.id if existing_success else "")
+    contact = None
+    batch_item = None
+    if mode == "test":
+        existing_success = (await session.execute(
+            select(AgentActionRow).where(
+                AgentActionRow.id != action.id,
+                AgentActionRow.action_type.in_([SEND_EMAIL, SEND_TEST_EMAIL]),
+                AgentActionRow.entity_type == "test_email",
+                AgentActionRow.entity_id == recipient,
+                AgentActionRow.status == "succeeded",
+            ).limit(1)
+        )).scalar_one_or_none()
+        add("no_prior_successful_test_action_for_recipient", existing_success is None, existing_success.id if existing_success else "")
+    if mode == "lead_gen":
+        contact_id = str(payload.get("contact_id") or "").strip()
+        batch_item_id = str(payload.get("batch_item_id") or "").strip()
+        if contact_id:
+            contact = await session.get(FirmContactRow, contact_id)
+        if batch_item_id:
+            batch_item = await session.get(LeadGenBatchItemRow, batch_item_id)
+            if batch_item and not contact:
+                contact = await session.get(FirmContactRow, batch_item.contact_id)
+        add("lead_gen_contact_exists", contact is not None, contact_id)
+        add("lead_gen_contact_email_usable", bool(contact and has_usable_email(contact.email)), getattr(contact, "email", "") if contact else "")
+        add(
+            "recipient_matches_contact",
+            bool(contact and (contact.email or "").strip().lower() == recipient),
+            getattr(contact, "email", "") if contact else "",
+        )
+        add("batch_item_exists", bool(batch_item_id and batch_item), batch_item_id)
+        if batch_item:
+            add("batch_item_not_already_started", batch_item.approval_status != "started", batch_item.approval_status)
+            suppressions = (batch_item.reason_json or {}).get("suppressions") or []
+            add("not_suppressed_by_selection", len(suppressions) == 0, ", ".join(str(x) for x in suppressions))
+        add("consult_link_present", "getpossibleminds.com/consult" in body.lower(), "")
+        add("zoho_api_configured", bool(os.getenv("ZOHO_MAIL_REFRESH_TOKEN", "").strip()), "")
+        try:
+            policy = await ensure_default_policy()
+            budget = daily_send_budget_from_policy(policy)
+            add("daily_budget_available", budget >= 1, str(budget))
+        except Exception as exc:
+            add("daily_budget_available", False, f"{type(exc).__name__}: {str(exc)[:120]}")
+        existing_item_success = None
+        if batch_item_id:
+            existing_item_success = (await session.execute(
+                select(AgentActionRow).where(
+                    AgentActionRow.id != action.id,
+                    AgentActionRow.action_type == SEND_EMAIL,
+                    AgentActionRow.entity_type == "lead_gen_email",
+                    AgentActionRow.entity_id == batch_item_id,
+                    AgentActionRow.status == "succeeded",
+                ).limit(1)
+            )).scalar_one_or_none()
+        add("no_prior_successful_lead_gen_action_for_item", existing_item_success is None, existing_item_success.id if existing_item_success else "")
+        existing_recipient_success = (await session.execute(
+            select(AgentActionRow).where(
+                AgentActionRow.id != action.id,
+                AgentActionRow.action_type == SEND_EMAIL,
+                AgentActionRow.entity_type == "lead_gen_email",
+                AgentActionRow.status == "succeeded",
+                AgentActionRow.input_json["to"].as_string() == recipient,
+            ).limit(1)
+        )).scalar_one_or_none()
+        add("no_prior_successful_lead_gen_action_for_recipient", existing_recipient_success is None, existing_recipient_success.id if existing_recipient_success else "")
 
     allowed = all(check["passed"] for check in checks)
     failed = [check for check in checks if not check["passed"]]
@@ -476,6 +660,8 @@ async def _check_send_email_policy_in_session(session, action: AgentActionRow) -
         "action_type": action.action_type,
         "mode": mode,
         "recipient_email": recipient,
+        "contact_id": getattr(contact, "id", None) if contact else None,
+        "batch_item_id": getattr(batch_item, "id", None) if batch_item else None,
     }
 
 
@@ -590,30 +776,152 @@ async def execute_action(action_id: str, *, actor: str = "operator") -> dict[str
     }
 
 
+async def execute_approved_lead_gen_email_actions(
+    *,
+    limit: int = 1,
+    actor: str = "master-agent",
+) -> dict[str, Any]:
+    """Execute approved lead-gen email actions through the durable policy gate.
+
+    This is the narrow autonomous send path for the master agent. It never
+    creates email content, changes recipients, or bypasses approval; it only
+    drains exact approved `send_email mode=lead_gen` actions.
+    """
+    await ensure_agent_tables()
+    safe_limit = max(1, min(int(limit), 25))
+    async with AsyncSessionLocal() as session:
+        rows = (await session.execute(
+            select(AgentActionRow)
+            .where(
+                AgentActionRow.action_type == SEND_EMAIL,
+                AgentActionRow.status == "approved",
+                AgentActionRow.entity_type == "lead_gen_email",
+                AgentActionRow.input_json["mode"].as_string() == "lead_gen",
+            )
+            .order_by(AgentActionRow.created_at.asc(), AgentActionRow.id.asc())
+            .limit(safe_limit)
+        )).scalars().all()
+        action_ids = [row.id for row in rows]
+
+    executions: list[dict[str, Any]] = []
+    for action_id in action_ids:
+        executions.append(await execute_action(action_id, actor=actor))
+
+    await safe_record_product_trace(
+        actor_type="agent" if actor != "operator" else "user",
+        actor_id=actor,
+        event_type="approved_lead_gen_email_actions_executed",
+        surface="agents",
+        entity_type="agent_action",
+        input_json={"limit": safe_limit, "candidate_action_ids": action_ids},
+        output_json={
+            "attempted": len(executions),
+            "executed": sum(1 for row in executions if row.get("executed")),
+            "action_ids": action_ids,
+        },
+    )
+    return {
+        "limit": safe_limit,
+        "candidate_action_ids": action_ids,
+        "attempted": len(executions),
+        "executed": sum(1 for row in executions if row.get("executed")),
+        "results": executions,
+    }
+
+
 async def _execute_send_email(payload: dict[str, Any]) -> dict[str, Any]:
     subject = _sanitize_email_copy(str(payload.get("subject") or ""))
     body = _sanitize_email_copy(str(payload.get("body") or ""))
     recipient = str(payload.get("to") or "").strip().lower()
     from_addr = str(payload.get("from_addr") or "").strip() or None
     mode = str(payload.get("mode") or "test").strip().lower()
+    contact_id = str(payload.get("contact_id") or "").strip()
+    batch_item_id = str(payload.get("batch_item_id") or "").strip()
+    recipient_name = "Pranav Modi" if recipient == "pranav.modi@gmail.com" else None
+    pif_id = str(payload.get("pif_id") or "").strip() or None
+    if mode == "lead_gen" and contact_id:
+        async with AsyncSessionLocal() as session:
+            contact = await session.get(FirmContactRow, contact_id)
+            if contact:
+                recipient_name = contact.full_name or recipient_name
+                pif_id = contact.pif_id or pif_id
     msg_id = _send_email(
         subject,
         body,
         to=recipient,
         from_addr=from_addr,
         message_type=f"possible_os_action_{mode}",
-        recipient_name="Pranav Modi" if recipient == "pranav.modi@gmail.com" else None,
+        recipient_name=recipient_name,
+        pif_id=pif_id,
+        transport="zoho_api" if mode == "lead_gen" else None,
     )
+    email_log: EmailLogRow | None = None
+    async with AsyncSessionLocal() as session:
+        email_log = (await session.execute(
+            select(EmailLogRow)
+            .where(
+                EmailLogRow.recipient_email == recipient,
+                EmailLogRow.message_type == f"possible_os_action_{mode}",
+                EmailLogRow.message_id == msg_id,
+            )
+            .order_by(desc(EmailLogRow.sent_at))
+            .limit(1)
+        )).scalar_one_or_none()
+        if email_log is None:
+            email_log = (await session.execute(
+                select(EmailLogRow)
+                .where(
+                    EmailLogRow.recipient_email == recipient,
+                    EmailLogRow.message_type == f"possible_os_action_{mode}",
+                    EmailLogRow.subject == subject,
+                )
+                .order_by(desc(EmailLogRow.sent_at))
+                .limit(1)
+            )).scalar_one_or_none()
+        email_log_data = _email_log_snapshot(email_log)
+    if mode == "lead_gen" and batch_item_id:
+        async with AsyncSessionLocal() as session:
+            item = await session.get(LeadGenBatchItemRow, batch_item_id)
+            if item:
+                item.approval_status = "started"
+                reason = dict(item.reason_json or {})
+                approval = dict(payload.get("approval") or {})
+                reason["last_sent_by"] = str(approval.get("approved_by") or "operator")
+                reason["last_sent_at"] = email_log_data.get("sent_at") or _utcnow().isoformat()
+                reason["last_sent_message_id"] = msg_id
+                if email_log_data.get("email_log_id"):
+                    reason["last_sent_email_log_id"] = email_log_data["email_log_id"]
+                reason["last_sent_subject"] = subject
+                reason["last_sent_mode"] = "lead_gen"
+                reason["last_sent_transport"] = email_log_data.get("transport") or "zoho_api"
+                reason["last_sent_status"] = email_log_data.get("status") or "sent"
+                for key in (
+                    "composer_experiment_key",
+                    "composer_variant_key",
+                    "skill_path",
+                    "skill_sha256",
+                ):
+                    if payload.get(key):
+                        reason[f"last_sent_{key}"] = payload.get(key)
+                item.reason_json = reason
+                await session.commit()
+    sent_at = email_log_data.get("sent_at") or _utcnow().isoformat()
     return {
         "action_type": SEND_EMAIL,
         "mode": mode,
         "sent_to": recipient,
         "sent_subject": subject,
         "sent_message_id": msg_id,
-        "sent_at": _utcnow().isoformat(),
+        "sent_at": sent_at,
         "message_type": f"possible_os_action_{mode}",
+        "transport": email_log_data.get("transport"),
+        "email_log_id": email_log_data.get("email_log_id"),
+        "email_log_status": email_log_data.get("status"),
+        "email_log": email_log_data,
         "subject_sha256": _sha256(subject),
         "body_sha256": _sha256(body),
+        "contact_id": contact_id or None,
+        "batch_item_id": batch_item_id or None,
     }
 
 

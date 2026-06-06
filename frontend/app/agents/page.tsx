@@ -5,10 +5,14 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
   Bot,
+  Braces,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
   Clock3,
+  Clipboard,
+  Check,
+  Code2,
   FileText,
   HeartPulse,
   ListChecks,
@@ -20,6 +24,7 @@ import {
 import {
   createResearchScoutTask,
   createSystemsHealthTask,
+  getAgentEvent,
   getAgentTask,
   getAgentsStatus,
   listAgentCapabilities,
@@ -32,6 +37,7 @@ import {
   updateAgentConfig,
   updateAgentTaskStatus,
   type AgentTaskEvent,
+  type AgentTaskEventSummary,
   type AgentTask,
   type AgentsStatus,
 } from "@/lib/api";
@@ -58,16 +64,238 @@ function statusTone(status: string) {
   return "border-neutral-200 bg-neutral-50 text-neutral-700";
 }
 
-function jsonPreview(value: unknown) {
-  return JSON.stringify(value ?? {}, null, 2);
+function objectValue(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function arrayValue(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function stringValue(value: unknown) {
+  return typeof value === "string" ? value : "";
+}
+
+const JSON_KEY_ORDER: Record<string, string[]> = {
+  master_agent_wake_context_v2: [
+    "kind",
+    "note",
+    "cached_static_context",
+    "volatile_wake_state",
+    "cached_static_context_sha256",
+    "prompt_cache",
+  ],
+  cached_static_context: [
+    "prime_directives",
+    "soul_compact",
+    "stable_operating_doctrine",
+    "stable_output_schema",
+    "stable_capability_definitions",
+    "stable_knowledge_summaries",
+    "wake_decision_questions",
+    "cache_design",
+  ],
+  volatile_wake_state: [
+    "woke_at",
+    "actor",
+    "goal_stack",
+    "active_goal",
+    "objective_status",
+    "current_state",
+    "recent_evidence",
+    "capabilities_state",
+    "configuration",
+    "current_tasks",
+    "recent_actions",
+    "goal_evidence",
+    "queue_analysis",
+    "recent_reports",
+    "recent_events",
+    "recent_heartbeat_summary",
+    "auto_delegated_task",
+    "auto_executed_lead_gen_sends",
+    "llm_call",
+  ],
+  heartbeat_event_output: [
+    "active_task_count",
+    "queued_task_count",
+    "blocked_task_count",
+    "stale_task_ids",
+    "queue_analysis",
+    "human_status",
+    "auto_delegated_task",
+    "auto_executed_lead_gen_sends",
+    "active_goal",
+  ],
+  heartbeat_result: [
+    "status",
+    "started_at",
+    "completed_at",
+    "active_task_count",
+    "queued_task_count",
+    "blocked_task_count",
+    "stale_task_ids",
+    "queue_analysis",
+    "heartbeat_enabled",
+    "heartbeat_interval_seconds",
+    "human_status",
+    "wake_context",
+    "status_llm",
+    "auto_delegated_task",
+    "auto_executed_lead_gen_sends",
+    "active_goal",
+    "soul",
+    "next_recommended_slice",
+  ],
+  status_llm: [
+    "used_llm",
+    "model",
+    "skill_path",
+    "raw_response",
+    "usage",
+    "cached_tokens",
+    "prompt_cache",
+  ],
+  human_status: [
+    "state",
+    "goal",
+    "current_focus",
+    "intended_next_steps",
+    "needs_from_user",
+    "confidence",
+    "reasoning",
+  ],
+  prompt_cache: ["strategy", "provider", "cache_key", "cache_retention", "passthrough_enabled"],
+  llm_call: ["enabled", "model", "skill_path", "status"],
+  goal_stack: ["short_term", "medium_term", "long_term"],
+  objective_status: ["status", "evidence", "remaining_work"],
+};
+
+function jsonOrderKey(label: string, value: Record<string, unknown>) {
+  if (value.kind === "master_agent_wake_context_v2") return "master_agent_wake_context_v2";
+  if (label === "event.output" && "human_status" in value && "active_task_count" in value) return "heartbeat_event_output";
+  if (label === "output" && "human_status" in value && "active_task_count" in value) return "heartbeat_event_output";
+  if (label === "heartbeat" && "wake_context" in value && "status_llm" in value) return "heartbeat_result";
+  return label;
+}
+
+function orderedJsonValue(value: unknown, label = "root"): unknown {
+  if (Array.isArray(value)) return value.map((item) => orderedJsonValue(item));
+  if (!value || typeof value !== "object") return value;
+  const record = value as Record<string, unknown>;
+  const order = JSON_KEY_ORDER[jsonOrderKey(label, record)] || [];
+  const ordered: Record<string, unknown> = {};
+  for (const key of order) {
+    if (Object.prototype.hasOwnProperty.call(record, key)) {
+      ordered[key] = orderedJsonValue(record[key], key);
+    }
+  }
+  for (const key of Object.keys(record)) {
+    if (!Object.prototype.hasOwnProperty.call(ordered, key)) {
+      ordered[key] = orderedJsonValue(record[key], key);
+    }
+  }
+  return ordered;
+}
+
+function jsonPreview(value: unknown, label = "root") {
+  return JSON.stringify(orderedJsonValue(value ?? {}, label), null, 2);
 }
 
 function jsonNodeSummary(value: unknown) {
   if (Array.isArray(value)) return `Array(${value.length})`;
   if (value && typeof value === "object") return `Object(${Object.keys(value).length})`;
-  if (typeof value === "string") return `"${value}"`;
+  if (typeof value === "string") return value.length > 80 ? `"${value.slice(0, 77)}..."` : `"${value}"`;
   if (value === null) return "null";
   return String(value);
+}
+
+function jsonType(value: unknown) {
+  if (Array.isArray(value)) return "array";
+  if (value === null) return "null";
+  return typeof value;
+}
+
+function jsonValueClass(value: unknown) {
+  if (typeof value === "string") return "text-emerald-700";
+  if (typeof value === "number") return "text-sky-700";
+  if (typeof value === "boolean") return "text-violet-700";
+  if (value === null) return "text-neutral-400";
+  return "text-neutral-800";
+}
+
+function shouldOpenJsonKey(depth: number, key: string) {
+  if (depth > 1) return false;
+  return [
+    "cached_static_context",
+    "volatile_wake_state",
+    "human_status",
+    "active_goal",
+    "objective_status",
+    "auto_executed_lead_gen_sends",
+    "status_llm",
+    "recent_actions",
+    "goal_evidence",
+  ].includes(key);
+}
+
+function JsonPrimitiveValue({ label, value }: { label: string; value: unknown }) {
+  const [previewPosition, setPreviewPosition] = useState<{ left: number; top: number } | null>(null);
+  const isLongString = typeof value === "string" && value.length > 80;
+
+  function updatePreviewPosition(clientX: number, clientY: number) {
+    const width = Math.min(680, Math.max(320, window.innerWidth - 32));
+    const height = Math.min(420, Math.max(220, window.innerHeight - 32));
+    setPreviewPosition({
+      left: Math.max(16, Math.min(clientX + 14, window.innerWidth - width - 16)),
+      top: Math.max(16, Math.min(clientY + 14, window.innerHeight - height - 16)),
+    });
+  }
+
+  return (
+    <span
+      className={cn(
+        "relative min-w-0 whitespace-pre-wrap break-words font-mono text-[11px] leading-5",
+        jsonValueClass(value),
+        isLongString ? "cursor-help rounded-sm outline-none focus:ring-2 focus:ring-emerald-200" : "",
+      )}
+      tabIndex={isLongString ? 0 : undefined}
+      onMouseEnter={(event) => {
+        if (isLongString) updatePreviewPosition(event.clientX, event.clientY);
+      }}
+      onMouseMove={(event) => {
+        if (isLongString) updatePreviewPosition(event.clientX, event.clientY);
+      }}
+      onMouseLeave={() => setPreviewPosition(null)}
+      onFocus={(event) => {
+        if (!isLongString) return;
+        const rect = event.currentTarget.getBoundingClientRect();
+        updatePreviewPosition(rect.left, rect.bottom);
+      }}
+      onBlur={() => setPreviewPosition(null)}
+    >
+      {jsonNodeSummary(value)}
+      {isLongString && previewPosition && (
+        <div
+          className="fixed z-[70] max-h-[420px] w-[min(680px,calc(100vw-32px))] overflow-auto rounded-lg border border-neutral-200 bg-white p-3 text-left shadow-2xl"
+          style={{ left: previewPosition.left, top: previewPosition.top }}
+          role="tooltip"
+        >
+          <div className="mb-2 flex items-center justify-between gap-3 border-b border-neutral-100 pb-2">
+            <span className="truncate font-sans text-xs font-semibold text-neutral-700">{label}</span>
+            <span className="shrink-0 rounded-full bg-neutral-100 px-2 py-0.5 font-sans text-[10px] font-medium text-neutral-500">
+              {value.length.toLocaleString()} chars
+            </span>
+          </div>
+          <pre className="whitespace-pre-wrap break-words font-mono text-[11px] leading-5 text-neutral-800">
+            {value}
+          </pre>
+        </div>
+      )}
+    </span>
+  );
 }
 
 function JsonTree({
@@ -81,36 +309,38 @@ function JsonTree({
   depth?: number;
   defaultOpen?: boolean;
 }) {
-  const expandable = value !== null && typeof value === "object";
+  const displayValue = orderedJsonValue(value, label);
+  const expandable = displayValue !== null && typeof displayValue === "object";
   if (!expandable) {
     return (
-      <div className="grid grid-cols-[minmax(120px,0.25fr)_minmax(0,1fr)] gap-3 border-b border-neutral-100 py-1.5">
-        <span className="truncate font-medium text-neutral-600">{label}</span>
-        <span className="min-w-0 whitespace-pre-wrap break-words font-mono text-[11px] leading-5 text-neutral-800">
-          {jsonNodeSummary(value)}
-        </span>
+      <div className="grid grid-cols-[minmax(120px,0.28fr)_minmax(0,1fr)] gap-3 border-b border-neutral-100 px-2 py-1.5 hover:bg-white">
+        <span className="truncate font-mono text-[11px] font-semibold text-neutral-500">{label}</span>
+        <JsonPrimitiveValue label={label} value={displayValue} />
       </div>
     );
   }
 
-  const entries = Array.isArray(value)
-    ? value.map((item, index) => [String(index), item] as const)
-    : Object.entries(value as Record<string, unknown>);
+  const entries = Array.isArray(displayValue)
+    ? displayValue.map((item, index) => [String(index), item] as const)
+    : Object.entries(displayValue as Record<string, unknown>);
 
   return (
     <details
-      className={cn("group rounded-md border border-neutral-100 bg-white", depth > 0 ? "mt-1" : "")}
+      className={cn("group rounded-lg border border-neutral-200 bg-white shadow-sm", depth > 0 ? "mt-1" : "")}
       open={defaultOpen}
     >
-      <summary className="flex cursor-pointer select-none items-center gap-2 px-2 py-1.5 text-xs hover:bg-neutral-50">
+      <summary className="flex cursor-pointer select-none items-center gap-2 rounded-lg px-2.5 py-2 text-xs hover:bg-neutral-50">
         <ChevronRight className="h-3.5 w-3.5 text-neutral-400 group-open:hidden" />
         <ChevronDown className="hidden h-3.5 w-3.5 text-neutral-400 group-open:block" />
-        <span className="font-semibold text-neutral-800">{label}</span>
+        <span className="min-w-0 truncate font-mono text-[11px] font-semibold text-neutral-800">{label}</span>
+        <span className="rounded-full border border-neutral-200 bg-neutral-50 px-1.5 py-0.5 font-mono text-[10px] text-neutral-500">
+          {jsonType(displayValue)}
+        </span>
         <span className="rounded-full bg-neutral-100 px-1.5 py-0.5 font-mono text-[10px] text-neutral-500">
-          {jsonNodeSummary(value)}
+          {jsonNodeSummary(displayValue)}
         </span>
       </summary>
-      <div className="space-y-1 border-t border-neutral-100 px-2 py-2" style={{ marginLeft: Math.min(depth, 4) * 10 }}>
+      <div className="space-y-1 border-t border-neutral-100 bg-neutral-50/60 px-2 py-2" style={{ marginLeft: Math.min(depth, 4) * 10 }}>
         {entries.length === 0 ? (
           <div className="font-mono text-[11px] text-neutral-400">empty</div>
         ) : (
@@ -120,7 +350,7 @@ function JsonTree({
               label={key}
               value={child}
               depth={depth + 1}
-              defaultOpen={depth === 0 && ["mission", "configuration", "current_tasks"].includes(key)}
+              defaultOpen={shouldOpenJsonKey(depth, key)}
             />
           ))
         )}
@@ -129,8 +359,62 @@ function JsonTree({
   );
 }
 
-function activitySummary(event: AgentTaskEvent) {
-  const output = event.output || {};
+function JsonModalPanel({
+  title,
+  description,
+  badge,
+  value,
+  mode,
+  copied,
+  onCopy,
+}: {
+  title: string;
+  description: string;
+  badge: string;
+  value: unknown;
+  mode: "parsed" | "raw";
+  copied: boolean;
+  onCopy: () => void;
+}) {
+  const orderedValue = orderedJsonValue(value || {}, badge);
+  const raw = jsonPreview(value || {}, badge);
+  return (
+    <section className="flex min-h-0 min-w-0 flex-col border-b border-neutral-200 bg-white lg:border-b-0 lg:border-r last:border-r-0">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-100 px-4 py-3">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-neutral-500">{title}</h3>
+            <span className="rounded-full bg-neutral-100 px-2 py-0.5 font-mono text-[10px] text-neutral-500">
+              {badge}
+            </span>
+          </div>
+          <p className="mt-0.5 text-xs text-neutral-400">{description}</p>
+        </div>
+        <button
+          type="button"
+          onClick={onCopy}
+          className="inline-flex items-center gap-1.5 rounded-md border border-neutral-200 px-2.5 py-1.5 text-xs font-medium text-neutral-700 hover:bg-neutral-50"
+        >
+          {copied ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Clipboard className="h-3.5 w-3.5" />}
+          {copied ? "Copied" : "Copy JSON"}
+        </button>
+      </div>
+      <div className="min-h-[340px] min-w-0 flex-1 overflow-auto bg-neutral-50 p-3">
+        {mode === "raw" ? (
+          <pre className="min-h-full w-max min-w-full rounded-lg border border-neutral-200 bg-neutral-950 p-3 font-mono text-[11px] leading-5 text-neutral-100 shadow-inner">
+            {raw}
+          </pre>
+        ) : (
+          <JsonTree value={orderedValue} label={badge} />
+        )}
+      </div>
+    </section>
+  );
+}
+
+function activitySummary(event: AgentTaskEvent | AgentTaskEventSummary) {
+  if ("summary" in event && event.summary) return event.summary;
+  const output = "output" in event ? event.output || {} : {};
   if (event.event_type === "master_heartbeat_completed") {
     const humanStatus = output.human_status as { state?: unknown } | undefined;
     if (typeof humanStatus?.state === "string" && humanStatus.state.trim()) {
@@ -139,7 +423,7 @@ function activitySummary(event: AgentTaskEvent) {
     return `active ${output.active_task_count ?? 0}, queued ${output.queued_task_count ?? 0}, blocked ${output.blocked_task_count ?? 0}`;
   }
   if (event.event_type === "task_created") {
-    const input = event.input || {};
+    const input = "input" in event ? event.input || {} : {};
     return typeof input.title === "string" ? input.title : event.message;
   }
   if (event.event_type === "status_changed") {
@@ -188,15 +472,50 @@ export default function AgentsPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [heartbeatEnabledDraft, setHeartbeatEnabledDraft] = useState(true);
   const [heartbeatIntervalDraft, setHeartbeatIntervalDraft] = useState("300");
+  const [autoSendLeadGenDraft, setAutoSendLeadGenDraft] = useState(false);
+  const [autoSendLeadGenLimitDraft, setAutoSendLeadGenLimitDraft] = useState("1");
+  const [jsonDisplayMode, setJsonDisplayMode] = useState<"parsed" | "raw">("parsed");
+  const [copiedJsonPanel, setCopiedJsonPanel] = useState<"input" | "output" | "metadata" | null>(null);
+  const [loadingJsonEventId, setLoadingJsonEventId] = useState<number | null>(null);
   const [jsonModal, setJsonModal] = useState<{
     eventId: number;
     createdAt: string | null;
     agentId: string;
+    eventType: string;
     summary: string;
     input: unknown;
     output: unknown;
     metadata?: Record<string, unknown>;
   } | null>(null);
+
+  async function copyJsonPanel(panel: "input" | "output" | "metadata", value: unknown) {
+    const label = panel === "input" ? "event.input" : panel === "output" ? "event.output" : "metadata";
+    const text = jsonPreview(value || {}, label);
+    await navigator.clipboard.writeText(text);
+    setCopiedJsonPanel(panel);
+    window.setTimeout(() => setCopiedJsonPanel((current) => (current === panel ? null : current)), 1400);
+  }
+
+  async function openEventJson(event: AgentTaskEventSummary) {
+    setJsonDisplayMode("parsed");
+    setCopiedJsonPanel(null);
+    setLoadingJsonEventId(event.id);
+    try {
+      const detail = await getAgentEvent(event.id);
+      setJsonModal({
+        eventId: detail.event.id,
+        createdAt: detail.event.created_at,
+        agentId: detail.event.agent_id,
+        eventType: detail.event.event_type,
+        summary: activitySummary(detail.event),
+        input: detail.event.input || {},
+        output: detail.event.output || {},
+        metadata: detail.event.metadata || {},
+      });
+    } finally {
+      setLoadingJsonEventId((current) => (current === event.id ? null : current));
+    }
+  }
 
   const status = useQuery({
     queryKey: ["agents-status"],
@@ -249,6 +568,8 @@ export default function AgentsPage() {
       updateAgentConfig({
         heartbeat_enabled: heartbeatEnabledDraft,
         heartbeat_interval_seconds: Number(heartbeatIntervalDraft),
+        auto_execute_approved_lead_gen_email_enabled: autoSendLeadGenDraft,
+        auto_execute_approved_lead_gen_email_limit: Number(autoSendLeadGenLimitDraft),
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["agents-status"] });
@@ -265,6 +586,8 @@ export default function AgentsPage() {
           ...current,
           heartbeat_enabled: data.config.heartbeat_enabled,
           heartbeat_interval_seconds: data.config.heartbeat_interval_seconds,
+          auto_execute_approved_lead_gen_email_enabled: data.config.auto_execute_approved_lead_gen_email_enabled,
+          auto_execute_approved_lead_gen_email_limit: data.config.auto_execute_approved_lead_gen_email_limit,
         };
       });
       qc.invalidateQueries({ queryKey: ["agents-status"] });
@@ -332,9 +655,18 @@ export default function AgentsPage() {
   const heartbeat = status.data?.last_heartbeat;
   const humanStatus = heartbeat?.human_status;
   const wakeContext = heartbeat?.wake_context;
+  const cachedStaticContext = objectValue(objectValue(wakeContext).cached_static_context);
+  const volatileWakeState = objectValue(objectValue(wakeContext).volatile_wake_state);
   const statusLlm = heartbeat?.status_llm;
   const activeGoal = heartbeat?.active_goal || goals.data?.goals?.[0] || null;
   const queueAnalysis = heartbeat?.queue_analysis || {};
+  const recentActionRows = arrayValue(volatileWakeState.recent_actions)
+    .map((row) => objectValue(row))
+    .filter((row) => row.id || row.action_type);
+  const jsonModalInput = objectValue(jsonModal?.input);
+  const jsonModalKind = stringValue(jsonModalInput.kind);
+  const jsonModalHasV2 =
+    Boolean(jsonModalInput.cached_static_context) && Boolean(jsonModalInput.volatile_wake_state);
   const staleQueueItems = Array.isArray(queueAnalysis.stale_queue_items)
     ? queueAnalysis.stale_queue_items
     : [];
@@ -343,16 +675,29 @@ export default function AgentsPage() {
     if (!status.data) return;
     setHeartbeatEnabledDraft(status.data.heartbeat_enabled);
     setHeartbeatIntervalDraft(String(status.data.heartbeat_interval_seconds));
-  }, [status.data?.heartbeat_enabled, status.data?.heartbeat_interval_seconds]);
+    setAutoSendLeadGenDraft(status.data.auto_execute_approved_lead_gen_email_enabled);
+    setAutoSendLeadGenLimitDraft(String(status.data.auto_execute_approved_lead_gen_email_limit));
+  }, [
+    status.data?.heartbeat_enabled,
+    status.data?.heartbeat_interval_seconds,
+    status.data?.auto_execute_approved_lead_gen_email_enabled,
+    status.data?.auto_execute_approved_lead_gen_email_limit,
+  ]);
   const heartbeatIntervalNumber = Number(heartbeatIntervalDraft);
+  const autoSendLeadGenLimitNumber = Number(autoSendLeadGenLimitDraft);
   const heartbeatConfigValid =
     Number.isFinite(heartbeatIntervalNumber) &&
     heartbeatIntervalNumber >= 60 &&
-    heartbeatIntervalNumber <= 3600;
+    heartbeatIntervalNumber <= 3600 &&
+    Number.isFinite(autoSendLeadGenLimitNumber) &&
+    autoSendLeadGenLimitNumber >= 1 &&
+    autoSendLeadGenLimitNumber <= 25;
   const heartbeatConfigDirty =
     Boolean(status.data) &&
     (heartbeatEnabledDraft !== status.data?.heartbeat_enabled ||
-      heartbeatIntervalDraft !== String(status.data?.heartbeat_interval_seconds ?? ""));
+      heartbeatIntervalDraft !== String(status.data?.heartbeat_interval_seconds ?? "") ||
+      autoSendLeadGenDraft !== status.data?.auto_execute_approved_lead_gen_email_enabled ||
+      autoSendLeadGenLimitDraft !== String(status.data?.auto_execute_approved_lead_gen_email_limit ?? ""));
 
   return (
     <div className="mx-auto max-w-[1500px] space-y-4">
@@ -385,8 +730,9 @@ export default function AgentsPage() {
             <h2 className="text-sm font-semibold text-neutral-950">Master heartbeat</h2>
             <p className="mt-1 max-w-3xl text-sm leading-6 text-neutral-600">
               V1 heartbeat reads protected `soul.md` as constitutional context, records traces,
-              checks active subagent tasks, and marks stale workers. It does not edit `soul.md`
-              or execute external actions.
+              checks active subagent tasks, and marks stale workers. It does not edit `soul.md`.
+              When enabled, it can execute only already-approved lead-gen email actions through
+              the durable policy gate.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -441,7 +787,7 @@ export default function AgentsPage() {
                 : "periodic loop stopped"}
             </div>
           </div>
-          <div className="rounded-lg border border-neutral-200 p-3 sm:col-span-2 lg:col-span-2">
+          <div className="rounded-lg border border-neutral-200 p-3 sm:col-span-2 lg:col-span-3">
             <div className="flex flex-wrap items-end gap-3">
               <label className="flex items-center gap-2 text-xs font-medium text-neutral-700">
                 <input
@@ -472,6 +818,27 @@ export default function AgentsPage() {
                   className="mt-1 h-9 w-full rounded-md border border-neutral-200 px-3 text-sm text-neutral-900"
                 />
               </label>
+              <label className="flex min-w-[260px] items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-950">
+                <input
+                  type="checkbox"
+                  checked={autoSendLeadGenDraft}
+                  onChange={(event) => setAutoSendLeadGenDraft(event.target.checked)}
+                  className="h-4 w-4 rounded border-amber-300"
+                />
+                Master may send approved lead-gen emails
+              </label>
+              <label className="w-28 text-xs font-medium text-neutral-700">
+                Send limit
+                <input
+                  type="number"
+                  min={1}
+                  max={25}
+                  step={1}
+                  value={autoSendLeadGenLimitDraft}
+                  onChange={(event) => setAutoSendLeadGenLimitDraft(event.target.value)}
+                  className="mt-1 h-9 w-full rounded-md border border-neutral-200 px-3 text-sm text-neutral-900"
+                />
+              </label>
               <button
                 type="button"
                 onClick={() => saveAgentConfig.mutate()}
@@ -483,8 +850,13 @@ export default function AgentsPage() {
               </button>
             </div>
             <div className="mt-2 text-xs text-neutral-500">
-              The Enabled checkbox saves immediately. Period changes use Save. Allowed range: 60-3600 seconds.
+              The Enabled checkbox saves immediately. Period and approved-send automation changes use Save. Heartbeat can only send exact approved lead-gen email actions through policy checks.
             </div>
+            {autoSendLeadGenDraft ? (
+              <div className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                When saved, each heartbeat may send up to {autoSendLeadGenLimitDraft || "1"} already-approved lead-gen email action(s). It cannot create recipients or bypass approval hashes.
+              </div>
+            ) : null}
             {status.data?.heartbeat_enabled === false ? (
               <div className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
                 Periodic heartbeat is disabled. The Run heartbeat button still performs one manual check.
@@ -704,9 +1076,86 @@ export default function AgentsPage() {
 
       <section className="rounded-xl border border-neutral-200 bg-white">
         <div className="flex flex-wrap items-center gap-2 border-b border-neutral-100 px-4 py-3">
+          <h2 className="text-sm font-semibold text-neutral-950">Recent durable actions</h2>
+          <span className="text-xs text-neutral-400">what the master agent can see about approved work and sends</span>
+        </div>
+        <div className="divide-y divide-neutral-100">
+          {recentActionRows.length === 0 && (
+            <div className="px-4 py-5 text-sm text-neutral-500">
+              Run a heartbeat to load recent durable actions.
+            </div>
+          )}
+          {recentActionRows.map((action) => {
+            const input = objectValue(action.input_summary);
+            const policy = objectValue(action.policy_summary);
+            const result = objectValue(action.result_summary);
+            const status = stringValue(action.status);
+            return (
+              <div key={stringValue(action.id)} className="grid gap-3 px-4 py-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.9fr)_12rem]">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className={cn(
+                      "rounded-full border px-2 py-0.5 text-[11px] font-medium",
+                      status === "succeeded"
+                        ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                        : status === "failed"
+                          ? "border-red-200 bg-red-50 text-red-700"
+                          : status === "approved"
+                            ? "border-amber-200 bg-amber-50 text-amber-700"
+                            : "border-neutral-200 bg-neutral-50 text-neutral-700",
+                    )}>
+                      {status || "unknown"}
+                    </span>
+                    <span className="rounded-full border border-neutral-200 bg-neutral-50 px-2 py-0.5 text-[11px] text-neutral-600">
+                      {stringValue(action.action_type)}
+                    </span>
+                    <span className="font-mono text-[11px] text-neutral-400">{stringValue(action.id)}</span>
+                  </div>
+                  <div className="mt-2 truncate text-sm font-semibold text-neutral-950">
+                    {stringValue(input.subject) || stringValue(result.sent_subject) || "No subject"}
+                  </div>
+                  <div className="mt-1 text-xs text-neutral-500">
+                    to {stringValue(input.to) || stringValue(result.sent_to) || "-"}
+                  </div>
+                </div>
+                <div className="grid gap-2 text-xs text-neutral-600 sm:grid-cols-2">
+                  <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-2">
+                    <div className="font-semibold text-neutral-800">Policy</div>
+                    <div className="mt-1">
+                      {policy.allowed === true ? "allowed" : policy.allowed === false ? "blocked" : "not checked"}
+                      {stringValue(policy.reason) ? ` · ${stringValue(policy.reason)}` : ""}
+                    </div>
+                  </div>
+                  <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-2">
+                    <div className="font-semibold text-neutral-800">Send evidence</div>
+                    <div className="mt-1">
+                      {stringValue(result.email_log_id) || "no email log linked"}
+                    </div>
+                    <div className="mt-1 text-neutral-500">
+                      {stringValue(result.transport) || "-"} {stringValue(result.email_log_status) || ""}
+                    </div>
+                  </div>
+                </div>
+                <div className="text-xs text-neutral-500 lg:text-right">
+                  <div>created {shortDate(stringValue(action.created_at))}</div>
+                  <div>completed {shortDate(stringValue(action.completed_at))}</div>
+                  {stringValue(result.sent_message_id) && (
+                    <div className="mt-1 truncate font-mono text-[10px] text-neutral-400" title={stringValue(result.sent_message_id)}>
+                      {stringValue(result.sent_message_id)}
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      <section className="rounded-xl border border-neutral-200 bg-white">
+        <div className="flex flex-wrap items-center gap-2 border-b border-neutral-100 px-4 py-3">
           <h2 className="text-sm font-semibold text-neutral-950">Wake-up context</h2>
           <span className="text-xs text-neutral-400">
-            complete V1 context packet loaded by the heartbeat
+            v2 packet: cached static context plus volatile wake state
           </span>
         </div>
         <div className="grid gap-4 p-4 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
@@ -717,28 +1166,58 @@ export default function AgentsPage() {
             </p>
             <div className="grid gap-2 text-xs">
               <div className="rounded-lg border border-neutral-200 p-3">
-                <div className="font-semibold text-neutral-800">Mission</div>
+                <div className="font-semibold text-neutral-800">Operating goal</div>
                 <div className="mt-1 text-neutral-500">
-                  {typeof wakeContext?.mission === "object" && wakeContext?.mission !== null
-                    ? String((wakeContext.mission as Record<string, unknown>).goal || "-")
-                    : "-"}
+                  {stringValue(objectValue(objectValue(volatileWakeState.goal_stack).short_term).goal)
+                    || stringValue(objectValue(objectValue(volatileWakeState.goal_stack).long_term).goal)
+                    || "-"}
                 </div>
                 <div className="mt-2 text-[11px] text-neutral-400">
-                  {typeof wakeContext?.mission === "object" && wakeContext?.mission !== null
-                    ? String((wakeContext.mission as Record<string, unknown>).goal_source || "")
-                    : ""}
+                  {stringValue(objectValue(objectValue(volatileWakeState.goal_stack).short_term).source)
+                    || stringValue(objectValue(objectValue(volatileWakeState.goal_stack).long_term).source)}
                 </div>
               </div>
               <div className="rounded-lg border border-neutral-200 p-3">
                 <div className="font-semibold text-neutral-800">Loaded at</div>
                 <div className="mt-1 text-neutral-500">
-                  {typeof wakeContext?.woke_at === "string" ? shortDate(wakeContext.woke_at) : "-"}
+                  {stringValue(volatileWakeState.woke_at) ? shortDate(stringValue(volatileWakeState.woke_at)) : "-"}
                 </div>
               </div>
               <div className="rounded-lg border border-neutral-200 p-3">
                 <div className="font-semibold text-neutral-800">Protected context</div>
                 <div className="mt-1 text-neutral-500">
                   {heartbeat?.soul?.loaded === true ? "soul.md loaded read-only" : "soul.md not loaded"}
+                </div>
+              </div>
+              <div className="rounded-lg border border-neutral-200 p-3">
+                <div className="font-semibold text-neutral-800">Cached prefix</div>
+                <div className="mt-1 font-mono text-[11px] text-neutral-500">
+                  {stringValue(objectValue(cachedStaticContext.cache_design).hash).slice(0, 16) || "-"}
+                </div>
+                <div className="mt-1 text-[11px] text-neutral-400">
+                  {Array.isArray(cachedStaticContext.prime_directives)
+                    ? `${cachedStaticContext.prime_directives.length} prime directives`
+                    : "not loaded"}
+                </div>
+              </div>
+              <div className="rounded-lg border border-neutral-200 p-3">
+                <div className="font-semibold text-neutral-800">OpenAI cache telemetry</div>
+                <div className="mt-1 text-neutral-500">
+                  {typeof statusLlm?.cached_tokens === "number"
+                    ? `${statusLlm.cached_tokens.toLocaleString()} cached tokens`
+                    : "not returned"}
+                </div>
+                <div className="mt-1 text-[11px] text-neutral-400">
+                  {stringValue(objectValue(statusLlm?.prompt_cache).cache_key) || "possible-os-master-agent-v1"}
+                </div>
+              </div>
+              <div className="rounded-lg border border-neutral-200 p-3">
+                <div className="font-semibold text-neutral-800">Volatile state</div>
+                <div className="mt-1 text-neutral-500">
+                  {stringValue(volatileWakeState.woke_at) ? shortDate(stringValue(volatileWakeState.woke_at)) : "-"}
+                </div>
+                <div className="mt-1 text-[11px] text-neutral-400">
+                  {Object.keys(volatileWakeState).length ? `${Object.keys(volatileWakeState).length} fields` : "not loaded"}
                 </div>
               </div>
             </div>
@@ -777,6 +1256,11 @@ export default function AgentsPage() {
               Loading activity...
             </div>
           )}
+          {activity.isError && (
+            <div className="px-4 py-4 text-sm text-red-700">
+              Could not load recent agent activity. Try refreshing the activity feed.
+            </div>
+          )}
           {!activity.isLoading && (activity.data?.events ?? []).length === 0 && (
             <div className="px-4 py-5 text-sm text-neutral-500">
               No agent activity has been recorded yet.
@@ -804,36 +1288,26 @@ export default function AgentsPage() {
                   )}
                 </div>
                 <p className="mt-1 truncate text-sm text-neutral-700">{activitySummary(event)}</p>
+                {event.has_payload && (
+                  <p className="mt-1 text-[11px] text-neutral-400">
+                    JSON available · {Math.max(1, Math.round(event.payload_size_bytes / 1024))} KB
+                  </p>
+                )}
               </div>
-              {event.event_type === "master_heartbeat_completed" ? (
+              {event.has_payload ? (
                 <div className="flex flex-wrap justify-start gap-2 sm:justify-end">
                   <button
                     type="button"
-                    onClick={() =>
-                      setJsonModal({
-                        eventId: event.id,
-                        createdAt: event.created_at,
-                        agentId: event.agent_id,
-                        summary: activitySummary(event),
-                        input: event.input || {},
-                        output: event.output || {},
-                        metadata: event.metadata || {},
-                      })
-                    }
-                    className="inline-flex items-center justify-center rounded-md border border-neutral-900 bg-neutral-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-neutral-800"
+                    onClick={() => void openEventJson(event)}
+                    disabled={loadingJsonEventId === event.id}
+                    className="inline-flex items-center justify-center gap-2 rounded-md border border-neutral-900 bg-neutral-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-60"
                   >
+                    {loadingJsonEventId === event.id && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                     View JSON
                   </button>
                 </div>
               ) : (
-                <details className="text-xs text-neutral-500">
-                  <summary className="cursor-pointer select-none text-right font-medium text-neutral-600">
-                    JSON
-                  </summary>
-                  <pre className="mt-2 max-h-48 overflow-auto rounded-md bg-neutral-50 p-2 text-left">
-                    {jsonPreview({ input: event.input, output: event.output, metadata: event.metadata })}
-                  </pre>
-                </details>
+                <div className="text-xs text-neutral-400 sm:text-right">No JSON payload</div>
               )}
             </div>
           ))}
@@ -997,70 +1471,117 @@ export default function AgentsPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-3">
           <div className="flex max-h-[92vh] w-full max-w-7xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
             <div className="border-b border-neutral-100 px-4 py-3">
-              <div className="flex items-start justify-between gap-4">
+              <div className="flex flex-wrap items-start justify-between gap-4">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="text-sm font-semibold text-neutral-950">Heartbeat JSON</h2>
+                    <h2 className="text-sm font-semibold text-neutral-950">Agent Event JSON</h2>
                     <span className="rounded-full border border-neutral-200 bg-neutral-50 px-2 py-0.5 font-mono text-[11px] text-neutral-500">
                       event #{jsonModal.eventId}
                     </span>
                     <span className="rounded-full border border-neutral-200 bg-neutral-50 px-2 py-0.5 text-[11px] text-neutral-500">
                       {jsonModal.agentId}
                     </span>
+                    <span className="rounded-full border border-neutral-200 bg-neutral-50 px-2 py-0.5 text-[11px] text-neutral-500">
+                      {jsonModal.eventType}
+                    </span>
+                    <span className={cn(
+                      "rounded-full border px-2 py-0.5 font-mono text-[11px]",
+                      jsonModalHasV2
+                        ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                        : "border-amber-200 bg-amber-50 text-amber-700",
+                    )}>
+                      {jsonModalKind || "unknown context"}
+                    </span>
                   </div>
                   <p className="mt-1 text-xs text-neutral-500">
-                    {shortDate(jsonModal.createdAt)} · input is what the heartbeat received; output is what it reported.
+                    {shortDate(jsonModal.createdAt)} · input is what the event received; output is what it produced.
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setJsonModal(null)}
-                  className="rounded-md border border-neutral-200 px-3 py-1.5 text-xs font-medium text-neutral-700 hover:bg-neutral-50"
-                >
-                  Close
-                </button>
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="inline-flex rounded-md border border-neutral-200 bg-neutral-50 p-0.5">
+                    <button
+                      type="button"
+                      onClick={() => setJsonDisplayMode("parsed")}
+                      className={cn(
+                        "inline-flex items-center gap-1.5 rounded px-2.5 py-1.5 text-xs font-medium",
+                        jsonDisplayMode === "parsed" ? "bg-white text-neutral-950 shadow-sm" : "text-neutral-500 hover:text-neutral-800",
+                      )}
+                    >
+                      <Braces className="h-3.5 w-3.5" />
+                      Parsed
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setJsonDisplayMode("raw")}
+                      className={cn(
+                        "inline-flex items-center gap-1.5 rounded px-2.5 py-1.5 text-xs font-medium",
+                        jsonDisplayMode === "raw" ? "bg-white text-neutral-950 shadow-sm" : "text-neutral-500 hover:text-neutral-800",
+                      )}
+                    >
+                      <Code2 className="h-3.5 w-3.5" />
+                      Raw
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setJsonModal(null)}
+                    className="rounded-md border border-neutral-200 px-3 py-1.5 text-xs font-medium text-neutral-700 hover:bg-neutral-50"
+                  >
+                    Close
+                  </button>
+                </div>
               </div>
               <div className="mt-3 rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-xs leading-5 text-neutral-600">
                 {jsonModal.summary}
               </div>
             </div>
-            <div className="grid min-h-0 flex-1 gap-0 bg-neutral-100 lg:grid-cols-2">
-              <section className="flex min-h-0 flex-col border-b border-neutral-200 bg-white lg:border-b-0 lg:border-r">
-                <div className="flex items-center justify-between gap-2 border-b border-neutral-100 px-4 py-2.5">
-                  <div>
-                    <h3 className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Input</h3>
-                    <p className="mt-0.5 text-xs text-neutral-400">Context packet loaded before the status decision.</p>
-                  </div>
-                  <span className="rounded-full bg-neutral-100 px-2 py-0.5 font-mono text-[10px] text-neutral-500">
-                    event.input
-                  </span>
-                </div>
-                <div className="min-h-[300px] flex-1 overflow-auto bg-neutral-50 p-3">
-                  <JsonTree value={jsonModal.input || {}} label="input" />
-                </div>
-              </section>
-              <section className="flex min-h-0 flex-col bg-white">
-                <div className="flex items-center justify-between gap-2 border-b border-neutral-100 px-4 py-2.5">
-                  <div>
-                    <h3 className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Output</h3>
-                    <p className="mt-0.5 text-xs text-neutral-400">Counts, active goal, human status, and execution result.</p>
-                  </div>
-                  <span className="rounded-full bg-neutral-100 px-2 py-0.5 font-mono text-[10px] text-neutral-500">
-                    event.output
-                  </span>
-                </div>
-                <div className="min-h-[300px] flex-1 overflow-auto bg-neutral-50 p-3">
-                  <JsonTree value={jsonModal.output || {}} label="output" />
-                </div>
-              </section>
+            <div className="grid min-h-0 min-w-0 flex-1 gap-0 bg-neutral-100 lg:grid-cols-2">
+              <JsonModalPanel
+                title="Input"
+                description={jsonModal.eventType === "master_heartbeat_completed"
+                  ? "Wake context loaded before the status decision."
+                  : "Payload captured before this event ran."}
+                badge="event.input"
+                value={jsonModal.input || {}}
+                mode={jsonDisplayMode}
+                copied={copiedJsonPanel === "input"}
+                onCopy={() => copyJsonPanel("input", jsonModal.input || {})}
+              />
+              <JsonModalPanel
+                title="Output"
+                description={jsonModal.eventType === "master_heartbeat_completed"
+                  ? "Counts, human status, goal state, and execution results."
+                  : "Payload captured after this event ran."}
+                badge="event.output"
+                value={jsonModal.output || {}}
+                mode={jsonDisplayMode}
+                copied={copiedJsonPanel === "output"}
+                onCopy={() => copyJsonPanel("output", jsonModal.output || {})}
+              />
             </div>
             {jsonModal.metadata && Object.keys(jsonModal.metadata).length > 0 && (
               <details className="border-t border-neutral-100 bg-white px-4 py-2 text-xs">
                 <summary className="cursor-pointer select-none font-semibold text-neutral-700">
                   Metadata
                 </summary>
-                <div className="mt-2 max-h-52 overflow-auto rounded-md bg-neutral-50 p-2">
-                  <JsonTree value={jsonModal.metadata} label="metadata" />
+                <div className="mt-2 max-h-52 min-w-0 overflow-auto rounded-md border border-neutral-200 bg-neutral-50 p-2">
+                  <div className="mb-2 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => copyJsonPanel("metadata", jsonModal.metadata || {})}
+                      className="inline-flex items-center gap-1.5 rounded-md border border-neutral-200 bg-white px-2.5 py-1.5 text-xs font-medium text-neutral-700 hover:bg-neutral-50"
+                    >
+                      {copiedJsonPanel === "metadata" ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Clipboard className="h-3.5 w-3.5" />}
+                      {copiedJsonPanel === "metadata" ? "Copied" : "Copy JSON"}
+                    </button>
+                  </div>
+                  {jsonDisplayMode === "raw" ? (
+                    <pre className="w-max min-w-full rounded-lg border border-neutral-200 bg-neutral-950 p-3 font-mono text-[11px] leading-5 text-neutral-100">
+                      {jsonPreview(jsonModal.metadata, "metadata")}
+                    </pre>
+                  ) : (
+                    <JsonTree value={orderedJsonValue(jsonModal.metadata, "metadata")} label="metadata" />
+                  )}
                 </div>
               </details>
             )}

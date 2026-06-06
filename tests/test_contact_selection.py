@@ -80,12 +80,12 @@ def test_target_lead_persona_only_allows_owner_partner_coo_equivalents():
         "President",
         "COO",
         "Chief Operating Officer",
+        "Operations Manager",
+        "Office Manager",
         "Owner",
     ]
     blocked_titles = [
         "",
-        "Operations Manager",
-        "Office Manager",
         "Intake Manager",
         "Personal Injury Department Manager",
         "Attorney",

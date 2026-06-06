@@ -56,6 +56,11 @@ before new first-touch outreach.
 The system drafts one email for the selected contact using the current context,
 policy, and learning memory.
 
+The first agent-operated slice should be small: select a few senior
+decision-makers, gather bounded evidence, compose approval-ready drafts, and
+stop before sending. This proves the loop without pretending the system is
+ready for fully autonomous daily outreach.
+
 ### Approve
 
 A human operator reviews the generated draft, sees the rationale, edits the

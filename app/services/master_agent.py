@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import html
+import json
 import logging
 import os
 import re
@@ -23,6 +24,7 @@ from app.db.models import (
     AgentReportRow,
     AgentTaskEventRow,
     AgentTaskRow,
+    EmailLogRow,
     MasterGoalRow,
     ProductTraceRow,
     SystemSettingsRow,
@@ -68,6 +70,8 @@ DEFAULT_AGENT_CONFIG = {
     "heartbeat_interval_seconds": 300,
     "status_llm_enabled": True,
     "auto_delegate_next_slice_enabled": True,
+    "auto_execute_approved_lead_gen_email_enabled": False,
+    "auto_execute_approved_lead_gen_email_limit": 1,
 }
 
 SYSTEMS_HEALTH_AGENT_TITLE = "Add SystemsHealthAgent log observation and bug-fix delegation"
@@ -128,6 +132,19 @@ CAPABILITY_DEFINITIONS = [
         "command_json": {"argv": ["bin/autocaller", "actions", "execute", "<action_id>", "--json"], "safe_probe": False},
     },
     {
+        "name": "execute approved lead-gen email actions",
+        "capability_type": "cli",
+        "source": "bin/autocaller actions execute-approved-lead-gen --limit=1 --actor=master-agent --json",
+        "purpose": "Execute exact approved lead-gen email actions through the durable action policy gate. Does not create or modify drafts.",
+        "risk_level": "high",
+        "requires_approval": True,
+        "autonomous_allowed": True,
+        "command_json": {
+            "argv": ["bin/autocaller", "actions", "execute-approved-lead-gen", "--limit", "1", "--actor", "master-agent", "--json"],
+            "safe_probe": False,
+        },
+    },
+    {
         "name": "send approved lead-gen draft action",
         "capability_type": "cli",
         "source": "bin/autocaller actions send-approved-lead-gen-draft --item=<id> --subject=... --body=...",
@@ -143,13 +160,26 @@ CAPABILITY_DEFINITIONS = [
     {
         "name": "send email action",
         "capability_type": "cli",
-        "source": "bin/autocaller actions send-email --mode=test --to=<email> --subject=... --body=...",
-        "purpose": "Create and optionally execute an exact approved email through the durable action executor. V1 supports mode=test.",
+        "source": "bin/autocaller actions send-email --mode=test|lead_gen --to=<email> --subject=... --body=...",
+        "purpose": "Create and optionally execute an exact approved email through the durable action executor. Lead-gen mode requires contact/item metadata and human approval.",
         "risk_level": "high",
         "requires_approval": True,
         "autonomous_allowed": False,
         "command_json": {
             "argv": ["bin/autocaller", "actions", "send-email", "--mode", "test", "--to", "<email>", "--subject", "<subject>", "--body", "<body>"],
+            "safe_probe": False,
+        },
+    },
+    {
+        "name": "lead-gen email agent slice",
+        "capability_type": "cli",
+        "source": "bin/autocaller lead-gen email-agent-slice --limit=3 --approval-ready",
+        "purpose": "Select senior lead-gen contacts, collect bounded evidence, compose approval-ready drafts through the email composer skill, and create no-send durable lead_gen email actions.",
+        "risk_level": "medium",
+        "requires_approval": False,
+        "autonomous_allowed": True,
+        "command_json": {
+            "argv": ["bin/autocaller", "lead-gen", "email-agent-slice", "--limit", "3", "--approval-ready", "--json"],
             "safe_probe": False,
         },
     },
@@ -349,6 +379,18 @@ def _normalize_agent_config(raw: dict[str, Any] | None) -> dict[str, Any]:
             config["status_llm_enabled"] = bool(raw.get("status_llm_enabled"))
         if "auto_delegate_next_slice_enabled" in raw:
             config["auto_delegate_next_slice_enabled"] = bool(raw.get("auto_delegate_next_slice_enabled"))
+        if "auto_execute_approved_lead_gen_email_enabled" in raw:
+            config["auto_execute_approved_lead_gen_email_enabled"] = bool(
+                raw.get("auto_execute_approved_lead_gen_email_enabled")
+            )
+        if "auto_execute_approved_lead_gen_email_limit" in raw:
+            try:
+                config["auto_execute_approved_lead_gen_email_limit"] = max(
+                    1,
+                    min(int(raw.get("auto_execute_approved_lead_gen_email_limit")), 25),
+                )
+            except (TypeError, ValueError):
+                pass
     return config
 
 
@@ -603,6 +645,57 @@ def event_to_dict(row: AgentTaskEventRow) -> dict[str, Any]:
     }
 
 
+def _payload_size(value: Any) -> int:
+    if value in (None, {}, []):
+        return 0
+    try:
+        return len(json.dumps(value, default=str))
+    except TypeError:
+        return len(str(value))
+
+
+def _event_activity_summary(row: AgentTaskEventRow) -> str:
+    output = row.output_json or {}
+    if row.event_type == "master_heartbeat_completed":
+        human_status = output.get("human_status") if isinstance(output, dict) else None
+        if isinstance(human_status, dict):
+            state = human_status.get("state")
+            if isinstance(state, str) and state.strip():
+                return state.strip()
+        return (
+            f"active {output.get('active_task_count', 0)}, "
+            f"queued {output.get('queued_task_count', 0)}, "
+            f"blocked {output.get('blocked_task_count', 0)}"
+        )
+    if row.event_type == "task_created":
+        input_json = row.input_json or {}
+        title = input_json.get("title") if isinstance(input_json, dict) else None
+        if isinstance(title, str) and title.strip():
+            return title.strip()
+    if row.event_type == "status_changed":
+        status = output.get("status") if isinstance(output, dict) else None
+        if isinstance(status, str) and status.strip():
+            return f"status {status.strip()}"
+    return row.message or row.event_type
+
+
+def event_summary_to_dict(row: AgentTaskEventRow) -> dict[str, Any]:
+    input_size = _payload_size(row.input_json)
+    output_size = _payload_size(row.output_json)
+    metadata_size = _payload_size(row.metadata_json)
+    return {
+        "id": row.id,
+        "task_id": row.task_id,
+        "agent_id": row.agent_id,
+        "event_type": row.event_type,
+        "message": row.message,
+        "summary": _event_activity_summary(row),
+        "has_payload": bool(input_size or output_size or metadata_size),
+        "payload_size_bytes": input_size + output_size + metadata_size,
+        "created_at": row.created_at.isoformat() if row.created_at else None,
+    }
+
+
 def report_to_dict(row: AgentReportRow) -> dict[str, Any]:
     return {
         "id": row.id,
@@ -707,6 +800,84 @@ def _short_action_event_snapshot(row: AgentActionEventRow) -> dict[str, Any]:
     }
 
 
+def _email_log_evidence_snapshot(row: EmailLogRow | None) -> dict[str, Any]:
+    if row is None:
+        return {}
+    return {
+        "email_log_id": row.id,
+        "recipient_email": row.recipient_email,
+        "recipient_name": row.recipient_name,
+        "subject": row.subject,
+        "message_type": row.message_type,
+        "transport": row.transport,
+        "message_id": row.message_id,
+        "status": row.status,
+        "error": row.error,
+        "sent_at": row.sent_at.isoformat() if row.sent_at else None,
+        "pif_id": row.pif_id,
+        "call_id": row.call_id,
+    }
+
+
+async def _enrich_action_email_log_evidence_for_snapshot(session, row: AgentActionRow) -> None:
+    if row.action_type != "send_email" or row.status != "succeeded":
+        return
+    payload = row.input_json if isinstance(row.input_json, dict) else {}
+    result = row.execution_result_json if isinstance(row.execution_result_json, dict) else {}
+    if result.get("email_log_id"):
+        return
+    recipient = str(result.get("sent_to") or payload.get("to") or "").strip().lower()
+    if not recipient:
+        return
+    subject = str(result.get("sent_subject") or payload.get("subject") or "").strip()
+    msg_id = str(result.get("sent_message_id") or "").strip()
+    email_log: EmailLogRow | None = None
+    if msg_id:
+        email_log = (await session.execute(
+            select(EmailLogRow)
+            .where(
+                EmailLogRow.recipient_email == recipient,
+                EmailLogRow.message_id == msg_id,
+            )
+            .order_by(desc(EmailLogRow.sent_at))
+            .limit(1)
+        )).scalar_one_or_none()
+    if email_log is None and subject:
+        email_log = (await session.execute(
+            select(EmailLogRow)
+            .where(
+                EmailLogRow.recipient_email == recipient,
+                EmailLogRow.subject == subject,
+            )
+            .order_by(desc(EmailLogRow.sent_at))
+            .limit(1)
+        )).scalar_one_or_none()
+    email_log_data = _email_log_evidence_snapshot(email_log)
+    if not email_log_data:
+        return
+    updated = dict(result)
+    updated.update({
+        "transport": email_log_data.get("transport"),
+        "email_log_id": email_log_data.get("email_log_id"),
+        "email_log_status": email_log_data.get("status"),
+        "email_log": email_log_data,
+    })
+    if not updated.get("sent_at") and email_log_data.get("sent_at"):
+        updated["sent_at"] = email_log_data["sent_at"]
+    if not updated.get("sent_message_id") and email_log_data.get("message_id"):
+        updated["sent_message_id"] = email_log_data["message_id"]
+    row.execution_result_json = updated
+    row.updated_at = _utcnow()
+    session.add(AgentActionEventRow(
+        action_id=row.id,
+        event_type="action_email_log_evidence_linked",
+        actor="system",
+        message="Linked existing email log evidence to successful send action.",
+        output_json=email_log_data,
+        metadata_json={"source": "master_agent_recent_action_snapshot"},
+    ))
+
+
 def _short_action_snapshot(row: AgentActionRow, events: list[AgentActionEventRow]) -> dict[str, Any]:
     payload = row.input_json if isinstance(row.input_json, dict) else {}
     result = row.execution_result_json if isinstance(row.execution_result_json, dict) else {}
@@ -748,6 +919,9 @@ def _short_action_snapshot(row: AgentActionRow, events: list[AgentActionEventRow
             "sent_message_id": result.get("sent_message_id"),
             "sent_at": result.get("sent_at"),
             "message_type": result.get("message_type"),
+            "transport": result.get("transport"),
+            "email_log_id": result.get("email_log_id"),
+            "email_log_status": result.get("email_log_status"),
         },
         "error": _compact_text(row.error or "", limit=260),
         "recent_events": [_short_action_event_snapshot(event) for event in events[:5]],
@@ -760,6 +934,14 @@ async def _recent_action_snapshots(session, *, limit: int = 8) -> list[dict[str,
     )).scalars().all()
     if not action_rows:
         return []
+    changed = False
+    for row in action_rows:
+        before = row.execution_result_json if isinstance(row.execution_result_json, dict) else {}
+        await _enrich_action_email_log_evidence_for_snapshot(session, row)
+        after = row.execution_result_json if isinstance(row.execution_result_json, dict) else {}
+        changed = changed or before.get("email_log_id") != after.get("email_log_id")
+    if changed:
+        await session.commit()
     action_ids = [row.id for row in action_rows]
     event_rows = (await session.execute(
         select(AgentActionEventRow)
@@ -784,8 +966,16 @@ def _goal_evidence(active_goal: dict[str, Any] | None, recent_actions: list[dict
         return {}
     for action in recent_actions:
         result = action.get("result_summary") or {}
-        if (
+        input_summary = action.get("input_summary") or {}
+        is_test_email_action = (
             action.get("action_type") == "send_test_email"
+            or (
+                action.get("action_type") == "send_email"
+                and bool(input_summary.get("test_email"))
+            )
+        )
+        if (
+            is_test_email_action
             and action.get("status") == "succeeded"
             and str(result.get("sent_to") or "").lower() == "pranav.modi@gmail.com"
         ):
@@ -877,6 +1067,270 @@ def _capabilities_context(capabilities: list[dict[str, Any]]) -> list[dict[str, 
     ]
 
 
+def _context_sha256(value: dict[str, Any]) -> str:
+    payload = json_dumps_stable(value)
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def json_dumps_stable(value: Any) -> str:
+    import json
+
+    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+
+def _prime_directives_context() -> list[str]:
+    return [
+        "Move fast toward the user's stated short-term and long-term goals, effectively and efficiently.",
+        "Maintain and improve a good mental model of how the system works and how it can improve over short and long horizons.",
+    ]
+
+
+def _wake_decision_questions() -> list[str]:
+    return [
+        "What is the user's most important stated goal right now?",
+        "What is the fastest safe next move toward it?",
+        "What does the current system state say is blocking progress?",
+        "What did we learn since the last wake?",
+        "Should the system model, skill, code, eval, or plan be updated?",
+        "What should be done now, delegated, postponed, or escalated to the user?",
+    ]
+
+
+def _stable_operating_doctrine_context() -> dict[str, Any]:
+    return {
+        "context_design": "Stable first, volatile last. Use cached context for identity, doctrine, schemas, capability definitions, and durable knowledge summaries.",
+        "ooda_loop": ["observe", "orient", "decide", "act"],
+        "learning_rule": "Separate raw evidence from interpreted objective status and durable knowledge.",
+        "horizontal_slices": "Prefer the smallest end-to-end slice that creates observable value.",
+        "approval_posture": {
+            "ask_before": [
+                "unapproved outbound email",
+                "live calls",
+                "destructive data changes",
+                "billing or DNS changes",
+                "modifying read-only inboxes",
+                "editing soul.md",
+            ],
+            "safe_autonomy": [
+                "read-only inspection",
+                "status synthesis",
+                "creating bounded subagent tasks",
+                "executing already-approved lead-gen email actions when enabled",
+            ],
+        },
+    }
+
+
+def _stable_output_schema_context() -> dict[str, Any]:
+    return {
+        "human_status": {
+            "required_fields": [
+                "state",
+                "goal",
+                "current_focus",
+                "intended_next_steps",
+                "needs_from_user",
+                "confidence",
+                "reasoning",
+            ],
+            "style": "concise human employee status update for a founder-operator",
+        }
+    }
+
+
+def _stable_capability_definitions(capabilities: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    rows = []
+    for cap in capabilities:
+        rows.append({
+            "name": cap.get("name"),
+            "capability_type": cap.get("capability_type"),
+            "source": cap.get("source"),
+            "purpose": cap.get("purpose"),
+            "risk_level": cap.get("risk_level"),
+            "requires_approval": cap.get("requires_approval"),
+            "autonomous_allowed": cap.get("autonomous_allowed"),
+        })
+    return sorted(rows, key=lambda row: str(row.get("name") or ""))
+
+
+def _capabilities_state_context(capabilities: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    rows = []
+    for cap in capabilities:
+        rows.append({
+            "name": cap.get("name"),
+            "last_status": cap.get("last_status"),
+            "last_verified_at": cap.get("last_verified_at"),
+        })
+    return sorted(rows, key=lambda row: str(row.get("name") or ""))
+
+
+def _stable_knowledge_summaries_stub() -> list[dict[str, Any]]:
+    return [
+        {
+            "slug": "possible-os",
+            "version": 1,
+            "confidence": "medium",
+            "summary": "Possible OS is the operating system for Possible Minds: observe work, act through approved paths, learn from traces and outcomes, and improve tools, skills, docs, UI, and code.",
+        },
+        {
+            "slug": "lead-gen-loop",
+            "version": 1,
+            "confidence": "medium",
+            "summary": "Lead gen loop: select senior contacts, compose drafts with the email skill, get user approval, send approved actions through policy gates, observe replies and outcomes, then improve targeting and composition.",
+        },
+        {
+            "slug": "action-execution",
+            "version": 1,
+            "confidence": "medium",
+            "summary": "Durable actions are policy-checked records. Approved lead-gen sends execute through the Zoho-backed email path and link to email_logs when available.",
+        },
+        {
+            "slug": "master-agent-heartbeat",
+            "version": 1,
+            "confidence": "medium",
+            "summary": "Heartbeat builds a wake context, optionally executes narrow enabled actions, writes a human status update through the gateway, records events and traces, and exposes input/output JSON in the Agents UI.",
+        },
+    ]
+
+
+def _cached_static_context(capabilities: list[dict[str, Any]]) -> dict[str, Any]:
+    context = {
+        "prime_directives": _prime_directives_context(),
+        "soul_compact": _compact_soul_context(),
+        "stable_operating_doctrine": _stable_operating_doctrine_context(),
+        "stable_output_schema": _stable_output_schema_context(),
+        "stable_capability_definitions": _stable_capability_definitions(capabilities),
+        "stable_knowledge_summaries": _stable_knowledge_summaries_stub(),
+        "wake_decision_questions": _wake_decision_questions(),
+    }
+    context["cache_design"] = {
+        "provider": "openai_codex_gateway",
+        "rule": "Keep this object byte-stable across heartbeats whenever inputs do not change.",
+        "hash": _context_sha256(context),
+    }
+    return context
+
+
+def _goal_stack_context(active_goal: dict[str, Any] | None) -> dict[str, Any]:
+    current = active_goal or {}
+    return {
+        "short_term": current,
+        "medium_term": {
+            "goal": "Build a cybernetic lead-generation loop with human approval, observable outcomes, and self-improving contact selection and email composition.",
+            "source": "durable product direction",
+        },
+        "long_term": {
+            "goal": "Build Possible OS as a self-improving operating system for Possible Minds.",
+            "source": "prime operating mission",
+        },
+    }
+
+
+def _current_state_context(
+    *,
+    agent_config: dict[str, Any],
+    active_tasks: list[dict[str, Any]],
+    queue_analysis: dict[str, Any],
+    recent_actions: list[dict[str, Any]],
+) -> dict[str, Any]:
+    approved_lead_gen_actions = [
+        action for action in recent_actions
+        if action.get("action_type") == "send_email"
+        and action.get("status") == "approved"
+        and action.get("entity_type") == "lead_gen_email"
+    ]
+    latest_sent = next(
+        (
+            action for action in recent_actions
+            if action.get("status") == "succeeded"
+            and (action.get("result_summary") or {}).get("sent_at")
+        ),
+        None,
+    )
+    return {
+        "heartbeat_enabled": bool(agent_config.get("heartbeat_enabled")),
+        "heartbeat_interval_seconds": agent_config.get("heartbeat_interval_seconds"),
+        "auto_send_approved_lead_gen_enabled": bool(agent_config.get("auto_execute_approved_lead_gen_email_enabled")),
+        "auto_send_approved_lead_gen_limit": agent_config.get("auto_execute_approved_lead_gen_email_limit"),
+        "active_task_count": len(active_tasks),
+        "queued_task_count": sum(1 for task in active_tasks if task.get("status") == "queued"),
+        "blocked_task_count": sum(1 for task in active_tasks if task.get("status") == "blocked"),
+        "approved_lead_gen_actions_in_recent_window": len(approved_lead_gen_actions),
+        "latest_sent_action": latest_sent or {},
+        "queue_analysis": queue_analysis,
+    }
+
+
+def _recent_evidence_context(recent_actions: list[dict[str, Any]], recent_reports: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    evidence: list[dict[str, Any]] = []
+    for action in recent_actions[:5]:
+        result = action.get("result_summary") or {}
+        if action.get("status") in {"succeeded", "failed"}:
+            evidence.append({
+                "type": f"action_{action.get('status')}",
+                "action_id": action.get("id"),
+                "action_type": action.get("action_type"),
+                "recipient": result.get("sent_to") or (action.get("input_summary") or {}).get("to"),
+                "sent_at": result.get("sent_at"),
+                "email_log_id": result.get("email_log_id"),
+                "status": action.get("status"),
+            })
+    for report in recent_reports[:3]:
+        evidence.append({
+            "type": "agent_report",
+            "report_id": report.get("id"),
+            "task_id": report.get("task_id"),
+            "status": report.get("status"),
+            "summary": _compact_text(str(report.get("summary") or ""), limit=220),
+            "created_at": report.get("created_at"),
+        })
+    return evidence
+
+
+def _volatile_wake_state(
+    *,
+    started_at: datetime,
+    actor: str,
+    agent_config: dict[str, Any],
+    active_tasks: list[dict[str, Any]],
+    recent_reports: list[dict[str, Any]],
+    recent_events: list[dict[str, Any]],
+    heartbeat_history: dict[str, Any],
+    queue_analysis: dict[str, Any],
+    capabilities: list[dict[str, Any]],
+    active_goal: dict[str, Any] | None,
+    recent_actions: list[dict[str, Any]],
+    goal_evidence: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "woke_at": started_at.isoformat(),
+        "actor": actor,
+        "goal_stack": _goal_stack_context(active_goal),
+        "active_goal": active_goal or {},
+        "objective_status": {
+            "status": goal_evidence.get("status") or "in_progress",
+            "evidence": goal_evidence,
+            "remaining_work": list((active_goal or {}).get("next_actions") or []),
+        },
+        "current_state": _current_state_context(
+            agent_config=agent_config,
+            active_tasks=active_tasks,
+            queue_analysis=queue_analysis,
+            recent_actions=recent_actions,
+        ),
+        "recent_evidence": _recent_evidence_context(recent_actions, recent_reports),
+        "capabilities_state": _capabilities_state_context(capabilities),
+        "configuration": agent_config,
+        "current_tasks": active_tasks,
+        "recent_actions": recent_actions,
+        "goal_evidence": goal_evidence,
+        "queue_analysis": queue_analysis,
+        "recent_reports": recent_reports[:5],
+        "recent_events": recent_events[:8],
+        "recent_heartbeat_summary": heartbeat_history,
+    }
+
+
 def _build_wake_context(
     *,
     started_at: datetime,
@@ -892,42 +1346,36 @@ def _build_wake_context(
     recent_actions: list[dict[str, Any]],
 ) -> dict[str, Any]:
     goal_evidence = _goal_evidence(active_goal, recent_actions)
+    cached_static_context = _cached_static_context(capabilities)
+    volatile_wake_state = _volatile_wake_state(
+        started_at=started_at,
+        actor=actor,
+        agent_config=agent_config,
+        active_tasks=active_tasks,
+        recent_reports=recent_reports,
+        recent_events=recent_events,
+        heartbeat_history=heartbeat_history,
+        queue_analysis=queue_analysis,
+        capabilities=capabilities,
+        active_goal=active_goal,
+        recent_actions=recent_actions,
+        goal_evidence=goal_evidence,
+    )
     return {
-        "kind": "master_agent_wake_context_v1",
+        "kind": "master_agent_wake_context_v2",
         "note": (
-            "This is the complete context packet loaded by the heartbeat before "
-            "the optional OpenClaw status-writing call."
+            "Prompt-cache-aware wake context: cached_static_context is stable and "
+            "appears before volatile_wake_state."
         ),
-        "actor": actor,
-        "woke_at": started_at.isoformat(),
-        "mission": {
-            "state": "Build and operate Possible OS as a self-improving operating system for Possible Minds.",
-            "goal": "Keep the system observable, delegate bounded work, report status clearly, and improve through traces, reports, evals, and approved code or skill changes.",
-            "goal_source": "bootstrap mission in app/services/master_agent.py::_build_wake_context; future version should load durable master plans",
-            "protected_context": "soul.md is read as constitutional context and must not be edited by heartbeat.",
+        "cached_static_context": cached_static_context,
+        "volatile_wake_state": volatile_wake_state,
+        "cached_static_context_sha256": cached_static_context["cache_design"]["hash"],
+        "prompt_cache": {
+            "strategy": "stable_prefix_first",
+            "provider": "openai_codex_gateway",
+            "cache_key": os.getenv("MASTER_AGENT_PROMPT_CACHE_KEY", "possible-os-master-agent-v1"),
+            "cache_retention": os.getenv("MASTER_AGENT_PROMPT_CACHE_RETENTION", "24h"),
         },
-        "soul_compact": _compact_soul_context(),
-        "active_goal": active_goal or {},
-        "configuration": agent_config,
-        "capabilities_today": _capabilities_context(capabilities),
-        "current_tasks": active_tasks,
-        "recent_actions": recent_actions,
-        "goal_evidence": goal_evidence,
-        "queue_analysis": queue_analysis,
-        "recent_reports": recent_reports[:5],
-        "recent_events": recent_events[:8],
-        "recent_heartbeat_summary": heartbeat_history,
-        "constraints": [
-            "No automatic code edits from heartbeat.",
-            "No email, mailbox, or external business action from heartbeat.",
-            "No destructive git action without explicit human approval.",
-            "Subagent reports are evidence, not final truth.",
-        ],
-        "next_recommended_slice": (
-            "Add SystemsHealthAgent log observation and bug-fix delegation, then "
-            "connect reports to reviewable improvement findings."
-        ),
-        "soul": _soul_context(),
     }
 
 
@@ -1029,14 +1477,35 @@ def _validate_llm_human_status(parsed: dict[str, Any], fallback: dict[str, Any])
     return status
 
 
+def _cached_tokens_from_usage(usage: dict[str, Any] | None) -> int | None:
+    if not isinstance(usage, dict):
+        return None
+    candidates: list[Any] = [
+        usage.get("cacheRead"),
+        usage.get("cache_read"),
+        usage.get("cached_tokens"),
+    ]
+    for key in ("prompt_tokens_details", "input_tokens_details"):
+        details = usage.get(key)
+        if isinstance(details, dict):
+            candidates.append(details.get("cached_tokens"))
+    for value in candidates:
+        if isinstance(value, bool):
+            continue
+        if isinstance(value, (int, float)) and value >= 0:
+            return int(value)
+    return None
+
+
 async def _compose_human_status_with_llm(
     *,
     wake_context: dict[str, Any],
     fallback_status: dict[str, Any],
 ) -> tuple[dict[str, Any], dict[str, Any]]:
+    cached_context = wake_context.get("cached_static_context") if isinstance(wake_context.get("cached_static_context"), dict) else {}
     payload = {
         "stable_context": {
-            "compact_soul": _compact_soul_context(),
+            "cached_static_context": cached_context,
             "output_contract": {
                 "required_fields": [
                     "state",
@@ -1073,13 +1542,31 @@ async def _compose_human_status_with_llm(
         max_tokens=int(os.getenv("MASTER_AGENT_STATUS_MAX_TOKENS", "1200")),
         timeout_s=int(os.getenv("MASTER_AGENT_STATUS_TIMEOUT_S", "60")),
         retries=int(os.getenv("MASTER_AGENT_STATUS_RETRIES", "1")),
+        prompt_cache_key=(
+            os.getenv("MASTER_AGENT_PROMPT_CACHE_KEY", "possible-os-master-agent-v1")
+            if os.getenv("MASTER_AGENT_PROMPT_CACHE_PASSTHROUGH", "").strip().lower() in {"1", "true", "yes", "on"}
+            else None
+        ),
+        prompt_cache_retention=(
+            os.getenv("MASTER_AGENT_PROMPT_CACHE_RETENTION", "24h")
+            if os.getenv("MASTER_AGENT_PROMPT_CACHE_PASSTHROUGH", "").strip().lower() in {"1", "true", "yes", "on"}
+            else None
+        ),
     )
+    cached_tokens = _cached_tokens_from_usage(result.usage)
     status = _validate_llm_human_status(result.parsed, fallback_status)
     metadata = {
         "used_llm": True,
         "model": result.model,
         "skill_path": str(MASTER_STATUS_SKILL_PATH),
         "raw_response": result.raw_response[:4000],
+        "usage": result.usage or {},
+        "cached_tokens": cached_tokens,
+        "prompt_cache": {
+            "strategy": "stable_prefix_first",
+            "cache_key": os.getenv("MASTER_AGENT_PROMPT_CACHE_KEY", "possible-os-master-agent-v1"),
+            "passthrough_enabled": os.getenv("MASTER_AGENT_PROMPT_CACHE_PASSTHROUGH", "").strip().lower() in {"1", "true", "yes", "on"},
+        },
     }
     return status, metadata
 
@@ -1442,6 +1929,8 @@ async def update_agent_config(
     *,
     heartbeat_enabled: bool | None = None,
     heartbeat_interval_seconds: int | None = None,
+    auto_execute_approved_lead_gen_email_enabled: bool | None = None,
+    auto_execute_approved_lead_gen_email_limit: int | None = None,
     actor: str = "operator",
 ) -> dict[str, Any]:
     async with AsyncSessionLocal() as session:
@@ -1460,6 +1949,15 @@ async def update_agent_config(
             current["heartbeat_interval_seconds"] = max(
                 60,
                 min(int(heartbeat_interval_seconds), 3600),
+            )
+        if auto_execute_approved_lead_gen_email_enabled is not None:
+            current["auto_execute_approved_lead_gen_email_enabled"] = bool(
+                auto_execute_approved_lead_gen_email_enabled
+            )
+        if auto_execute_approved_lead_gen_email_limit is not None:
+            current["auto_execute_approved_lead_gen_email_limit"] = max(
+                1,
+                min(int(auto_execute_approved_lead_gen_email_limit), 25),
             )
         row.agent_config = current
         await session.commit()
@@ -1822,7 +2320,19 @@ async def get_agent_task(task_id: str) -> dict[str, Any] | None:
         return task_to_dict(row) if row else None
 
 
-async def list_agent_events(*, task_id: str | None = None, limit: int = 100) -> list[dict[str, Any]]:
+async def get_agent_event(event_id: int) -> dict[str, Any] | None:
+    await ensure_agent_tables()
+    async with AsyncSessionLocal() as session:
+        row = await session.get(AgentTaskEventRow, event_id)
+        return event_to_dict(row) if row else None
+
+
+async def list_agent_events(
+    *,
+    task_id: str | None = None,
+    limit: int = 100,
+    include_payload: bool = False,
+) -> list[dict[str, Any]]:
     await ensure_agent_tables()
     limit = max(1, min(limit, 500))
     async with AsyncSessionLocal() as session:
@@ -1830,7 +2340,8 @@ async def list_agent_events(*, task_id: str | None = None, limit: int = 100) -> 
         if task_id:
             stmt = stmt.where(AgentTaskEventRow.task_id == task_id)
         rows = (await session.execute(stmt)).scalars().all()
-        return [event_to_dict(row) for row in rows]
+        serializer = event_to_dict if include_payload else event_summary_to_dict
+        return [serializer(row) for row in rows]
 
 
 async def list_agent_reports(*, task_id: str | None = None, limit: int = 100) -> list[dict[str, Any]]:
@@ -2416,6 +2927,14 @@ async def run_master_heartbeat(*, actor: str = "master-agent") -> dict[str, Any]
     human_status: dict[str, Any] = {}
     wake_context: dict[str, Any] = {}
     status_metadata: dict[str, Any] = {"used_llm": False}
+    auto_executed_lead_gen_sends: dict[str, Any] = {}
+    if agent_config.get("auto_execute_approved_lead_gen_email_enabled", False):
+        from app.services.action_execution import execute_approved_lead_gen_email_actions
+
+        auto_executed_lead_gen_sends = await execute_approved_lead_gen_email_actions(
+            actor=actor,
+            limit=int(agent_config.get("auto_execute_approved_lead_gen_email_limit") or 1),
+        )
     async with AsyncSessionLocal() as session:
         rows = (await session.execute(
             select(AgentTaskRow).where(AgentTaskRow.status.in_(list(ACTIVE_TASK_STATUSES)))
@@ -2491,7 +3010,10 @@ async def run_master_heartbeat(*, actor: str = "master-agent") -> dict[str, Any]
             active_goal=active_goal,
             recent_actions=recent_action_snapshots,
         )
-        wake_context["auto_delegated_task"] = auto_delegated_task or {}
+        volatile_wake_state = wake_context.setdefault("volatile_wake_state", {})
+        if isinstance(volatile_wake_state, dict):
+            volatile_wake_state["auto_delegated_task"] = auto_delegated_task or {}
+            volatile_wake_state["auto_executed_lead_gen_sends"] = auto_executed_lead_gen_sends or {}
         if agent_config.get("status_llm_enabled", True):
             try:
                 human_status, status_metadata = await _compose_human_status_with_llm(
@@ -2516,12 +3038,13 @@ async def run_master_heartbeat(*, actor: str = "master-agent") -> dict[str, Any]
                 "reasoning": "Status LLM is disabled in agent_config; using deterministic fallback.",
             }
             status_metadata = {"used_llm": False, "disabled": True}
-        wake_context["llm_call"] = {
-            "enabled": bool(agent_config.get("status_llm_enabled", True)),
-            "model": MASTER_STATUS_MODEL,
-            "skill_path": str(MASTER_STATUS_SKILL_PATH),
-            "status": "succeeded" if status_metadata.get("used_llm") else "fallback",
-        }
+        if isinstance(volatile_wake_state, dict):
+            volatile_wake_state["llm_call"] = {
+                "enabled": bool(agent_config.get("status_llm_enabled", True)),
+                "model": MASTER_STATUS_MODEL,
+                "skill_path": str(MASTER_STATUS_SKILL_PATH),
+                "status": "succeeded" if status_metadata.get("used_llm") else "fallback",
+            }
         session.add(AgentTaskEventRow(
             task_id=None,
             agent_id="master-agent",
@@ -2536,6 +3059,7 @@ async def run_master_heartbeat(*, actor: str = "master-agent") -> dict[str, Any]
                 "queue_analysis": queue_analysis,
                 "human_status": human_status,
                 "auto_delegated_task": auto_delegated_task or {},
+                "auto_executed_lead_gen_sends": auto_executed_lead_gen_sends or {},
                 "active_goal": active_goal or {},
             },
             metadata_json={
@@ -2560,6 +3084,7 @@ async def run_master_heartbeat(*, actor: str = "master-agent") -> dict[str, Any]
         "wake_context": wake_context,
         "status_llm": status_metadata,
         "auto_delegated_task": auto_delegated_task,
+        "auto_executed_lead_gen_sends": auto_executed_lead_gen_sends,
         "active_goal": active_goal,
         "soul": _soul_context(),
         "next_recommended_slice": (

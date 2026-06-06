@@ -14,6 +14,7 @@ from app.services.action_execution import (
     create_send_approved_lead_gen_draft_action,
     create_send_test_email_action,
     execute_action,
+    execute_approved_lead_gen_email_actions,
     get_action,
     list_actions,
 )
@@ -45,10 +46,23 @@ class TestEmailActionRequest(BaseModel):
 
 class EmailActionRequest(TestEmailActionRequest):
     mode: str = Field("test", max_length=32)
+    contact_id: str | None = Field(None, max_length=64)
+    batch_item_id: str | None = Field(None, max_length=64)
+    pif_id: str | None = Field(None, max_length=64)
+    firm_name: str | None = Field(None, max_length=255)
+    composer_experiment_key: str | None = None
+    composer_variant_key: str | None = None
+    skill_path: str | None = None
+    skill_sha256: str | None = None
 
 
 class ExecuteActionRequest(BaseModel):
     actor: str = Field("operator", max_length=128)
+
+
+class ExecuteApprovedLeadGenActionsRequest(BaseModel):
+    actor: str = Field("operator", max_length=128)
+    limit: int = Field(1, ge=1, le=25)
 
 
 @router.get("")
@@ -93,6 +107,19 @@ async def create_lead_gen_send_action(req: LeadGenDraftActionRequest, execute_no
         if execute_now:
             return await create_and_execute_send_approved_lead_gen_draft(**kwargs)
         return {"action": await create_send_approved_lead_gen_draft_action(**kwargs)}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"{type(exc).__name__}: {str(exc)[:500]}")
+
+
+@router.post("/lead-gen/execute-approved")
+async def execute_approved_lead_gen_actions(req: ExecuteApprovedLeadGenActionsRequest):
+    try:
+        return await execute_approved_lead_gen_email_actions(
+            actor=req.actor,
+            limit=req.limit,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:

@@ -6,7 +6,9 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from app.services.action_execution import create_and_execute_send_approved_lead_gen_draft
+from app.db import AsyncSessionLocal
+from app.db.models import FirmContactRow, LeadGenBatchItemRow
+from app.services.action_execution import create_send_email_action, execute_action
 from app.services.lead_gen_cybernetic import (
     approve_batch,
     classify_and_store_observation,
@@ -18,6 +20,7 @@ from app.services.lead_gen_cybernetic import (
     list_batches,
     set_daily_send_budget,
 )
+from app.services.lead_gen_email_agent import create_lead_gen_email_agent_slice
 from app.services.sequences.registry import DEFAULT_TEMPLATE_KEY
 
 
@@ -67,6 +70,15 @@ class SendBatchItemDraftRequest(BaseModel):
     skill_sha256: Optional[str] = None
 
 
+class LeadGenEmailAgentSliceRequest(BaseModel):
+    limit: int = Field(default=3, ge=1, le=10)
+    template_key: str = DEFAULT_TEMPLATE_KEY
+    created_by: str = Field("master-agent", max_length=128)
+    composer_variant_key: Optional[str] = None
+    approve_actions: bool = False
+    policy_check_first_action: bool = False
+
+
 @router.get("/api/lead-gen/policy/current")
 async def current_policy():
     row = await ensure_default_policy()
@@ -103,6 +115,26 @@ async def create_batch(req: CreateBatchRequest):
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/api/lead-gen/email-agent/slice")
+async def create_email_agent_slice(req: LeadGenEmailAgentSliceRequest):
+    try:
+        return await create_lead_gen_email_agent_slice(
+            limit=req.limit,
+            template_key=req.template_key,
+            created_by=req.created_by,
+            composer_variant_key=req.composer_variant_key,
+            approve_actions=req.approve_actions,
+            policy_check_first_action=req.policy_check_first_action,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"lead_gen_email_agent_slice_failed: {type(e).__name__}: {str(e)[:300]}",
+        )
 
 
 @router.get("/api/lead-gen/batches")
@@ -147,17 +179,30 @@ async def send_batch_item_preview_draft(
     req: SendBatchItemDraftRequest,
 ):
     try:
-        execution = await create_and_execute_send_approved_lead_gen_draft(
-            batch_item_id=batch_item_id,
+        async with AsyncSessionLocal() as session:
+            item = await session.get(LeadGenBatchItemRow, batch_item_id)
+            if not item:
+                raise ValueError("batch_item_not_found")
+            contact = await session.get(FirmContactRow, item.contact_id)
+            if not contact or not contact.email:
+                raise ValueError("contact_email_not_found")
+        action = await create_send_email_action(
+            mode="lead_gen",
+            to=contact.email,
             subject=req.subject,
             body=req.body,
             requested_by=req.sent_by,
             approved_by=req.sent_by,
+            contact_id=item.contact_id,
+            batch_item_id=batch_item_id,
+            pif_id=item.pif_id,
+            firm_name=item.firm_name,
             composer_experiment_key=req.composer_experiment_key,
             composer_variant_key=req.composer_variant_key,
             skill_path=req.skill_path,
             skill_sha256=req.skill_sha256,
         )
+        execution = await execute_action(action["id"], actor=req.sent_by)
         result = dict(execution.get("result") or {})
         result["agent_action"] = execution.get("action")
         result["agent_action_policy"] = execution.get("policy")

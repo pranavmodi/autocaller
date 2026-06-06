@@ -25,16 +25,18 @@ Important routes:
 | `GET` | `/api/lead-gen/policy/current` | active policy, weights, suppressions, daily send budget |
 | `PUT` | `/api/lead-gen/settings/daily-send-budget` | persist daily send budget on active policy |
 | `POST` | `/api/lead-gen/batches` | create a daily action plan batch |
+| `POST` | `/api/lead-gen/email-agent/slice` | create a no-send 3-contact email-agent slice with research evidence, composer drafts, and durable `send_email mode=lead_gen` actions |
 | `GET` | `/api/lead-gen/batches` | list batches |
 | `GET` | `/api/lead-gen/batches/{batch_id}` | get batch, items, optional observations |
 | `POST` | `/api/lead-gen/batches/{batch_id}/approve` | approve batch and optionally queue sequences |
-| `POST` | `/api/lead-gen/batch-items/{batch_item_id}/send-draft` | create and execute a durable approved-draft action, then send through the existing Zoho-backed batch-item path |
+| `POST` | `/api/lead-gen/batch-items/{batch_item_id}/send-draft` | create and execute a durable `send_email mode=lead_gen` action for the exact edited draft |
 | `POST` | `/api/lead-gen/observations/classify` | classify and store manual/API feedback |
 | `POST` | `/api/lead-gen/batches/{batch_id}/proposal` | create a human-reviewed learning proposal |
 | `GET` | `/api/actions` | list durable Possible OS action execution records |
 | `GET` | `/api/actions/{action_id}` | show one action and its event timeline |
 | `POST` | `/api/actions/{action_id}/policy-check` | run reusable action policy checks without execution |
 | `POST` | `/api/actions/{action_id}/execute` | execute one policy-approved action |
+| `POST` | `/api/actions/lead-gen/execute-approved` | execute already-approved `send_email mode=lead_gen` actions through the policy gate |
 | `POST` | `/api/actions/lead-gen/send-approved-draft` | create, and optionally execute, a high-risk approved lead-gen email action |
 | `POST` | `/api/inbound-email/poll` | poll Zoho IMAP and create reply observations/actions |
 | `GET` | `/api/inbound-email` | list stored inbound messages |
@@ -57,6 +59,8 @@ Primary commands:
 ```bash
 bin/autocaller lead-gen policy
 bin/autocaller lead-gen recommend --template possible_minds_dynamic --limit 50
+bin/autocaller lead-gen email-agent-slice --limit 3 --approval-ready
+bin/autocaller lead-gen email-agent-slice --limit 3 --approve-actions --policy-check-first-action --json
 bin/autocaller lead-gen batches
 bin/autocaller lead-gen show <batch_id> --observations
 bin/autocaller lead-gen approve <batch_id>
@@ -67,7 +71,9 @@ bin/autocaller actions list --type send_approved_lead_gen_draft
 bin/autocaller actions show <action_id>
 bin/autocaller actions policy-check <action_id>
 bin/autocaller actions execute <action_id>
+bin/autocaller actions execute-approved-lead-gen --limit 1 --actor master-agent
 bin/autocaller actions send-approved-lead-gen-draft --item <batch_item_id> --subject "..." --body "..."
+bin/autocaller actions send-email --mode lead_gen --to <email> --subject "..." --body "..." --contact <contact_id> --item <batch_item_id> --no-execute
 bin/autocaller inbound poll --limit 50 --classify
 bin/autocaller todos list --area lead-gen
 bin/autocaller todos add "Review new workflow idea" --area lead-gen --source-url https://...
@@ -95,6 +101,9 @@ It currently supports:
 - manual observation entry;
 - proposal generation;
 - row-level score component visibility.
+- creating a 3-contact approval-ready email-agent slice;
+- opening stored `agent_draft` drafts directly in the Lead Gen modal;
+- sending approved modal drafts through durable `send_email mode=lead_gen`.
 
 Global operator actions are in
 `frontend/components/OperatorNotificationPopup.tsx`. Despite the legacy file
@@ -133,9 +142,127 @@ Responsibilities:
 
 File: `app/services/action_execution.py`
 
-The first horizontal action-execution slice wraps lead-gen email sending.
+Durable action execution wraps test email and lead-gen email sending.
 
-Current action type:
+Current email action modes:
+
+- `send_email mode=test`
+- `send_email mode=lead_gen`
+- legacy `send_approved_lead_gen_draft`
+
+For `send_email mode=lead_gen`, the action input includes the exact approved
+recipient, subject, body, contact id, batch item id, firm metadata, composer
+variant metadata, and subject/body hashes.
+
+Policy checks verify:
+
+- action status allows execution;
+- human approval metadata exists;
+- recipient matches the approval;
+- subject/body hashes match the approved copy;
+- recipient is valid;
+- contact exists;
+- contact email matches the recipient;
+- batch item exists;
+- batch item is not already started;
+- selection suppressions are empty;
+- consult link is present in the body;
+- Zoho API transport is configured;
+- active daily budget is readable and greater than zero;
+- no prior successful `lead_gen` action exists for the same batch item;
+- no prior successful `lead_gen` action exists for the same recipient.
+
+Execution sends through `_send_email(..., transport="zoho_api")`, then writes
+send metadata back onto both the durable action result and
+`lead_gen_batch_items.reason_json`.
+
+The durable action result includes:
+
+- `sent_to`;
+- `sent_subject`;
+- `sent_message_id`;
+- `sent_at`;
+- `message_type`;
+- `transport`;
+- `email_log_id`;
+- `email_log_status`;
+- an `email_log` snapshot with recipient, subject, message type, transport,
+  provider message id, status, error, and timestamp.
+
+The lead-gen batch item reason JSON includes:
+
+- `last_sent_at`;
+- `last_sent_message_id`;
+- `last_sent_email_log_id`;
+- `last_sent_subject`;
+- `last_sent_mode = lead_gen`;
+- `last_sent_transport`;
+- `last_sent_status`;
+- composer skill metadata when present.
+
+Heartbeat includes compact recent action summaries in its wake context so the
+master agent can see whether recent durable sends actually linked to an email
+log row and transport result.
+
+The master agent can send lead-gen email only through
+`execute_approved_lead_gen_email_actions`. That function drains existing
+`agent_actions` rows where:
+
+- `action_type = send_email`;
+- `input_json.mode = lead_gen`;
+- `entity_type = lead_gen_email`;
+- `status = approved`.
+
+Each candidate still runs through `execute_action`, which re-checks policy
+before any email leaves the system. The master agent cannot create recipients,
+modify drafts, or bypass approval hashes in this path.
+
+Heartbeat uses this executor only when
+`agent_config.auto_execute_approved_lead_gen_email_enabled` is true. The per-run
+limit is `agent_config.auto_execute_approved_lead_gen_email_limit`, clamped to
+1-25. The same settings are exposed by:
+
+```bash
+bin/autocaller agents config \
+  --auto-send-approved-lead-gen \
+  --auto-send-limit 1
+```
+
+### Email-Agent Slice
+
+File: `app/services/lead_gen_email_agent.py`
+
+This is the first horizontal slice for the master agent to create lead-gen email
+work without sending email.
+
+Flow:
+
+1. `create_lead_gen_email_agent_slice(limit=3)` creates a normal lead-gen
+   recommendation batch.
+2. Contact selection reuses the deterministic recommender and only targets
+   founders, CEOs, COOs, managing partners, partners, operations leaders, or
+   equivalent senior operators.
+3. `research_contact_context` creates a bounded internal evidence packet from:
+   - `firm_contacts` name/title/email/source/LinkedIn;
+   - `patients` firm website/state/metadata where available;
+   - email quality;
+   - selection reason, score, features, and suppressions.
+4. `compose_lead_email` calls
+   `app/skills/possible-minds-lead-email-composer/SKILL.md` through the
+   OpenClaw gateway with contact, firm, history, research, selection evidence,
+   policy, proof points, and consult-signature constraints.
+5. The generated subject, body, rationale, angle, CTA, risk flags, composer
+   variant, skill path, and skill hash are stored in
+   `lead_gen_batch_items.reason_json.agent_draft`.
+6. A durable `send_email mode=lead_gen` action is created for each draft.
+   Default status is `waiting_for_approval`; `--approve-actions` creates exact
+   approved no-send actions useful for policy-check validation.
+7. A `lead_gen_email_agent_slice_created` product trace records the batch,
+   draft count, action ids, and optional first policy-check result.
+
+The route and CLI intentionally do not execute email sends.
+
+Legacy action type:
 
 - `send_approved_lead_gen_draft`
 

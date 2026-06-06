@@ -12,6 +12,7 @@ from app.services.master_agent import (
     create_research_scout_task,
     create_systems_health_agent_task,
     get_agent_config,
+    get_agent_event,
     get_agent_task,
     get_last_heartbeat_result,
     list_agent_capabilities,
@@ -82,6 +83,8 @@ class AgentReportRequest(BaseModel):
 class AgentConfigRequest(BaseModel):
     heartbeat_enabled: bool | None = None
     heartbeat_interval_seconds: int | None = Field(None, ge=60, le=3600)
+    auto_execute_approved_lead_gen_email_enabled: bool | None = None
+    auto_execute_approved_lead_gen_email_limit: int | None = Field(None, ge=1, le=25)
     actor: str = Field("operator", max_length=128)
 
 
@@ -102,6 +105,8 @@ async def agents_status():
     return {
         "heartbeat_enabled": config["heartbeat_enabled"],
         "heartbeat_interval_seconds": config["heartbeat_interval_seconds"],
+        "auto_execute_approved_lead_gen_email_enabled": config["auto_execute_approved_lead_gen_email_enabled"],
+        "auto_execute_approved_lead_gen_email_limit": config["auto_execute_approved_lead_gen_email_limit"],
         "last_heartbeat": await get_last_heartbeat_result(),
     }
 
@@ -112,6 +117,8 @@ async def patch_agent_config(req: AgentConfigRequest):
         "config": await update_agent_config(
             heartbeat_enabled=req.heartbeat_enabled,
             heartbeat_interval_seconds=req.heartbeat_interval_seconds,
+            auto_execute_approved_lead_gen_email_enabled=req.auto_execute_approved_lead_gen_email_enabled,
+            auto_execute_approved_lead_gen_email_limit=req.auto_execute_approved_lead_gen_email_limit,
             actor=req.actor,
         ),
     }
@@ -195,7 +202,7 @@ async def task(task_id: str):
         raise HTTPException(status_code=404, detail="agent_task_not_found")
     return {
         "task": found,
-        "events": await list_agent_events(task_id=task_id, limit=100),
+        "events": await list_agent_events(task_id=task_id, limit=100, include_payload=True),
         "reports": await list_agent_reports(task_id=task_id, limit=100),
     }
 
@@ -243,6 +250,14 @@ async def events(
     limit: int = Query(100, ge=1, le=500),
 ):
     return {"events": await list_agent_events(task_id=task_id, limit=limit)}
+
+
+@router.get("/events/{event_id}")
+async def event_detail(event_id: int):
+    found = await get_agent_event(event_id)
+    if not found:
+        raise HTTPException(status_code=404, detail="agent_event_not_found")
+    return {"event": found}
 
 
 @router.get("/reports")

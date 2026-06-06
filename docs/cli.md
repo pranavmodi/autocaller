@@ -147,16 +147,19 @@ Every command accepts `--help`. Exit code is `0` on success, `1` on any error
 | `todos add <title> [--area=lead-gen --status=not_started --body=... --source-url=...]` | Add a DB-backed todo. |
 | `todos update <id> [--title=... --status=done --body=... --clear-source-url]` | Edit a DB-backed todo. |
 | `todos delete <id>` | Delete a DB-backed todo. |
+| `lead-gen email-agent-slice [--limit=3 --composer-variant=... --approval-ready --json]` | Select senior decision-maker contacts, collect bounded internal evidence, compose approval-ready drafts with the Possible Minds email composer skill, and create no-send durable `send_email mode=lead_gen` actions. |
 | `actions list [--status=approved --type=send_approved_lead_gen_draft --json]` | List durable Possible OS action execution records. |
 | `actions show <action_id> [--json]` | Show one action with its append-only event timeline. |
 | `actions policy-check <action_id> [--actor=operator --json]` | Run the reusable policy checker without executing the action. |
 | `actions execute <action_id> [--actor=operator --json]` | Execute one policy-approved action through its narrow executor. |
+| `actions execute-approved-lead-gen [--limit=1 --actor=operator --json]` | Execute already-approved `send_email mode=lead_gen` actions through the durable policy gate. This is the narrow action the master agent may use when approved-send automation is enabled. Successful sends link the action result to the `email_logs` row, transport, message id, and log status. |
 | `actions send-approved-lead-gen-draft --item=<batch_item_id> --subject=... --body=... [--approved-by=operator] [--no-execute]` | Create and optionally execute the first high-risk action slice: an exact approved lead-gen email draft sent through the existing Zoho-backed lead-gen path. |
-| `actions send-email --mode=test --to=<email> --subject=... --body=... [--approved-by=operator --from=... --no-execute --json]` | Create, policy-check, and optionally execute a regular durable email action. V1 supports `mode=test`; future modes should include lead-gen, reply, and transactional. |
+| `actions send-email --mode=test --to=<email> --subject=... --body=... [--approved-by=operator --from=... --no-execute --json]` | Create, policy-check, and optionally execute a regular durable test email action. |
+| `actions send-email --mode=lead_gen --to=<email> --subject=... --body=... --contact=<contact_id> --item=<batch_item_id> [--pif=<pif_id> --firm=... --approved-by=operator --no-execute --json]` | Create, policy-check, and optionally execute an exact approved lead-gen email action. Policy verifies recipient/contact match, approval hashes, consult link, Zoho transport, no suppression, and no prior successful send for the same item/recipient. |
 | `actions send-test-email --to=<email> [--subject=... --body=... --approved-by=operator --from=... --no-execute --json]` | Convenience alias for `actions send-email --mode=test`. Use the regular email action family for master-agent execution-path tests instead of free-form email shell commands. |
 | `agents status [--json]` | Show the Possible OS master-agent heartbeat configuration and the last heartbeat result in the current backend process. |
-| `agents config [--interval-seconds=300] [--enabled/--disabled] [--json]` | Update the persisted master-agent heartbeat settings. The running loop reads this setting every tick, so changing the period does not require a backend restart. |
-| `agents heartbeat [--json]` | Run one master-agent heartbeat tick immediately. V1 reads `soul.md` as protected read-only context, records traces, checks active subagent tasks, and marks stale workers. |
+| `agents config [--interval-seconds=300] [--enabled/--disabled] [--auto-send-approved-lead-gen\|--no-auto-send-approved-lead-gen --auto-send-limit=1 --json]` | Update persisted master-agent heartbeat settings. The approved-send toggle lets heartbeat execute exact approved lead-gen email actions through the policy gate. |
+| `agents heartbeat [--json]` | Run one master-agent heartbeat tick immediately. V1 reads `soul.md` as protected read-only context, records traces, checks active subagent tasks, marks stale workers, and, only when enabled, executes already-approved lead-gen email actions. |
 | `agents list [--status=all --agent=ResearchScoutAgent --limit=100 --json]` | List durable master/subagent task packets. |
 | `agents show <task_id> [--json]` | Show one subagent task with recent lifecycle events and reports. |
 | `agents create --agent=... --title=... --objective=... [--priority=50 --risk=low]` | Create a minimal durable subagent task packet. |
@@ -219,6 +222,21 @@ center item generates the actual email draft and rationale, and the email sends
 only after the operator reviews/edits/clicks send. The daily send budget is
 persisted on the active lead-gen policy and can be saved from the Lead Gen UI
 before generating today's list.
+
+The smallest master-agent lead-gen slice is:
+
+```bash
+bin/autocaller lead-gen email-agent-slice --limit 3 --approval-ready
+```
+
+That command creates a normal lead-gen batch, stores research evidence and an
+`agent_draft` on each selected batch item, and creates durable
+`send_email mode=lead_gen` actions in `waiting_for_approval`. It does not send
+email. For no-send policy validation of an exact approved action, run:
+
+```bash
+bin/autocaller lead-gen email-agent-slice --limit 3 --approve-actions --policy-check-first-action --json
+```
 
 ---
 

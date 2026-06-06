@@ -374,11 +374,17 @@ async def compose_lead_email(
     step_num: int,
     model: str | None = None,
     composer_variant_key: str | None = None,
+    research_evidence: dict[str, Any] | None = None,
+    selection_evidence: dict[str, Any] | None = None,
 ) -> LeadEmailComposition:
     payload = await build_lead_email_context(
         contact=contact,
         firm_name=firm_name,
     )
+    if research_evidence:
+        payload["research_evidence"] = research_evidence
+    if selection_evidence:
+        payload["selection_evidence"] = selection_evidence
     env_skill_path = os.getenv("LEAD_EMAIL_COMPOSER_SKILL_PATH", "").strip()
     if env_skill_path:
         skill_path = env_skill_path
@@ -405,6 +411,8 @@ async def compose_lead_email(
         "contact_name": contact.full_name,
         "pif_id": contact.pif_id,
         "sequence": _sequence_snapshot(sequence, step_num=step_num),
+        "research_evidence": research_evidence or {},
+        "selection_evidence": selection_evidence or {},
         "skill_path": skill_path,
         "skill_sha256": skill_sha256,
         "composer_experiment_key": composer_experiment_key,

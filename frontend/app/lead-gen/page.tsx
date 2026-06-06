@@ -22,6 +22,7 @@ import {
   approveLeadGenBatch,
   classifyLeadGenObservation,
   createLeadGenBatch,
+  createLeadGenEmailAgentSlice,
   createLeadGenProposal,
   getContactDetail,
   getComposerVariants,
@@ -131,6 +132,19 @@ function LeadGenPageContent() {
       setBatchId(data.batch.id);
     },
   });
+  const createAgentSlice = useMutation({
+    mutationFn: () => createLeadGenEmailAgentSlice({
+      limit: 3,
+      template_key: DEFAULT_TEMPLATE,
+      created_by: "operator",
+      approve_actions: false,
+      policy_check_first_action: false,
+    }),
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ["lead-gen-batches"] });
+      setBatchId(data.batch.id);
+    },
+  });
 
   return (
     <div className="mx-auto min-w-0 max-w-[1500px] space-y-6">
@@ -166,6 +180,34 @@ function LeadGenPageContent() {
             isGenerating={createToday.isPending}
             generateError={createToday.isError}
           />
+          <section className="rounded-xl border border-neutral-200 bg-white p-4">
+            <div className="text-xs font-semibold uppercase tracking-wider text-neutral-400">
+              Agent slice
+            </div>
+            <p className="mt-2 text-sm leading-6 text-neutral-600">
+              Selects 3 senior decision-maker contacts, adds internal evidence,
+              composes drafts with the email skill, and creates approval-ready
+              send actions. No email is sent.
+            </p>
+            <button
+              type="button"
+              onClick={() => createAgentSlice.mutate()}
+              disabled={createAgentSlice.isPending}
+              className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-md border border-neutral-200 px-3 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50 disabled:opacity-50"
+            >
+              {createAgentSlice.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Sparkles className="h-4 w-4" />
+              )}
+              Create 3 approval-ready drafts
+            </button>
+            {createAgentSlice.isError && (
+              <div className="mt-2 text-xs text-red-600">
+                Could not create the agent slice.
+              </div>
+            )}
+          </section>
         </aside>
         <main className="col-span-12 lg:col-span-8 xl:col-span-9">
           {batchId ? (
@@ -500,7 +542,7 @@ function BatchDetail({
     [activeComposerVariants, selectedComposerVariantKey],
   );
   const completedDraftCount = previewableItems.filter(
-    (item) => draftStatuses[item.id] === "completed",
+    (item) => draftStatuses[item.id] === "completed" || Boolean(storedAgentDraftStep(item)),
   ).length;
   const requestedPreviewKey = [
     batchId,
@@ -581,7 +623,7 @@ function BatchDetail({
     data.items.some((item) => item.approval_status === "approved" && canQueueItem(item));
   const generateAllDrafts = async () => {
     const remaining = previewableItems.filter(
-      (item) => !isEmailSent(item) && draftStatuses[item.id] !== "completed",
+      (item) => !isEmailSent(item) && !storedAgentDraftStep(item) && draftStatuses[item.id] !== "completed",
     );
     if (remaining.length === 0) return;
     setIsGeneratingAllDrafts(true);
@@ -824,6 +866,7 @@ function DailyActionPlan({
               "grid min-w-0 gap-3 px-4 py-3 text-sm lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1.35fr)_minmax(180px,0.9fr)_minmax(130px,auto)]",
               sentItemIds.has(item.id) && "bg-sky-50",
               !sentItemIds.has(item.id) && draftStatuses[item.id] === "completed" && "bg-emerald-50",
+              !sentItemIds.has(item.id) && storedAgentDraftStep(item) && "bg-emerald-50",
               draftStatuses[item.id] === "generating" && "bg-amber-50",
               draftStatuses[item.id] === "failed" && "bg-red-50",
             )}
@@ -869,7 +912,7 @@ function DailyActionPlan({
                   {reasonValue(item, "last_sent_subject")}
                 </div>
               )}
-              {!isEmailSent(item) && draftStatuses[item.id] === "completed" && (
+              {!isEmailSent(item) && (draftStatuses[item.id] === "completed" || storedAgentDraftStep(item)) && (
                 <div className="mt-2 inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-800">
                   <CheckCircle2 className="h-3 w-3" />
                   Draft generated
@@ -1093,6 +1136,36 @@ function reasonText(item: LeadGenBatchItem) {
   return reasonValue(item, "reason") || "Selected by the daily lead-gen planner.";
 }
 
+function objectValue(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function storedAgentDraftStep(item: LeadGenBatchItem): RenderedSequenceStep | null {
+  const draft = objectValue(item.reason?.agent_draft);
+  if (!draft) return null;
+  const subject = typeof draft.subject === "string" ? draft.subject : "";
+  const body = typeof draft.body === "string" ? draft.body : "";
+  if (!subject.trim() || !body.trim()) return null;
+  return {
+    step: 1,
+    subject,
+    body,
+    message_type: "dynamic_lead_email",
+    reasoning: typeof draft.rationale === "string" ? draft.rationale : null,
+    angle: typeof draft.angle === "string" ? draft.angle : null,
+    cta: typeof draft.cta === "string" ? draft.cta : null,
+    blog_link_used: typeof draft.blog_link_used === "string" ? draft.blog_link_used : null,
+    composer_experiment_key: typeof draft.composer_experiment_key === "string" ? draft.composer_experiment_key : null,
+    composer_variant_key: typeof draft.composer_variant_key === "string" ? draft.composer_variant_key : null,
+    skill_path: typeof draft.skill_path === "string" ? draft.skill_path : null,
+    skill_sha256: typeof draft.skill_sha256 === "string" ? draft.skill_sha256 : null,
+    requires_human_review: true,
+    risk_flags: Array.isArray(draft.risk_flags) ? draft.risk_flags.map(String) : [],
+  };
+}
+
 function PreviewModal({
   item,
   composerVariantKey,
@@ -1105,6 +1178,7 @@ function PreviewModal({
   const qc = useQueryClient();
   const isDynamic = isDynamicComposer(item.template_key);
   const alreadySent = isEmailSent(item);
+  const storedDraft = useMemo(() => storedAgentDraftStep(item), [item]);
   const canSendDraft = canSendFromPreview(item);
   const [draftSubject, setDraftSubject] = useState("");
   const [draftBody, setDraftBody] = useState("");
@@ -1113,22 +1187,23 @@ function PreviewModal({
   const q = useQuery({
     queryKey: sequencePreviewQueryKey(item, composerVariantKey),
     queryFn: () => previewSequence(item.contact_id, item.template_key, sequencePreviewOptions(item, composerVariantKey)),
-    enabled: !alreadySent,
+    enabled: !alreadySent && !storedDraft,
     staleTime: 5 * 60_000,
   });
   const detail = useQuery({
     queryKey: contactDetailQueryKey(item),
     queryFn: () => getContactDetail(item.contact_id, item.template_key),
-    enabled: !alreadySent,
+    enabled: !alreadySent && !storedDraft,
     staleTime: 5 * 60_000,
   });
   const nextStep = useMemo(() => {
+    if (storedDraft) return storedDraft;
     const steps = q.data ?? [];
     const sequence = detail.data?.sequence;
     if (sequence && sequence.current_step >= sequence.steps_total) return undefined;
     const nextStepNumber = sequence ? sequence.current_step + 1 : 1;
     return steps.find((step) => step.step === nextStepNumber) ?? steps[0];
-  }, [detail.data?.sequence, q.data]);
+  }, [detail.data?.sequence, q.data, storedDraft]);
   useEffect(() => {
     if (nextStep) {
       setDraftSubject(nextStep.subject);
@@ -1265,7 +1340,7 @@ function PreviewModal({
           )}
         </div>
         <div className="flex flex-wrap justify-end gap-2 border-t border-neutral-100 px-5 py-3">
-          {nextStep && (
+          {nextStep && !storedDraft && (
             <button
               type="button"
               onClick={regeneratePreview}

@@ -45,6 +45,11 @@ state. Use `bin/autocaller agents capabilities` for the capability registry and
 `bin/autocaller agents goals` for durable adaptive goals.
 Use `bin/autocaller agents run-research-scout` to execute one queued
 ResearchScoutAgent task and write a durable learning note/report.
+Heartbeat can execute already-approved lead-gen email actions only when enabled
+with `bin/autocaller agents config --auto-send-approved-lead-gen
+--auto-send-limit=<N>`. This does not let the agent create or alter email
+content; it only drains exact approved `send_email mode=lead_gen` actions
+through the durable policy gate.
 
 Possible OS also has a first durable action-execution slice. Use
 `bin/autocaller actions list`, `actions show <id>`, `actions policy-check <id>`,
@@ -54,11 +59,32 @@ high-risk supported action is `send_approved_lead_gen_draft`, exposed as
 --subject=... --body=...`; it creates an exact approved draft action, checks
 policy, and sends through the existing Zoho-backed lead-gen path. Regular
 durable email actions use `bin/autocaller actions send-email --mode=test
---to=<email> --subject=... --body=...`; V1 only supports `mode=test`, and
-`actions send-test-email` is a convenience alias. These commands create exact
-approved email actions and execute only through the same policy/executor path.
-Do not send email from free-form shell commands or LLM-generated
-recipient/body payloads.
+--to=<email> --subject=... --body=...`; `actions send-test-email` is a
+convenience alias. Lead-gen email actions use
+`bin/autocaller actions send-email --mode=lead_gen --contact=<contact_id>
+--item=<batch_item_id> --to=<email> --subject=... --body=... --no-execute`.
+Policy verifies the exact approval hashes, contact/recipient match, consult
+link, Zoho transport, no selection suppressions, and no prior successful send
+for the same item/recipient.
+`bin/autocaller actions execute-approved-lead-gen --limit=<N>
+--actor=master-agent` executes only already-approved lead-gen email actions via
+that same policy gate. This is the action heartbeat uses when approved-send
+automation is enabled. Successful `send_email` executions write send evidence
+onto the action's `execution_result`: recipient, subject, provider message id,
+transport, linked `email_logs.id`, email log status, and timestamp. Heartbeat
+recent-action summaries expose the same evidence so the master agent can see
+what actually happened.
+
+For the current master-agent lead-generation slice, use
+`bin/autocaller lead-gen email-agent-slice --limit 3 --approval-ready`.
+It selects senior decision-maker contacts from `firm_contacts`, collects
+bounded internal evidence, composes drafts with
+`app/skills/possible-minds-lead-email-composer/SKILL.md`, stores each
+`agent_draft` on the lead-gen batch item, and creates no-send durable
+`send_email mode=lead_gen` actions. Add `--approve-actions
+--policy-check-first-action --json` only when you need a no-send policy-check
+artifact for an exact approved draft. Do not send email from free-form shell
+commands or LLM-generated recipient/body payloads.
 
 ---
 

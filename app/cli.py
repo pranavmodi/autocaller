@@ -2931,6 +2931,27 @@ def actions_execute(
     )
 
 
+@actions_app.command("execute-approved-lead-gen")
+def actions_execute_approved_lead_gen(
+    limit: int = typer.Option(1, "--limit", "-n", min=1, max=25, help="Maximum approved lead-gen email actions to execute."),
+    actor: str = typer.Option("operator", "--actor", help="Actor recorded on action events/traces."),
+    json_output: bool = typer.Option(False, "--json"),
+):
+    """Execute approved lead-gen email actions through the durable policy gate."""
+    data = _post(
+        "/api/actions/lead-gen/execute-approved",
+        json_body={"actor": actor, "limit": limit},
+        timeout=180.0,
+    )
+    if json_output:
+        console.print_json(data=data)
+        return
+    console.print(
+        f"attempted={data.get('attempted')} executed={data.get('executed')} "
+        f"candidates={', '.join(data.get('candidate_action_ids') or []) or '-'}"
+    )
+
+
 @actions_app.command("send-approved-lead-gen-draft")
 def actions_send_approved_lead_gen_draft(
     batch_item_id: str = typer.Option(..., "--item", help="Lead-gen batch item id."),
@@ -3007,9 +3028,13 @@ def actions_send_email(
     to: str = typer.Option(..., "--to", help="Approved recipient."),
     subject: str = typer.Option(..., "--subject", help="Approved subject."),
     body: str = typer.Option(..., "--body", help="Approved body."),
-    mode: str = typer.Option("test", "--mode", help="Email mode. Current supported value: test."),
+    mode: str = typer.Option("test", "--mode", help="Email mode: test or lead_gen."),
     approved_by: str = typer.Option("operator", "--approved-by"),
     from_addr: str = typer.Option("", "--from", help="Optional configured From override."),
+    contact_id: str = typer.Option("", "--contact", help="Lead-gen contact id for --mode=lead_gen."),
+    batch_item_id: str = typer.Option("", "--item", help="Lead-gen batch item id for --mode=lead_gen."),
+    pif_id: str = typer.Option("", "--pif", help="Lead-gen firm pif_id for --mode=lead_gen."),
+    firm_name: str = typer.Option("", "--firm", help="Lead-gen firm name for --mode=lead_gen."),
     execute_now: bool = typer.Option(True, "--execute/--no-execute", help="Execute immediately after creating the action."),
     json_output: bool = typer.Option(False, "--json"),
 ):
@@ -3024,6 +3049,10 @@ def actions_send_email(
             "requested_by": approved_by,
             "approved_by": approved_by,
             "from_addr": from_addr or None,
+            "contact_id": contact_id or None,
+            "batch_item_id": batch_item_id or None,
+            "pif_id": pif_id or None,
+            "firm_name": firm_name or None,
         },
         timeout=120.0,
     )
@@ -3101,6 +3130,18 @@ def agents_config(
         "--enabled/--disabled",
         help="Enable or disable the master heartbeat loop.",
     ),
+    auto_send_approved_lead_gen: Optional[bool] = typer.Option(
+        None,
+        "--auto-send-approved-lead-gen/--no-auto-send-approved-lead-gen",
+        help="Allow heartbeat to execute already-approved lead-gen email actions through policy checks.",
+    ),
+    auto_send_limit: Optional[int] = typer.Option(
+        None,
+        "--auto-send-limit",
+        min=1,
+        max=25,
+        help="Maximum approved lead-gen email actions heartbeat may execute per run.",
+    ),
     json_output: bool = typer.Option(False, "--json", help="Print raw JSON."),
 ):
     """Update master-agent heartbeat settings without restarting the backend."""
@@ -3109,6 +3150,10 @@ def agents_config(
         payload["heartbeat_interval_seconds"] = interval_seconds
     if enabled is not None:
         payload["heartbeat_enabled"] = enabled
+    if auto_send_approved_lead_gen is not None:
+        payload["auto_execute_approved_lead_gen_email_enabled"] = auto_send_approved_lead_gen
+    if auto_send_limit is not None:
+        payload["auto_execute_approved_lead_gen_email_limit"] = auto_send_limit
     if len(payload) == 1:
         data = _get("/api/agents/status")
         if json_output:
@@ -3116,6 +3161,14 @@ def agents_config(
             return
         console.print(f"heartbeat_enabled: {data.get('heartbeat_enabled')}")
         console.print(f"heartbeat_interval_seconds: {data.get('heartbeat_interval_seconds')}")
+        console.print(
+            "auto_execute_approved_lead_gen_email_enabled: "
+            f"{data.get('auto_execute_approved_lead_gen_email_enabled')}"
+        )
+        console.print(
+            "auto_execute_approved_lead_gen_email_limit: "
+            f"{data.get('auto_execute_approved_lead_gen_email_limit')}"
+        )
         return
     data = _patch("/api/agents/config", json_body=payload)
     if json_output:
@@ -3125,6 +3178,14 @@ def agents_config(
     console.print("[green]updated master-agent config[/green]")
     console.print(f"heartbeat_enabled: {config.get('heartbeat_enabled')}")
     console.print(f"heartbeat_interval_seconds: {config.get('heartbeat_interval_seconds')}")
+    console.print(
+        "auto_execute_approved_lead_gen_email_enabled: "
+        f"{config.get('auto_execute_approved_lead_gen_email_enabled')}"
+    )
+    console.print(
+        "auto_execute_approved_lead_gen_email_limit: "
+        f"{config.get('auto_execute_approved_lead_gen_email_limit')}"
+    )
 
 
 @agents_app.command("list")
@@ -3488,6 +3549,62 @@ def lead_gen_recommend(
         f"({len(items)} item(s), template={batch['template_key']})"
     )
     _print_lead_gen_items(items)
+
+
+@lead_gen_app.command("email-agent-slice")
+def lead_gen_email_agent_slice(
+    limit: int = typer.Option(3, "--limit", "-n", min=1, max=10, help="Number of decision-maker contacts to draft."),
+    template_key: str = typer.Option(
+        "possible_minds_dynamic",
+        "--template-key",
+        "--template",
+        help="Composer template key.",
+    ),
+    created_by: str = typer.Option("master-agent", "--created-by"),
+    composer_variant_key: str = typer.Option("", "--composer-variant", help="Optional composer skill variant key."),
+    approve_actions: bool = typer.Option(
+        False,
+        "--approve-actions/--approval-ready",
+        help="Create exact approved actions for no-send policy checks. Default leaves actions waiting for approval.",
+    ),
+    policy_check_first_action: bool = typer.Option(
+        False,
+        "--policy-check-first-action",
+        help="Policy-check the first created action without executing it.",
+    ),
+    json_output: bool = typer.Option(False, "--json", help="Print raw JSON."),
+):
+    """Create a no-send agent slice: select contacts, research context, compose drafts, create actions."""
+    data = _post(
+        "/api/lead-gen/email-agent/slice",
+        json_body={
+            "limit": limit,
+            "template_key": template_key,
+            "created_by": created_by,
+            "composer_variant_key": composer_variant_key or None,
+            "approve_actions": approve_actions,
+            "policy_check_first_action": policy_check_first_action,
+        },
+        timeout=240.0,
+    )
+    if json_output:
+        console.print_json(data=data)
+        return
+    batch = data.get("batch") or {}
+    drafts = data.get("drafts") or []
+    console.print(
+        f"[green]Created lead-gen email agent slice[/green] {batch.get('id')} "
+        f"({len(drafts)} draft(s), no_email_sent={data.get('no_email_sent')})"
+    )
+    for draft in drafts:
+        console.print(
+            f"- {draft.get('contact_name') or draft.get('firm_name')} "
+            f"<{draft.get('contact_email')}> action={draft.get('action_id')} "
+            f"status={draft.get('action_status')} subject={draft.get('subject')}"
+        )
+    if data.get("first_policy"):
+        policy = data["first_policy"]
+        console.print(f"first_policy allowed={policy.get('allowed')} reason={policy.get('reason')}")
 
 
 @lead_gen_app.command("batches")

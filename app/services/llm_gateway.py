@@ -32,6 +32,7 @@ class GatewayJSONResult:
     parsed: dict[str, Any]
     raw_response: str
     model: str
+    usage: dict[str, Any] | None = None
 
 
 def gateway_token() -> str:
@@ -119,6 +120,8 @@ async def call_skill_json(
     timeout_s: int | None = None,
     max_tokens: int | None = None,
     retries: int | None = None,
+    prompt_cache_key: str | None = None,
+    prompt_cache_retention: str | None = None,
 ) -> GatewayJSONResult:
     """Call OpenClaw gateway with SKILL.md as system prompt and parse JSON."""
     skill = load_skill(skill_path)
@@ -135,6 +138,10 @@ async def call_skill_json(
         ],
         "max_tokens": token_limit,
     }
+    if prompt_cache_key:
+        body["prompt_cache_key"] = prompt_cache_key
+    if prompt_cache_retention:
+        body["prompt_cache_retention"] = prompt_cache_retention
 
     last_error: Exception | None = None
     for attempt in range(1, attempts + 1):
@@ -161,7 +168,8 @@ async def call_skill_json(
                 raise LLMGatewayError("gateway returned empty content")
             parsed = extract_json(content)
             require_fields(parsed, required_fields)
-            return GatewayJSONResult(parsed=parsed, raw_response=content, model=model_id)
+            usage = data.get("usage") if isinstance(data.get("usage"), dict) else None
+            return GatewayJSONResult(parsed=parsed, raw_response=content, model=model_id, usage=usage)
         except (httpx.HTTPStatusError, httpx.ReadTimeout, httpx.ConnectError, httpx.RemoteProtocolError, LLMGatewayError) as e:
             last_error = e
             logger.warning("gateway skill call attempt %d failed: %s", attempt, e)

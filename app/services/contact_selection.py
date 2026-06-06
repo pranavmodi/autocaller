@@ -54,6 +54,7 @@ TARGET_LEAD_PERSONA_KEYS = {
     "founder_owner",
     "coo",
     "managing_partner",
+    "operations_leader",
     "partner",
 }
 

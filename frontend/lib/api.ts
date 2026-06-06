@@ -308,6 +308,18 @@ export type AgentTaskEvent = {
   created_at: string | null;
 };
 
+export type AgentTaskEventSummary = {
+  id: number;
+  task_id: string | null;
+  agent_id: string;
+  event_type: string;
+  message: string;
+  summary: string;
+  has_payload: boolean;
+  payload_size_bytes: number;
+  created_at: string | null;
+};
+
 export type AgentReport = {
   id: string;
   task_id: string | null;
@@ -383,7 +395,11 @@ export type MasterHeartbeat = {
     error?: string;
     disabled?: boolean;
     raw_response?: string;
+    cached_tokens?: number | null;
+    usage?: Record<string, unknown>;
+    prompt_cache?: Record<string, unknown>;
   };
+  auto_executed_lead_gen_sends?: Record<string, unknown>;
   active_goal?: MasterGoal | null;
   queue_analysis?: Record<string, unknown>;
   soul: Record<string, unknown>;
@@ -393,6 +409,8 @@ export type MasterHeartbeat = {
 export type AgentsStatus = {
   heartbeat_enabled: boolean;
   heartbeat_interval_seconds: number;
+  auto_execute_approved_lead_gen_email_enabled: boolean;
+  auto_execute_approved_lead_gen_email_limit: number;
   last_heartbeat: MasterHeartbeat | null;
 };
 
@@ -401,8 +419,15 @@ export const getAgentsStatus = () => get<AgentsStatus>("/api/agents/status");
 export const updateAgentConfig = (payload: {
   heartbeat_enabled?: boolean;
   heartbeat_interval_seconds?: number;
+  auto_execute_approved_lead_gen_email_enabled?: boolean;
+  auto_execute_approved_lead_gen_email_limit?: number;
 }) =>
-  patch<{ config: { heartbeat_enabled: boolean; heartbeat_interval_seconds: number } }>(
+  patch<{ config: {
+    heartbeat_enabled: boolean;
+    heartbeat_interval_seconds: number;
+    auto_execute_approved_lead_gen_email_enabled: boolean;
+    auto_execute_approved_lead_gen_email_limit: number;
+  } }>(
     "/api/agents/config",
     {
       ...payload,
@@ -431,12 +456,15 @@ export const getAgentTask = (taskId: string) =>
     `/api/agents/tasks/${encodeURIComponent(taskId)}`,
   );
 
+export const getAgentEvent = (eventId: number) =>
+  get<{ event: AgentTaskEvent }>(`/api/agents/events/${encodeURIComponent(eventId)}`);
+
 export const listAgentEvents = (args?: { task_id?: string; limit?: number }) => {
   const params = new URLSearchParams();
   if (args?.task_id) params.set("task_id", args.task_id);
   if (args?.limit) params.set("limit", String(args.limit));
   const suffix = params.toString() ? `?${params}` : "";
-  return get<{ events: AgentTaskEvent[] }>(`/api/agents/events${suffix}`);
+  return get<{ events: AgentTaskEventSummary[] }>(`/api/agents/events${suffix}`);
 };
 
 export const createResearchScoutTask = () =>
@@ -1572,6 +1600,20 @@ export const createLeadGenBatch = (args: {
   created_by?: string;
 }) => post<LeadGenBatchDetail>("/api/lead-gen/batches", args);
 
+export const createLeadGenEmailAgentSlice = (args: {
+  limit?: number;
+  template_key?: string;
+  created_by?: string;
+  composer_variant_key?: string | null;
+  approve_actions?: boolean;
+  policy_check_first_action?: boolean;
+}) => post<LeadGenBatchDetail & {
+  drafts: Array<Record<string, unknown>>;
+  action_ids: string[];
+  first_policy: Record<string, unknown> | null;
+  no_email_sent: boolean;
+}>("/api/lead-gen/email-agent/slice", args);
+
 export const listLeadGenBatches = (args: { status?: string; limit?: number } = {}) => {
   const params = new URLSearchParams();
   if (args.status && args.status !== "all") params.set("status", args.status);
@@ -1620,12 +1662,16 @@ export const sendLeadGenBatchItemDraft = (
 ) =>
   post<{
     batch_item_id: string;
-    sequence_id: string;
+    sequence_id?: string;
     sent_to: string;
     sent_subject: string;
     sent_message_id: string;
     sent_at: string;
-    step: number;
+    step?: number;
+    mode?: string;
+    message_type?: string;
+    agent_action?: Record<string, unknown>;
+    agent_action_policy?: Record<string, unknown>;
     composer_experiment_key?: string | null;
     composer_variant_key?: string | null;
   }>(
