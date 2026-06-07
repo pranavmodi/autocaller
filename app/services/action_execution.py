@@ -32,6 +32,13 @@ from app.services.product_traces import safe_record_product_trace
 SEND_APPROVED_LEAD_GEN_DRAFT = "send_approved_lead_gen_draft"
 SEND_EMAIL = "send_email"
 SEND_TEST_EMAIL = "send_test_email"  # Legacy action type kept readable for old rows.
+TERMINAL_SEND_POLICY_REASONS = {
+    "batch_item_not_already_started",
+    "no_prior_successful_action_for_item",
+    "no_prior_successful_lead_gen_action_for_item",
+    "no_prior_successful_lead_gen_action_for_recipient",
+    "no_prior_successful_test_action_for_recipient",
+}
 
 
 def _utcnow() -> datetime:
@@ -48,6 +55,20 @@ def _json_object(value: dict[str, Any] | None) -> dict[str, Any]:
 
 def _sha256(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+def _terminal_policy_block_reason(policy: dict[str, Any]) -> str:
+    """Return the terminal failed policy reason, if this action should stop retrying."""
+    reason = str(policy.get("reason") or "").strip()
+    if reason in TERMINAL_SEND_POLICY_REASONS:
+        return reason
+    for check in policy.get("checks") or []:
+        if not isinstance(check, dict) or check.get("passed") is not False:
+            continue
+        name = str(check.get("name") or "").strip()
+        if name in TERMINAL_SEND_POLICY_REASONS:
+            return name
+    return ""
 
 
 def _email_log_snapshot(row: EmailLogRow | None) -> dict[str, Any]:
@@ -669,10 +690,45 @@ async def execute_action(action_id: str, *, actor: str = "operator") -> dict[str
     await ensure_agent_tables()
     policy = await check_action_policy(action_id, actor=actor)
     if not policy["allowed"]:
+        terminal_reason = _terminal_policy_block_reason(policy)
+        if terminal_reason:
+            async with AsyncSessionLocal() as session:
+                action = await session.get(AgentActionRow, action_id)
+                if action and action.status == "approved":
+                    action.status = "blocked"
+                    action.error = f"Policy blocked permanently: {terminal_reason}"
+                    action.completed_at = _utcnow()
+                    action.execution_result_json = {
+                        "executed": False,
+                        "blocked_by_policy": True,
+                        "reason": terminal_reason,
+                    }
+                    await _record_action_event(
+                        session,
+                        action_id=action.id,
+                        event_type="action_blocked_by_policy",
+                        actor=actor,
+                        message=action.error,
+                        output_json={
+                            "reason": terminal_reason,
+                            "policy": policy,
+                        },
+                    )
+                    await session.commit()
+            await safe_record_product_trace(
+                actor_type="user" if actor == "operator" else "agent",
+                actor_id=actor,
+                event_type="action_blocked_by_policy",
+                surface="actions",
+                entity_type="agent_action",
+                entity_id=action_id,
+                output_json={"reason": terminal_reason, "policy": policy},
+            )
         return {
             "action": (await get_action(action_id) or {}).get("action"),
             "policy": policy,
             "executed": False,
+            "blocked": bool(terminal_reason),
         }
 
     async with AsyncSessionLocal() as session:

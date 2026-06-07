@@ -83,6 +83,10 @@ class AgentReportRequest(BaseModel):
 class AgentConfigRequest(BaseModel):
     heartbeat_enabled: bool | None = None
     heartbeat_interval_seconds: int | None = Field(None, ge=60, le=3600)
+    tool_runner_enabled: bool | None = None
+    tool_runner_max_iterations: int | None = Field(None, ge=1, le=5)
+    tool_runner_max_runtime_seconds: int | None = Field(None, ge=15, le=180)
+    tool_runner_persist_continuation: bool | None = None
     auto_execute_approved_lead_gen_email_enabled: bool | None = None
     auto_execute_approved_lead_gen_email_limit: int | None = Field(None, ge=1, le=25)
     actor: str = Field("operator", max_length=128)
@@ -105,6 +109,10 @@ async def agents_status():
     return {
         "heartbeat_enabled": config["heartbeat_enabled"],
         "heartbeat_interval_seconds": config["heartbeat_interval_seconds"],
+        "tool_runner_enabled": config["tool_runner_enabled"],
+        "tool_runner_max_iterations": config["tool_runner_max_iterations"],
+        "tool_runner_max_runtime_seconds": config["tool_runner_max_runtime_seconds"],
+        "tool_runner_persist_continuation": config["tool_runner_persist_continuation"],
         "auto_execute_approved_lead_gen_email_enabled": config["auto_execute_approved_lead_gen_email_enabled"],
         "auto_execute_approved_lead_gen_email_limit": config["auto_execute_approved_lead_gen_email_limit"],
         "last_heartbeat": await get_last_heartbeat_result(),
@@ -117,6 +125,10 @@ async def patch_agent_config(req: AgentConfigRequest):
         "config": await update_agent_config(
             heartbeat_enabled=req.heartbeat_enabled,
             heartbeat_interval_seconds=req.heartbeat_interval_seconds,
+            tool_runner_enabled=req.tool_runner_enabled,
+            tool_runner_max_iterations=req.tool_runner_max_iterations,
+            tool_runner_max_runtime_seconds=req.tool_runner_max_runtime_seconds,
+            tool_runner_persist_continuation=req.tool_runner_persist_continuation,
             auto_execute_approved_lead_gen_email_enabled=req.auto_execute_approved_lead_gen_email_enabled,
             auto_execute_approved_lead_gen_email_limit=req.auto_execute_approved_lead_gen_email_limit,
             actor=req.actor,

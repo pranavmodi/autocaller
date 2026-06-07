@@ -537,6 +537,48 @@ Add a runner module:
 app/services/master_agent_runner.py
 ```
 
+### Heartbeat Input Contract
+
+When this runner is connected to heartbeat, the wake context should expose the
+runner affordance explicitly:
+
+```json
+{
+  "volatile_wake_state": {
+    "tool_runner": {
+      "enabled": true,
+      "allowed_tools": ["filesystem_read", "action_read", "sandbox_write"],
+      "sandbox_root": "data/agent-sandbox",
+      "max_iterations": 5,
+      "max_runtime_seconds": 90,
+      "persist_continuation": true
+    },
+    "previous_heartbeat_summary": {
+      "status": "completed",
+      "summary": "Inspected heartbeat implementation.",
+      "tool_calls_used": 2,
+      "files_inspected": ["app/services/master_agent.py"],
+      "learned": [],
+      "next_continuation": [],
+      "blockers": [],
+      "user_help_needed": []
+    },
+    "goal_continuation_state": {
+      "goal_id": "...",
+      "status": "in_progress",
+      "files_read": [],
+      "facts_learned": [],
+      "remaining_questions": [],
+      "next_suggested_tool_call": {},
+      "document_target": "docs/agent-kb/system-model/master-agent.md"
+    }
+  }
+}
+```
+
+Do not put the full previous heartbeat output into the next input. Carry forward
+only the compact summary and goal continuation state.
+
 V1 loop contract:
 
 ```python
@@ -591,7 +633,12 @@ Allowed LLM decisions:
 - max runtime: 90 seconds;
 - max tool output per call: 50 KB;
 - max accumulated tool context: bounded and summarized;
-- only allow `filesystem_read` in V1;
+- only allow read-only runner tools in V1:
+  - `filesystem_read`;
+  - `action_read`;
+- allow bounded writes only through `sandbox_write` under
+  `data/agent-sandbox`;
+- reject shell commands, production-file writes, and database mutations;
 - no file modifications in this runner slice;
 - every tool call is traced;
 - if budget ends before finish, write continuation state.
@@ -615,6 +662,58 @@ Create durable continuation state in an agent report or dedicated event:
 This is how the next heartbeat knows what happened without relying on the LLM's
 hidden memory.
 
+### Heartbeat Output Contract
+
+The heartbeat output should include a full bounded-loop transcript:
+
+```json
+{
+  "tool_loop": {
+    "status": "completed",
+    "tool_calls_used": 2,
+    "tool_calls_limit": 5,
+    "runtime_seconds": 12.34,
+    "steps": [
+      {
+        "step": 1,
+        "decision": "tool_call",
+        "tool": "filesystem_read",
+        "operation": "search_text",
+        "allowed": true,
+        "result_summary": "3 matches",
+        "files_touched": ["app/services/master_agent.py"],
+        "truncated": false,
+        "error": ""
+      }
+    ],
+    "final_answer": {
+      "summary": "Inspected heartbeat implementation.",
+      "facts_learned": [],
+      "remaining_questions": [],
+      "next_actions": [],
+      "recommended_document_updates": [],
+      "blockers": [],
+      "user_help_needed": []
+    },
+    "previous_heartbeat_summary": {
+      "status": "completed",
+      "summary": "Inspected heartbeat implementation.",
+      "tool_calls_used": 2,
+      "files_inspected": ["app/services/master_agent.py"],
+      "learned": [],
+      "next_continuation": [],
+      "blockers": [],
+      "user_help_needed": []
+    },
+    "goal_continuation_state": {}
+  }
+}
+```
+
+The full transcript is for observability. The compact
+`previous_heartbeat_summary` and `goal_continuation_state` are the only parts
+that should become input to the next heartbeat.
+
 ### First Use Case
 
 For the current manual goal, the runner should be able to:
@@ -625,8 +724,121 @@ For the current manual goal, the runner should be able to:
 4. propose the first Markdown document sections;
 5. write continuation state.
 
-Writing the Markdown document can be a later approved write capability unless
-the user explicitly authorizes a narrow document-write path.
+### Implementation Note: 2026-06-06
+
+Implemented the top three preparation steps:
+
+- documented the exact heartbeat input/output contract for the runner;
+- added goal continuation helpers in `app/services/master_agent.py` using
+  existing `agent_reports` rows with `agent_id=MasterAgentToolRunner` and
+  `status=continuation`;
+- added `app/services/master_agent_runner.py`, a bounded runner module that:
+  - accepts only approved read-only tools in V1;
+  - supports `tool_call`, `finish`, and `blocked` decisions;
+  - records compact tool-step summaries;
+  - creates `previous_heartbeat_summary`;
+  - can persist `goal_continuation_state` through the report helper.
+
+Connected the runner to `run_master_heartbeat()`:
+
+- added `app/skills/master-agent-runner/SKILL.md` as the OpenClaw decision
+  skill;
+- added `openclaw_runner_decision_provider(...)`;
+- added compact tool observations so the LLM can decide after reading tool
+  output;
+- added `tool_runner_enabled`, `tool_runner_max_iterations`,
+  `tool_runner_max_runtime_seconds`, and `tool_runner_persist_continuation` to
+  agent config;
+- exposed those settings through `/api/agents/config`, `bin/autocaller agents
+  config`, and the `/agents` settings panel;
+- added `goal_continuation_state` and `previous_heartbeat_summary` to wake
+  context;
+- added `tool_loop` to heartbeat event output and returned heartbeat JSON.
+- hardened continuation persistence so each new continuation report merges
+  prior files, facts, and questions instead of replacing them with only the
+  latest heartbeat's evidence.
+- hardened continuation loading so wake context aggregates recent continuation
+  reports for the same goal instead of trusting only the newest report.
+
+### Implementation Note: 2026-06-07
+
+Added the first cybernetic action-outcome inspection slice:
+
+- added `app/services/action_read.py`;
+- added read-only `action_read` runner tool support:
+  - `get_action`;
+  - `list_recent`;
+- updated `app/services/master_agent_runner.py` so the LLM can choose either
+  `filesystem_read` or `action_read`;
+- updated wake context `tool_runner.allowed_tools` to advertise both tools;
+- added the `action outcome inspection` capability definition;
+- updated `app/skills/master-agent-runner/SKILL.md` so blocked policy outcomes
+  are treated as feedback, not silent failure;
+- added compact interpretation for policy-blocked actions, including duplicate
+  send cases that point at related prior successful action IDs;
+- fixed read-only filesystem search parsing so numeric line numbers cannot
+  pollute `files_touched`;
+- added tests for `action_read` and runner `action_read` tool calls.
+
+Behavior change:
+
+- policy gates still block unsafe or duplicate execution;
+- the master agent can now inspect a blocked action outcome and decide whether
+  to stop retrying, ask the user, clean up stale work, or propose a system
+  improvement.
+
+Validation:
+
+```bash
+python3 -m py_compile app/services/action_read.py app/services/master_agent_runner.py app/services/filesystem_read.py app/services/master_agent.py
+.venv/bin/pytest tests/test_action_read.py tests/test_master_agent_runner.py tests/test_filesystem_read.py tests/test_master_agent.py tests/test_action_execution.py -q
+```
+
+### Implementation Note: 2026-06-07, Sandbox Workspace
+
+Added the first bounded write actuator:
+
+- added `app/services/sandbox_write.py`;
+- added runner tool `sandbox_write`;
+- supported operations:
+  - `list`;
+  - `read`;
+  - `write`;
+  - `append`;
+  - `mkdir`;
+  - `delete`;
+- scoped all operations to `data/agent-sandbox`;
+- rejected absolute paths, `..` traversal, symlink traversal, oversized writes,
+  binary reads, and sandbox-root deletion;
+- added CLI helpers:
+  - `bin/autocaller fs sandbox-list`;
+  - `bin/autocaller fs sandbox-read`;
+  - `bin/autocaller fs sandbox-write`;
+  - `bin/autocaller fs sandbox-mkdir`;
+  - `bin/autocaller fs sandbox-delete`;
+- added the `agent sandbox file workspace` capability definition;
+- updated `tool_runner.allowed_tools` to advertise `sandbox_write`;
+- updated `app/skills/master-agent-runner/SKILL.md` so the runner can preserve
+  working notes under `data/agent-sandbox`;
+- ignored `data/agent-sandbox/` in git.
+
+Behavior change:
+
+- the master agent can now leave durable scratch notes and draft knowledge files
+  between heartbeats without being able to mutate production code or docs.
+
+Validation:
+
+```bash
+python3 -m py_compile app/services/sandbox_write.py app/services/master_agent_runner.py app/services/master_agent.py app/cli.py
+.venv/bin/pytest tests/test_sandbox_write.py tests/test_master_agent_runner.py tests/test_master_agent.py -q
+bin/autocaller fs sandbox-write master-agent-understanding.md --content "smoke" --actor master-agent --json
+bin/autocaller fs sandbox-read master-agent-understanding.md --json
+bin/autocaller fs sandbox-delete master-agent-understanding.md --json
+```
+
+Promoting sandbox notes into production docs should remain a later, explicit
+capability.
 
 ### Validation
 

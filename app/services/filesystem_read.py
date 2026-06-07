@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import fnmatch
 import os
+import re
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -249,7 +250,14 @@ def search_text(
     raw_lines = proc.stdout.splitlines()
     matches: list[dict[str, Any]] = []
     for line in raw_lines[:max_matches]:
-        file_part, line_no, text = (line.split(":", 2) + ["", ""])[:3]
+        match = re.match(r"^(?P<path>.+?):(?P<line>\d+):(?P<text>.*)$", line)
+        if not match:
+            continue
+        file_part = match.group("path")
+        line_no = match.group("line")
+        text = match.group("text")
+        if not file_part or file_part.isdigit():
+            continue
         try:
             _check_sensitive(file_part)
         except FilesystemReadError:

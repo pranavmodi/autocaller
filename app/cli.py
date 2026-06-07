@@ -129,6 +129,12 @@ def _run_fs_payload(payload: dict, *, actor: str = "operator") -> dict:
     return asyncio.run(run_filesystem_read(payload, actor=actor))
 
 
+def _run_sandbox_payload(payload: dict, *, actor: str = "operator") -> dict:
+    from app.services.sandbox_write import run_sandbox_write
+
+    return asyncio.run(run_sandbox_write(payload, actor=actor))
+
+
 def _print_fs_result(data: dict, *, json_output: bool) -> None:
     if json_output:
         console.print_json(data=data)
@@ -149,6 +155,23 @@ def _print_fs_result(data: dict, *, json_output: bool) -> None:
         console.print(result.get("content") or "")
     elif "output" in result:
         console.print(result.get("output") or "")
+
+
+def _print_sandbox_result(data: dict, *, json_output: bool) -> None:
+    if json_output:
+        console.print_json(data=data)
+        return
+    result = data.get("result") or {}
+    if not data.get("allowed"):
+        console.print(f"[red]rejected[/red] {result.get('error') or result.get('summary') or 'request rejected'}")
+        return
+    operation = result.get("operation") or "sandbox"
+    console.print(f"[green]{operation}[/green] {result.get('summary') or ''}")
+    if "items" in result:
+        for item in result.get("items") or []:
+            console.print(f"{item.get('kind', ''):9} {item.get('path')} {item.get('bytes', '')}")
+    elif "content" in result:
+        console.print(result.get("content") or "")
 
 
 def _delete(path: str, timeout: float = 30.0) -> dict:
@@ -3111,6 +3134,8 @@ def agents_status(json_output: bool = typer.Option(False, "--json", help="Print 
         return
     console.print(f"heartbeat_enabled: {data.get('heartbeat_enabled')}")
     console.print(f"heartbeat_interval_seconds: {data.get('heartbeat_interval_seconds')}")
+    console.print(f"tool_runner_enabled: {data.get('tool_runner_enabled')}")
+    console.print(f"tool_runner_max_iterations: {data.get('tool_runner_max_iterations')}")
     last = data.get("last_heartbeat") or {}
     if last:
         console.print(f"last_completed_at: {last.get('completed_at')}")
@@ -3137,7 +3162,7 @@ def agents_status(json_output: bool = typer.Option(False, "--json", help="Print 
 @agents_app.command("heartbeat")
 def agents_heartbeat(json_output: bool = typer.Option(False, "--json", help="Print raw JSON.")):
     """Run one master-agent heartbeat tick now."""
-    data = _post("/api/agents/heartbeat/run", timeout=60.0)
+    data = _post("/api/agents/heartbeat/run", timeout=240.0)
     if json_output:
         console.print_json(data=data)
         return
@@ -3164,6 +3189,30 @@ def agents_config(
         "--enabled/--disabled",
         help="Enable or disable the master heartbeat loop.",
     ),
+    tool_runner_enabled: Optional[bool] = typer.Option(
+        None,
+        "--tool-runner-enabled/--tool-runner-disabled",
+        help="Enable or disable the bounded master-agent read-only tool runner.",
+    ),
+    tool_runner_iterations: Optional[int] = typer.Option(
+        None,
+        "--tool-runner-iterations",
+        min=1,
+        max=5,
+        help="Maximum read-only tool decisions per heartbeat.",
+    ),
+    tool_runner_runtime_seconds: Optional[int] = typer.Option(
+        None,
+        "--tool-runner-runtime-seconds",
+        min=15,
+        max=180,
+        help="Maximum runtime budget for the heartbeat tool runner.",
+    ),
+    tool_runner_persist_continuation: Optional[bool] = typer.Option(
+        None,
+        "--tool-runner-persist-continuation/--no-tool-runner-persist-continuation",
+        help="Persist compact continuation state for the next heartbeat.",
+    ),
     auto_send_approved_lead_gen: Optional[bool] = typer.Option(
         None,
         "--auto-send-approved-lead-gen/--no-auto-send-approved-lead-gen",
@@ -3184,6 +3233,14 @@ def agents_config(
         payload["heartbeat_interval_seconds"] = interval_seconds
     if enabled is not None:
         payload["heartbeat_enabled"] = enabled
+    if tool_runner_enabled is not None:
+        payload["tool_runner_enabled"] = tool_runner_enabled
+    if tool_runner_iterations is not None:
+        payload["tool_runner_max_iterations"] = tool_runner_iterations
+    if tool_runner_runtime_seconds is not None:
+        payload["tool_runner_max_runtime_seconds"] = tool_runner_runtime_seconds
+    if tool_runner_persist_continuation is not None:
+        payload["tool_runner_persist_continuation"] = tool_runner_persist_continuation
     if auto_send_approved_lead_gen is not None:
         payload["auto_execute_approved_lead_gen_email_enabled"] = auto_send_approved_lead_gen
     if auto_send_limit is not None:
@@ -3195,6 +3252,10 @@ def agents_config(
             return
         console.print(f"heartbeat_enabled: {data.get('heartbeat_enabled')}")
         console.print(f"heartbeat_interval_seconds: {data.get('heartbeat_interval_seconds')}")
+        console.print(f"tool_runner_enabled: {data.get('tool_runner_enabled')}")
+        console.print(f"tool_runner_max_iterations: {data.get('tool_runner_max_iterations')}")
+        console.print(f"tool_runner_max_runtime_seconds: {data.get('tool_runner_max_runtime_seconds')}")
+        console.print(f"tool_runner_persist_continuation: {data.get('tool_runner_persist_continuation')}")
         console.print(
             "auto_execute_approved_lead_gen_email_enabled: "
             f"{data.get('auto_execute_approved_lead_gen_email_enabled')}"
@@ -3212,6 +3273,10 @@ def agents_config(
     console.print("[green]updated master-agent config[/green]")
     console.print(f"heartbeat_enabled: {config.get('heartbeat_enabled')}")
     console.print(f"heartbeat_interval_seconds: {config.get('heartbeat_interval_seconds')}")
+    console.print(f"tool_runner_enabled: {config.get('tool_runner_enabled')}")
+    console.print(f"tool_runner_max_iterations: {config.get('tool_runner_max_iterations')}")
+    console.print(f"tool_runner_max_runtime_seconds: {config.get('tool_runner_max_runtime_seconds')}")
+    console.print(f"tool_runner_persist_continuation: {config.get('tool_runner_persist_continuation')}")
     console.print(
         "auto_execute_approved_lead_gen_email_enabled: "
         f"{config.get('auto_execute_approved_lead_gen_email_enabled')}"
@@ -3520,6 +3585,75 @@ def fs_git_show(
         actor=actor,
     )
     _print_fs_result(data, json_output=json_output)
+
+
+@fs_app.command("sandbox-list")
+def fs_sandbox_list(
+    path: str = typer.Argument(".", help="Sandbox-relative path to list."),
+    recursive: bool = typer.Option(True, "--recursive/--no-recursive"),
+    limit: int = typer.Option(200, "--limit", min=1, max=500),
+    actor: str = typer.Option("operator", "--actor"),
+    json_output: bool = typer.Option(False, "--json"),
+):
+    """List files in the bounded agent sandbox."""
+    data = _run_sandbox_payload(
+        {"operation": "list", "path": path, "recursive": recursive, "limit": limit},
+        actor=actor,
+    )
+    _print_sandbox_result(data, json_output=json_output)
+
+
+@fs_app.command("sandbox-read")
+def fs_sandbox_read(
+    path: str = typer.Argument(..., help="Sandbox-relative file path."),
+    max_bytes: int = typer.Option(50_000, "--max-bytes", min=1, max=50_000),
+    actor: str = typer.Option("operator", "--actor"),
+    json_output: bool = typer.Option(False, "--json"),
+):
+    """Read a text file from the bounded agent sandbox."""
+    data = _run_sandbox_payload(
+        {"operation": "read", "path": path, "max_bytes": max_bytes},
+        actor=actor,
+    )
+    _print_sandbox_result(data, json_output=json_output)
+
+
+@fs_app.command("sandbox-write")
+def fs_sandbox_write(
+    path: str = typer.Argument(..., help="Sandbox-relative file path."),
+    content: str = typer.Option(..., "--content", help="UTF-8 content to write."),
+    append: bool = typer.Option(False, "--append", help="Append instead of overwrite."),
+    actor: str = typer.Option("operator", "--actor"),
+    json_output: bool = typer.Option(False, "--json"),
+):
+    """Write or append a text file inside the bounded agent sandbox."""
+    data = _run_sandbox_payload(
+        {"operation": "append" if append else "write", "path": path, "content": content},
+        actor=actor,
+    )
+    _print_sandbox_result(data, json_output=json_output)
+
+
+@fs_app.command("sandbox-mkdir")
+def fs_sandbox_mkdir(
+    path: str = typer.Argument(..., help="Sandbox-relative directory path."),
+    actor: str = typer.Option("operator", "--actor"),
+    json_output: bool = typer.Option(False, "--json"),
+):
+    """Create a directory inside the bounded agent sandbox."""
+    data = _run_sandbox_payload({"operation": "mkdir", "path": path}, actor=actor)
+    _print_sandbox_result(data, json_output=json_output)
+
+
+@fs_app.command("sandbox-delete")
+def fs_sandbox_delete(
+    path: str = typer.Argument(..., help="Sandbox-relative file or directory path."),
+    actor: str = typer.Option("operator", "--actor"),
+    json_output: bool = typer.Option(False, "--json"),
+):
+    """Delete a file or directory inside the bounded agent sandbox."""
+    data = _run_sandbox_payload({"operation": "delete", "path": path}, actor=actor)
+    _print_sandbox_result(data, json_output=json_output)
 
 
 @agents_app.command("goals")

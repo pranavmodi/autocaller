@@ -52,6 +52,7 @@ static/
 # Simulator outputs + exported call data
 data/simulations/
 data/codex_tasks/
+data/agent-sandbox/
 data/*.db
 calls_export*.csv
 /tmp/autocaller*.log

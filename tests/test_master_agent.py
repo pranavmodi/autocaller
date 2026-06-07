@@ -3,7 +3,9 @@ from datetime import datetime, timezone
 from app.db.models import AgentReportRow, AgentTaskEventRow, AgentTaskRow
 from app.services.master_agent import (
     _build_wake_context,
+    _normalize_agent_config,
     _objective_status_context,
+    continuation_state_from_report,
     event_summary_to_dict,
     event_to_dict,
     report_to_dict,
@@ -97,6 +99,34 @@ def test_event_and_report_dicts_expose_report_back_fields():
     assert report_to_dict(report)["recommended_next_actions"] == ["Create eval case."]
 
 
+def test_continuation_state_from_report_extracts_goal_handoff():
+    state = {
+        "kind": "goal_continuation_state",
+        "goal_id": "goal_1",
+        "files_read": ["app/services/master_agent.py"],
+    }
+    report = {
+        "id": "report_1",
+        "evidence": [{"kind": "other"}, state],
+    }
+
+    assert continuation_state_from_report(report) == state
+
+
+def test_agent_config_normalizes_tool_runner_settings():
+    config = _normalize_agent_config({
+        "tool_runner_enabled": True,
+        "tool_runner_max_iterations": 50,
+        "tool_runner_max_runtime_seconds": 999,
+        "tool_runner_persist_continuation": False,
+    })
+
+    assert config["tool_runner_enabled"] is True
+    assert config["tool_runner_max_iterations"] == 5
+    assert config["tool_runner_max_runtime_seconds"] == 180
+    assert config["tool_runner_persist_continuation"] is False
+
+
 def test_event_summary_dict_omits_heavy_payloads():
     event = AgentTaskEventRow(
         id=5,
@@ -126,10 +156,27 @@ def test_event_summary_dict_omits_heavy_payloads():
 
 
 def test_wake_context_v2_does_not_duplicate_legacy_top_level_fields():
+    continuation_state = {
+        "kind": "goal_continuation_state",
+        "goal_id": "goal_1",
+        "tool_loop": {
+            "previous_heartbeat_summary": {
+                "status": "completed",
+                "files_inspected": ["app/services/master_agent.py"],
+            },
+        },
+    }
     context = _build_wake_context(
         started_at=datetime(2026, 6, 5, tzinfo=timezone.utc),
         actor="operator",
-        agent_config={"heartbeat_enabled": False, "heartbeat_interval_seconds": 600},
+        agent_config={
+            "heartbeat_enabled": False,
+            "heartbeat_interval_seconds": 600,
+            "tool_runner_enabled": True,
+            "tool_runner_max_iterations": 3,
+            "tool_runner_max_runtime_seconds": 90,
+            "tool_runner_persist_continuation": True,
+        },
         active_tasks=[],
         recent_reports=[],
         recent_events=[],
@@ -138,6 +185,7 @@ def test_wake_context_v2_does_not_duplicate_legacy_top_level_fields():
         capabilities=[],
         active_goal={"goal": "Test goal", "next_actions": ["Do the next thing"]},
         recent_actions=[],
+        goal_continuation_state=continuation_state,
     )
 
     assert context["kind"] == "master_agent_wake_context_v2"
@@ -145,6 +193,17 @@ def test_wake_context_v2_does_not_duplicate_legacy_top_level_fields():
     assert "volatile_wake_state" in context
     assert "active_goal" in context["volatile_wake_state"]
     assert "recent_actions" in context["volatile_wake_state"]
+    assert context["volatile_wake_state"]["tool_runner"]["enabled"] is True
+    assert context["volatile_wake_state"]["tool_runner"]["allowed_tools"] == [
+        "filesystem_read",
+        "action_read",
+        "sandbox_write",
+    ]
+    assert context["volatile_wake_state"]["tool_runner"]["sandbox_root"] == "data/agent-sandbox"
+    assert context["volatile_wake_state"]["goal_continuation_state"] == continuation_state
+    assert context["volatile_wake_state"]["previous_heartbeat_summary"]["files_inspected"] == [
+        "app/services/master_agent.py",
+    ]
 
     for legacy_key in (
         "mission",

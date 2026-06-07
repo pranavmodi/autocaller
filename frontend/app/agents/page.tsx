@@ -73,6 +73,43 @@ function objectiveTone(status: string) {
   return "border-sky-200 bg-sky-50 text-sky-700";
 }
 
+function eventTone(eventType: string) {
+  if (eventType === "master_heartbeat_completed") return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  if (eventType === "master_heartbeat_started") return "border-teal-200 bg-teal-50 text-teal-700";
+  if (eventType === "agent_config_updated") return "border-amber-200 bg-amber-50 text-amber-700";
+  if (eventType === "master_goal_set" || eventType === "master_goal_synthesized") return "border-violet-200 bg-violet-50 text-violet-700";
+  if (eventType === "report_created") return "border-sky-200 bg-sky-50 text-sky-700";
+  if (eventType.includes("task_")) return "border-blue-200 bg-blue-50 text-blue-700";
+  if (eventType.includes("capabilit")) return "border-cyan-200 bg-cyan-50 text-cyan-700";
+  if (eventType.includes("action_")) return "border-rose-200 bg-rose-50 text-rose-700";
+  return "border-neutral-200 bg-neutral-50 text-neutral-700";
+}
+
+const ACTIVITY_FILTERS = [
+  { key: "all", label: "All" },
+  { key: "heartbeat", label: "Heartbeats" },
+  { key: "config", label: "Config" },
+  { key: "goals", label: "Goals" },
+  { key: "tasks", label: "Tasks" },
+  { key: "reports", label: "Reports" },
+  { key: "actions", label: "Actions" },
+  { key: "capabilities", label: "Capabilities" },
+  { key: "other", label: "Other" },
+] as const;
+
+type ActivityFilter = (typeof ACTIVITY_FILTERS)[number]["key"];
+
+function activityCategory(eventType: string): ActivityFilter {
+  if (eventType.startsWith("master_heartbeat_")) return "heartbeat";
+  if (eventType === "agent_config_updated") return "config";
+  if (eventType.startsWith("master_goal_") || eventType.includes("goal_")) return "goals";
+  if (eventType === "report_created") return "reports";
+  if (eventType.includes("task_")) return "tasks";
+  if (eventType.includes("action_")) return "actions";
+  if (eventType.includes("capabilit")) return "capabilities";
+  return "other";
+}
+
 function objectValue(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
@@ -135,6 +172,7 @@ const JSON_KEY_ORDER: Record<string, string[]> = {
     "queue_analysis",
     "human_status",
     "objective_status",
+    "tool_loop",
     "auto_delegated_task",
     "auto_executed_lead_gen_sends",
     "active_goal",
@@ -153,7 +191,9 @@ const JSON_KEY_ORDER: Record<string, string[]> = {
     "human_status",
     "objective_status",
     "wake_context",
+    "tool_loop",
     "status_llm",
+    "tool_runner",
     "auto_delegated_task",
     "auto_executed_lead_gen_sends",
     "active_goal",
@@ -481,8 +521,13 @@ export default function AgentsPage() {
   const qc = useQueryClient();
   const [selectedTaskId, setSelectedTaskId] = useState<string>("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [activityFilter, setActivityFilter] = useState<ActivityFilter>("all");
   const [heartbeatEnabledDraft, setHeartbeatEnabledDraft] = useState(true);
   const [heartbeatIntervalDraft, setHeartbeatIntervalDraft] = useState("300");
+  const [toolRunnerEnabledDraft, setToolRunnerEnabledDraft] = useState(false);
+  const [toolRunnerIterationsDraft, setToolRunnerIterationsDraft] = useState("3");
+  const [toolRunnerRuntimeDraft, setToolRunnerRuntimeDraft] = useState("90");
+  const [toolRunnerPersistDraft, setToolRunnerPersistDraft] = useState(true);
   const [autoSendLeadGenDraft, setAutoSendLeadGenDraft] = useState(false);
   const [autoSendLeadGenLimitDraft, setAutoSendLeadGenLimitDraft] = useState("1");
   const [jsonDisplayMode, setJsonDisplayMode] = useState<"parsed" | "raw">("parsed");
@@ -579,6 +624,10 @@ export default function AgentsPage() {
       updateAgentConfig({
         heartbeat_enabled: heartbeatEnabledDraft,
         heartbeat_interval_seconds: Number(heartbeatIntervalDraft),
+        tool_runner_enabled: toolRunnerEnabledDraft,
+        tool_runner_max_iterations: Number(toolRunnerIterationsDraft),
+        tool_runner_max_runtime_seconds: Number(toolRunnerRuntimeDraft),
+        tool_runner_persist_continuation: toolRunnerPersistDraft,
         auto_execute_approved_lead_gen_email_enabled: autoSendLeadGenDraft,
         auto_execute_approved_lead_gen_email_limit: Number(autoSendLeadGenLimitDraft),
       }),
@@ -597,6 +646,10 @@ export default function AgentsPage() {
           ...current,
           heartbeat_enabled: data.config.heartbeat_enabled,
           heartbeat_interval_seconds: data.config.heartbeat_interval_seconds,
+          tool_runner_enabled: data.config.tool_runner_enabled,
+          tool_runner_max_iterations: data.config.tool_runner_max_iterations,
+          tool_runner_max_runtime_seconds: data.config.tool_runner_max_runtime_seconds,
+          tool_runner_persist_continuation: data.config.tool_runner_persist_continuation,
           auto_execute_approved_lead_gen_email_enabled: data.config.auto_execute_approved_lead_gen_email_enabled,
           auto_execute_approved_lead_gen_email_limit: data.config.auto_execute_approved_lead_gen_email_limit,
         };
@@ -688,24 +741,53 @@ export default function AgentsPage() {
     ? queueAnalysis.stale_queue_items
     : [];
   const capabilityRows = capabilities.data?.capabilities ?? [];
+  const activityRows = activity.data?.events ?? [];
+  const activityCounts = useMemo(() => {
+    const countsByKind = Object.fromEntries(ACTIVITY_FILTERS.map((filter) => [filter.key, 0])) as Record<ActivityFilter, number>;
+    countsByKind.all = activityRows.length;
+    for (const row of activityRows) {
+      countsByKind[activityCategory(row.event_type)] += 1;
+    }
+    return countsByKind;
+  }, [activityRows]);
+  const filteredActivityRows = useMemo(() => {
+    if (activityFilter === "all") return activityRows;
+    return activityRows.filter((row) => activityCategory(row.event_type) === activityFilter);
+  }, [activityFilter, activityRows]);
   useEffect(() => {
     if (!status.data) return;
     setHeartbeatEnabledDraft(status.data.heartbeat_enabled);
     setHeartbeatIntervalDraft(String(status.data.heartbeat_interval_seconds));
+    setToolRunnerEnabledDraft(status.data.tool_runner_enabled);
+    setToolRunnerIterationsDraft(String(status.data.tool_runner_max_iterations));
+    setToolRunnerRuntimeDraft(String(status.data.tool_runner_max_runtime_seconds));
+    setToolRunnerPersistDraft(status.data.tool_runner_persist_continuation);
     setAutoSendLeadGenDraft(status.data.auto_execute_approved_lead_gen_email_enabled);
     setAutoSendLeadGenLimitDraft(String(status.data.auto_execute_approved_lead_gen_email_limit));
   }, [
     status.data?.heartbeat_enabled,
     status.data?.heartbeat_interval_seconds,
+    status.data?.tool_runner_enabled,
+    status.data?.tool_runner_max_iterations,
+    status.data?.tool_runner_max_runtime_seconds,
+    status.data?.tool_runner_persist_continuation,
     status.data?.auto_execute_approved_lead_gen_email_enabled,
     status.data?.auto_execute_approved_lead_gen_email_limit,
   ]);
   const heartbeatIntervalNumber = Number(heartbeatIntervalDraft);
+  const toolRunnerIterationsNumber = Number(toolRunnerIterationsDraft);
+  const toolRunnerRuntimeNumber = Number(toolRunnerRuntimeDraft);
   const autoSendLeadGenLimitNumber = Number(autoSendLeadGenLimitDraft);
   const heartbeatConfigValid =
     Number.isFinite(heartbeatIntervalNumber) &&
     heartbeatIntervalNumber >= 60 &&
     heartbeatIntervalNumber <= 3600 &&
+    Number.isFinite(toolRunnerIterationsNumber) &&
+    toolRunnerIterationsNumber >= 1 &&
+    toolRunnerIterationsNumber <= 5 &&
+    Number.isFinite(toolRunnerRuntimeNumber) &&
+    toolRunnerRuntimeNumber >= 15 &&
+    toolRunnerRuntimeNumber <= 180 &&
     Number.isFinite(autoSendLeadGenLimitNumber) &&
     autoSendLeadGenLimitNumber >= 1 &&
     autoSendLeadGenLimitNumber <= 25;
@@ -713,8 +795,33 @@ export default function AgentsPage() {
     Boolean(status.data) &&
     (heartbeatEnabledDraft !== status.data?.heartbeat_enabled ||
       heartbeatIntervalDraft !== String(status.data?.heartbeat_interval_seconds ?? "") ||
+      toolRunnerEnabledDraft !== status.data?.tool_runner_enabled ||
+      toolRunnerIterationsDraft !== String(status.data?.tool_runner_max_iterations ?? "") ||
+      toolRunnerRuntimeDraft !== String(status.data?.tool_runner_max_runtime_seconds ?? "") ||
+      toolRunnerPersistDraft !== status.data?.tool_runner_persist_continuation ||
       autoSendLeadGenDraft !== status.data?.auto_execute_approved_lead_gen_email_enabled ||
       autoSendLeadGenLimitDraft !== String(status.data?.auto_execute_approved_lead_gen_email_limit ?? ""));
+
+  function openLatestHeartbeatJson() {
+    if (!heartbeat) return;
+    const { wake_context: wakeContextPayload, ...heartbeatOutput } = heartbeat;
+    setJsonDisplayMode("parsed");
+    setCopiedJsonPanel(null);
+    setJsonModal({
+      eventId: 0,
+      createdAt: heartbeat.completed_at,
+      agentId: "master-agent",
+      eventType: "master_heartbeat_completed",
+      summary: heartbeat.human_status?.state || "Latest persisted heartbeat result.",
+      input: wakeContextPayload || {},
+      output: heartbeatOutput,
+      metadata: {
+        source: "GET /api/agents/status last_heartbeat",
+        status_llm: heartbeat.status_llm || {},
+        tool_runner: heartbeat.tool_runner || {},
+      },
+    });
+  }
 
   return (
     <div className="mx-auto max-w-[1500px] space-y-4">
@@ -761,6 +868,15 @@ export default function AgentsPage() {
             >
               {runHeartbeat.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <HeartPulse className="h-4 w-4" />}
               Run heartbeat
+            </button>
+            <button
+              type="button"
+              onClick={openLatestHeartbeatJson}
+              disabled={!heartbeat}
+              className="inline-flex items-center gap-2 rounded-md border border-neutral-200 px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50 disabled:opacity-60"
+            >
+              <Braces className="h-4 w-4" />
+              Latest heartbeat JSON
             </button>
             <button
               type="button"
@@ -856,6 +972,48 @@ export default function AgentsPage() {
                   className="mt-1 h-9 w-full rounded-md border border-neutral-200 px-3 text-sm text-neutral-900"
                 />
               </label>
+              <label className="flex min-w-[250px] items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-950">
+                <input
+                  type="checkbox"
+                  checked={toolRunnerEnabledDraft}
+                  onChange={(event) => setToolRunnerEnabledDraft(event.target.checked)}
+                  className="h-4 w-4 rounded border-emerald-300"
+                />
+                Master may use read-only tools
+              </label>
+              <label className="w-28 text-xs font-medium text-neutral-700">
+                Tool calls
+                <input
+                  type="number"
+                  min={1}
+                  max={5}
+                  step={1}
+                  value={toolRunnerIterationsDraft}
+                  onChange={(event) => setToolRunnerIterationsDraft(event.target.value)}
+                  className="mt-1 h-9 w-full rounded-md border border-neutral-200 px-3 text-sm text-neutral-900"
+                />
+              </label>
+              <label className="w-32 text-xs font-medium text-neutral-700">
+                Runtime sec
+                <input
+                  type="number"
+                  min={15}
+                  max={180}
+                  step={15}
+                  value={toolRunnerRuntimeDraft}
+                  onChange={(event) => setToolRunnerRuntimeDraft(event.target.value)}
+                  className="mt-1 h-9 w-full rounded-md border border-neutral-200 px-3 text-sm text-neutral-900"
+                />
+              </label>
+              <label className="flex min-w-[220px] items-center gap-2 text-xs font-medium text-neutral-700">
+                <input
+                  type="checkbox"
+                  checked={toolRunnerPersistDraft}
+                  onChange={(event) => setToolRunnerPersistDraft(event.target.checked)}
+                  className="h-4 w-4 rounded border-neutral-300"
+                />
+                Persist continuation
+              </label>
               <button
                 type="button"
                 onClick={() => saveAgentConfig.mutate()}
@@ -867,8 +1025,13 @@ export default function AgentsPage() {
               </button>
             </div>
             <div className="mt-2 text-xs text-neutral-500">
-              The Enabled checkbox saves immediately. Period and approved-send automation changes use Save. Heartbeat can only send exact approved lead-gen email actions through policy checks.
+              The Enabled checkbox saves immediately. Period, runner, and approved-send automation changes use Save. The runner only uses bounded read-only filesystem inspection.
             </div>
+            {toolRunnerEnabledDraft ? (
+              <div className="mt-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
+                When saved, each manual or scheduled heartbeat may make up to {toolRunnerIterationsDraft || "3"} read-only tool call(s) and save compact continuation notes for the next wake-up.
+              </div>
+            ) : null}
             {autoSendLeadGenDraft ? (
               <div className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
                 When saved, each heartbeat may send up to {autoSendLeadGenLimitDraft || "1"} already-approved lead-gen email action(s). It cannot create recipients or bypass approval hashes.
@@ -1328,6 +1491,31 @@ export default function AgentsPage() {
             Refresh activity
           </button>
         </div>
+        <div className="border-b border-neutral-100 px-4 py-3">
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {ACTIVITY_FILTERS.map((filter) => (
+              <button
+                key={filter.key}
+                type="button"
+                onClick={() => setActivityFilter(filter.key)}
+                className={cn(
+                  "inline-flex shrink-0 items-center gap-2 rounded-md border px-3 py-1.5 text-xs font-medium transition-colors",
+                  activityFilter === filter.key
+                    ? "border-neutral-900 bg-neutral-900 text-white"
+                    : "border-neutral-200 bg-white text-neutral-600 hover:bg-neutral-50 hover:text-neutral-950",
+                )}
+              >
+                <span>{filter.label}</span>
+                <span className={cn(
+                  "rounded-full px-1.5 py-0.5 text-[10px]",
+                  activityFilter === filter.key ? "bg-white/15 text-white" : "bg-neutral-100 text-neutral-500",
+                )}>
+                  {activityCounts[filter.key] ?? 0}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
         <div className="divide-y divide-neutral-100">
           {activity.isLoading && (
             <div className="flex items-center gap-2 px-4 py-4 text-sm text-neutral-500">
@@ -1345,7 +1533,12 @@ export default function AgentsPage() {
               No agent activity has been recorded yet.
             </div>
           )}
-          {(activity.data?.events ?? []).map((event) => (
+          {!activity.isLoading && activityRows.length > 0 && filteredActivityRows.length === 0 && (
+            <div className="px-4 py-5 text-sm text-neutral-500">
+              No activity matches this filter.
+            </div>
+          )}
+          {filteredActivityRows.map((event) => (
             <div key={event.id} className="grid gap-2 px-4 py-3 sm:grid-cols-[12rem_minmax(0,1fr)_10rem]">
               <div className="text-xs text-neutral-500">
                 <div className="font-medium text-neutral-800">{shortDate(event.created_at)}</div>
@@ -1353,7 +1546,10 @@ export default function AgentsPage() {
               </div>
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="rounded-full border border-neutral-200 bg-neutral-50 px-2 py-0.5 text-[11px] font-medium text-neutral-700">
+                  <span className="rounded-full border border-neutral-200 bg-white px-2 py-0.5 text-[11px] font-medium capitalize text-neutral-500">
+                    {activityCategory(event.event_type)}
+                  </span>
+                  <span className={cn("rounded-full border px-2 py-0.5 text-[11px] font-medium", eventTone(event.event_type))}>
                     {event.event_type}
                   </span>
                   {event.task_id && (
@@ -1367,6 +1563,11 @@ export default function AgentsPage() {
                   )}
                 </div>
                 <p className="mt-1 truncate text-sm text-neutral-700">{activitySummary(event)}</p>
+                {event.event_type === "agent_config_updated" ? (
+                  <p className="mt-1 text-[11px] text-amber-700">
+                    Configuration change, not a heartbeat run.
+                  </p>
+                ) : null}
                 {event.has_payload && (
                   <p className="mt-1 text-[11px] text-neutral-400">
                     JSON available · {Math.max(1, Math.round(event.payload_size_bytes / 1024))} KB

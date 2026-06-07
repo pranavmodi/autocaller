@@ -738,16 +738,139 @@ wake up
 
 The heartbeat remains the scheduler. The runner loop is the bounded work engine.
 
+Heartbeat input should expose:
+
+```json
+{
+  "volatile_wake_state": {
+    "tool_runner": {
+      "enabled": true,
+      "allowed_tools": ["filesystem_read", "action_read", "sandbox_write"],
+      "sandbox_root": "data/agent-sandbox",
+      "max_iterations": 5,
+      "max_runtime_seconds": 90,
+      "persist_continuation": true
+    },
+    "previous_heartbeat_summary": {},
+    "goal_continuation_state": {}
+  }
+}
+```
+
 V1 limits:
 
-- only `filesystem_read` tool calls;
-- no file modifications;
+- only approved read-only tool calls:
+  - `filesystem_read` for bounded code/docs/git inspection;
+  - `action_read` for bounded durable action outcome inspection;
+- bounded file modifications are allowed only through `sandbox_write` under
+  `data/agent-sandbox`;
+- no production file modifications;
+- no database mutations from runner tools;
 - max 5 tool calls per heartbeat;
 - max 90 seconds runtime;
 - max 50 KB output per tool call;
 - bounded accumulated context;
 - every tool call is traced;
 - if the loop cannot finish, write continuation state and stop.
+
+Current implementation:
+
+- `run_master_heartbeat()` can invoke `app/services/master_agent_runner.py`
+  when `tool_runner_enabled` is true in agent config.
+- The runner uses `app/skills/master-agent-runner/SKILL.md` through the
+  OpenClaw gateway to choose one bounded decision at a time.
+- The executable runner tools are read-only:
+  - `filesystem_read`;
+  - `action_read`.
+- The bounded writable runner tool is:
+  - `sandbox_write`, scoped to `data/agent-sandbox`.
+- Each tool result is compacted before being passed into the next runner
+  decision.
+- The heartbeat output includes `tool_loop`.
+- The heartbeat wake context includes only compact previous continuation state,
+  not the full previous transcript.
+- New continuation records merge prior `files_read`, facts, and questions with
+  the current runner evidence so a weaker later heartbeat does not erase useful
+  previous progress.
+- The continuation loader also aggregates recent continuation reports for the
+  same goal, so the next heartbeat receives the accumulated inspected-file list
+  even if the latest individual run was weak.
+- Config is exposed through `/api/agents/config`, `bin/autocaller agents
+  config`, and the `/agents` settings panel.
+
+### Action Outcome Inspection
+
+Cybernetic action execution needs both a hard actuator boundary and a legible
+feedback path.
+
+When policy blocks an action, the policy gate should still prevent execution.
+But the block should also become interpretable feedback that the master agent
+can inspect.
+
+Current implementation:
+
+- `app/services/action_read.py` exposes a read-only runner tool named
+  `action_read`.
+- Supported operations:
+  - `get_action`;
+  - `list_recent`.
+- `get_action` returns compact action state, policy checks, execution result,
+  recent events, and a short interpretation.
+- Duplicate-send policy blocks are interpreted as stale duplicate work with
+  related prior successful action IDs when those IDs are present in failed
+  policy-check details.
+- The runner skill instructs the model to inspect relevant blocked or failed
+  actions, stop retrying stale duplicates, and propose cleanup or system
+  improvements.
+
+This keeps the loop cybernetic:
+
+```text
+goal -> action -> observed result -> error signal -> interpretation -> next action
+```
+
+The policy gate supplies the error signal. `action_read` gives the agent a safe
+way to inspect and interpret it.
+
+### Agent Sandbox Workspace
+
+The master agent now has one bounded writable workspace:
+
+```text
+data/agent-sandbox/
+```
+
+This is a scratch and working-memory directory, not a production-code surface.
+
+The sandbox lets the agent:
+
+- create files;
+- append to files;
+- overwrite files;
+- read sandbox files;
+- list sandbox files;
+- create directories;
+- delete sandbox files or directories.
+
+Policy:
+
+- all paths are relative to `data/agent-sandbox`;
+- absolute paths are rejected;
+- `..` traversal is rejected;
+- symlink traversal is rejected;
+- writes outside the sandbox are impossible through this tool;
+- content size is capped;
+- every operation is traced;
+- the sandbox directory is ignored by git.
+
+Cybernetic purpose:
+
+```text
+read code -> synthesize understanding -> write sandbox note -> next heartbeat reads/extends note
+```
+
+This gives the agent a safe actuator for durable working memory before granting
+any broader repo-write capability.
 
 Continuation state should record:
 
@@ -766,6 +889,27 @@ Continuation state should record:
 This is how the next heartbeat knows what happened without relying on hidden LLM
 memory.
 
+Heartbeat output should include the full bounded-loop transcript:
+
+```json
+{
+  "tool_loop": {
+    "status": "completed",
+    "tool_calls_used": 2,
+    "tool_calls_limit": 5,
+    "runtime_seconds": 12.34,
+    "steps": [],
+    "final_answer": {},
+    "previous_heartbeat_summary": {},
+    "goal_continuation_state": {}
+  }
+}
+```
+
+Only the compact `previous_heartbeat_summary` and `goal_continuation_state`
+should become input to the next heartbeat. The full transcript remains in the
+heartbeat output, traces, and event details for inspection.
+
 For the current codebase-understanding goal, the runner should be able to:
 
 1. search for heartbeat and context functions;
@@ -776,6 +920,19 @@ For the current codebase-understanding goal, the runner should be able to:
 
 Writing or modifying Markdown should be a separate, explicitly approved write
 capability unless the user authorizes a narrow document-write path.
+
+Implementation note, 2026-06-06:
+
+The first three runner-preparation pieces now exist:
+
+- exact heartbeat input/output contract documented;
+- goal continuation storage helper using existing `agent_reports` rows;
+- `app/services/master_agent_runner.py` bounded runner module.
+
+The module can execute injected decisions and produce compact continuation
+summaries. It is not yet connected to the heartbeat scheduler. The next slice is
+to add a feature flag, call the runner from `run_master_heartbeat()`, and load
+the latest continuation state into the next wake context.
 
 ## Human Question Capability And Knowledge Base Design
 

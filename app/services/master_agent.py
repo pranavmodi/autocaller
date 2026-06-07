@@ -69,6 +69,10 @@ DEFAULT_AGENT_CONFIG = {
     "heartbeat_enabled": True,
     "heartbeat_interval_seconds": 300,
     "status_llm_enabled": True,
+    "tool_runner_enabled": False,
+    "tool_runner_max_iterations": 3,
+    "tool_runner_max_runtime_seconds": 90,
+    "tool_runner_persist_continuation": True,
     "auto_delegate_next_slice_enabled": True,
     "auto_execute_approved_lead_gen_email_enabled": False,
     "auto_execute_approved_lead_gen_email_limit": 1,
@@ -78,6 +82,8 @@ SYSTEMS_HEALTH_AGENT_TITLE = "Add SystemsHealthAgent log observation and bug-fix
 SUPPORTED_RUNNER_AGENTS = {"ResearchScoutAgent", "SystemsHealthAgent"}
 MASTER_GOAL_TTL_SECONDS = 6 * 60 * 60
 STALE_QUEUE_MIN_SECONDS = 30 * 60
+GOAL_CONTINUATION_AGENT_ID = "MasterAgentToolRunner"
+GOAL_CONTINUATION_STATUS = "continuation"
 
 
 CAPABILITY_DEFINITIONS = [
@@ -110,6 +116,35 @@ CAPABILITY_DEFINITIONS = [
         "requires_approval": False,
         "autonomous_allowed": True,
         "command_json": {"argv": ["bin/autocaller", "actions", "list", "--json"], "safe_probe": True},
+    },
+    {
+        "name": "action outcome inspection",
+        "capability_type": "runner_tool",
+        "source": "master-agent runner tool: action_read",
+        "purpose": "Inspect durable action status, policy feedback, execution result, and event timeline without changing anything.",
+        "risk_level": "low",
+        "requires_approval": False,
+        "autonomous_allowed": True,
+        "command_json": {
+            "tool": "action_read",
+            "operations": ["get_action", "list_recent"],
+            "read_only": True,
+        },
+    },
+    {
+        "name": "agent sandbox file workspace",
+        "capability_type": "runner_tool",
+        "source": "master-agent runner tool: sandbox_write",
+        "purpose": "Create, read, append, overwrite, list, and delete files inside the bounded agent sandbox only.",
+        "risk_level": "medium",
+        "requires_approval": False,
+        "autonomous_allowed": True,
+        "command_json": {
+            "tool": "sandbox_write",
+            "operations": ["list", "read", "write", "append", "mkdir", "delete"],
+            "sandbox_root": "data/agent-sandbox",
+            "bounded_write": True,
+        },
     },
     {
         "name": "actions policy-check",
@@ -393,6 +428,26 @@ def _normalize_agent_config(raw: dict[str, Any] | None) -> dict[str, Any]:
                 pass
         if "status_llm_enabled" in raw:
             config["status_llm_enabled"] = bool(raw.get("status_llm_enabled"))
+        if "tool_runner_enabled" in raw:
+            config["tool_runner_enabled"] = bool(raw.get("tool_runner_enabled"))
+        if "tool_runner_max_iterations" in raw:
+            try:
+                config["tool_runner_max_iterations"] = max(
+                    1,
+                    min(int(raw.get("tool_runner_max_iterations")), 5),
+                )
+            except (TypeError, ValueError):
+                pass
+        if "tool_runner_max_runtime_seconds" in raw:
+            try:
+                config["tool_runner_max_runtime_seconds"] = max(
+                    15,
+                    min(int(raw.get("tool_runner_max_runtime_seconds")), 180),
+                )
+            except (TypeError, ValueError):
+                pass
+        if "tool_runner_persist_continuation" in raw:
+            config["tool_runner_persist_continuation"] = bool(raw.get("tool_runner_persist_continuation"))
         if "auto_delegate_next_slice_enabled" in raw:
             config["auto_delegate_next_slice_enabled"] = bool(raw.get("auto_delegate_next_slice_enabled"))
         if "auto_execute_approved_lead_gen_email_enabled" in raw:
@@ -729,6 +784,27 @@ def report_to_dict(row: AgentReportRow) -> dict[str, Any]:
         "recommended_next_actions": row.recommended_next_actions_json or [],
         "created_at": row.created_at.isoformat() if row.created_at else None,
     }
+
+
+def continuation_state_from_report(report: dict[str, Any]) -> dict[str, Any]:
+    evidence = report.get("evidence") if isinstance(report, dict) else []
+    if not isinstance(evidence, list):
+        return {}
+    for item in evidence:
+        if not isinstance(item, dict):
+            continue
+        if item.get("kind") == "goal_continuation_state":
+            return item
+    return {}
+
+
+def _valid_continuation_file_path(value: Any) -> str:
+    text = str(value or "").strip()
+    if not text or text.isdigit():
+        return ""
+    if "\x00" in text or text.startswith("/") or ".." in text.split("/"):
+        return ""
+    return text
 
 
 def capability_to_dict(row: AgentCapabilityRow) -> dict[str, Any]:
@@ -1422,6 +1498,10 @@ def _current_state_context(
     return {
         "heartbeat_enabled": bool(agent_config.get("heartbeat_enabled")),
         "heartbeat_interval_seconds": agent_config.get("heartbeat_interval_seconds"),
+        "tool_runner_enabled": bool(agent_config.get("tool_runner_enabled")),
+        "tool_runner_max_iterations": agent_config.get("tool_runner_max_iterations"),
+        "tool_runner_max_runtime_seconds": agent_config.get("tool_runner_max_runtime_seconds"),
+        "tool_runner_persist_continuation": bool(agent_config.get("tool_runner_persist_continuation")),
         "auto_send_approved_lead_gen_enabled": bool(agent_config.get("auto_execute_approved_lead_gen_email_enabled")),
         "auto_send_approved_lead_gen_limit": agent_config.get("auto_execute_approved_lead_gen_email_limit"),
         "active_task_count": len(active_tasks),
@@ -1473,6 +1553,7 @@ def _volatile_wake_state(
     active_goal: dict[str, Any] | None,
     recent_actions: list[dict[str, Any]],
     goal_evidence: dict[str, Any],
+    goal_continuation_state: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     objective_status = _objective_status_context(
         active_goal,
@@ -1500,6 +1581,20 @@ def _volatile_wake_state(
         "current_tasks": active_tasks,
         "recent_actions": recent_actions,
         "goal_evidence": goal_evidence,
+        "tool_runner": {
+            "enabled": bool(agent_config.get("tool_runner_enabled")),
+            "allowed_tools": ["filesystem_read", "action_read", "sandbox_write"],
+            "sandbox_root": "data/agent-sandbox",
+            "max_iterations": agent_config.get("tool_runner_max_iterations"),
+            "max_runtime_seconds": agent_config.get("tool_runner_max_runtime_seconds"),
+            "persist_continuation": bool(agent_config.get("tool_runner_persist_continuation")),
+        },
+        "goal_continuation_state": goal_continuation_state or {},
+        "previous_heartbeat_summary": (
+            (goal_continuation_state or {}).get("tool_loop", {}).get("previous_heartbeat_summary")
+            if isinstance((goal_continuation_state or {}).get("tool_loop"), dict)
+            else {}
+        ),
         "queue_analysis": queue_analysis,
         "recent_reports": recent_reports[:5],
         "recent_events": recent_events[:8],
@@ -1520,6 +1615,7 @@ def _build_wake_context(
     capabilities: list[dict[str, Any]],
     active_goal: dict[str, Any] | None,
     recent_actions: list[dict[str, Any]],
+    goal_continuation_state: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     goal_evidence = _goal_evidence(active_goal, recent_actions)
     cached_static_context = _cached_static_context(capabilities)
@@ -1536,6 +1632,7 @@ def _build_wake_context(
         active_goal=active_goal,
         recent_actions=recent_actions,
         goal_evidence=goal_evidence,
+        goal_continuation_state=goal_continuation_state,
     )
     return {
         "kind": "master_agent_wake_context_v2",
@@ -2105,6 +2202,10 @@ async def update_agent_config(
     *,
     heartbeat_enabled: bool | None = None,
     heartbeat_interval_seconds: int | None = None,
+    tool_runner_enabled: bool | None = None,
+    tool_runner_max_iterations: int | None = None,
+    tool_runner_max_runtime_seconds: int | None = None,
+    tool_runner_persist_continuation: bool | None = None,
     auto_execute_approved_lead_gen_email_enabled: bool | None = None,
     auto_execute_approved_lead_gen_email_limit: int | None = None,
     actor: str = "operator",
@@ -2126,6 +2227,20 @@ async def update_agent_config(
                 60,
                 min(int(heartbeat_interval_seconds), 3600),
             )
+        if tool_runner_enabled is not None:
+            current["tool_runner_enabled"] = bool(tool_runner_enabled)
+        if tool_runner_max_iterations is not None:
+            current["tool_runner_max_iterations"] = max(
+                1,
+                min(int(tool_runner_max_iterations), 5),
+            )
+        if tool_runner_max_runtime_seconds is not None:
+            current["tool_runner_max_runtime_seconds"] = max(
+                15,
+                min(int(tool_runner_max_runtime_seconds), 180),
+            )
+        if tool_runner_persist_continuation is not None:
+            current["tool_runner_persist_continuation"] = bool(tool_runner_persist_continuation)
         if auto_execute_approved_lead_gen_email_enabled is not None:
             current["auto_execute_approved_lead_gen_email_enabled"] = bool(
                 auto_execute_approved_lead_gen_email_enabled
@@ -3064,6 +3179,148 @@ async def create_agent_report(
     return report
 
 
+async def create_goal_continuation_report(
+    *,
+    goal_id: str,
+    goal: str,
+    status: str = "in_progress",
+    summary: str = "",
+    files_read: list[str] | None = None,
+    facts_learned: list[Any] | None = None,
+    remaining_questions: list[Any] | None = None,
+    next_suggested_tool_call: dict[str, Any] | None = None,
+    document_target: str = "docs/agent-kb/system-model/master-agent.md",
+    tool_loop: dict[str, Any] | None = None,
+    actor: str = GOAL_CONTINUATION_AGENT_ID,
+) -> dict[str, Any]:
+    """Persist a compact handoff note for future heartbeats.
+
+    This intentionally reuses AgentReportRow so the slice avoids a new table
+    until the continuation model proves it needs first-class indexing.
+    """
+    state = {
+        "kind": "goal_continuation_state",
+        "goal_id": goal_id,
+        "goal": goal,
+        "status": status,
+        "summary": summary,
+        "files_read": sorted({
+            path for path in (_valid_continuation_file_path(item) for item in (files_read or []))
+            if path
+        }),
+        "facts_learned": _json_list(facts_learned),
+        "remaining_questions": _json_list(remaining_questions),
+        "next_suggested_tool_call": _json_object(next_suggested_tool_call),
+        "document_target": document_target,
+        "tool_loop_summary": {
+            "status": (tool_loop or {}).get("status"),
+            "tool_calls_used": (tool_loop or {}).get("tool_calls_used"),
+            "tool_calls_limit": (tool_loop or {}).get("tool_calls_limit"),
+        },
+        "updated_at": _utcnow().isoformat(),
+    }
+    report = await create_agent_report(
+        task_id=None,
+        agent_id=actor,
+        status=GOAL_CONTINUATION_STATUS,
+        summary=summary or f"Continuation state for goal {goal_id}",
+        key_findings=state["facts_learned"],
+        actions_taken=[{
+            "type": "goal_continuation_saved",
+            "files_read": state["files_read"],
+            "tool_loop_status": state["tool_loop_summary"].get("status"),
+        }],
+        artifacts=[{
+            "type": "document_target",
+            "path": document_target,
+        }],
+        evidence=[state],
+        verification=[
+            "Continuation state was saved without modifying project files.",
+            "Full tool-loop evidence remains in heartbeat output and product traces.",
+        ],
+        risks=[],
+        open_questions=state["remaining_questions"],
+        recommended_next_actions=[
+            state["next_suggested_tool_call"]
+            if state["next_suggested_tool_call"]
+            else "Continue from this compact continuation state on the next heartbeat."
+        ],
+    )
+    await safe_record_product_trace(
+        actor_type="agent",
+        actor_id=actor,
+        event_type="goal_continuation_saved",
+        surface="agents",
+        entity_type="master_goal",
+        entity_id=goal_id,
+        output_json={
+            "report_id": report.get("id"),
+            "summary": state["summary"],
+            "files_read": state["files_read"],
+            "status": state["status"],
+        },
+    )
+    return {"report": report, "continuation_state": state}
+
+
+async def get_latest_goal_continuation_state(goal_id: str | None) -> dict[str, Any]:
+    if not goal_id:
+        return {}
+    await ensure_agent_tables()
+    async with AsyncSessionLocal() as session:
+        rows = (await session.execute(
+            select(AgentReportRow)
+            .where(AgentReportRow.agent_id == GOAL_CONTINUATION_AGENT_ID)
+            .where(AgentReportRow.status == GOAL_CONTINUATION_STATUS)
+            .order_by(AgentReportRow.created_at.desc())
+            .limit(25)
+        )).scalars().all()
+    latest: dict[str, Any] = {}
+    files_read: list[str] = []
+    facts_learned: list[Any] = []
+    remaining_questions: list[Any] = []
+    seen_files: set[str] = set()
+    seen_facts: set[str] = set()
+    seen_questions: set[str] = set()
+    for row in rows:
+        report = report_to_dict(row)
+        state = continuation_state_from_report(report)
+        if state.get("goal_id") != goal_id:
+            continue
+        if not latest:
+            latest = {
+                "report_id": report.get("id"),
+                "created_at": report.get("created_at"),
+                **state,
+            }
+        for path in state.get("files_read") or []:
+            text = _valid_continuation_file_path(path)
+            if text and text not in seen_files:
+                seen_files.add(text)
+                files_read.append(text)
+        for fact in state.get("facts_learned") or []:
+            key = json.dumps(fact, sort_keys=True, default=str)
+            if key not in seen_facts:
+                seen_facts.add(key)
+                facts_learned.append(fact)
+        for question in state.get("remaining_questions") or []:
+            key = json.dumps(question, sort_keys=True, default=str)
+            if key not in seen_questions:
+                seen_questions.add(key)
+                remaining_questions.append(question)
+    if latest:
+        latest["files_read"] = sorted(files_read)
+        latest["facts_learned"] = facts_learned
+        latest["remaining_questions"] = remaining_questions
+        latest["merged_report_count"] = len([
+            row for row in rows
+            if continuation_state_from_report(report_to_dict(row)).get("goal_id") == goal_id
+        ])
+        return latest
+    return {}
+
+
 async def run_master_heartbeat(*, actor: str = "master-agent") -> dict[str, Any]:
     """Run one lightweight heartbeat tick.
 
@@ -3103,6 +3360,8 @@ async def run_master_heartbeat(*, actor: str = "master-agent") -> dict[str, Any]
     human_status: dict[str, Any] = {}
     wake_context: dict[str, Any] = {}
     status_metadata: dict[str, Any] = {"used_llm": False}
+    tool_loop: dict[str, Any] = {}
+    tool_runner_metadata: dict[str, Any] = {"enabled": bool(agent_config.get("tool_runner_enabled"))}
     auto_executed_lead_gen_sends: dict[str, Any] = {}
     if agent_config.get("auto_execute_approved_lead_gen_email_enabled", False):
         from app.services.action_execution import execute_approved_lead_gen_email_actions
@@ -3163,6 +3422,9 @@ async def run_master_heartbeat(*, actor: str = "master-agent") -> dict[str, Any]
             capabilities=capabilities,
             recent_reports=recent_report_snapshots,
         )
+        goal_continuation_state = await get_latest_goal_continuation_state(
+            str((active_goal or {}).get("id") or "")
+        )
         fallback_status = _build_human_status(
             active_count=active_count,
             queued_count=queued_count,
@@ -3185,11 +3447,55 @@ async def run_master_heartbeat(*, actor: str = "master-agent") -> dict[str, Any]
             capabilities=capabilities,
             active_goal=active_goal,
             recent_actions=recent_action_snapshots,
+            goal_continuation_state=goal_continuation_state,
         )
         volatile_wake_state = wake_context.setdefault("volatile_wake_state", {})
         if isinstance(volatile_wake_state, dict):
             volatile_wake_state["auto_delegated_task"] = auto_delegated_task or {}
             volatile_wake_state["auto_executed_lead_gen_sends"] = auto_executed_lead_gen_sends or {}
+        if agent_config.get("tool_runner_enabled", False) and active_goal:
+            try:
+                from app.services.master_agent_runner import (
+                    openclaw_runner_decision_provider,
+                    run_master_agent_tool_loop,
+                )
+
+                tool_loop = await run_master_agent_tool_loop(
+                    wake_context=wake_context,
+                    active_goal=active_goal,
+                    max_iterations=int(agent_config.get("tool_runner_max_iterations") or 3),
+                    max_runtime_seconds=int(agent_config.get("tool_runner_max_runtime_seconds") or 90),
+                    actor=actor,
+                    decision_provider=openclaw_runner_decision_provider,
+                    persist_continuation=bool(agent_config.get("tool_runner_persist_continuation", True)),
+                )
+                tool_runner_metadata = {
+                    "enabled": True,
+                    "status": tool_loop.get("status"),
+                    "tool_calls_used": tool_loop.get("tool_calls_used"),
+                    "continuation_report_id": tool_loop.get("continuation_report_id"),
+                }
+            except Exception as exc:
+                logger.exception("master-agent tool runner failed")
+                tool_loop = {
+                    "status": "failed",
+                    "error": str(exc),
+                    "tool_calls_used": 0,
+                    "steps": [],
+                    "final_answer": {
+                        "summary": "Tool runner failed before completing a bounded loop.",
+                        "blockers": [str(exc)],
+                    },
+                }
+                tool_runner_metadata = {"enabled": True, "status": "failed", "error": str(exc)}
+            if isinstance(volatile_wake_state, dict):
+                volatile_wake_state["tool_loop"] = tool_loop
+        elif isinstance(volatile_wake_state, dict):
+            volatile_wake_state["tool_loop"] = {
+                "status": "disabled" if not agent_config.get("tool_runner_enabled", False) else "no_active_goal",
+                "tool_calls_used": 0,
+                "steps": [],
+            }
         objective_status = (
             volatile_wake_state.get("objective_status")
             if isinstance(volatile_wake_state.get("objective_status"), dict)
@@ -3240,6 +3546,7 @@ async def run_master_heartbeat(*, actor: str = "master-agent") -> dict[str, Any]
                 "queue_analysis": queue_analysis,
                 "human_status": human_status,
                 "objective_status": objective_status,
+                "tool_loop": tool_loop,
                 "auto_delegated_task": auto_delegated_task or {},
                 "auto_executed_lead_gen_sends": auto_executed_lead_gen_sends or {},
                 "active_goal": active_goal or {},
@@ -3247,6 +3554,7 @@ async def run_master_heartbeat(*, actor: str = "master-agent") -> dict[str, Any]
             metadata_json={
                 "trace_id": trace.get("trace_id") if trace else None,
                 "status_llm": status_metadata,
+                "tool_runner": tool_runner_metadata,
             },
         ))
         await session.commit()
@@ -3264,8 +3572,10 @@ async def run_master_heartbeat(*, actor: str = "master-agent") -> dict[str, Any]
         "heartbeat_interval_seconds": agent_config["heartbeat_interval_seconds"],
         "human_status": human_status,
         "objective_status": objective_status,
+        "tool_loop": tool_loop,
         "wake_context": wake_context,
         "status_llm": status_metadata,
+        "tool_runner": tool_runner_metadata,
         "auto_delegated_task": auto_delegated_task,
         "auto_executed_lead_gen_sends": auto_executed_lead_gen_sends,
         "active_goal": active_goal,

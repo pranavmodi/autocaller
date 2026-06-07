@@ -396,6 +396,7 @@ export type MasterHeartbeat = {
     next_best_action?: string;
   };
   wake_context?: Record<string, unknown>;
+  tool_loop?: Record<string, unknown>;
   status_llm?: {
     used_llm?: boolean;
     model?: string;
@@ -408,6 +409,7 @@ export type MasterHeartbeat = {
     prompt_cache?: Record<string, unknown>;
   };
   auto_executed_lead_gen_sends?: Record<string, unknown>;
+  tool_runner?: Record<string, unknown>;
   active_goal?: MasterGoal | null;
   queue_analysis?: Record<string, unknown>;
   soul: Record<string, unknown>;
@@ -417,6 +419,10 @@ export type MasterHeartbeat = {
 export type AgentsStatus = {
   heartbeat_enabled: boolean;
   heartbeat_interval_seconds: number;
+  tool_runner_enabled: boolean;
+  tool_runner_max_iterations: number;
+  tool_runner_max_runtime_seconds: number;
+  tool_runner_persist_continuation: boolean;
   auto_execute_approved_lead_gen_email_enabled: boolean;
   auto_execute_approved_lead_gen_email_limit: number;
   last_heartbeat: MasterHeartbeat | null;
@@ -427,12 +433,20 @@ export const getAgentsStatus = () => get<AgentsStatus>("/api/agents/status");
 export const updateAgentConfig = (payload: {
   heartbeat_enabled?: boolean;
   heartbeat_interval_seconds?: number;
+  tool_runner_enabled?: boolean;
+  tool_runner_max_iterations?: number;
+  tool_runner_max_runtime_seconds?: number;
+  tool_runner_persist_continuation?: boolean;
   auto_execute_approved_lead_gen_email_enabled?: boolean;
   auto_execute_approved_lead_gen_email_limit?: number;
 }) =>
   patch<{ config: {
     heartbeat_enabled: boolean;
     heartbeat_interval_seconds: number;
+    tool_runner_enabled: boolean;
+    tool_runner_max_iterations: number;
+    tool_runner_max_runtime_seconds: number;
+    tool_runner_persist_continuation: boolean;
     auto_execute_approved_lead_gen_email_enabled: boolean;
     auto_execute_approved_lead_gen_email_limit: number;
   } }>(
