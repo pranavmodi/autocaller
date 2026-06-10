@@ -365,6 +365,7 @@ def _send_email(
     recipient_name: str | None = None,
     from_addr: str | None = None,
     transport: str | None = None,
+    brief_version: int | None = None,
 ) -> str:
     """Send an email. Prefers the Zoho Mail HTTPS API when configured, then
     SMTP, and only uses Resend when explicitly selected or SMTP/API is
@@ -419,6 +420,7 @@ def _send_email(
             pif_id=pif_id,
             call_id=call_id,
             recipient_name=recipient_name,
+            brief_version=brief_version,
         )
         raise
 
@@ -433,6 +435,7 @@ def _send_email(
         pif_id=pif_id,
         call_id=call_id,
         recipient_name=recipient_name,
+        brief_version=brief_version,
     )
     return msg_id
 

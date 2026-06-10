@@ -240,6 +240,7 @@ async def create_sequence_approval_notification(
                 "composer_variant_key": composed.composer_variant_key,
                 "skill_path": composed.skill_path,
                 "skill_sha256": composed.skill_sha256,
+                "brief_version": composed.brief_version,
             }
         except LeadEmailComposerError as e:
             seq.status = "paused"
@@ -301,6 +302,7 @@ async def create_sequence_approval_notification(
                 "composer_variant_key": render_meta.get("composer_variant_key"),
                 "skill_path": render_meta.get("skill_path"),
                 "skill_sha256": render_meta.get("skill_sha256"),
+                "brief_version": render_meta.get("brief_version"),
                 "draft_subject": rendered_subject,
                 "draft_body": rendered_body,
                 "message_type": rendered_message_type,

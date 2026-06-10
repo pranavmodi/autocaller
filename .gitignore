@@ -69,3 +69,4 @@ logs/
 .coverage
 htmlcov/
 .pytest_cache/
+docs/product/tasks/logs/

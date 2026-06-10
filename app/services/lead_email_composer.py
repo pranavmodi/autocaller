@@ -12,13 +12,14 @@ from typing import Any
 from sqlalchemy import desc, or_, select
 
 from app.db import AsyncSessionLocal
-from app.db.models import ConsultBookingRow, EmailSequenceRow, FirmContactRow, InboundEmailRow
+from app.db.models import ConsultBookingRow, EmailSequenceRow, FirmContactRow, InboundEmailRow, PatientRow
 from app.services.llm_gateway import LLMGatewayError, call_skill_json
 from app.services.lead_email_composer_variants import (
     EXPERIMENT_KEY,
     choose_composer_skill_variant,
     get_composer_skill_variant,
 )
+from app.services.listening_client import ListeningClient, ListeningClientError
 from app.services.product_traces import safe_record_product_trace
 
 
@@ -63,6 +64,7 @@ class LeadEmailComposition:
     composer_variant_key: str
     skill_path: str
     skill_sha256: str | None
+    brief_version: int | None = None
 
 
 class LeadEmailComposerError(RuntimeError):
@@ -154,6 +156,121 @@ def _sanitize_subject(value: str | None) -> str:
         cleaned = subject[len("Quick question about "):].strip()
         return cleaned[:1].upper() + cleaned[1:]
     return subject
+
+
+def _brief_markdown(data: dict[str, Any]) -> str:
+    return str(data.get("brief_md") or data.get("markdown") or data.get("body") or "")
+
+
+def _brief_version(data: dict[str, Any]) -> int | None:
+    try:
+        return int(data.get("version"))
+    except (TypeError, ValueError):
+        return None
+
+
+def _insight_rows(data: dict[str, Any]) -> list[dict[str, Any]]:
+    rows = data.get("insights")
+    if rows is None:
+        rows = data.get("items")
+    if isinstance(rows, list):
+        return [row for row in rows if isinstance(row, dict)]
+    return []
+
+
+def _listening_query_terms(
+    *,
+    firm_name: str,
+    contact: FirmContactRow,
+    patient: PatientRow | None,
+) -> str:
+    parts = [
+        firm_name,
+        getattr(contact, "title", None),
+        getattr(patient, "practice_area", None) if patient else None,
+        getattr(patient, "notes", None) if patient else None,
+    ]
+    if patient and isinstance(patient.tags, list):
+        parts.extend(str(tag) for tag in patient.tags[:8])
+    text = " ".join(str(part or "") for part in parts)
+    tokens = []
+    for token in re.findall(r"[A-Za-z][A-Za-z0-9_-]{2,}", text.lower()):
+        if token in {
+            "firm", "law", "legal", "group", "office", "offices", "the",
+            "and", "for", "with", "attorney", "attorneys",
+        }:
+            continue
+        tokens.append(token.replace("_", "-"))
+    if not tokens:
+        return "personal injury intake operations"
+    deduped = list(dict.fromkeys(tokens))
+    return " ".join(deduped[:8])
+
+
+async def fetch_listening_context_for_email(
+    *,
+    contact: FirmContactRow,
+    firm_name: str,
+    limit: int = 5,
+) -> dict[str, Any]:
+    """Fetch the latest mindset brief + matched insights for composer context.
+
+    Soft-fails by design: lead-gen composition must proceed when Mission
+    Control is down.
+    """
+    patient: PatientRow | None = None
+    async with AsyncSessionLocal() as session:
+        possible_ids = []
+        if contact.pif_id:
+            possible_ids.extend([f"pif-{contact.pif_id}", f"mc-{contact.pif_id}"])
+        if possible_ids:
+            patient = (await session.execute(
+                select(PatientRow).where(PatientRow.patient_id.in_(possible_ids)).limit(1)
+            )).scalar_one_or_none()
+        if patient is None and firm_name:
+            patient = (await session.execute(
+                select(PatientRow)
+                .where(PatientRow.firm_name.ilike(f"%{firm_name}%"))
+                .limit(1)
+            )).scalar_one_or_none()
+
+    query = _listening_query_terms(firm_name=firm_name, contact=contact, patient=patient)
+    client = ListeningClient()
+    try:
+        brief_data = await client.brief()
+        insights_data = await client.insights(q=query, limit=limit)
+    except ListeningClientError as e:
+        return {
+            "available": False,
+            "brief_version": None,
+            "query": query,
+            "error": str(e)[:300],
+            "insights": [],
+        }
+
+    brief_md = _brief_markdown(brief_data)
+    insights = _insight_rows(insights_data)[:limit]
+    return {
+        "available": True,
+        "brief_version": _brief_version(brief_data),
+        "brief_created_at": brief_data.get("created_at"),
+        "query": query,
+        "brief_excerpt": _excerpt(brief_md, 1800),
+        "insights": [
+            {
+                "type": row.get("type"),
+                "cluster": row.get("cluster"),
+                "who_feels_it": row.get("who_feels_it"),
+                "severity": row.get("severity"),
+                "quote": row.get("quote"),
+                "paraphrase": row.get("paraphrase"),
+                "source_name": row.get("source_name"),
+                "source_kind": row.get("source_kind"),
+                "url": row.get("url"),
+            }
+            for row in insights
+        ],
+    }
 
 
 def _file_sha256(path: str) -> str | None:
@@ -381,6 +498,13 @@ async def compose_lead_email(
         contact=contact,
         firm_name=firm_name,
     )
+    listening_context = await fetch_listening_context_for_email(
+        contact=contact,
+        firm_name=firm_name,
+        limit=5,
+    )
+    if listening_context.get("available"):
+        payload["listening_mindset_context"] = listening_context
     if research_evidence:
         payload["research_evidence"] = research_evidence
     if selection_evidence:
@@ -413,6 +537,13 @@ async def compose_lead_email(
         "sequence": _sequence_snapshot(sequence, step_num=step_num),
         "research_evidence": research_evidence or {},
         "selection_evidence": selection_evidence or {},
+        "listening_mindset": {
+            "available": bool(listening_context.get("available")),
+            "brief_version": listening_context.get("brief_version"),
+            "query": listening_context.get("query"),
+            "insight_count": len(listening_context.get("insights") or []),
+            "error": listening_context.get("error"),
+        },
         "skill_path": skill_path,
         "skill_sha256": skill_sha256,
         "composer_experiment_key": composer_experiment_key,
@@ -430,6 +561,12 @@ async def compose_lead_email(
             "contact": payload.get("contact", {}),
             "conversation_state": payload.get("conversation_state", {}),
             "policy": payload.get("policy", {}),
+            "listening_mindset": payload.get("listening_mindset_context") or {
+                "available": False,
+                "brief_version": None,
+                "query": listening_context.get("query"),
+                "error": listening_context.get("error"),
+            },
         },
         output_json=payload,
         context_json=trace_context,
@@ -475,6 +612,7 @@ async def compose_lead_email(
         composer_variant_key=composer_variant_key,
         skill_path=skill_path,
         skill_sha256=skill_sha256,
+        brief_version=listening_context.get("brief_version"),
     )
     await safe_record_product_trace(
         actor_type="system",
@@ -497,6 +635,7 @@ async def compose_lead_email(
             "composer_variant_key": composition.composer_variant_key,
             "skill_path": composition.skill_path,
             "skill_sha256": composition.skill_sha256,
+            "brief_version": composition.brief_version,
         },
         context_json=trace_context,
         metadata_json={"raw_response_excerpt": _excerpt(composition.raw_response, 1200)},

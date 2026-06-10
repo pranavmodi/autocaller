@@ -92,6 +92,7 @@ Commands
   mock           Mock-mode toggle (redirect all Twilio calls to a mock phone).
   allowlist      Manage allowed_phones (phone allowlist).
   followups      GTM follow-up queue — calls awaiting action.
+  listening      Mission Control mindset brief, insights, sources, and prep.
 ```
 
 Every command accepts `--help`. Exit code is `0` on success, `1` on any error
@@ -157,6 +158,11 @@ Every command accepts `--help`. Exit code is `0` on success, `1` on any error
 | `actions send-email --mode=test --to=<email> --subject=... --body=... [--approved-by=operator --from=... --no-execute --json]` | Create, policy-check, and optionally execute a regular durable test email action. |
 | `actions send-email --mode=lead_gen --to=<email> --subject=... --body=... --contact=<contact_id> --item=<batch_item_id> [--pif=<pif_id> --firm=... --approved-by=operator --no-execute --json]` | Create, policy-check, and optionally execute an exact approved lead-gen email action. Policy verifies recipient/contact match, approval hashes, consult link, Zoho transport, no suppression, and no prior successful send for the same item/recipient. |
 | `actions send-test-email --to=<email> [--subject=... --body=... --approved-by=operator --from=... --no-execute --json]` | Convenience alias for `actions send-email --mode=test`. Use the regular email action family for master-agent execution-path tests instead of free-form email shell commands. |
+| `listening brief [--version N]` | Print the Mission Control mindset brief markdown from `http://127.0.0.1:8001/api/listening`. |
+| `listening search "<q>" [--type T] [--who W] [--limit N]` | Search extracted listening insights by query, type, and buyer persona. |
+| `listening quotes --cluster <cluster> [--limit 5]` | Show direct quotes for one listening insight cluster. |
+| `listening sources` | Show listening source name, kind, last poll time, and computed stale flag. |
+| `listening prep <firm-or-name>` | Combine local `patients`/`firm_contacts` context, top matched insights, and one gateway call into a pre-call persona, objections, and vocabulary one-pager. |
 | `agents status [--json]` | Show the Possible OS master-agent heartbeat configuration, objective status, and last heartbeat result in the current backend process. |
 | `agents config [--interval-seconds=300] [--enabled/--disabled] [--auto-send-approved-lead-gen\|--no-auto-send-approved-lead-gen --auto-send-limit=1 --json]` | Update persisted master-agent heartbeat settings. The approved-send toggle lets heartbeat execute exact approved lead-gen email actions through the policy gate. |
 | `agents heartbeat [--json]` | Run one master-agent heartbeat tick immediately. V1 reads `soul.md` as protected read-only context, records traces, checks active subagent tasks, marks stale workers, and, only when enabled, executes already-approved lead-gen email actions. |
@@ -604,6 +610,25 @@ Sender selection defaults to `SMTP_FROM_EMAIL`, then `SMTP_USERNAME`, then
 configured addresses, or an address listed in `EMAIL_ALLOWED_FROM_ADDRESSES`.
 Threaded lead-reply sends can use `THREAD_REPLY_FROM_EMAIL` to differ from the
 generic notification sender.
+
+### Recipe: "morning mindset check"
+```bash
+bin/autocaller listening brief
+bin/autocaller listening search "medical records follow up" --limit 8
+bin/autocaller listening sources
+```
+Use this before approving outreach for the day. The brief is read from Mission
+Control on `:8001`; if Mission Control is down the CLI exits non-zero and does
+not alter autocaller state.
+
+### Recipe: "pre-call prep"
+```bash
+bin/autocaller listening prep "Smith Injury Law"
+bin/autocaller listening quotes --cluster medical-records-workflow --limit 5
+```
+`listening prep` looks up the firm/contact in local `patients` and
+`firm_contacts`, fetches top matched listening insights, then makes one gateway
+call to render persona, expected objections, and vocabulary. It is read-only.
 
 ### Recipe: "review every outbound touch with one firm"
 ```bash

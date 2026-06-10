@@ -733,6 +733,7 @@ class EmailLogRow(Base):
     message_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     status: Mapped[str] = mapped_column(String(16), default="sent")
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    brief_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
     sent_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), default=_utcnow,
     )

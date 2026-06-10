@@ -15,7 +15,7 @@ import os
 import re
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import httpx
 import typer
@@ -51,6 +51,7 @@ todos_app = typer.Typer(help="Editable project todo backlog.", no_args_is_help=T
 agents_app = typer.Typer(help="Possible OS master-agent heartbeat and subagent tasks.", no_args_is_help=True)
 actions_app = typer.Typer(help="Durable Possible OS action execution queue.", no_args_is_help=True)
 fs_app = typer.Typer(help="Read-only repo filesystem inspection for Possible OS agents.", no_args_is_help=True)
+listening_app = typer.Typer(help="Mission Control listening brief, insights, sources, and prep.", no_args_is_help=True)
 outreach_campaigns_app = typer.Typer(help="Create / list / show outreach campaigns.", no_args_is_help=True)
 outreach_audience_app = typer.Typer(help="Build a campaign's recipient list from firm contacts.", no_args_is_help=True)
 outreach_app.add_typer(outreach_campaigns_app, name="campaigns")
@@ -79,6 +80,7 @@ app.add_typer(todos_app, name="todos")
 app.add_typer(agents_app, name="agents")
 app.add_typer(actions_app, name="actions")
 app.add_typer(fs_app, name="fs")
+app.add_typer(listening_app, name="listening")
 
 console = Console()
 
@@ -1503,6 +1505,306 @@ def followups_backfill_voicemails(
         "sent": sent, "skipped": skipped, "dry_run_count": dry, "errors": errors,
         "results": results,
     })
+
+
+# ---------------------------------------------------------------------------
+# listening — Mission Control mindset brief + insights
+# ---------------------------------------------------------------------------
+
+def _listening_client():
+    from app.services.listening_client import ListeningClient
+
+    return ListeningClient()
+
+
+def _listening_get(coro):
+    from app.services.listening_client import ListeningClientError
+
+    try:
+        return _run(coro)
+    except ListeningClientError as e:
+        console.print(f"[red]{e}[/red]")
+        raise typer.Exit(code=1) from e
+
+
+def _rows_from_payload(payload: dict[str, Any], key: str) -> list[dict[str, Any]]:
+    rows = payload.get(key)
+    if rows is None:
+        rows = payload.get("items")
+    return [row for row in (rows or []) if isinstance(row, dict)]
+
+
+def _brief_text(payload: dict[str, Any]) -> str:
+    return str(payload.get("brief_md") or payload.get("markdown") or payload.get("body") or "")
+
+
+def _parse_dt(value: Any):
+    if not value:
+        return None
+    from datetime import datetime, timezone
+
+    text = str(value).strip().replace("Z", "+00:00")
+    try:
+        dt = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
+def _source_stale(row: dict[str, Any]) -> bool:
+    from datetime import datetime, timezone
+
+    if row.get("stale") is not None:
+        return bool(row.get("stale"))
+    last = _parse_dt(row.get("last_polled_at"))
+    if last is None:
+        return True
+    try:
+        cadence = int(row.get("expected_cadence_days") or 30)
+    except (TypeError, ValueError):
+        cadence = 30
+    return (datetime.now(timezone.utc) - last).days > cadence
+
+
+@listening_app.command("brief")
+def listening_brief(
+    version: Optional[int] = typer.Option(None, "--version", "-v", help="Brief version to print. Defaults to latest."),
+):
+    """Print the Mission Control mindset brief as markdown."""
+    data = _listening_get(_listening_client().brief(version=version))
+    md = _brief_text(data)
+    if not md:
+        console.print("[yellow]Brief returned no markdown.[/yellow]")
+        console.print_json(data=data)
+        return
+    console.print(md, markup=False)
+
+
+@listening_app.command("search")
+def listening_search(
+    q: str = typer.Argument(..., help="Insight search query."),
+    insight_type: Optional[str] = typer.Option(None, "--type", "-t", help="Filter by insight type."),
+    who: Optional[str] = typer.Option(None, "--who", "-w", help="Filter by who_feels_it persona."),
+    limit: int = typer.Option(20, "--limit", "-n", min=1, max=100, help="Maximum insights to show."),
+):
+    """Search listening insights."""
+    data = _listening_get(_listening_client().insights(
+        q=q,
+        insight_type=insight_type,
+        who=who,
+        limit=limit,
+    ))
+    rows = _rows_from_payload(data, "insights")
+    if not rows:
+        console.print("[yellow]No insights matched.[/yellow]")
+        return
+    table = Table(title=f"Listening insights ({len(rows)})")
+    for col in ["type", "cluster", "who", "severity", "quote", "source"]:
+        table.add_column(col, overflow="fold")
+    for row in rows:
+        table.add_row(
+            str(row.get("type") or "—"),
+            str(row.get("cluster") or "—"),
+            str(row.get("who_feels_it") or "—"),
+            str(row.get("severity") or "—"),
+            str(row.get("quote") or row.get("paraphrase") or "—")[:220],
+            str(row.get("source_name") or row.get("url") or "—")[:80],
+        )
+    console.print(table)
+
+
+@listening_app.command("quotes")
+def listening_quotes(
+    cluster: str = typer.Option(..., "--cluster", "-c", help="Insight cluster to pull quotes from."),
+    limit: int = typer.Option(5, "--limit", "-n", min=1, max=50, help="Maximum quotes to show."),
+):
+    """Show direct quotes for one insight cluster."""
+    data = _listening_get(_listening_client().insights(cluster=cluster, limit=limit))
+    rows = _rows_from_payload(data, "insights")
+    if not rows:
+        console.print("[yellow]No quotes matched.[/yellow]")
+        return
+    for i, row in enumerate(rows, start=1):
+        quote = str(row.get("quote") or row.get("paraphrase") or "").strip()
+        source = str(row.get("source_name") or row.get("url") or "").strip()
+        console.print(f"[bold]{i}. {row.get('type') or 'insight'}[/bold] [{row.get('who_feels_it') or 'unknown'}]")
+        console.print(quote, markup=False)
+        if source:
+            console.print(f"[dim]{source}[/dim]")
+        console.print()
+
+
+@listening_app.command("sources")
+def listening_sources():
+    """List listening sources and freshness state."""
+    data = _listening_get(_listening_client().sources(limit=500))
+    rows = _rows_from_payload(data, "sources")
+    if not rows:
+        console.print("[yellow]No sources returned.[/yellow]")
+        return
+    table = Table(title=f"Listening sources ({len(rows)})")
+    for col in ["name", "kind", "last_polled_at", "stale"]:
+        table.add_column(col, overflow="fold")
+    for row in rows:
+        stale = _source_stale(row)
+        table.add_row(
+            str(row.get("name") or "—")[:60],
+            str(row.get("kind") or "—"),
+            str(row.get("last_polled_at") or "never"),
+            "yes" if stale else "no",
+        )
+    console.print(table)
+
+
+async def _firm_context_for_prep(term: str) -> dict[str, Any]:
+    from sqlalchemy import or_, select
+
+    from app.db import AsyncSessionLocal
+    from app.db.models import FirmContactRow, PatientRow
+
+    like = f"%{term}%"
+    async with AsyncSessionLocal() as session:
+        patients = (await session.execute(
+            select(PatientRow)
+            .where(or_(PatientRow.firm_name.ilike(like), PatientRow.name.ilike(like)))
+            .order_by(PatientRow.updated_at.desc())
+            .limit(5)
+        )).scalars().all()
+        pif_ids = []
+        for row in patients:
+            pid = row.patient_id or ""
+            if pid.startswith("pif-"):
+                pif_ids.append(pid[4:])
+            elif pid.startswith("mc-"):
+                pif_ids.append(pid[3:])
+        contact_filters = [FirmContactRow.full_name.ilike(like)]
+        if pif_ids:
+            contact_filters.append(FirmContactRow.pif_id.in_(pif_ids))
+        contacts = (await session.execute(
+            select(FirmContactRow)
+            .where(or_(*contact_filters))
+            .order_by(FirmContactRow.updated_at.desc())
+            .limit(10)
+        )).scalars().all()
+    return {
+        "query": term,
+        "patients": [
+            {
+                "patient_id": row.patient_id,
+                "lead_name": row.name,
+                "firm_name": row.firm_name,
+                "state": row.state,
+                "practice_area": row.practice_area,
+                "title": row.title,
+                "tags": row.tags,
+                "notes": row.notes,
+                "source": row.source,
+            }
+            for row in patients
+        ],
+        "contacts": [
+            {
+                "id": row.id,
+                "pif_id": row.pif_id,
+                "full_name": row.full_name,
+                "first_name": row.first_name,
+                "title": row.title,
+                "email": row.email,
+                "source": row.source,
+            }
+            for row in contacts
+        ],
+    }
+
+
+def _prep_search_query(context: dict[str, Any], term: str) -> str:
+    parts = [term]
+    for row in context.get("patients") or []:
+        parts.extend([
+            row.get("firm_name"),
+            row.get("practice_area"),
+            row.get("title"),
+            row.get("notes"),
+        ])
+        parts.extend(row.get("tags") or [])
+    for row in context.get("contacts") or []:
+        parts.append(row.get("title"))
+    text = " ".join(str(part or "") for part in parts)
+    tokens = [
+        token.lower()
+        for token in re.findall(r"[A-Za-z][A-Za-z0-9_-]{2,}", text)
+        if token.lower() not in {"firm", "law", "legal", "group", "office", "and", "the"}
+    ]
+    return " ".join(list(dict.fromkeys(tokens))[:10]) or term
+
+
+async def _render_listening_prep(context: dict[str, Any], insights: list[dict[str, Any]]) -> str:
+    from app.services.llm_gateway import DEFAULT_GATEWAY_URL, extract_json, gateway_token, require_fields
+
+    url = os.getenv("OPENCLAW_GATEWAY_URL", DEFAULT_GATEWAY_URL)
+    model = os.getenv("LISTENING_PREP_MODEL", os.getenv("OPENCLAW_DEFAULT_MODEL", "openclaw"))
+    payload = {
+        "firm_context": context,
+        "matched_insights": insights[:8],
+        "task": (
+            "Render a concise pre-call one-pager for a PI-firm outreach call. "
+            "Return JSON with markdown, persona, expected_objections, and vocabulary."
+        ),
+    }
+    body = {
+        "model": model,
+        "messages": [
+            {
+                "role": "system",
+                "content": (
+                    "You prepare practical sales-call prep for Possible Minds. "
+                    "Use only the provided firm context and listening insights. "
+                    "Return JSON only: {\"markdown\": string, \"persona\": string, "
+                    "\"expected_objections\": [string], \"vocabulary\": [string]}."
+                ),
+            },
+            {"role": "user", "content": json.dumps(payload, indent=2)},
+        ],
+        "max_tokens": 1100,
+    }
+    timeout_s = float(os.getenv("LISTENING_PREP_TIMEOUT_S", "240"))
+    async with httpx.AsyncClient(timeout=timeout_s, verify=False) as client:
+        resp = await client.post(
+            url,
+            headers={
+                "Authorization": f"Bearer {gateway_token()}",
+                "Content-Type": "application/json",
+            },
+            json=body,
+        )
+    resp.raise_for_status()
+    data = resp.json()
+    content = data["choices"][0]["message"]["content"]
+    parsed = extract_json(content)
+    require_fields(parsed, ["markdown", "persona", "expected_objections", "vocabulary"])
+    return str(parsed["markdown"]).strip()
+
+
+@listening_app.command("prep")
+def listening_prep(
+    firm_or_name: str = typer.Argument(..., help="Firm or contact name to prepare for."),
+):
+    """Build a one-page persona, objections, and vocabulary prep sheet."""
+    context = _run(_firm_context_for_prep(firm_or_name))
+    if not context.get("patients") and not context.get("contacts"):
+        console.print(f"[red]No local firm/contact context matched: {firm_or_name}[/red]")
+        raise typer.Exit(code=1)
+    search_query = _prep_search_query(context, firm_or_name)
+    insights_data = _listening_get(_listening_client().insights(q=search_query, limit=8))
+    insights = _rows_from_payload(insights_data, "insights")
+    try:
+        markdown = _run(_render_listening_prep(context, insights))
+    except Exception as e:
+        console.print(f"[red]Prep LLM call failed: {type(e).__name__}: {str(e)[:300]}[/red]")
+        raise typer.Exit(code=1) from e
+    console.print(markdown, markup=False)
 
 
 # ---------------------------------------------------------------------------

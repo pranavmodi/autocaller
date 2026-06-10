@@ -372,6 +372,15 @@ async def send_notification_draft_reply(
         return notification_to_dict(row)
 
 
+def _optional_int(value) -> int | None:  # noqa: ANN001
+    if value is None or value == "":
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 async def _send_sequence_draft_notification(
     session: AsyncSession,
     row: OperatorNotificationRow,
@@ -419,6 +428,7 @@ async def _send_sequence_draft_notification(
         pif_id=contact.pif_id,
         recipient_name=contact.full_name,
         transport="zoho_api",
+        brief_version=_optional_int(suggested.get("brief_version")),
     )
 
     sent_at = datetime.now(timezone.utc)
@@ -442,6 +452,7 @@ async def _send_sequence_draft_notification(
         "sent_to": contact.email,
         "sent_subject": draft_subject,
         "sent_body": draft_body,
+        "brief_version": suggested.get("brief_version"),
     })
     row.suggested_action_json = suggested
     row.status = "actioned"

@@ -60,6 +60,7 @@ def log_email(
     pif_id: Optional[str] = None,
     call_id: Optional[str] = None,
     recipient_name: Optional[str] = None,
+    brief_version: Optional[int] = None,
 ) -> None:
     """Insert one row into email_logs. Never raises."""
     try:
@@ -70,11 +71,11 @@ def log_email(
                     INSERT INTO email_logs (
                         id, pif_id, call_id, recipient_email, recipient_name,
                         subject, body_excerpt, message_type, transport,
-                        message_id, status, error, sent_at
+                        message_id, status, error, sent_at, brief_version
                     ) VALUES (
                         :id, :pif_id, :call_id, :to, :to_name,
                         :subject, :body, :mtype, :transport,
-                        :mid, :status, :err, :sent_at
+                        :mid, :status, :err, :sent_at, :brief_version
                     )
                     """
                 ),
@@ -92,6 +93,7 @@ def log_email(
                     "status": (status or "sent")[:16],
                     "err": error,
                     "sent_at": datetime.now(timezone.utc),
+                    "brief_version": brief_version,
                 },
             )
     except Exception as e:

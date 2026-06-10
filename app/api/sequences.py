@@ -81,6 +81,7 @@ class RenderedStepDTO(BaseModel):
     composer_variant_key: Optional[str] = None
     skill_path: Optional[str] = None
     skill_sha256: Optional[str] = None
+    brief_version: Optional[int] = None
     requires_human_review: bool = False
     risk_flags: list[str] = Field(default_factory=list)
 
@@ -338,6 +339,7 @@ async def preview_sequence(
                     composer_variant_key=suggested.get("composer_variant_key"),
                     skill_path=suggested.get("skill_path"),
                     skill_sha256=suggested.get("skill_sha256"),
+                    brief_version=suggested.get("brief_version"),
                     requires_human_review=bool(suggested.get("requires_human_review", True)),
                     risk_flags=suggested.get("risk_flags") or [],
                 ))
@@ -366,6 +368,7 @@ async def preview_sequence(
         composer_variant_key=composed.composer_variant_key,
         skill_path=composed.skill_path,
         skill_sha256=composed.skill_sha256,
+        brief_version=composed.brief_version,
         requires_human_review=composed.requires_human_review,
         risk_flags=composed.risk_flags,
     ))

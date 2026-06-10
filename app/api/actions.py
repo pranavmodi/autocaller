@@ -33,6 +33,7 @@ class LeadGenDraftActionRequest(BaseModel):
     composer_variant_key: str | None = None
     skill_path: str | None = None
     skill_sha256: str | None = None
+    brief_version: int | None = None
 
 
 class TestEmailActionRequest(BaseModel):
@@ -54,6 +55,7 @@ class EmailActionRequest(TestEmailActionRequest):
     composer_variant_key: str | None = None
     skill_path: str | None = None
     skill_sha256: str | None = None
+    brief_version: int | None = None
 
 
 class ExecuteActionRequest(BaseModel):

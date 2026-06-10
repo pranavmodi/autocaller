@@ -84,6 +84,7 @@ def _email_log_snapshot(row: EmailLogRow | None) -> dict[str, Any]:
         "message_id": row.message_id,
         "status": row.status,
         "error": row.error,
+        "brief_version": row.brief_version,
         "sent_at": row.sent_at.isoformat() if row.sent_at else None,
         "pif_id": row.pif_id,
         "call_id": row.call_id,
@@ -271,6 +272,7 @@ async def create_send_approved_lead_gen_draft_action(
     composer_variant_key: str | None = None,
     skill_path: str | None = None,
     skill_sha256: str | None = None,
+    brief_version: int | None = None,
 ) -> dict[str, Any]:
     await ensure_agent_tables()
     draft_subject = _sanitize_email_copy(subject)
@@ -290,6 +292,7 @@ async def create_send_approved_lead_gen_draft_action(
         "composer_variant_key": composer_variant_key,
         "skill_path": skill_path,
         "skill_sha256": skill_sha256,
+        "brief_version": brief_version,
         "approval": {
             "approved_by": approved_by or "operator",
             "approved_at": _utcnow().isoformat(),
@@ -363,6 +366,7 @@ async def create_send_email_action(
     composer_variant_key: str | None = None,
     skill_path: str | None = None,
     skill_sha256: str | None = None,
+    brief_version: int | None = None,
 ) -> dict[str, Any]:
     await ensure_agent_tables()
     email_mode = (mode or "test").strip().lower()
@@ -402,6 +406,7 @@ async def create_send_email_action(
         "composer_variant_key": composer_variant_key,
         "skill_path": skill_path,
         "skill_sha256": skill_sha256,
+        "brief_version": brief_version,
         "subject_sha256": _sha256(draft_subject),
         "body_sha256": _sha256(draft_body),
         "test_email": email_mode == "test",
@@ -770,6 +775,7 @@ async def execute_action(action_id: str, *, actor: str = "operator") -> dict[str
                 composer_variant_key=payload.get("composer_variant_key"),
                 skill_path=payload.get("skill_path"),
                 skill_sha256=payload.get("skill_sha256"),
+                brief_version=payload.get("brief_version"),
             )
     except Exception as exc:
         async with AsyncSessionLocal() as session:
@@ -910,6 +916,7 @@ async def _execute_send_email(payload: dict[str, Any]) -> dict[str, Any]:
         recipient_name=recipient_name,
         pif_id=pif_id,
         transport="zoho_api" if mode == "lead_gen" else None,
+        brief_version=int(payload["brief_version"]) if payload.get("brief_version") else None,
     )
     email_log: EmailLogRow | None = None
     async with AsyncSessionLocal() as session:
@@ -956,6 +963,7 @@ async def _execute_send_email(payload: dict[str, Any]) -> dict[str, Any]:
                     "composer_variant_key",
                     "skill_path",
                     "skill_sha256",
+                    "brief_version",
                 ):
                     if payload.get(key):
                         reason[f"last_sent_{key}"] = payload.get(key)
@@ -992,6 +1000,7 @@ async def create_and_execute_send_approved_lead_gen_draft(
     composer_variant_key: str | None = None,
     skill_path: str | None = None,
     skill_sha256: str | None = None,
+    brief_version: int | None = None,
 ) -> dict[str, Any]:
     action = await create_send_approved_lead_gen_draft_action(
         batch_item_id=batch_item_id,
@@ -1003,6 +1012,7 @@ async def create_and_execute_send_approved_lead_gen_draft(
         composer_variant_key=composer_variant_key,
         skill_path=skill_path,
         skill_sha256=skill_sha256,
+        brief_version=brief_version,
     )
     return await execute_action(action["id"], actor=approved_by or requested_by or "operator")
 

@@ -232,6 +232,7 @@ async def create_lead_gen_email_agent_slice(
             composer_variant_key=composition.composer_variant_key,
             skill_path=composition.skill_path,
             skill_sha256=composition.skill_sha256,
+            brief_version=composition.brief_version,
         )
         action_ids.append(action["id"])
         if policy_check_first_action and first_policy is None:
@@ -249,6 +250,7 @@ async def create_lead_gen_email_agent_slice(
             "composer_variant_key": composition.composer_variant_key,
             "skill_path": composition.skill_path,
             "skill_sha256": composition.skill_sha256,
+            "brief_version": composition.brief_version,
             "action_id": action["id"],
             "action_status": action["status"],
             "research": research,

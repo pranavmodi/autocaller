@@ -74,6 +74,9 @@ bin/autocaller actions execute <action_id>
 bin/autocaller actions execute-approved-lead-gen --limit 1 --actor master-agent
 bin/autocaller actions send-approved-lead-gen-draft --item <batch_item_id> --subject "..." --body "..."
 bin/autocaller actions send-email --mode lead_gen --to <email> --subject "..." --body "..." --contact <contact_id> --item <batch_item_id> --no-execute
+bin/autocaller listening brief
+bin/autocaller listening search "medical records follow up" --limit 8
+bin/autocaller listening prep "<firm-or-name>"
 bin/autocaller inbound poll --limit 50 --classify
 bin/autocaller todos list --area lead-gen
 bin/autocaller todos add "Review new workflow idea" --area lead-gen --source-url https://...
@@ -152,7 +155,7 @@ Current email action modes:
 
 For `send_email mode=lead_gen`, the action input includes the exact approved
 recipient, subject, body, contact id, batch item id, firm metadata, composer
-variant metadata, and subject/body hashes.
+variant metadata, nullable listening `brief_version`, and subject/body hashes.
 
 Policy checks verify:
 
@@ -250,9 +253,11 @@ Flow:
 4. `compose_lead_email` calls
    `app/skills/possible-minds-lead-email-composer/SKILL.md` through the
    OpenClaw gateway with contact, firm, history, research, selection evidence,
-   policy, proof points, and consult-signature constraints.
+   policy, proof points, consult-signature constraints, and, when Mission
+   Control is reachable, latest listening brief context plus top matched
+   insights.
 5. The generated subject, body, rationale, angle, CTA, risk flags, composer
-   variant, skill path, and skill hash are stored in
+   variant, skill path, skill hash, and nullable `brief_version` are stored in
    `lead_gen_batch_items.reason_json.agent_draft`.
 6. A durable `send_email mode=lead_gen` action is created for each draft.
    Default status is `waiting_for_approval`; `--approve-actions` creates exact
@@ -403,9 +408,12 @@ Responsibilities:
 - build the evidence packet for one email from firm/contact data, DB email logs,
   stored inbound replies, booked consult patterns, and direct Zoho Sent mailbox
   lookup for prior messages to the recipient;
+- fetch the latest Mission Control listening brief and top five matched
+  insights from `app/services/listening_client.py`; failures are soft and leave
+  `brief_version` null;
 - call the local skill/LLM path;
 - produce subject, body, rationale, angle, CTA, blog link, model, and risk
-  metadata;
+  metadata including nullable `brief_version`;
 - keep the email plaintext, remove disallowed dash punctuation, and require
   human review.
 

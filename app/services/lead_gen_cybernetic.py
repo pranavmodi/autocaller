@@ -201,6 +201,7 @@ async def send_batch_item_draft(
     composer_variant_key: str | None = None,
     skill_path: str | None = None,
     skill_sha256: str | None = None,
+    brief_version: int | None = None,
 ) -> dict[str, Any]:
     draft_subject = _sanitize_email_copy(subject)
     draft_body = _sanitize_email_copy(body)
@@ -246,6 +247,7 @@ async def send_batch_item_draft(
         pif_id=contact.pif_id,
         recipient_name=contact.full_name,
         transport="zoho_api",
+        brief_version=brief_version,
     )
 
     sent_at = _utcnow()
@@ -268,6 +270,8 @@ async def send_batch_item_draft(
                 reason["last_sent_skill_path"] = skill_path
             if skill_sha256:
                 reason["last_sent_skill_sha256"] = skill_sha256
+            if brief_version:
+                reason["last_sent_brief_version"] = brief_version
             item_row.reason_json = reason
         if seq_row:
             seq_row.current_step = step_num
@@ -329,6 +333,7 @@ async def send_batch_item_draft(
                 "composer_variant_key": composer_variant_key,
                 "skill_path": skill_path,
                 "skill_sha256": skill_sha256,
+                "brief_version": brief_version,
             })
             notification.suggested_action_json = suggested
             notification.status = "actioned"
@@ -353,6 +358,7 @@ async def send_batch_item_draft(
             "message_id": msg_id,
             "sent_at": sent_at.isoformat(),
             "sent_to": contact.email,
+            "brief_version": brief_version,
         },
         context_json={
             "batch_id": item.batch_id,
@@ -363,6 +369,7 @@ async def send_batch_item_draft(
             "composer_variant_key": composer_variant_key,
             "skill_path": skill_path,
             "skill_sha256": skill_sha256,
+            "brief_version": brief_version,
         },
     )
 
@@ -376,6 +383,7 @@ async def send_batch_item_draft(
         "step": step_num,
         "composer_experiment_key": composer_experiment_key,
         "composer_variant_key": composer_variant_key,
+        "brief_version": brief_version,
     }
 
 

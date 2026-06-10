@@ -391,6 +391,11 @@ Common causes: Geo permissions not enabled, AMD mis-classifying carrier voicemai
 | `autocaller email send-consult --to ... --name ... --slot ... [--firm --notes]` | Manually fire the consult-booking confirmation (same template the Cal.com booking flow sends). |
 | `autocaller comms list [--firm --channel --since --status --q --limit --raw]` | Outbound communications feed (calls + voicemail + sms + email). Unions `call_logs` (channel derived from `voicemail_left`), `email_logs`, `sms_logs`. Same data the `/comms` UI page shows. `--firm <pif_id>` narrows to one firm; `/firms/{pif_id}` shows the same timeline inline. |
 | `autocaller comms show <kind:id>` | Show one comm as JSON. Kinds: `call:` (or for voicemail too — same call_id), `email:`, `sms:`. |
+| `autocaller listening brief [--version N]` | Print the Mission Control mindset brief markdown from `http://127.0.0.1:8001/api/listening`. Read-only. |
+| `autocaller listening search "<q>" [--type T] [--who W] [--limit N]` | Search extracted listening insights by query, type, and buyer persona. |
+| `autocaller listening quotes --cluster <cluster> [--limit 5]` | Show direct quotes for one listening insight cluster. |
+| `autocaller listening sources` | Show listening source name, kind, last poll time, and computed stale flag. |
+| `autocaller listening prep <firm-or-name>` | Build a pre-call one-pager from local `patients`/`firm_contacts`, top matched listening insights, and one gateway call. Read-only. |
 | `autocaller contacts backfill` | Populate `firm_contacts` from PIF Stats `leadership[]` + the patient DM. Idempotent. Run once before any `sequences start`. |
 | `autocaller contacts list [--firm <pif_id>]` | List firm_contacts roster. |
 | `autocaller sequences preview <contact_id>` | Render the four-email sequence for one contact, with their real Yelp quote injected. Read-only. |
