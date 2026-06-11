@@ -10,6 +10,7 @@ import {
   ChevronDown,
   CheckCircle2,
   ClipboardCheck,
+  Clock,
   Eye,
   Loader2,
   MailPlus,
@@ -912,7 +913,13 @@ function DailyActionPlan({
                   {reasonValue(item, "last_sent_subject")}
                 </div>
               )}
-              {!isEmailSent(item) && (draftStatuses[item.id] === "completed" || storedAgentDraftStep(item)) && (
+              {!isEmailSent(item) && scheduledSendPt(item) && (
+                <div className="mt-2 inline-flex items-center gap-1 rounded-full bg-violet-100 px-2 py-0.5 text-[11px] font-medium text-violet-800">
+                  <Clock className="h-3 w-3" />
+                  Scheduled — sends {scheduledSendPt(item)}
+                </div>
+              )}
+              {!isEmailSent(item) && !scheduledSendPt(item) && (draftStatuses[item.id] === "completed" || storedAgentDraftStep(item)) && (
                 <div className="mt-2 inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-800">
                   <CheckCircle2 className="h-3 w-3" />
                   Draft generated
@@ -1098,11 +1105,19 @@ function previewButtonLabel(item: LeadGenBatchItem) {
 function canSendFromPreview(item: LeadGenBatchItem) {
   const action = reasonValue(item, "action_type") || "first_touch";
   if (isEmailSent(item)) return false;
+  if (scheduledSendPt(item)) return false;
   return action === "first_touch" || action === "follow_up" || action === "approve_existing_draft";
 }
 
 function isEmailSent(item: LeadGenBatchItem) {
   return Boolean(reasonValue(item, "last_sent_at") || reasonValue(item, "last_sent_message_id"));
+}
+
+function scheduledSendPt(item: LeadGenBatchItem): string {
+  if (!reasonValue(item, "send_email_action_id")) return "";
+  const draft = objectValue(item.reason?.agent_draft);
+  const pt = draft && typeof draft.scheduled_for_pt === "string" ? draft.scheduled_for_pt : "";
+  return pt;
 }
 
 function sequencePreviewQueryKey(item: LeadGenBatchItem, composerVariantKey = "") {
@@ -1271,6 +1286,19 @@ function PreviewModal({
           )}
         </div>
         <div className="overflow-y-auto px-5 py-4">
+          {!alreadySent && scheduledSendPt(item) && (
+            <div className="mb-3 flex items-center gap-2 rounded-md border border-violet-200 bg-violet-50 px-3 py-3 text-sm text-violet-900">
+              <Clock className="h-4 w-4 shrink-0" />
+              <div>
+                <div className="font-medium">Scheduled for auto-send at {scheduledSendPt(item)}.</div>
+                <div className="mt-0.5 text-xs">
+                  The daemon will send this automatically. To change it, use{" "}
+                  <code>actions reschedule</code> / <code>actions cancel</code> or the /actions page —
+                  manual send is disabled to prevent a duplicate.
+                </div>
+              </div>
+            </div>
+          )}
           {alreadySent ? (
             <div className="rounded-md border border-sky-200 bg-sky-50 px-3 py-3 text-sm text-sky-900">
               <div className="font-medium">This email has already been sent.</div>

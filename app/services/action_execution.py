@@ -76,6 +76,27 @@ def _action_is_live_scheduled(row: AgentActionRow | None) -> bool:
     return bool(row and row.status == "approved" and row.scheduled_for is not None)
 
 
+async def find_live_scheduled_action_for_item(session, batch_item_id: str) -> dict[str, Any] | None:
+    """Return the live (approved + scheduled) send_email action for a batch item, if any."""
+    rows = (
+        await session.execute(
+            select(AgentActionRow)
+            .where(AgentActionRow.action_type == "send_email")
+            .where(AgentActionRow.status == "approved")
+            .where(AgentActionRow.scheduled_for.isnot(None))
+            .order_by(desc(AgentActionRow.created_at))
+        )
+    ).scalars()
+    for row in rows:
+        if (row.input_json or {}).get("batch_item_id") == batch_item_id:
+            return {
+                "id": row.id,
+                "scheduled_for_pt": format_pt(row.scheduled_for),
+                "scheduled_for_utc": format_utc(row.scheduled_for),
+            }
+    return None
+
+
 def _update_action_draft_payload(row: AgentActionRow, *, subject: str, body: str, actor: str) -> dict[str, Any]:
     draft_subject = _sanitize_email_copy(subject)
     draft_body = _sanitize_email_copy(body)

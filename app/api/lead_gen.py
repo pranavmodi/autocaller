@@ -11,6 +11,7 @@ from app.db.models import FirmContactRow, LeadGenBatchItemRow
 from app.services.action_execution import (
     create_send_email_action,
     execute_action,
+    find_live_scheduled_action_for_item,
     load_lead_gen_draft_for_edit,
     save_edited_lead_gen_draft,
 )
@@ -201,6 +202,16 @@ async def send_batch_item_preview_draft(
             contact = await session.get(FirmContactRow, item.contact_id)
             if not contact or not contact.email:
                 raise ValueError("contact_email_not_found")
+            scheduled = await find_live_scheduled_action_for_item(session, batch_item_id)
+            if scheduled is not None:
+                raise HTTPException(
+                    status_code=409,
+                    detail=(
+                        "already_scheduled: this draft is queued for auto-send at "
+                        f"{scheduled['scheduled_for_pt']} (action {scheduled['id']}). "
+                        "Cancel or reschedule it instead of sending again."
+                    ),
+                )
         action = await create_send_email_action(
             mode="lead_gen",
             to=contact.email,
@@ -222,6 +233,8 @@ async def send_batch_item_preview_draft(
         result["agent_action"] = execution.get("action")
         result["agent_action_policy"] = execution.get("policy")
         return result
+    except HTTPException:
+        raise
     except ValueError as e:
         detail = str(e)
         if detail in {"batch_item_not_found", "contact_email_not_found"}:
