@@ -81,7 +81,7 @@ async def find_live_scheduled_action_for_item(session, batch_item_id: str) -> di
     rows = (
         await session.execute(
             select(AgentActionRow)
-            .where(AgentActionRow.action_type == "send_email")
+            .where(AgentActionRow.action_type.in_(["send_email", "send_approved_lead_gen_draft"]))
             .where(AgentActionRow.status == "approved")
             .where(AgentActionRow.scheduled_for.isnot(None))
             .order_by(desc(AgentActionRow.created_at))
