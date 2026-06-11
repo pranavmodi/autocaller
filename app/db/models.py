@@ -1215,6 +1215,7 @@ class LeadGenObservationRow(Base):
     )
     pif_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     event_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    dedupe_key: Mapped[str | None] = mapped_column(String(128), nullable=True)
     raw_event_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     classified_outcome: Mapped[str | None] = mapped_column(String(64), nullable=True)
     confidence: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -1225,8 +1226,10 @@ class LeadGenObservationRow(Base):
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow)
 
     __table_args__ = (
+        UniqueConstraint("event_type", "dedupe_key", name="uq_lead_gen_observations_event_dedupe"),
         Index("ix_lead_gen_observations_batch_id", "batch_id"),
         Index("ix_lead_gen_observations_contact_id", "contact_id"),
+        Index("ix_lead_gen_observations_dedupe_key", "dedupe_key"),
         Index("ix_lead_gen_observations_event_type", "event_type"),
         Index("ix_lead_gen_observations_outcome", "classified_outcome"),
         Index("ix_lead_gen_observations_created_at", "created_at"),

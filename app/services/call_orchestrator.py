@@ -2301,6 +2301,44 @@ class CallOrchestrator:
             f"Demo booked: {booking.start_iso} ({booking.booking_id})",
         )
 
+        try:
+            from sqlalchemy import func, select
+
+            from app.db import AsyncSessionLocal
+            from app.db.models import FirmContactRow
+            from app.services.lead_gen_cybernetic import record_observation
+
+            contact_id = None
+            async with AsyncSessionLocal() as session:
+                contact = (await session.execute(
+                    select(FirmContactRow)
+                    .where(func.lower(FirmContactRow.email) == invitee_email.lower())
+                    .order_by(FirmContactRow.updated_at.desc())
+                    .limit(1)
+                )).scalar_one_or_none()
+                contact_id = contact.id if contact else None
+            await record_observation(
+                "consult_booked",
+                {
+                    "dedupe_key": f"calcom_booking:{booking.booking_id}",
+                    "booking_id": booking.booking_id,
+                    "call_id": self._current_call.call_id,
+                    "lead_id": self._current_patient.patient_id,
+                    "invitee_name": self._current_patient.name,
+                    "invitee_email": invitee_email,
+                    "firm_name": self._current_patient.firm_name or "",
+                    "state": self._current_patient.state or "",
+                    "slot_start": booking.start_iso,
+                    "slot_end": booking.end_iso,
+                    "meeting_url": booking.meeting_url or "",
+                    "pain_point_summary": pain_summary or None,
+                    "source": "calcom_call_tool",
+                },
+                contact_id=contact_id,
+            )
+        except Exception as e:
+            logger.warning("Failed to record consult booking observation: %s", e)
+
         return {
             "booked": True,
             "booking_id": booking.booking_id,

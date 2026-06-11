@@ -20,10 +20,11 @@ import re
 import httpx
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field, field_validator
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_, func
 
 from app.db import AsyncSessionLocal
-from app.db.models import ConsultBookingRow
+from app.db.models import ConsultBookingRow, FirmContactRow
+from app.services.lead_gen_cybernetic import record_observation
 from app.services.phone_normalize import normalize_phone
 
 logger = logging.getLogger(__name__)
@@ -278,8 +279,33 @@ async def create_booking(request: Request, payload: BookingRequest):
             raise HTTPException(status_code=409, detail="slot already booked")
         await session.refresh(row)
         booking_id = row.id
+        contact = (await session.execute(
+            select(FirmContactRow)
+            .where(func.lower(FirmContactRow.email) == row.email.lower())
+            .order_by(FirmContactRow.updated_at.desc())
+            .limit(1)
+        )).scalar_one_or_none()
+        contact_id = contact.id if contact else None
         # Capture values before session closes.
         notify_row = row
+
+    await record_observation(
+        "consult_booked",
+        {
+            "dedupe_key": f"consult_booking:{booking_id}",
+            "consult_booking_id": booking_id,
+            "name": notify_row.name,
+            "firm_name": notify_row.firm_name,
+            "email": notify_row.email,
+            "phone": notify_row.phone,
+            "slot_start": notify_row.slot_start.isoformat(),
+            "slot_end": notify_row.slot_end.isoformat(),
+            "source": notify_row.source,
+            "notes": notify_row.notes,
+            "created_at": notify_row.created_at.isoformat() if notify_row.created_at else None,
+        },
+        contact_id=contact_id,
+    )
 
     # Fire-and-forget SMS notification to the operator.
     try:

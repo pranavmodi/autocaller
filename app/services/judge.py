@@ -405,11 +405,40 @@ async def review_call(
     )
 
 
+def _lead_gen_outcome_from_call_review(review: CallReview) -> str:
+    if review.gtm_disposition == "meeting_booked":
+        return "booked_qualified_conversation"
+    if review.gtm_disposition in {"hot_lead_no_booking", "warm_interest", "qualifying_signal_no_commitment"}:
+        return "positive_reply"
+    if review.gtm_disposition == "do_not_recontact":
+        return "do_not_contact"
+    if review.gtm_disposition in {"bad_data", "wrong_person"}:
+        return "wrong_person"
+    if review.gtm_disposition in {"not_interested", "competitor_locked", "no_fit"}:
+        return "not_interested"
+    if review.gtm_disposition == "needs_human_review":
+        return "needs_human_review"
+    return "neutral"
+
+
+def _lead_gen_next_action_from_call_review(review: CallReview) -> str:
+    if review.gtm_disposition == "meeting_booked":
+        return "confirm_booking"
+    if review.gtm_disposition == "do_not_recontact":
+        return "mark_do_not_contact"
+    if review.gtm_disposition in {"bad_data", "wrong_person"}:
+        return "find_better_contact"
+    if review.follow_up_action and review.follow_up_action != "none":
+        return "human_reply"
+    return "no_action"
+
+
 async def persist_review(call_id: str, review: CallReview) -> None:
     """Write a review to call_logs."""
-    from sqlalchemy import update
+    from sqlalchemy import select, update
     from app.db import AsyncSessionLocal
-    from app.db.models import CallLogRow
+    from app.db.models import CallLogRow, FirmContactRow
+    from app.services.lead_gen_cybernetic import record_observation
 
     follow_up_when = None
     if review.follow_up_when:
@@ -433,13 +462,14 @@ async def persist_review(call_id: str, review: CallReview) -> None:
         "recommended_prompt_edits": review.recommended_prompt_edits,
     }
 
+    judged_at = datetime.now(timezone.utc)
     async with AsyncSessionLocal() as session:
         await session.execute(
             update(CallLogRow).where(CallLogRow.call_id == call_id).values(
                 judge_score=review.overall,
                 judge_scores=scores,
                 judge_notes=notes,
-                judged_at=datetime.now(timezone.utc),
+                judged_at=judged_at,
                 gtm_disposition=review.gtm_disposition,
                 follow_up_action=review.follow_up_action,
                 follow_up_when=follow_up_when,
@@ -454,7 +484,48 @@ async def persist_review(call_id: str, review: CallReview) -> None:
                 dnc_reason=review.dnc_reason,
             )
         )
+        call = await session.get(CallLogRow, call_id)
+        contact = None
+        if call:
+            if call.patient_id:
+                pif_id = str(call.patient_id).replace("pif-", "", 1).replace("mc-", "", 1)
+                contact = (await session.execute(
+                    select(FirmContactRow).where(FirmContactRow.pif_id == pif_id).limit(1)
+                )).scalars().first()
+            if not contact and call.phone:
+                contact = (await session.execute(
+                    select(FirmContactRow).where(FirmContactRow.phone == call.phone).limit(1)
+                )).scalars().first()
         await session.commit()
+
+    await record_observation(
+        "call_disposition",
+        {
+            "dedupe_key": f"call_disposition:{call_id}:{judged_at.isoformat()}",
+            "call_id": call_id,
+            "patient_id": call.patient_id if call else None,
+            "patient_name": call.patient_name if call else None,
+            "firm_name": call.firm_name if call else None,
+            "phone": call.phone if call else None,
+            "call_status": call.call_status if call else None,
+            "call_disposition": call.call_disposition if call else None,
+            "outcome": call.outcome if call else None,
+            "gtm_disposition": review.gtm_disposition,
+            "follow_up_action": review.follow_up_action,
+            "follow_up_when": follow_up_when.isoformat() if follow_up_when else None,
+            "overall_score": review.overall,
+            "call_summary": review.call_summary,
+            "judged_at": judged_at.isoformat(),
+        },
+        contact_id=contact.id if contact else None,
+        classification={
+            "outcome": _lead_gen_outcome_from_call_review(review),
+            "confidence": 80,
+            "next_action": _lead_gen_next_action_from_call_review(review),
+            "reasoning": "Deterministic classification from finalized outbound call judge disposition.",
+            "model": "judge-disposition",
+        },
+    )
 
 
 # ---------------------------------------------------------------------------

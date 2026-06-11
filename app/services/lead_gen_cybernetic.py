@@ -8,11 +8,14 @@ This module keeps the control loop deterministic:
 from __future__ import annotations
 
 import uuid
+import hashlib
+import json
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from sqlalchemy import desc, or_, select
+from sqlalchemy import desc, func, or_, select
+from sqlalchemy.exc import IntegrityError
 
 from app.db import AsyncSessionLocal
 from app.db.models import (
@@ -51,6 +54,119 @@ def _new_id() -> str:
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _canonical_json(value: Any) -> str:
+    return json.dumps(value, sort_keys=True, separators=(",", ":"), default=str)
+
+
+def _observation_dedupe_key(event_type: str, raw_event: dict[str, Any]) -> str:
+    explicit = str(raw_event.get("dedupe_key") or "").strip()
+    if explicit:
+        return explicit[:128]
+    for key in (
+        "action_id",
+        "inbound_email_id",
+        "link_event_id",
+        "consult_booking_id",
+        "booking_id",
+        "call_id",
+        "provider_event_id",
+        "email_log_id",
+        "sent_message_id",
+        "message_id",
+    ):
+        value = raw_event.get(key)
+        if value:
+            return f"{key}:{value}"[:128]
+    digest = hashlib.sha256(_canonical_json(raw_event).encode("utf-8")).hexdigest()
+    return f"sha256:{digest}"[:128]
+
+
+DETERMINISTIC_OBSERVATION_CLASSIFICATIONS: dict[str, dict[str, Any]] = {
+    "email_sent": {
+        "outcome": "neutral",
+        "confidence": 100,
+        "next_action": "continue_sequence",
+        "reasoning": "Deterministic observation: lead-gen email send succeeded.",
+        "model": "deterministic",
+    },
+    "email_send_failed": {
+        "outcome": "bounce",
+        "confidence": 80,
+        "next_action": "pause_sequence",
+        "reasoning": "Deterministic observation: lead-gen email send failed before or during transport.",
+        "model": "deterministic",
+    },
+    "link_clicked": {
+        "outcome": "opened_or_clicked",
+        "confidence": 80,
+        "next_action": "continue_sequence",
+        "reasoning": "Deterministic observation: tracked recipient clicked a link.",
+        "model": "deterministic",
+    },
+    "consult_booked": {
+        "outcome": "booked_qualified_conversation",
+        "confidence": 100,
+        "next_action": "confirm_booking",
+        "reasoning": "Deterministic observation: a consult booking was created.",
+        "model": "deterministic",
+    },
+    "call_disposition": {
+        "outcome": "neutral",
+        "confidence": 70,
+        "next_action": "no_action",
+        "reasoning": "Deterministic observation: outbound call disposition finalized.",
+        "model": "deterministic",
+    },
+    "email_action_cancelled": {
+        "outcome": "neutral",
+        "confidence": 100,
+        "next_action": "no_action",
+        "reasoning": "Deterministic observation: scheduled/approved lead-gen email action was cancelled.",
+        "model": "deterministic",
+    },
+    "email_rescheduled": {
+        "outcome": "neutral",
+        "confidence": 100,
+        "next_action": "no_action",
+        "reasoning": "Deterministic observation: scheduled lead-gen email action was rescheduled.",
+        "model": "deterministic",
+    },
+}
+
+
+def _classification_value(classification: Any, key: str, default: Any = None) -> Any:
+    if classification is None:
+        return default
+    if isinstance(classification, dict):
+        return classification.get(key, default)
+    attr = {
+        "outcome": "outcome",
+        "confidence": "confidence",
+        "next_action": "next_action",
+        "reasoning": "reasoning",
+        "model": "model",
+        "raw_response": "raw_response",
+    }.get(key, key)
+    return getattr(classification, attr, default)
+
+
+def _normalize_observation_classification(
+    event_type: str,
+    classification: Any | None,
+) -> dict[str, Any]:
+    base = dict(DETERMINISTIC_OBSERVATION_CLASSIFICATIONS.get(event_type) or {})
+    if classification is None and base:
+        return base
+    return {
+        "outcome": _classification_value(classification, "outcome", base.get("outcome")),
+        "confidence": _classification_value(classification, "confidence", base.get("confidence")),
+        "next_action": _classification_value(classification, "next_action", base.get("next_action")),
+        "reasoning": _classification_value(classification, "reasoning", base.get("reasoning")),
+        "model": _classification_value(classification, "model", base.get("model") or "manual"),
+        "raw_response": _classification_value(classification, "raw_response", ""),
+    }
 
 
 def staggered_due_at(
@@ -506,6 +622,7 @@ def _observation_to_dict(obs: LeadGenObservationRow) -> dict[str, Any]:
         "contact_id": obs.contact_id,
         "pif_id": obs.pif_id,
         "event_type": obs.event_type,
+        "dedupe_key": obs.dedupe_key,
         "raw_event": obs.raw_event_json or {},
         "classified_outcome": obs.classified_outcome,
         "confidence": obs.confidence,
@@ -514,6 +631,121 @@ def _observation_to_dict(obs: LeadGenObservationRow) -> dict[str, Any]:
         "llm_model": obs.llm_model,
         "created_at": obs.created_at.isoformat() if obs.created_at else None,
     }
+
+
+async def record_observation(
+    event_type: str,
+    raw_event: dict[str, Any],
+    *,
+    contact_id: str | None = None,
+    batch_id: str | None = None,
+    batch_item_id: str | None = None,
+    classification: Any | None = None,
+) -> dict[str, Any]:
+    """Store one deduped lead-gen observation.
+
+    Deterministic event callers pass a deterministic classification. Reply
+    ingestion passes the existing LLM classifier result.
+    """
+    clean_event_type = str(event_type or "").strip()
+    if not clean_event_type:
+        raise ValueError("event_type_required")
+    event = raw_event if isinstance(raw_event, dict) else {"value": raw_event}
+    dedupe_key = _observation_dedupe_key(clean_event_type, event)
+    classified = _normalize_observation_classification(clean_event_type, classification)
+    lookup_batch_id = batch_id
+    lookup_batch_item_id = batch_item_id
+    lookup_contact_id = contact_id
+    pif_id = str(event.get("pif_id") or "").strip() or None
+
+    async with AsyncSessionLocal() as session:
+        existing = (await session.execute(
+            select(LeadGenObservationRow).where(
+                LeadGenObservationRow.event_type == clean_event_type,
+                LeadGenObservationRow.dedupe_key == dedupe_key,
+            )
+        )).scalar_one_or_none()
+        if existing:
+            result = _observation_to_dict(existing)
+            result["existing"] = True
+            return result
+
+        item = None
+        if lookup_batch_item_id:
+            item = await session.get(LeadGenBatchItemRow, lookup_batch_item_id)
+        elif lookup_batch_id and lookup_contact_id:
+            item = (await session.execute(
+                select(LeadGenBatchItemRow).where(
+                    LeadGenBatchItemRow.batch_id == lookup_batch_id,
+                    LeadGenBatchItemRow.contact_id == lookup_contact_id,
+                )
+            )).scalar_one_or_none()
+        elif lookup_contact_id:
+            item = (await session.execute(
+                select(LeadGenBatchItemRow)
+                .where(LeadGenBatchItemRow.contact_id == lookup_contact_id)
+                .order_by(desc(LeadGenBatchItemRow.updated_at))
+                .limit(1)
+            )).scalar_one_or_none()
+
+        contact = None
+        if item:
+            lookup_batch_id = lookup_batch_id or item.batch_id
+            lookup_batch_item_id = lookup_batch_item_id or item.id
+            lookup_contact_id = lookup_contact_id or item.contact_id
+            pif_id = item.pif_id
+        if lookup_contact_id:
+            contact = await session.get(FirmContactRow, lookup_contact_id)
+            if contact and not pif_id:
+                pif_id = contact.pif_id
+
+        obs = LeadGenObservationRow(
+            id=_new_id(),
+            batch_id=lookup_batch_id,
+            batch_item_id=lookup_batch_item_id,
+            contact_id=lookup_contact_id,
+            pif_id=pif_id,
+            event_type=clean_event_type,
+            dedupe_key=dedupe_key,
+            raw_event_json=event,
+            classified_outcome=classified.get("outcome"),
+            confidence=classified.get("confidence"),
+            next_action=classified.get("next_action"),
+            llm_reasoning=classified.get("reasoning"),
+            llm_model=classified.get("model"),
+            llm_raw_response=classified.get("raw_response") or "",
+        )
+        session.add(obs)
+        if item and classified.get("outcome") in {
+            "booked_qualified_conversation",
+            "positive_reply",
+            "referral",
+            "wrong_person",
+            "not_interested",
+            "do_not_contact",
+            "bounce",
+            "opened_or_clicked",
+            "needs_human_review",
+        }:
+            item.outcome = classified.get("outcome")
+            item.outcome_confidence = classified.get("confidence")
+        try:
+            await session.commit()
+        except IntegrityError:
+            await session.rollback()
+            existing = (await session.execute(
+                select(LeadGenObservationRow).where(
+                    LeadGenObservationRow.event_type == clean_event_type,
+                    LeadGenObservationRow.dedupe_key == dedupe_key,
+                )
+            )).scalar_one()
+            result = _observation_to_dict(existing)
+            result["existing"] = True
+            return result
+        await session.refresh(obs)
+        result = _observation_to_dict(obs)
+        result["existing"] = False
+        return result
 
 
 async def list_batches(limit: int = 50, status: str | None = None) -> list[dict[str, Any]]:
@@ -741,32 +973,80 @@ async def classify_and_store_observation(
         model=model,
     )
 
+    return await record_observation(
+        event_type,
+        raw_event,
+        batch_id=batch_id or (item.batch_id if item else None),
+        batch_item_id=batch_item_id or (item.id if item else None),
+        contact_id=lookup_contact_id,
+        classification=classification,
+    )
+
+
+def parse_observation_since(value: str | None) -> datetime | None:
+    raw = (value or "").strip()
+    if not raw:
+        return None
+    now = _utcnow()
+    unit = raw[-1].lower()
+    amount = raw[:-1]
+    try:
+        if unit == "d":
+            return now - timedelta(days=float(amount))
+        if unit == "h":
+            return now - timedelta(hours=float(amount))
+        if unit == "m":
+            return now - timedelta(minutes=float(amount))
+    except ValueError:
+        pass
+    try:
+        parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError as e:
+        raise ValueError("invalid_since") from e
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+async def list_observations(
+    *,
+    since: datetime | None = None,
+    event_type: str | None = None,
+    contact_id: str | None = None,
+    limit: int = 200,
+) -> list[dict[str, Any]]:
+    safe_limit = max(1, min(int(limit), 1000))
     async with AsyncSessionLocal() as session:
-        obs = LeadGenObservationRow(
-            id=_new_id(),
-            batch_id=batch_id or (item.batch_id if item else None),
-            batch_item_id=batch_item_id or (item.id if item else None),
-            contact_id=lookup_contact_id,
-            pif_id=(item.pif_id if item else (contact.pif_id if contact else None)),
-            event_type=event_type,
-            raw_event_json=raw_event,
-            classified_outcome=classification.outcome,
-            confidence=classification.confidence,
-            next_action=classification.next_action,
-            llm_reasoning=classification.reasoning,
-            llm_model=classification.model,
-            llm_raw_response=classification.raw_response,
+        stmt = select(LeadGenObservationRow)
+        if since:
+            stmt = stmt.where(LeadGenObservationRow.created_at >= since)
+        if event_type:
+            stmt = stmt.where(LeadGenObservationRow.event_type == event_type)
+        if contact_id:
+            stmt = stmt.where(LeadGenObservationRow.contact_id == contact_id)
+        rows = (await session.execute(
+            stmt.order_by(desc(LeadGenObservationRow.created_at)).limit(safe_limit)
+        )).scalars().all()
+    return [_observation_to_dict(row) for row in rows]
+
+
+async def summarize_observations(
+    *,
+    since: datetime | None = None,
+) -> list[dict[str, Any]]:
+    async with AsyncSessionLocal() as session:
+        count_expr = func.count(LeadGenObservationRow.id).label("count")
+        stmt = select(
+            LeadGenObservationRow.event_type,
+            count_expr,
         )
-        session.add(obs)
-        if item:
-            item_row = (await session.execute(
-                select(LeadGenBatchItemRow).where(LeadGenBatchItemRow.id == item.id)
-            )).scalar_one()
-            item_row.outcome = classification.outcome
-            item_row.outcome_confidence = classification.confidence
-        await session.commit()
-        await session.refresh(obs)
-    return _observation_to_dict(obs)
+        if since:
+            stmt = stmt.where(LeadGenObservationRow.created_at >= since)
+        rows = (await session.execute(
+            stmt.group_by(LeadGenObservationRow.event_type)
+            .order_by(count_expr.desc(), LeadGenObservationRow.event_type.asc())
+        )).all()
+    return [{"event_type": row[0], "count": int(row[1] or 0)} for row in rows]
 
 
 async def create_policy_proposal_from_batch(

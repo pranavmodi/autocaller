@@ -23,6 +23,7 @@ from app.services.lead_email_composer import _sanitize_email_copy
 from app.services.lead_gen_cybernetic import (
     daily_send_budget_from_policy,
     ensure_default_policy,
+    record_observation,
     send_batch_item_draft,
 )
 from app.services.master_agent import ensure_agent_tables
@@ -198,6 +199,92 @@ def _email_log_snapshot(row: EmailLogRow | None) -> dict[str, Any]:
         "pif_id": row.pif_id,
         "call_id": row.call_id,
     }
+
+
+def _is_lead_gen_email_action(row: AgentActionRow | None) -> bool:
+    if row is None:
+        return False
+    payload = dict(row.input_json or {})
+    if row.action_type == SEND_APPROVED_LEAD_GEN_DRAFT:
+        return True
+    return (
+        row.action_type in {SEND_EMAIL, SEND_TEST_EMAIL}
+        and row.entity_type == "lead_gen_email"
+        and str(payload.get("mode") or "").lower() == "lead_gen"
+    )
+
+
+def _action_observation_linkage(row: AgentActionRow | None) -> dict[str, str | None]:
+    if row is None:
+        return {"contact_id": None, "batch_item_id": None}
+    payload = dict(row.input_json or {})
+    batch_item_id = str(payload.get("batch_item_id") or "").strip()
+    if not batch_item_id and row.entity_type == "lead_gen_batch_item":
+        batch_item_id = str(row.entity_id or "").strip()
+    contact_id = str(payload.get("contact_id") or "").strip()
+    return {
+        "contact_id": contact_id or None,
+        "batch_item_id": batch_item_id or None,
+    }
+
+
+def _action_observation_raw(
+    row: AgentActionRow,
+    *,
+    event_type: str,
+    result: dict[str, Any] | None = None,
+    error: str | None = None,
+    extra: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    payload = dict(row.input_json or {})
+    raw = {
+        "dedupe_key": f"{event_type}:{row.id}",
+        "action_id": row.id,
+        "action_type": row.action_type,
+        "action_status": row.status,
+        "entity_type": row.entity_type,
+        "entity_id": row.entity_id,
+        "to": payload.get("to"),
+        "subject": payload.get("subject"),
+        "brief_version": payload.get("brief_version"),
+        "composer_experiment_key": payload.get("composer_experiment_key"),
+        "composer_variant_key": payload.get("composer_variant_key"),
+        "skill_path": payload.get("skill_path"),
+        "skill_sha256": payload.get("skill_sha256"),
+        "scheduled_for": row.scheduled_for.isoformat() if row.scheduled_for else None,
+    }
+    if result:
+        raw.update({
+            "sent_message_id": result.get("sent_message_id"),
+            "email_log_id": result.get("email_log_id"),
+            "sent_at": result.get("sent_at"),
+            "transport": result.get("transport"),
+            "email_log_status": result.get("email_log_status"),
+        })
+    if error:
+        raw["error"] = error
+    if extra:
+        raw.update(extra)
+    return raw
+
+
+async def _record_lead_gen_action_observation(
+    row: AgentActionRow | None,
+    *,
+    event_type: str,
+    result: dict[str, Any] | None = None,
+    error: str | None = None,
+    extra: dict[str, Any] | None = None,
+) -> None:
+    if not _is_lead_gen_email_action(row):
+        return
+    linkage = _action_observation_linkage(row)
+    await record_observation(
+        event_type,
+        _action_observation_raw(row, event_type=event_type, result=result, error=error, extra=extra),
+        contact_id=linkage["contact_id"],
+        batch_item_id=linkage["batch_item_id"],
+    )
 
 
 def action_to_dict(row: AgentActionRow) -> dict[str, Any]:
@@ -412,6 +499,7 @@ async def cancel_action(action_id: str, *, actor: str = "operator", reason: str 
         )
         await session.commit()
         result = action_to_dict(action)
+        action_row = action
     await safe_record_product_trace(
         actor_type="user" if (actor or "operator") == "operator" else "agent",
         actor_id=actor or "operator",
@@ -420,6 +508,11 @@ async def cancel_action(action_id: str, *, actor: str = "operator", reason: str 
         entity_type="agent_action",
         entity_id=action_id,
         output_json={"reason": cancel_reason},
+    )
+    await _record_lead_gen_action_observation(
+        action_row,
+        event_type="email_action_cancelled",
+        extra={"cancelled_by": actor or "operator", "reason": cancel_reason},
     )
     return {"action": result, "cancelled": True}
 
@@ -473,6 +566,7 @@ async def reschedule_action(
         )
         await session.commit()
         result = action_to_dict(action)
+        action_row = action
     await safe_record_product_trace(
         actor_type="user" if (actor or "operator") == "operator" else "agent",
         actor_id=actor or "operator",
@@ -482,6 +576,18 @@ async def reschedule_action(
         entity_id=action_id,
         input_json={"old_scheduled_for": old_time.isoformat()},
         output_json={"scheduled_for": new_time.isoformat()},
+    )
+    await _record_lead_gen_action_observation(
+        action_row,
+        event_type="email_rescheduled",
+        extra={
+            "dedupe_key": f"email_rescheduled:{action_id}:{old_time.isoformat()}:{new_time.isoformat()}",
+            "rescheduled_by": actor or "operator",
+            "old_scheduled_for": old_time.isoformat(),
+            "scheduled_for": new_time.isoformat(),
+            "old_scheduled_for_pt": format_pt(old_time),
+            "scheduled_for_pt": format_pt(new_time),
+        },
     )
     return {
         "action": result,
@@ -613,6 +719,23 @@ async def save_edited_lead_gen_draft(
                 )
             await session.commit()
             result = action_to_dict(action)
+            action_row = action
+            if scheduled_for and old_scheduled_for and _as_utc(scheduled_for) != old_scheduled_for:
+                await _record_lead_gen_action_observation(
+                    action_row,
+                    event_type="email_rescheduled",
+                    extra={
+                        "dedupe_key": (
+                            f"email_rescheduled:{action.id}:"
+                            f"{old_scheduled_for.isoformat()}:{action.scheduled_for.isoformat()}"
+                        ),
+                        "rescheduled_by": actor or "operator",
+                        "old_scheduled_for": old_scheduled_for.isoformat(),
+                        "scheduled_for": action.scheduled_for.isoformat() if action.scheduled_for else None,
+                        "old_scheduled_for_pt": format_pt(old_scheduled_for),
+                        "scheduled_for_pt": format_pt(action.scheduled_for) if action.scheduled_for else None,
+                    },
+                )
             return {
                 "action": result,
                 "updated_existing": True,
@@ -1129,6 +1252,7 @@ async def execute_action(action_id: str, *, actor: str = "operator") -> dict[str
     if not policy["allowed"]:
         terminal_reason = _terminal_policy_block_reason(policy)
         if terminal_reason:
+            blocked_action = None
             async with AsyncSessionLocal() as session:
                 action = await session.get(AgentActionRow, action_id)
                 if action and action.status == "approved":
@@ -1152,6 +1276,7 @@ async def execute_action(action_id: str, *, actor: str = "operator") -> dict[str
                         },
                     )
                     await session.commit()
+                    blocked_action = action
             await safe_record_product_trace(
                 actor_type="user" if actor == "operator" else "agent",
                 actor_id=actor,
@@ -1160,6 +1285,21 @@ async def execute_action(action_id: str, *, actor: str = "operator") -> dict[str
                 entity_type="agent_action",
                 entity_id=action_id,
                 output_json={"reason": terminal_reason, "policy": policy},
+            )
+            await _record_lead_gen_action_observation(
+                blocked_action,
+                event_type="email_send_failed",
+                error=f"Policy blocked permanently: {terminal_reason}",
+                extra={"policy": policy, "blocked_by_policy": True},
+            )
+        else:
+            async with AsyncSessionLocal() as session:
+                action = await session.get(AgentActionRow, action_id)
+            await _record_lead_gen_action_observation(
+                action,
+                event_type="email_send_failed",
+                error=f"Policy refused execution: {policy.get('reason')}",
+                extra={"policy": policy, "blocked_by_policy": False},
             )
         return {
             "action": (await get_action(action_id) or {}).get("action"),
@@ -1210,11 +1350,13 @@ async def execute_action(action_id: str, *, actor: str = "operator") -> dict[str
                 brief_version=payload.get("brief_version"),
             )
     except Exception as exc:
+        failed_action = None
+        error_text = f"{type(exc).__name__}: {str(exc)[:500]}"
         async with AsyncSessionLocal() as session:
             action = await session.get(AgentActionRow, action_id)
             if action:
                 action.status = "failed"
-                action.error = f"{type(exc).__name__}: {str(exc)[:500]}"
+                action.error = error_text
                 action.completed_at = _utcnow()
                 action.execution_result_json = {"error": action.error}
                 await _record_action_event(
@@ -1226,6 +1368,7 @@ async def execute_action(action_id: str, *, actor: str = "operator") -> dict[str
                     output_json=action.execution_result_json,
                 )
                 await session.commit()
+                failed_action = action
         await safe_record_product_trace(
             actor_type="user" if actor == "operator" else "agent",
             actor_id=actor,
@@ -1233,10 +1376,16 @@ async def execute_action(action_id: str, *, actor: str = "operator") -> dict[str
             surface="actions",
             entity_type="agent_action",
             entity_id=action_id,
-            output_json={"error": f"{type(exc).__name__}: {str(exc)[:500]}"},
+            output_json={"error": error_text},
+        )
+        await _record_lead_gen_action_observation(
+            failed_action,
+            event_type="email_send_failed",
+            error=error_text,
         )
         raise
 
+    succeeded_action = None
     async with AsyncSessionLocal() as session:
         action = await session.get(AgentActionRow, action_id)
         if action:
@@ -1253,6 +1402,7 @@ async def execute_action(action_id: str, *, actor: str = "operator") -> dict[str
                 output_json=result,
             )
             await session.commit()
+            succeeded_action = action
     await safe_record_product_trace(
         actor_type="user" if actor == "operator" else "agent",
         actor_id=actor,
@@ -1261,6 +1411,11 @@ async def execute_action(action_id: str, *, actor: str = "operator") -> dict[str
         entity_type="agent_action",
         entity_id=action_id,
         output_json=result,
+    )
+    await _record_lead_gen_action_observation(
+        succeeded_action,
+        event_type="email_sent",
+        result=result,
     )
     return {
         "action": (await get_action(action_id) or {}).get("action"),

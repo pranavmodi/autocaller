@@ -12,7 +12,6 @@ import hmac
 import json
 import os
 import time
-import uuid
 from dataclasses import dataclass
 from typing import Any, Mapping
 
@@ -24,8 +23,8 @@ from app.db.models import (
     EmailSequenceRow,
     FirmContactRow,
     LeadGenBatchItemRow,
-    LeadGenObservationRow,
 )
+from app.services.lead_gen_cybernetic import record_observation
 
 
 class ResendWebhookVerificationError(ValueError):
@@ -332,43 +331,28 @@ async def ingest_resend_webhook(
         observation_created = False
         if item and classification.observation_type:
             raw_event = {
+                "dedupe_key": f"resend:{provider_event_id or email_id or hashlib.sha256(json.dumps(payload, sort_keys=True).encode('utf-8')).hexdigest()}:{classification.observation_type}",
                 "provider": "resend",
                 "provider_event_id": provider_event_id,
                 "event_type": event_type,
                 "email_id": email_id,
                 "payload": payload,
             }
-            existing = list((
-                await session.execute(
-                    select(LeadGenObservationRow).where(
-                        LeadGenObservationRow.batch_item_id == item.id,
-                        LeadGenObservationRow.event_type == classification.observation_type,
-                    )
-                )
-            ).scalars().all())
-            duplicate = any(
-                (obs.raw_event_json or {}).get("provider_event_id") == provider_event_id
-                or (obs.raw_event_json or {}).get("email_id") == email_id
-                for obs in existing
+            obs = await record_observation(
+                classification.observation_type,
+                raw_event,
+                batch_id=item.batch_id,
+                batch_item_id=item.id,
+                contact_id=item.contact_id,
+                classification={
+                    "outcome": classification.outcome,
+                    "confidence": classification.confidence,
+                    "next_action": classification.next_action,
+                    "reasoning": f"Deterministic classification from Resend {event_type} webhook.",
+                    "model": "resend-webhook",
+                },
             )
-            if not duplicate:
-                session.add(LeadGenObservationRow(
-                    id=uuid.uuid4().hex,
-                    batch_id=item.batch_id,
-                    batch_item_id=item.id,
-                    contact_id=item.contact_id,
-                    pif_id=item.pif_id,
-                    event_type=classification.observation_type,
-                    raw_event_json=raw_event,
-                    classified_outcome=classification.outcome,
-                    confidence=classification.confidence,
-                    next_action=classification.next_action,
-                    llm_reasoning=(
-                        f"Deterministic classification from Resend {event_type} webhook."
-                    ),
-                    llm_model="resend-webhook",
-                ))
-                observation_created = True
+            observation_created = not bool(obs.get("existing"))
             if classification.update_batch_item:
                 item.outcome = classification.outcome
                 item.outcome_confidence = classification.confidence

@@ -48,6 +48,7 @@ from app.services.outreach_composer import (
 )
 from app.services.product_learning import link_event_trace_kwargs
 from app.services.product_traces import safe_record_product_trace
+from app.services.lead_gen_cybernetic import record_observation
 
 
 logger = logging.getLogger(__name__)
@@ -833,6 +834,26 @@ async def record_click(
         await session.commit()
     if trace_kwargs:
         await safe_record_product_trace(**trace_kwargs)
+    await record_observation(
+        "link_clicked",
+        {
+            "dedupe_key": f"link_event:{event.id}",
+            "link_event_id": event.id,
+            "send_id": send.id,
+            "campaign_id": send.campaign_id,
+            "token": token,
+            "url": dest,
+            "recipient_email": send.recipient_email,
+            "recipient_name": send.recipient_name,
+            "firm_name": send.firm_name,
+            "pif_id": send.pif_id,
+            "clicked_at": event.ts.isoformat() if event.ts else None,
+            "ip": event.ip,
+            "user_agent": event.user_agent,
+            "referer": event.referer,
+        },
+        contact_id=send.contact_id,
+    )
     return dest
 
 

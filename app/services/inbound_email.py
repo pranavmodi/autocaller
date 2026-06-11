@@ -29,8 +29,8 @@ from app.db.models import (
     FirmContactRow,
     InboundEmailRow,
     LeadGenBatchItemRow,
-    LeadGenObservationRow,
 )
+from app.services.lead_gen_cybernetic import record_observation
 from app.services.lead_feedback_classifier import FeedbackClassification, classify_feedback_event
 from app.services.operator_notifications import create_operator_notification
 
@@ -492,15 +492,11 @@ async def store_inbound_email(
 
         obs = None
         if item:
-            classification = await _classify_reply(parsed, contact, item, classify=classify)
-            obs = LeadGenObservationRow(
-                id=uuid.uuid4().hex,
-                batch_id=item.batch_id,
-                batch_item_id=item.id,
-                contact_id=item.contact_id,
-                pif_id=item.pif_id,
-                event_type="email_reply",
-                raw_event_json={
+            classification = await _classify_reply(parsed, contact, item, classify=True)
+            obs = await record_observation(
+                "email_reply_received",
+                {
+                    "dedupe_key": f"inbound_email:{row.id}",
                     "provider": PROVIDER,
                     "inbound_email_id": row.id,
                     "account_email": parsed.account_email,
@@ -515,17 +511,13 @@ async def store_inbound_email(
                     "body_text": parsed.body_text,
                     "received_at": parsed.received_at.isoformat() if parsed.received_at else None,
                 },
-                classified_outcome=classification.outcome,
-                confidence=classification.confidence,
-                next_action=classification.next_action,
-                llm_reasoning=classification.reasoning,
-                llm_model=classification.model,
-                llm_raw_response=classification.raw_response,
+                batch_id=item.batch_id,
+                batch_item_id=item.id,
+                contact_id=item.contact_id,
+                classification=classification,
             )
-            session.add(obs)
-            await session.flush()
-            row.lead_gen_observation_id = obs.id
-            row.classification_status = "classified" if classify else "needs_human_review"
+            row.lead_gen_observation_id = obs["id"]
+            row.classification_status = "classified"
             item.outcome = classification.outcome
             item.outcome_confidence = classification.confidence
             if seq and seq.status == "active":
@@ -538,7 +530,7 @@ async def store_inbound_email(
                 contact=contact,
                 item=item,
                 seq=seq,
-                obs=obs,
+                obs_id=obs["id"],
                 classification=classification,
             )
 
@@ -555,7 +547,7 @@ async def _create_lead_reply_notification(
     contact: FirmContactRow,
     item: LeadGenBatchItemRow,
     seq: EmailSequenceRow | None,
-    obs: LeadGenObservationRow,
+    obs_id: str,
     classification: FeedbackClassification,
 ) -> None:
     firm_name = item.firm_name or "lead"
@@ -610,7 +602,7 @@ async def _create_lead_reply_notification(
             "sequence_id": item.sequence_id,
             "sequence_status": seq.status if seq else None,
             "sequence_paused_reason": seq.paused_reason if seq else None,
-            "lead_gen_observation_id": obs.id,
+            "lead_gen_observation_id": obs_id,
         },
         suggested_action=suggested_action,
     )

@@ -48,6 +48,10 @@ comms_app = typer.Typer(help="Outbound communications dashboard — calls, voice
 contacts_app = typer.Typer(help="Per-firm contact roster (backfill from PIF Stats + patients).", no_args_is_help=True)
 sequences_app = typer.Typer(help="Email sequences — preview, start, and recommend contacts.", no_args_is_help=True)
 lead_gen_app = typer.Typer(help="Cybernetic lead-generation loop — batches, feedback, learning.", no_args_is_help=True)
+lead_gen_observations_app = typer.Typer(
+    help="List and summarize automatic lead-generation observations.",
+    no_args_is_help=False,
+)
 inbound_app = typer.Typer(help="Inbound email ingestion — Zoho IMAP reader for replies.", no_args_is_help=True)
 outreach_app = typer.Typer(help="Blog-post outreach campaigns — LLM-composed, per-recipient, tracked.", no_args_is_help=True)
 todos_app = typer.Typer(help="Editable project todo backlog.", no_args_is_help=True)
@@ -60,6 +64,7 @@ outreach_campaigns_app = typer.Typer(help="Create / list / show outreach campaig
 outreach_audience_app = typer.Typer(help="Build a campaign's recipient list from firm contacts.", no_args_is_help=True)
 outreach_app.add_typer(outreach_campaigns_app, name="campaigns")
 outreach_app.add_typer(outreach_audience_app, name="audience")
+lead_gen_app.add_typer(lead_gen_observations_app, name="observations")
 
 app.add_typer(leads_app, name="leads")
 app.add_typer(calls_app, name="calls")
@@ -4654,6 +4659,65 @@ def lead_gen_observe(
     console.print_json(data=data)
 
 
+@lead_gen_observations_app.callback(invoke_without_command=True)
+def lead_gen_observations(
+    ctx: typer.Context,
+    since: str = typer.Option("7d", "--since", help='Window such as "7d", "24h", or an ISO timestamp.'),
+    event_type: str = typer.Option("", "--type", help="Filter by event_type."),
+    contact_id: str = typer.Option("", "--contact", help="Filter by firm_contacts.id."),
+    limit: int = typer.Option(200, "--limit", "-n", min=1, max=1000),
+    json_output: bool = typer.Option(False, "--json", help="Print raw JSON."),
+):
+    """List automatic lead-generation observations with linkage."""
+    if ctx.invoked_subcommand:
+        return
+    from app.services.lead_gen_cybernetic import list_observations, parse_observation_since
+
+    try:
+        since_dt = parse_observation_since(since)
+    except ValueError as exc:
+        console.print(f"[red]Invalid --since: {exc}[/red]")
+        raise typer.Exit(code=1) from exc
+    rows = asyncio.run(list_observations(
+        since=since_dt,
+        event_type=event_type or None,
+        contact_id=contact_id or None,
+        limit=limit,
+    ))
+    if json_output:
+        console.print_json(data={"observations": rows})
+        return
+    _print_lead_gen_observations(rows)
+
+
+@lead_gen_observations_app.command("summary")
+def lead_gen_observations_summary(
+    since: str = typer.Option("7d", "--since", help='Window such as "7d", "24h", or an ISO timestamp.'),
+    json_output: bool = typer.Option(False, "--json", help="Print raw JSON."),
+):
+    """Print counts by automatic observation event type."""
+    from app.services.lead_gen_cybernetic import parse_observation_since, summarize_observations
+
+    try:
+        since_dt = parse_observation_since(since)
+    except ValueError as exc:
+        console.print(f"[red]Invalid --since: {exc}[/red]")
+        raise typer.Exit(code=1) from exc
+    rows = asyncio.run(summarize_observations(since=since_dt))
+    if json_output:
+        console.print_json(data={"since": since, "summary": rows})
+        return
+    if not rows:
+        console.print("[dim]No observations.[/dim]")
+        return
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("event_type", no_wrap=True)
+    table.add_column("count", justify="right", no_wrap=True)
+    for row in rows:
+        table.add_row(row["event_type"], str(row["count"]))
+    console.print(table)
+
+
 @lead_gen_app.command("propose")
 def lead_gen_propose(
     batch_id: str = typer.Argument(..., help="lead_gen_batches.id"),
@@ -4703,7 +4767,10 @@ def _print_lead_gen_observations(observations: list[dict]) -> None:
         return
     table = Table(show_header=True, header_style="bold")
     table.add_column("when", no_wrap=True)
+    table.add_column("obs", no_wrap=True)
     table.add_column("event", no_wrap=True)
+    table.add_column("contact", no_wrap=True)
+    table.add_column("item", no_wrap=True)
     table.add_column("outcome", no_wrap=True)
     table.add_column("conf", justify="right", no_wrap=True)
     table.add_column("next", no_wrap=True)
@@ -4711,7 +4778,10 @@ def _print_lead_gen_observations(observations: list[dict]) -> None:
     for obs in observations:
         table.add_row(
             (obs.get("created_at") or "")[:19],
+            (obs.get("id") or "")[:8] + "…",
             obs.get("event_type") or "",
+            ((obs.get("contact_id") or "")[:8] + "…") if obs.get("contact_id") else "—",
+            ((obs.get("batch_item_id") or "")[:8] + "…") if obs.get("batch_item_id") else "—",
             obs.get("classified_outcome") or "—",
             str(obs.get("confidence") or ""),
             obs.get("next_action") or "—",

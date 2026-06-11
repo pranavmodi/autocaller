@@ -72,6 +72,9 @@ bin/autocaller lead-gen edit-draft <batch_item_id> --at "10:30 PT"
 bin/autocaller lead-gen approve <batch_id>
 bin/autocaller lead-gen approve <batch_id> --start-sequences
 bin/autocaller lead-gen observe --event-type email_reply --item <batch_item_id> --text "..."
+bin/autocaller lead-gen observations --since 7d
+bin/autocaller lead-gen observations --since 7d --type email_sent --contact <contact_id>
+bin/autocaller lead-gen observations summary --since 7d
 bin/autocaller lead-gen propose <batch_id>
 bin/autocaller actions list --type send_approved_lead_gen_draft
 bin/autocaller actions list --scheduled
@@ -95,6 +98,43 @@ bin/autocaller todos delete <id>
 ```
 
 The CLI reference remains in `docs/cli.md`.
+
+### Auto-Observation Contract
+
+All meaningful lead-generation feedback enters `lead_gen_observations`
+automatically through `app/services/lead_gen_cybernetic.py::record_observation`.
+The helper accepts:
+
+```python
+record_observation(event_type, raw_event, *, contact_id=None, batch_id=None,
+                   batch_item_id=None, classification=None)
+```
+
+It enriches linkage from `batch_item_id` or `contact_id` when possible, stores
+the raw event payload, and writes a stable `dedupe_key`. Repeating the same
+`(event_type, dedupe_key)` returns the existing observation instead of creating
+a duplicate. Deterministic events pass deterministic classifications and never
+call an LLM. Genuine inbound replies are the only automatic event type that
+uses the existing lead feedback classifier.
+
+Current event taxonomy:
+
+| event_type | Source | Classification |
+| --- | --- | --- |
+| `email_sent` | successful `send_email mode=lead_gen` or approved lead-gen draft execution, including scheduled daemon execution | deterministic neutral / continue sequence |
+| `email_send_failed` | transport exception or policy refusal in `execute_action` | deterministic failure / pause sequence |
+| `email_reply_received` | Zoho inbound reply matched to a lead-gen contact/batch item | existing LLM feedback classifier |
+| `link_clicked` | tracked `link_events` click attributed to an outreach send | deterministic opened-or-clicked |
+| `consult_booked` | website consult booking or Cal.com booking made during a call | deterministic booked qualified conversation |
+| `call_disposition` | judge persistence after outbound call review finalizes GTM disposition | deterministic mapping from GTM disposition |
+| `email_action_cancelled` | approved/waiting lead-gen email action cancellation | deterministic audit trail |
+| `email_rescheduled` | scheduled lead-gen email action moved to a new time | deterministic audit trail |
+
+The weekly learning KPI is:
+
+```bash
+bin/autocaller lead-gen observations summary --since 7d
+```
 
 ### Frontend
 
@@ -758,6 +798,5 @@ git diff --check
 - Front is not yet ingested into the production lead-gen selection flow.
 - Resend webhook code exists, but production must be configured with a deployed
   webhook URL and `RESEND_WEBHOOK_SECRET`.
-- Booking lifecycle events are not yet normalized into lead-gen observations.
 - The file name `OperatorNotificationPopup.tsx` is legacy; the component is now
   a non-blocking action center.

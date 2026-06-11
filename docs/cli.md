@@ -153,6 +153,8 @@ Every command accepts `--help`. Exit code is `0` on success, `1` on any error
 | `ideas add "..." [--json]` | Save a simple future idea. Use `ideas add - < idea.txt` or pipe stdin for multiline text. |
 | `ideas edit <id> "..." [--json]` | Replace the text for a saved idea. Use `ideas edit <id> - < idea.txt` for multiline text. |
 | `lead-gen email-agent-slice [--limit=3 --composer-variant=... --approval-ready --batch=<batch_id> --json]` | Select senior decision-maker contacts, collect bounded internal evidence, compose approval-ready drafts with the Possible Minds email composer skill, and create no-send durable `send_email mode=lead_gen` actions. With `--batch`, skip selection and compose for an existing batch's pending undrafted items (operator- or agent-curated lists, e.g. Front-warm shortlists). |
+| `lead-gen observations [--since=7d --type=<event_type> --contact=<contact_id> --json]` | List automatic lead-gen observations with batch/contact/item linkage. Includes sends, failures, replies, clicks, bookings, call dispositions, cancellations, and reschedules. |
+| `lead-gen observations summary [--since=7d --json]` | Count observations by event type for the weekly learning KPI / qualified-engagement readout. |
 | `actions list [--status=approved --type=send_approved_lead_gen_draft --scheduled --json]` | List durable Possible OS action execution records. `--scheduled` shows only future approved scheduled actions ordered by `scheduled_for`; the normal list header includes the pending scheduled count. |
 | `actions show <action_id> [--json]` | Show one action with its append-only event timeline. |
 | `actions scheduler-status [--json]` | Show whether the daemon scheduled-action loop is running, last tick time, pending scheduled count, and due count. |
@@ -674,6 +676,17 @@ To operate directly on an action:
 ```bash
 bin/autocaller actions reschedule <action_id> --at "11:00 PT"
 bin/autocaller actions cancel <action_id> --reason "operator changed plan"
+```
+
+### Recipe: "read the week's feedback"
+Use this for the weekly lead-gen learning KPI. It reads the automatic
+observation loop: sends, send failures, matched replies, tracked clicks,
+consult bookings, finalized call dispositions, cancellations, and reschedules.
+
+```bash
+bin/autocaller lead-gen observations summary --since 7d
+bin/autocaller lead-gen observations --since 7d
+bin/autocaller lead-gen observations --since 7d --type email_reply_received
 ```
 
 ### Recipe: "morning mindset check"
