@@ -158,11 +158,14 @@ Every command accepts `--help`. Exit code is `0` on success, `1` on any error
 | `actions scheduler-status [--json]` | Show whether the daemon scheduled-action loop is running, last tick time, pending scheduled count, and due count. |
 | `actions policy-check <action_id> [--actor=operator --json]` | Run the reusable policy checker without executing the action. |
 | `actions execute <action_id> [--actor=operator --json]` | Execute one policy-approved action through its narrow executor. |
+| `actions cancel <action_id> [--reason=... --actor=operator --json]` | Cancel an action that is still `waiting_for_approval` or `approved`, including scheduled sends. Refuses terminal/running actions and appends `action_cancelled` to the timeline. |
+| `actions reschedule <action_id> --at "10:30 PT" [--actor=operator --json]` | Move an approved scheduled action to a new future ISO/PT time. Prints old -> new in Pacific and UTC and appends `action_rescheduled`. |
 | `actions execute-approved-lead-gen [--limit=1 --actor=operator --json]` | Execute already-approved `send_email mode=lead_gen` actions through the durable policy gate. This is the narrow action the master agent may use when approved-send automation is enabled. Successful sends link the action result to the `email_logs` row, transport, message id, and log status. |
 | `actions send-approved-lead-gen-draft --item=<batch_item_id> --subject=... --body=... [--approved-by=operator] [--at "09:30 PT"] [--no-execute]` | Create and optionally execute the first high-risk action slice: an exact approved lead-gen email draft sent through the existing Zoho-backed lead-gen path. With `--at`, stores `scheduled_for`, runs policy check, does not execute, and prints PT plus UTC. |
 | `actions send-email --mode=test --to=<email> --subject=... --body=... [--approved-by=operator --from=... --at "2026-06-11T09:30:00-07:00" --no-execute --json]` | Create, policy-check, and optionally execute a regular durable test email action. With `--at`, creates an approved scheduled action and never sends immediately. |
 | `actions send-email --mode=lead_gen --to=<email> --subject=... --body=... --contact=<contact_id> --item=<batch_item_id> [--pif=<pif_id> --firm=... --approved-by=operator --at "09:30 PT" --no-execute --json]` | Create, policy-check, and optionally execute an exact approved lead-gen email action. Policy verifies recipient/contact match, approval hashes, consult link, Zoho transport, no suppression, and no prior successful send for the same item/recipient. With `--at`, the daemon sends when due and expires stale actions more than 24h late. |
 | `actions send-test-email --to=<email> [--subject=... --body=... --approved-by=operator --from=... --no-execute --json]` | Convenience alias for `actions send-email --mode=test`. Use the regular email action family for master-agent execution-path tests instead of free-form email shell commands. |
+| `lead-gen edit-draft <batch_item_id> [--at "10:30 PT"] [--editor/--no-editor] [--execute] [--json]` | Open the current `agent_draft` in `$EDITOR`, save it back to the queued action, and keep the batch item's UI draft fields approved/in sync. If a live scheduled action exists, edits update it instead of creating a duplicate; otherwise the command creates a new approved draft action. |
 | `listening brief [--version N]` | Print the Mission Control mindset brief markdown from `http://127.0.0.1:8001/api/listening`. |
 | `listening search "<q>" [--type T] [--who W] [--limit N]` | Search extracted listening insights by query, type, and buyer persona. |
 | `listening quotes --cluster <cluster> [--limit 5]` | Show direct quotes for one listening insight cluster. |
@@ -641,6 +644,37 @@ non-zero instead of rolling it to tomorrow. The daemon checks every 30 seconds,
 executes only actions still `approved`, re-runs the normal policy gate at send
 time, and marks actions more than 24 hours stale as `expired` instead of
 sending them.
+
+### Recipe: "edit and reschedule a queued draft"
+Use this when a lead-gen batch item already has an `agent_draft` and the
+operator wants to revise the exact copy before it goes out.
+
+```bash
+# Opens $EDITOR (fallback: vi) with:
+# Subject: ...
+#
+# body...
+bin/autocaller lead-gen edit-draft <batch_item_id> --at "10:30 PT"
+
+bin/autocaller actions show <action_id>
+bin/autocaller lead-gen show <batch_id>
+```
+
+If `reason_json.send_email_action_id` points to a live approved scheduled
+action, `lead-gen edit-draft` updates that action's subject/body and optional
+`scheduled_for` instead of creating a second queued send. If no live scheduled
+action exists, it creates a new approved `send_approved_lead_gen_draft` action.
+`--no-editor` reuses the current draft text; `--execute` is explicit and only
+applies when creating a new unscheduled action. The command syncs
+`reason_json.agent_draft` and `approval_status=approved` so the Lead Gen UI
+matches the action queue.
+
+To operate directly on an action:
+
+```bash
+bin/autocaller actions reschedule <action_id> --at "11:00 PT"
+bin/autocaller actions cancel <action_id> --reason "operator changed plan"
+```
 
 ### Recipe: "morning mindset check"
 ```bash

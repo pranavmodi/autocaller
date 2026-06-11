@@ -30,6 +30,8 @@ Important routes:
 | `GET` | `/api/lead-gen/batches/{batch_id}` | get batch, items, optional observations |
 | `POST` | `/api/lead-gen/batches/{batch_id}/approve` | approve batch and optionally queue sequences |
 | `POST` | `/api/lead-gen/batch-items/{batch_item_id}/send-draft` | create and execute a durable `send_email mode=lead_gen` action for the exact edited draft |
+| `GET` | `/api/lead-gen/batch-items/{batch_item_id}/draft` | load the current editable draft, preferring the referenced action's subject/body when present |
+| `POST` | `/api/lead-gen/batch-items/{batch_item_id}/edit-draft` | save an operator-edited draft, updating an existing live scheduled action or creating a new approved draft action |
 | `POST` | `/api/lead-gen/observations/classify` | classify and store manual/API feedback |
 | `POST` | `/api/lead-gen/batches/{batch_id}/proposal` | create a human-reviewed learning proposal |
 | `GET` | `/api/actions` | list durable Possible OS action execution records; `scheduled=true` returns future scheduled approved sends ordered by `scheduled_for` |
@@ -37,6 +39,8 @@ Important routes:
 | `GET` | `/api/actions/{action_id}` | show one action and its event timeline |
 | `POST` | `/api/actions/{action_id}/policy-check` | run reusable action policy checks without execution |
 | `POST` | `/api/actions/{action_id}/execute` | execute one policy-approved action |
+| `POST` | `/api/actions/{action_id}/cancel` | cancel a waiting/approved action and append an event timeline entry |
+| `POST` | `/api/actions/{action_id}/reschedule` | move an approved scheduled action to a new future timestamp and append an event |
 | `POST` | `/api/actions/lead-gen/execute-approved` | execute already-approved `send_email mode=lead_gen` actions through the policy gate |
 | `POST` | `/api/actions/lead-gen/send-approved-draft` | create, and optionally execute, a high-risk approved lead-gen email action |
 | `POST` | `/api/inbound-email/poll` | poll Zoho IMAP and create reply observations/actions |
@@ -64,6 +68,7 @@ bin/autocaller lead-gen email-agent-slice --limit 3 --approval-ready
 bin/autocaller lead-gen email-agent-slice --limit 3 --approve-actions --policy-check-first-action --json
 bin/autocaller lead-gen batches
 bin/autocaller lead-gen show <batch_id> --observations
+bin/autocaller lead-gen edit-draft <batch_item_id> --at "10:30 PT"
 bin/autocaller lead-gen approve <batch_id>
 bin/autocaller lead-gen approve <batch_id> --start-sequences
 bin/autocaller lead-gen observe --event-type email_reply --item <batch_item_id> --text "..."
@@ -74,6 +79,8 @@ bin/autocaller actions scheduler-status
 bin/autocaller actions show <action_id>
 bin/autocaller actions policy-check <action_id>
 bin/autocaller actions execute <action_id>
+bin/autocaller actions cancel <action_id> --reason "operator changed plan"
+bin/autocaller actions reschedule <action_id> --at "11:00 PT"
 bin/autocaller actions execute-approved-lead-gen --limit 1 --actor master-agent
 bin/autocaller actions send-approved-lead-gen-draft --item <batch_item_id> --subject "..." --body "..." --at "09:30 PT"
 bin/autocaller actions send-email --mode lead_gen --to <email> --subject "..." --body "..." --contact <contact_id> --item <batch_item_id> --at "2026-06-11T09:30:00-07:00"
@@ -140,7 +147,7 @@ Responsibilities:
 - serialize batches, items, observations, and proposals;
 - approve batches;
 - schedule queueable sequence starts;
-- send edited batch-item drafts through the durable action execution slice;
+- send and edit batch-item drafts through the durable action execution slice;
 - classify and store observations;
 - create learning proposals.
 
@@ -163,6 +170,16 @@ Both `send_email` and legacy `send_approved_lead_gen_draft` can also store
 `agent_actions.scheduled_for` when the operator uses `--at`; the action remains
 `approved`, is policy-checked immediately, and is not sent until the daemon
 scheduled-action loop finds it due.
+Operators can cancel or reschedule approved scheduled actions through
+`actions cancel` and `actions reschedule`; both append action events.
+`lead-gen edit-draft` loads `reason_json.agent_draft` but prefers the current
+action input when `send_email_action_id` points at an action. Saving updates a
+live approved scheduled action in place, including approval hashes and optional
+`scheduled_for`, instead of creating a duplicate. If no live scheduled action
+exists, it creates a new approved `send_approved_lead_gen_draft` action. The
+same service helper syncs `reason_json.agent_draft`, `send_email_action_id`,
+scheduled PT/UTC display fields, `operator_edited=true`, and
+`approval_status=approved`.
 
 Policy checks verify:
 

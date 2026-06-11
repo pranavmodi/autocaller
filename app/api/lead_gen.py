@@ -8,7 +8,12 @@ from pydantic import BaseModel, Field
 
 from app.db import AsyncSessionLocal
 from app.db.models import FirmContactRow, LeadGenBatchItemRow
-from app.services.action_execution import create_send_email_action, execute_action
+from app.services.action_execution import (
+    create_send_email_action,
+    execute_action,
+    load_lead_gen_draft_for_edit,
+    save_edited_lead_gen_draft,
+)
 from app.services.lead_gen_cybernetic import (
     approve_batch,
     classify_and_store_observation,
@@ -68,6 +73,14 @@ class SendBatchItemDraftRequest(BaseModel):
     composer_variant_key: Optional[str] = None
     skill_path: Optional[str] = None
     skill_sha256: Optional[str] = None
+
+
+class EditBatchItemDraftRequest(BaseModel):
+    subject: str = Field(..., min_length=1, max_length=500)
+    body: str = Field(..., min_length=1, max_length=20000)
+    actor: str = Field("operator", max_length=128)
+    scheduled_for: Optional[str] = None
+    execute_now: bool = False
 
 
 class LeadGenEmailAgentSliceRequest(BaseModel):
@@ -220,6 +233,45 @@ async def send_batch_item_preview_draft(
         raise HTTPException(
             status_code=400,
             detail=f"send_failed: {type(e).__name__}: {str(e)[:300]}",
+        )
+
+
+@router.get("/api/lead-gen/batch-items/{batch_item_id}/draft")
+async def get_batch_item_editable_draft(batch_item_id: str):
+    try:
+        return await load_lead_gen_draft_for_edit(batch_item_id)
+    except ValueError as e:
+        detail = str(e)
+        if detail in {"batch_item_not_found", "agent_draft_not_found"}:
+            raise HTTPException(status_code=404, detail=detail)
+        raise HTTPException(status_code=400, detail=detail)
+
+
+@router.post("/api/lead-gen/batch-items/{batch_item_id}/edit-draft")
+async def edit_batch_item_draft(batch_item_id: str, req: EditBatchItemDraftRequest):
+    try:
+        scheduled_for = None
+        if req.scheduled_for:
+            from datetime import datetime
+
+            scheduled_for = datetime.fromisoformat(req.scheduled_for.replace("Z", "+00:00"))
+        return await save_edited_lead_gen_draft(
+            batch_item_id=batch_item_id,
+            subject=req.subject,
+            body=req.body,
+            actor=req.actor,
+            scheduled_for=scheduled_for,
+            execute_now=req.execute_now,
+        )
+    except ValueError as e:
+        detail = str(e)
+        if detail in {"batch_item_not_found", "agent_draft_not_found"}:
+            raise HTTPException(status_code=404, detail=detail)
+        raise HTTPException(status_code=400, detail=detail)
+    except Exception as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"edit_draft_failed: {type(e).__name__}: {str(e)[:300]}",
         )
 
 

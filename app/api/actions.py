@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from app.services.action_execution import (
+    cancel_action,
     check_action_policy,
     create_and_execute_send_approved_lead_gen_draft,
     create_send_email_action,
@@ -18,6 +19,7 @@ from app.services.action_execution import (
     execute_approved_lead_gen_email_actions,
     get_action,
     list_actions,
+    reschedule_action,
 )
 from app.services.action_scheduler import count_pending_scheduled_actions, scheduler_status
 
@@ -71,6 +73,16 @@ class ExecuteApprovedLeadGenActionsRequest(BaseModel):
     limit: int = Field(1, ge=1, le=25)
 
 
+class CancelActionRequest(BaseModel):
+    actor: str = Field("operator", max_length=128)
+    reason: str = Field("", max_length=1000)
+
+
+class RescheduleActionRequest(BaseModel):
+    actor: str = Field("operator", max_length=128)
+    scheduled_for: datetime
+
+
 @router.get("")
 async def actions(
     status: str | None = Query(None),
@@ -116,6 +128,40 @@ async def execute(action_id: str, req: ExecuteActionRequest | None = None):
         return await execute_action(action_id, actor=(req.actor if req else "operator"))
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"{type(exc).__name__}: {str(exc)[:500]}")
+
+
+@router.post("/{action_id}/cancel")
+async def cancel(action_id: str, req: CancelActionRequest | None = None):
+    try:
+        return await cancel_action(
+            action_id,
+            actor=(req.actor if req else "operator"),
+            reason=(req.reason if req else ""),
+        )
+    except ValueError as exc:
+        detail = str(exc)
+        if detail == "action_not_found":
+            raise HTTPException(status_code=404, detail=detail)
+        raise HTTPException(status_code=400, detail=detail)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"{type(exc).__name__}: {str(exc)[:500]}")
+
+
+@router.post("/{action_id}/reschedule")
+async def reschedule(action_id: str, req: RescheduleActionRequest):
+    try:
+        return await reschedule_action(
+            action_id,
+            scheduled_for=req.scheduled_for,
+            actor=req.actor,
+        )
+    except ValueError as exc:
+        detail = str(exc)
+        if detail == "action_not_found":
+            raise HTTPException(status_code=404, detail=detail)
+        raise HTTPException(status_code=400, detail=detail)
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"{type(exc).__name__}: {str(exc)[:500]}")
 

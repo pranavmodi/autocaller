@@ -27,6 +27,7 @@ from app.services.lead_gen_cybernetic import (
 )
 from app.services.master_agent import ensure_agent_tables
 from app.services.product_traces import safe_record_product_trace
+from app.services.scheduled_time import format_pt, format_utc
 
 
 SEND_APPROVED_LEAD_GEN_DRAFT = "send_approved_lead_gen_draft"
@@ -45,6 +46,12 @@ def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _as_utc(value: datetime) -> datetime:
+    if value.tzinfo is None or value.utcoffset() is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
 def _new_id(prefix: str) -> str:
     return f"{prefix}_{uuid.uuid4().hex[:24]}"
 
@@ -55,6 +62,87 @@ def _json_object(value: dict[str, Any] | None) -> dict[str, Any]:
 
 def _sha256(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+def _action_subject_body(row: AgentActionRow) -> tuple[str, str]:
+    payload = row.input_json if isinstance(row.input_json, dict) else {}
+    return (
+        _sanitize_email_copy(str(payload.get("subject") or "")),
+        _sanitize_email_copy(str(payload.get("body") or "")),
+    )
+
+
+def _action_is_live_scheduled(row: AgentActionRow | None) -> bool:
+    return bool(row and row.status == "approved" and row.scheduled_for is not None)
+
+
+def _update_action_draft_payload(row: AgentActionRow, *, subject: str, body: str, actor: str) -> dict[str, Any]:
+    draft_subject = _sanitize_email_copy(subject)
+    draft_body = _sanitize_email_copy(body)
+    if not draft_subject:
+        raise ValueError("draft_subject_empty")
+    if not draft_body:
+        raise ValueError("draft_body_empty")
+
+    payload = dict(row.input_json or {})
+    old_subject = str(payload.get("subject") or "")
+    old_body = str(payload.get("body") or "")
+    subject_hash = _sha256(draft_subject)
+    body_hash = _sha256(draft_body)
+    payload["subject"] = draft_subject
+    payload["body"] = draft_body
+    payload["subject_sha256"] = subject_hash
+    payload["body_sha256"] = body_hash
+    approval = dict(payload.get("approval") or {})
+    if approval:
+        approval["approved_by"] = str(approval.get("approved_by") or row.approved_by or actor or "operator")
+        approval["approved_at"] = _utcnow().isoformat()
+        approval["subject_sha256"] = subject_hash
+        approval["body_sha256"] = body_hash
+        if payload.get("to"):
+            approval["recipient"] = str(payload.get("to") or "").strip().lower()
+        payload["approval"] = approval
+    row.input_json = payload
+    row.policy_result_json = {}
+    row.updated_at = _utcnow()
+    return {
+        "old_subject_sha256": _sha256(old_subject),
+        "old_body_sha256": _sha256(old_body),
+        "subject_sha256": subject_hash,
+        "body_sha256": body_hash,
+    }
+
+
+def _sync_lead_gen_scheduled_draft_fields(
+    item: LeadGenBatchItemRow,
+    *,
+    action: AgentActionRow,
+    subject: str,
+    body: str,
+    actor: str,
+) -> dict[str, Any]:
+    reason = dict(item.reason_json or {})
+    existing_draft = dict(reason.get("agent_draft") or {})
+    scheduled_for = _as_utc(action.scheduled_for) if action.scheduled_for else None
+    existing_draft.update({
+        "subject": _sanitize_email_copy(subject),
+        "body": _sanitize_email_copy(body),
+        "operator_edited": True,
+        "operator_edited_by": actor or "operator",
+        "operator_edited_at": _utcnow().isoformat(),
+        "action_id": action.id,
+        "action_status": action.status,
+        "action_type": action.action_type,
+        "scheduled_for_pt": format_pt(scheduled_for) if scheduled_for else None,
+        "scheduled_for_utc": format_utc(scheduled_for) if scheduled_for else None,
+    })
+    reason["agent_draft"] = existing_draft
+    reason["send_email_action_id"] = action.id
+    reason["next_operator_action"] = "scheduled_send_queued" if scheduled_for else "approved_send_queued"
+    item.reason_json = reason
+    item.approval_status = "approved"
+    item.updated_at = _utcnow()
+    return reason
 
 
 def _terminal_policy_block_reason(policy: dict[str, Any]) -> str:
@@ -272,6 +360,275 @@ async def get_action(action_id: str) -> dict[str, Any] | None:
         }
 
 
+async def cancel_action(action_id: str, *, actor: str = "operator", reason: str = "") -> dict[str, Any]:
+    await ensure_agent_tables()
+    cancel_reason = (reason or "Operator cancelled action.").strip()
+    async with AsyncSessionLocal() as session:
+        action = await session.get(AgentActionRow, action_id)
+        if not action:
+            raise ValueError("action_not_found")
+        if action.status not in {"waiting_for_approval", "approved"}:
+            raise ValueError(f"action_cannot_be_cancelled_from_status:{action.status}")
+        now = _utcnow()
+        action.status = "cancelled"
+        action.completed_at = now
+        action.error = f"Cancelled by {actor or 'operator'}: {cancel_reason}"
+        action.execution_result_json = {
+            "executed": False,
+            "cancelled": True,
+            "cancelled_by": actor or "operator",
+            "cancelled_at": now.isoformat(),
+            "reason": cancel_reason,
+        }
+        action.updated_at = now
+        await _record_action_event(
+            session,
+            action_id=action.id,
+            event_type="action_cancelled",
+            actor=actor or "operator",
+            message=action.error,
+            output_json=action.execution_result_json,
+        )
+        await session.commit()
+        result = action_to_dict(action)
+    await safe_record_product_trace(
+        actor_type="user" if (actor or "operator") == "operator" else "agent",
+        actor_id=actor or "operator",
+        event_type="action_cancelled",
+        surface="actions",
+        entity_type="agent_action",
+        entity_id=action_id,
+        output_json={"reason": cancel_reason},
+    )
+    return {"action": result, "cancelled": True}
+
+
+async def reschedule_action(
+    action_id: str,
+    *,
+    scheduled_for: datetime,
+    actor: str = "operator",
+) -> dict[str, Any]:
+    await ensure_agent_tables()
+    new_time = _as_utc(scheduled_for)
+    if new_time <= _utcnow():
+        raise ValueError("scheduled_time_is_in_the_past")
+    async with AsyncSessionLocal() as session:
+        action = await session.get(AgentActionRow, action_id)
+        if not action:
+            raise ValueError("action_not_found")
+        if action.status != "approved":
+            raise ValueError(f"action_cannot_be_rescheduled_from_status:{action.status}")
+        if not action.scheduled_for:
+            raise ValueError("action_is_not_scheduled")
+        old_time = _as_utc(action.scheduled_for)
+        action.scheduled_for = new_time
+        action.policy_result_json = {}
+        action.updated_at = _utcnow()
+        subject, body = _action_subject_body(action)
+        if action.entity_type == "lead_gen_batch_item" and action.entity_id:
+            item = await session.get(LeadGenBatchItemRow, action.entity_id)
+            if item:
+                _sync_lead_gen_scheduled_draft_fields(
+                    item,
+                    action=action,
+                    subject=subject,
+                    body=body,
+                    actor=actor or "operator",
+                )
+        await _record_action_event(
+            session,
+            action_id=action.id,
+            event_type="action_rescheduled",
+            actor=actor or "operator",
+            message=f"Action rescheduled from {format_pt(old_time)} to {format_pt(new_time)}.",
+            input_json={"old_scheduled_for": old_time.isoformat(), "scheduled_for": new_time.isoformat()},
+            output_json={
+                "old_scheduled_for_pt": format_pt(old_time),
+                "old_scheduled_for_utc": format_utc(old_time),
+                "scheduled_for_pt": format_pt(new_time),
+                "scheduled_for_utc": format_utc(new_time),
+            },
+        )
+        await session.commit()
+        result = action_to_dict(action)
+    await safe_record_product_trace(
+        actor_type="user" if (actor or "operator") == "operator" else "agent",
+        actor_id=actor or "operator",
+        event_type="action_rescheduled",
+        surface="actions",
+        entity_type="agent_action",
+        entity_id=action_id,
+        input_json={"old_scheduled_for": old_time.isoformat()},
+        output_json={"scheduled_for": new_time.isoformat()},
+    )
+    return {
+        "action": result,
+        "old_scheduled_for": old_time.isoformat(),
+        "scheduled_for": new_time.isoformat(),
+        "old_scheduled_for_pt": format_pt(old_time),
+        "old_scheduled_for_utc": format_utc(old_time),
+        "scheduled_for_pt": format_pt(new_time),
+        "scheduled_for_utc": format_utc(new_time),
+    }
+
+
+async def load_lead_gen_draft_for_edit(batch_item_id: str) -> dict[str, Any]:
+    await ensure_agent_tables()
+    async with AsyncSessionLocal() as session:
+        item = await session.get(LeadGenBatchItemRow, batch_item_id)
+        if not item:
+            raise ValueError("batch_item_not_found")
+        reason = dict(item.reason_json or {})
+        draft = dict(reason.get("agent_draft") or {})
+        action = None
+        action_id = str(reason.get("send_email_action_id") or draft.get("action_id") or "").strip()
+        if action_id:
+            action = await session.get(AgentActionRow, action_id)
+        if action:
+            subject, body = _action_subject_body(action)
+            if subject or body:
+                draft["subject"] = subject
+                draft["body"] = body
+                draft["action_id"] = action.id
+                draft["action_status"] = action.status
+                draft["action_type"] = action.action_type
+                draft["scheduled_for"] = action.scheduled_for.isoformat() if action.scheduled_for else None
+        subject = _sanitize_email_copy(str(draft.get("subject") or ""))
+        body = _sanitize_email_copy(str(draft.get("body") or ""))
+        if not subject and not body:
+            raise ValueError("agent_draft_not_found")
+        return {
+            "batch_item_id": item.id,
+            "approval_status": item.approval_status,
+            "draft": {"subject": subject, "body": body},
+            "action": action_to_dict(action) if action else None,
+            "reason": reason,
+        }
+
+
+async def save_edited_lead_gen_draft(
+    *,
+    batch_item_id: str,
+    subject: str,
+    body: str,
+    actor: str = "operator",
+    scheduled_for: datetime | None = None,
+    execute_now: bool = False,
+) -> dict[str, Any]:
+    await ensure_agent_tables()
+    draft_subject = _sanitize_email_copy(subject)
+    draft_body = _sanitize_email_copy(body)
+    if not draft_subject:
+        raise ValueError("draft_subject_empty")
+    if not draft_body:
+        raise ValueError("draft_body_empty")
+    if scheduled_for and _as_utc(scheduled_for) <= _utcnow():
+        raise ValueError("scheduled_time_is_in_the_past")
+    if scheduled_for:
+        execute_now = False
+
+    async with AsyncSessionLocal() as session:
+        item = await session.get(LeadGenBatchItemRow, batch_item_id)
+        if not item:
+            raise ValueError("batch_item_not_found")
+        reason = dict(item.reason_json or {})
+        draft = dict(reason.get("agent_draft") or {})
+        action_id = str(reason.get("send_email_action_id") or draft.get("action_id") or "").strip()
+        action = await session.get(AgentActionRow, action_id) if action_id else None
+        if _action_is_live_scheduled(action):
+            old_scheduled_for = _as_utc(action.scheduled_for) if action.scheduled_for else None
+            old_subject, old_body = _action_subject_body(action)
+            hashes = _update_action_draft_payload(
+                action,
+                subject=draft_subject,
+                body=draft_body,
+                actor=actor or "operator",
+            )
+            if scheduled_for:
+                action.scheduled_for = _as_utc(scheduled_for)
+            _sync_lead_gen_scheduled_draft_fields(
+                item,
+                action=action,
+                subject=draft_subject,
+                body=draft_body,
+                actor=actor or "operator",
+            )
+            await _record_action_event(
+                session,
+                action_id=action.id,
+                event_type="action_draft_edited",
+                actor=actor or "operator",
+                message="Scheduled lead-gen draft edited in operator editor.",
+                input_json={
+                    "old_subject_sha256": _sha256(old_subject),
+                    "old_body_sha256": _sha256(old_body),
+                    "old_scheduled_for": old_scheduled_for.isoformat() if old_scheduled_for else None,
+                },
+                output_json={
+                    **hashes,
+                    "scheduled_for": action.scheduled_for.isoformat() if action.scheduled_for else None,
+                    "scheduled_for_pt": format_pt(action.scheduled_for) if action.scheduled_for else None,
+                    "scheduled_for_utc": format_utc(action.scheduled_for) if action.scheduled_for else None,
+                },
+            )
+            if scheduled_for and old_scheduled_for and _as_utc(scheduled_for) != old_scheduled_for:
+                await _record_action_event(
+                    session,
+                    action_id=action.id,
+                    event_type="action_rescheduled",
+                    actor=actor or "operator",
+                    message=f"Action rescheduled from {format_pt(old_scheduled_for)} to {format_pt(action.scheduled_for)}.",
+                    input_json={
+                        "old_scheduled_for": old_scheduled_for.isoformat(),
+                        "scheduled_for": action.scheduled_for.isoformat(),
+                    },
+                    output_json={
+                        "old_scheduled_for_pt": format_pt(old_scheduled_for),
+                        "old_scheduled_for_utc": format_utc(old_scheduled_for),
+                        "scheduled_for_pt": format_pt(action.scheduled_for),
+                        "scheduled_for_utc": format_utc(action.scheduled_for),
+                    },
+                )
+            await session.commit()
+            result = action_to_dict(action)
+            return {
+                "action": result,
+                "updated_existing": True,
+                "created": False,
+                "executed": False,
+                "scheduled_for_pt": format_pt(action.scheduled_for) if action.scheduled_for else None,
+                "scheduled_for_utc": format_utc(action.scheduled_for) if action.scheduled_for else None,
+            }
+
+    action = await create_send_approved_lead_gen_draft_action(
+        batch_item_id=batch_item_id,
+        subject=draft_subject,
+        body=draft_body,
+        requested_by=actor or "operator",
+        approved_by=actor or "operator",
+        scheduled_for=_as_utc(scheduled_for) if scheduled_for else None,
+    )
+    if execute_now:
+        execution = await execute_action(action["id"], actor=actor or "operator")
+        return {
+            "action": execution.get("action") or action,
+            "created": True,
+            "updated_existing": False,
+            "executed": bool(execution.get("executed")),
+            "result": execution.get("result") or {},
+            "policy": execution.get("policy") or {},
+        }
+    return {
+        "action": action,
+        "created": True,
+        "updated_existing": False,
+        "executed": False,
+        "scheduled_for_pt": format_pt(action.get("scheduled_for")) if action.get("scheduled_for") else None,
+        "scheduled_for_utc": format_utc(action.get("scheduled_for")) if action.get("scheduled_for") else None,
+    }
+
+
 async def create_send_approved_lead_gen_draft_action(
     *,
     batch_item_id: str,
@@ -352,6 +709,15 @@ async def create_send_approved_lead_gen_draft_action(
                 actor=approved_by or requested_by or "operator",
                 message="Action scheduled for daemon execution.",
                 input_json={"scheduled_for": scheduled_for.isoformat()},
+            )
+        item = await session.get(LeadGenBatchItemRow, batch_item_id)
+        if item:
+            _sync_lead_gen_scheduled_draft_fields(
+                item,
+                action=action,
+                subject=draft_subject,
+                body=draft_body,
+                actor=approved_by or requested_by or "operator",
             )
         await session.commit()
         await session.refresh(action)

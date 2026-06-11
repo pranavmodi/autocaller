@@ -13,7 +13,10 @@ import csv
 import json
 import os
 import re
+import shlex
+import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any, Optional
 
@@ -97,12 +100,24 @@ def _api_base() -> str:
     return os.getenv("AUTOCALLER_API_BASE", f"http://127.0.0.1:{port}").rstrip("/")
 
 
+def _http_error_detail(exc: httpx.HTTPError) -> str:
+    if isinstance(exc, httpx.HTTPStatusError):
+        try:
+            payload = exc.response.json()
+        except Exception:
+            payload = {}
+        detail = payload.get("detail") if isinstance(payload, dict) else None
+        if detail:
+            return f"{exc.response.status_code} {detail}"
+    return str(exc)
+
+
 def _get(path: str, **params) -> dict:
     try:
         resp = httpx.get(f"{_api_base()}{path}", params=params or None, timeout=15.0)
         resp.raise_for_status()
     except httpx.HTTPError as e:
-        console.print(f"[red]API request failed: {e}[/red]")
+        console.print(f"[red]API request failed: {_http_error_detail(e)}[/red]")
         raise typer.Exit(code=1) from e
     return resp.json()
 
@@ -112,9 +127,51 @@ def _post(path: str, json_body: Optional[dict] = None, timeout: float = 30.0) ->
         resp = httpx.post(f"{_api_base()}{path}", json=json_body or {}, timeout=timeout)
         resp.raise_for_status()
     except httpx.HTTPError as e:
-        console.print(f"[red]API request failed: {e}[/red]")
+        console.print(f"[red]API request failed: {_http_error_detail(e)}[/red]")
         raise typer.Exit(code=1) from e
     return resp.json() if resp.content else {}
+
+
+def _parse_editor_draft(raw: str) -> tuple[str, str]:
+    lines = raw.splitlines()
+    if not lines:
+        raise ValueError("draft file is empty")
+    first = lines[0]
+    if not first.lower().startswith("subject:"):
+        raise ValueError("first line must be 'Subject: ...'")
+    subject = first.split(":", 1)[1].strip()
+    body_lines = lines[1:]
+    if body_lines and body_lines[0].strip() == "":
+        body_lines = body_lines[1:]
+    body = "\n".join(body_lines).strip()
+    if not subject:
+        raise ValueError("subject cannot be empty")
+    if not body:
+        raise ValueError("body cannot be empty")
+    return subject, body
+
+
+def _edit_subject_body(subject: str, body: str, *, use_editor: bool) -> tuple[str, str]:
+    if not use_editor:
+        return subject, body
+    editor = os.getenv("EDITOR", "").strip() or "vi"
+    with tempfile.NamedTemporaryFile("w+", prefix="lead-gen-draft-", suffix=".txt", encoding="utf-8") as tmp:
+        tmp.write(f"Subject: {subject.strip()}\n\n{body.strip()}\n")
+        tmp.flush()
+        try:
+            subprocess.run([*shlex.split(editor), tmp.name], check=True)
+        except FileNotFoundError as exc:
+            console.print(f"[red]Editor not found: {editor}[/red]")
+            raise typer.Exit(code=1) from exc
+        except subprocess.CalledProcessError as exc:
+            console.print(f"[red]Editor exited with status {exc.returncode}[/red]")
+            raise typer.Exit(code=1) from exc
+        tmp.seek(0)
+        try:
+            return _parse_editor_draft(tmp.read())
+        except ValueError as exc:
+            console.print(f"[red]Invalid draft file: {exc}[/red]")
+            raise typer.Exit(code=1) from exc
 
 
 def _patch(path: str, json_body: Optional[dict] = None, timeout: float = 30.0) -> dict:
@@ -122,7 +179,7 @@ def _patch(path: str, json_body: Optional[dict] = None, timeout: float = 30.0) -
         resp = httpx.patch(f"{_api_base()}{path}", json=json_body or {}, timeout=timeout)
         resp.raise_for_status()
     except httpx.HTTPError as e:
-        console.print(f"[red]API request failed: {e}[/red]")
+        console.print(f"[red]API request failed: {_http_error_detail(e)}[/red]")
         raise typer.Exit(code=1) from e
     return resp.json() if resp.content else {}
 
@@ -3430,6 +3487,57 @@ def actions_execute(
     )
 
 
+@actions_app.command("cancel")
+def actions_cancel(
+    action_id: str = typer.Argument(...),
+    reason: str = typer.Option("", "--reason", help="Human-readable cancellation reason."),
+    actor: str = typer.Option("operator", "--actor", help="Actor recorded on action events/traces."),
+    json_output: bool = typer.Option(False, "--json"),
+):
+    """Cancel a waiting or approved action before it runs."""
+    data = _post(
+        f"/api/actions/{action_id}/cancel",
+        json_body={"actor": actor, "reason": reason},
+        timeout=30.0,
+    )
+    if json_output:
+        console.print_json(data=data)
+        return
+    action = data.get("action") or {}
+    console.print(f"action={action.get('id')} status={action.get('status')} cancelled=true")
+
+
+@actions_app.command("reschedule")
+def actions_reschedule(
+    action_id: str = typer.Argument(...),
+    at: str = typer.Option(..., "--at", help='New send time: ISO-8601 with offset, or "HH:MM PT|PDT|PST" today.'),
+    actor: str = typer.Option("operator", "--actor", help="Actor recorded on action events/traces."),
+    json_output: bool = typer.Option(False, "--json"),
+):
+    """Move an approved scheduled action to a new future time."""
+    from app.services.scheduled_time import parse_scheduled_time
+
+    try:
+        scheduled_for = parse_scheduled_time(at)
+    except ValueError as exc:
+        console.print(f"[red]Invalid --at: {exc}[/red]")
+        raise typer.Exit(code=1) from exc
+    data = _post(
+        f"/api/actions/{action_id}/reschedule",
+        json_body={"actor": actor, "scheduled_for": scheduled_for.isoformat()},
+        timeout=30.0,
+    )
+    if json_output:
+        console.print_json(data=data)
+        return
+    action = data.get("action") or {}
+    console.print(
+        f"action={action.get('id')} status={action.get('status')} "
+        f"{data.get('old_scheduled_for_pt')} ({data.get('old_scheduled_for_utc')}) -> "
+        f"{data.get('scheduled_for_pt')} ({data.get('scheduled_for_utc')})"
+    )
+
+
 @actions_app.command("execute-approved-lead-gen")
 def actions_execute_approved_lead_gen(
     limit: int = typer.Option(1, "--limit", "-n", min=1, max=25, help="Maximum approved lead-gen email actions to execute."),
@@ -4433,6 +4541,58 @@ def lead_gen_show(
     _print_lead_gen_items(data.get("items") or [])
     if observations:
         _print_lead_gen_observations(data.get("observations") or [])
+
+
+@lead_gen_app.command("edit-draft")
+def lead_gen_edit_draft(
+    batch_item_id: str = typer.Argument(..., help="lead_gen_batch_items.id"),
+    at: str = typer.Option("", "--at", help='Optional scheduled send time: ISO-8601 with offset, or "HH:MM PT|PDT|PST" today.'),
+    use_editor: bool = typer.Option(True, "--editor/--no-editor", help="Open $EDITOR before saving."),
+    execute_now: bool = typer.Option(False, "--execute/--no-execute", help="Execute immediately after creating a new unscheduled action."),
+    actor: str = typer.Option("operator", "--actor", help="Actor recorded on action events/traces."),
+    json_output: bool = typer.Option(False, "--json"),
+):
+    """Edit a lead-gen draft and create or update its approved action."""
+    scheduled_for = None
+    if at:
+        from app.services.scheduled_time import parse_scheduled_time
+
+        try:
+            scheduled_for = parse_scheduled_time(at)
+        except ValueError as exc:
+            console.print(f"[red]Invalid --at: {exc}[/red]")
+            raise typer.Exit(code=1) from exc
+        execute_now = False
+    loaded = _get(f"/api/lead-gen/batch-items/{batch_item_id}/draft")
+    draft = loaded.get("draft") or {}
+    subject, body = _edit_subject_body(
+        str(draft.get("subject") or ""),
+        str(draft.get("body") or ""),
+        use_editor=use_editor,
+    )
+    data = _post(
+        f"/api/lead-gen/batch-items/{batch_item_id}/edit-draft",
+        json_body={
+            "subject": subject,
+            "body": body,
+            "actor": actor,
+            "scheduled_for": scheduled_for.isoformat() if scheduled_for else None,
+            "execute_now": execute_now,
+        },
+        timeout=120.0,
+    )
+    if json_output:
+        console.print_json(data=data)
+        return
+    action = data.get("action") or {}
+    scheduled_pt = data.get("scheduled_for_pt") or ""
+    scheduled_utc = data.get("scheduled_for_utc") or ""
+    suffix = f" scheduled_pt={scheduled_pt} scheduled_utc={scheduled_utc}" if scheduled_pt else ""
+    console.print(
+        f"action={action.get('id')} status={action.get('status')} "
+        f"created={data.get('created')} updated_existing={data.get('updated_existing')} "
+        f"executed={data.get('executed')}{suffix}"
+    )
 
 
 @lead_gen_app.command("approve")

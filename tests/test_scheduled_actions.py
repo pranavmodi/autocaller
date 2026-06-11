@@ -33,6 +33,14 @@ def test_parse_scheduled_time_pt_past_errors():
         )
 
 
+def test_parse_scheduled_time_iso_past_errors():
+    with pytest.raises(ValueError, match="already in the past"):
+        parse_scheduled_time(
+            "2026-06-11T07:30:00Z",
+            now=datetime(2026, 6, 11, 15, 0, tzinfo=timezone.utc),
+        )
+
+
 def test_due_selection_classifies_due_future_and_expired():
     now = datetime(2026, 6, 11, 16, 0, tzinfo=timezone.utc)
     rows = [

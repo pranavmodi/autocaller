@@ -53,8 +53,11 @@ through the durable policy gate.
 
 Possible OS also has a first durable action-execution slice. Use
 `bin/autocaller actions list`, `actions show <id>`, `actions policy-check <id>`,
-`actions scheduler-status`, and `actions execute <id>` to inspect or run
-policy-checked actions. The first
+`actions scheduler-status`, `actions execute <id>`, `actions cancel <id>`, and
+`actions reschedule <id> --at "10:30 PT"` to inspect, run, cancel, or move
+policy-checked actions. `actions cancel` only works before execution while the
+action is `waiting_for_approval` or `approved`; `actions reschedule` only works
+for approved scheduled actions and prints old -> new in PT and UTC. The first
 high-risk supported action is `send_approved_lead_gen_draft`, exposed as
 `bin/autocaller actions send-approved-lead-gen-draft --item=<batch_item_id>
 --subject=... --body=...`; it creates an exact approved draft action, checks
@@ -72,6 +75,15 @@ every 30 seconds and expires anything more than 24 hours stale.
 Policy verifies the exact approval hashes, contact/recipient match, consult
 link, Zoho transport, no selection suppressions, and no prior successful send
 for the same item/recipient.
+Use `bin/autocaller lead-gen edit-draft <batch_item_id>` to open the current
+lead-gen draft in `$EDITOR` as `Subject: ...`, blank line, body. Add
+`--at "10:30 PT"` to schedule/reschedule from the same save, or `--no-editor`
+to reuse the current text. If the item already points at a live approved
+scheduled action, edit-draft updates that action's subject/body and time in
+place instead of creating a duplicate. Otherwise it creates a new approved
+`send_approved_lead_gen_draft` action. It also syncs
+`reason_json.agent_draft`, `send_email_action_id`, and
+`approval_status=approved` so the Lead Gen UI matches the action queue.
 `bin/autocaller actions execute-approved-lead-gen --limit=<N>
 --actor=master-agent` executes only already-approved lead-gen email actions via
 that same policy gate. This is the action heartbeat uses when approved-send

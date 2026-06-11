@@ -56,7 +56,10 @@ def parse_scheduled_time(value: str, *, now: datetime | None = None) -> datetime
         raise ValueError(
             'scheduled time must be ISO-8601 with offset or "HH:MM PT"'
         ) from exc
-    return _aware_utc(parsed)
+    scheduled_utc = _aware_utc(parsed)
+    if scheduled_utc <= now_utc:
+        raise ValueError("scheduled time is already in the past")
+    return scheduled_utc
 
 
 def format_pt(value: datetime | str | None) -> str:
