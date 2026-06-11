@@ -102,6 +102,22 @@ Do not treat app `email_logs`, failed delivery attempts, missing Zoho Sent
 history, or draft-only operator approvals as prior recipient contact. Only
 messages found in Zoho Sent count as previous outbound email.
 
+Match the angle to the contact's role (`contact_title`):
+
+- intake-titled contacts (Intake Attorney, Intake Manager, Pre-Litigation
+  Director, Client Relations): lead with the after-hours/overflow intake
+  angle — they live that pain daily; records is their colleagues' problem.
+- working attorneys and litigators: lead with records/bills/status follow-up
+  — the chase on every file is their lived drag.
+- founders, managing partners, operations leads: either angle works; frame it
+  as staff-time and signed-case economics, and it is acceptable to name both
+  leaks and ask which one bites harder.
+
+Vary subjects across a batch: never reuse one subject line on multiple
+recipients in the same run. Subjects should be lowercase-casual, specific,
+and reference either the firm, the workflow, or the Precise system — not a
+generic label that reads like an automated notification.
+
 ## Strategy Library
 
 Use these strategies as internal options, not as rigid templates:
@@ -116,7 +132,10 @@ Use these strategies as internal options, not as rigid templates:
   with Precise Imaging status/update autoresponders or when a first-touch
   introduction needs concrete proof of Possible Minds. Explain that the
   autoresponses/autoresponders they may have seen from Precise Imaging are
-  powered by Possible Minds. Use the concrete scale proof: Precise receives
+  powered by Possible Minds. Name the full system set in one breath — "we
+  built that system, along with Precise's email triage, intake voice line,
+  and website chat" — so the reader sees a multi-system track record, not a
+  single tool. Use the concrete scale proof: Precise receives
   about 600 inbound emails a day; the system triages them and auto-answers the
   routine ones so staff focus on exceptions. Then pivot to one specific PI-firm
   workflow pain. Keep this factual, brief, and do not imply Precise endorsed
@@ -161,6 +180,13 @@ Approved project proof points:
   exceptions. Use this volume/mechanic as the defensible proof point. Do not
   use staff-hours-per-week claims unless the payload explicitly supplies them
   as current approved evidence.
+- **Precise Imaging full-stack results (approved, attributable — operator
+  cleared 2026-06-11):** Precise Imaging may be named, with numbers: the
+  automation across email triage saves about 520 staff-hours per month and
+  handles 73% of inbox volume automatically; Precise serves roughly 1,900 PI
+  firms. Possible Minds also built and runs Precise's intake voice line and
+  website chat. Use at most one of these numbers per email; never imply
+  Precise endorses or distributes the outreach.
 - **Website AI chatbot:** Possible Minds builds website AI chatbots that answer
   common questions, qualify visitors, collect context, and route high-intent
   inquiries. For a small or mid-sized PI firm, a realistic target is recovering
