@@ -18,6 +18,7 @@ from .services.daily_report_service import daily_report_loop
 from .services.judge import judge_loop
 from .services.voicemail_followup_service import voicemail_followup_loop
 from .services.sequence_scheduler import sequence_loop
+from .services.action_scheduler import scheduled_action_loop
 from .services.product_traces import new_trace_id, request_id_var, trace_id_var
 from .providers import set_queue_source, set_patient_source
 from .providers.settings_provider import get_settings_provider
@@ -78,6 +79,9 @@ async def lifespan(app: FastAPI):
     # Start the 4-step email sequence scheduler. Gated by
     # ALLOW_SEQUENCE_SEND=true — loop ticks but no-ops without the flag.
     sequence_task = asyncio.create_task(sequence_loop(interval_seconds=60))
+    # Start explicitly scheduled durable action sends. This does not start the
+    # dispatcher; it only drains approved actions with scheduled_for set.
+    scheduled_action_task = asyncio.create_task(scheduled_action_loop(interval_seconds=30))
     from .services.master_agent import (
         heartbeat_interval_seconds,
         master_heartbeat_loop,
@@ -109,6 +113,7 @@ async def lifespan(app: FastAPI):
         cadence_task,
         vm_followup_task,
         sequence_task,
+        scheduled_action_task,
         reconciler_task,
     ]
     tasks_to_cancel.append(master_heartbeat_task)

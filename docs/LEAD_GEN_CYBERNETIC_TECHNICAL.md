@@ -32,7 +32,8 @@ Important routes:
 | `POST` | `/api/lead-gen/batch-items/{batch_item_id}/send-draft` | create and execute a durable `send_email mode=lead_gen` action for the exact edited draft |
 | `POST` | `/api/lead-gen/observations/classify` | classify and store manual/API feedback |
 | `POST` | `/api/lead-gen/batches/{batch_id}/proposal` | create a human-reviewed learning proposal |
-| `GET` | `/api/actions` | list durable Possible OS action execution records |
+| `GET` | `/api/actions` | list durable Possible OS action execution records; `scheduled=true` returns future scheduled approved sends ordered by `scheduled_for` |
+| `GET` | `/api/actions/scheduler/status` | show scheduled-action daemon loop state, last tick, pending scheduled count, and due count |
 | `GET` | `/api/actions/{action_id}` | show one action and its event timeline |
 | `POST` | `/api/actions/{action_id}/policy-check` | run reusable action policy checks without execution |
 | `POST` | `/api/actions/{action_id}/execute` | execute one policy-approved action |
@@ -68,12 +69,14 @@ bin/autocaller lead-gen approve <batch_id> --start-sequences
 bin/autocaller lead-gen observe --event-type email_reply --item <batch_item_id> --text "..."
 bin/autocaller lead-gen propose <batch_id>
 bin/autocaller actions list --type send_approved_lead_gen_draft
+bin/autocaller actions list --scheduled
+bin/autocaller actions scheduler-status
 bin/autocaller actions show <action_id>
 bin/autocaller actions policy-check <action_id>
 bin/autocaller actions execute <action_id>
 bin/autocaller actions execute-approved-lead-gen --limit 1 --actor master-agent
-bin/autocaller actions send-approved-lead-gen-draft --item <batch_item_id> --subject "..." --body "..."
-bin/autocaller actions send-email --mode lead_gen --to <email> --subject "..." --body "..." --contact <contact_id> --item <batch_item_id> --no-execute
+bin/autocaller actions send-approved-lead-gen-draft --item <batch_item_id> --subject "..." --body "..." --at "09:30 PT"
+bin/autocaller actions send-email --mode lead_gen --to <email> --subject "..." --body "..." --contact <contact_id> --item <batch_item_id> --at "2026-06-11T09:30:00-07:00"
 bin/autocaller listening brief
 bin/autocaller listening search "medical records follow up" --limit 8
 bin/autocaller listening prep "<firm-or-name>"
@@ -156,6 +159,10 @@ Current email action modes:
 For `send_email mode=lead_gen`, the action input includes the exact approved
 recipient, subject, body, contact id, batch item id, firm metadata, composer
 variant metadata, nullable listening `brief_version`, and subject/body hashes.
+Both `send_email` and legacy `send_approved_lead_gen_draft` can also store
+`agent_actions.scheduled_for` when the operator uses `--at`; the action remains
+`approved`, is policy-checked immediately, and is not sent until the daemon
+scheduled-action loop finds it due.
 
 Policy checks verify:
 
@@ -206,6 +213,21 @@ The lead-gen batch item reason JSON includes:
 Heartbeat includes compact recent action summaries in its wake context so the
 master agent can see whether recent durable sends actually linked to an email
 log row and transport result.
+
+Scheduled sends:
+
+- CLI accepts ISO-8601 with offset or `HH:MM PT|PDT|PST` for today in
+  America/Los_Angeles.
+- `actions send-email --at ...` and `actions send-approved-lead-gen-draft --at ...`
+  create approved scheduled actions, run policy check, and do not execute.
+- `app/services/action_scheduler.py` runs from the FastAPI lifespan every 30
+  seconds, selecting approved rows where `scheduled_for <= now()`, oldest first.
+- Each due action is executed through `execute_action`, so all normal policy
+  checks run again at send time.
+- Rows more than 24 hours stale are marked `expired` with an error note instead
+  of sending.
+- `/actions` shows future scheduled actions with Pacific time, relative timing,
+  and stored subject/body from `input_json`.
 
 The master agent can send lead-gen email only through
 `execute_approved_lead_gen_email_actions`. That function drains existing

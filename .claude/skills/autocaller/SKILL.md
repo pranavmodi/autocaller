@@ -53,7 +53,8 @@ through the durable policy gate.
 
 Possible OS also has a first durable action-execution slice. Use
 `bin/autocaller actions list`, `actions show <id>`, `actions policy-check <id>`,
-and `actions execute <id>` to inspect or run policy-checked actions. The first
+`actions scheduler-status`, and `actions execute <id>` to inspect or run
+policy-checked actions. The first
 high-risk supported action is `send_approved_lead_gen_draft`, exposed as
 `bin/autocaller actions send-approved-lead-gen-draft --item=<batch_item_id>
 --subject=... --body=...`; it creates an exact approved draft action, checks
@@ -63,6 +64,11 @@ durable email actions use `bin/autocaller actions send-email --mode=test
 convenience alias. Lead-gen email actions use
 `bin/autocaller actions send-email --mode=lead_gen --contact=<contact_id>
 --item=<batch_item_id> --to=<email> --subject=... --body=... --no-execute`.
+Both `actions send-approved-lead-gen-draft` and `actions send-email` accept
+`--at "09:30 PT"` or an ISO-8601 time with offset. With `--at`, the CLI stores
+`scheduled_for`, runs the normal policy check, prints PT and UTC, and does not
+send immediately; the daemon's scheduled-action loop sends due approved actions
+every 30 seconds and expires anything more than 24 hours stale.
 Policy verifies the exact approval hashes, contact/recipient match, consult
 link, Zoho transport, no selection suppressions, and no prior successful send
 for the same item/recipient.
@@ -403,10 +409,13 @@ Common causes: Geo permissions not enabled, AMD mis-classifying carrier voicemai
 | `autocaller sequences list [--status active\|paused\|completed]` | List sequence rows + step state. |
 | `autocaller lead-gen policy\|recommend\|batches\|show\|approve\|observe\|propose` | Cybernetic lead-generation loop for Precise Imaging. Recommends bounded batches, requires approval, and creates lightweight operator action-center approvals immediately when selected email sequences are queued; drafts compose lazily when an action is opened. Stores observations and proposes policy changes against booked qualified conversations. UI: `/lead-gen`. Concept doc: `docs/CYBERNETIC_LEAD_GEN_CONCEPT.md`. |
 | `autocaller actions list\|show\|policy-check\|execute` | Durable Possible OS action execution queue. Supported high-risk actions must be policy-checked and use narrow executors. |
-| `autocaller actions send-approved-lead-gen-draft --item=... --subject=... --body=... [--no-execute]` | Create and optionally execute an exact approved lead-gen email draft action. Do not use arbitrary shell email sends for master-agent execution. |
-| `autocaller actions send-email --mode=test --to=... --subject=... --body=... [--no-execute]` | Create and optionally execute a regular durable email action. V1 supports `mode=test`. |
+| `autocaller actions list [--scheduled]` | List durable action records. `--scheduled` shows future approved scheduled sends ordered by send time. |
+| `autocaller actions scheduler-status` | Show daemon scheduled-action loop status, last tick, pending scheduled count, and due count. |
+| `autocaller actions send-approved-lead-gen-draft --item=... --subject=... --body=... [--at "09:30 PT" --no-execute]` | Create and optionally execute an exact approved lead-gen email draft action. With `--at`, schedule it instead of sending now. Do not use arbitrary shell email sends for master-agent execution. |
+| `autocaller actions send-email --mode=test --to=... --subject=... --body=... [--at "2026-06-11T09:30:00-07:00" --no-execute]` | Create and optionally execute a regular durable email action. With `--at`, create an approved scheduled action and do not send immediately. |
 | `autocaller actions send-test-email --to=... [--subject ... --body ... --no-execute]` | Convenience alias for `send-email --mode=test`. Use this to validate the durable execution path. |
 | `autocaller todos list\|add\|update\|delete` | DB-backed editable project backlog. Use this or the `/todos` UI for new active backlog items; do not add new todo markdown files. |
+| `autocaller ideas list\|add\|edit` | Simple future product, marketing, and GTM idea capture. Backed by the todos API/table with `area=ideas`; use `add -` or `edit <id> -` for multiline stdin. UI: `/ideas`. |
 | `autocaller outreach campaigns create --post-slug=...` | Spin up a new LLM-composed blog-post outreach campaign. Snapshot of post metadata + excerpts is frozen on the row so every recipient sees the same context. |
 | `autocaller outreach campaigns list [--status=...]` / `show <id>` | Inspect campaigns and per-status send counts + open/click totals. |
 | `autocaller outreach audience add --campaign=N --pif-ids=A,B\|--contact-ids=A,B [--exclude-recent-days=14]` | Expand firms into emailable contacts; dedupes against the campaign and skips anyone emailed in the last N days. |

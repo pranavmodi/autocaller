@@ -223,14 +223,25 @@ async def list_actions(
     status: str | None = None,
     action_type: str | None = None,
     limit: int = 100,
+    scheduled: bool = False,
 ) -> list[dict[str, Any]]:
     await ensure_agent_tables()
     async with AsyncSessionLocal() as session:
-        stmt = select(AgentActionRow).order_by(desc(AgentActionRow.created_at)).limit(max(1, min(limit, 500)))
+        safe_limit = max(1, min(limit, 500))
+        stmt = select(AgentActionRow)
         if status:
             stmt = stmt.where(AgentActionRow.status == status)
         if action_type:
             stmt = stmt.where(AgentActionRow.action_type == action_type)
+        if scheduled:
+            stmt = stmt.where(
+                AgentActionRow.status == "approved",
+                AgentActionRow.scheduled_for.is_not(None),
+                AgentActionRow.scheduled_for >= _utcnow(),
+            ).order_by(AgentActionRow.scheduled_for.asc(), AgentActionRow.id.asc())
+        else:
+            stmt = stmt.order_by(desc(AgentActionRow.created_at))
+        stmt = stmt.limit(safe_limit)
         rows = (await session.execute(stmt)).scalars().all()
         changed = False
         for row in rows:
@@ -273,6 +284,7 @@ async def create_send_approved_lead_gen_draft_action(
     skill_path: str | None = None,
     skill_sha256: str | None = None,
     brief_version: int | None = None,
+    scheduled_for: datetime | None = None,
 ) -> dict[str, Any]:
     await ensure_agent_tables()
     draft_subject = _sanitize_email_copy(subject)
@@ -311,6 +323,7 @@ async def create_send_approved_lead_gen_draft_action(
             entity_type="lead_gen_batch_item",
             entity_id=batch_item_id,
             input_json=input_json,
+            scheduled_for=scheduled_for,
         )
         session.add(action)
         await session.flush()
@@ -319,13 +332,27 @@ async def create_send_approved_lead_gen_draft_action(
             action_id=action_id,
             event_type="action_approved",
             actor=approved_by or requested_by or "operator",
-            message="Approved exact lead-gen draft for execution.",
+            message=(
+                "Approved exact lead-gen draft for scheduled execution."
+                if scheduled_for
+                else "Approved exact lead-gen draft for execution."
+            ),
             input_json={
                 "batch_item_id": batch_item_id,
                 "subject_sha256": input_json["subject_sha256"],
                 "body_sha256": input_json["body_sha256"],
+                "scheduled_for": scheduled_for.isoformat() if scheduled_for else None,
             },
         )
+        if scheduled_for:
+            await _record_action_event(
+                session,
+                action_id=action_id,
+                event_type="action_scheduled",
+                actor=approved_by or requested_by or "operator",
+                message="Action scheduled for daemon execution.",
+                input_json={"scheduled_for": scheduled_for.isoformat()},
+            )
         await session.commit()
         await session.refresh(action)
         result = action_to_dict(action)
@@ -339,6 +366,7 @@ async def create_send_approved_lead_gen_draft_action(
         input_json={
             "action_type": SEND_APPROVED_LEAD_GEN_DRAFT,
             "batch_item_id": batch_item_id,
+            "scheduled_for": scheduled_for.isoformat() if scheduled_for else None,
         },
         output_json={"status": result["status"]},
         context_json={
@@ -367,6 +395,7 @@ async def create_send_email_action(
     skill_path: str | None = None,
     skill_sha256: str | None = None,
     brief_version: int | None = None,
+    scheduled_for: datetime | None = None,
 ) -> dict[str, Any]:
     await ensure_agent_tables()
     email_mode = (mode or "test").strip().lower()
@@ -425,6 +454,7 @@ async def create_send_email_action(
             entity_type=entity_type,
             entity_id=entity_id,
             input_json=input_json,
+            scheduled_for=scheduled_for,
         )
         session.add(action)
         await session.flush()
@@ -434,7 +464,11 @@ async def create_send_email_action(
             event_type="action_approved" if approved_actor else "action_created",
             actor=approved_actor or requested_by or "operator",
             message=(
-                f"Approved exact {email_mode} email for execution."
+                (
+                    f"Approved exact {email_mode} email for scheduled execution."
+                    if scheduled_for
+                    else f"Approved exact {email_mode} email for execution."
+                )
                 if approved_actor
                 else f"Created {email_mode} email action awaiting approval."
             ),
@@ -445,8 +479,18 @@ async def create_send_email_action(
                 "batch_item_id": input_json["batch_item_id"],
                 "subject_sha256": input_json["subject_sha256"],
                 "body_sha256": input_json["body_sha256"],
+                "scheduled_for": scheduled_for.isoformat() if scheduled_for else None,
             },
         )
+        if scheduled_for:
+            await _record_action_event(
+                session,
+                action_id=action_id,
+                event_type="action_scheduled",
+                actor=approved_actor or requested_by or "operator",
+                message="Action scheduled for daemon execution.",
+                input_json={"scheduled_for": scheduled_for.isoformat()},
+            )
         await session.commit()
         await session.refresh(action)
         result = action_to_dict(action)
@@ -463,6 +507,7 @@ async def create_send_email_action(
             "to": recipient,
             "contact_id": input_json["contact_id"],
             "batch_item_id": input_json["batch_item_id"],
+            "scheduled_for": scheduled_for.isoformat() if scheduled_for else None,
         },
         output_json={"status": result["status"]},
         context_json={

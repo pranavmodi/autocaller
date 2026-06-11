@@ -7,6 +7,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
   ArrowLeft,
   CheckCircle2,
+  Clock3,
   ExternalLink,
   Inbox,
   Loader2,
@@ -15,13 +16,17 @@ import {
 } from "lucide-react";
 import {
   getPendingOperatorNotifications,
+  listAgentActions,
   recordProductTrace,
+  type AgentAction,
   type OperatorNotification,
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 const ACTIONS_PENDING_LIMIT = 50;
 const ACTIONS_QUERY_KEY = ["operator-notifications-pending", ACTIONS_PENDING_LIMIT] as const;
+const SCHEDULED_ACTIONS_LIMIT = 50;
+const SCHEDULED_ACTIONS_QUERY_KEY = ["agent-actions-scheduled", SCHEDULED_ACTIONS_LIMIT] as const;
 
 function stringValue(value: unknown) {
   return typeof value === "string" ? value : "";
@@ -35,6 +40,28 @@ function shortDate(value: string | null | undefined) {
     hour: "numeric",
     minute: "2-digit",
   });
+}
+
+function ptDate(value: string | null | undefined) {
+  if (!value) return "";
+  return new Date(value).toLocaleString("en-US", {
+    timeZone: "America/Los_Angeles",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZoneName: "short",
+  });
+}
+
+function relativeSchedule(value: string | null | undefined) {
+  if (!value) return "";
+  const ms = new Date(value).getTime() - Date.now();
+  const absMinutes = Math.max(0, Math.round(Math.abs(ms) / 60_000));
+  const hours = Math.floor(absMinutes / 60);
+  const minutes = absMinutes % 60;
+  const compact = hours ? `${hours}h ${minutes}m` : `${minutes}m`;
+  return ms >= 0 ? `in ${compact}` : `${compact} late`;
 }
 
 function actionCategory(notification: OperatorNotification) {
@@ -125,6 +152,7 @@ function ActionsPageContent() {
   const searchParams = useSearchParams();
   const requestedId = Number(searchParams.get("notification") || 0) || null;
   const [selectedId, setSelectedId] = useState<number | null>(requestedId);
+  const [selectedScheduledId, setSelectedScheduledId] = useState<string | null>(null);
   const viewedActionIds = useRef<Set<number>>(new Set());
 
   const pending = useQuery({
@@ -134,11 +162,23 @@ function ActionsPageContent() {
     refetchIntervalInBackground: true,
   });
 
+  const scheduled = useQuery({
+    queryKey: SCHEDULED_ACTIONS_QUERY_KEY,
+    queryFn: () => listAgentActions({ scheduled: true, limit: SCHEDULED_ACTIONS_LIMIT }),
+    refetchInterval: 5_000,
+    refetchIntervalInBackground: true,
+  });
+
   const queue = useMemo(() => pending.data?.pending ?? [], [pending.data?.pending]);
+  const scheduledQueue = useMemo(() => scheduled.data?.actions ?? [], [scheduled.data?.actions]);
   const current = useMemo(() => {
     if (queue.length === 0) return undefined;
     return queue.find((item) => item.id === selectedId) ?? queue[0];
   }, [queue, selectedId]);
+  const currentScheduled = useMemo(() => {
+    if (scheduledQueue.length === 0) return undefined;
+    return scheduledQueue.find((item) => item.id === selectedScheduledId) ?? scheduledQueue[0];
+  }, [scheduledQueue, selectedScheduledId]);
 
   useEffect(() => {
     if (requestedId) setSelectedId(requestedId);
@@ -149,6 +189,12 @@ function ActionsPageContent() {
       setSelectedId(queue[0].id);
     }
   }, [current, queue]);
+
+  useEffect(() => {
+    if (!currentScheduled && scheduledQueue.length > 0) {
+      setSelectedScheduledId(scheduledQueue[0].id);
+    }
+  }, [currentScheduled, scheduledQueue]);
 
   useEffect(() => {
     if (!current || viewedActionIds.current.has(current.id)) return;
@@ -182,6 +228,16 @@ function ActionsPageContent() {
           pointers to the right execution surface
         </span>
       </div>
+
+      <ScheduledActionsPanel
+        actions={scheduledQueue}
+        selectedId={currentScheduled?.id ?? null}
+        selectedAction={currentScheduled}
+        isLoading={scheduled.isLoading}
+        isFetching={scheduled.isFetching}
+        onRefresh={() => scheduled.refetch()}
+        onSelect={setSelectedScheduledId}
+      />
 
       <section className="rounded-xl border border-neutral-200 bg-white">
         <div className="flex flex-wrap items-center gap-3 border-b border-neutral-100 px-4 py-3">
@@ -243,6 +299,165 @@ function ActionsPageContent() {
           </div>
         )}
       </section>
+    </div>
+  );
+}
+
+function ScheduledActionsPanel({
+  actions,
+  selectedId,
+  selectedAction,
+  isLoading,
+  isFetching,
+  onRefresh,
+  onSelect,
+}: {
+  actions: AgentAction[];
+  selectedId: string | null;
+  selectedAction: AgentAction | undefined;
+  isLoading: boolean;
+  isFetching: boolean;
+  onRefresh: () => void;
+  onSelect: (id: string) => void;
+}) {
+  return (
+    <section className="rounded-xl border border-neutral-200 bg-white">
+      <div className="flex flex-wrap items-center gap-3 border-b border-neutral-100 px-4 py-3">
+        <div className="flex items-center gap-2">
+          <Clock3 className="h-4 w-4 text-sky-700" />
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-neutral-500">
+            Scheduled sends
+          </h2>
+        </div>
+        <span className="rounded-full bg-sky-50 px-2 py-0.5 text-xs font-medium text-sky-800">
+          {actions.length}
+        </span>
+        <button
+          type="button"
+          onClick={onRefresh}
+          disabled={isFetching}
+          className="inline-flex items-center gap-2 rounded-md border border-neutral-200 px-3 py-1.5 text-xs font-medium text-neutral-700 hover:bg-neutral-50 disabled:opacity-60 sm:ml-auto"
+        >
+          {isFetching ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <RefreshCw className="h-3.5 w-3.5" />
+          )}
+          Refresh
+        </button>
+      </div>
+      {isLoading ? (
+        <div className="flex items-center gap-2 px-4 py-8 text-sm text-neutral-500">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Loading scheduled sends...
+        </div>
+      ) : actions.length === 0 ? (
+        <div className="px-4 py-8 text-sm text-neutral-500">
+          No scheduled sends.
+        </div>
+      ) : (
+        <div className="grid min-w-0 grid-cols-1 lg:grid-cols-[360px_minmax(0,1fr)]">
+          <div className="border-b border-neutral-100 bg-neutral-50 p-2 lg:border-b-0 lg:border-r">
+            <div className="space-y-1">
+              {actions.map((action) => (
+                <button
+                  key={action.id}
+                  type="button"
+                  onClick={() => onSelect(action.id)}
+                  className={cn(
+                    "w-full rounded-lg border px-3 py-3 text-left transition",
+                    action.id === selectedId
+                      ? "border-sky-700 bg-white shadow-sm"
+                      : "border-transparent hover:border-neutral-200 hover:bg-white",
+                  )}
+                >
+                  <div className="flex min-w-0 items-start gap-2">
+                    <span className="mt-0.5 rounded-md bg-sky-700 p-1.5 text-white">
+                      <Clock3 className="h-3.5 w-3.5" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm font-semibold text-neutral-900">
+                        {stringValue(action.input.subject) || action.action_type}
+                      </div>
+                      <div className="mt-1 truncate text-xs text-neutral-500">
+                        {stringValue(action.input.to) ||
+                          stringValue(action.input.batch_item_id) ||
+                          action.entity_id ||
+                          "Scheduled action"}
+                      </div>
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[11px] font-medium text-sky-800">
+                          {ptDate(action.scheduled_for)}
+                        </span>
+                        <span className="text-[11px] font-medium text-neutral-500">
+                          {relativeSchedule(action.scheduled_for)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+          {selectedAction && <ScheduledActionDetail action={selectedAction} />}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function ScheduledActionDetail({ action }: { action: AgentAction }) {
+  const subject = stringValue(action.input.subject);
+  const body = stringValue(action.input.body);
+  const recipient = stringValue(action.input.to);
+  const batchItemId = stringValue(action.input.batch_item_id);
+  const policyReason = stringValue(action.policy_result.reason);
+  return (
+    <div className="min-w-0 px-4 py-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="inline-flex items-center gap-1 rounded-full bg-sky-50 px-2 py-0.5 text-xs font-medium text-sky-800">
+          <Clock3 className="h-3 w-3" />
+          Scheduled pending
+        </span>
+        <span className="text-xs text-neutral-500">
+          {ptDate(action.scheduled_for)} - {relativeSchedule(action.scheduled_for)}
+        </span>
+      </div>
+      <h3 className="mt-2 text-base font-semibold text-neutral-950">
+        {subject || action.action_type}
+      </h3>
+      <dl className="mt-3 grid grid-cols-[92px_minmax(0,1fr)] gap-x-3 gap-y-1.5 text-xs">
+        <dt className="text-neutral-500">Action</dt>
+        <dd className="break-all text-neutral-800">{action.id}</dd>
+        <dt className="text-neutral-500">Status</dt>
+        <dd className="text-neutral-800">{action.status}</dd>
+        <dt className="text-neutral-500">Recipient</dt>
+        <dd className="break-all text-neutral-800">{recipient || "From batch item"}</dd>
+        {batchItemId && (
+          <>
+            <dt className="text-neutral-500">Batch item</dt>
+            <dd className="break-all text-neutral-800">{batchItemId}</dd>
+          </>
+        )}
+        {policyReason && (
+          <>
+            <dt className="text-neutral-500">Policy</dt>
+            <dd className="text-neutral-800">{policyReason}</dd>
+          </>
+        )}
+      </dl>
+      {(subject || body) && (
+        <div className="mt-4 rounded-lg border border-neutral-200 bg-neutral-50 p-3">
+          {subject && (
+            <div className="text-sm font-medium text-neutral-900">{subject}</div>
+          )}
+          {body && (
+            <pre className="mt-2 max-h-72 overflow-y-auto whitespace-pre-wrap font-sans text-xs leading-relaxed text-neutral-700">
+              {body}
+            </pre>
+          )}
+        </div>
+      )}
     </div>
   );
 }

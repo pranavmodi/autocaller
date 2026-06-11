@@ -48,6 +48,7 @@ lead_gen_app = typer.Typer(help="Cybernetic lead-generation loop — batches, fe
 inbound_app = typer.Typer(help="Inbound email ingestion — Zoho IMAP reader for replies.", no_args_is_help=True)
 outreach_app = typer.Typer(help="Blog-post outreach campaigns — LLM-composed, per-recipient, tracked.", no_args_is_help=True)
 todos_app = typer.Typer(help="Editable project todo backlog.", no_args_is_help=True)
+ideas_app = typer.Typer(help="Simple future product, marketing, and GTM idea capture.", no_args_is_help=True)
 agents_app = typer.Typer(help="Possible OS master-agent heartbeat and subagent tasks.", no_args_is_help=True)
 actions_app = typer.Typer(help="Durable Possible OS action execution queue.", no_args_is_help=True)
 fs_app = typer.Typer(help="Read-only repo filesystem inspection for Possible OS agents.", no_args_is_help=True)
@@ -77,6 +78,7 @@ app.add_typer(lead_gen_app, name="lead-gen")
 app.add_typer(inbound_app, name="inbound")
 app.add_typer(outreach_app, name="outreach")
 app.add_typer(todos_app, name="todos")
+app.add_typer(ideas_app, name="ideas")
 app.add_typer(agents_app, name="agents")
 app.add_typer(actions_app, name="actions")
 app.add_typer(fs_app, name="fs")
@@ -3181,6 +3183,128 @@ def todos_delete(
 
 
 # ---------------------------------------------------------------------------
+# ideas — simple future idea capture
+# ---------------------------------------------------------------------------
+
+IDEAS_AREA = "ideas"
+LEGACY_IDEA_AREA_PREFIX = "idea:"
+
+
+def _is_idea_row(row: dict) -> bool:
+    area = str(row.get("area") or "")
+    return area == IDEAS_AREA or area.startswith(LEGACY_IDEA_AREA_PREFIX)
+
+
+def _read_idea_text(text: str) -> str:
+    if text == "-":
+        text = sys.stdin.read()
+    text = text.strip()
+    if not text:
+        console.print("[red]Idea text is required.[/red]")
+        raise typer.Exit(code=1)
+    return text
+
+
+def _idea_title(text: str) -> str:
+    from datetime import datetime, timezone
+
+    first_line = next((line.strip() for line in text.splitlines() if line.strip()), "Idea")
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    return f"{first_line[:80]} {stamp}"
+
+
+def _idea_rows() -> list[dict]:
+    data = _get("/api/todos")
+    return [row for row in data.get("todos") or [] if _is_idea_row(row)]
+
+
+def _get_idea_or_exit(idea_id: int) -> dict:
+    for row in _idea_rows():
+        if int(row.get("id") or 0) == idea_id:
+            return row
+    console.print(f"[red]Idea {idea_id} not found.[/red]")
+    raise typer.Exit(code=1)
+
+
+@ideas_app.command("list")
+def ideas_list(
+    json_output: bool = typer.Option(False, "--json", help="Print raw JSON."),
+):
+    """List saved future ideas."""
+    rows = list(reversed(_idea_rows()))
+    if json_output:
+        console.print_json(data={"ideas": rows})
+        return
+
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("id", no_wrap=True)
+    table.add_column("updated", no_wrap=True)
+    table.add_column("idea")
+    for row in rows:
+        text = (row.get("body") or row.get("title") or "").strip()
+        preview = text.replace("\n", " ")
+        if len(preview) > 120:
+            preview = f"{preview[:117]}..."
+        table.add_row(
+            str(row.get("id") or ""),
+            str(row.get("updated_at") or row.get("created_at") or ""),
+            preview,
+        )
+    console.print(table)
+
+
+@ideas_app.command("add")
+def ideas_add(
+    text: str = typer.Argument(..., help='Idea text. Use "-" to read multiline text from stdin.'),
+    json_output: bool = typer.Option(False, "--json", help="Print raw JSON."),
+):
+    """Save a future product, marketing, or GTM idea."""
+    body = _read_idea_text(text)
+    data = _post(
+        "/api/todos",
+        json_body={
+            "title": _idea_title(body),
+            "area": IDEAS_AREA,
+            "section": "Ideas",
+            "status": "raw",
+            "body": body,
+            "actor": "operator",
+        },
+    )
+    if json_output:
+        console.print_json(data=data)
+        return
+    row = data.get("todo") or {}
+    console.print(f"[green]saved idea[/green] {row.get('id')}")
+
+
+@ideas_app.command("edit")
+def ideas_edit(
+    idea_id: int = typer.Argument(...),
+    text: str = typer.Argument(..., help='Replacement idea text. Use "-" to read multiline text from stdin.'),
+    json_output: bool = typer.Option(False, "--json", help="Print raw JSON."),
+):
+    """Replace the text for a saved idea."""
+    existing = _get_idea_or_exit(idea_id)
+    body = _read_idea_text(text)
+    data = _patch(
+        f"/api/todos/{idea_id}",
+        json_body={
+            "title": existing.get("title") or _idea_title(body),
+            "area": existing.get("area") or IDEAS_AREA,
+            "section": existing.get("section") or "Ideas",
+            "status": existing.get("status") or "raw",
+            "body": body,
+            "actor": "operator",
+        },
+    )
+    if json_output:
+        console.print_json(data=data)
+        return
+    console.print(f"[green]updated idea[/green] {idea_id}")
+
+
+# ---------------------------------------------------------------------------
 # actions — durable Possible OS action execution
 # ---------------------------------------------------------------------------
 
@@ -3188,6 +3312,7 @@ def todos_delete(
 def actions_list(
     status: str = typer.Option("", "--status", help="Filter by action status."),
     action_type: str = typer.Option("", "--type", help="Filter by action type."),
+    scheduled: bool = typer.Option(False, "--scheduled", help="Show only future scheduled approved actions."),
     limit: int = typer.Option(50, "--limit", "-n", min=1, max=500),
     json_output: bool = typer.Option(False, "--json", help="Print raw JSON."),
 ):
@@ -3196,14 +3321,17 @@ def actions_list(
         "/api/actions",
         status=status or None,
         action_type=action_type or None,
+        scheduled=scheduled or None,
         limit=limit,
     )
     if json_output:
         console.print_json(data=data)
         return
     rows = data.get("actions") or []
-    table = Table(title=f"Actions ({len(rows)})")
-    for col in ["id", "type", "status", "risk", "entity", "requested", "approved", "created"]:
+    pending_scheduled = data.get("pending_scheduled_count", 0)
+    title = f"Scheduled actions ({len(rows)})" if scheduled else f"Actions ({len(rows)}; scheduled pending={pending_scheduled})"
+    table = Table(title=title)
+    for col in ["id", "type", "status", "risk", "entity", "scheduled", "requested", "approved", "created"]:
         table.add_column(col, overflow="fold")
     for row in rows:
         table.add_row(
@@ -3212,11 +3340,27 @@ def actions_list(
             str(row.get("status") or ""),
             str(row.get("risk_level") or ""),
             f"{row.get('entity_type') or ''}:{row.get('entity_id') or ''}",
+            str(row.get("scheduled_for") or ""),
             str(row.get("requested_by") or ""),
             str(row.get("approved_by") or ""),
             str(row.get("created_at") or ""),
         )
     console.print(table)
+
+
+@actions_app.command("scheduler-status")
+def actions_scheduler_status(json_output: bool = typer.Option(False, "--json", help="Print raw JSON.")):
+    """Show daemon scheduled-action loop status and pending counts."""
+    data = _get("/api/actions/scheduler/status")
+    if json_output:
+        console.print_json(data=data)
+        return
+    console.print(f"running={data.get('running')}")
+    console.print(f"last_tick_at={data.get('last_tick_at') or '-'}")
+    console.print(f"pending_count={data.get('pending_count')}")
+    console.print(f"due_count={data.get('due_count')}")
+    if data.get("last_error"):
+        console.print(f"[red]last_error={data.get('last_error')}[/red]")
 
 
 @actions_app.command("show")
@@ -3313,10 +3457,20 @@ def actions_send_approved_lead_gen_draft(
     subject: str = typer.Option(..., "--subject", help="Approved subject."),
     body: str = typer.Option(..., "--body", help="Approved body."),
     approved_by: str = typer.Option("operator", "--approved-by"),
+    at: str = typer.Option("", "--at", help='Schedule send time: ISO-8601 with offset, or "HH:MM PT|PDT|PST" today.'),
     execute_now: bool = typer.Option(True, "--execute/--no-execute", help="Execute immediately after creating the action."),
     json_output: bool = typer.Option(False, "--json"),
 ):
     """Create, policy-check, and optionally execute an approved lead-gen email draft."""
+    scheduled_for = None
+    if at:
+        from app.services.scheduled_time import format_pt, format_utc, parse_scheduled_time
+        try:
+            scheduled_for = parse_scheduled_time(at)
+        except ValueError as exc:
+            console.print(f"[red]Invalid --at: {exc}[/red]")
+            raise typer.Exit(code=1) from exc
+        execute_now = False
     data = _post(
         f"/api/actions/lead-gen/send-approved-draft?execute_now={'true' if execute_now else 'false'}",
         json_body={
@@ -3325,6 +3479,7 @@ def actions_send_approved_lead_gen_draft(
             "body": body,
             "requested_by": approved_by,
             "approved_by": approved_by,
+            "scheduled_for": scheduled_for.isoformat() if scheduled_for else None,
         },
         timeout=120.0,
     )
@@ -3333,6 +3488,14 @@ def actions_send_approved_lead_gen_draft(
         return
     action = data.get("action") or {}
     result = data.get("result") or {}
+    if scheduled_for:
+        policy = data.get("policy") or {}
+        console.print(
+            f"action={action.get('id')} status={action.get('status')} policy={policy.get('reason')} "
+            f"scheduled_pt={format_pt(action.get('scheduled_for'))} "
+            f"scheduled_utc={format_utc(action.get('scheduled_for'))}"
+        )
+        return
     console.print(
         f"action={action.get('id')} status={action.get('status')} "
         f"sent_to={result.get('sent_to', '—')} message_id={result.get('sent_message_id', '—')}"
@@ -3390,10 +3553,20 @@ def actions_send_email(
     batch_item_id: str = typer.Option("", "--item", help="Lead-gen batch item id for --mode=lead_gen."),
     pif_id: str = typer.Option("", "--pif", help="Lead-gen firm pif_id for --mode=lead_gen."),
     firm_name: str = typer.Option("", "--firm", help="Lead-gen firm name for --mode=lead_gen."),
+    at: str = typer.Option("", "--at", help='Schedule send time: ISO-8601 with offset, or "HH:MM PT|PDT|PST" today.'),
     execute_now: bool = typer.Option(True, "--execute/--no-execute", help="Execute immediately after creating the action."),
     json_output: bool = typer.Option(False, "--json"),
 ):
     """Create, policy-check, and optionally execute a durable email action."""
+    scheduled_for = None
+    if at:
+        from app.services.scheduled_time import format_pt, format_utc, parse_scheduled_time
+        try:
+            scheduled_for = parse_scheduled_time(at)
+        except ValueError as exc:
+            console.print(f"[red]Invalid --at: {exc}[/red]")
+            raise typer.Exit(code=1) from exc
+        execute_now = False
     data = _post(
         f"/api/actions/email/send?execute_now={'true' if execute_now else 'false'}",
         json_body={
@@ -3408,6 +3581,7 @@ def actions_send_email(
             "batch_item_id": batch_item_id or None,
             "pif_id": pif_id or None,
             "firm_name": firm_name or None,
+            "scheduled_for": scheduled_for.isoformat() if scheduled_for else None,
         },
         timeout=120.0,
     )
@@ -3416,6 +3590,14 @@ def actions_send_email(
         return
     action = data.get("action") or {}
     result = data.get("result") or {}
+    if scheduled_for:
+        policy = data.get("policy") or {}
+        console.print(
+            f"action={action.get('id')} status={action.get('status')} mode={mode} "
+            f"policy={policy.get('reason')} scheduled_pt={format_pt(action.get('scheduled_for'))} "
+            f"scheduled_utc={format_utc(action.get('scheduled_for'))}"
+        )
+        return
     console.print(
         f"action={action.get('id')} status={action.get('status')} "
         f"mode={mode} sent_to={result.get('sent_to', '—')} "

@@ -92,6 +92,7 @@ Commands
   mock           Mock-mode toggle (redirect all Twilio calls to a mock phone).
   allowlist      Manage allowed_phones (phone allowlist).
   followups      GTM follow-up queue — calls awaiting action.
+  ideas          Simple future product, marketing, and GTM idea capture.
   listening      Mission Control mindset brief, insights, sources, and prep.
 ```
 
@@ -148,15 +149,19 @@ Every command accepts `--help`. Exit code is `0` on success, `1` on any error
 | `todos add <title> [--area=lead-gen --status=not_started --body=... --source-url=...]` | Add a DB-backed todo. |
 | `todos update <id> [--title=... --status=done --body=... --clear-source-url]` | Edit a DB-backed todo. |
 | `todos delete <id>` | Delete a DB-backed todo. |
+| `ideas list [--json]` | List saved future product, marketing, GTM, and ops ideas. Reads rows stored in the DB-backed todo table under `area=ideas` and legacy `idea:*` areas. |
+| `ideas add "..." [--json]` | Save a simple future idea. Use `ideas add - < idea.txt` or pipe stdin for multiline text. |
+| `ideas edit <id> "..." [--json]` | Replace the text for a saved idea. Use `ideas edit <id> - < idea.txt` for multiline text. |
 | `lead-gen email-agent-slice [--limit=3 --composer-variant=... --approval-ready --batch=<batch_id> --json]` | Select senior decision-maker contacts, collect bounded internal evidence, compose approval-ready drafts with the Possible Minds email composer skill, and create no-send durable `send_email mode=lead_gen` actions. With `--batch`, skip selection and compose for an existing batch's pending undrafted items (operator- or agent-curated lists, e.g. Front-warm shortlists). |
-| `actions list [--status=approved --type=send_approved_lead_gen_draft --json]` | List durable Possible OS action execution records. |
+| `actions list [--status=approved --type=send_approved_lead_gen_draft --scheduled --json]` | List durable Possible OS action execution records. `--scheduled` shows only future approved scheduled actions ordered by `scheduled_for`; the normal list header includes the pending scheduled count. |
 | `actions show <action_id> [--json]` | Show one action with its append-only event timeline. |
+| `actions scheduler-status [--json]` | Show whether the daemon scheduled-action loop is running, last tick time, pending scheduled count, and due count. |
 | `actions policy-check <action_id> [--actor=operator --json]` | Run the reusable policy checker without executing the action. |
 | `actions execute <action_id> [--actor=operator --json]` | Execute one policy-approved action through its narrow executor. |
 | `actions execute-approved-lead-gen [--limit=1 --actor=operator --json]` | Execute already-approved `send_email mode=lead_gen` actions through the durable policy gate. This is the narrow action the master agent may use when approved-send automation is enabled. Successful sends link the action result to the `email_logs` row, transport, message id, and log status. |
-| `actions send-approved-lead-gen-draft --item=<batch_item_id> --subject=... --body=... [--approved-by=operator] [--no-execute]` | Create and optionally execute the first high-risk action slice: an exact approved lead-gen email draft sent through the existing Zoho-backed lead-gen path. |
-| `actions send-email --mode=test --to=<email> --subject=... --body=... [--approved-by=operator --from=... --no-execute --json]` | Create, policy-check, and optionally execute a regular durable test email action. |
-| `actions send-email --mode=lead_gen --to=<email> --subject=... --body=... --contact=<contact_id> --item=<batch_item_id> [--pif=<pif_id> --firm=... --approved-by=operator --no-execute --json]` | Create, policy-check, and optionally execute an exact approved lead-gen email action. Policy verifies recipient/contact match, approval hashes, consult link, Zoho transport, no suppression, and no prior successful send for the same item/recipient. |
+| `actions send-approved-lead-gen-draft --item=<batch_item_id> --subject=... --body=... [--approved-by=operator] [--at "09:30 PT"] [--no-execute]` | Create and optionally execute the first high-risk action slice: an exact approved lead-gen email draft sent through the existing Zoho-backed lead-gen path. With `--at`, stores `scheduled_for`, runs policy check, does not execute, and prints PT plus UTC. |
+| `actions send-email --mode=test --to=<email> --subject=... --body=... [--approved-by=operator --from=... --at "2026-06-11T09:30:00-07:00" --no-execute --json]` | Create, policy-check, and optionally execute a regular durable test email action. With `--at`, creates an approved scheduled action and never sends immediately. |
+| `actions send-email --mode=lead_gen --to=<email> --subject=... --body=... --contact=<contact_id> --item=<batch_item_id> [--pif=<pif_id> --firm=... --approved-by=operator --at "09:30 PT" --no-execute --json]` | Create, policy-check, and optionally execute an exact approved lead-gen email action. Policy verifies recipient/contact match, approval hashes, consult link, Zoho transport, no suppression, and no prior successful send for the same item/recipient. With `--at`, the daemon sends when due and expires stale actions more than 24h late. |
 | `actions send-test-email --to=<email> [--subject=... --body=... --approved-by=operator --from=... --no-execute --json]` | Convenience alias for `actions send-email --mode=test`. Use the regular email action family for master-agent execution-path tests instead of free-form email shell commands. |
 | `listening brief [--version N]` | Print the Mission Control mindset brief markdown from `http://127.0.0.1:8001/api/listening`. |
 | `listening search "<q>" [--type T] [--who W] [--limit N]` | Search extracted listening insights by query, type, and buyer persona. |
@@ -610,6 +615,32 @@ Sender selection defaults to `SMTP_FROM_EMAIL`, then `SMTP_USERNAME`, then
 configured addresses, or an address listed in `EMAIL_ALLOWED_FROM_ADDRESSES`.
 Threaded lead-reply sends can use `THREAD_REPLY_FROM_EMAIL` to differ from the
 generic notification sender.
+
+### Recipe: "schedule a morning send window"
+Use this when the operator has approved exact lead-gen drafts but wants them to
+go out at specific Pacific morning times.
+
+```bash
+bin/autocaller actions send-email \
+  --mode lead_gen \
+  --to contact@example.com \
+  --subject "Quick question" \
+  --body "$(cat /tmp/approved-body.txt)" \
+  --contact <contact_id> \
+  --item <batch_item_id> \
+  --at "09:30 PT"
+
+bin/autocaller actions list --scheduled
+bin/autocaller actions scheduler-status
+```
+
+`--at` accepts ISO-8601 with an offset, such as
+`2026-06-11T09:30:00-07:00`, or `HH:MM PT|PDT|PST` for today in
+America/Los_Angeles. If the PT time is already past today, the CLI exits
+non-zero instead of rolling it to tomorrow. The daemon checks every 30 seconds,
+executes only actions still `approved`, re-runs the normal policy gate at send
+time, and marks actions more than 24 hours stale as `expired` instead of
+sending them.
 
 ### Recipe: "morning mindset check"
 ```bash

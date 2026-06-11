@@ -1,6 +1,7 @@
 """Durable action execution endpoints for Possible OS."""
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
@@ -18,6 +19,7 @@ from app.services.action_execution import (
     get_action,
     list_actions,
 )
+from app.services.action_scheduler import count_pending_scheduled_actions, scheduler_status
 
 
 router = APIRouter(prefix="/api/actions", tags=["actions"])
@@ -34,6 +36,7 @@ class LeadGenDraftActionRequest(BaseModel):
     skill_path: str | None = None
     skill_sha256: str | None = None
     brief_version: int | None = None
+    scheduled_for: datetime | None = None
 
 
 class TestEmailActionRequest(BaseModel):
@@ -56,6 +59,7 @@ class EmailActionRequest(TestEmailActionRequest):
     skill_path: str | None = None
     skill_sha256: str | None = None
     brief_version: int | None = None
+    scheduled_for: datetime | None = None
 
 
 class ExecuteActionRequest(BaseModel):
@@ -71,9 +75,23 @@ class ExecuteApprovedLeadGenActionsRequest(BaseModel):
 async def actions(
     status: str | None = Query(None),
     action_type: str | None = Query(None),
+    scheduled: bool = Query(False),
     limit: int = Query(100, ge=1, le=500),
 ):
-    return {"actions": await list_actions(status=status, action_type=action_type, limit=limit)}
+    return {
+        "actions": await list_actions(
+            status=status,
+            action_type=action_type,
+            scheduled=scheduled,
+            limit=limit,
+        ),
+        "pending_scheduled_count": await count_pending_scheduled_actions(),
+    }
+
+
+@router.get("/scheduler/status")
+async def scheduler():
+    return await scheduler_status()
 
 
 @router.get("/{action_id}")
@@ -108,7 +126,13 @@ async def create_lead_gen_send_action(req: LeadGenDraftActionRequest, execute_no
     try:
         if execute_now:
             return await create_and_execute_send_approved_lead_gen_draft(**kwargs)
-        return {"action": await create_send_approved_lead_gen_draft_action(**kwargs)}
+        action = await create_send_approved_lead_gen_draft_action(**kwargs)
+        if kwargs.get("scheduled_for"):
+            return {
+                "action": action,
+                "policy": await check_action_policy(action["id"], actor=kwargs.get("approved_by") or "operator"),
+            }
+        return {"action": action}
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:
@@ -135,7 +159,13 @@ async def create_email_action(req: EmailActionRequest, execute_now: bool = Query
         if execute_now:
             action = await create_send_email_action(**kwargs)
             return await execute_action(action["id"], actor=kwargs.get("approved_by") or "operator")
-        return {"action": await create_send_email_action(**kwargs)}
+        action = await create_send_email_action(**kwargs)
+        if kwargs.get("scheduled_for"):
+            return {
+                "action": action,
+                "policy": await check_action_policy(action["id"], actor=kwargs.get("approved_by") or "operator"),
+            }
+        return {"action": action}
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:

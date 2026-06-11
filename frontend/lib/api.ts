@@ -1130,6 +1130,44 @@ export const sendOperatorNotificationDraft = (
     options,
   );
 
+export type AgentAction = {
+  id: string;
+  action_type: string;
+  status: string;
+  risk_level: string;
+  requested_by: string;
+  approved_by: string | null;
+  entity_type: string | null;
+  entity_id: string | null;
+  input: Record<string, unknown>;
+  policy_result: Record<string, unknown>;
+  execution_result: Record<string, unknown>;
+  error: string | null;
+  trace_id: string | null;
+  scheduled_for: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+export const listAgentActions = (args: {
+  status?: string;
+  action_type?: string;
+  scheduled?: boolean;
+  limit?: number;
+} = {}) => {
+  const params = new URLSearchParams();
+  if (args.status) params.set("status", args.status);
+  if (args.action_type) params.set("action_type", args.action_type);
+  if (args.scheduled) params.set("scheduled", "true");
+  if (args.limit) params.set("limit", String(args.limit));
+  const qs = params.toString();
+  return get<{ actions: AgentAction[]; pending_scheduled_count: number }>(
+    `/api/actions${qs ? `?${qs}` : ""}`,
+  );
+};
+
 // ---- SEO and Agent Optimization ----
 export type SeoAuditAction = {
   id: string;
