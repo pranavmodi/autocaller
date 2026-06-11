@@ -77,6 +77,7 @@ class LeadGenEmailAgentSliceRequest(BaseModel):
     composer_variant_key: Optional[str] = None
     approve_actions: bool = False
     policy_check_first_action: bool = False
+    batch_id: Optional[str] = Field(default=None, max_length=64)
 
 
 @router.get("/api/lead-gen/policy/current")
@@ -127,6 +128,7 @@ async def create_email_agent_slice(req: LeadGenEmailAgentSliceRequest):
             composer_variant_key=req.composer_variant_key,
             approve_actions=req.approve_actions,
             policy_check_first_action=req.policy_check_first_action,
+            batch_id=req.batch_id,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

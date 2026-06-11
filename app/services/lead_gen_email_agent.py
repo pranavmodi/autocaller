@@ -126,12 +126,33 @@ async def create_lead_gen_email_agent_slice(
     composer_variant_key: str | None = None,
     approve_actions: bool = False,
     policy_check_first_action: bool = False,
+    batch_id: str | None = None,
 ) -> dict[str, Any]:
-    """Select contacts, compose drafts, and create no-send durable actions."""
+    """Select contacts, compose drafts, and create no-send durable actions.
+
+    With ``batch_id``, skip selection and compose for that batch's pending
+    items that have no agent draft yet (operator- or agent-curated batches).
+    """
     safe_limit = max(1, min(int(limit), 10))
-    policy = await ensure_default_policy()
-    rec_data = await recommend_sequence_contacts(template_key=template_key, limit=safe_limit)
-    batch_id = _new_id()
+    existing_batch = bool(batch_id)
+    if not existing_batch:
+        policy = await ensure_default_policy()
+        rec_data = await recommend_sequence_contacts(template_key=template_key, limit=safe_limit)
+        batch_id = _new_id()
+    if existing_batch:
+        existing = await get_batch(batch_id, include_observations=False)
+        if not existing or not existing.get("batch"):
+            raise ValueError(f"Batch not found: {batch_id}")
+        return await _compose_batch_items(
+            batch_id=batch_id,
+            created_by=created_by,
+            composer_variant_key=composer_variant_key,
+            approve_actions=approve_actions,
+            policy_check_first_action=policy_check_first_action,
+            template_key=template_key,
+            only_undrafted_pending=True,
+            limit=safe_limit,
+        )
     async with AsyncSessionLocal() as session:
         batch_row = LeadGenBatchRow(
             id=batch_id,
@@ -182,9 +203,39 @@ async def create_lead_gen_email_agent_slice(
             ))
         await session.commit()
 
+    return await _compose_batch_items(
+        batch_id=batch_id,
+        created_by=created_by,
+        composer_variant_key=composer_variant_key,
+        approve_actions=approve_actions,
+        policy_check_first_action=policy_check_first_action,
+        template_key=template_key,
+        only_undrafted_pending=False,
+        limit=safe_limit,
+    )
+
+
+async def _compose_batch_items(
+    *,
+    batch_id: str,
+    created_by: str,
+    composer_variant_key: str | None,
+    approve_actions: bool,
+    policy_check_first_action: bool,
+    template_key: str,
+    only_undrafted_pending: bool,
+    limit: int,
+) -> dict[str, Any]:
+    """Compose drafts + create no-send actions for a batch's items."""
     batch_data = await get_batch(batch_id, include_observations=False)
     batch = batch_data["batch"]
     items = batch_data.get("items") or []
+    if only_undrafted_pending:
+        items = [
+            i for i in items
+            if i.get("approval_status") in ("pending", "approved")
+            and not (i.get("reason") or {}).get("agent_draft")
+        ][: max(1, limit)]
     drafts: list[dict[str, Any]] = []
     action_ids: list[str] = []
     first_policy: dict[str, Any] | None = None
@@ -200,7 +251,9 @@ async def create_lead_gen_email_agent_slice(
             selection_reason=item.get("reason") or {},
         )
         selection_evidence = {
-            "why_this_contact_was_selected": item.get("reason", {}).get("reason") or "",
+            "why_this_contact_was_selected": item.get("reason", {}).get("reason")
+            or item.get("reason", {}).get("basis")
+            or "",
             "persona": item.get("persona") or "",
             "score": item.get("score"),
             "score_breakdown": item.get("reason", {}).get("score_breakdown") or {},
@@ -288,10 +341,11 @@ async def create_lead_gen_email_agent_slice(
         entity_type="lead_gen_batch",
         entity_id=batch["id"],
         input_json={
-            "limit": safe_limit,
+            "limit": limit,
             "template_key": template_key,
             "composer_variant_key": composer_variant_key,
             "approve_actions": approve_actions,
+            "existing_batch": only_undrafted_pending,
         },
         output_json={
             "draft_count": len(drafts),

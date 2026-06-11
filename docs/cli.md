@@ -148,7 +148,7 @@ Every command accepts `--help`. Exit code is `0` on success, `1` on any error
 | `todos add <title> [--area=lead-gen --status=not_started --body=... --source-url=...]` | Add a DB-backed todo. |
 | `todos update <id> [--title=... --status=done --body=... --clear-source-url]` | Edit a DB-backed todo. |
 | `todos delete <id>` | Delete a DB-backed todo. |
-| `lead-gen email-agent-slice [--limit=3 --composer-variant=... --approval-ready --json]` | Select senior decision-maker contacts, collect bounded internal evidence, compose approval-ready drafts with the Possible Minds email composer skill, and create no-send durable `send_email mode=lead_gen` actions. |
+| `lead-gen email-agent-slice [--limit=3 --composer-variant=... --approval-ready --batch=<batch_id> --json]` | Select senior decision-maker contacts, collect bounded internal evidence, compose approval-ready drafts with the Possible Minds email composer skill, and create no-send durable `send_email mode=lead_gen` actions. With `--batch`, skip selection and compose for an existing batch's pending undrafted items (operator- or agent-curated lists, e.g. Front-warm shortlists). |
 | `actions list [--status=approved --type=send_approved_lead_gen_draft --json]` | List durable Possible OS action execution records. |
 | `actions show <action_id> [--json]` | Show one action with its append-only event timeline. |
 | `actions policy-check <action_id> [--actor=operator --json]` | Run the reusable policy checker without executing the action. |

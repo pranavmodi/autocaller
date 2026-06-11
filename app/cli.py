@@ -4156,6 +4156,11 @@ def lead_gen_email_agent_slice(
         "--policy-check-first-action",
         help="Policy-check the first created action without executing it.",
     ),
+    batch_id: str = typer.Option(
+        "",
+        "--batch",
+        help="Compose for an existing batch's pending undrafted items instead of selecting contacts.",
+    ),
     json_output: bool = typer.Option(False, "--json", help="Print raw JSON."),
 ):
     """Create a no-send agent slice: select contacts, research context, compose drafts, create actions."""
@@ -4168,6 +4173,7 @@ def lead_gen_email_agent_slice(
             "composer_variant_key": composer_variant_key or None,
             "approve_actions": approve_actions,
             "policy_check_first_action": policy_check_first_action,
+            "batch_id": batch_id or None,
         },
         timeout=240.0,
     )

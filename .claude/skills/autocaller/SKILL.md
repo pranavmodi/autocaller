@@ -76,7 +76,7 @@ recent-action summaries expose the same evidence so the master agent can see
 what actually happened.
 
 For the current master-agent lead-generation slice, use
-`bin/autocaller lead-gen email-agent-slice --limit 3 --approval-ready`.
+`bin/autocaller lead-gen email-agent-slice --limit 3 --approval-ready`. To compose for a hand-curated batch instead of auto-selection: `lead-gen email-agent-slice --batch <batch_id> --limit 10`.
 It selects senior decision-maker contacts from `firm_contacts`, collects
 bounded internal evidence, composes drafts with
 `app/skills/possible-minds-lead-email-composer/SKILL.md`, stores each
