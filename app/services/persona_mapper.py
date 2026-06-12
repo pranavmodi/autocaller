@@ -46,7 +46,7 @@ class _TitleRule:
 
 TITLE_RULES: tuple[_TitleRule, ...] = (
     _TitleRule("founder_owner", ("founder", "owner", "principal", "shareholder")),
-    _TitleRule("managing_partner", ("managing partner", "senior partner", "partner")),
+    _TitleRule("managing_partner", ("managing partner", "managing attorney", "senior partner", "partner")),
     _TitleRule("coo_ops", ("chief executive officer", "ceo", "president")),
     _TitleRule("coo_ops", ("chief operating officer", "coo", "executive director", "director of operations")),
     _TitleRule("attorney", ("pi practice chair", "practice chair", "litigation lead", "pre-litigation lead", "pre litigation lead")),
@@ -171,7 +171,12 @@ async def map_personas(pif_id: str | None = None) -> dict[str, int]:
                 skipped += 1
                 continue
             current = float(contact.persona_confidence or 0.0)
-            if contact.persona and current >= match.confidence:
+            # Never lower confidence, but DO correct a wrong persona at equal
+            # confidence — otherwise an early misclassification is permanent.
+            if contact.persona and (
+                current > match.confidence
+                or (current == match.confidence and contact.persona == match.persona)
+            ):
                 skipped += 1
                 continue
             contact.persona = match.persona
