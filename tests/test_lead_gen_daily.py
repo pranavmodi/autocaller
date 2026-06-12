@@ -1,0 +1,221 @@
+from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
+
+import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+
+from app.api.lead_gen import router as lead_gen_router
+from app.services import lead_gen_daily
+
+
+class _Result:
+    def __init__(self, rows):
+        self.rows = rows
+
+    def all(self):
+        return self.rows
+
+
+class _Session:
+    def __init__(self, rows):
+        self.rows = rows
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        return None
+
+    async def execute(self, _stmt):
+        return _Result(self.rows)
+
+
+def _settings_provider(enabled=True):
+    async def get_settings():
+        return SimpleNamespace(system_enabled=enabled)
+
+    return SimpleNamespace(get_settings=get_settings)
+
+
+@pytest.mark.asyncio
+async def test_gates_skip_when_system_disabled(monkeypatch):
+    monkeypatch.setattr(lead_gen_daily, "get_settings_provider", lambda: _settings_provider(False))
+
+    result = await lead_gen_daily._run_gates(
+        {"daily_send_budget": 20},
+        now=datetime(2026, 6, 12, 14, 0, tzinfo=timezone.utc),
+    )
+
+    assert result["passed"] is False
+    assert result["reason"] == "system_disabled"
+
+
+@pytest.mark.asyncio
+async def test_gates_skip_when_budget_zero(monkeypatch):
+    monkeypatch.setattr(lead_gen_daily, "get_settings_provider", lambda: _settings_provider(True))
+
+    result = await lead_gen_daily._run_gates(
+        {"daily_send_budget": 0},
+        now=datetime(2026, 6, 12, 14, 0, tzinfo=timezone.utc),
+    )
+
+    assert result["passed"] is False
+    assert result["reason"] == "daily_send_budget_zero"
+
+
+@pytest.mark.asyncio
+async def test_gates_skip_weekend(monkeypatch):
+    monkeypatch.setattr(lead_gen_daily, "get_settings_provider", lambda: _settings_provider(True))
+
+    result = await lead_gen_daily._run_gates(
+        {"daily_send_budget": 20},
+        now=datetime(2026, 6, 13, 14, 0, tzinfo=timezone.utc),
+    )
+
+    assert result["passed"] is False
+    assert result["reason"] == "weekday_disabled"
+
+
+@pytest.mark.asyncio
+async def test_deliverability_circuit_breaker_math(monkeypatch):
+    now = datetime(2026, 6, 12, 14, 0, tzinfo=timezone.utc)
+    rows = [
+        ("email_sent", "neutral"),
+        ("email_sent", "neutral"),
+        ("email_sent", "neutral"),
+        ("email_sent", "neutral"),
+        ("email_send_failed", "bounce"),
+        ("manual", "bounce"),
+    ]
+    monkeypatch.setattr(lead_gen_daily, "AsyncSessionLocal", lambda: _Session(rows))
+
+    result = await lead_gen_daily._deliverability_circuit(
+        {"deliverability_circuit_breaker_threshold": 0.25, "deliverability_circuit_breaker_min_sends": 4},
+        now=now,
+    )
+
+    assert result["sends"] == 4
+    assert result["failures"] == 2
+    assert result["tripped"] is True
+
+
+def test_persona_quota_shortfall_fill_and_one_per_firm():
+    recs = [
+        {"contact_id": "a1", "pif_id": "p1", "firm_name": "A", "persona": "founder_owner", "score": 100},
+        {"contact_id": "a2", "pif_id": "p1", "firm_name": "A", "persona": "coo_ops", "score": 99},
+        {"contact_id": "b1", "pif_id": "p2", "firm_name": "B", "persona": "coo_ops", "score": 90},
+        {"contact_id": "c1", "pif_id": "p3", "firm_name": "C", "persona": "intake", "score": 80},
+    ]
+
+    selected = lead_gen_daily._select_by_persona_quota(
+        recs,
+        quota={"founder_owner": 1},
+        batch_size=3,
+    )
+
+    assert [row["contact_id"] for row in selected] == ["a1", "b1", "c1"]
+    assert len({row["pif_id"] for row in selected}) == 3
+
+
+def test_schedule_spread_same_day_and_next_weekday():
+    same_day = lead_gen_daily.spread_schedule_times(
+        item_ids=["a", "b", "c"],
+        now=datetime(2026, 6, 12, 14, 0, tzinfo=timezone.utc),
+    )
+
+    assert len(same_day) == 3
+    assert all(t.tzinfo == timezone.utc for t in same_day)
+    assert [t.astimezone(lead_gen_daily.PT).date().isoformat() for t in same_day] == [
+        "2026-06-12",
+        "2026-06-12",
+        "2026-06-12",
+    ]
+    assert all(9 <= t.astimezone(lead_gen_daily.PT).hour <= 11 for t in same_day)
+
+    next_day = lead_gen_daily.spread_schedule_times(
+        item_ids=["a"],
+        now=datetime(2026, 6, 12, 20, 0, tzinfo=timezone.utc),
+    )[0]
+
+    assert next_day.astimezone(lead_gen_daily.PT).date().isoformat() == "2026-06-15"
+
+
+def test_notify_payload_shape():
+    message = lead_gen_daily.build_notify_message(
+        batch_id="batch-1",
+        item_count=20,
+        draft_count=18,
+        persona_mix={"founder_owner": 5},
+        subjects=["One", "Two", "Three", "Four"],
+    )
+
+    assert message.startswith("[from cc]")
+    assert "batch=batch-1" in message
+    assert "items=20 drafts=18" in message
+    assert "review at /lead-gen" in message
+    assert "Four" not in message
+
+
+@pytest.mark.asyncio
+async def test_compose_partial_on_repeated_chunk_failure(monkeypatch):
+    batch = {
+        "items": [
+            {"id": "item-1", "approval_status": "pending", "reason": {}},
+            {"id": "item-2", "approval_status": "pending", "reason": {}},
+        ]
+    }
+
+    async def fake_get_batch(*_args, **_kwargs):
+        return batch
+
+    async def fail_compose(**_kwargs):
+        raise RuntimeError("composer_down")
+
+    monkeypatch.setattr(lead_gen_daily, "get_batch", fake_get_batch)
+    monkeypatch.setattr(lead_gen_daily, "_compose_batch_items", fail_compose)
+
+    result = await lead_gen_daily._compose_batch(
+        batch_id="batch-1",
+        created_by="test",
+        template_key="possible_minds_dynamic",
+    )
+
+    assert result["complete"] is False
+    assert result["drafted"] == 0
+    assert len(result["errors"]) == 2
+
+
+def test_daily_api_smoke(monkeypatch):
+    app = FastAPI()
+    app.include_router(lead_gen_router)
+
+    async def fake_run(**kwargs):
+        return {
+            "id": "run-1",
+            "run_date": "2026-06-12",
+            "status": "completed",
+            "stage": "done",
+            "stages": {"gates": {"status": "completed", "counts": kwargs}},
+            "batch_id": "batch-1",
+        }
+
+    async def fake_list(limit=20):
+        return [{"id": "run-1", "run_date": "2026-06-12", "status": "completed", "stage": "done", "stages": {}, "batch_id": "batch-1"}]
+
+    async def fake_enabled():
+        return {"enabled": False, "key": "daily_run_enabled"}
+
+    async def fake_set(enabled):
+        return {"enabled": enabled, "key": "daily_run_enabled"}
+
+    monkeypatch.setattr("app.api.lead_gen.run_daily_pipeline", fake_run)
+    monkeypatch.setattr("app.api.lead_gen.list_daily_runs", fake_list)
+    monkeypatch.setattr("app.api.lead_gen.get_daily_run_enabled", fake_enabled)
+    monkeypatch.setattr("app.api.lead_gen.set_daily_run_enabled", fake_set)
+
+    client = TestClient(app)
+    assert client.post("/api/lead-gen/daily-run", json={"dry_run": True}).json()["batch_id"] == "batch-1"
+    assert client.get("/api/lead-gen/daily-runs?limit=1").json()["runs"][0]["id"] == "run-1"
+    assert client.get("/api/lead-gen/daily-run/enabled").json()["enabled"] is False
+    assert client.put("/api/lead-gen/daily-run/enabled", json={"enabled": True}).json()["enabled"] is True

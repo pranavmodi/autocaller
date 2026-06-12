@@ -27,6 +27,12 @@ from app.services.lead_gen_cybernetic import (
     set_daily_send_budget,
 )
 from app.services.lead_gen_email_agent import create_lead_gen_email_agent_slice
+from app.services.lead_gen_daily import (
+    get_daily_run_enabled,
+    list_daily_runs,
+    run_daily_pipeline,
+    set_daily_run_enabled,
+)
 from app.services.sequences.registry import DEFAULT_TEMPLATE_KEY
 
 
@@ -94,6 +100,16 @@ class LeadGenEmailAgentSliceRequest(BaseModel):
     batch_id: Optional[str] = Field(default=None, max_length=64)
 
 
+class DailyRunRequest(BaseModel):
+    dry_run: bool = False
+    force: bool = False
+    created_by: str = Field("operator", max_length=128)
+
+
+class DailyRunEnabledRequest(BaseModel):
+    enabled: bool
+
+
 @router.get("/api/lead-gen/policy/current")
 async def current_policy():
     row = await ensure_default_policy()
@@ -159,6 +175,32 @@ async def get_batches(
     status: Optional[str] = Query(None),
 ):
     return {"batches": await list_batches(limit=limit, status=status)}
+
+
+@router.post("/api/lead-gen/daily-run")
+async def run_daily_lead_gen(req: DailyRunRequest):
+    return await run_daily_pipeline(
+        dry_run=req.dry_run,
+        force=req.force,
+        created_by=req.created_by,
+    )
+
+
+@router.get("/api/lead-gen/daily-runs")
+async def get_daily_runs(
+    limit: int = Query(20, ge=1, le=100),
+):
+    return {"runs": await list_daily_runs(limit=limit)}
+
+
+@router.get("/api/lead-gen/daily-run/enabled")
+async def get_daily_enabled():
+    return await get_daily_run_enabled()
+
+
+@router.put("/api/lead-gen/daily-run/enabled")
+async def put_daily_enabled(req: DailyRunEnabledRequest):
+    return await set_daily_run_enabled(req.enabled)
 
 
 @router.get("/api/lead-gen/batches/{batch_id}")

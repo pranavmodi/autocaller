@@ -14,6 +14,7 @@ import {
   Eye,
   Loader2,
   MailPlus,
+  Play,
   RefreshCw,
   Send,
   ShieldCheck,
@@ -28,13 +29,18 @@ import {
   getContactDetail,
   getComposerVariants,
   getLeadGenBatch,
+  getLeadGenDailyEnabled,
   getLeadGenPolicy,
   listLeadGenBatches,
+  listLeadGenDailyRuns,
   previewSequence,
+  runLeadGenDaily,
   sendLeadGenBatchItemDraft,
+  setLeadGenDailyEnabled,
   updateLeadGenDailySendBudget,
   type LeadGenBatch,
   type LeadGenBatchItem,
+  type LeadGenDailyRun,
   type LeadGenObservation,
   type RenderedSequenceStep,
   type ComposerSkillVariant,
@@ -77,6 +83,16 @@ function LeadGenPageContent() {
   const batches = useQuery({
     queryKey: ["lead-gen-batches", "recent"],
     queryFn: () => listLeadGenBatches({ limit: 20 }),
+    refetchInterval: 30_000,
+  });
+  const dailyRuns = useQuery({
+    queryKey: ["lead-gen-daily-runs"],
+    queryFn: () => listLeadGenDailyRuns(5),
+    refetchInterval: 30_000,
+  });
+  const dailyEnabled = useQuery({
+    queryKey: ["lead-gen-daily-enabled"],
+    queryFn: getLeadGenDailyEnabled,
     refetchInterval: 30_000,
   });
 
@@ -146,6 +162,25 @@ function LeadGenPageContent() {
       setBatchId(data.batch.id);
     },
   });
+  const runDaily = useMutation({
+    mutationFn: (dryRun: boolean) => runLeadGenDaily({ dry_run: dryRun }),
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ["lead-gen-daily-runs"] });
+      qc.invalidateQueries({ queryKey: ["lead-gen-batches"] });
+      if (data.batch_id) setBatchId(data.batch_id);
+    },
+  });
+  const toggleDaily = useMutation({
+    mutationFn: (enabled: boolean) => setLeadGenDailyEnabled(enabled),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["lead-gen-daily-enabled"] });
+    },
+  });
+
+  const todayDailyRun =
+    (dailyRuns.data?.runs ?? []).find((run) => run.run_date === californiaDateKey(new Date())) ??
+    (dailyRuns.data?.runs ?? [])[0] ??
+    null;
 
   return (
     <div className="mx-auto min-w-0 max-w-[1500px] space-y-6">
@@ -171,6 +206,16 @@ function LeadGenPageContent() {
 
       <div className="grid gap-4 lg:grid-cols-12">
         <aside className="col-span-12 space-y-3 lg:col-span-4 xl:col-span-3">
+          <DailyRunPanel
+            run={todayDailyRun}
+            enabled={Boolean(dailyEnabled.data?.enabled)}
+            loading={dailyRuns.isLoading || dailyEnabled.isLoading}
+            onToggle={(enabled) => toggleDaily.mutate(enabled)}
+            toggling={toggleDaily.isPending}
+            onRun={(dryRun) => runDaily.mutate(dryRun)}
+            running={runDaily.isPending}
+            error={runDaily.isError || toggleDaily.isError}
+          />
           <DailySendBudgetPanel
             dailyEmailBudget={dailyEmailBudget}
             onDailyEmailBudgetChange={setDailyEmailBudget}
@@ -380,6 +425,107 @@ function SafetyBand() {
         ALLOW_SEQUENCE_SEND=true on the backend.
       </span>
     </div>
+  );
+}
+
+function DailyRunPanel({
+  run,
+  enabled,
+  loading,
+  onToggle,
+  toggling,
+  onRun,
+  running,
+  error,
+}: {
+  run: LeadGenDailyRun | null;
+  enabled: boolean;
+  loading: boolean;
+  onToggle: (enabled: boolean) => void;
+  toggling: boolean;
+  onRun: (dryRun: boolean) => void;
+  running: boolean;
+  error: boolean;
+}) {
+  const stages = run?.stages ?? {};
+  const selectCounts = (stages.select?.counts ?? {}) as Record<string, unknown>;
+  const composeCounts = (stages.compose?.counts ?? {}) as Record<string, unknown>;
+  const selectedCount = typeof selectCounts.selected === "number" ? selectCounts.selected : null;
+  const draftedCount = typeof composeCounts.drafted === "number" ? composeCounts.drafted : null;
+
+  return (
+    <section className="rounded-xl border border-neutral-200 bg-white">
+      <div className="flex items-center gap-2 border-b border-neutral-100 px-4 py-2.5">
+        <Clock className="h-4 w-4 text-neutral-500" />
+        <h2 className="text-xs font-semibold uppercase tracking-wider text-neutral-400">
+          Daily run
+        </h2>
+        {loading && <Loader2 className="ml-auto h-3.5 w-3.5 animate-spin text-neutral-400" />}
+      </div>
+      <div className="space-y-3 px-4 py-3">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="text-sm font-medium text-neutral-900">
+              {run?.run_date ?? californiaDateKey(new Date())}
+            </div>
+            <div className="mt-0.5 text-xs text-neutral-500">
+              {run ? `${run.status} at ${run.stage}` : "No run recorded today"}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => onToggle(!enabled)}
+            disabled={toggling}
+            className={cn(
+              "inline-flex h-7 min-w-16 items-center justify-center rounded-full px-3 text-xs font-medium",
+              enabled ? "bg-emerald-100 text-emerald-800" : "bg-neutral-100 text-neutral-600",
+              toggling && "opacity-60",
+            )}
+          >
+            {enabled ? "Enabled" : "Disabled"}
+          </button>
+        </div>
+        <div className="grid grid-cols-3 gap-2 text-center">
+          <Metric label="Selected" value={selectedCount === null ? "-" : String(selectedCount)} />
+          <Metric label="Drafted" value={draftedCount === null ? "-" : String(draftedCount)} />
+          <Metric label="Batch" value={run?.batch_id ? "Yes" : "-"} />
+        </div>
+        {run?.batch_id && (
+          <Link
+            href={`/lead-gen?batch=${encodeURIComponent(run.batch_id)}`}
+            className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-neutral-200 px-3 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50"
+          >
+            <Eye className="h-4 w-4" />
+            Open batch
+          </Link>
+        )}
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() => onRun(true)}
+            disabled={running}
+            className="inline-flex items-center justify-center gap-2 rounded-md border border-neutral-200 px-3 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50 disabled:opacity-60"
+          >
+            {running ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+            Dry run
+          </button>
+          <button
+            type="button"
+            onClick={() => onRun(false)}
+            disabled={running}
+            className="inline-flex items-center justify-center gap-2 rounded-md bg-neutral-900 px-3 py-2 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-60"
+          >
+            {running ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+            Run now
+          </button>
+        </div>
+        {error && (
+          <div className="text-xs text-red-600">
+            Daily run request failed.
+          </div>
+        )}
+      </div>
+    </section>
   );
 }
 

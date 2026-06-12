@@ -5021,6 +5021,100 @@ def lead_gen_email_agent_slice(
         console.print(f"first_policy allowed={policy.get('allowed')} reason={policy.get('reason')}")
 
 
+def _print_daily_run(data: dict) -> None:
+    console.print(
+        f"[bold]daily-run[/bold] date={data.get('run_date')} status={data.get('status')} "
+        f"stage={data.get('stage')} batch={data.get('batch_id') or '-'}"
+    )
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("stage", no_wrap=True)
+    table.add_column("status", no_wrap=True)
+    table.add_column("counts")
+    table.add_column("error")
+    stages = data.get("stages") or {}
+    for stage in [
+        "gates",
+        "signals",
+        "research",
+        "personas",
+        "select",
+        "batch",
+        "compose",
+        "schedule",
+        "notify",
+    ]:
+        entry = stages.get(stage) or {}
+        counts = entry.get("counts")
+        if isinstance(counts, dict):
+            compact = json.dumps(counts, sort_keys=True, default=str)
+        else:
+            compact = "" if counts is None else str(counts)
+        table.add_row(
+            stage,
+            str(entry.get("status") or "-"),
+            compact[:220],
+            str(entry.get("error") or entry.get("reason") or "")[:160],
+        )
+    console.print(table)
+
+
+@lead_gen_app.command("daily-run")
+def lead_gen_daily_run(
+    dry_run: bool = typer.Option(False, "--dry-run", help="Plan without DB writes, research API calls, actions, or WhatsApp."),
+    force: bool = typer.Option(False, "--force", help="Re-run today's checkpointed pipeline."),
+    json_output: bool = typer.Option(False, "--json", help="Print raw JSON."),
+):
+    """Run the deterministic daily lead-selection and drafting pipeline now."""
+    data = _post(
+        "/api/lead-gen/daily-run",
+        json_body={"dry_run": dry_run, "force": force, "created_by": "operator"},
+        timeout=900.0,
+    )
+    if json_output:
+        console.print_json(data=data)
+        return
+    _print_daily_run(data)
+
+
+@lead_gen_app.command("daily-status")
+def lead_gen_daily_status(
+    date_: str = typer.Option("", "--date", help="Run date YYYY-MM-DD. Defaults to latest/today."),
+    json_output: bool = typer.Option(False, "--json", help="Print raw JSON."),
+):
+    """Show daily lead-gen pipeline run state."""
+    data = _get("/api/lead-gen/daily-runs", limit=100)
+    runs = data.get("runs") or []
+    if date_:
+        runs = [row for row in runs if row.get("run_date") == date_]
+    if json_output:
+        console.print_json(data={"runs": runs})
+        return
+    if not runs:
+        console.print("[dim]No daily runs found.[/dim]")
+        return
+    _print_daily_run(runs[0])
+
+
+@lead_gen_app.command("daily-enable")
+def lead_gen_daily_enable(json_output: bool = typer.Option(False, "--json", help="Print raw JSON.")):
+    """Enable the persisted daily lead-gen loop flag."""
+    data = _put("/api/lead-gen/daily-run/enabled", {"enabled": True})
+    if json_output:
+        console.print_json(data=data)
+        return
+    console.print(f"daily_run_enabled={data.get('enabled')} key={data.get('key')}")
+
+
+@lead_gen_app.command("daily-disable")
+def lead_gen_daily_disable(json_output: bool = typer.Option(False, "--json", help="Print raw JSON.")):
+    """Disable the persisted daily lead-gen loop flag."""
+    data = _put("/api/lead-gen/daily-run/enabled", {"enabled": False})
+    if json_output:
+        console.print_json(data=data)
+        return
+    console.print(f"daily_run_enabled={data.get('enabled')} key={data.get('key')}")
+
+
 @lead_gen_app.command("batches")
 def lead_gen_batches(
     status: str = typer.Option("", "--status", help="recommended | approved | sequencing | observing | completed | archived"),

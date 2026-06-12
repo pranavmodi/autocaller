@@ -169,6 +169,9 @@ Every command accepts `--help`. Exit code is `0` on success, `1` on any error
 | `ideas add "..." [--json]` | Save a simple future idea. Use `ideas add - < idea.txt` or pipe stdin for multiline text. |
 | `ideas edit <id> "..." [--json]` | Replace the text for a saved idea. Use `ideas edit <id> - < idea.txt` for multiline text. |
 | `lead-gen email-agent-slice [--limit=3 --composer-variant=... --approval-ready --batch=<batch_id> --json]` | Select senior decision-maker contacts, collect bounded internal evidence, compose approval-ready drafts with the Possible Minds email composer skill, and create no-send durable `send_email mode=lead_gen` actions. With `--batch`, skip selection and compose for an existing batch's pending undrafted items (operator- or agent-curated lists, e.g. Front-warm shortlists). |
+| `lead-gen daily-run [--dry-run] [--force] [--json]` | Run the deterministic daily lead-selection pipeline now. It gates on system enabled, active policy budget, weekday, and deliverability health; refreshes stale Front-derived signals without Front API calls; queues bounded research; maps personas; creates a persona-mixed batch; composes drafts; and schedules `waiting_for_approval` lead-gen email actions in the PT morning window. `--dry-run` performs no writes, no external research calls, no actions, and no WhatsApp. |
+| `lead-gen daily-status [--date YYYY-MM-DD] [--json]` | Show the checkpointed daily-run stage table, status, batch id, counts, and errors. Partial runs resume incomplete stages when `daily-run` is called again. |
+| `lead-gen daily-enable` / `lead-gen daily-disable` | Flip the persisted `daily_run_enabled` flag. The daemon loop is wired on boot but defaults disabled and no-ops until an operator enables it. |
 | `lead-gen observations [--since=7d --type=<event_type> --contact=<contact_id> --json]` | List automatic lead-gen observations with batch/contact/item linkage. Includes sends, failures, replies, clicks, bookings, call dispositions, cancellations, and reschedules. |
 | `lead-gen observations summary [--since=7d --json]` | Count observations by event type for the weekly learning KPI / qualified-engagement readout. |
 | `leads warm-list [--limit=20] [--json]` | Print the top Front-warmed firms with named contacts that have not yet been emailed. Use after `front sync` for the daily warm-list workflow. |
@@ -628,6 +631,35 @@ bin/autocaller front warm-batch --domains examplelaw.com --name "Researched warm
 research, polls for completion up to the timeout, upserts titled
 `firm_contacts`, stores behavior analysis on `front_firm_activity`, and maps
 contact personas for the lead-email composer.
+
+### Recipe: "the daily batch"
+Use this for the deterministic daily lead-gen run. The loop is safe to leave
+wired into the daemon because `daily_run_enabled` defaults to false and is
+stored in DB settings, not env. Enabling it only creates approval-waiting
+scheduled draft actions; approved sends still require operator approval.
+
+```bash
+bin/autocaller lead-gen daily-status
+bin/autocaller lead-gen daily-run --dry-run
+bin/autocaller lead-gen daily-run
+bin/autocaller lead-gen daily-status
+bin/autocaller actions list --status waiting_for_approval --type send_email
+```
+
+To let the daemon create the morning batch during the 06:30-08:00 PT loop
+window:
+
+```bash
+bin/autocaller lead-gen daily-enable
+bin/autocaller lead-gen daily-status
+bin/autocaller lead-gen daily-disable
+```
+
+The run checkpoints `gates`, `signals`, `research`, `personas`, `select`,
+`batch`, `compose`, `schedule`, and `notify` in `lead_gen_daily_runs`. A
+partial compose can be resumed by running the command again. The schedule stage
+spreads drafted items across the policy send window, defaulting to 09:00-11:30
+America/Los_Angeles, and leaves every action in `waiting_for_approval`.
 
 ### Recipe: "who competes with firm X"
 Use this when a warm-list firm needs local PI competitor context. The rebuild

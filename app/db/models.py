@@ -1,7 +1,7 @@
 """SQLAlchemy ORM table models."""
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from sqlalchemy import (
-    String, Integer, BigInteger, Boolean, Text, Float, Index, CheckConstraint,
+    String, Integer, BigInteger, Boolean, Text, Float, Date, Index, CheckConstraint,
     ForeignKey, UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import JSONB, TIMESTAMP
@@ -1325,6 +1325,35 @@ class LeadGenBatchItemRow(Base):
         Index("ix_lead_gen_batch_items_contact_id", "contact_id"),
         Index("ix_lead_gen_batch_items_pif_id", "pif_id"),
         Index("ix_lead_gen_batch_items_outcome", "outcome"),
+    )
+
+
+class LeadGenDailyRunRow(Base):
+    """Checkpointed daily lead-selection and drafting pipeline run."""
+    __tablename__ = "lead_gen_daily_runs"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    run_date: Mapped[date] = mapped_column(Date, nullable=False, unique=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending")
+    stage: Mapped[str] = mapped_column(String(64), nullable=False, default="pending")
+    stages_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    batch_id: Mapped[str | None] = mapped_column(
+        String(64), ForeignKey("lead_gen_batches.id", ondelete="SET NULL"), nullable=True,
+    )
+    created_by: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), default=_utcnow, onupdate=_utcnow,
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('pending', 'running', 'partial', 'completed', 'failed', 'skipped')",
+            name="ck_lead_gen_daily_runs_status",
+        ),
+        Index("ix_lead_gen_daily_runs_run_date", "run_date"),
+        Index("ix_lead_gen_daily_runs_status", "status"),
+        Index("ix_lead_gen_daily_runs_created_at", "created_at"),
     )
 
 

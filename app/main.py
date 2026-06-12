@@ -89,6 +89,8 @@ async def lifespan(app: FastAPI):
             max_calls=int(os.getenv("FRONT_SYNC_MAX_CALLS", "300")),
         )
     )
+    from .services.lead_gen_daily import daily_run_loop
+    lead_gen_daily_task = asyncio.create_task(daily_run_loop(interval_seconds=600))
     from .services.master_agent import (
         heartbeat_interval_seconds,
         master_heartbeat_loop,
@@ -122,6 +124,7 @@ async def lifespan(app: FastAPI):
         sequence_task,
         scheduled_action_task,
         front_sync_task,
+        lead_gen_daily_task,
         reconciler_task,
     ]
     tasks_to_cancel.append(master_heartbeat_task)

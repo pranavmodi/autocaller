@@ -1640,6 +1640,19 @@ export type LeadGenProposal = {
   created_at: string | null;
 };
 
+export type LeadGenDailyRun = {
+  id: string;
+  run_date: string | null;
+  status: string;
+  stage: string;
+  stages: Record<string, Record<string, unknown>>;
+  batch_id: string | null;
+  created_by: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  dry_run?: boolean;
+};
+
 export const getLeadGenPolicy = () =>
   get<LeadGenPolicy>("/api/lead-gen/policy/current");
 
@@ -1673,6 +1686,22 @@ export const createLeadGenEmailAgentSlice = (args: {
   first_policy: Record<string, unknown> | null;
   no_email_sent: boolean;
 }>("/api/lead-gen/email-agent/slice", args);
+
+export const runLeadGenDaily = (args: { dry_run?: boolean; force?: boolean } = {}) =>
+  post<LeadGenDailyRun>("/api/lead-gen/daily-run", {
+    dry_run: args.dry_run ?? false,
+    force: args.force ?? false,
+    created_by: "operator",
+  });
+
+export const listLeadGenDailyRuns = (limit = 5) =>
+  get<{ runs: LeadGenDailyRun[] }>(`/api/lead-gen/daily-runs?limit=${limit}`);
+
+export const getLeadGenDailyEnabled = () =>
+  get<{ enabled: boolean; key: string }>("/api/lead-gen/daily-run/enabled");
+
+export const setLeadGenDailyEnabled = (enabled: boolean) =>
+  put<{ enabled: boolean; key: string }>("/api/lead-gen/daily-run/enabled", { enabled });
 
 export const listLeadGenBatches = (args: { status?: string; limit?: number } = {}) => {
   const params = new URLSearchParams();

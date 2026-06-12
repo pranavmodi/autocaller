@@ -1,0 +1,1052 @@
+"""Deterministic daily lead-selection and draft scheduling pipeline."""
+from __future__ import annotations
+
+import asyncio
+import json
+import logging
+import os
+import subprocess
+import uuid
+from collections import Counter, defaultdict
+from datetime import date, datetime, time, timedelta, timezone
+from typing import Any, Iterable
+from zoneinfo import ZoneInfo
+
+from sqlalchemy import desc, func, select
+
+from app.db import AsyncSessionLocal
+from app.db.models import (
+    AgentActionRow,
+    FrontFirmActivityRow,
+    LeadGenBatchItemRow,
+    LeadGenBatchRow,
+    LeadGenDailyRunRow,
+    LeadGenObservationRow,
+    LeadGenPolicyVersionRow,
+    SystemSettingsRow,
+)
+from app.providers.settings_provider import get_settings_provider
+from app.services.action_execution import (
+    SEND_EMAIL,
+    _record_action_event,
+    create_send_email_action,
+    find_live_scheduled_action_for_item,
+)
+from app.services.firm_research import orchestrate_warm_research
+from app.services.front_sync import front_status, normalize_domain, refresh_warm_scores, resolve_firms
+from app.services.lead_gen_cybernetic import TARGET_METRIC, ensure_default_policy, get_batch
+from app.services.lead_gen_email_agent import _compose_batch_items
+from app.services.persona_mapper import map_personas
+from app.services.sequence_recommendations import recommend_sequence_contacts
+from app.services.sequences.registry import DEFAULT_TEMPLATE_KEY
+from app.services.scheduled_time import format_pt, format_utc
+
+
+logger = logging.getLogger(__name__)
+
+PT = ZoneInfo("America/Los_Angeles")
+DAILY_RUN_CONFIG_KEY = "daily_run_enabled"
+DAILY_RUN_STAGES = (
+    "gates",
+    "signals",
+    "research",
+    "personas",
+    "select",
+    "batch",
+    "compose",
+    "schedule",
+    "notify",
+)
+DEFAULT_PERSONA_QUOTA = {
+    "founder_owner": 5,
+    "managing_partner": 4,
+    "coo_ops": 3,
+    "intake": 3,
+    "records": 2,
+    "case_manager": 1,
+    "lien_settlement": 1,
+    "attorney": 1,
+}
+DEFAULT_SEND_WINDOW = {
+    "start": "09:00",
+    "end": "11:30",
+    "timezone": "America/Los_Angeles",
+}
+HARD_EXCLUDED_DOMAINS = {"precisemri.com"}
+
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _new_id() -> str:
+    return uuid.uuid4().hex
+
+
+def _json_safe(value: Any) -> Any:
+    try:
+        json.dumps(value, default=str)
+        return value
+    except TypeError:
+        return json.loads(json.dumps(value, default=str))
+
+
+def _date_for_run(now: datetime | None = None) -> date:
+    return (now or _utcnow()).astimezone(PT).date()
+
+
+def _run_to_dict(row: LeadGenDailyRunRow) -> dict[str, Any]:
+    return {
+        "id": row.id,
+        "run_date": row.run_date.isoformat() if row.run_date else None,
+        "status": row.status,
+        "stage": row.stage,
+        "stages": row.stages_json or {},
+        "batch_id": row.batch_id,
+        "created_by": row.created_by,
+        "created_at": row.created_at.isoformat() if row.created_at else None,
+        "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+    }
+
+
+def _stage_done(stages: dict[str, Any], stage: str) -> bool:
+    return (stages.get(stage) or {}).get("status") in {"completed", "skipped"}
+
+
+async def _checkpoint(
+    run_id: str,
+    *,
+    stage: str,
+    status: str,
+    counts: dict[str, Any] | None = None,
+    error: str | None = None,
+    extra: dict[str, Any] | None = None,
+    run_status: str | None = None,
+    batch_id: str | None = None,
+) -> LeadGenDailyRunRow:
+    now = _utcnow()
+    async with AsyncSessionLocal() as session:
+        row = await session.get(LeadGenDailyRunRow, run_id)
+        if not row:
+            raise ValueError("daily_run_not_found")
+        stages = dict(row.stages_json or {})
+        entry = dict(stages.get(stage) or {})
+        entry.setdefault("started_at", now.isoformat())
+        if status in {"completed", "skipped", "failed", "partial"}:
+            entry["finished_at"] = now.isoformat()
+        entry["status"] = status
+        if counts is not None:
+            entry["counts"] = _json_safe(counts)
+        if error:
+            entry["error"] = error
+        if extra:
+            entry.update(_json_safe(extra))
+        stages[stage] = entry
+        row.stages_json = stages
+        row.stage = stage
+        if run_status:
+            row.status = run_status
+        if batch_id:
+            row.batch_id = batch_id
+        row.updated_at = now
+        await session.commit()
+        await session.refresh(row)
+        return row
+
+
+async def _create_or_get_run(
+    *,
+    run_date: date,
+    created_by: str,
+    force: bool,
+) -> tuple[LeadGenDailyRunRow, bool]:
+    async with AsyncSessionLocal() as session:
+        existing = (await session.execute(
+            select(LeadGenDailyRunRow).where(LeadGenDailyRunRow.run_date == run_date)
+        )).scalar_one_or_none()
+        if existing and not force:
+            return existing, False
+        if existing and force:
+            existing.status = "running"
+            existing.stage = "pending"
+            existing.stages_json = {}
+            existing.batch_id = None
+            existing.created_by = created_by
+            existing.updated_at = _utcnow()
+            await session.commit()
+            await session.refresh(existing)
+            return existing, True
+        row = LeadGenDailyRunRow(
+            id=_new_id(),
+            run_date=run_date,
+            status="running",
+            stage="pending",
+            stages_json={},
+            created_by=created_by,
+        )
+        session.add(row)
+        await session.commit()
+        await session.refresh(row)
+        return row, True
+
+
+async def _active_policy() -> LeadGenPolicyVersionRow | None:
+    async with AsyncSessionLocal() as session:
+        return (await session.execute(
+            select(LeadGenPolicyVersionRow)
+            .where(LeadGenPolicyVersionRow.active.is_(True))
+            .order_by(desc(LeadGenPolicyVersionRow.created_at))
+            .limit(1)
+        )).scalar_one_or_none()
+
+
+def _policy_weights(policy: LeadGenPolicyVersionRow | None) -> dict[str, Any]:
+    return dict(getattr(policy, "weights_json", None) or {})
+
+
+def _int_policy(weights: dict[str, Any], key: str, default: int, *, minimum: int = 0, maximum: int = 500) -> int:
+    try:
+        value = int(weights.get(key, default))
+    except (TypeError, ValueError):
+        value = default
+    return max(minimum, min(maximum, value))
+
+
+def _float_policy(weights: dict[str, Any], key: str, default: float) -> float:
+    try:
+        return float(weights.get(key, default))
+    except (TypeError, ValueError):
+        return default
+
+
+def _persona_quota(weights: dict[str, Any]) -> dict[str, int]:
+    raw = weights.get("daily_persona_quota")
+    if not isinstance(raw, dict):
+        return dict(DEFAULT_PERSONA_QUOTA)
+    quota: dict[str, int] = {}
+    for key, default in DEFAULT_PERSONA_QUOTA.items():
+        try:
+            quota[key] = max(0, int(raw.get(key, default)))
+        except (TypeError, ValueError):
+            quota[key] = default
+    for key, value in raw.items():
+        if key in quota:
+            continue
+        try:
+            quota[str(key)] = max(0, int(value))
+        except (TypeError, ValueError):
+            continue
+    return quota
+
+
+def _send_window(weights: dict[str, Any]) -> dict[str, str]:
+    raw = weights.get("daily_send_window")
+    if not isinstance(raw, dict):
+        return dict(DEFAULT_SEND_WINDOW)
+    return {
+        "start": str(raw.get("start") or DEFAULT_SEND_WINDOW["start"]),
+        "end": str(raw.get("end") or DEFAULT_SEND_WINDOW["end"]),
+        "timezone": str(raw.get("timezone") or DEFAULT_SEND_WINDOW["timezone"]),
+    }
+
+
+def _weekdays(weights: dict[str, Any]) -> set[int]:
+    raw = weights.get("daily_run_weekdays", [0, 1, 2, 3, 4])
+    if not isinstance(raw, list):
+        return {0, 1, 2, 3, 4}
+    out = set()
+    for value in raw:
+        try:
+            out.add(int(value))
+        except (TypeError, ValueError):
+            continue
+    return out or {0, 1, 2, 3, 4}
+
+
+async def _deliverability_circuit(weights: dict[str, Any], *, now: datetime | None = None) -> dict[str, Any]:
+    threshold = _float_policy(weights, "deliverability_circuit_breaker_threshold", 0.25)
+    min_sends = _int_policy(weights, "deliverability_circuit_breaker_min_sends", 4, minimum=1, maximum=1000)
+    cutoff = (now or _utcnow()) - timedelta(hours=48)
+    async with AsyncSessionLocal() as session:
+        rows = (await session.execute(
+            select(LeadGenObservationRow.event_type, LeadGenObservationRow.classified_outcome)
+            .where(LeadGenObservationRow.created_at >= cutoff)
+        )).all()
+    sends = sum(1 for event_type, _outcome in rows if event_type == "email_sent")
+    failures = sum(
+        1
+        for event_type, outcome in rows
+        if event_type == "email_send_failed" or outcome == "bounce"
+    )
+    ratio = (failures / sends) if sends else 0.0
+    tripped = sends >= min_sends and ratio > threshold
+    return {
+        "tripped": tripped,
+        "sends": sends,
+        "failures": failures,
+        "ratio": round(ratio, 4),
+        "threshold": threshold,
+        "min_sends": min_sends,
+    }
+
+
+async def _run_gates(weights: dict[str, Any], *, now: datetime | None = None) -> dict[str, Any]:
+    settings = await get_settings_provider().get_settings()
+    if not settings.system_enabled:
+        return {"passed": False, "reason": "system_disabled", "system_enabled": False}
+    daily_send_budget = _int_policy(weights, "daily_send_budget", 50, minimum=0, maximum=200)
+    if daily_send_budget <= 0:
+        return {"passed": False, "reason": "daily_send_budget_zero", "daily_send_budget": daily_send_budget}
+    local_now = (now or _utcnow()).astimezone(PT)
+    weekdays = _weekdays(weights)
+    if local_now.weekday() not in weekdays:
+        return {
+            "passed": False,
+            "reason": "weekday_disabled",
+            "weekday": local_now.weekday(),
+            "allowed_weekdays": sorted(weekdays),
+        }
+    circuit = await _deliverability_circuit(weights, now=now)
+    if circuit["tripped"]:
+        return {"passed": False, "reason": "deliverability_circuit_breaker", "deliverability": circuit}
+    return {
+        "passed": True,
+        "system_enabled": True,
+        "daily_send_budget": daily_send_budget,
+        "weekday": local_now.weekday(),
+        "deliverability": circuit,
+    }
+
+
+def _select_by_persona_quota(
+    recommendations: Iterable[dict[str, Any]],
+    *,
+    quota: dict[str, int],
+    batch_size: int,
+) -> list[dict[str, Any]]:
+    selected: list[dict[str, Any]] = []
+    used_firms: set[str] = set()
+    counts: Counter[str] = Counter()
+    ordered = sorted(
+        list(recommendations),
+        key=lambda row: (-int(row.get("score") or 0), str(row.get("firm_name") or "").lower()),
+    )
+    for rec in ordered:
+        if len(selected) >= batch_size:
+            break
+        pif_id = str(rec.get("pif_id") or "")
+        persona = str(rec.get("persona") or "")
+        if pif_id in used_firms:
+            continue
+        if counts[persona] >= quota.get(persona, 0):
+            continue
+        selected.append(rec)
+        used_firms.add(pif_id)
+        counts[persona] += 1
+    for rec in ordered:
+        if len(selected) >= batch_size:
+            break
+        pif_id = str(rec.get("pif_id") or "")
+        if pif_id in used_firms:
+            continue
+        selected.append(rec)
+        used_firms.add(pif_id)
+        counts[str(rec.get("persona") or "")] += 1
+    return selected
+
+
+async def _suppressed_pifs_and_behavior(pif_ids: set[str]) -> tuple[set[str], dict[str, dict[str, Any]]]:
+    if not pif_ids:
+        return set(), {}
+    suppressed: set[str] = set()
+    behavior: dict[str, dict[str, Any]] = {}
+    async with AsyncSessionLocal() as session:
+        rows = (await session.execute(
+            select(FrontFirmActivityRow).where(FrontFirmActivityRow.pif_id.in_(pif_ids))
+        )).scalars().all()
+    for row in rows:
+        terms = json.dumps({
+            "inbox_breakdown": row.inbox_breakdown or {},
+            "tech_signals": row.tech_signals or {},
+        }, sort_keys=True, default=str).lower()
+        if any(marker in terms for marker in ("collection", "collections", "non-payment", "nonpayment", "non payment")):
+            suppressed.add(str(row.pif_id))
+        if row.behavioral_json:
+            behavior[str(row.pif_id)] = {
+                "after_hours_ratio": (row.behavioral_json or {}).get("after_hours_ratio"),
+                "primary_pain_point": (row.behavioral_json or {}).get("primary_pain_point"),
+            }
+    return suppressed, behavior
+
+
+async def _select_contacts(
+    *,
+    weights: dict[str, Any],
+    batch_size: int,
+    template_key: str,
+) -> dict[str, Any]:
+    rec_limit = max(batch_size * 5, 100)
+    rec_data = await recommend_sequence_contacts(template_key=template_key, limit=rec_limit)
+    recs = list(rec_data.get("recommended") or [])
+    pif_ids = {str(r.get("pif_id") or "") for r in recs if r.get("pif_id")}
+    suppressed_pifs, behavior_by_pif = await _suppressed_pifs_and_behavior(pif_ids)
+    filtered: list[dict[str, Any]] = []
+    excluded = Counter()
+    for rec in recs:
+        pif_id = str(rec.get("pif_id") or "")
+        domain = normalize_domain(str(rec.get("contact_email") or ""))
+        if domain in HARD_EXCLUDED_DOMAINS:
+            excluded["hard_domain"] += 1
+            continue
+        if pif_id in suppressed_pifs:
+            excluded["suppress_flag"] += 1
+            continue
+        filtered.append(rec)
+    quota = _persona_quota(weights)
+    selected = _select_by_persona_quota(filtered, quota=quota, batch_size=batch_size)
+    persona_mix = Counter(str(row.get("persona") or "unknown") for row in selected)
+    return {
+        "selected": selected,
+        "recommendation_counts": rec_data.get("counts") or {},
+        "quota": quota,
+        "batch_size": batch_size,
+        "persona_mix": dict(persona_mix),
+        "excluded": dict(excluded),
+        "behavior_by_pif": behavior_by_pif,
+    }
+
+
+async def _create_daily_batch(
+    *,
+    run_id: str,
+    run_date: date,
+    selected: list[dict[str, Any]],
+    select_result: dict[str, Any],
+    policy: LeadGenPolicyVersionRow | None,
+    created_by: str,
+    template_key: str,
+) -> str:
+    active_policy = policy or await ensure_default_policy()
+    batch_id = _new_id()
+    behavior_by_pif = select_result.get("behavior_by_pif") or {}
+    async with AsyncSessionLocal() as session:
+        batch = LeadGenBatchRow(
+            id=batch_id,
+            name=f"Daily run {run_date.isoformat()}",
+            target_metric=TARGET_METRIC,
+            template_key=template_key,
+            policy_version=active_policy.version,
+            status="recommended",
+            counts_json={
+                **(select_result.get("recommendation_counts") or {}),
+                "basis": "daily-run",
+                "daily_run_id": run_id,
+                "requested": select_result.get("batch_size"),
+                "returned": len(selected),
+                "persona_mix": select_result.get("persona_mix") or {},
+                "persona_quota": select_result.get("quota") or {},
+                "excluded": select_result.get("excluded") or {},
+            },
+            created_by=created_by,
+        )
+        session.add(batch)
+        await session.flush()
+        for rec in selected:
+            behavior = behavior_by_pif.get(str(rec.get("pif_id") or ""), {})
+            reason_json = {
+                "basis": "daily-run",
+                "reason": rec.get("reason") or "",
+                "contact_source": rec.get("contact_source") or "",
+                "policy_version": active_policy.version,
+                "daily_run_id": run_id,
+                "action_type": "first_touch",
+                "priority_bucket": "new_conversation",
+                "source_type": "lead_gen_daily_run",
+                "source_id": rec.get("contact_id"),
+                "signals": rec.get("selection_signals") or rec.get("signals") or [],
+                "next_operator_action": "review_edit_approve_send",
+                "selection_policy_version": rec.get("policy_version") or active_policy.version,
+                "score_breakdown": rec.get("score_breakdown") or {},
+                "selection_features": rec.get("selection_features") or {},
+                "suppressions": rec.get("suppressions") or [],
+                "persona_quota": select_result.get("quota") or {},
+                "behavioral_json": {
+                    "after_hours_ratio": behavior.get("after_hours_ratio"),
+                    "primary_pain_point": behavior.get("primary_pain_point"),
+                },
+            }
+            session.add(LeadGenBatchItemRow(
+                id=_new_id(),
+                batch_id=batch_id,
+                contact_id=rec["contact_id"],
+                pif_id=rec["pif_id"],
+                firm_name=rec["firm_name"],
+                contact_name=rec.get("contact_name") or "",
+                contact_email=rec["contact_email"],
+                contact_title=rec.get("contact_title") or "",
+                persona=rec.get("persona") or "",
+                template_key=template_key,
+                score=int(rec.get("score") or 0),
+                reason_json=reason_json,
+                approval_status="pending",
+            ))
+        await session.commit()
+    return batch_id
+
+
+async def _compose_batch(*, batch_id: str, created_by: str, template_key: str) -> dict[str, Any]:
+    all_drafts: list[dict[str, Any]] = []
+    action_ids: list[str] = []
+    errors: list[str] = []
+    for _chunk in range(40):
+        before = await get_batch(batch_id, include_observations=False)
+        pending = [
+            item for item in before.get("items") or []
+            if item.get("approval_status") in {"pending", "approved"}
+            and not (item.get("reason") or {}).get("agent_draft")
+        ]
+        if not pending:
+            break
+        chunk_limit = min(5, len(pending))
+        chunk_ok = False
+        for attempt in range(2):
+            try:
+                result = await _compose_batch_items(
+                    batch_id=batch_id,
+                    created_by=created_by,
+                    composer_variant_key=None,
+                    approve_actions=False,
+                    policy_check_first_action=False,
+                    template_key=template_key,
+                    only_undrafted_pending=True,
+                    limit=chunk_limit,
+                )
+                all_drafts.extend(result.get("drafts") or [])
+                action_ids.extend(result.get("action_ids") or [])
+                chunk_ok = True
+                break
+            except Exception as exc:
+                errors.append(f"attempt {attempt + 1}: {type(exc).__name__}: {str(exc)[:300]}")
+                logger.exception("daily-run compose chunk failed for batch %s", batch_id)
+        if not chunk_ok:
+            break
+    final = await get_batch(batch_id, include_observations=False)
+    items = final.get("items") or []
+    drafted = sum(1 for item in items if (item.get("reason") or {}).get("agent_draft"))
+    return {
+        "drafts": all_drafts,
+        "action_ids": action_ids,
+        "drafted": drafted,
+        "total": len(items),
+        "errors": errors,
+        "complete": drafted >= len(items),
+    }
+
+
+def _parse_hhmm(value: str) -> time:
+    parts = str(value or "").split(":", 1)
+    if len(parts) != 2:
+        raise ValueError("invalid_time")
+    return time(hour=max(0, min(23, int(parts[0]))), minute=max(0, min(59, int(parts[1]))))
+
+
+def _next_weekday(start: date, *, weekdays: set[int]) -> date:
+    current = start
+    for _ in range(14):
+        if current.weekday() in weekdays:
+            return current
+        current += timedelta(days=1)
+    return start
+
+
+def spread_schedule_times(
+    *,
+    item_ids: list[str],
+    now: datetime | None = None,
+    window: dict[str, str] | None = None,
+    weekdays: set[int] | None = None,
+) -> list[datetime]:
+    if not item_ids:
+        return []
+    window = window or DEFAULT_SEND_WINDOW
+    weekdays = weekdays or {0, 1, 2, 3, 4}
+    tz = ZoneInfo(window.get("timezone") or "America/Los_Angeles")
+    local_now = (now or _utcnow()).astimezone(tz)
+    start_t = _parse_hhmm(window.get("start") or "09:00")
+    end_t = _parse_hhmm(window.get("end") or "11:30")
+    target_date = local_now.date()
+    end_today = datetime.combine(target_date, end_t, tzinfo=tz)
+    if target_date.weekday() not in weekdays or local_now >= end_today:
+        target_date = _next_weekday(target_date + timedelta(days=1), weekdays=weekdays)
+    else:
+        target_date = _next_weekday(target_date, weekdays=weekdays)
+    start_dt = datetime.combine(target_date, start_t, tzinfo=tz)
+    end_dt = datetime.combine(target_date, end_t, tzinfo=tz)
+    total_seconds = max(0, int((end_dt - start_dt).total_seconds()))
+    count = len(item_ids)
+    times: list[datetime] = []
+    for idx, item_id in enumerate(item_ids):
+        base_offset = total_seconds // 2 if count == 1 else int((total_seconds * idx) / (count - 1))
+        jitter_window = 240
+        jitter = (sum(ord(c) for c in item_id) % (jitter_window + 1)) - (jitter_window // 2)
+        offset = max(0, min(total_seconds, base_offset + jitter))
+        times.append((start_dt + timedelta(seconds=offset)).astimezone(timezone.utc))
+    return times
+
+
+async def _find_waiting_action_for_item(session, batch_item_id: str) -> AgentActionRow | None:
+    rows = (await session.execute(
+        select(AgentActionRow)
+        .where(AgentActionRow.action_type == SEND_EMAIL)
+        .where(AgentActionRow.status == "waiting_for_approval")
+        .order_by(desc(AgentActionRow.created_at))
+    )).scalars().all()
+    for row in rows:
+        if (row.input_json or {}).get("batch_item_id") == batch_item_id:
+            return row
+    return None
+
+
+async def _schedule_drafted_items(
+    *,
+    batch_id: str,
+    created_by: str,
+    weights: dict[str, Any],
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    batch = await get_batch(batch_id, include_observations=False)
+    drafted = [
+        item for item in batch.get("items") or []
+        if (item.get("reason") or {}).get("agent_draft")
+    ]
+    scheduled_times = spread_schedule_times(
+        item_ids=[item["id"] for item in drafted],
+        now=now,
+        window=_send_window(weights),
+        weekdays=_weekdays(weights),
+    )
+    created = updated = skipped = 0
+    action_ids: list[str] = []
+    subjects: list[str] = []
+    scheduled: list[dict[str, Any]] = []
+    for item, scheduled_for in zip(drafted, scheduled_times):
+        async with AsyncSessionLocal() as session:
+            live = await find_live_scheduled_action_for_item(session, item["id"])
+            if live:
+                skipped += 1
+                scheduled.append({"item_id": item["id"], "skipped": "already_approved_scheduled", **live})
+                continue
+            row = await _find_waiting_action_for_item(session, item["id"])
+            reason = dict(item.get("reason") or {})
+            draft = dict(reason.get("agent_draft") or {})
+            if row:
+                row.scheduled_for = scheduled_for
+                row.updated_at = _utcnow()
+                await _record_action_event(
+                    session,
+                    action_id=row.id,
+                    event_type="action_scheduled",
+                    actor=created_by,
+                    message="Daily run scheduled draft awaiting approval.",
+                    input_json={"scheduled_for": scheduled_for.isoformat(), "batch_item_id": item["id"]},
+                )
+                item_row = await session.get(LeadGenBatchItemRow, item["id"])
+                if item_row:
+                    item_reason = dict(item_row.reason_json or {})
+                    item_draft = dict(item_reason.get("agent_draft") or {})
+                    item_draft.update({
+                        "action_id": row.id,
+                        "action_status": row.status,
+                        "scheduled_for_pt": format_pt(scheduled_for),
+                        "scheduled_for_utc": format_utc(scheduled_for),
+                    })
+                    item_reason["agent_draft"] = item_draft
+                    item_reason["send_email_action_id"] = row.id
+                    item_reason["next_operator_action"] = "review_approve_scheduled_send"
+                    item_row.reason_json = item_reason
+                await session.commit()
+                await session.refresh(row)
+                updated += 1
+                action = {
+                    "id": row.id,
+                    "status": row.status,
+                    "scheduled_for": row.scheduled_for.isoformat() if row.scheduled_for else None,
+                }
+            else:
+                action = await create_send_email_action(
+                    mode="lead_gen",
+                    to=item["contact_email"],
+                    subject=str(draft.get("subject") or ""),
+                    body=str(draft.get("body") or ""),
+                    requested_by=created_by,
+                    approved_by=None,
+                    contact_id=item["contact_id"],
+                    batch_item_id=item["id"],
+                    pif_id=item["pif_id"],
+                    firm_name=item["firm_name"],
+                    composer_experiment_key=draft.get("composer_experiment_key"),
+                    composer_variant_key=draft.get("composer_variant_key"),
+                    skill_path=draft.get("skill_path"),
+                    skill_sha256=draft.get("skill_sha256"),
+                    brief_version=draft.get("brief_version"),
+                    scheduled_for=scheduled_for,
+                )
+                created += 1
+            action_ids.append(action["id"])
+            subjects.append(str(draft.get("subject") or ""))
+            scheduled.append({
+                "item_id": item["id"],
+                "action_id": action["id"],
+                "status": action.get("status"),
+                "scheduled_for_pt": format_pt(scheduled_for),
+                "scheduled_for_utc": format_utc(scheduled_for),
+            })
+    return {
+        "scheduled": len(action_ids),
+        "created": created,
+        "updated": updated,
+        "skipped": skipped,
+        "action_ids": action_ids,
+        "subjects": [s for s in subjects if s][:3],
+        "items": scheduled,
+    }
+
+
+def build_notify_message(*, batch_id: str | None, item_count: int, draft_count: int, persona_mix: dict[str, Any], subjects: list[str]) -> str:
+    subject_lines = "; ".join(subjects[:3]) if subjects else "No subjects drafted"
+    return (
+        "[from cc] Daily lead-gen run ready for review. "
+        f"batch={batch_id or 'none'} items={item_count} drafts={draft_count} "
+        f"persona_mix={json.dumps(persona_mix, sort_keys=True)} "
+        f"first_subjects={subject_lines}. review at /lead-gen"
+    )
+
+
+async def _notify_operator(
+    *,
+    batch_id: str | None,
+    item_count: int,
+    draft_count: int,
+    persona_mix: dict[str, Any],
+    subjects: list[str],
+) -> dict[str, Any]:
+    to = os.getenv("OPERATOR_WHATSAPP", "+918287149638")
+    message = build_notify_message(
+        batch_id=batch_id,
+        item_count=item_count,
+        draft_count=draft_count,
+        persona_mix=persona_mix,
+        subjects=subjects,
+    )
+
+    def _send() -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            ["openclaw", "message", "send", "--channel", "whatsapp", "-t", to, "--message", message],
+            capture_output=True,
+            text=True,
+            timeout=45,
+            check=False,
+        )
+
+    try:
+        proc = await asyncio.to_thread(_send)
+        return {
+            "sent": proc.returncode == 0,
+            "returncode": proc.returncode,
+            "to": to,
+            "message": message,
+            "stdout": (proc.stdout or "")[-500:],
+            "stderr": (proc.stderr or "")[-500:],
+        }
+    except subprocess.TimeoutExpired:
+        logger.warning("daily-run WhatsApp notify timed out")
+        return {"sent": False, "timeout": True, "to": to, "message": message}
+    except FileNotFoundError:
+        logger.warning("openclaw CLI not found for daily-run WhatsApp notify")
+        return {"sent": False, "error": "openclaw_cli_not_found", "to": to, "message": message}
+
+
+async def run_daily_pipeline(
+    *,
+    dry_run: bool = False,
+    force: bool = False,
+    created_by: str = "daily-run",
+    run_date: date | None = None,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    """Run or resume today's deterministic daily lead-gen pipeline.
+
+    Dry runs intentionally avoid writes and external side effects so operators
+    can validate live selection without creating actions or consuming research
+    API budget.
+    """
+    now = now or _utcnow()
+    target_date = run_date or _date_for_run(now)
+    policy = await _active_policy()
+    weights = _policy_weights(policy)
+    template_key = str(weights.get("daily_template_key") or DEFAULT_TEMPLATE_KEY)
+    batch_size = _int_policy(weights, "daily_batch_size", 20, minimum=1, maximum=200)
+
+    if dry_run:
+        stages: dict[str, Any] = {}
+        gates = await _run_gates(weights, now=now)
+        stages["gates"] = {"status": "completed" if gates["passed"] else "skipped", "counts": gates}
+        if gates["passed"]:
+            status_data = await front_status()
+            age = (status_data.get("sync_health") or {}).get("last_run_age_hours")
+            stages["signals"] = {"status": "completed", "counts": {"front_last_run_age_hours": age, "would_refresh": age is None or age > 30}}
+            stages["research"] = {"status": "skipped", "reason": "dry_run"}
+            stages["personas"] = {"status": "skipped", "reason": "dry_run"}
+            selected = await _select_contacts(weights=weights, batch_size=batch_size, template_key=template_key)
+            stages["select"] = {
+                "status": "completed",
+                "counts": {
+                    "selected": len(selected["selected"]),
+                    "persona_mix": selected["persona_mix"],
+                    "excluded": selected["excluded"],
+                },
+            }
+            stages["batch"] = {"status": "skipped", "reason": "dry_run"}
+            stages["compose"] = {"status": "skipped", "reason": "dry_run"}
+            stages["schedule"] = {"status": "skipped", "reason": "dry_run"}
+            stages["notify"] = {"status": "skipped", "reason": "dry_run"}
+        return {
+            "id": f"dry-run-{target_date.isoformat()}",
+            "run_date": target_date.isoformat(),
+            "status": "skipped" if not gates["passed"] else "completed",
+            "stage": "dry_run",
+            "stages": stages,
+            "batch_id": None,
+            "dry_run": True,
+        }
+
+    row, should_run = await _create_or_get_run(run_date=target_date, created_by=created_by, force=force)
+    if not should_run and row.status != "partial":
+        return _run_to_dict(row)
+
+    stages = dict(row.stages_json or {})
+    select_result: dict[str, Any] | None = None
+    schedule_result: dict[str, Any] = {}
+
+    try:
+        if not _stage_done(stages, "gates"):
+            await _checkpoint(row.id, stage="gates", status="running", run_status="running")
+            gates = await _run_gates(weights, now=now)
+            if not gates["passed"]:
+                row = await _checkpoint(
+                    row.id,
+                    stage="gates",
+                    status="skipped",
+                    counts=gates,
+                    run_status="skipped",
+                    extra={"reason": gates.get("reason")},
+                )
+                return _run_to_dict(row)
+            row = await _checkpoint(row.id, stage="gates", status="completed", counts=gates, run_status="running")
+
+        if not _stage_done(row.stages_json or {}, "signals"):
+            await _checkpoint(row.id, stage="signals", status="running")
+            status_data = await front_status()
+            age = (status_data.get("sync_health") or {}).get("last_run_age_hours")
+            refreshed: dict[str, Any] = {}
+            if age is None or float(age) > 30:
+                refreshed["resolve"] = await resolve_firms()
+                refreshed["scores"] = await refresh_warm_scores()
+            row = await _checkpoint(
+                row.id,
+                stage="signals",
+                status="completed",
+                counts={"front_last_run_age_hours": age, "refreshed": bool(refreshed)},
+                extra=refreshed,
+            )
+
+        if not _stage_done(row.stages_json or {}, "research"):
+            await _checkpoint(row.id, stage="research", status="running")
+            try:
+                research_budget = _int_policy(weights, "daily_research_budget", 10, minimum=0, maximum=100)
+                if research_budget > 0:
+                    research = await orchestrate_warm_research(
+                        top_n=research_budget,
+                        kinds=["research", "analyze_behavior"],
+                        timeout_seconds=600,
+                        poll_interval_seconds=15,
+                    )
+                else:
+                    research = {"skipped": "daily_research_budget_zero"}
+                row = await _checkpoint(row.id, stage="research", status="completed", counts=research)
+            except Exception as exc:
+                row = await _checkpoint(
+                    row.id,
+                    stage="research",
+                    status="partial",
+                    error=f"{type(exc).__name__}: {str(exc)[:500]}",
+                    run_status="running",
+                )
+
+        if not _stage_done(row.stages_json or {}, "personas"):
+            await _checkpoint(row.id, stage="personas", status="running")
+            personas = await map_personas()
+            row = await _checkpoint(row.id, stage="personas", status="completed", counts=personas)
+
+        if not _stage_done(row.stages_json or {}, "select"):
+            await _checkpoint(row.id, stage="select", status="running")
+            select_result = await _select_contacts(weights=weights, batch_size=batch_size, template_key=template_key)
+            row = await _checkpoint(
+                row.id,
+                stage="select",
+                status="completed",
+                counts={
+                    "selected": len(select_result["selected"]),
+                    "batch_size": batch_size,
+                    "persona_mix": select_result["persona_mix"],
+                    "excluded": select_result["excluded"],
+                    "recommendation_counts": select_result["recommendation_counts"],
+                },
+                extra={"selected_contact_ids": [r["contact_id"] for r in select_result["selected"]]},
+            )
+
+        if not _stage_done(row.stages_json or {}, "batch"):
+            await _checkpoint(row.id, stage="batch", status="running")
+            if select_result is None:
+                select_result = await _select_contacts(weights=weights, batch_size=batch_size, template_key=template_key)
+            batch_id = await _create_daily_batch(
+                run_id=row.id,
+                run_date=target_date,
+                selected=select_result["selected"],
+                select_result=select_result,
+                policy=policy,
+                created_by=created_by,
+                template_key=template_key,
+            )
+            row = await _checkpoint(
+                row.id,
+                stage="batch",
+                status="completed",
+                counts={"items": len(select_result["selected"])},
+                batch_id=batch_id,
+            )
+
+        if not _stage_done(row.stages_json or {}, "compose"):
+            await _checkpoint(row.id, stage="compose", status="running")
+            if not row.batch_id:
+                raise ValueError("batch_id_missing_for_compose")
+            compose = await _compose_batch(batch_id=row.batch_id, created_by=created_by, template_key=template_key)
+            row = await _checkpoint(
+                row.id,
+                stage="compose",
+                status="completed" if compose["complete"] else "partial",
+                counts=compose,
+                run_status="running" if compose["complete"] else "partial",
+                error="; ".join(compose["errors"][-2:]) if compose["errors"] and not compose["complete"] else None,
+            )
+            if not compose["complete"]:
+                return _run_to_dict(row)
+
+        if not _stage_done(row.stages_json or {}, "schedule"):
+            await _checkpoint(row.id, stage="schedule", status="running")
+            if not row.batch_id:
+                raise ValueError("batch_id_missing_for_schedule")
+            schedule_result = await _schedule_drafted_items(
+                batch_id=row.batch_id,
+                created_by=created_by,
+                weights=weights,
+                now=now,
+            )
+            row = await _checkpoint(row.id, stage="schedule", status="completed", counts=schedule_result)
+
+        if not _stage_done(row.stages_json or {}, "notify"):
+            await _checkpoint(row.id, stage="notify", status="running")
+            batch = await get_batch(row.batch_id, include_observations=False) if row.batch_id else {"items": []}
+            items = batch.get("items") or []
+            persona_mix = dict(Counter(str(item.get("persona") or "unknown") for item in items))
+            draft_count = sum(1 for item in items if (item.get("reason") or {}).get("agent_draft"))
+            subjects = schedule_result.get("subjects") or [
+                ((item.get("reason") or {}).get("agent_draft") or {}).get("subject")
+                for item in items
+                if ((item.get("reason") or {}).get("agent_draft") or {}).get("subject")
+            ][:3]
+            notify = await _notify_operator(
+                batch_id=row.batch_id,
+                item_count=len(items),
+                draft_count=draft_count,
+                persona_mix=persona_mix,
+                subjects=subjects,
+            )
+            row = await _checkpoint(row.id, stage="notify", status="completed", counts=notify)
+
+        row = await _checkpoint(row.id, stage="done", status="completed", run_status="completed")
+        return _run_to_dict(row)
+    except Exception as exc:
+        logger.exception("daily lead-gen pipeline failed")
+        current_stage = row.stage if row else "unknown"
+        row = await _checkpoint(
+            row.id,
+            stage=current_stage,
+            status="failed",
+            error=f"{type(exc).__name__}: {str(exc)[:500]}",
+            run_status="partial" if row and row.batch_id else "failed",
+        )
+        return _run_to_dict(row)
+
+
+async def list_daily_runs(*, limit: int = 20) -> list[dict[str, Any]]:
+    async with AsyncSessionLocal() as session:
+        rows = (await session.execute(
+            select(LeadGenDailyRunRow)
+            .order_by(desc(LeadGenDailyRunRow.run_date), desc(LeadGenDailyRunRow.created_at))
+            .limit(max(1, min(int(limit), 100)))
+        )).scalars().all()
+    return [_run_to_dict(row) for row in rows]
+
+
+async def get_daily_run(*, run_date: date | None = None) -> dict[str, Any] | None:
+    target = run_date or _date_for_run()
+    async with AsyncSessionLocal() as session:
+        row = (await session.execute(
+            select(LeadGenDailyRunRow).where(LeadGenDailyRunRow.run_date == target)
+        )).scalar_one_or_none()
+    return _run_to_dict(row) if row else None
+
+
+async def get_daily_run_enabled() -> dict[str, Any]:
+    async with AsyncSessionLocal() as session:
+        row = (await session.execute(select(SystemSettingsRow).where(SystemSettingsRow.id == 1))).scalar_one_or_none()
+        config = dict(getattr(row, "agent_config", None) or {}) if row else {}
+    return {"enabled": bool(config.get(DAILY_RUN_CONFIG_KEY, False)), "key": DAILY_RUN_CONFIG_KEY}
+
+
+async def set_daily_run_enabled(enabled: bool) -> dict[str, Any]:
+    async with AsyncSessionLocal() as session:
+        row = (await session.execute(select(SystemSettingsRow).where(SystemSettingsRow.id == 1))).scalar_one_or_none()
+        if row is None:
+            row = SystemSettingsRow(id=1, business_hours={}, queue_thresholds={}, agent_config={})
+            session.add(row)
+        config = dict(row.agent_config or {})
+        config[DAILY_RUN_CONFIG_KEY] = bool(enabled)
+        config["daily_run_enabled_updated_at"] = _utcnow().isoformat()
+        row.agent_config = config
+        await session.commit()
+    return {"enabled": bool(enabled), "key": DAILY_RUN_CONFIG_KEY}
+
+
+def _in_daily_loop_window(now: datetime | None = None) -> bool:
+    local = (now or _utcnow()).astimezone(PT)
+    return local.weekday() < 5 and time(6, 30) <= local.time() < time(8, 0)
+
+
+async def daily_run_loop(interval_seconds: int = 600) -> None:
+    """Background loop. Wired on startup, but default-off and no-op disabled."""
+    logger.info("lead_gen_daily_run_loop starting (interval=%ss, default disabled)", interval_seconds)
+    while True:
+        try:
+            enabled = await get_daily_run_enabled()
+            if enabled["enabled"] and _in_daily_loop_window():
+                today = _date_for_run()
+                current = await get_daily_run(run_date=today)
+                if not current or current.get("status") not in {"completed", "running"}:
+                    await run_daily_pipeline(created_by="daily-run-loop", run_date=today)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("lead_gen_daily_run_loop tick failed")
+        await asyncio.sleep(interval_seconds)

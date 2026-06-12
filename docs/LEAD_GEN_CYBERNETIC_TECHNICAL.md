@@ -26,6 +26,10 @@ Important routes:
 | `PUT` | `/api/lead-gen/settings/daily-send-budget` | persist daily send budget on active policy |
 | `POST` | `/api/lead-gen/batches` | create a daily action plan batch |
 | `POST` | `/api/lead-gen/email-agent/slice` | create a no-send 3-contact email-agent slice with research evidence, composer drafts, and durable `send_email mode=lead_gen` actions |
+| `POST` | `/api/lead-gen/daily-run` | run or dry-run the checkpointed daily lead-selection and drafting pipeline |
+| `GET` | `/api/lead-gen/daily-runs` | list recent daily-run checkpoints |
+| `GET` | `/api/lead-gen/daily-run/enabled` | read the persisted daemon-loop flag, default false |
+| `PUT` | `/api/lead-gen/daily-run/enabled` | enable or disable the default-off daily-run daemon loop |
 | `GET` | `/api/lead-gen/batches` | list batches |
 | `GET` | `/api/lead-gen/batches/{batch_id}` | get batch, items, optional observations |
 | `POST` | `/api/lead-gen/batches/{batch_id}/approve` | approve batch and optionally queue sequences |
@@ -73,6 +77,11 @@ bin/autocaller lead-gen policy
 bin/autocaller lead-gen recommend --template possible_minds_dynamic --limit 50
 bin/autocaller lead-gen email-agent-slice --limit 3 --approval-ready
 bin/autocaller lead-gen email-agent-slice --limit 3 --approve-actions --policy-check-first-action --json
+bin/autocaller lead-gen daily-run --dry-run
+bin/autocaller lead-gen daily-run
+bin/autocaller lead-gen daily-status
+bin/autocaller lead-gen daily-enable
+bin/autocaller lead-gen daily-disable
 bin/autocaller lead-gen batches
 bin/autocaller lead-gen show <batch_id> --observations
 bin/autocaller lead-gen edit-draft <batch_item_id> --at "10:30 PT"
@@ -723,6 +732,7 @@ Lead-gen policy and planning:
 - `lead_gen_policy_versions`
 - `lead_gen_batches`
 - `lead_gen_batch_items`
+- `lead_gen_daily_runs`
 - `lead_gen_observations`
 - `lead_gen_policy_proposals`
 
@@ -746,6 +756,7 @@ Important stored JSON fields:
 - `lead_gen_policy_versions.suppressions_json`
 - `lead_gen_batches.counts_json`
 - `lead_gen_batch_items.reason_json`
+- `lead_gen_daily_runs.stages_json`
 - `lead_gen_observations.raw_event_json`
 - `lead_gen_policy_proposals.proposed_change_json`
 - `lead_gen_policy_proposals.evidence_json`
@@ -768,6 +779,52 @@ Important stored JSON fields:
 9. New contacts are scored by `score_contact_selection`.
 10. Batch and item rows are stored.
 11. UI shows selected actions, reasons, scores, and score components.
+
+### Daily Run Pipeline
+
+`app/services/lead_gen_daily.py` owns the deterministic daily run. A real run
+creates or resumes one `lead_gen_daily_runs` row per Pacific run date and
+checkpoints these stages in `stages_json`: `gates`, `signals`, `research`,
+`personas`, `select`, `batch`, `compose`, `schedule`, and `notify`.
+
+Important behavior:
+
+- Gates require `system_enabled=true`, active policy `daily_send_budget > 0`,
+  an allowed weekday, and no recent deliverability circuit breaker. The breaker
+  trips when the last 48h has at least four sends and
+  `email_send_failed`/bounce observations exceed the policy threshold
+  (`deliverability_circuit_breaker_threshold`, default `0.25`).
+- If Front sync is stale by more than 30 hours, the run calls local
+  `resolve_firms()` and `refresh_warm_scores()` only; it does not call Front.
+- Research queues bounded PIF Stats warm-firm research and behavior tasks using
+  `daily_research_budget` (default `10`) and proceeds on timeout. Research
+  errors are non-fatal.
+- Persona mapping runs before selection.
+- Selection uses `recommend_sequence_contacts`, excludes `precisemri.com` and
+  Front suppress-flagged firms, applies `daily_persona_quota`, keeps one
+  contact per firm, then fills any shortfall by score order up to
+  `daily_batch_size` (default `20`).
+- The batch is named `Daily run YYYY-MM-DD`. Item `reason_json` includes
+  `basis=daily-run`, quota, selection features/suppressions, and behavior facts
+  from `front_firm_activity.behavioral_json`.
+- Compose reuses the existing batch-compose path in chunks of five, leaving
+  transient failures as `partial` so the next run resumes undrafted items.
+- Schedule spreads drafted items across `daily_send_window` (default
+  `09:00-11:30 America/Los_Angeles`) and leaves every action in
+  `waiting_for_approval`. The scheduled-action daemon only drains `approved`
+  actions, so these cannot send without operator approval.
+- Notify shells out to `openclaw message send --channel whatsapp ...` with a
+  45-second timeout. Delivery verification is intentionally outside this
+  service.
+
+`daily-run --dry-run` is no-write and no-side-effect: it evaluates gates,
+Front staleness, and selection, but it does not create batches, actions, PIF
+Stats tasks, or WhatsApp messages.
+
+The daemon loop is wired in `app/main.py` but reads persisted
+`system_settings.agent_config.daily_run_enabled`. The default is false, so a
+daemon restart never starts the pipeline unless an operator explicitly enables
+it with CLI/API/UI.
 
 ### Approve And Queue
 
