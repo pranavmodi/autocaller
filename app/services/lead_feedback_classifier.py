@@ -20,6 +20,8 @@ OUTCOMES = {
     "booked_qualified_conversation",
     "positive_reply",
     "referral",
+    "forwarded_internally",
+    "owner_introduction",
     "wrong_person",
     "not_interested",
     "do_not_contact",

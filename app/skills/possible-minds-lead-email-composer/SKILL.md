@@ -147,6 +147,16 @@ fake name), write to the desk's owner in their working vocabulary, and
 keep the CTA an easy forward: one line inviting them to pass it to
 whoever owns that workflow is acceptable alongside the binary question.
 
+Non-buyer personas (records, intake, case_manager, lien_settlement,
+paralegal, and non-partner attorneys) are usually not the economic buyer,
+so do not write them a buyer email. They have two real motivations you can
+serve: making their own day easier, and looking informed and ahead of the
+curve to their boss and peers. Write to those motivations: frame the system
+as something that removes THEIR chase, and give them an easy way to carry
+it upstairs with credit ("forward this to whoever owns the workflow and
+it'll look like you did the homework"). Never ask them budget-shaped
+questions; never make them responsible for a purchase decision.
+
 Vary subjects across a batch: never reuse one subject line on multiple
 recipients in the same run. Subjects should be lowercase-casual, specific,
 and reference either the firm, the workflow, or the Precise system — not a
@@ -195,6 +205,14 @@ Use these strategies as internal options, not as rigid templates:
   that Possible Minds is already helping PI firms and healthcare-adjacent
   operators with practical AI transformation projects, such as email triage,
   autoresponders, website AI chatbots, and voice-AI intake automation.
+- `champion_enablement`: Use for non-buyer staff personas (records, intake,
+  case manager, lien negotiator, paralegal). Make the email about their own
+  daily chase, then arm them to be the internal champion: offer a short,
+  concrete explainer they can forward upstairs and get credit for finding
+  ("want the 2-minute explainer? Pass it to whoever owns this and it reads
+  like you did the homework."). The reward you are offering is social
+  credit, not a product. Until a public one-pager link is supplied in
+  `blog_posts`, offer to send the explainer by reply instead of linking.
 - `right_owner_referral`: Use when the contact may not own the workflow. Ask
   who owns records, intake, operations, or automation decisions.
 - `respectful_close_loop`: Use late in a run or after repeated non-response.

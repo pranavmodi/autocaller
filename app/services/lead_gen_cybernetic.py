@@ -720,6 +720,8 @@ async def record_observation(
             "booked_qualified_conversation",
             "positive_reply",
             "referral",
+            "forwarded_internally",
+            "owner_introduction",
             "wrong_person",
             "not_interested",
             "do_not_contact",
@@ -1066,6 +1068,9 @@ async def create_policy_proposal_from_batch(
         "booked_qualified_conversation",
         "positive_reply",
         "referral",
+        # champion-dynamic outcomes: a staff contact carried us upstairs
+        "forwarded_internally",
+        "owner_introduction",
     }
     negative = {"not_interested", "do_not_contact", "bounce"}
     by_persona: dict[str, dict[str, int]] = {}
