@@ -141,8 +141,9 @@ Every command accepts `--help`. Exit code is `0` on success, `1` on any error
 | `contacts backfill [--limit=N]` | Pull leadership rosters from PIF Stats + autocaller patient DM rows into `firm_contacts`. Idempotent. Run once before using `sequences start`. |
 | `contacts list [--firm=<pif_id>] [--limit=N]` | List firm_contacts rows. Without `--firm`, walks across firms. |
 | `front sync [--full] [--max-calls N] [--json]` | Budgeted read-only Precise Front sync: contacts, inbox activity metadata, offline firm resolution, and warm-score refresh. Hard-caps API calls and persists cursors/watermarks. |
-| `front status [--json]` | Show Front sync cursors, watermarks, counts, matched domains, and warm-domain counts. |
-| `front contacts [--firm=<pif_id> \| --domain=<domain>] [--limit=N] [--json]` | List synced Front contacts with matched pif_id, masked email display, warm score, and tech signals. |
+| `front status [--json]` | Show Front sync health, cursors, watermarks, table counts, funnel counts, day-over-day deltas, and timing feed data used by `/front`. |
+| `front contacts [--firm=<pif_id> \| --domain=<domain> --q=<text>] [--limit=N] [--json]` | List synced Front contacts with matched pif_id, masked email display, warm score, and tech signals. |
+| `front warm-batch --domains a.com,b.com [--name=...] [--json]` | Create a recommended lead-gen batch directly from selected Front-warm domains. Items use `reason_json.basis = "front-warm"` and stay pending for review in `/lead-gen`. |
 | `sequences preview <contact_id>` | Render the four (or three, if no Yelp quote) email drafts for one contact against their actual personalization data. Read-only. |
 | `sequences start <contact_id>` | Start the 4-step sequence for one contact. Idempotent — second start returns 409 with current state. Sends gated by `ALLOW_SEQUENCE_SEND=true`. |
 | `sequences list [--status=active\|paused\|completed]` | List sequence rows + which step each is on. |
@@ -590,11 +591,13 @@ hard API call budget.
 bin/autocaller front sync --max-calls 300
 bin/autocaller front status
 bin/autocaller leads warm-list --limit 20
+bin/autocaller front warm-batch --domains examplelaw.com,anotherfirm.com --name "Front warm review"
 ```
 
-Review the named contacts before creating a lead-gen batch. The Front-warm
-feature is stored in the inactive `lead-gen-v2` policy until the orchestrator
-activates it after review.
+Review the named contacts before creating a lead-gen batch. `front warm-batch`
+does not call Front and does not send email; it writes a normal recommended
+lead-gen batch with pending items, `reason_json.basis = "front-warm"`, and a
+link back to `/lead-gen?batch=<id>`.
 
 ### Recipe: "something's wrong — triage"
 ```bash

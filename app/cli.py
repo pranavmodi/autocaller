@@ -3063,13 +3063,14 @@ def front_status_cmd(json_output: bool = typer.Option(False, "--json", help="Pri
 def front_contacts_cmd(
     firm: str = typer.Option("", "--firm", help="Filter by matched pif_id."),
     domain: str = typer.Option("", "--domain", help="Filter by email/domain."),
+    q: str = typer.Option("", "--q", help="Search name, email, domain, or pif_id."),
     limit: int = typer.Option(50, "--limit", "-n", min=1, max=500),
     json_output: bool = typer.Option(False, "--json", help="Print raw JSON."),
 ):
     """List synced Front contacts with matched firm and warmth metadata."""
     from app.services.front_sync import list_front_contacts
 
-    rows = _run(list_front_contacts(firm=firm, domain=domain, limit=limit))
+    rows = _run(list_front_contacts(firm=firm, domain=domain, q=q, limit=limit))
     if json_output:
         console.print_json(data={"contacts": rows})
         return
@@ -3085,6 +3086,48 @@ def front_contacts_cmd(
             str(row.get("pif_id") or ""),
             str(row.get("warm_score") or 0),
             json.dumps(row.get("tech_signals") or {}, sort_keys=True),
+        )
+    console.print(table)
+
+
+@front_app.command("warm-batch")
+def front_warm_batch_cmd(
+    domains: str = typer.Option(..., "--domains", help="Comma-separated synced Front domains to include."),
+    name: str = typer.Option("", "--name", help="Optional lead-gen batch name."),
+    json_output: bool = typer.Option(False, "--json", help="Print raw JSON."),
+):
+    """Create a recommended lead-gen batch from selected Front-warm domains."""
+    from app.services.front_sync import create_front_warm_batch
+
+    domain_list = [part.strip() for part in domains.split(",") if part.strip()]
+    try:
+        data = _run(create_front_warm_batch(
+            domains=domain_list,
+            name=name or None,
+            created_by="operator-cli",
+        ))
+    except ValueError as e:
+        console.print(f"[red]{e}[/red]")
+        raise typer.Exit(code=1)
+    if json_output:
+        console.print_json(data=data)
+        return
+    batch = data.get("batch") or {}
+    items = data.get("items") or []
+    link = data.get("link") or f"/lead-gen?batch={batch.get('id')}"
+    console.print(f"created batch={batch.get('id')} items={len(items)} link={link}")
+    table = Table(title="Front warm batch items")
+    for col in ["score", "domain", "firm", "contact", "email"]:
+        table.add_column(col, overflow="fold")
+    for item in items:
+        reason = item.get("reason") or {}
+        features = reason.get("selection_features") or {}
+        table.add_row(
+            str(item.get("score") or 0),
+            str(features.get("domain") or ""),
+            str(item.get("firm_name") or ""),
+            str(item.get("contact_name") or ""),
+            _mask_email(item.get("contact_email")),
         )
     console.print(table)
 

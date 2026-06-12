@@ -54,6 +54,11 @@ Important routes:
 | `POST` | `/api/todos` | create a DB-backed project todo |
 | `PATCH` | `/api/todos/{todo_id}` | edit a DB-backed project todo |
 | `DELETE` | `/api/todos/{todo_id}` | delete a DB-backed project todo |
+| `GET` | `/api/front/status` | Front sync health, cursors, watermarks, table counts, funnel deltas, and timing feed |
+| `GET` | `/api/front/warm-list` | top Front-warm matched firms with named contacts, prior-email flags, and tech signals |
+| `GET` | `/api/front/contacts` | synced Front contacts filtered by domain/search |
+| `GET` | `/api/front/signals` | tech-stack counts, inbox-activity mix, and suppress-flagged domains |
+| `POST` | `/api/front/warm-batch` | create a recommended lead-gen batch directly from selected Front-warm domains |
 
 ### CLI
 
@@ -79,6 +84,7 @@ bin/autocaller lead-gen propose <batch_id>
 bin/autocaller front sync --max-calls 300
 bin/autocaller front status
 bin/autocaller front contacts --domain examplelaw.com
+bin/autocaller front warm-batch --domains examplelaw.com,anotherfirm.com
 bin/autocaller leads warm-list --limit 20
 bin/autocaller actions list --type send_approved_lead_gen_draft
 bin/autocaller actions list --scheduled
@@ -111,7 +117,12 @@ Files:
   `FrontSyncStateRow`) and Alembic revision
   `n6o7p8q9r0s1_add_front_lead_engine.py`.
 - Service: `app/services/front_sync.py`.
-- CLI: `front sync`, `front status`, `front contacts`, and `leads warm-list`.
+- API: `app/api/front.py` exposes `/api/front/status`, `/api/front/warm-list`,
+  `/api/front/contacts`, `/api/front/signals`, and `/api/front/warm-batch`.
+- CLI: `front sync`, `front status`, `front contacts`, `front warm-batch`, and
+  `leads warm-list`.
+- Frontend: `frontend/app/front/page.tsx` renders sync health, funnel counts,
+  the expandable warm-list table, timing feed, and signals panel.
 
 Tables:
 
@@ -141,6 +152,11 @@ Operational constraints implemented:
   consumer domains, excludes `*.filevineapp.com` robot contacts, and records
   Filevine as `tech_signals.case_mgmt = "filevine"`.
 - Warm scoring is offline and writes `front_firm_activity.warm_score`.
+- `/api/front/warm-batch` and `front warm-batch` never call Front. They validate
+  selected domains against synced rows, pick eligible named contacts that have
+  not already been emailed, create a normal `lead_gen_batches` row, and add
+  pending `lead_gen_batch_items` with `reason_json.basis = "front-warm"` plus
+  score breakdown and source features.
 
 Policy integration:
 

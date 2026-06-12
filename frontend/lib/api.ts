@@ -1842,6 +1842,139 @@ export const getComposerVariantStats = (days = 30) =>
     `/api/lead-email-composer/variant-stats?days=${encodeURIComponent(String(days))}`,
   );
 
+// ---- Front observability ----
+export type FrontFunnelStep = {
+  key: string;
+  label: string;
+  total: number;
+  last_24h: number;
+  previous_24h: number;
+  delta: number;
+};
+
+export type FrontSyncState = {
+  key: string;
+  cursor: string | null;
+  watermark: string | null;
+  updated_at: string | null;
+  watermark_age_hours: number | null;
+  updated_age_hours: number | null;
+};
+
+export type FrontStatus = {
+  counts: Record<string, number>;
+  table_counts: Record<string, number>;
+  funnel: FrontFunnelStep[];
+  states: FrontSyncState[];
+  sync_health: {
+    last_run_at: string | null;
+    last_run_age_hours: number | null;
+    calls_used: number | null;
+    call_budget: number;
+    latest_watermark: string | null;
+    latest_watermark_age_hours: number | null;
+    next_daily_run_at: string | null;
+    last_error: string | null;
+    stale: boolean;
+    stale_after_hours: number;
+  };
+  latest_contact_synced_at: string | null;
+  timing_feed: Array<{
+    domain: string;
+    pif_id: string | null;
+    firm_name: string;
+    event_at: string | null;
+    last_referral_at: string | null;
+    last_seen_at: string | null;
+    kind: string;
+    contact_count: number;
+    warm_score: number;
+  }>;
+};
+
+export type FrontNamedContact = {
+  id: string;
+  name: string;
+  email: string;
+  title: string | null;
+  emailed_before: boolean;
+  front_last_seen: string | null;
+  source: string;
+};
+
+export type FrontWarmFirm = {
+  domain: string;
+  firm_name: string;
+  pif_id: string | null;
+  pif_match: boolean;
+  warm_score: number;
+  last_seen_at: string | null;
+  last_referral_at: string | null;
+  last_records_at: string | null;
+  contact_count: number;
+  named_contacts: FrontNamedContact[];
+  eligible_contact_count: number;
+  tech_signals: Record<string, unknown>;
+  inbox_breakdown: Record<string, unknown>;
+};
+
+export type FrontContact = {
+  front_id: string;
+  name: string | null;
+  primary_email: string | null;
+  domain: string | null;
+  front_updated_at: string | null;
+  pif_id: string | null;
+  warm_score: number;
+  tech_signals: Record<string, unknown>;
+  last_seen_at: string | null;
+  last_referral_at: string | null;
+};
+
+export type FrontSignals = {
+  tech_stack_counts: Array<{
+    signal: string;
+    values: Array<{ value: string; count: number }>;
+  }>;
+  inbox_activity_mix: Array<{
+    inbox_id: string;
+    name: string;
+    domains: number;
+    conversation_count: number;
+    last_seen_at: string | null;
+  }>;
+  suppress_flagged_firms: Array<{
+    domain: string;
+    pif_id: string | null;
+    reasons: string[];
+    warm_score: number;
+    last_seen_at: string | null;
+  }>;
+};
+
+export const getFrontStatus = () => get<FrontStatus>("/api/front/status");
+
+export const getFrontWarmList = (limit = 50) =>
+  get<{ warm_list: FrontWarmFirm[] }>(`/api/front/warm-list?limit=${limit}`);
+
+export const getFrontContacts = (args: { domain?: string; q?: string; limit?: number } = {}) => {
+  const params = new URLSearchParams();
+  if (args.domain) params.set("domain", args.domain);
+  if (args.q) params.set("q", args.q);
+  if (args.limit) params.set("limit", String(args.limit));
+  const qs = params.toString();
+  return get<{ contacts: FrontContact[] }>(`/api/front/contacts${qs ? `?${qs}` : ""}`);
+};
+
+export const getFrontSignals = () => get<FrontSignals>("/api/front/signals");
+
+export const createFrontWarmBatch = (args: {
+  domains: string[];
+  name?: string;
+  template_key?: string;
+  created_by?: string;
+}) => post<LeadGenBatchDetail & { link: string }>("/api/front/warm-batch", args);
+
 export const classifyLeadGenObservation = (args: {
   event_type: string;
   raw_event: Record<string, unknown>;

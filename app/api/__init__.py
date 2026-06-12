@@ -23,6 +23,7 @@ from .learning import router as learning_router
 from .todos import router as todos_router
 from .composer_variants import router as composer_variants_router
 from .actions import router as actions_router
+from .front import router as front_router
 
 __all__ = [
     "dashboard_router", "websocket_router", "settings_router",
@@ -33,4 +34,5 @@ __all__ = [
     "resend_webhooks_router", "inbound_email_router",
     "operator_notifications_router", "seo_router", "product_traces_router",
     "learning_router", "todos_router", "composer_variants_router", "actions_router",
+    "front_router",
 ]

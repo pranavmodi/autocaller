@@ -108,13 +108,19 @@ artifact for an exact approved draft. Do not send email from free-form shell
 commands or LLM-generated recipient/body payloads.
 
 Front read-only enrichment is available through
-`bin/autocaller front sync --max-calls <N>`, `front status`, and
-`front contacts [--firm=<pif_id>|--domain=<domain>]`. It reads Precise Front
-contacts and selected inbox conversation metadata only, persists cursors in
+`bin/autocaller front sync --max-calls <N>`, `front status`,
+`front contacts [--firm=<pif_id>|--domain=<domain>|--q=<text>]`, and
+`front warm-batch --domains a.com,b.com`. It reads Precise Front contacts and
+selected inbox conversation metadata only, persists cursors in
 `front_sync_state`, resolves domains to MC `pif_firms`, and writes warm scores
-to `front_firm_activity`. Use `bin/autocaller leads warm-list --limit 20` for
-the daily warm list. `lead-gen-v2` includes the Front warmth feature but is
-created inactive; do not activate it without operator/orchestrator review.
+to `front_firm_activity`. Use `/front` for sync health, funnel deltas, warm
+firms, onboarding/referrer timing, and signal breakdowns. Use
+`bin/autocaller leads warm-list --limit 20` for the daily warm list. Use
+`front warm-batch` only after reviewing selected domains; it does not call
+Front or send email, and it creates pending lead-gen batch items with
+`reason_json.basis = "front-warm"`. `lead-gen-v2` includes the Front warmth
+feature but is created inactive; do not activate it without
+operator/orchestrator review.
 
 ---
 
@@ -429,8 +435,9 @@ Common causes: Geo permissions not enabled, AMD mis-classifying carrier voicemai
 | `autocaller contacts backfill` | Populate `firm_contacts` from PIF Stats `leadership[]` + the patient DM. Idempotent. Run once before any `sequences start`. |
 | `autocaller contacts list [--firm <pif_id>]` | List firm_contacts roster. |
 | `autocaller front sync [--full] [--max-calls N]` | Read-only Precise Front sync for contacts, activity metadata, domain resolution, and warm-score refresh. Persists cursors and hard-caps API calls. |
-| `autocaller front status` | Show Front cursors, watermarks, counts, matched domains, and warm-domain counts. |
-| `autocaller front contacts [--firm <pif_id> \| --domain <domain>]` | List synced Front contacts with masked emails, matched pif_id, warm score, and tech signals. |
+| `autocaller front status` | Show Front sync health, cursors, watermarks, counts, funnel deltas, timing feed, and stale/error state. |
+| `autocaller front contacts [--firm <pif_id> \| --domain <domain> --q <text>]` | List synced Front contacts with masked emails, matched pif_id, warm score, and tech signals. |
+| `autocaller front warm-batch --domains a.com,b.com` | Create a recommended lead-gen batch from reviewed Front-warm domains. Items stay pending and carry `reason_json.basis = "front-warm"`. |
 | `autocaller leads warm-list [--limit 20]` | Print the daily Front-warmed firm/contact list, excluding contacts already emailed. |
 | `autocaller sequences preview <contact_id>` | Render the four-email sequence for one contact, with their real Yelp quote injected. Read-only. |
 | `autocaller sequences start <contact_id>` | Start the 4-step sequence (one contact at a time, by design). Idempotent — second start returns 409. Sends are gated by `ALLOW_SEQUENCE_SEND=true`. UI: `/sequences` page has the same flow with a forced "I've reviewed all drafts" checkbox before the Start button enables. |

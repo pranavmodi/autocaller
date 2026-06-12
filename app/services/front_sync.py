@@ -10,14 +10,14 @@ import sqlite3
 import time
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
 import httpx
 from dotenv import load_dotenv
-from sqlalchemy import desc, func, select
+from sqlalchemy import desc, func, or_, select
 from sqlalchemy.dialects.postgresql import insert
 
 from app.db import AsyncSessionLocal
@@ -27,10 +27,19 @@ from app.db.models import (
     FrontContactRow,
     FrontFirmActivityRow,
     FrontSyncStateRow,
+    LeadGenBatchItemRow,
+    LeadGenBatchRow,
     LeadGenPolicyVersionRow,
+    PatientRow,
 )
 from app.services.contact_selection import DEFAULT_CONTACT_SELECTION_WEIGHTS, deep_merge_policy
-from app.services.lead_gen_cybernetic import DEFAULT_DAILY_SEND_BUDGET, TARGET_METRIC
+from app.services.lead_gen_cybernetic import (
+    DEFAULT_DAILY_SEND_BUDGET,
+    TARGET_METRIC,
+    ensure_default_policy,
+    get_batch,
+)
+from app.services.sequences.registry import DEFAULT_TEMPLATE_KEY
 
 
 FRONT_ENV_PATH = Path("/root/.openclaw/workspace/secrets/front_precise.env")
@@ -40,6 +49,7 @@ DEFAULT_INBOXES = {
     "inb_rcld": "Records & Images",
     "inb_37vb5": "AR Case Updates",
 }
+FRONT_LAST_RUN_STATE_KEY = "_last_run"
 CONSUMER_DOMAINS = {
     "aol.com",
     "gmail.com",
@@ -59,6 +69,40 @@ EMAIL_RE = re.compile(r"[\w.+%-]+@[\w.-]+\.[A-Za-z]{2,}")
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _iso(value: datetime | None) -> str | None:
+    return value.isoformat() if value else None
+
+
+def _age_hours(value: datetime | None, *, now: datetime | None = None) -> float | None:
+    if value is None:
+        return None
+    now = now or _utcnow()
+    return round(max(0.0, (now - value).total_seconds() / 3600.0), 2)
+
+
+def _day_delta(total: int, last_24h: int, previous_24h: int) -> dict[str, int]:
+    return {
+        "total": int(total or 0),
+        "last_24h": int(last_24h or 0),
+        "previous_24h": int(previous_24h or 0),
+        "delta": int(last_24h or 0) - int(previous_24h or 0),
+    }
+
+
+def _safe_json_loads(value: str | None) -> dict[str, Any]:
+    if not value:
+        return {}
+    try:
+        parsed = json.loads(value)
+        return parsed if isinstance(parsed, dict) else {}
+    except json.JSONDecodeError:
+        return {}
+
+
+def _new_lead_gen_id() -> str:
+    return uuid.uuid4().hex
 
 
 def parse_front_datetime(value: Any) -> datetime | None:
@@ -438,6 +482,46 @@ def _load_pif_domain_map(db_path: Path = MISSION_DB_PATH) -> dict[str, str]:
     return domains
 
 
+async def _firm_names_for_pifs(session, pif_ids: set[str]) -> dict[str, str]:
+    if not pif_ids:
+        return {}
+    patient_ids = [f"pif-{pif_id}" for pif_id in pif_ids] + [f"mc-{pif_id}" for pif_id in pif_ids]
+    rows = (await session.execute(
+        select(PatientRow.patient_id, PatientRow.firm_name, PatientRow.name)
+        .where(PatientRow.patient_id.in_(patient_ids))
+    )).all()
+    names: dict[str, str] = {}
+    for patient_id, firm_name, name in rows:
+        raw = str(patient_id or "")
+        pif_id = raw[4:] if raw.startswith("pif-") else raw[3:] if raw.startswith("mc-") else raw
+        label = (firm_name or name or "").strip()
+        if pif_id and label:
+            names.setdefault(pif_id, label)
+    return names
+
+
+def _activity_to_signal_terms(activity: FrontFirmActivityRow) -> str:
+    return json.dumps(
+        {
+            "domain": activity.domain,
+            "inbox_breakdown": activity.inbox_breakdown or {},
+            "tech_signals": activity.tech_signals or {},
+        },
+        sort_keys=True,
+        default=str,
+    ).lower()
+
+
+def _suppression_reasons(activity: FrontFirmActivityRow) -> list[str]:
+    terms = _activity_to_signal_terms(activity)
+    reasons: list[str] = []
+    if "collection" in terms or "collections" in terms:
+        reasons.append("collections")
+    if "non-payment" in terms or "nonpayment" in terms or "non payment" in terms:
+        reasons.append("non_payment")
+    return reasons
+
+
 async def _refresh_contact_counts(session) -> None:
     rows = (await session.execute(
         select(
@@ -653,8 +737,14 @@ async def ensure_lead_gen_v2_policy(session) -> LeadGenPolicyVersionRow:
 
 
 async def front_status() -> dict[str, Any]:
+    now = _utcnow()
+    since = now - timedelta(days=1)
+    previous_since = now - timedelta(days=2)
     async with AsyncSessionLocal() as session:
         states = (await session.execute(select(FrontSyncStateRow).order_by(FrontSyncStateRow.key.asc()))).scalars().all()
+        visible_states = [state for state in states if state.key != FRONT_LAST_RUN_STATE_KEY]
+        last_run_state = next((state for state in states if state.key == FRONT_LAST_RUN_STATE_KEY), None)
+        last_run = _safe_json_loads(last_run_state.cursor if last_run_state else None)
         contact_count = (await session.execute(select(func.count(FrontContactRow.front_id)))).scalar_one()
         activity_count = (await session.execute(select(func.count(FrontFirmActivityRow.domain)))).scalar_one()
         matched_count = (await session.execute(
@@ -663,30 +753,146 @@ async def front_status() -> dict[str, Any]:
         warm_count = (await session.execute(
             select(func.count(FrontFirmActivityRow.domain)).where(FrontFirmActivityRow.warm_score > 0)
         )).scalar_one()
+        front_firm_contacts = (await session.execute(
+            select(func.count(FirmContactRow.id)).where(
+                (FirmContactRow.source == "front") | FirmContactRow.front_contact_id.isnot(None)
+            )
+        )).scalar_one()
         latest_contact = (await session.execute(
             select(FrontContactRow).order_by(desc(FrontContactRow.first_synced_at)).limit(1)
         )).scalar_one_or_none()
+        contact_last = (await session.execute(
+            select(func.count(FrontContactRow.front_id)).where(FrontContactRow.first_synced_at >= since)
+        )).scalar_one()
+        contact_prev = (await session.execute(
+            select(func.count(FrontContactRow.front_id))
+            .where(FrontContactRow.first_synced_at >= previous_since)
+            .where(FrontContactRow.first_synced_at < since)
+        )).scalar_one()
+        domains_last = (await session.execute(
+            select(func.count(FrontFirmActivityRow.domain)).where(FrontFirmActivityRow.last_seen_at >= since)
+        )).scalar_one()
+        domains_prev = (await session.execute(
+            select(func.count(FrontFirmActivityRow.domain))
+            .where(FrontFirmActivityRow.last_seen_at >= previous_since)
+            .where(FrontFirmActivityRow.last_seen_at < since)
+        )).scalar_one()
+        matched_last = (await session.execute(
+            select(func.count(FrontFirmActivityRow.domain))
+            .where(FrontFirmActivityRow.pif_id.isnot(None))
+            .where(FrontFirmActivityRow.last_seen_at >= since)
+        )).scalar_one()
+        matched_prev = (await session.execute(
+            select(func.count(FrontFirmActivityRow.domain))
+            .where(FrontFirmActivityRow.pif_id.isnot(None))
+            .where(FrontFirmActivityRow.last_seen_at >= previous_since)
+            .where(FrontFirmActivityRow.last_seen_at < since)
+        )).scalar_one()
+        firm_contacts_last = (await session.execute(
+            select(func.count(FirmContactRow.id))
+            .where((FirmContactRow.source == "front") | FirmContactRow.front_contact_id.isnot(None))
+            .where(FirmContactRow.created_at >= since)
+        )).scalar_one()
+        firm_contacts_prev = (await session.execute(
+            select(func.count(FirmContactRow.id))
+            .where((FirmContactRow.source == "front") | FirmContactRow.front_contact_id.isnot(None))
+            .where(FirmContactRow.created_at >= previous_since)
+            .where(FirmContactRow.created_at < since)
+        )).scalar_one()
+        warm_last = (await session.execute(
+            select(func.count(FrontFirmActivityRow.domain))
+            .where(FrontFirmActivityRow.warm_score > 0)
+            .where(FrontFirmActivityRow.last_seen_at >= since)
+        )).scalar_one()
+        warm_prev = (await session.execute(
+            select(func.count(FrontFirmActivityRow.domain))
+            .where(FrontFirmActivityRow.warm_score > 0)
+            .where(FrontFirmActivityRow.last_seen_at >= previous_since)
+            .where(FrontFirmActivityRow.last_seen_at < since)
+        )).scalar_one()
+        timing_rows = (await session.execute(
+            select(FrontFirmActivityRow)
+            .where(
+                or_(
+                    FrontFirmActivityRow.last_referral_at >= now - timedelta(days=7),
+                    FrontFirmActivityRow.last_seen_at >= now - timedelta(days=30),
+                )
+            )
+            .order_by(desc(FrontFirmActivityRow.last_seen_at))
+            .limit(60)
+        )).scalars().all()
+        firm_names = await _firm_names_for_pifs(session, {row.pif_id for row in timing_rows if row.pif_id})
+    latest_state_at = max((state.updated_at for state in visible_states if state.updated_at), default=None)
+    latest_watermark = max((state.watermark for state in visible_states if state.watermark), default=None)
+    last_run_at = parse_front_datetime(last_run.get("finished_at")) or latest_state_at
+    interval_seconds = int(os.getenv("FRONT_SYNC_INTERVAL_SECONDS", "86400") or "86400")
+    next_daily_run_at = last_run_at + timedelta(seconds=interval_seconds) if last_run_at else None
+    state_payloads = [
+        {
+            "key": row.key,
+            "cursor": row.cursor,
+            "watermark": _iso(row.watermark),
+            "updated_at": _iso(row.updated_at),
+            "watermark_age_hours": _age_hours(row.watermark, now=now),
+            "updated_age_hours": _age_hours(row.updated_at, now=now),
+        }
+        for row in visible_states
+    ]
+    stale = last_run_at is None or (now - last_run_at) > timedelta(hours=36)
     return {
         "counts": {
             "front_contacts": int(contact_count or 0),
             "front_firm_activity": int(activity_count or 0),
             "matched_domains": int(matched_count or 0),
             "warm_domains": int(warm_count or 0),
+            "front_firm_contacts": int(front_firm_contacts or 0),
         },
-        "states": [
-            {
-                "key": row.key,
-                "cursor": row.cursor,
-                "watermark": row.watermark.isoformat() if row.watermark else None,
-                "updated_at": row.updated_at.isoformat() if row.updated_at else None,
-            }
-            for row in states
+        "table_counts": {
+            "front_contacts": int(contact_count or 0),
+            "front_firm_activity": int(activity_count or 0),
+            "front_sync_state": len(visible_states),
+            "front_firm_contacts": int(front_firm_contacts or 0),
+        },
+        "funnel": [
+            {"key": "contacts", "label": "Contacts", **_day_delta(contact_count, contact_last, contact_prev)},
+            {"key": "domains", "label": "Domains", **_day_delta(activity_count, domains_last, domains_prev)},
+            {"key": "matched_firms", "label": "Matched firms", **_day_delta(matched_count, matched_last, matched_prev)},
+            {"key": "firm_contacts_added", "label": "Firm contacts added", **_day_delta(front_firm_contacts, firm_contacts_last, firm_contacts_prev)},
+            {"key": "warm_list_size", "label": "Warm-list size", **_day_delta(warm_count, warm_last, warm_prev)},
         ],
-        "latest_contact_synced_at": latest_contact.first_synced_at.isoformat() if latest_contact else None,
+        "states": state_payloads,
+        "sync_health": {
+            "last_run_at": _iso(last_run_at),
+            "last_run_age_hours": _age_hours(last_run_at, now=now),
+            "calls_used": last_run.get("calls_used"),
+            "call_budget": int(last_run.get("call_budget") or os.getenv("FRONT_SYNC_MAX_CALLS", "300") or 300),
+            "latest_watermark": _iso(latest_watermark),
+            "latest_watermark_age_hours": _age_hours(latest_watermark, now=now),
+            "next_daily_run_at": _iso(next_daily_run_at),
+            "last_error": last_run.get("error"),
+            "stale": stale,
+            "stale_after_hours": 36,
+        },
+        "last_run": last_run,
+        "latest_contact_synced_at": _iso(latest_contact.first_synced_at if latest_contact else None),
+        "timing_feed": [
+            {
+                "domain": row.domain,
+                "pif_id": row.pif_id,
+                "firm_name": firm_names.get(row.pif_id or "", row.domain),
+                "event_at": _iso(row.last_referral_at or row.last_seen_at),
+                "last_referral_at": _iso(row.last_referral_at),
+                "last_seen_at": _iso(row.last_seen_at),
+                "kind": "weekly_referrer" if row.last_referral_at and row.last_referral_at >= now - timedelta(days=7) else "onboarding_moment",
+                "contact_count": row.contact_count,
+                "warm_score": row.warm_score,
+            }
+            for row in timing_rows
+        ],
     }
 
 
-async def list_front_contacts(*, firm: str = "", domain: str = "", limit: int = 50) -> list[dict[str, Any]]:
+async def list_front_contacts(*, firm: str = "", domain: str = "", q: str = "", limit: int = 50) -> list[dict[str, Any]]:
     async with AsyncSessionLocal() as session:
         stmt = select(FrontContactRow, FrontFirmActivityRow).join(
             FrontFirmActivityRow,
@@ -697,6 +903,14 @@ async def list_front_contacts(*, firm: str = "", domain: str = "", limit: int = 
             stmt = stmt.where(FrontContactRow.domain == normalize_domain(domain))
         if firm:
             stmt = stmt.where(FrontFirmActivityRow.pif_id == firm)
+        if q:
+            like = f"%{q.strip()}%"
+            stmt = stmt.where(or_(
+                FrontContactRow.name.ilike(like),
+                FrontContactRow.primary_email.ilike(like),
+                FrontContactRow.domain.ilike(like),
+                FrontFirmActivityRow.pif_id.ilike(like),
+            ))
         stmt = stmt.order_by(desc(FrontContactRow.front_updated_at)).limit(max(1, min(limit, 500)))
         rows = (await session.execute(stmt)).all()
     return [
@@ -705,12 +919,70 @@ async def list_front_contacts(*, firm: str = "", domain: str = "", limit: int = 
             "name": contact.name,
             "primary_email": contact.primary_email,
             "domain": contact.domain,
-            "front_updated_at": contact.front_updated_at.isoformat() if contact.front_updated_at else None,
+            "front_updated_at": _iso(contact.front_updated_at),
             "pif_id": activity.pif_id if activity else None,
             "warm_score": activity.warm_score if activity else 0,
             "tech_signals": activity.tech_signals if activity else {},
+            "last_seen_at": _iso(activity.last_seen_at) if activity else None,
+            "last_referral_at": _iso(activity.last_referral_at) if activity else None,
         }
         for contact, activity in rows
+    ]
+
+
+async def front_warm_firms(*, limit: int = 20) -> list[dict[str, Any]]:
+    limit = max(1, min(limit, 100))
+    async with AsyncSessionLocal() as session:
+        activities = (await session.execute(
+            select(FrontFirmActivityRow)
+            .where(FrontFirmActivityRow.pif_id.isnot(None))
+            .where(FrontFirmActivityRow.warm_score > 0)
+            .order_by(desc(FrontFirmActivityRow.warm_score), desc(FrontFirmActivityRow.last_seen_at))
+            .limit(limit)
+        )).scalars().all()
+        pif_ids = {row.pif_id for row in activities if row.pif_id}
+        firm_names = await _firm_names_for_pifs(session, pif_ids)
+        contact_rows = (await session.execute(
+            select(FirmContactRow)
+            .where(FirmContactRow.pif_id.in_(pif_ids) if pif_ids else False)
+            .where(FirmContactRow.email.isnot(None))
+            .order_by(FirmContactRow.pif_id.asc(), FirmContactRow.full_name.asc())
+        )).scalars().all() if pif_ids else []
+        emailed = set((await session.execute(
+            select(EmailLogRow.recipient_email)
+            .where(EmailLogRow.recipient_email.in_([c.email for c in contact_rows if c.email]))
+        )).scalars().all()) if contact_rows else set()
+    contacts_by_pif: dict[str, list[dict[str, Any]]] = {}
+    for contact in contact_rows:
+        email = (contact.email or "").strip().lower()
+        if not is_human_named_contact(contact.full_name, email):
+            continue
+        contacts_by_pif.setdefault(contact.pif_id, []).append({
+            "id": contact.id,
+            "name": contact.full_name,
+            "email": email,
+            "title": contact.title,
+            "emailed_before": email in emailed,
+            "front_last_seen": _iso(contact.front_last_seen),
+            "source": contact.source,
+        })
+    return [
+        {
+            "domain": activity.domain,
+            "firm_name": firm_names.get(activity.pif_id or "", activity.domain),
+            "pif_id": activity.pif_id,
+            "pif_match": bool(activity.pif_id),
+            "warm_score": activity.warm_score,
+            "last_seen_at": _iso(activity.last_seen_at),
+            "last_referral_at": _iso(activity.last_referral_at),
+            "last_records_at": _iso(activity.last_records_at),
+            "contact_count": activity.contact_count,
+            "named_contacts": contacts_by_pif.get(activity.pif_id or "", []),
+            "eligible_contact_count": sum(1 for c in contacts_by_pif.get(activity.pif_id or "", []) if not c["emailed_before"]),
+            "tech_signals": activity.tech_signals or {},
+            "inbox_breakdown": activity.inbox_breakdown or {},
+        }
+        for activity in activities
     ]
 
 
@@ -748,7 +1020,210 @@ async def warm_list(*, limit: int = 20) -> list[dict[str, Any]]:
     return out[: max(1, min(limit, 100))]
 
 
+async def front_signals() -> dict[str, Any]:
+    async with AsyncSessionLocal() as session:
+        activities = (await session.execute(select(FrontFirmActivityRow))).scalars().all()
+    tech_counts: dict[str, dict[str, int]] = {}
+    inbox_mix: dict[str, dict[str, Any]] = {}
+    suppress_flagged: list[dict[str, Any]] = []
+    for activity in activities:
+        for key, value in (activity.tech_signals or {}).items():
+            if value in (None, "", [], {}):
+                continue
+            bucket = tech_counts.setdefault(str(key), {})
+            label = json.dumps(value, sort_keys=True) if isinstance(value, (dict, list)) else str(value)
+            bucket[label] = bucket.get(label, 0) + 1
+        for inbox_id, stats_raw in (activity.inbox_breakdown or {}).items():
+            stats = stats_raw if isinstance(stats_raw, dict) else {}
+            label = str(stats.get("name") or inbox_id)
+            row = inbox_mix.setdefault(str(inbox_id), {
+                "inbox_id": str(inbox_id),
+                "name": label,
+                "domains": 0,
+                "conversation_count": 0,
+                "last_seen_at": None,
+            })
+            row["domains"] += 1
+            row["conversation_count"] += int(stats.get("conversation_count") or 0)
+            last_seen = parse_front_datetime(stats.get("last_seen_at"))
+            existing = parse_front_datetime(row.get("last_seen_at"))
+            if last_seen and (existing is None or last_seen > existing):
+                row["last_seen_at"] = last_seen.isoformat()
+        reasons = _suppression_reasons(activity)
+        if reasons:
+            suppress_flagged.append({
+                "domain": activity.domain,
+                "pif_id": activity.pif_id,
+                "reasons": reasons,
+                "warm_score": activity.warm_score,
+                "last_seen_at": _iso(activity.last_seen_at),
+            })
+    return {
+        "tech_stack_counts": [
+            {"signal": key, "values": [{"value": value, "count": count} for value, count in sorted(values.items())]}
+            for key, values in sorted(tech_counts.items())
+        ],
+        "inbox_activity_mix": sorted(inbox_mix.values(), key=lambda row: row["conversation_count"], reverse=True),
+        "suppress_flagged_firms": sorted(suppress_flagged, key=lambda row: (row["reasons"], row["domain"])),
+    }
+
+
+def build_front_warm_reason_json(
+    *,
+    activity: FrontFirmActivityRow,
+    contact: FirmContactRow,
+    firm_name: str,
+    policy_version: str,
+) -> dict[str, Any]:
+    return {
+        "basis": "front-warm",
+        "reason": (
+            f"Front-warm firm selected from synced relationship signals: "
+            f"warm_score={activity.warm_score}, contact_count={activity.contact_count}."
+        ),
+        "contact_source": contact.source or "front",
+        "policy_version": policy_version,
+        "action_type": "first_touch",
+        "priority_bucket": "front_warm",
+        "source_type": "front_warm_domain",
+        "source_id": activity.domain,
+        "signals": [
+            "front_warm_score",
+            "front_contact",
+            "front_activity",
+            *(
+                ["recent_referral"] if activity.last_referral_at else []
+            ),
+        ],
+        "next_operator_action": "review_and_approve",
+        "selection_policy_version": policy_version,
+        "score_breakdown": {
+            "warm_score": int(activity.warm_score or 0),
+            "contact_count": int(activity.contact_count or 0),
+            "last_seen_at": _iso(activity.last_seen_at),
+            "last_referral_at": _iso(activity.last_referral_at),
+            "tech_signals": activity.tech_signals or {},
+        },
+        "selection_features": {
+            "domain": activity.domain,
+            "firm_name": firm_name,
+            "pif_id": activity.pif_id,
+            "front_contact_id": contact.front_contact_id,
+            "front_last_seen": _iso(contact.front_last_seen),
+            "inbox_breakdown": activity.inbox_breakdown or {},
+        },
+        "suppressions": [],
+    }
+
+
+async def create_front_warm_batch(
+    *,
+    domains: list[str],
+    name: str | None = None,
+    template_key: str = DEFAULT_TEMPLATE_KEY,
+    created_by: str = "operator",
+) -> dict[str, Any]:
+    clean_domains = list(dict.fromkeys(filter(None, (normalize_domain(domain) for domain in domains))))
+    if not clean_domains:
+        raise ValueError("domains_required")
+    policy = await ensure_default_policy()
+    batch_id = _new_lead_gen_id()
+    async with AsyncSessionLocal() as session:
+        activities = (await session.execute(
+            select(FrontFirmActivityRow)
+            .where(FrontFirmActivityRow.domain.in_(clean_domains))
+            .where(FrontFirmActivityRow.pif_id.isnot(None))
+            .order_by(desc(FrontFirmActivityRow.warm_score), desc(FrontFirmActivityRow.last_seen_at))
+        )).scalars().all()
+        if not activities:
+            raise ValueError("no_matched_front_warm_domains")
+        pif_ids = {row.pif_id for row in activities if row.pif_id}
+        firm_names = await _firm_names_for_pifs(session, pif_ids)
+        contacts = (await session.execute(
+            select(FirmContactRow)
+            .where(FirmContactRow.pif_id.in_(pif_ids))
+            .where(FirmContactRow.email.isnot(None))
+            .order_by(FirmContactRow.pif_id.asc(), FirmContactRow.full_name.asc())
+        )).scalars().all()
+        emailed = {
+            (email or "").strip().lower()
+            for email in (await session.execute(
+                select(EmailLogRow.recipient_email)
+                .where(EmailLogRow.recipient_email.in_([c.email for c in contacts if c.email]))
+            )).scalars().all()
+        }
+        contacts_by_pif: dict[str, list[FirmContactRow]] = {}
+        for contact in contacts:
+            email = (contact.email or "").strip().lower()
+            if not is_human_named_contact(contact.full_name, email):
+                continue
+            if email in emailed:
+                continue
+            contacts_by_pif.setdefault(contact.pif_id, []).append(contact)
+        selected: list[tuple[FrontFirmActivityRow, FirmContactRow, str]] = []
+        for activity in activities:
+            pif_contacts = contacts_by_pif.get(activity.pif_id or "", [])
+            if not pif_contacts:
+                continue
+            firm_name = firm_names.get(activity.pif_id or "", activity.domain)
+            selected.append((activity, pif_contacts[0], firm_name))
+        if not selected:
+            raise ValueError("no_eligible_named_contacts")
+        batch = LeadGenBatchRow(
+            id=batch_id,
+            name=name or f"Front warm batch {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}",
+            target_metric=TARGET_METRIC,
+            template_key=template_key,
+            policy_version=policy.version,
+            status="recommended",
+            counts_json={
+                "basis": "front-warm",
+                "requested_domains": len(clean_domains),
+                "matched_domains": len(activities),
+                "items": len(selected),
+            },
+            created_by=created_by,
+        )
+        session.add(batch)
+        await session.flush()
+        for activity, contact, firm_name in selected:
+            session.add(LeadGenBatchItemRow(
+                id=_new_lead_gen_id(),
+                batch_id=batch_id,
+                contact_id=contact.id,
+                pif_id=contact.pif_id,
+                firm_name=firm_name,
+                contact_name=contact.full_name or "",
+                contact_email=(contact.email or "").strip().lower(),
+                contact_title=contact.title or "",
+                persona="front_warm_contact",
+                template_key=template_key,
+                score=int(activity.warm_score or 0),
+                reason_json=build_front_warm_reason_json(
+                    activity=activity,
+                    contact=contact,
+                    firm_name=firm_name,
+                    policy_version=policy.version,
+                ),
+                approval_status="pending",
+            ))
+        await session.commit()
+    batch_data = await get_batch(batch_id)
+    batch_data["link"] = f"/lead-gen?batch={batch_id}"
+    return batch_data
+
+
+async def _save_front_last_run(payload: dict[str, Any]) -> None:
+    async with AsyncSessionLocal() as session:
+        row = await _get_state(session, FRONT_LAST_RUN_STATE_KEY)
+        row.cursor = json.dumps(payload, sort_keys=True, default=str)
+        row.watermark = parse_front_datetime(payload.get("finished_at") or payload.get("started_at"))
+        row.updated_at = _utcnow()
+        await session.commit()
+
+
 async def run_front_sync(*, max_calls: int = 300, full: bool = False) -> dict[str, Any]:
+    started_at = _utcnow()
     budget = FrontRateBudget(max_calls=max(1, max_calls))
     contacts = await sync_contacts(max_calls=max_calls, full=full, budget=budget)
     activity = await sync_inbox_activity(max_calls=max_calls, full=full, budget=budget) if not budget.exhausted() else {
@@ -760,6 +1235,18 @@ async def run_front_sync(*, max_calls: int = 300, full: bool = False) -> dict[st
     }
     resolve = await resolve_firms()
     scores = await refresh_warm_scores()
+    await _save_front_last_run({
+        "started_at": started_at.isoformat(),
+        "finished_at": _utcnow().isoformat(),
+        "calls_used": budget.calls_made,
+        "call_budget": budget.max_calls,
+        "full": full,
+        "contacts": contacts,
+        "activity": activity,
+        "resolve": resolve,
+        "scores": scores,
+        "error": None,
+    })
     return {
         "contacts": contacts,
         "activity": activity,
@@ -775,6 +1262,13 @@ async def front_sync_loop(*, interval_seconds: int = 86400, max_calls: int = 300
             await run_front_sync(max_calls=max_calls, full=False)
         except asyncio.CancelledError:
             raise
-        except Exception:
-            pass
+        except Exception as e:
+            await _save_front_last_run({
+                "started_at": _utcnow().isoformat(),
+                "finished_at": _utcnow().isoformat(),
+                "calls_used": None,
+                "call_budget": max_calls,
+                "full": False,
+                "error": f"{type(e).__name__}: {str(e)[:500]}",
+            })
         await asyncio.sleep(interval_seconds)
