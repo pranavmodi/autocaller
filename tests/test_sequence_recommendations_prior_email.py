@@ -139,3 +139,26 @@ async def test_mapped_persona_column_makes_titleless_contacts_eligible(monkeypat
     assert by_id["c-records"]["score"] > 0
     assert "c-lowconf" not in by_id
     assert by_id["c-founder"]["persona"] == "founder_owner"
+
+
+@pytest.mark.asyncio
+async def test_mapped_persona_recs_carry_no_missing_persona_suppression(monkeypatch):
+    """The send gate refuses items with stored suppressions; mapped-persona
+    recs must not carry the vestigial missing_persona marker."""
+    def _c(cid, pif, email, name, title, persona=None, conf=None):
+        return SimpleNamespace(
+            id=cid, pif_id=pif, email=email, full_name=name, title=title,
+            source="front", persona=persona, persona_confidence=conf,
+        )
+
+    contacts = [_c("c-records", "pif-r", "maria@firmr.com", "Maria Lopez", "", "records", 0.9)]
+    results = [
+        [None], [], [], [], [], [], [], [], [], [],
+        contacts,
+        [("pif-pif-r", "Firm R", "CA")],
+        [],
+    ]
+    monkeypatch.setattr(sr, "AsyncSessionLocal", lambda: _FakeSession(results))
+    out = await sr.recommend_sequence_contacts(template_key="possible_minds_dynamic", limit=10)
+    rec = {r["contact_id"]: r for r in out["recommended"]}["c-records"]
+    assert "missing_persona" not in (rec["suppressions"] or [])

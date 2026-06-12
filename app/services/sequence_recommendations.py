@@ -312,14 +312,17 @@ async def recommend_sequence_contacts(
             policy_weights=policy_weights,
         )
         score = scored.score
-        if "missing_persona" in scored.suppressions or scored.score <= 0:
+        suppressions = list(scored.suppressions or [])
+        if "missing_persona" in suppressions or scored.score <= 0:
             if not has_mapped_persona:
                 counts["suppressed_non_persona"] += 1
                 continue
             # The title couldn't be classified but the persona column knows
             # this contact: lift the missing_persona risk penalty (-1000 by
-            # default) so the mapped persona competes on its real signals.
+            # default) AND drop the marker — the send gate refuses any item
+            # whose stored suppressions are non-empty.
             score = max(10, scored.score + 1000)
+            suppressions = [s for s in suppressions if s != "missing_persona"]
         persona_key = (
             mapped_persona
             if has_mapped_persona
@@ -340,7 +343,7 @@ async def recommend_sequence_contacts(
             score_breakdown=scored.score_breakdown,
             selection_features=scored.features,
             selection_signals=scored.signals,
-            suppressions=scored.suppressions,
+            suppressions=suppressions,
             policy_version=policy_version,
         )
         current = best_by_firm.get(c.pif_id)
