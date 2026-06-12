@@ -144,6 +144,9 @@ Every command accepts `--help`. Exit code is `0` on success, `1` on any error
 | `front status [--json]` | Show Front sync health, cursors, watermarks, table counts, funnel counts, day-over-day deltas, and timing feed data used by `/front`. |
 | `front contacts [--firm=<pif_id> \| --domain=<domain> --q=<text>] [--limit=N] [--json]` | List synced Front contacts with matched pif_id, masked email display, warm score, and tech signals. |
 | `front warm-batch --domains a.com,b.com [--name=...] [--json]` | Create a recommended lead-gen batch directly from selected Front-warm domains. Items use `reason_json.basis = "front-warm"` and stay pending for review in `/lead-gen`. |
+| `front competitors rebuild [--json]` | Recompute local firm-vs-firm competition features and edges from cached Mission Control SQLite plus `front_firm_activity`. No Front API calls and no LLM calls. |
+| `front competitors summary [--json]` | Show competitor graph coverage: firms with features/metros, edge count, tier distribution, top metro counts, and last rebuild time. |
+| `front competitors show <domain-or-name> [--limit=N] [--json]` | Show who competes with one firm, including score, neighbor name/domain/metro, and one-line evidence. |
 | `sequences preview <contact_id>` | Render the four (or three, if no Yelp quote) email drafts for one contact against their actual personalization data. Read-only. |
 | `sequences start <contact_id>` | Start the 4-step sequence for one contact. Idempotent — second start returns 409 with current state. Sends gated by `ALLOW_SEQUENCE_SEND=true`. |
 | `sequences list [--status=active\|paused\|completed]` | List sequence rows + which step each is on. |
@@ -598,6 +601,21 @@ Review the named contacts before creating a lead-gen batch. `front warm-batch`
 does not call Front and does not send email; it writes a normal recommended
 lead-gen batch with pending items, `reason_json.basis = "front-warm"`, and a
 link back to `/lead-gen?batch=<id>`.
+
+### Recipe: "who competes with firm X"
+Use this when a warm-list firm needs local PI competitor context. The rebuild
+uses only local Mission Control cache tables and autocaller Postgres activity;
+it does not call Front and does not call an LLM.
+
+```bash
+bin/autocaller front competitors rebuild
+bin/autocaller front competitors summary
+bin/autocaller front competitors show examplelaw.com --limit 10
+```
+
+The score combines local metro overlap, deterministic case-mix tags from cached
+conversation text, lien/bill amount tier proximity, and shared Front activity.
+Evidence dollar values are lien or bill amounts, not settlement values.
 
 ### Recipe: "something's wrong — triage"
 ```bash

@@ -18,10 +18,13 @@ import {
 } from "lucide-react";
 import {
   createFrontWarmBatch,
+  getFrontCompetitorSummary,
+  getFrontCompetitors,
   getFrontSignals,
   getFrontStatus,
   getFrontWarmList,
   type FrontWarmFirm,
+  type FrontCompetitorSummary,
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -47,6 +50,11 @@ export default function FrontPage() {
   const signals = useQuery({
     queryKey: ["front-signals"],
     queryFn: getFrontSignals,
+    refetchInterval: 60_000,
+  });
+  const competitorSummary = useQuery({
+    queryKey: ["front-competitor-summary"],
+    queryFn: getFrontCompetitorSummary,
     refetchInterval: 60_000,
   });
 
@@ -116,6 +124,7 @@ export default function FrontPage() {
           status.refetch();
           warmList.refetch();
           signals.refetch();
+          competitorSummary.refetch();
         }}
       />
 
@@ -144,10 +153,12 @@ export default function FrontPage() {
             rows={status.data?.timing_feed ?? []}
           />
           <SignalsZone
-            loading={signals.isLoading}
-            error={signals.isError}
-            data={signals.data}
-          />
+          loading={signals.isLoading}
+          error={signals.isError}
+          data={signals.data}
+          competitorSummary={competitorSummary.data}
+          competitorSummaryLoading={competitorSummary.isLoading}
+        />
         </div>
       </div>
     </div>
@@ -361,21 +372,30 @@ function WarmListZone({
                     <tr className="bg-neutral-50/70">
                       <td />
                       <td colSpan={6} className="px-4 py-3">
-                        <div className="grid gap-2 md:grid-cols-2">
-                          {row.named_contacts.map((contact) => (
-                            <div key={contact.id} className="rounded-md border border-neutral-200 bg-white px-3 py-2">
-                              <div className="flex min-w-0 items-center gap-2">
-                                <span className="truncate text-sm font-medium text-neutral-900">{contact.name}</span>
-                                {contact.emailed_before && (
-                                  <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-800">emailed</span>
-                                )}
-                              </div>
-                              <div className="mt-0.5 truncate text-xs text-neutral-500">{contact.title || "No title"} · {contact.email}</div>
+                        <div className="grid gap-3 lg:grid-cols-2">
+                          <div>
+                            <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-500">Contacts</div>
+                            <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-1">
+                              {row.named_contacts.map((contact) => (
+                                <div key={contact.id} className="rounded-md border border-neutral-200 bg-white px-3 py-2">
+                                  <div className="flex min-w-0 items-center gap-2">
+                                    <span className="truncate text-sm font-medium text-neutral-900">{contact.name}</span>
+                                    {contact.emailed_before && (
+                                      <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-800">emailed</span>
+                                    )}
+                                  </div>
+                                  <div className="mt-0.5 truncate text-xs text-neutral-500">{contact.title || "No title"} · {contact.email}</div>
+                                </div>
+                              ))}
+                              {!row.named_contacts.length && (
+                                <div className="text-sm text-neutral-500">No named contacts.</div>
+                              )}
                             </div>
-                          ))}
-                          {!row.named_contacts.length && (
-                            <div className="text-sm text-neutral-500">No named contacts.</div>
-                          )}
+                          </div>
+                          <div>
+                            <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-500">Competes with</div>
+                            <CompetitorList row={row} />
+                          </div>
                         </div>
                       </td>
                     </tr>
@@ -389,6 +409,45 @@ function WarmListZone({
       {loading && <div className="px-4 py-8 text-sm text-neutral-500">Loading warm list...</div>}
       {error && <div className="px-4 py-8 text-sm text-red-700">Could not load warm list.</div>}
     </section>
+  );
+}
+
+function CompetitorList({ row }: { row: FrontWarmFirm }) {
+  const competitors = useQuery({
+    queryKey: ["front-competitors", row.pif_id || row.domain],
+    queryFn: () =>
+      getFrontCompetitors({
+        domain: row.pif_id ? undefined : row.domain,
+        pif_id: row.pif_id || undefined,
+        limit: 5,
+      }),
+  });
+
+  if (competitors.isLoading) {
+    return <div className="text-sm text-neutral-500">Loading competitors...</div>;
+  }
+  if (competitors.isError) {
+    return <div className="text-sm text-red-700">Could not load competitors.</div>;
+  }
+  const rows = competitors.data?.competitors ?? [];
+  if (!rows.length) {
+    return <div className="text-sm text-neutral-500">No graph neighbors yet.</div>;
+  }
+  return (
+    <div className="space-y-2">
+      {rows.map((competitor) => (
+        <div key={competitor.pif_id} className="rounded-md border border-neutral-200 bg-white px-3 py-2">
+          <div className="flex min-w-0 items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="truncate text-sm font-medium text-neutral-900">{competitor.firm_name}</div>
+              <div className="truncate text-xs text-neutral-500">{competitor.domain || competitor.metro || competitor.pif_id}</div>
+            </div>
+            <div className="shrink-0 text-sm font-semibold text-neutral-900">{Math.round(competitor.score * 100)}</div>
+          </div>
+          <div className="mt-1 line-clamp-2 text-xs text-neutral-500">{competitor.evidence?.why || "Shared metro and case profile."}</div>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -443,10 +502,14 @@ function SignalsZone({
   loading,
   error,
   data,
+  competitorSummary,
+  competitorSummaryLoading,
 }: {
   loading: boolean;
   error: boolean;
   data: Awaited<ReturnType<typeof getFrontSignals>> | undefined;
+  competitorSummary: FrontCompetitorSummary | undefined;
+  competitorSummaryLoading: boolean;
 }) {
   return (
     <section className="rounded-lg border border-neutral-200 bg-white p-4">
@@ -460,6 +523,17 @@ function SignalsZone({
         <div className="text-sm text-red-700">Could not load signals.</div>
       ) : (
         <div className="space-y-4">
+          <div>
+            <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-500">Competitor graph</div>
+            <div className="rounded-md border border-neutral-200 px-3 py-2">
+              <div className="text-sm font-medium text-neutral-900">
+                {competitorSummaryLoading ? "Loading..." : `${(competitorSummary?.firms_with_metro ?? 0).toLocaleString()} firms / ${(competitorSummary?.edge_count ?? 0).toLocaleString()} edges`}
+              </div>
+              <div className="mt-1 truncate text-xs text-neutral-500">
+                {competitorSummary?.last_computed_at ? `rebuilt ${formatDate(competitorSummary.last_computed_at)}` : "no rebuild yet"}
+              </div>
+            </div>
+          </div>
           <div>
             <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-500">Tech stack</div>
             <div className="space-y-2">

@@ -47,6 +47,7 @@ email_app = typer.Typer(help="Outbound email — config check + manual sends (te
 comms_app = typer.Typer(help="Outbound communications dashboard — calls, voicemails, SMS, emails (read-only).", no_args_is_help=True)
 contacts_app = typer.Typer(help="Per-firm contact roster (backfill from PIF Stats + patients).", no_args_is_help=True)
 front_app = typer.Typer(help="Front read-only enrichment sync and warm lead signals.", no_args_is_help=True)
+front_competitors_app = typer.Typer(help="Local firm-vs-firm PI competition graph.", no_args_is_help=True)
 sequences_app = typer.Typer(help="Email sequences — preview, start, and recommend contacts.", no_args_is_help=True)
 lead_gen_app = typer.Typer(help="Cybernetic lead-generation loop — batches, feedback, learning.", no_args_is_help=True)
 lead_gen_observations_app = typer.Typer(
@@ -66,6 +67,7 @@ outreach_audience_app = typer.Typer(help="Build a campaign's recipient list from
 outreach_app.add_typer(outreach_campaigns_app, name="campaigns")
 outreach_app.add_typer(outreach_audience_app, name="audience")
 lead_gen_app.add_typer(lead_gen_observations_app, name="observations")
+front_app.add_typer(front_competitors_app, name="competitors")
 
 app.add_typer(leads_app, name="leads")
 app.add_typer(calls_app, name="calls")
@@ -3128,6 +3130,86 @@ def front_warm_batch_cmd(
             str(item.get("firm_name") or ""),
             str(item.get("contact_name") or ""),
             _mask_email(item.get("contact_email")),
+        )
+    console.print(table)
+
+
+@front_competitors_app.command("rebuild")
+def front_competitors_rebuild_cmd(
+    json_output: bool = typer.Option(False, "--json", help="Print raw JSON."),
+):
+    """Rebuild the local firm-vs-firm competition graph from cached data."""
+    from app.services.competitor_graph import rebuild_competitor_graph
+
+    data = _run(rebuild_competitor_graph())
+    if json_output:
+        console.print_json(data=data)
+        return
+    console.print(
+        f"features={data.get('firms_with_features')} with_metro={data.get('firms_with_metro')} "
+        f"with_case_mix={data.get('firms_with_case_mix')} edges={data.get('edge_count')} "
+        f"client_switching_hits={data.get('client_switching_hit_count')} duration={data.get('duration_seconds')}s"
+    )
+
+
+@front_competitors_app.command("summary")
+def front_competitors_summary_cmd(
+    json_output: bool = typer.Option(False, "--json", help="Print raw JSON."),
+):
+    """Show competitor graph coverage, edge count, and tier distribution."""
+    from app.services.competitor_graph import competitor_summary
+
+    data = _run(competitor_summary())
+    if json_output:
+        console.print_json(data=data)
+        return
+    console.print(
+        f"features={data.get('firms_with_features')} with_metro={data.get('firms_with_metro')} "
+        f"edges={data.get('edge_count')} last={data.get('last_computed_at') or 'never'}"
+    )
+    table = Table(title="Competitor graph metros")
+    table.add_column("metro", overflow="fold")
+    table.add_column("firms", justify="right")
+    for row in (data.get("metro_counts") or [])[:12]:
+        table.add_row(str(row.get("metro") or ""), str(row.get("count") or 0))
+    console.print(table)
+    console.print(f"tiers={json.dumps(data.get('tier_distribution') or {}, sort_keys=True)}")
+
+
+@front_competitors_app.command("show")
+def front_competitors_show_cmd(
+    identifier: str = typer.Argument(..., help="Firm domain, PIF id, or firm-name fragment."),
+    limit: int = typer.Option(10, "--limit", "-n", min=1, max=50),
+    json_output: bool = typer.Option(False, "--json", help="Print raw JSON."),
+):
+    """Show who competes with one firm."""
+    from app.services.competitor_graph import get_competitors
+    from app.services.front_sync import normalize_domain
+
+    domain = normalize_domain(identifier) if "." in identifier else ""
+    data = _run(get_competitors(domain=domain, pif_id=identifier if not domain else "", q=identifier, limit=limit))
+    if json_output:
+        console.print_json(data=data)
+        return
+    firm = data.get("firm")
+    if not firm:
+        console.print(f"[red]No competitor graph feature found for {identifier}[/red]")
+        raise typer.Exit(code=1)
+    console.print(
+        f"{firm.get('firm_name')} ({firm.get('domain') or firm.get('pif_id')}) "
+        f"metro={firm.get('metro') or 'unknown'} tier={firm.get('value_tier') or 'unknown'}"
+    )
+    table = Table(title="Competes with")
+    for col in ["score", "firm", "domain", "metro", "why"]:
+        table.add_column(col, overflow="fold")
+    for row in data.get("competitors") or []:
+        evidence = row.get("evidence") or {}
+        table.add_row(
+            f"{float(row.get('score') or 0):.2f}",
+            str(row.get("firm_name") or ""),
+            str(row.get("domain") or ""),
+            str(row.get("metro") or ""),
+            str(evidence.get("why") or ""),
         )
     console.print(table)
 

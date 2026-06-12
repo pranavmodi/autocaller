@@ -1952,6 +1952,45 @@ export type FrontSignals = {
   }>;
 };
 
+export type FrontCompetitorSummary = {
+  firms_with_features: number;
+  firms_with_metro: number;
+  edge_count: number;
+  last_computed_at: string | null;
+  metro_counts: Array<{ metro: string; count: number }>;
+  tier_distribution: Record<string, number>;
+};
+
+export type FrontCompetitor = {
+  pif_id: string;
+  firm_name: string;
+  domain: string | null;
+  metro: string | null;
+  score: number;
+  components: Record<string, number>;
+  evidence: {
+    why?: string;
+    [key: string]: unknown;
+  };
+};
+
+export type FrontCompetitorsResponse = {
+  firm: {
+    pif_id: string;
+    firm_name: string;
+    domain: string | null;
+    metro: string | null;
+    city: string | null;
+    state: string | null;
+    case_mix: Record<string, number>;
+    value_tier: string | null;
+    volume_proxy: number | null;
+    evidence: Record<string, unknown>;
+    computed_at: string | null;
+  } | null;
+  competitors: FrontCompetitor[];
+};
+
 export const getFrontStatus = () => get<FrontStatus>("/api/front/status");
 
 export const getFrontWarmList = (limit = 50) =>
@@ -1967,6 +2006,17 @@ export const getFrontContacts = (args: { domain?: string; q?: string; limit?: nu
 };
 
 export const getFrontSignals = () => get<FrontSignals>("/api/front/signals");
+
+export const getFrontCompetitorSummary = () =>
+  get<FrontCompetitorSummary>("/api/front/competitors/summary");
+
+export const getFrontCompetitors = (args: { domain?: string; pif_id?: string; limit?: number }) => {
+  const params = new URLSearchParams();
+  if (args.domain) params.set("domain", args.domain);
+  if (args.pif_id) params.set("pif_id", args.pif_id);
+  if (args.limit) params.set("limit", String(args.limit));
+  return get<FrontCompetitorsResponse>(`/api/front/competitors?${params.toString()}`);
+};
 
 export const createFrontWarmBatch = (args: {
   domains: string[];

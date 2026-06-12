@@ -1,7 +1,7 @@
 """SQLAlchemy ORM table models."""
 from datetime import datetime, timezone
 from sqlalchemy import (
-    String, Integer, BigInteger, Boolean, Text, Index, CheckConstraint,
+    String, Integer, BigInteger, Boolean, Text, Float, Index, CheckConstraint,
     ForeignKey, UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import JSONB, TIMESTAMP
@@ -910,6 +910,51 @@ class FrontSyncStateRow(Base):
     cursor: Mapped[str | None] = mapped_column(Text, nullable=True)
     watermark: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
     updated_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow, onupdate=_utcnow)
+
+
+class FirmCompetitiveFeatureRow(Base):
+    """Local-cache-derived firm features used to score PI competitors."""
+    __tablename__ = "firm_competitive_features"
+
+    pif_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    firm_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    domain: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    metro: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    city: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    state: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    case_mix: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    value_tier: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    volume_proxy: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    evidence: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    computed_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow)
+
+    __table_args__ = (
+        Index("ix_firm_competitive_features_domain", "domain"),
+        Index("ix_firm_competitive_features_metro", "metro"),
+        Index("ix_firm_competitive_features_value_tier", "value_tier"),
+    )
+
+
+class CompetitorEdgeRow(Base):
+    """Undirected firm-vs-firm competition edge, stored once with a < b."""
+    __tablename__ = "competitor_edges"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    firm_a_pif_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    firm_b_pif_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    metro: Mapped[str] = mapped_column(String(64), nullable=False)
+    score: Mapped[float] = mapped_column(Float, nullable=False)
+    components: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    evidence: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    computed_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("firm_a_pif_id", "firm_b_pif_id", name="uq_competitor_edges_pair"),
+        Index("ix_competitor_edges_firm_a", "firm_a_pif_id"),
+        Index("ix_competitor_edges_firm_b", "firm_b_pif_id"),
+        Index("ix_competitor_edges_metro", "metro"),
+        Index("ix_competitor_edges_score", "score"),
+    )
 
 
 class EmailSequenceRow(Base):

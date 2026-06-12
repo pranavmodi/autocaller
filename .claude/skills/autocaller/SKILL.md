@@ -122,6 +122,14 @@ Front or send email, and it creates pending lead-gen batch items with
 feature but is created inactive; do not activate it without
 operator/orchestrator review.
 
+Firm-vs-firm PI competition context is available through
+`bin/autocaller front competitors rebuild`, `front competitors summary`, and
+`front competitors show <domain-or-name>`. The rebuild uses only local
+Mission Control SQLite cache tables plus autocaller Postgres activity; it must
+not call Front and must not call an LLM. Evidence dollar values are lien or
+bill amounts from cached threads, not settlement values. `/front` shows graph
+coverage in Signals and a "Competes with" list inside expanded warm-list rows.
+
 ---
 
 ## First: establish situational awareness
@@ -438,6 +446,9 @@ Common causes: Geo permissions not enabled, AMD mis-classifying carrier voicemai
 | `autocaller front status` | Show Front sync health, cursors, watermarks, counts, funnel deltas, timing feed, and stale/error state. |
 | `autocaller front contacts [--firm <pif_id> \| --domain <domain> --q <text>]` | List synced Front contacts with masked emails, matched pif_id, warm score, and tech signals. |
 | `autocaller front warm-batch --domains a.com,b.com` | Create a recommended lead-gen batch from reviewed Front-warm domains. Items stay pending and carry `reason_json.basis = "front-warm"`. |
+| `autocaller front competitors rebuild` | Recompute local PI firm competition features and edges from MC SQLite cache plus `front_firm_activity`. No Front API calls and no LLM calls. |
+| `autocaller front competitors summary` | Show graph coverage, top metros, tier distribution, edge count, and last rebuild time. |
+| `autocaller front competitors show <domain-or-name>` | Show one firm's nearest competitors with scores and one-line evidence. |
 | `autocaller leads warm-list [--limit 20]` | Print the daily Front-warmed firm/contact list, excluding contacts already emailed. |
 | `autocaller sequences preview <contact_id>` | Render the four-email sequence for one contact, with their real Yelp quote injected. Read-only. |
 | `autocaller sequences start <contact_id>` | Start the 4-step sequence (one contact at a time, by design). Idempotent — second start returns 409. Sends are gated by `ALLOW_SEQUENCE_SEND=true`. UI: `/sequences` page has the same flow with a forced "I've reviewed all drafts" checkbox before the Start button enables. |
