@@ -88,9 +88,9 @@ async def check_no_patient_data_in_outreach(
             model="openclaw",
             payload={"subject": subject, "body": body},
             required_fields=["contains_phi", "reason"],
-            timeout_s=45,
+            timeout_s=150,
             max_tokens=300,
-            retries=1,
+            retries=2,
             prompt_cache_key=f"outreach-phi-guard:{digest}",
             prompt_cache_retention="24h",
         )
