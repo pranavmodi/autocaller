@@ -147,6 +147,8 @@ Every command accepts `--help`. Exit code is `0` on success, `1` on any error
 | `front competitors rebuild [--json]` | Recompute local firm-vs-firm competition features and edges from cached Mission Control SQLite plus `front_firm_activity`. No Front API calls and no LLM calls. |
 | `front competitors summary [--json]` | Show competitor graph coverage: firms with features/metros, edge count, tier distribution, top metro counts, and last rebuild time. |
 | `front competitors show <domain-or-name> [--limit=N] [--json]` | Show who competes with one firm, including score, neighbor name/domain/metro, and one-line evidence. |
+| `front competitors search <q> [--limit=N] [--json]` | Search any firm with local competitive features by firm-name or domain substring, including edge count and warm-list status. |
+| `front competitors graph <domain-or-name> [--depth=1] [--json]` | Print a firm's competitive ego network: node/link counts plus top edges, or raw graph payload for scripts with `--json`. |
 | `sequences preview <contact_id>` | Render the four (or three, if no Yelp quote) email drafts for one contact against their actual personalization data. Read-only. |
 | `sequences start <contact_id>` | Start the 4-step sequence for one contact. Idempotent — second start returns 409 with current state. Sends gated by `ALLOW_SEQUENCE_SEND=true`. |
 | `sequences list [--status=active\|paused\|completed]` | List sequence rows + which step each is on. |
@@ -617,6 +619,20 @@ The score combines local metro overlap, deterministic case-mix tags from cached
 conversation text, lien/bill amount tier proximity, and shared Front activity.
 Evidence dollar values are lien or bill amounts, not settlement values.
 
+### Recipe: "explore a firm's competitive neighborhood"
+Use this when an operator or agent needs the graph behind the browser
+visualization. Search works across all firms with competitive features, not
+just `/front` warm-list rows.
+
+```bash
+bin/autocaller front competitors search wilshire
+bin/autocaller front competitors graph wilshirelawfirm.com --depth 1
+bin/autocaller front competitors graph wilshirelawfirm.com --depth 2 --json
+```
+
+Depth 1 returns the center firm, direct neighbors, and all edges among that
+node set. Depth 2 expands outward and caps the graph at 60 highest-score nodes.
+
 ### Recipe: "something's wrong — triage"
 ```bash
 bin/autocaller status               # is daemon alive? any active call?
@@ -809,6 +825,11 @@ to a public hostname before composing.
 ## 11. REST API (used by the CLI — agents can call directly)
 
 Base URL: `http://127.0.0.1:${BACKEND_PORT:-8000}` (or `PUBLIC_BASE_URL` externally).
+
+The in-browser force-directed competitor graph on `/front` is UI-only. The
+same graph data is fully available to agents and scripts through
+`bin/autocaller front competitors graph --json` and
+`GET /api/front/competitors/graph`.
 
 Relevant endpoints:
 

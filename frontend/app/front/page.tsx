@@ -2,8 +2,17 @@
 
 import Link from "next/link";
 import { Fragment, type ReactNode } from "react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  forceCenter,
+  forceCollide,
+  forceLink,
+  forceManyBody,
+  forceSimulation,
+  type SimulationLinkDatum,
+  type SimulationNodeDatum,
+} from "d3-force";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -13,22 +22,34 @@ import {
   Loader2,
   Plus,
   RefreshCw,
+  Search,
   Signal,
   Users,
 } from "lucide-react";
 import {
   createFrontWarmBatch,
+  getFrontCompetitorGraph,
   getFrontCompetitorSummary,
   getFrontCompetitors,
   getFrontSignals,
   getFrontStatus,
   getFrontWarmList,
+  searchFrontCompetitors,
+  type FrontCompetitorGraphLink,
+  type FrontCompetitorGraphNode,
+  type FrontCompetitorGraphResponse,
   type FrontWarmFirm,
   type FrontCompetitorSummary,
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 type SortKey = "warm_score" | "last_seen_at" | "last_referral_at" | "contact_count";
+type GraphFirm = {
+  pif_id: string;
+  firm_name: string;
+  domain: string | null;
+  metro?: string | null;
+};
 
 export default function FrontPage() {
   const qc = useQueryClient();
@@ -36,6 +57,7 @@ export default function FrontPage() {
   const [expandedDomains, setExpandedDomains] = useState<Set<string>>(new Set());
   const [sortKey, setSortKey] = useState<SortKey>("warm_score");
   const [createdBatch, setCreatedBatch] = useState<{ id: string; link: string } | null>(null);
+  const [graphFirm, setGraphFirm] = useState<GraphFirm | null>(null);
 
   const status = useQuery({
     queryKey: ["front-status"],
@@ -145,6 +167,7 @@ export default function FrontPage() {
           createPending={createBatch.isPending}
           createError={createBatch.isError ? String(createBatch.error?.message || "Could not create batch") : ""}
           createdBatch={createdBatch}
+          onViewGraph={setGraphFirm}
         />
 
         <div className="space-y-4">
@@ -158,6 +181,8 @@ export default function FrontPage() {
           data={signals.data}
           competitorSummary={competitorSummary.data}
           competitorSummaryLoading={competitorSummary.isLoading}
+          graphFirm={graphFirm}
+          onGraphFirmChange={setGraphFirm}
         />
         </div>
       </div>
@@ -267,6 +292,7 @@ function WarmListZone({
   createPending,
   createError,
   createdBatch,
+  onViewGraph,
 }: {
   rows: FrontWarmFirm[];
   loading: boolean;
@@ -281,6 +307,7 @@ function WarmListZone({
   createPending: boolean;
   createError: string;
   createdBatch: { id: string; link: string } | null;
+  onViewGraph: (firm: GraphFirm) => void;
 }) {
   return (
     <section className="min-w-0 rounded-lg border border-neutral-200 bg-white">
@@ -394,7 +421,7 @@ function WarmListZone({
                           </div>
                           <div>
                             <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-500">Competes with</div>
-                            <CompetitorList row={row} />
+                            <CompetitorList row={row} onViewGraph={onViewGraph} />
                           </div>
                         </div>
                       </td>
@@ -412,7 +439,7 @@ function WarmListZone({
   );
 }
 
-function CompetitorList({ row }: { row: FrontWarmFirm }) {
+function CompetitorList({ row, onViewGraph }: { row: FrontWarmFirm; onViewGraph: (firm: GraphFirm) => void }) {
   const competitors = useQuery({
     queryKey: ["front-competitors", row.pif_id || row.domain],
     queryFn: () =>
@@ -433,8 +460,25 @@ function CompetitorList({ row }: { row: FrontWarmFirm }) {
   if (!rows.length) {
     return <div className="text-sm text-neutral-500">No graph neighbors yet.</div>;
   }
+  const center = competitors.data?.firm;
   return (
     <div className="space-y-2">
+      {center?.pif_id && (
+        <button
+          type="button"
+          onClick={() =>
+            onViewGraph({
+              pif_id: center.pif_id,
+              firm_name: center.firm_name,
+              domain: center.domain,
+              metro: center.metro,
+            })
+          }
+          className="text-xs font-medium text-neutral-700 underline-offset-2 hover:text-neutral-950 hover:underline"
+        >
+          view graph
+        </button>
+      )}
       {rows.map((competitor) => (
         <div key={competitor.pif_id} className="rounded-md border border-neutral-200 bg-white px-3 py-2">
           <div className="flex min-w-0 items-center justify-between gap-3">
@@ -444,6 +488,20 @@ function CompetitorList({ row }: { row: FrontWarmFirm }) {
             </div>
             <div className="shrink-0 text-sm font-semibold text-neutral-900">{Math.round(competitor.score * 100)}</div>
           </div>
+          <button
+            type="button"
+            onClick={() =>
+              onViewGraph({
+                pif_id: competitor.pif_id,
+                firm_name: competitor.firm_name,
+                domain: competitor.domain,
+                metro: competitor.metro,
+              })
+            }
+            className="mt-1 text-xs font-medium text-neutral-700 underline-offset-2 hover:text-neutral-950 hover:underline"
+          >
+            view graph
+          </button>
           <div className="mt-1 line-clamp-2 text-xs text-neutral-500">{competitor.evidence?.why || "Shared metro and case profile."}</div>
         </div>
       ))}
@@ -504,12 +562,16 @@ function SignalsZone({
   data,
   competitorSummary,
   competitorSummaryLoading,
+  graphFirm,
+  onGraphFirmChange,
 }: {
   loading: boolean;
   error: boolean;
   data: Awaited<ReturnType<typeof getFrontSignals>> | undefined;
   competitorSummary: FrontCompetitorSummary | undefined;
   competitorSummaryLoading: boolean;
+  graphFirm: GraphFirm | null;
+  onGraphFirmChange: (firm: GraphFirm) => void;
 }) {
   return (
     <section className="rounded-lg border border-neutral-200 bg-white p-4">
@@ -525,6 +587,7 @@ function SignalsZone({
         <div className="space-y-4">
           <div>
             <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-500">Competitor graph</div>
+            <CompetitorSearchBox onSelect={onGraphFirmChange} />
             <div className="rounded-md border border-neutral-200 px-3 py-2">
               <div className="text-sm font-medium text-neutral-900">
                 {competitorSummaryLoading ? "Loading..." : `${(competitorSummary?.firms_with_metro ?? 0).toLocaleString()} firms / ${(competitorSummary?.edge_count ?? 0).toLocaleString()} edges`}
@@ -533,6 +596,7 @@ function SignalsZone({
                 {competitorSummary?.last_computed_at ? `rebuilt ${formatDate(competitorSummary.last_computed_at)}` : "no rebuild yet"}
               </div>
             </div>
+            <CompetitorGraphPanel selectedFirm={graphFirm} onSelectedFirmChange={onGraphFirmChange} />
           </div>
           <div>
             <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-500">Tech stack</div>
@@ -578,6 +642,354 @@ function SignalsZone({
       )}
     </section>
   );
+}
+
+function CompetitorSearchBox({ onSelect }: { onSelect: (firm: GraphFirm) => void }) {
+  const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => setDebouncedQuery(query.trim()), 300);
+    return () => window.clearTimeout(timeout);
+  }, [query]);
+
+  const search = useQuery({
+    queryKey: ["front-competitor-search", debouncedQuery],
+    queryFn: () => searchFrontCompetitors({ q: debouncedQuery, limit: 8 }),
+    enabled: debouncedQuery.length >= 2,
+  });
+
+  const results = search.data?.results ?? [];
+  return (
+    <div className="relative mb-2">
+      <div className="flex h-10 items-center gap-2 rounded-md border border-neutral-200 bg-white px-3">
+        <Search className="h-4 w-4 shrink-0 text-neutral-400" />
+        <input
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Firm name or domain"
+          className="min-w-0 flex-1 bg-transparent text-sm text-neutral-900 outline-none placeholder:text-neutral-400"
+        />
+        {search.isFetching && <Loader2 className="h-4 w-4 animate-spin text-neutral-400" />}
+      </div>
+      {debouncedQuery.length >= 2 && (
+        <div className="absolute z-20 mt-1 max-h-80 w-full overflow-auto rounded-md border border-neutral-200 bg-white shadow-lg">
+          {search.isError ? (
+            <div className="px-3 py-2 text-sm text-red-700">Search unavailable.</div>
+          ) : results.length ? (
+            results.map((result) => (
+              <button
+                key={result.pif_id}
+                type="button"
+                onClick={() => {
+                  onSelect({
+                    pif_id: result.pif_id,
+                    firm_name: result.firm_name,
+                    domain: result.domain,
+                    metro: result.metro,
+                  });
+                  setQuery(result.firm_name);
+                  setDebouncedQuery("");
+                }}
+                className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-neutral-50"
+              >
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-medium text-neutral-900">{result.firm_name}</span>
+                  <span className="block truncate text-xs text-neutral-500">{result.domain || result.metro || result.pif_id}</span>
+                </span>
+                <span className="shrink-0 text-xs text-neutral-500">{result.edge_count} edges</span>
+              </button>
+            ))
+          ) : search.isFetching ? (
+            <div className="px-3 py-2 text-sm text-neutral-500">Loading...</div>
+          ) : (
+            <div className="px-3 py-2 text-sm text-neutral-500">No matches.</div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CompetitorGraphPanel({
+  selectedFirm,
+  onSelectedFirmChange,
+}: {
+  selectedFirm: GraphFirm | null;
+  onSelectedFirmChange: (firm: GraphFirm) => void;
+}) {
+  const [depth, setDepth] = useState<1 | 2>(1);
+  const [trail, setTrail] = useState<GraphFirm[]>([]);
+
+  useEffect(() => {
+    if (!selectedFirm) {
+      setTrail([]);
+      return;
+    }
+    setTrail((prev) => {
+      const last = prev[prev.length - 1];
+      if (last?.pif_id === selectedFirm.pif_id) return prev;
+      return [selectedFirm];
+    });
+  }, [selectedFirm]);
+
+  const graph = useQuery({
+    queryKey: ["front-competitor-graph", selectedFirm?.pif_id, depth],
+    queryFn: () => getFrontCompetitorGraph({ pif_id: selectedFirm?.pif_id || "", depth }),
+    enabled: Boolean(selectedFirm?.pif_id),
+  });
+
+  if (!selectedFirm) {
+    return <div className="mt-2 rounded-md border border-dashed border-neutral-200 px-3 py-4 text-sm text-neutral-500">No firm selected.</div>;
+  }
+
+  const data = graph.data;
+  const noEdges = data && data.links.length === 0;
+  return (
+    <div className="mt-3 rounded-md border border-neutral-200 bg-white">
+      <div className="flex flex-wrap items-center gap-2 border-b border-neutral-200 px-3 py-2">
+        <div className="min-w-0">
+          <div className="truncate text-sm font-semibold text-neutral-900">{selectedFirm.firm_name}</div>
+          <div className="truncate text-xs text-neutral-500">{selectedFirm.domain || selectedFirm.metro || selectedFirm.pif_id}</div>
+        </div>
+        <div className="ml-auto flex rounded-md border border-neutral-200 p-0.5">
+          <DepthButton active={depth === 1} onClick={() => setDepth(1)}>1 hop</DepthButton>
+          <DepthButton active={depth === 2} onClick={() => setDepth(2)}>2 hops</DepthButton>
+        </div>
+      </div>
+      {trail.length > 1 && (
+        <div className="flex flex-wrap gap-1 border-b border-neutral-100 px-3 py-2">
+          {trail.map((firm, index) => (
+            <button
+              key={`${firm.pif_id}-${index}`}
+              type="button"
+              onClick={() => {
+                const nextTrail = trail.slice(0, index + 1);
+                setTrail(nextTrail);
+                onSelectedFirmChange(firm);
+              }}
+              className="max-w-[150px] truncate rounded border border-neutral-200 px-2 py-1 text-xs text-neutral-600 hover:bg-neutral-50"
+            >
+              {firm.firm_name}
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="p-3">
+        {graph.isLoading ? (
+          <div className="flex h-80 items-center justify-center text-sm text-neutral-500">
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            Loading graph...
+          </div>
+        ) : graph.isError ? (
+          <div className="flex h-80 items-center justify-center text-sm text-red-700">Could not load graph.</div>
+        ) : noEdges ? (
+          <div className="flex h-80 items-center justify-center text-sm text-neutral-500">no competitor data for this firm</div>
+        ) : data ? (
+          <CompetitorGraphSvg
+            data={data}
+            onNodeClick={(node) => {
+              if (node.is_center) return;
+              const firm = {
+                pif_id: node.pif_id,
+                firm_name: node.firm_name,
+                domain: node.domain,
+                metro: node.metro,
+              };
+              setTrail((prev) => {
+                const existingIndex = prev.findIndex((item) => item.pif_id === node.pif_id);
+                if (existingIndex >= 0) return prev.slice(0, existingIndex + 1);
+                return [...prev, firm];
+              });
+              onSelectedFirmChange(firm);
+            }}
+          />
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function DepthButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "h-7 rounded px-2 text-xs font-medium",
+        active ? "bg-neutral-900 text-white" : "text-neutral-600 hover:bg-neutral-50",
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+type SimNode = FrontCompetitorGraphNode & SimulationNodeDatum;
+type SimLink = Omit<FrontCompetitorGraphLink, "source" | "target"> &
+  SimulationLinkDatum<SimNode> & {
+    source: string | SimNode;
+    target: string | SimNode;
+  };
+
+function CompetitorGraphSvg({
+  data,
+  onNodeClick,
+}: {
+  data: FrontCompetitorGraphResponse;
+  onNodeClick: (node: FrontCompetitorGraphNode) => void;
+}) {
+  const width = 660;
+  const height = 380;
+  const [layout, setLayout] = useState<{ nodes: SimNode[]; links: SimLink[] }>({ nodes: [], links: [] });
+  const [tooltip, setTooltip] = useState<{ x: number; y: number; link: FrontCompetitorGraphLink } | null>(null);
+
+  useEffect(() => {
+    const nodes: SimNode[] = data.nodes.map((node, index) => ({
+      ...node,
+      x: width / 2 + Math.cos(index) * 90,
+      y: height / 2 + Math.sin(index) * 70,
+    }));
+    const links: SimLink[] = data.links.map((link) => ({ ...link }));
+    const simulation = forceSimulation<SimNode>(nodes)
+      .force(
+        "link",
+        forceLink<SimNode, SimLink>(links)
+          .id((node) => node.pif_id)
+          .distance((link) => 120 - Number(link.score || 0) * 45)
+          .strength((link) => 0.28 + Number(link.score || 0) * 0.45),
+      )
+      .force("charge", forceManyBody<SimNode>().strength(-260))
+      .force("collide", forceCollide<SimNode>().radius((node) => nodeRadius(node) + 10))
+      .force("center", forceCenter(width / 2, height / 2))
+      .on("tick", () => setLayout({ nodes: [...nodes], links: [...links] }));
+
+    simulation.alpha(1).restart();
+    return () => {
+      simulation.stop();
+    };
+  }, [data]);
+
+  const nodesById = useMemo(
+    () => new Map(layout.nodes.map((node) => [node.pif_id, node])),
+    [layout.nodes],
+  );
+  const metros = useMemo(
+    () => Array.from(new Set(data.nodes.map((node) => node.metro || "unknown"))).slice(0, 8),
+    [data.nodes],
+  );
+
+  const linkEndpoint = (value: string | SimNode) => (typeof value === "string" ? nodesById.get(value) : value);
+
+  return (
+    <div className="relative">
+      <svg
+        viewBox={`0 0 ${width} ${height}`}
+        role="img"
+        aria-label="Competitive neighborhood graph"
+        className="h-80 w-full rounded-md border border-neutral-100 bg-neutral-50"
+      >
+        <g>
+          {layout.links.map((link, index) => {
+            const source = linkEndpoint(link.source);
+            const target = linkEndpoint(link.target);
+            if (!source || !target) return null;
+            return (
+              <line
+                key={`${String(source.pif_id)}-${String(target.pif_id)}-${index}`}
+                x1={source.x || 0}
+                y1={source.y || 0}
+                x2={target.x || 0}
+                y2={target.y || 0}
+                stroke="#525252"
+                strokeWidth={1 + Number(link.score || 0) * 4}
+                strokeOpacity={0.18 + Number(link.score || 0) * 0.55}
+                onMouseMove={(event) =>
+                  setTooltip({
+                    x: event.clientX,
+                    y: event.clientY,
+                    link: {
+                      source: source.pif_id,
+                      target: target.pif_id,
+                      score: Number(link.score || 0),
+                      components: link.components || {},
+                      evidence_summary: link.evidence_summary || "",
+                    },
+                  })
+                }
+                onMouseLeave={() => setTooltip(null)}
+              />
+            );
+          })}
+        </g>
+        <g>
+          {layout.nodes.map((node) => {
+            const radius = nodeRadius(node);
+            return (
+              <g
+                key={node.pif_id}
+                transform={`translate(${node.x || width / 2}, ${node.y || height / 2})`}
+                className={node.is_center ? "" : "cursor-pointer"}
+                onClick={() => onNodeClick(node)}
+              >
+                {node.is_center && <circle r={radius + 5} fill="none" stroke="#111827" strokeWidth={2.5} />}
+                <circle r={radius} fill={metroColor(node.metro)} stroke="#fff" strokeWidth={1.5} />
+                <text
+                  x={radius + 6}
+                  y={4}
+                  className="pointer-events-none fill-neutral-800 text-[11px] font-medium"
+                >
+                  {truncateLabel(node.firm_name)}
+                </text>
+              </g>
+            );
+          })}
+        </g>
+      </svg>
+      <div className="mt-2 flex flex-wrap gap-2">
+        {metros.map((metro) => (
+          <span key={metro} className="inline-flex items-center gap-1 text-xs text-neutral-500">
+            <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: metroColor(metro) }} />
+            {metro}
+          </span>
+        ))}
+      </div>
+      {tooltip && (
+        <div
+          className="pointer-events-none fixed z-50 max-w-xs rounded-md border border-neutral-200 bg-white px-3 py-2 text-xs text-neutral-700 shadow-lg"
+          style={{ left: tooltip.x + 12, top: tooltip.y + 12 }}
+        >
+          <div className="font-semibold text-neutral-900">score {tooltip.link.score.toFixed(2)}</div>
+          <div className="mt-1">{tooltip.link.evidence_summary}</div>
+          <div className="mt-1 text-neutral-500">{formatComponents(tooltip.link.components)}</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function nodeRadius(node: Pick<FrontCompetitorGraphNode, "volume_proxy" | "is_center">) {
+  const volume = Math.max(0, Number(node.volume_proxy || 0));
+  const radius = 6 + Math.sqrt(volume) * 3.2;
+  return Math.max(node.is_center ? 10 : 6, Math.min(22, radius));
+}
+
+const METRO_PALETTE = ["#2563eb", "#16a34a", "#dc2626", "#9333ea", "#ea580c", "#0891b2", "#be123c", "#4f46e5"];
+
+function metroColor(metro?: string | null) {
+  const key = metro || "unknown";
+  let hash = 0;
+  for (let i = 0; i < key.length; i += 1) hash = (hash * 31 + key.charCodeAt(i)) >>> 0;
+  return METRO_PALETTE[hash % METRO_PALETTE.length];
+}
+
+function truncateLabel(value: string) {
+  return value.length > 22 ? `${value.slice(0, 21)}...` : value;
+}
+
+function formatComponents(components: Record<string, number>) {
+  const parts = Object.entries(components || {}).map(([key, value]) => `${key} ${Number(value || 0).toFixed(2)}`);
+  return parts.slice(0, 5).join(" · ");
 }
 
 function formatDate(value?: string | null) {

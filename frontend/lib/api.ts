@@ -1991,6 +1991,39 @@ export type FrontCompetitorsResponse = {
   competitors: FrontCompetitor[];
 };
 
+export type FrontCompetitorSearchResult = {
+  pif_id: string;
+  firm_name: string;
+  domain: string | null;
+  metro: string | null;
+  value_tier: string | null;
+  edge_count: number;
+  is_warm_list: boolean;
+};
+
+export type FrontCompetitorGraphNode = {
+  pif_id: string;
+  firm_name: string;
+  domain: string | null;
+  metro: string | null;
+  value_tier: string | null;
+  volume_proxy: number | null;
+  is_center: boolean;
+};
+
+export type FrontCompetitorGraphLink = {
+  source: string;
+  target: string;
+  score: number;
+  components: Record<string, number>;
+  evidence_summary: string;
+};
+
+export type FrontCompetitorGraphResponse = {
+  nodes: FrontCompetitorGraphNode[];
+  links: FrontCompetitorGraphLink[];
+};
+
 export const getFrontStatus = () => get<FrontStatus>("/api/front/status");
 
 export const getFrontWarmList = (limit = 50) =>
@@ -2016,6 +2049,20 @@ export const getFrontCompetitors = (args: { domain?: string; pif_id?: string; li
   if (args.pif_id) params.set("pif_id", args.pif_id);
   if (args.limit) params.set("limit", String(args.limit));
   return get<FrontCompetitorsResponse>(`/api/front/competitors?${params.toString()}`);
+};
+
+export const searchFrontCompetitors = (args: { q: string; limit?: number }) => {
+  const params = new URLSearchParams();
+  params.set("q", args.q);
+  if (args.limit) params.set("limit", String(args.limit));
+  return get<{ results: FrontCompetitorSearchResult[] }>(`/api/front/competitors/search?${params.toString()}`);
+};
+
+export const getFrontCompetitorGraph = (args: { pif_id: string; depth?: 1 | 2 }) => {
+  const params = new URLSearchParams();
+  params.set("pif_id", args.pif_id);
+  if (args.depth) params.set("depth", String(args.depth));
+  return get<FrontCompetitorGraphResponse>(`/api/front/competitors/graph?${params.toString()}`);
 };
 
 export const createFrontWarmBatch = (args: {

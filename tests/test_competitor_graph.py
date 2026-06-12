@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from app.api.front import router as front_router
+from app.db.models import CompetitorEdgeRow, FirmCompetitiveFeatureRow, FrontFirmActivityRow
 from app.services import competitor_graph
 from app.services.competitor_graph import (
     build_competitor_graph_from_cache,
@@ -16,6 +17,106 @@ from app.services.competitor_graph import (
     parse_first_address,
     value_tier_for_amounts,
 )
+
+
+class _OrmResult:
+    def __init__(self, rows):
+        self.rows = rows
+
+    def scalars(self):
+        return self
+
+    def all(self):
+        return self.rows
+
+
+class _CompetitorOrmSession:
+    def __init__(self, *, features, edges, activities):
+        self.features = list(features)
+        self.edges = list(edges)
+        self.activities = list(activities)
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        return None
+
+    async def get(self, model, key):
+        if model is FirmCompetitiveFeatureRow:
+            return next((row for row in self.features if row.pif_id == key), None)
+        return None
+
+    async def execute(self, stmt):
+        entity = stmt.column_descriptions[0].get("entity")
+        params = stmt.compile().params
+        text = str(stmt)
+        if entity is FirmCompetitiveFeatureRow:
+            ids = _param_strings(params)
+            if ids:
+                return _OrmResult([row for row in self.features if row.pif_id in ids])
+            needle = next((str(value).strip("%").lower() for value in params.values() if isinstance(value, str) and "%" in value), "")
+            rows = [
+                row for row in self.features
+                if needle in row.firm_name.lower() or needle in (row.domain or "").lower()
+            ]
+            rows.sort(key=lambda row: row.firm_name)
+            return _OrmResult(rows[: int(params.get("param_1") or 50)])
+        if entity is CompetitorEdgeRow:
+            ids = set(_param_strings(params))
+            if " AND " in text and ids:
+                rows = [row for row in self.edges if row.firm_a_pif_id in ids and row.firm_b_pif_id in ids]
+            elif ids:
+                rows = [row for row in self.edges if row.firm_a_pif_id in ids or row.firm_b_pif_id in ids]
+            else:
+                rows = list(self.edges)
+            rows.sort(key=lambda row: row.score, reverse=True)
+            return _OrmResult(rows)
+        if entity is FrontFirmActivityRow:
+            strings = set(_param_strings(params))
+            return _OrmResult([
+                row for row in self.activities
+                if (row.pif_id and row.pif_id in strings) or row.domain in strings
+            ])
+        return _OrmResult([])
+
+
+def _param_strings(params):
+    values = []
+    for value in params.values():
+        if isinstance(value, str):
+            values.append(value)
+        elif isinstance(value, (list, tuple, set)):
+            values.extend(str(item) for item in value)
+    return [value for value in values if "%" not in value]
+
+
+def _feature(pif_id, name, domain, *, metro="los-angeles", value_tier="mid", volume_proxy=4):
+    return FirmCompetitiveFeatureRow(
+        pif_id=pif_id,
+        firm_name=name,
+        domain=domain,
+        metro=metro,
+        city="Los Angeles",
+        state="CA",
+        case_mix={"mva": 1.0},
+        value_tier=value_tier,
+        volume_proxy=volume_proxy,
+        evidence={},
+    )
+
+
+def _edge(a, b, score, *, why="same metro; case mix similarity 1.00"):
+    first, second = sorted((a, b))
+    return CompetitorEdgeRow(
+        id=f"edge-{first}-{second}",
+        firm_a_pif_id=first,
+        firm_b_pif_id=second,
+        metro="los-angeles",
+        score=score,
+        components={"geo": 1.0, "case_mix": score},
+        evidence={"why": why},
+    )
 
 
 def test_address_parsing_real_shaped_fixtures():
@@ -189,3 +290,70 @@ def test_front_competitor_api_smoke(monkeypatch):
     assert client.get("/api/front/competitors/summary").json()["firms_with_metro"] == 2
     assert client.get("/api/front/competitors?pif_id=pif-a").json()["competitors"][0]["score"] == 0.8
     assert client.get("/api/front/competitors").status_code == 400
+
+
+def test_front_competitor_search_api_matches_name_and_domain(monkeypatch):
+    app = FastAPI()
+    app.include_router(front_router)
+    features = [
+        _feature("pif-a", "Alpha Injury Law", "alphainjury.example"),
+        _feature("pif-b", "Beta Accident Group", "betapi.example"),
+        _feature("pif-c", "Central Workers Firm", "centralworkers.example", metro="central-valley"),
+    ]
+    edges = [_edge("pif-a", "pif-b", 0.8), _edge("pif-a", "pif-c", 0.3)]
+    activities = [FrontFirmActivityRow(domain="alphainjury.example", pif_id="pif-a", warm_score=210)]
+    session = _CompetitorOrmSession(features=features, edges=edges, activities=activities)
+    monkeypatch.setattr(competitor_graph, "AsyncSessionLocal", lambda: session)
+
+    client = TestClient(app)
+    assert client.get("/api/front/competitors/search?q=a").status_code == 400
+    name_rows = client.get("/api/front/competitors/search?q=alpha").json()["results"]
+    assert name_rows[0]["pif_id"] == "pif-a"
+    assert name_rows[0]["edge_count"] == 2
+    assert name_rows[0]["is_warm_list"] is True
+    domain_rows = client.get("/api/front/competitors/search?q=betapi").json()["results"]
+    assert domain_rows[0]["pif_id"] == "pif-b"
+
+
+def test_front_competitor_graph_api_includes_neighbor_edges_and_404(monkeypatch):
+    app = FastAPI()
+    app.include_router(front_router)
+    features = [
+        _feature("pif-a", "Alpha Injury Law", "alphainjury.example", volume_proxy=9),
+        _feature("pif-b", "Beta Accident Group", "beta.example", volume_proxy=4),
+        _feature("pif-c", "Coastal Trial Firm", "coastal.example", volume_proxy=1),
+    ]
+    edges = [
+        _edge("pif-a", "pif-b", 0.9, why="alpha beta evidence"),
+        _edge("pif-a", "pif-c", 0.8, why="alpha coastal evidence"),
+        _edge("pif-b", "pif-c", 0.7, why="neighbor edge evidence"),
+    ]
+    session = _CompetitorOrmSession(features=features, edges=edges, activities=[])
+    monkeypatch.setattr(competitor_graph, "AsyncSessionLocal", lambda: session)
+
+    client = TestClient(app)
+    payload = client.get("/api/front/competitors/graph?pif_id=pif-a&depth=1").json()
+    assert {node["pif_id"] for node in payload["nodes"]} == {"pif-a", "pif-b", "pif-c"}
+    assert any({link["source"], link["target"]} == {"pif-b", "pif-c"} for link in payload["links"])
+    assert any(link["evidence_summary"] == "neighbor edge evidence" for link in payload["links"])
+    assert client.get("/api/front/competitors/graph?pif_id=missing").status_code == 404
+
+
+def test_front_competitor_graph_api_depth_two_caps_nodes(monkeypatch):
+    app = FastAPI()
+    app.include_router(front_router)
+    features = [_feature("pif-center", "Center Firm", "center.example")]
+    edges = []
+    for index in range(70):
+        pif_id = f"pif-{index:02d}"
+        features.append(_feature(pif_id, f"Firm {index:02d}", f"firm{index:02d}.example", volume_proxy=index + 1))
+        edges.append(_edge("pif-center", pif_id, 1.0 - (index / 100)))
+    session = _CompetitorOrmSession(features=features, edges=edges, activities=[])
+    monkeypatch.setattr(competitor_graph, "AsyncSessionLocal", lambda: session)
+
+    client = TestClient(app)
+    payload = client.get("/api/front/competitors/graph?pif_id=pif-center&depth=2").json()
+    assert len(payload["nodes"]) == 60
+    assert payload["nodes"][0]["pif_id"] == "pif-center"
+    assert "pif-00" in {node["pif_id"] for node in payload["nodes"]}
+    assert "pif-69" not in {node["pif_id"] for node in payload["nodes"]}

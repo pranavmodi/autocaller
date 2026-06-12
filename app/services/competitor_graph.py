@@ -949,6 +949,120 @@ async def get_competitors(*, domain: str = "", pif_id: str = "", q: str = "", li
     }
 
 
+async def search_competitor_firms(*, q: str, limit: int = 10) -> dict[str, Any]:
+    clean_q = q.strip()
+    if len(clean_q) < 2:
+        raise ValueError("query_too_short")
+    like = f"%{clean_q}%"
+    async with AsyncSessionLocal() as session:
+        firms = (await session.execute(
+            select(FirmCompetitiveFeatureRow)
+            .where(or_(FirmCompetitiveFeatureRow.firm_name.ilike(like), FirmCompetitiveFeatureRow.domain.ilike(like)))
+            .order_by(FirmCompetitiveFeatureRow.firm_name)
+            .limit(max(1, min(limit, 50)))
+        )).scalars().all()
+        pif_ids = [firm.pif_id for firm in firms]
+        domains = [firm.domain for firm in firms if firm.domain]
+        edge_counts = {pif_id: 0 for pif_id in pif_ids}
+        warm_pif_ids: set[str] = set()
+        warm_domains: set[str] = set()
+        if pif_ids:
+            edges = (await session.execute(
+                select(CompetitorEdgeRow).where(
+                    or_(
+                        CompetitorEdgeRow.firm_a_pif_id.in_(pif_ids),
+                        CompetitorEdgeRow.firm_b_pif_id.in_(pif_ids),
+                    )
+                )
+            )).scalars().all()
+            for edge in edges:
+                if edge.firm_a_pif_id in edge_counts:
+                    edge_counts[edge.firm_a_pif_id] += 1
+                if edge.firm_b_pif_id in edge_counts:
+                    edge_counts[edge.firm_b_pif_id] += 1
+            warm_rows = (await session.execute(
+                select(FrontFirmActivityRow)
+                .where(FrontFirmActivityRow.warm_score > 0)
+                .where(
+                    or_(
+                        FrontFirmActivityRow.pif_id.in_(pif_ids),
+                        FrontFirmActivityRow.domain.in_(domains or [""]),
+                    )
+                )
+            )).scalars().all()
+            warm_pif_ids = {row.pif_id for row in warm_rows if row.pif_id}
+            warm_domains = {row.domain for row in warm_rows if row.domain}
+    return {
+        "results": [
+            {
+                "pif_id": firm.pif_id,
+                "firm_name": firm.firm_name,
+                "domain": firm.domain,
+                "metro": firm.metro,
+                "value_tier": firm.value_tier,
+                "edge_count": edge_counts.get(firm.pif_id, 0),
+                "is_warm_list": bool(firm.pif_id in warm_pif_ids or (firm.domain and firm.domain in warm_domains)),
+            }
+            for firm in firms
+        ]
+    }
+
+
+async def get_competitor_graph(*, pif_id: str, depth: int = 1) -> dict[str, Any] | None:
+    clean_pif_id = pif_id.strip()
+    clean_depth = 2 if depth >= 2 else 1
+    async with AsyncSessionLocal() as session:
+        center = await session.get(FirmCompetitiveFeatureRow, clean_pif_id)
+        if center is None:
+            return None
+        first_edges = (await session.execute(
+            select(CompetitorEdgeRow)
+            .where(or_(CompetitorEdgeRow.firm_a_pif_id == center.pif_id, CompetitorEdgeRow.firm_b_pif_id == center.pif_id))
+            .order_by(desc(CompetitorEdgeRow.score))
+        )).scalars().all()
+        best_scores: dict[str, float] = {}
+        for edge in first_edges:
+            other = edge.firm_b_pif_id if edge.firm_a_pif_id == center.pif_id else edge.firm_a_pif_id
+            best_scores[other] = max(best_scores.get(other, 0.0), float(edge.score or 0))
+        if clean_depth == 2 and best_scores:
+            first_hop_ids = list(best_scores)
+            second_edges = (await session.execute(
+                select(CompetitorEdgeRow).where(
+                    or_(
+                        CompetitorEdgeRow.firm_a_pif_id.in_(first_hop_ids),
+                        CompetitorEdgeRow.firm_b_pif_id.in_(first_hop_ids),
+                    )
+                )
+            )).scalars().all()
+            for edge in second_edges:
+                for candidate in (edge.firm_a_pif_id, edge.firm_b_pif_id):
+                    if candidate == center.pif_id:
+                        continue
+                    best_scores[candidate] = max(best_scores.get(candidate, 0.0), float(edge.score or 0))
+        selected_neighbors = [
+            pif for pif, _score in sorted(best_scores.items(), key=lambda item: (-item[1], item[0]))[:59]
+        ]
+        node_ids = {center.pif_id, *selected_neighbors}
+        feature_rows = (await session.execute(
+            select(FirmCompetitiveFeatureRow).where(FirmCompetitiveFeatureRow.pif_id.in_(list(node_ids)))
+        )).scalars().all()
+        graph_edges = (await session.execute(
+            select(CompetitorEdgeRow)
+            .where(CompetitorEdgeRow.firm_a_pif_id.in_(list(node_ids)))
+            .where(CompetitorEdgeRow.firm_b_pif_id.in_(list(node_ids)))
+            .order_by(desc(CompetitorEdgeRow.score))
+        )).scalars().all()
+    features_by_id = {row.pif_id: row for row in feature_rows}
+    return {
+        "nodes": [
+            _graph_node_payload(features_by_id[pif], is_center=pif == center.pif_id)
+            for pif in [center.pif_id, *selected_neighbors]
+            if pif in features_by_id
+        ],
+        "links": [_graph_link_payload(edge) for edge in graph_edges],
+    }
+
+
 def _feature_payload(row: FirmCompetitiveFeatureRow) -> dict[str, Any]:
     return {
         "pif_id": row.pif_id,
@@ -962,4 +1076,27 @@ def _feature_payload(row: FirmCompetitiveFeatureRow) -> dict[str, Any]:
         "volume_proxy": row.volume_proxy,
         "evidence": row.evidence or {},
         "computed_at": row.computed_at.isoformat() if row.computed_at else None,
+    }
+
+
+def _graph_node_payload(row: FirmCompetitiveFeatureRow, *, is_center: bool) -> dict[str, Any]:
+    return {
+        "pif_id": row.pif_id,
+        "firm_name": row.firm_name,
+        "domain": row.domain,
+        "metro": row.metro,
+        "value_tier": row.value_tier,
+        "volume_proxy": row.volume_proxy,
+        "is_center": is_center,
+    }
+
+
+def _graph_link_payload(row: CompetitorEdgeRow) -> dict[str, Any]:
+    evidence = row.evidence or {}
+    return {
+        "source": row.firm_a_pif_id,
+        "target": row.firm_b_pif_id,
+        "score": round(float(row.score or 0), 4),
+        "components": row.components or {},
+        "evidence_summary": str(evidence.get("why") or "Shared competitive profile."),
     }

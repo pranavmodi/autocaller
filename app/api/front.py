@@ -15,8 +15,10 @@ from app.services.front_sync import (
 )
 from app.services.competitor_graph import (
     competitor_summary,
+    get_competitor_graph,
     get_competitors,
     rebuild_competitor_graph,
+    search_competitor_firms,
 )
 from app.services.sequences.registry import DEFAULT_TEMPLATE_KEY
 
@@ -84,6 +86,32 @@ async def get_front_competitors(
     if not domain and not pif_id:
         raise HTTPException(status_code=400, detail="domain_or_pif_id_required")
     return await get_competitors(domain=domain, pif_id=pif_id, limit=limit)
+
+
+@router.get("/api/front/competitors/search")
+async def get_front_competitors_search(
+    q: str = Query("", max_length=255),
+    limit: int = Query(10, ge=1, le=50),
+):
+    try:
+        return await search_competitor_firms(q=q, limit=limit)
+    except ValueError as e:
+        if str(e) == "query_too_short":
+            raise HTTPException(status_code=400, detail="query_too_short")
+        raise
+
+
+@router.get("/api/front/competitors/graph")
+async def get_front_competitors_graph(
+    pif_id: str = Query("", max_length=64),
+    depth: int = Query(1, ge=1, le=2),
+):
+    if not pif_id:
+        raise HTTPException(status_code=400, detail="pif_id_required")
+    graph = await get_competitor_graph(pif_id=pif_id, depth=depth)
+    if graph is None:
+        raise HTTPException(status_code=404, detail="unknown_pif_id")
+    return graph
 
 
 @router.get("/api/front/competitors/summary")

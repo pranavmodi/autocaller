@@ -3214,6 +3214,88 @@ def front_competitors_show_cmd(
     console.print(table)
 
 
+@front_competitors_app.command("search")
+def front_competitors_search_cmd(
+    q: str = typer.Argument(..., help="Firm-name or domain substring."),
+    limit: int = typer.Option(10, "--limit", "-n", min=1, max=50),
+    json_output: bool = typer.Option(False, "--json", help="Print raw JSON."),
+):
+    """Search firms with local competitor features."""
+    from app.services.competitor_graph import search_competitor_firms
+
+    try:
+        data = _run(search_competitor_firms(q=q, limit=limit))
+    except ValueError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from exc
+    if json_output:
+        console.print_json(data=data)
+        return
+    rows = data.get("results") or []
+    table = Table(title="Competitor firm search")
+    for col in ["firm", "domain", "metro", "tier", "edges", "warm"]:
+        table.add_column(col, overflow="fold")
+    for row in rows:
+        table.add_row(
+            str(row.get("firm_name") or ""),
+            str(row.get("domain") or ""),
+            str(row.get("metro") or ""),
+            str(row.get("value_tier") or ""),
+            str(row.get("edge_count") or 0),
+            "yes" if row.get("is_warm_list") else "",
+        )
+    console.print(table)
+
+
+@front_competitors_app.command("graph")
+def front_competitors_graph_cmd(
+    identifier: str = typer.Argument(..., help="Firm domain, PIF id, or firm-name fragment."),
+    depth: int = typer.Option(1, "--depth", min=1, max=2, help="Neighborhood depth: 1 or 2 hops."),
+    json_output: bool = typer.Option(False, "--json", help="Print raw JSON."),
+):
+    """Print an ego-network payload for one firm's competitive neighborhood."""
+    from app.services.competitor_graph import get_competitor_graph, get_competitors
+    from app.services.front_sync import normalize_domain
+
+    domain = normalize_domain(identifier) if "." in identifier else ""
+    async def load_graph():
+        resolved = await get_competitors(domain=domain, pif_id=identifier if not domain else "", q=identifier, limit=1)
+        firm = resolved.get("firm")
+        if not firm:
+            return None, None
+        graph = await get_competitor_graph(pif_id=str(firm.get("pif_id") or ""), depth=depth)
+        return firm, graph
+
+    firm, data = _run(load_graph())
+    if not firm:
+        console.print(f"[red]No competitor graph feature found for {identifier}[/red]")
+        raise typer.Exit(code=1)
+    if not data:
+        console.print(f"[red]No competitor graph feature found for {identifier}[/red]")
+        raise typer.Exit(code=1)
+    if json_output:
+        console.print_json(data=data)
+        return
+    nodes = data.get("nodes") or []
+    links = data.get("links") or []
+    console.print(
+        f"{firm.get('firm_name')} ({firm.get('domain') or firm.get('pif_id')}) "
+        f"depth={depth} nodes={len(nodes)} links={len(links)}"
+    )
+    names = {row.get("pif_id"): row.get("firm_name") or row.get("pif_id") for row in nodes}
+    table = Table(title="Top graph edges")
+    for col in ["score", "source", "target", "why"]:
+        table.add_column(col, overflow="fold")
+    for row in links[:15]:
+        table.add_row(
+            f"{float(row.get('score') or 0):.2f}",
+            str(names.get(row.get("source"), row.get("source"))),
+            str(names.get(row.get("target"), row.get("target"))),
+            str(row.get("evidence_summary") or ""),
+        )
+    console.print(table)
+
+
 # ---------------------------------------------------------------------------
 # sequences — preview + start (strict one-at-a-time)
 # ---------------------------------------------------------------------------
