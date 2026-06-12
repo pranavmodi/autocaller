@@ -103,3 +103,39 @@ async def test_prior_email_contact_and_recent_firm_are_suppressed(monkeypatch):
     by_id = {r["contact_id"]: r for r in out["recommended"]}
     assert by_id["c-clean-oldfirm"]["selection_features"]["has_prior_comms"] is True
     assert by_id["c-clean"]["selection_features"]["has_prior_comms"] is False
+
+
+@pytest.mark.asyncio
+async def test_mapped_persona_column_makes_titleless_contacts_eligible(monkeypatch):
+    """Front-sourced contacts without titles select via the persona column,
+    and recommendation personas use the mapper taxonomy keys (quota keys)."""
+    def _c(cid, pif, email, name, title, persona=None, conf=None):
+        return SimpleNamespace(
+            id=cid, pif_id=pif, email=email, full_name=name, title=title,
+            source="front", persona=persona, persona_confidence=conf,
+        )
+
+    contacts = [
+        # no title, mapped records desk at 0.7 -> eligible, persona=records
+        _c("c-records", "pif-r", "maria@firmr.com", "Maria Lopez", "", "records", 0.7),
+        # no title, low-confidence mapping -> still suppressed
+        _c("c-lowconf", "pif-l", "sam@firml.com", "Sam Low", "", "intake", 0.4),
+        # titled founder -> persona normalized to mapper key founder_owner
+        _c("c-founder", "pif-f", "jane@firmf.com", "Jane Founder", "Founder"),
+    ]
+    results = [
+        [None], [], [], [], [], [], [], [], [], [],   # policy..sequence ids (all empty)
+        contacts,
+        [("pif-pif-r", "Firm R", "CA"), ("pif-pif-l", "Firm L", "CA"), ("pif-pif-f", "Firm F", "CA")],
+        [],
+    ]
+    monkeypatch.setattr(sr, "AsyncSessionLocal", lambda: _FakeSession(results))
+
+    out = await sr.recommend_sequence_contacts(template_key="possible_minds_dynamic", limit=10)
+    by_id = {r["contact_id"]: r for r in out["recommended"]}
+
+    assert "c-records" in by_id
+    assert by_id["c-records"]["persona"] == "records"
+    assert by_id["c-records"]["score"] > 0
+    assert "c-lowconf" not in by_id
+    assert by_id["c-founder"]["persona"] == "founder_owner"

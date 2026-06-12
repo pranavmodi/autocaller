@@ -29,11 +29,27 @@ EMAIL_FIRM_COOLDOWN_DAYS = 14
 from app.services.contact_selection import (
     ContactSelectionInput,
     DEFAULT_CONTACT_SELECTION_WEIGHTS,
+    TARGET_LEAD_PERSONA_KEYS,
+    classify_persona,
     has_usable_email,
     is_target_lead_persona,
     looks_like_non_law_firm,
     score_contact_selection,
 )
+
+# classify_persona's title taxonomy -> persona_mapper's column taxonomy, so
+# recommendations always emit the mapper keys the daily persona quota uses.
+_CLASSIFIER_TO_MAPPER_PERSONA = {
+    "founder_owner": "founder_owner",
+    "managing_partner": "managing_partner",
+    "partner": "managing_partner",
+    "coo": "coo_ops",
+    "operations_leader": "coo_ops",
+}
+
+# Minimum mapped-persona confidence (persona_mapper column) for a contact to
+# be selectable without a classifiable decision-maker title.
+MAPPED_PERSONA_MIN_CONFIDENCE = 0.7
 from app.services.sequences.registry import normalize_template_key
 from app.services.sequences.registry import DEFAULT_TEMPLATE_KEY
 
@@ -272,7 +288,11 @@ async def recommend_sequence_contacts(
         if looks_like_non_law_firm(firm_name, c.title):
             counts["suppressed_non_law_firm"] += 1
             continue
-        if not is_target_lead_persona(c.title, c.source):
+        title_persona_key, _title_label = classify_persona(c.title, c.source)
+        mapped_persona = (getattr(c, "persona", None) or "").strip()
+        mapped_conf = float(getattr(c, "persona_confidence", None) or 0.0)
+        has_mapped_persona = bool(mapped_persona) and mapped_conf >= MAPPED_PERSONA_MIN_CONFIDENCE
+        if title_persona_key not in TARGET_LEAD_PERSONA_KEYS and not has_mapped_persona:
             counts["suppressed_non_persona"] += 1
             continue
         scored = score_contact_selection(
@@ -291,9 +311,20 @@ async def recommend_sequence_contacts(
             ),
             policy_weights=policy_weights,
         )
+        score = scored.score
         if "missing_persona" in scored.suppressions or scored.score <= 0:
-            counts["suppressed_non_persona"] += 1
-            continue
+            if not has_mapped_persona:
+                counts["suppressed_non_persona"] += 1
+                continue
+            # The title couldn't be classified but the persona column knows
+            # this contact: lift the missing_persona risk penalty (-1000 by
+            # default) so the mapped persona competes on its real signals.
+            score = max(10, scored.score + 1000)
+        persona_key = (
+            mapped_persona
+            if has_mapped_persona
+            else _CLASSIFIER_TO_MAPPER_PERSONA.get(title_persona_key, scored.persona)
+        )
         reason = scored.reason
         rec = Recommendation(
             contact_id=c.id,
@@ -303,8 +334,8 @@ async def recommend_sequence_contacts(
             contact_email=c.email or "",
             contact_title=c.title or "",
             contact_source=c.source,
-            persona=scored.persona,
-            score=scored.score,
+            persona=persona_key,
+            score=score,
             reason=reason,
             score_breakdown=scored.score_breakdown,
             selection_features=scored.features,
