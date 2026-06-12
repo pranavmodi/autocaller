@@ -52,7 +52,7 @@ async def test_phi_guard_clean_draft_passes_with_mocked_llm(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_phi_guard_llm_error_fails_closed_and_caches(monkeypatch):
+async def test_phi_guard_llm_error_fails_closed_but_never_caches(monkeypatch):
     calls = 0
 
     async def mock_llm(*args, **kwargs):
@@ -68,11 +68,13 @@ async def test_phi_guard_llm_error_fails_closed_and_caches(monkeypatch):
     first = await check_no_patient_data_in_outreach(subject=subject, body=body, cache=cache)
     second = await check_no_patient_data_in_outreach(subject=subject, body=body, cache=cache)
 
+    # Fails closed on each attempt...
     assert first["passed"] is False
     assert first["detail"].startswith("llm_error:")
-    assert second["cached"] is True
-    assert calls == 1
-    assert outreach_body_hash(subject, body) in cache
+    assert second["passed"] is False
+    # ...but a transport error is retried, never cached as a verdict.
+    assert calls == 2
+    assert outreach_body_hash(subject, body) not in cache
 
 
 def test_deterministic_phi_patterns_cover_case_shapes():
