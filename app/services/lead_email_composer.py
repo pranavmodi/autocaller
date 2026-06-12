@@ -12,7 +12,7 @@ from typing import Any
 from sqlalchemy import desc, or_, select
 
 from app.db import AsyncSessionLocal
-from app.db.models import ConsultBookingRow, EmailSequenceRow, FirmContactRow, InboundEmailRow, PatientRow
+from app.db.models import ConsultBookingRow, EmailSequenceRow, FirmContactRow, FrontFirmActivityRow, InboundEmailRow, PatientRow
 from app.services.llm_gateway import LLMGatewayError, call_skill_json
 from app.services.lead_email_composer_variants import (
     EXPERIMENT_KEY,
@@ -371,6 +371,14 @@ async def build_lead_email_context(
             }
 
     async with AsyncSessionLocal() as session:
+        activity = None
+        if contact.pif_id:
+            activity = (await session.execute(
+                select(FrontFirmActivityRow)
+                .where(FrontFirmActivityRow.pif_id == contact.pif_id)
+                .order_by(desc(FrontFirmActivityRow.warm_score), desc(FrontFirmActivityRow.last_seen_at))
+                .limit(1)
+            )).scalar_one_or_none()
         replies = (await session.execute(
             select(InboundEmailRow)
             .where(
@@ -416,6 +424,9 @@ async def build_lead_email_context(
             "first_name": contact.first_name,
             "email": contact.email,
             "title": contact.title,
+            "persona": contact.persona,
+            "persona_source": contact.persona_source,
+            "persona_confidence": contact.persona_confidence,
             "source": contact.source,
         },
         "history": {
@@ -467,7 +478,9 @@ async def build_lead_email_context(
             reply_count=len(replies),
             zoho_sent_count=len(zoho_sent_messages),
         ),
-        "front_signals": [],
+        "front_signals": {
+            "behavior": (activity.behavioral_json if activity else None) or {},
+        },
         "inferred_pain_points": [],
         "blog_posts": _blog_posts(),
         "policy": {

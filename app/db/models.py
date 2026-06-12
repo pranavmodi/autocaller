@@ -846,6 +846,10 @@ class FirmContactRow(Base):
     front_contact_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     front_last_seen: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
     tech_signals: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    persona: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    persona_source: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    persona_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    research_title: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), default=_utcnow,
     )
@@ -892,6 +896,7 @@ class FrontFirmActivityRow(Base):
     last_records_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
     inbox_breakdown: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     tech_signals: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    behavioral_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     warm_score: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     synced_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow)
 
@@ -910,6 +915,29 @@ class FrontSyncStateRow(Base):
     cursor: Mapped[str | None] = mapped_column(Text, nullable=True)
     watermark: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
     updated_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow, onupdate=_utcnow)
+
+
+class ResearchTaskRow(Base):
+    """PIF Stats async research task tracked for polling and resume."""
+    __tablename__ = "research_tasks"
+
+    task_id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    pif_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="queued")
+    requested_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow)
+    completed_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    result_summary: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+
+    __table_args__ = (
+        CheckConstraint(
+            "kind IN ('research', 'research_staff', 'analyze_behavior')",
+            name="ck_research_tasks_kind",
+        ),
+        Index("ix_research_tasks_pif_id", "pif_id"),
+        Index("ix_research_tasks_status", "status"),
+        Index("ix_research_tasks_kind_status", "kind", "status"),
+    )
 
 
 class FirmCompetitiveFeatureRow(Base):

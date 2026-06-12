@@ -48,6 +48,8 @@ comms_app = typer.Typer(help="Outbound communications dashboard — calls, voice
 contacts_app = typer.Typer(help="Per-firm contact roster (backfill from PIF Stats + patients).", no_args_is_help=True)
 front_app = typer.Typer(help="Front read-only enrichment sync and warm lead signals.", no_args_is_help=True)
 front_competitors_app = typer.Typer(help="Local firm-vs-firm PI competition graph.", no_args_is_help=True)
+research_app = typer.Typer(help="PIF Stats firm research orchestration.", no_args_is_help=True)
+personas_app = typer.Typer(help="Map and inspect PI firm contact personas.", no_args_is_help=True)
 sequences_app = typer.Typer(help="Email sequences — preview, start, and recommend contacts.", no_args_is_help=True)
 lead_gen_app = typer.Typer(help="Cybernetic lead-generation loop — batches, feedback, learning.", no_args_is_help=True)
 lead_gen_observations_app = typer.Typer(
@@ -85,6 +87,8 @@ app.add_typer(email_app, name="email")
 app.add_typer(comms_app, name="comms")
 app.add_typer(contacts_app, name="contacts")
 app.add_typer(front_app, name="front")
+app.add_typer(research_app, name="research")
+app.add_typer(personas_app, name="personas")
 app.add_typer(sequences_app, name="sequences")
 app.add_typer(lead_gen_app, name="lead-gen")
 app.add_typer(inbound_app, name="inbound")
@@ -2980,6 +2984,177 @@ def contacts_list(
         )
     console.print(table)
     console.print(f"[dim]{len(rows)} contact(s)[/dim]")
+
+
+# ---------------------------------------------------------------------------
+# research / personas — PIF Stats warm research orchestration
+# ---------------------------------------------------------------------------
+
+def _parse_research_kinds(raw: str) -> list[str]:
+    from app.services.firm_research import normalize_kinds
+
+    parts = [p.strip() for p in (raw or "").split(",") if p.strip()]
+    return normalize_kinds(parts or None)
+
+
+def _print_research_tasks(tasks: list[dict[str, Any]]) -> None:
+    table = Table(title=f"Research tasks ({len(tasks)})")
+    for col in ["kind", "task_id", "pif_id", "status"]:
+        table.add_column(col, overflow="fold")
+    for row in tasks:
+        table.add_row(
+            str(row.get("kind") or ""),
+            str(row.get("task_id") or ""),
+            str(row.get("pif_id") or ""),
+            str(row.get("status") or ""),
+        )
+    console.print(table)
+
+
+@research_app.command("firm")
+def research_firm_cmd(
+    domain_or_pif: str = typer.Argument(..., help="Warm-list domain or upstream PIF ID."),
+    staff: bool = typer.Option(True, "--staff/--no-staff", help="Queue staff research too."),
+    behavior: bool = typer.Option(False, "--behavior", help="Queue behavior analysis too."),
+    poll: bool = typer.Option(False, "--poll", help="Poll queued/open tasks after queueing."),
+    json_output: bool = typer.Option(False, "--json", help="Print raw JSON."),
+):
+    """Queue research for one firm. Safe POST budget defaults to 30/run."""
+    from app.services.firm_research import poll_research_tasks, queue_firm_research, resolve_domain_or_pif
+
+    async def _run_one():
+        pif_id = await resolve_domain_or_pif(domain_or_pif)
+        queued = await queue_firm_research(pif_id, staff=staff, behavior=behavior)
+        polled = None
+        if poll:
+            task_ids = [row["task_id"] for row in queued.get("queued") or []]
+            polled = await poll_research_tasks(task_ids=task_ids or None)
+        return {"pif_id": pif_id, "queue": queued, "poll": polled}
+
+    data = _run(_run_one())
+    if json_output:
+        console.print_json(data=data)
+        return
+    queue = data["queue"]
+    console.print(
+        f"pif_id={data['pif_id']} queued={len(queue.get('queued') or [])} "
+        f"skipped={len(queue.get('skipped') or [])} posts={queue.get('budget', {}).get('task_posts_made')}"
+    )
+    _print_research_tasks([{**row, "pif_id": data["pif_id"]} for row in queue.get("queued") or []])
+    if queue.get("skipped"):
+        console.print_json(data={"skipped": queue["skipped"]})
+    if data.get("poll"):
+        console.print_json(data=data["poll"])
+
+
+@research_app.command("warm")
+def research_warm_cmd(
+    top: int = typer.Option(50, "--top", min=1, max=100, help="Warm firms to inspect."),
+    kinds: str = typer.Option("research,staff", "--kinds", help="Comma-separated: research,staff,behavior."),
+    timeout: int = typer.Option(1800, "--timeout", min=1, max=1800, help="Poll timeout seconds."),
+    json_output: bool = typer.Option(False, "--json", help="Print raw JSON."),
+):
+    """Research the warm list on demand with hard POST budget and resume."""
+    from app.services.firm_research import orchestrate_warm_research
+
+    data = _run(orchestrate_warm_research(top_n=top, kinds=_parse_research_kinds(kinds), timeout_seconds=timeout))
+    if json_output:
+        console.print_json(data=data)
+        return
+    console.print(
+        f"warm top={top} queued={len(data.get('queued_task_ids') or [])} "
+        f"posts={data.get('budget', {}).get('task_posts_made')} timed_out={data.get('timed_out')}"
+    )
+    tasks = []
+    for result in data.get("queue_results") or []:
+        for row in result.get("queued") or []:
+            tasks.append({**row, "pif_id": result.get("pif_id")})
+    _print_research_tasks(tasks)
+    poll_data = data.get("poll") or {}
+    console.print(
+        f"poll polled={poll_data.get('polled', 0)} completed={poll_data.get('completed', 0)} "
+        f"failed={poll_data.get('failed', 0)} open={poll_data.get('open', 0)}"
+    )
+
+
+@research_app.command("status")
+def research_status_cmd(
+    tasks: bool = typer.Option(False, "--tasks", help="Print open task rows."),
+    json_output: bool = typer.Option(False, "--json", help="Print raw JSON."),
+):
+    """Show research coverage counts and open tasks."""
+    from app.services.firm_research import research_coverage
+
+    data = _run(research_coverage())
+    if json_output:
+        console.print_json(data=data)
+        return
+    coverage = data.get("coverage") or {}
+    console.print(
+        f"matched={coverage.get('matched_firms')} researched={coverage.get('researched_firms')} "
+        f"({coverage.get('research_percent')}%) staff={coverage.get('staff_researched_firms')} "
+        f"behavior={coverage.get('behavior_analyzed_firms')} open_tasks={len(data.get('open_tasks') or [])}"
+    )
+    if tasks:
+        _print_research_tasks(data.get("open_tasks") or [])
+
+
+@research_app.command("sync")
+def research_sync_cmd(json_output: bool = typer.Option(False, "--json", help="Print raw JSON.")):
+    """Poll and upsert queued/running research tasks without queueing new work."""
+    from app.services.firm_research import poll_research_tasks
+
+    data = _run(poll_research_tasks())
+    if json_output:
+        console.print_json(data=data)
+        return
+    console.print(
+        f"polled={data.get('polled')} completed={data.get('completed')} "
+        f"failed={data.get('failed')} open={data.get('open')}"
+    )
+    _print_research_tasks(data.get("tasks") or [])
+
+
+@personas_app.command("map")
+def personas_map_cmd(
+    pif: str = typer.Option("", "--pif", help="Limit to one PIF ID."),
+    json_output: bool = typer.Option(False, "--json", help="Print raw JSON."),
+):
+    """Map firm_contacts titles/emails to composer persona keys."""
+    from app.services.persona_mapper import map_personas
+
+    data = _run(map_personas(pif_id=pif or None))
+    if json_output:
+        console.print_json(data=data)
+        return
+    console.print(f"scanned={data.get('scanned')} updated={data.get('updated')} skipped={data.get('skipped')}")
+
+
+@personas_app.command("show")
+def personas_show_cmd(
+    domain: str = typer.Argument(..., help="Warm-list domain or PIF ID."),
+    json_output: bool = typer.Option(False, "--json", help="Print raw JSON."),
+):
+    """Show contacts and mapped personas for a firm."""
+    from app.services.firm_research import personas_for_domain
+
+    data = _run(personas_for_domain(domain))
+    if json_output:
+        console.print_json(data=data)
+        return
+    table = Table(title=f"Personas for {domain}")
+    for col in ["name", "email", "title", "persona", "source", "conf"]:
+        table.add_column(col, overflow="fold")
+    for row in data.get("contacts") or []:
+        table.add_row(
+            row.get("name") or "—",
+            _mask_email(row.get("email")),
+            row.get("title") or "—",
+            row.get("persona") or "—",
+            row.get("persona_source") or "—",
+            str(row.get("persona_confidence") if row.get("persona_confidence") is not None else "—"),
+        )
+    console.print(table)
 
 
 # ---------------------------------------------------------------------------

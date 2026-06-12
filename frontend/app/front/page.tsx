@@ -34,6 +34,7 @@ import {
   getFrontSignals,
   getFrontStatus,
   getFrontWarmList,
+  getResearchStatus,
   searchFrontCompetitors,
   type FrontCompetitorGraphLink,
   type FrontCompetitorGraphNode,
@@ -77,6 +78,11 @@ export default function FrontPage() {
   const competitorSummary = useQuery({
     queryKey: ["front-competitor-summary"],
     queryFn: getFrontCompetitorSummary,
+    refetchInterval: 60_000,
+  });
+  const researchStatus = useQuery({
+    queryKey: ["research-status"],
+    queryFn: getResearchStatus,
     refetchInterval: 60_000,
   });
 
@@ -147,6 +153,7 @@ export default function FrontPage() {
           warmList.refetch();
           signals.refetch();
           competitorSummary.refetch();
+          researchStatus.refetch();
         }}
       />
 
@@ -176,14 +183,16 @@ export default function FrontPage() {
             rows={status.data?.timing_feed ?? []}
           />
           <SignalsZone
-          loading={signals.isLoading}
-          error={signals.isError}
-          data={signals.data}
-          competitorSummary={competitorSummary.data}
-          competitorSummaryLoading={competitorSummary.isLoading}
-          graphFirm={graphFirm}
-          onGraphFirmChange={setGraphFirm}
-        />
+            loading={signals.isLoading}
+            error={signals.isError}
+            data={signals.data}
+            researchStatus={researchStatus.data}
+            researchStatusLoading={researchStatus.isLoading}
+            competitorSummary={competitorSummary.data}
+            competitorSummaryLoading={competitorSummary.isLoading}
+            graphFirm={graphFirm}
+            onGraphFirmChange={setGraphFirm}
+          />
         </div>
       </div>
     </div>
@@ -407,6 +416,11 @@ function WarmListZone({
                                 <div key={contact.id} className="rounded-md border border-neutral-200 bg-white px-3 py-2">
                                   <div className="flex min-w-0 items-center gap-2">
                                     <span className="truncate text-sm font-medium text-neutral-900">{contact.name}</span>
+                                    {contact.persona && (
+                                      <span className="shrink-0 rounded bg-emerald-100 px-1.5 py-0.5 text-[11px] font-medium text-emerald-800">
+                                        {contact.persona}
+                                      </span>
+                                    )}
                                     {contact.emailed_before && (
                                       <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-800">emailed</span>
                                     )}
@@ -560,6 +574,8 @@ function SignalsZone({
   loading,
   error,
   data,
+  researchStatus,
+  researchStatusLoading,
   competitorSummary,
   competitorSummaryLoading,
   graphFirm,
@@ -568,6 +584,8 @@ function SignalsZone({
   loading: boolean;
   error: boolean;
   data: Awaited<ReturnType<typeof getFrontSignals>> | undefined;
+  researchStatus: Awaited<ReturnType<typeof getResearchStatus>> | undefined;
+  researchStatusLoading: boolean;
   competitorSummary: FrontCompetitorSummary | undefined;
   competitorSummaryLoading: boolean;
   graphFirm: GraphFirm | null;
@@ -585,6 +603,29 @@ function SignalsZone({
         <div className="text-sm text-red-700">Could not load signals.</div>
       ) : (
         <div className="space-y-4">
+          <div>
+            <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-500">Research coverage</div>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <div className="rounded-md border border-neutral-200 px-3 py-2">
+                <div className="text-sm font-medium text-neutral-900">
+                  {researchStatusLoading
+                    ? "Loading..."
+                    : `${(researchStatus?.coverage.researched_firms ?? 0).toLocaleString()} / ${(researchStatus?.coverage.matched_firms ?? 0).toLocaleString()}`}
+                </div>
+                <div className="mt-1 text-xs text-neutral-500">
+                  firm research · {researchStatus?.coverage.research_percent ?? 0}%
+                </div>
+              </div>
+              <div className="rounded-md border border-neutral-200 px-3 py-2">
+                <div className="text-sm font-medium text-neutral-900">
+                  {(researchStatus?.open_tasks.length ?? 0).toLocaleString()} open
+                </div>
+                <div className="mt-1 text-xs text-neutral-500">
+                  staff {(researchStatus?.coverage.staff_researched_firms ?? 0).toLocaleString()} · behavior {(researchStatus?.coverage.behavior_analyzed_firms ?? 0).toLocaleString()}
+                </div>
+              </div>
+            </div>
+          </div>
           <div>
             <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-500">Competitor graph</div>
             <CompetitorSearchBox onSelect={onGraphFirmChange} />

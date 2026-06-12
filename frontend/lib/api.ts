@@ -1897,6 +1897,9 @@ export type FrontNamedContact = {
   name: string;
   email: string;
   title: string | null;
+  persona: string | null;
+  persona_source: string | null;
+  persona_confidence: number | null;
   emailed_before: boolean;
   front_last_seen: string | null;
   source: string;
@@ -1916,6 +1919,7 @@ export type FrontWarmFirm = {
   eligible_contact_count: number;
   tech_signals: Record<string, unknown>;
   inbox_breakdown: Record<string, unknown>;
+  behavioral_json: Record<string, unknown>;
 };
 
 export type FrontContact = {
@@ -1950,6 +1954,26 @@ export type FrontSignals = {
     warm_score: number;
     last_seen_at: string | null;
   }>;
+};
+
+export type ResearchStatus = {
+  coverage: {
+    matched_firms: number;
+    researched_firms: number;
+    staff_researched_firms: number;
+    behavior_analyzed_firms: number;
+    research_percent: number;
+    staff_percent: number;
+    behavior_percent: number;
+  };
+  open_tasks: Array<{
+    task_id: string;
+    pif_id: string;
+    kind: string;
+    status: string;
+    requested_at: string | null;
+  }>;
+  task_counts: Record<string, number>;
 };
 
 export type FrontCompetitorSummary = {
@@ -2039,6 +2063,8 @@ export const getFrontContacts = (args: { domain?: string; q?: string; limit?: nu
 };
 
 export const getFrontSignals = () => get<FrontSignals>("/api/front/signals");
+
+export const getResearchStatus = () => get<ResearchStatus>("/api/research/status");
 
 export const getFrontCompetitorSummary = () =>
   get<FrontCompetitorSummary>("/api/front/competitors/summary");

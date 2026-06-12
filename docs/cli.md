@@ -144,6 +144,12 @@ Every command accepts `--help`. Exit code is `0` on success, `1` on any error
 | `front status [--json]` | Show Front sync health, cursors, watermarks, table counts, funnel counts, day-over-day deltas, and timing feed data used by `/front`. |
 | `front contacts [--firm=<pif_id> \| --domain=<domain> --q=<text>] [--limit=N] [--json]` | List synced Front contacts with matched pif_id, masked email display, warm score, and tech signals. |
 | `front warm-batch --domains a.com,b.com [--name=...] [--json]` | Create a recommended lead-gen batch directly from selected Front-warm domains. Items use `reason_json.basis = "front-warm"` and stay pending for review in `/lead-gen`. |
+| `research firm <domain-or-pif> [--staff/--no-staff] [--behavior] [--poll] [--json]` | Queue PIF Stats firm research for one warm-list domain or PIF ID. Uses only safe task-creating POSTs, hard-capped at 30 per run with >=2s spacing. `--behavior` also queues behavior analysis. |
+| `research warm [--top=50] [--kinds=research,staff] [--timeout=1800] [--json]` | Walk the Front warm list by warm score, skip already researched firms, queue research up to the POST budget, poll for completion, upsert titled contacts, sync behavior JSON, and map personas. |
+| `research status [--tasks] [--json]` | Show matched-firm research coverage, staff/behavior coverage, task status counts, and optionally open task rows. |
+| `research sync [--json]` | Poll queued/running research tasks and upsert completed results without queueing new production work. Use to resume after a prior warm run timed out. |
+| `personas map [--pif=<id>] [--json]` | Fill `firm_contacts.persona`, source, and confidence from research/title keywords or functional email prefixes. Idempotent and never lowers confidence. |
+| `personas show <domain-or-pif> [--json]` | Print a firm's contacts with title, mapped persona, source, and confidence. |
 | `front competitors rebuild [--json]` | Recompute local firm-vs-firm competition features and edges from cached Mission Control SQLite plus `front_firm_activity`. No Front API calls and no LLM calls. |
 | `front competitors summary [--json]` | Show competitor graph coverage: firms with features/metros, edge count, tier distribution, top metro counts, and last rebuild time. |
 | `front competitors show <domain-or-name> [--limit=N] [--json]` | Show who competes with one firm, including score, neighbor name/domain/metro, and one-line evidence. |
@@ -603,6 +609,25 @@ Review the named contacts before creating a lead-gen batch. `front warm-batch`
 does not call Front and does not send email; it writes a normal recommended
 lead-gen batch with pending items, `reason_json.basis = "front-warm"`, and a
 link back to `/lead-gen?batch=<id>`.
+
+### Recipe: "research the warm list before a batch"
+Use this when the warm list has matched PIF IDs but weak contact titles or
+missing personas. PIF Stats research runs on production Precise infrastructure,
+so trigger it manually and respect the POST budget.
+
+```bash
+bin/autocaller research status --tasks
+bin/autocaller research warm --top 50 --kinds research,staff
+bin/autocaller research sync
+bin/autocaller personas map
+bin/autocaller personas show examplelaw.com
+bin/autocaller front warm-batch --domains examplelaw.com --name "Researched warm review"
+```
+
+`research warm` queues only safe PIF Stats task endpoints, skips completed
+research, polls for completion up to the timeout, upserts titled
+`firm_contacts`, stores behavior analysis on `front_firm_activity`, and maps
+contact personas for the lead-email composer.
 
 ### Recipe: "who competes with firm X"
 Use this when a warm-list firm needs local PI competitor context. The rebuild

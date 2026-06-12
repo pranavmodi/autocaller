@@ -59,6 +59,8 @@ Important routes:
 | `GET` | `/api/front/contacts` | synced Front contacts filtered by domain/search |
 | `GET` | `/api/front/signals` | tech-stack counts, inbox-activity mix, and suppress-flagged domains |
 | `POST` | `/api/front/warm-batch` | create a recommended lead-gen batch directly from selected Front-warm domains |
+| `POST` | `/api/research/warm` | trigger budgeted PIF Stats research over the Front warm list |
+| `GET` | `/api/research/status` | research coverage counts and open PIF Stats task rows |
 
 ### CLI
 
@@ -85,6 +87,12 @@ bin/autocaller front sync --max-calls 300
 bin/autocaller front status
 bin/autocaller front contacts --domain examplelaw.com
 bin/autocaller front warm-batch --domains examplelaw.com,anotherfirm.com
+bin/autocaller research status --tasks
+bin/autocaller research firm examplelaw.com --staff --behavior
+bin/autocaller research warm --top 50 --kinds research,staff
+bin/autocaller research sync
+bin/autocaller personas map
+bin/autocaller personas show examplelaw.com
 bin/autocaller leads warm-list --limit 20
 bin/autocaller actions list --type send_approved_lead_gen_draft
 bin/autocaller actions list --scheduled
@@ -131,10 +139,12 @@ Tables:
   contact JSON.
 - `front_firm_activity`: domain-level metadata aggregate only. It stores
   contact count, last seen/referral/records timestamps, inbox breakdown, tech
-  signals, matched `pif_id`, and `warm_score`.
+  signals, matched `pif_id`, `warm_score`, and nullable `behavioral_json`
+  copied from completed PIF Stats behavior analysis.
 - `front_sync_state`: per-stage cursor and watermark.
 - `firm_contacts` now has nullable `front_contact_id`, `front_last_seen`, and
-  `tech_signals` columns.
+  `tech_signals` columns. Firm research also adds nullable `persona`,
+  `persona_source`, `persona_confidence`, and `research_title` columns.
 
 Operational constraints implemented:
 
@@ -162,7 +172,54 @@ Operational constraints implemented:
   selected domains against synced rows, pick eligible named contacts that have
   not already been emailed, create a normal `lead_gen_batches` row, and add
   pending `lead_gen_batch_items` with `reason_json.basis = "front-warm"` plus
-  score breakdown and source features.
+  score breakdown and source features. When a contact has a mapped persona, the
+  batch item uses that persona key instead of the generic `front_warm_contact`.
+
+### PIF Stats Firm Research Orchestrator and Personas
+
+Files:
+
+- Schema: Alembic revision
+  `p8q9r0s1t2u3_add_firm_research_orchestrator.py`; ORM rows
+  `ResearchTaskRow`, the new contact persona columns, and
+  `FrontFirmActivityRow.behavioral_json`.
+- Service: `app/services/firm_research.py`.
+- Persona mapper: `app/services/persona_mapper.py`.
+- API: `app/api/research.py` exposes `/api/research/warm` and
+  `/api/research/status`.
+- CLI: `research firm`, `research warm`, `research status`, `research sync`,
+  `personas map`, and `personas show`.
+
+Operational constraints implemented:
+
+- No daemon loop exists for research. Operators or agents must trigger research
+  explicitly.
+- `PifStatsClient` uses `PIF_BASE` or `PIFSTATS_BASE_URL`, defaults to the
+  existing Precise PIF Stats base, and only calls:
+  `POST /pif-info/{pif_id}/research`,
+  `POST /pif-info/{pif_id}/research-staff`,
+  `POST /pif-info/{pif_id}/analyze-behavior`,
+  `GET /pif-info/research-status/{task_id}`, and
+  `GET /pif-info/{pif_id}`.
+- Task-creating POSTs have a hard default budget of 30/run, >=2s spacing, and
+  429 retry handling that honors `Retry-After`, widens pacing, and burns budget
+  on retries. GETs are paced at >=0.5s.
+- If PIF Stats starts requiring auth, credentials are read from env
+  (`PIFSTATS_AUTH_TOKEN`, `PIF_AUTH_TOKEN`, `PIFSTATS_API_KEY`, or
+  `PIFSTATS_AUTH_HEADER`), never hardcoded.
+- Completed leadership/staff payloads upsert into `firm_contacts`, matching by
+  `(pif_id, email)` when email exists and `(pif_id, name)` otherwise. Research
+  titles are stored separately in `research_title`.
+- Completed behavior analysis copies `behavioral_data` into
+  `front_firm_activity.behavioral_json` for all rows with the same `pif_id`.
+- `compose_lead_email` includes mapped `contact.persona` fields and
+  `front_signals.behavior` so the composer skill can use after-hours ratios,
+  primary pain points, and topic distributions as evidence.
+- `persona_mapper` maps title keywords and functional email prefixes to the
+  composer persona keys: `founder_owner`, `managing_partner`, `coo_ops`,
+  `intake`, `records`, `case_manager`, `lien_settlement`, `marketing`,
+  `attorney`, and `paralegal`. It is idempotent and never replaces an existing
+  higher-confidence persona with a lower-confidence source.
 
 Policy integration:
 

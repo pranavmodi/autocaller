@@ -981,6 +981,9 @@ async def front_warm_firms(*, limit: int = 20) -> list[dict[str, Any]]:
             "name": contact.full_name,
             "email": email,
             "title": contact.title,
+            "persona": contact.persona,
+            "persona_source": contact.persona_source,
+            "persona_confidence": contact.persona_confidence,
             "emailed_before": email in emailed,
             "front_last_seen": _iso(contact.front_last_seen),
             "source": contact.source,
@@ -1000,6 +1003,7 @@ async def front_warm_firms(*, limit: int = 20) -> list[dict[str, Any]]:
             "eligible_contact_count": sum(1 for c in contacts_by_pif.get(activity.pif_id or "", []) if not c["emailed_before"]),
             "tech_signals": activity.tech_signals or {},
             "inbox_breakdown": activity.inbox_breakdown or {},
+            "behavioral_json": activity.behavioral_json or {},
         }
         for activity in activities
     ]
@@ -1031,7 +1035,9 @@ async def warm_list(*, limit: int = 20) -> list[dict[str, Any]]:
             "contact_name": contact.full_name,
             "contact_email": contact.email,
             "contact_title": contact.title,
+            "persona": contact.persona,
             "tech_signals": activity.tech_signals or {},
+            "behavioral_json": activity.behavioral_json or {},
         }
         for activity, contact in rows
         if is_human_named_contact(contact.full_name, contact.email)
@@ -1215,7 +1221,7 @@ async def create_front_warm_batch(
                 contact_name=contact.full_name or "",
                 contact_email=(contact.email or "").strip().lower(),
                 contact_title=contact.title or "",
-                persona="front_warm_contact",
+                persona=contact.persona or "front_warm_contact",
                 template_key=template_key,
                 score=int(activity.warm_score or 0),
                 reason_json=build_front_warm_reason_json(
