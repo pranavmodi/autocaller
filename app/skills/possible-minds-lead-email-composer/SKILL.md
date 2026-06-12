@@ -102,16 +102,50 @@ Do not treat app `email_logs`, failed delivery attempts, missing Zoho Sent
 history, or draft-only operator approvals as prior recipient contact. Only
 messages found in Zoho Sent count as previous outbound email.
 
-Match the angle to the contact's role (`contact_title`):
+Match the angle to the contact's persona. When the payload supplies
+`contact.persona` (or the batch item carries a persona key), it is the
+primary signal; `contact_title` refines it. The persona inventory lives in
+docs/product/PI_FIRM_PERSONAS.md; the keys below map to it.
 
-- intake-titled contacts (Intake Attorney, Intake Manager, Pre-Litigation
-  Director, Client Relations): lead with the after-hours/overflow intake
-  angle — they live that pain daily; records is their colleagues' problem.
-- working attorneys and litigators: lead with records/bills/status follow-up
-  — the chase on every file is their lived drag.
-- founders, managing partners, operations leads: either angle works; frame it
-  as staff-time and signed-case economics, and it is acceptable to name both
-  leaks and ask which one bites harder.
+- `founder_owner` / `managing_partner` (economic buyers): frame around
+  leverage, staff-time economics, and signed cases. Their fear is adding
+  tools staff won't use; their proof is a system already running at scale.
+  Either wedge works; it is acceptable to name both leaks (after-hours
+  intake, records chase) and ask which one bites harder. Vocabulary:
+  signed cases, staff hours, leakage, throughput. Never teach them their
+  own business.
+- `coo_ops` (COO, executive director, firm administrator, office manager):
+  frame around queue visibility, handoffs, exception-only workflows, and
+  implementation load. They are the implementation success owner: stress
+  that the Precise systems run unattended and staff touch only exceptions.
+  Vocabulary: throughput, follow-up loops, staff workload, adoption.
+- `intake` (intake director/specialist, new-client coordinator, or a
+  staffed intake@ desk): lead with after-hours/overflow intake — they live
+  missed calls, slow speed-to-lead, and morning backlogs daily; records is
+  their colleagues' problem. Vocabulary: speed-to-lead, answer rate,
+  after-hours gap, signed vs lost.
+- `records` (records clerk/manager, or a staffed records@ desk): lead with
+  the records-and-bills chase — portals, faxes, re-requests, status
+  reconstruction. The most concrete persona: name the chase mechanics, not
+  abstractions. Vocabulary: requests outstanding, follow-up loops,
+  turnaround days.
+- `case_manager` (case managers and supervisors): frame around status
+  visibility and fewer client-update loops; they answer "any update?"
+  calls all day. Vocabulary: client updates, treatment status, file load.
+- `lien_settlement` (lien negotiators, settlement/disbursement
+  coordinators): frame around reduction cycles, disbursement delays, and
+  provider follow-up. They are detail-skeptical: be concrete and modest.
+- `attorney` (trial/pre-lit/associate attorneys): lead with records/
+  bills/status follow-up, the chase on every file is their lived drag;
+  respect litigation quality concerns, never imply legal-work automation.
+- `marketing` (marketing/growth/BD): frame around lead response time,
+  conversion leakage, and attribution; chatbot and voice-AI intake are the
+  natural hooks.
+
+Functional-inbox recipients (records@, intake@): greet with `Hi,` (no
+fake name), write to the desk's owner in their working vocabulary, and
+keep the CTA an easy forward: one line inviting them to pass it to
+whoever owns that workflow is acceptable alongside the binary question.
 
 Vary subjects across a batch: never reuse one subject line on multiple
 recipients in the same run. Subjects should be lowercase-casual, specific,
