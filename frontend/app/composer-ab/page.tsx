@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FileCode2, FlaskConical, Loader2, Pencil, RefreshCw, Save, UploadCloud, X } from "lucide-react";
 import {
+  getComposerAbReport,
   getComposerVariantStats,
   updateComposerVariant,
   uploadComposerVariant,
@@ -315,6 +316,11 @@ export default function ComposerAbPage() {
     queryFn: () => getComposerVariantStats(days),
     refetchInterval: 60_000,
   });
+  const report = useQuery({
+    queryKey: ["composer-ab-report", days],
+    queryFn: () => getComposerAbReport(days),
+    refetchInterval: 60_000,
+  });
 
   return (
     <div className="mx-auto max-w-[1500px] space-y-4">
@@ -355,6 +361,53 @@ export default function ComposerAbPage() {
           </button>
         </div>
       </div>
+
+
+      <section className="rounded-xl border border-neutral-200 bg-white p-4">
+        <h2 className="text-sm font-semibold text-neutral-950">
+          Experiment verdicts — {report.data?.axis ?? "subject_line"}
+        </h2>
+        <p className="mt-1 text-xs text-neutral-500">
+          Persona-blocked. A verdict needs ≥{report.data?.min_sends_per_arm ?? 40} sends per arm and{" "}
+          {Math.round(((report.data?.decision_probability ?? 0.9) * 100))}% probability of beating baseline.
+        </p>
+        {(report.data?.warnings ?? []).map((w) => (
+          <p key={w} className="mt-2 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800">{w}</p>
+        ))}
+        <div className="mt-3 overflow-x-auto">
+          <table className="w-full text-left text-xs">
+            <thead className="text-neutral-500">
+              <tr>
+                {["variant", "sent", "opened", "replied", "declined", "open rate", "reply rate", "P>base (opens)", "P>base (replies)", "verdict"].map((h) => (
+                  <th key={h} className="px-2 py-1.5 font-medium">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {(report.data?.arms ?? []).map((arm) => (
+                <tr key={arm.variant} className="border-t border-neutral-100">
+                  <td className="px-2 py-1.5 font-medium text-neutral-900">{arm.variant}{arm.is_baseline ? " (baseline)" : ""}</td>
+                  <td className="px-2 py-1.5">{arm.sent}</td>
+                  <td className="px-2 py-1.5">{arm.opened}</td>
+                  <td className="px-2 py-1.5">{arm.replied}</td>
+                  <td className="px-2 py-1.5">{arm.declined}</td>
+                  <td className="px-2 py-1.5">{arm.open_rate == null ? "—" : arm.open_rate.toFixed(2)}</td>
+                  <td className="px-2 py-1.5">{arm.reply_rate == null ? "—" : arm.reply_rate.toFixed(2)}</td>
+                  <td className="px-2 py-1.5">{arm.p_beats_baseline_opens == null ? "—" : arm.p_beats_baseline_opens.toFixed(2)}</td>
+                  <td className="px-2 py-1.5">{arm.p_beats_baseline_replies == null ? "—" : arm.p_beats_baseline_replies.toFixed(2)}</td>
+                  <td className="px-2 py-1.5">
+                    <span className={
+                      arm.verdict === "winner" ? "rounded bg-emerald-100 px-1.5 py-0.5 font-medium text-emerald-700"
+                      : arm.verdict === "loser" ? "rounded bg-rose-100 px-1.5 py-0.5 font-medium text-rose-700"
+                      : "rounded bg-neutral-100 px-1.5 py-0.5 text-neutral-600"
+                    }>{arm.verdict}</span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
 
       <section className="rounded-xl border border-neutral-200 bg-white p-4">
         <h2 className="text-sm font-semibold text-neutral-950">Variant drop folder</h2>

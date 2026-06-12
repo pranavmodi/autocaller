@@ -2426,3 +2426,32 @@ export const editOutreachSend = (
   sendId: number,
   body: { subject?: string; body_html?: string; plaintext?: string; by?: string },
 ) => post<OutreachSend>(`/api/outreach/sends/${sendId}/edit`, body);
+
+export interface ComposerAbArm {
+  variant: string;
+  is_baseline: boolean;
+  sent: number;
+  opened: number;
+  replied: number;
+  declined: number;
+  bounced: number;
+  open_rate: number | null;
+  reply_rate: number | null;
+  p_beats_baseline_opens: number | null;
+  p_beats_baseline_replies: number | null;
+  verdict: string;
+  personas: Record<string, { sent: number; opened: number; replied: number; declined: number; bounced: number }>;
+}
+
+export interface ComposerAbReport {
+  experiment_key: string;
+  axis: string;
+  days: number;
+  min_sends_per_arm: number;
+  decision_probability: number;
+  arms: ComposerAbArm[];
+  warnings: string[];
+}
+
+export const getComposerAbReport = (days = 60) =>
+  get<ComposerAbReport>(`/api/lead-email-composer/report?days=${encodeURIComponent(String(days))}`);
