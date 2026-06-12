@@ -2,20 +2,29 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
-from sqlalchemy import desc, select
+from sqlalchemy import desc, func, select
 
 from app.db import AsyncSessionLocal
 from app.db.models import (
     CallLogRow,
+    EmailLogRow,
     EmailSequenceRow,
     FirmContactRow,
     FrontFirmActivityRow,
+    LeadGenBatchItemRow,
+    LeadGenBatchRow,
     LeadGenPolicyVersionRow,
     PatientRow,
     SmsLogRow,
 )
+
+# Fresh-selection firm cooldown: any firm with a successful lead-gen email or
+# a batch item created inside this window is excluded from new first-touch
+# selection. Follow-ups are owned by sequences/actions, never fresh selection.
+EMAIL_FIRM_COOLDOWN_DAYS = 14
 from app.services.contact_selection import (
     ContactSelectionInput,
     DEFAULT_CONTACT_SELECTION_WEIGHTS,
@@ -80,11 +89,16 @@ async def recommend_sequence_contacts(
 ) -> dict:
     """Return one founder/COO-style contact per untouched firm.
 
-    "Untouched" deliberately does not use `email_logs` as prior-email truth.
-    The lead-gen loop now treats Zoho Sent as authoritative for previous
-    outbound email. Existing sequence rows still suppress the firm so we do not
-    multi-thread active workflow state, and non-email call/SMS history still
-    suppresses the firm for v1.
+    Prior-email handling (two distinct concerns):
+    - Composition still treats Zoho Sent as the authoritative narrative of
+      previous outbound email (what the draft may claim about prior contact).
+    - Selection additionally suppresses on our own send/batch records, which
+      are reliable for "we touched this firm/contact recently" even when a
+      send later bounced: contacts that ever received a sent email or sat in
+      any batch are excluded; firms with a sent email or batch item inside
+      EMAIL_FIRM_COOLDOWN_DAYS are excluded; firms emailed longer ago stay
+      selectable for a *different* contact with has_prior_comms=True.
+    Existing sequence rows and call/SMS history still suppress the firm.
     """
     template_key = normalize_template_key(template_key)
     limit = max(1, min(limit, 200))
@@ -106,6 +120,51 @@ async def recommend_sequence_contacts(
             if p
         }
         contacted_pifs = sms_pifs | call_pifs
+
+        cooldown_cutoff = datetime.now(timezone.utc) - timedelta(days=EMAIL_FIRM_COOLDOWN_DAYS)
+        emailed_contact_emails = {
+            e.lower() for e in (await session.execute(
+                select(EmailLogRow.recipient_email).where(
+                    EmailLogRow.status == "sent",
+                    EmailLogRow.recipient_email.isnot(None),
+                )
+            )).scalars().all()
+            if e
+        }
+        emailed_pifs_all = {
+            p for p in (await session.execute(
+                select(EmailLogRow.pif_id).where(
+                    EmailLogRow.status == "sent",
+                    EmailLogRow.pif_id.isnot(None),
+                )
+            )).scalars().all()
+            if p
+        }
+        recent_emailed_pifs = {
+            p for p in (await session.execute(
+                select(EmailLogRow.pif_id).where(
+                    EmailLogRow.status == "sent",
+                    EmailLogRow.pif_id.isnot(None),
+                    EmailLogRow.sent_at >= cooldown_cutoff,
+                )
+            )).scalars().all()
+            if p
+        }
+        batch_contact_ids = {
+            c for c in (await session.execute(
+                select(LeadGenBatchItemRow.contact_id)
+            )).scalars().all()
+            if c
+        }
+        recent_batch_pifs = {
+            p for p in (await session.execute(
+                select(LeadGenBatchItemRow.pif_id)
+                .join(LeadGenBatchRow, LeadGenBatchRow.id == LeadGenBatchItemRow.batch_id)
+                .where(LeadGenBatchRow.created_at >= cooldown_cutoff)
+            )).scalars().all()
+            if p
+        }
+        recent_email_pifs = recent_emailed_pifs | recent_batch_pifs
 
         sequence_contact_ids = (await session.execute(
             select(EmailSequenceRow.contact_id).where(
@@ -161,6 +220,8 @@ async def recommend_sequence_contacts(
     counts = {
         "contacts_seen": len(contacts),
         "suppressed_contacted_firm": 0,
+        "suppressed_prior_email_contact": 0,
+        "suppressed_recent_email_firm": 0,
         "suppressed_existing_sequence": 0,
         "suppressed_unusable_email": 0,
         "suppressed_non_law_firm": 0,
@@ -176,6 +237,12 @@ async def recommend_sequence_contacts(
             continue
         if c.pif_id in contacted_pifs:
             counts["suppressed_contacted_firm"] += 1
+            continue
+        if c.id in batch_contact_ids or (c.email or "").lower() in emailed_contact_emails:
+            counts["suppressed_prior_email_contact"] += 1
+            continue
+        if c.pif_id in recent_email_pifs:
+            counts["suppressed_recent_email_firm"] += 1
             continue
         if c.pif_id in sequenced_pifs:
             counts["suppressed_existing_sequence"] += 1
@@ -200,7 +267,7 @@ async def recommend_sequence_contacts(
                 contact_title=c.title or "",
                 contact_source=c.source or "",
                 state=states.get(c.pif_id),
-                has_prior_comms=False,
+                has_prior_comms=c.pif_id in emailed_pifs_all,
                 has_existing_sequence=False,
                 front_warm_score=front_warm_scores.get(c.pif_id, 0),
             ),
