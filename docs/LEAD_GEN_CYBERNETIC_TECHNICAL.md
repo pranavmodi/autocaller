@@ -143,6 +143,12 @@ Operational constraints implemented:
 - API stages are read-only GETs.
 - `FrontRateBudget` hard-caps calls per run and enforces at least 1.5 seconds
   between calls.
+- HTTP 429 responses are handled in `FrontClient.get`: the client honors
+  `Retry-After` (clamped 1–60s), doubles the run's pacing interval (capped at
+  15s), retries up to twice, and counts events in `rate_limited` (surfaced in
+  stage stats, the persisted last-run payload, and `GET /api/front/status` /
+  `front status`). Persistent 429s raise and abort the run with the cursor
+  already persisted, so the next run resumes where it stopped.
 - Contacts sync paginates `/contacts`, persists cursor/watermark after each
   page, and derives the domain from the primary email handle.
 - Inbox activity sync reads selected inbox conversation metadata only and never

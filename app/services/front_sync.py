@@ -219,6 +219,7 @@ class FrontRateBudget:
     max_calls: int = 300
     min_interval_seconds: float = 1.5
     calls_made: int = 0
+    rate_limited_count: int = 0
     _last_call_monotonic: float = 0.0
 
     @property
@@ -265,6 +266,21 @@ class FrontClient:
             return None
         url = path_or_url if path_or_url.startswith("http") else f"{self.base}{path_or_url}"
         resp = await self._client.get(url, params=params)
+        for _retry in range(2):
+            if resp.status_code != 429:
+                break
+            # Front told us to slow down: honor Retry-After, permanently widen
+            # this run's pacing, and burn budget on the retry like any call.
+            self.budget.rate_limited_count += 1
+            try:
+                retry_after = float(resp.headers.get("Retry-After") or 5.0)
+            except ValueError:
+                retry_after = 5.0
+            self.budget.min_interval_seconds = min(self.budget.min_interval_seconds * 2, 15.0)
+            await asyncio.sleep(min(max(retry_after, 1.0), 60.0))
+            if not await self.budget.before_call():
+                return None
+            resp = await self._client.get(url, params=params)
         resp.raise_for_status()
         return resp.json()
 
@@ -345,6 +361,7 @@ async def sync_contacts(*, max_calls: int = 300, full: bool = False, budget: Fro
         "calls_made": budget.calls_made,
         "remaining_calls": budget.remaining,
         "budget_exhausted": budget.exhausted(),
+        "rate_limited": budget.rate_limited_count,
     }
 
 
@@ -463,6 +480,7 @@ async def sync_inbox_activity(*, max_calls: int = 300, full: bool = False, budge
         "calls_made": budget.calls_made,
         "remaining_calls": budget.remaining,
         "budget_exhausted": budget.exhausted(),
+        "rate_limited": budget.rate_limited_count,
     }
 
 
@@ -866,6 +884,7 @@ async def front_status() -> dict[str, Any]:
             "last_run_age_hours": _age_hours(last_run_at, now=now),
             "calls_used": last_run.get("calls_used"),
             "call_budget": int(last_run.get("call_budget") or os.getenv("FRONT_SYNC_MAX_CALLS", "300") or 300),
+            "rate_limited": last_run.get("rate_limited"),
             "latest_watermark": _iso(latest_watermark),
             "latest_watermark_age_hours": _age_hours(latest_watermark, now=now),
             "next_daily_run_at": _iso(next_daily_run_at),
@@ -1240,6 +1259,7 @@ async def run_front_sync(*, max_calls: int = 300, full: bool = False) -> dict[st
         "finished_at": _utcnow().isoformat(),
         "calls_used": budget.calls_made,
         "call_budget": budget.max_calls,
+        "rate_limited": budget.rate_limited_count,
         "full": full,
         "contacts": contacts,
         "activity": activity,
