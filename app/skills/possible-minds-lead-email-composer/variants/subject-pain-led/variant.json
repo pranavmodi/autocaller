@@ -1,0 +1,9 @@
+{
+  "key": "subject-pain-led",
+  "label": "Subject: pain-led",
+  "description": "Subject-line axis arm B: subjects name the workflow pain, no Precise mention. Body unchanged.",
+  "allocation_weight": 100,
+  "active": true,
+  "experiment_axis": "subject_line",
+  "created": "2026-06-12"
+}

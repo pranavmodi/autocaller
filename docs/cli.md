@@ -150,6 +150,9 @@ Every command accepts `--help`. Exit code is `0` on success, `1` on any error
 | `research sync [--json]` | Poll queued/running research tasks and upsert completed results without queueing new production work. Use to resume after a prior warm run timed out. |
 | `personas map [--pif=<id>] [--json]` | Fill `firm_contacts.persona`, source, and confidence from research/title keywords or functional email prefixes. Idempotent and never lowers confidence. |
 | `personas show <domain-or-pif> [--json]` | Print a firm's contacts with title, mapped persona, source, and confidence. |
+| `composer-ab variants` | List composer skill variants (subject-line experiment arms) with active state and allocation weight. |
+| `composer-ab assign <contact_id>` | Preview the deterministic (rendezvous-hash) variant assignment for a contact. |
+| `composer-ab report [--days 60] [--json]` | Persona-blocked A/B report: sends/opens/replies per arm with beta-binomial P(beats baseline), verdict gated at 40 sends/arm and 90% probability. Warns when Resend opens are not flowing. |
 | `front competitors rebuild [--json]` | Recompute local firm-vs-firm competition features and edges from cached Mission Control SQLite plus `front_firm_activity`. No Front API calls and no LLM calls. |
 | `front competitors summary [--json]` | Show competitor graph coverage: firms with features/metros, edge count, tier distribution, top metro counts, and last rebuild time. |
 | `front competitors show <domain-or-name> [--limit=N] [--json]` | Show who competes with one firm, including score, neighbor name/domain/metro, and one-line evidence. |

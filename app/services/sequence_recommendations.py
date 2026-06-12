@@ -16,6 +16,7 @@ from app.db.models import (
     FrontFirmActivityRow,
     LeadGenBatchItemRow,
     LeadGenBatchRow,
+    LeadGenObservationRow,
     LeadGenPolicyVersionRow,
     PatientRow,
     SmsLogRow,
@@ -166,6 +167,19 @@ async def recommend_sequence_contacts(
         }
         recent_email_pifs = recent_emailed_pifs | recent_batch_pifs
 
+        # Firms that explicitly declined never re-enter fresh selection.
+        declined_pifs = {
+            p for p in (await session.execute(
+                select(LeadGenObservationRow.pif_id).where(
+                    LeadGenObservationRow.classified_outcome.in_(
+                        ["declined", "negative_reply", "do_not_contact", "unsubscribe"]
+                    ),
+                    LeadGenObservationRow.pif_id.isnot(None),
+                )
+            )).scalars().all()
+            if p
+        }
+
         sequence_contact_ids = (await session.execute(
             select(EmailSequenceRow.contact_id).where(
                 EmailSequenceRow.template_key == DEFAULT_TEMPLATE_KEY,
@@ -222,6 +236,7 @@ async def recommend_sequence_contacts(
         "suppressed_contacted_firm": 0,
         "suppressed_prior_email_contact": 0,
         "suppressed_recent_email_firm": 0,
+        "suppressed_declined_firm": 0,
         "suppressed_existing_sequence": 0,
         "suppressed_unusable_email": 0,
         "suppressed_non_law_firm": 0,
@@ -240,6 +255,9 @@ async def recommend_sequence_contacts(
             continue
         if c.id in batch_contact_ids or (c.email or "").lower() in emailed_contact_emails:
             counts["suppressed_prior_email_contact"] += 1
+            continue
+        if c.pif_id in declined_pifs:
+            counts["suppressed_declined_firm"] += 1
             continue
         if c.pif_id in recent_email_pifs:
             counts["suppressed_recent_email_firm"] += 1

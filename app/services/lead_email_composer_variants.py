@@ -369,3 +369,160 @@ async def composer_variant_stats(*, days: int = 30) -> dict[str, Any]:
         "variants_dir": str(VARIANTS_DIR),
         "variants": rows,
     }
+
+
+# ---------------------------------------------------------------------------
+# A/B report: persona-blocked counts + beta-binomial decisions
+# ---------------------------------------------------------------------------
+
+AB_MIN_SENDS_PER_ARM = 40
+AB_DECISION_PROBABILITY = 0.90
+_AB_MC_DRAWS = 4000
+
+_REPLY_OUTCOMES = {"positive_reply", "reply", "referral", "needs_human_review"}
+_DECLINE_OUTCOMES = {"declined", "negative_reply", "do_not_contact", "unsubscribe"}
+
+
+def _beta_prob_beats(a_succ: int, a_n: int, b_succ: int, b_n: int) -> float | None:
+    """P(rate_A > rate_B) under independent Beta(1+s, 1+f) posteriors.
+
+    Monte Carlo with a fixed seed: deterministic, no numpy/scipy needed,
+    accurate enough (±~1%) for go/no-go calls at our send volumes.
+    """
+    if a_n <= 0 or b_n <= 0:
+        return None
+    import random as _random
+
+    rng = _random.Random(f"ab:{a_succ}:{a_n}:{b_succ}:{b_n}")
+    wins = 0
+    for _ in range(_AB_MC_DRAWS):
+        a = rng.betavariate(1 + a_succ, 1 + max(0, a_n - a_succ))
+        b = rng.betavariate(1 + b_succ, 1 + max(0, b_n - b_succ))
+        if a > b:
+            wins += 1
+    return round(wins / _AB_MC_DRAWS, 4)
+
+
+def _ab_verdict(prob: float | None, sends: int) -> str:
+    if sends < AB_MIN_SENDS_PER_ARM or prob is None:
+        return "collecting"
+    if prob >= AB_DECISION_PROBABILITY:
+        return "winner"
+    if prob <= 1 - AB_DECISION_PROBABILITY:
+        return "loser"
+    return "leading" if prob >= 0.5 else "trailing"
+
+
+async def composer_ab_report(*, days: int = 60) -> dict[str, Any]:
+    """Variant × persona experiment report for the subject-line A/B.
+
+    Sources: agent_actions stamped with composer_variant_key (the send-time
+    truth), batch items for persona, observations for outcomes. Operator-
+    authored drafts (no variant stamp) are excluded by construction.
+    """
+    from app.db.models import AgentActionRow
+
+    days = max(1, min(days, 365))
+    since = _window_start(days)
+
+    async with AsyncSessionLocal() as session:
+        actions = (await session.execute(
+            select(AgentActionRow).where(
+                AgentActionRow.created_at >= since,
+                AgentActionRow.action_type.in_(
+                    ["send_email", "send_approved_lead_gen_draft"]
+                ),
+            )
+        )).scalars().all()
+        items = (await session.execute(
+            select(LeadGenBatchItemRow)
+        )).scalars().all()
+        observations = (await session.execute(
+            select(LeadGenObservationRow).where(
+                LeadGenObservationRow.created_at >= since,
+            )
+        )).scalars().all()
+
+    persona_by_item = {item.id: (item.persona or "unknown") for item in items}
+
+    arm_by_item: dict[str, str] = {}
+    for action in actions:
+        payload = action.input_json or {}
+        variant = str(payload.get("composer_variant_key") or "").strip()
+        item_id = str(payload.get("batch_item_id") or action.entity_id or "").strip()
+        if variant and item_id:
+            arm_by_item.setdefault(item_id, variant)
+
+    def _bucket() -> dict[str, int]:
+        return {"sent": 0, "opened": 0, "replied": 0, "declined": 0, "bounced": 0}
+
+    totals: dict[str, dict[str, int]] = {}
+    blocks: dict[tuple[str, str], dict[str, int]] = {}
+    opens_seen = 0
+    for obs in observations:
+        item_id = obs.batch_item_id or ""
+        variant = arm_by_item.get(item_id)
+        if not variant:
+            continue
+        persona = persona_by_item.get(item_id, "unknown")
+        total = totals.setdefault(variant, _bucket())
+        block = blocks.setdefault((variant, persona), _bucket())
+        event = obs.event_type or ""
+        outcome = obs.classified_outcome or ""
+        for row in (total, block):
+            if event == "email_sent":
+                row["sent"] += 1
+            elif event in ("email_open", "email_click"):
+                row["opened"] += 1
+            elif event in ("email_bounce",):
+                row["bounced"] += 1
+            elif event == "email_reply" or outcome in _REPLY_OUTCOMES:
+                row["replied"] += 1
+            if outcome in _DECLINE_OUTCOMES:
+                row["declined"] += 1
+        if event in ("email_open", "email_click"):
+            opens_seen += 1
+
+    baseline = totals.get("baseline", _bucket())
+    arms = []
+    for variant, total in sorted(totals.items()):
+        is_baseline = variant == "baseline"
+        p_open = None if is_baseline else _beta_prob_beats(
+            total["opened"], total["sent"], baseline["opened"], baseline["sent"])
+        p_reply = None if is_baseline else _beta_prob_beats(
+            total["replied"], total["sent"], baseline["replied"], baseline["sent"])
+        arms.append({
+            "variant": variant,
+            "is_baseline": is_baseline,
+            **total,
+            "open_rate": _rate(total["opened"], total["sent"]),
+            "reply_rate": _rate(total["replied"], total["sent"]),
+            "p_beats_baseline_opens": p_open,
+            "p_beats_baseline_replies": p_reply,
+            "verdict": "baseline" if is_baseline else _ab_verdict(
+                p_reply if opens_seen == 0 else p_open, total["sent"]),
+            "personas": {
+                persona: dict(block)
+                for (v, persona), block in sorted(blocks.items())
+                if v == variant
+            },
+        })
+
+    warnings = []
+    if opens_seen == 0:
+        warnings.append(
+            "no email_open events have EVER been recorded: the Resend webhook "
+            "is not delivering (register the endpoint in the Resend dashboard "
+            "and set RESEND_WEBHOOK_SECRET); verdicts fall back to reply rate, "
+            "which needs ~40+ sends per arm"
+        )
+
+    return {
+        "experiment_key": EXPERIMENT_KEY,
+        "axis": "subject_line",
+        "days": days,
+        "min_sends_per_arm": AB_MIN_SENDS_PER_ARM,
+        "decision_probability": AB_DECISION_PROBABILITY,
+        "arms": arms,
+        "warnings": warnings,
+    }

@@ -50,6 +50,7 @@ front_app = typer.Typer(help="Front read-only enrichment sync and warm lead sign
 front_competitors_app = typer.Typer(help="Local firm-vs-firm PI competition graph.", no_args_is_help=True)
 research_app = typer.Typer(help="PIF Stats firm research orchestration.", no_args_is_help=True)
 personas_app = typer.Typer(help="Map and inspect PI firm contact personas.", no_args_is_help=True)
+composer_ab_app = typer.Typer(help="Composer A/B experiment — variants, assignment, report.", no_args_is_help=True)
 sequences_app = typer.Typer(help="Email sequences — preview, start, and recommend contacts.", no_args_is_help=True)
 lead_gen_app = typer.Typer(help="Cybernetic lead-generation loop — batches, feedback, learning.", no_args_is_help=True)
 lead_gen_observations_app = typer.Typer(
@@ -89,6 +90,7 @@ app.add_typer(contacts_app, name="contacts")
 app.add_typer(front_app, name="front")
 app.add_typer(research_app, name="research")
 app.add_typer(personas_app, name="personas")
+app.add_typer(composer_ab_app, name="composer-ab")
 app.add_typer(sequences_app, name="sequences")
 app.add_typer(lead_gen_app, name="lead-gen")
 app.add_typer(inbound_app, name="inbound")
@@ -5951,6 +5953,60 @@ def outreach_events(
         )
     console.print(table)
     console.print(f"[dim]{len(rows)} event(s)[/dim]")
+
+
+@composer_ab_app.command("variants")
+def composer_ab_variants():
+    """List composer skill variants with allocation and active state."""
+    from app.services.lead_email_composer_variants import discover_composer_skill_variants
+
+    table = Table(title="Composer A/B variants")
+    for col in ("key", "label", "active", "weight", "baseline"):
+        table.add_column(col)
+    for v in discover_composer_skill_variants():
+        table.add_row(v.key, v.label, str(v.active), str(v.allocation_weight), str(v.is_baseline))
+    console.print(table)
+
+
+@composer_ab_app.command("assign")
+def composer_ab_assign(contact_id: str = typer.Argument(..., help="Contact id to preview assignment for.")):
+    """Preview the deterministic variant assignment for a contact."""
+    from app.services.lead_email_composer_variants import choose_composer_skill_variant
+
+    v = choose_composer_skill_variant(contact_id)
+    console.print(f"{contact_id} -> {v.key} ({v.label})")
+
+
+@composer_ab_app.command("report")
+def composer_ab_report_cmd(
+    days: int = typer.Option(60, "--days", help="Lookback window."),
+    as_json: bool = typer.Option(False, "--json", help="Print raw JSON."),
+):
+    """Persona-blocked A/B report with beta-binomial verdicts vs baseline."""
+    import asyncio as _asyncio
+
+    from app.services.lead_email_composer_variants import composer_ab_report
+
+    report = _asyncio.run(composer_ab_report(days=days))
+    if as_json:
+        console.print_json(json.dumps(report))
+        return
+    table = Table(title=f"Composer A/B — {report['axis']} ({report['days']}d)")
+    for col in ("variant", "sent", "opened", "replied", "declined", "open_rate", "reply_rate", "P>base(opens)", "P>base(replies)", "verdict"):
+        table.add_column(col)
+    for arm in report["arms"]:
+        table.add_row(
+            arm["variant"], str(arm["sent"]), str(arm["opened"]), str(arm["replied"]),
+            str(arm["declined"]),
+            "-" if arm["open_rate"] is None else f"{arm['open_rate']:.2f}",
+            "-" if arm["reply_rate"] is None else f"{arm['reply_rate']:.2f}",
+            "-" if arm["p_beats_baseline_opens"] is None else f"{arm['p_beats_baseline_opens']:.2f}",
+            "-" if arm["p_beats_baseline_replies"] is None else f"{arm['p_beats_baseline_replies']:.2f}",
+            arm["verdict"],
+        )
+    console.print(table)
+    for w in report["warnings"]:
+        console.print(f"[yellow]warning:[/yellow] {w}")
 
 
 if __name__ == "__main__":

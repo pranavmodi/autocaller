@@ -1,0 +1,9 @@
+{
+  "key": "subject-behavioral",
+  "label": "Subject: behavioral",
+  "description": "Subject-line axis arm C: subjects built from the firm's own behavioral signal (after-hours ratio, pain topic), fallback pain-led. Body unchanged.",
+  "allocation_weight": 100,
+  "active": true,
+  "experiment_axis": "subject_line",
+  "created": "2026-06-12"
+}

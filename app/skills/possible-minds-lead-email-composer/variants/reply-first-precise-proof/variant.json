@@ -1,7 +1,8 @@
 {
-  "active": true,
+  "active": false,
   "allocation_weight": 100,
   "description": "Tests shorter first-touch emails that lead with the Precise autoresponder proof and use a binary or one-word reply CTA.",
   "key": "reply-first-precise-proof",
-  "label": "Reply-First Precise Proof"
+  "label": "Reply-First Precise Proof",
+  "retired_reason": "whole-skill arms confound too many axes; superseded by subject-line experiment 2026-06-12"
 }

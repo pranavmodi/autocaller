@@ -71,6 +71,7 @@ async def test_prior_email_contact_and_recent_firm_are_suppressed(monkeypatch):
         ["pif-recent"],                           # 6 recent_emailed_pifs
         ["c-batched"],                            # 7 batch_contact_ids
         ["pif-recent"],                           # 8 recent_batch_pifs
+        [],                                       # 9 declined_pifs
         [],                                       # 9 sequence_contact_ids
         contacts,                                 # 11 contacts (10 skipped: 9 empty)
         [("pif-old", "Old Firm", "CA"), ("pif-batch", "Batch Firm", "CA"),
@@ -79,7 +80,7 @@ async def test_prior_email_contact_and_recent_firm_are_suppressed(monkeypatch):
         [],                                       # 13 front warm rows
     ]
     # patient rows arrive as (patient_id, firm_name, state) with pif-/mc- keys
-    results[10] = [(f"pif-{p}", n, s) for p, n, s in
+    results[11] = [(f"pif-{p}", n, s) for p, n, s in
                    [("pif-old", "Old Firm", "CA"), ("pif-batch", "Batch Firm", "CA"),
                     ("pif-recent", "Recent Firm", "CA"), ("pif-cold", "Cold Firm", "CA"),
                     ("pif-fresh", "Fresh Firm", "CA")]]

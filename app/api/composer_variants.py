@@ -73,3 +73,10 @@ async def upload_composer_variant(
 @router.get("/api/lead-email-composer/variant-stats")
 async def get_composer_variant_stats(days: int = Query(30, ge=1, le=365)):
     return await composer_variant_stats(days=days)
+
+
+@router.get("/api/lead-email-composer/report")
+async def get_composer_ab_report(days: int = 60):
+    from app.services.lead_email_composer_variants import composer_ab_report
+
+    return await composer_ab_report(days=days)

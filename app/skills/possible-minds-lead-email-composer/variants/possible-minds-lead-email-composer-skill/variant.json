@@ -1,7 +1,8 @@
 {
-  "active": true,
+  "active": false,
   "allocation_weight": 100,
   "description": "",
   "key": "possible-minds-lead-email-composer-skill",
-  "label": "Claude Email Composer.SKILL"
+  "label": "Claude Email Composer.SKILL",
+  "retired_reason": "whole-skill arms confound too many axes; superseded by subject-line experiment 2026-06-12"
 }
