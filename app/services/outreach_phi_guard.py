@@ -106,7 +106,9 @@ async def check_no_patient_data_in_outreach(
             "body_hash": digest,
         }
     except (LLMGatewayError, TimeoutError, Exception) as exc:
-        result = {
+        # Fail closed for THIS attempt, but never cache transport errors —
+        # a wedged gateway must not become a permanent verdict on the body.
+        return {
             "passed": False,
             "detail": f"llm_error:{type(exc).__name__}: {str(exc)[:180]}",
             "reason": "LLM PHI classifier failed; failing closed.",
