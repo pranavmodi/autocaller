@@ -27,6 +27,7 @@ from app.services.lead_gen_cybernetic import (
     send_batch_item_draft,
 )
 from app.services.master_agent import ensure_agent_tables
+from app.services.outreach_phi_guard import PHI_GUARD_CHECK_NAME, check_no_patient_data_in_outreach
 from app.services.product_traces import safe_record_product_trace
 from app.services.scheduled_time import format_pt, format_utc
 
@@ -1100,6 +1101,11 @@ async def _check_action_policy_in_session(session, action: AgentActionRow) -> di
     add("subject_hash_matches_approval", _sha256(subject) == approval.get("subject_sha256"), "")
     add("body_hash_matches_approval", _sha256(body) == approval.get("body_sha256"), "")
     add("zoho_api_configured", bool(os.getenv("ZOHO_MAIL_REFRESH_TOKEN", "").strip()), "")
+    guard_cache = dict(payload.get("phi_egress_guard_cache") or {})
+    guard = await check_no_patient_data_in_outreach(subject=subject, body=body, cache=guard_cache)
+    payload["phi_egress_guard_cache"] = guard_cache
+    action.input_json = payload
+    add(PHI_GUARD_CHECK_NAME, bool(guard.get("passed")), str(guard.get("detail") or ""))
 
     item = await session.get(LeadGenBatchItemRow, batch_item_id) if batch_item_id else None
     add("batch_item_exists", item is not None, batch_item_id)
@@ -1200,6 +1206,11 @@ async def _check_send_email_policy_in_session(session, action: AgentActionRow) -
             suppressions = (batch_item.reason_json or {}).get("suppressions") or []
             add("not_suppressed_by_selection", len(suppressions) == 0, ", ".join(str(x) for x in suppressions))
         add("consult_link_present", "getpossibleminds.com/consult" in body.lower(), "")
+        guard_cache = dict(payload.get("phi_egress_guard_cache") or {})
+        guard = await check_no_patient_data_in_outreach(subject=subject, body=body, cache=guard_cache)
+        payload["phi_egress_guard_cache"] = guard_cache
+        action.input_json = payload
+        add(PHI_GUARD_CHECK_NAME, bool(guard.get("passed")), str(guard.get("detail") or ""))
         add("zoho_api_configured", bool(os.getenv("ZOHO_MAIL_REFRESH_TOKEN", "").strip()), "")
         try:
             policy = await ensure_default_policy()

@@ -68,6 +68,28 @@ def test_contact_selection_policy_override_changes_component_weight():
     assert scored.score_breakdown["email_quality:generic_inbox"] == -55
 
 
+def test_front_warmth_feature_is_weighted_when_policy_includes_it():
+    scored = score_contact_selection(
+        ContactSelectionInput(
+            contact_id="c-front",
+            pif_id="p-front",
+            firm_name="Warm Injury Law",
+            contact_name="Jane Owner",
+            contact_email="jane@warminjury.com",
+            contact_title="Owner",
+            contact_source="front",
+            front_warm_score=42,
+        ),
+        policy_weights={
+            "front_warmth": {"weight": 1, "max_bonus": 75},
+        },
+    )
+
+    assert scored.score_breakdown["front_warmth:warm_score"] == 42
+    assert scored.features["front_warm_score"] == 42
+    assert "front_warmth:warm_score" in scored.signals
+
+
 def test_target_lead_persona_only_allows_owner_partner_coo_equivalents():
     allowed_titles = [
         "Founder & Trial Attorney",

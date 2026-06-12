@@ -45,6 +45,12 @@ Sense -> Select -> Compose -> Approve -> Send -> Observe -> Classify
 The system gathers available context about firms, contacts, previous
 conversations, delivery history, bookings, and operator feedback.
 
+Precise Front is a primary relationship sensor: it can tell us which firm
+domains and people have recently interacted with Precise, which inbox workflow
+they touched, and whether metadata reveals case-management tooling. Those
+signals should improve contact freshness and timing, not copy patient-specific
+details into outreach.
+
 ### Select
 
 The system decides which limited set of contacts should receive attention
@@ -371,6 +377,7 @@ What it tells us:
 Signals:
 
 - Front conversation history;
+- Front contact freshness and firm-level activity metadata;
 - Precise relationship context;
 - CRM status;
 - owner assignment;
@@ -514,6 +521,10 @@ The system can improve only by changing things it is allowed to change.
 - Policy changes should be proposals before they become active.
 - Suppression and safety actions should be conservative.
 - Front should remain read-only unless explicitly redesigned otherwise.
+- Patient-specific data must never leave through outbound outreach. The egress
+  policy gate should block any final rendered email that contains patient
+  names, DOBs, medical details, dates of loss, or case-specific patient
+  information.
 - Every outbound action should be traceable to the policy and context that
   produced it.
 

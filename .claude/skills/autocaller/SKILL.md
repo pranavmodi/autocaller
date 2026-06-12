@@ -73,8 +73,11 @@ Both `actions send-approved-lead-gen-draft` and `actions send-email` accept
 send immediately; the daemon's scheduled-action loop sends due approved actions
 every 30 seconds and expires anything more than 24 hours stale.
 Policy verifies the exact approval hashes, contact/recipient match, consult
-link, Zoho transport, no selection suppressions, and no prior successful send
-for the same item/recipient.
+link, no patient data in outreach, Zoho transport, no selection suppressions,
+and no prior successful send for the same item/recipient. The PHI egress guard
+is the `no_patient_data_in_outreach` policy check and combines deterministic
+patterns with one OpenClaw JSON classifier on the final rendered subject/body;
+LLM failure fails closed.
 Use `bin/autocaller lead-gen edit-draft <batch_item_id>` to open the current
 lead-gen draft in `$EDITOR` as `Subject: ...`, blank line, body. Add
 `--at "10:30 PT"` to schedule/reschedule from the same save, or `--no-editor`
@@ -103,6 +106,15 @@ bounded internal evidence, composes drafts with
 --policy-check-first-action --json` only when you need a no-send policy-check
 artifact for an exact approved draft. Do not send email from free-form shell
 commands or LLM-generated recipient/body payloads.
+
+Front read-only enrichment is available through
+`bin/autocaller front sync --max-calls <N>`, `front status`, and
+`front contacts [--firm=<pif_id>|--domain=<domain>]`. It reads Precise Front
+contacts and selected inbox conversation metadata only, persists cursors in
+`front_sync_state`, resolves domains to MC `pif_firms`, and writes warm scores
+to `front_firm_activity`. Use `bin/autocaller leads warm-list --limit 20` for
+the daily warm list. `lead-gen-v2` includes the Front warmth feature but is
+created inactive; do not activate it without operator/orchestrator review.
 
 ---
 
@@ -416,6 +428,10 @@ Common causes: Geo permissions not enabled, AMD mis-classifying carrier voicemai
 | `autocaller listening prep <firm-or-name>` | Build a pre-call one-pager from local `patients`/`firm_contacts`, top matched listening insights, and one gateway call. Read-only. |
 | `autocaller contacts backfill` | Populate `firm_contacts` from PIF Stats `leadership[]` + the patient DM. Idempotent. Run once before any `sequences start`. |
 | `autocaller contacts list [--firm <pif_id>]` | List firm_contacts roster. |
+| `autocaller front sync [--full] [--max-calls N]` | Read-only Precise Front sync for contacts, activity metadata, domain resolution, and warm-score refresh. Persists cursors and hard-caps API calls. |
+| `autocaller front status` | Show Front cursors, watermarks, counts, matched domains, and warm-domain counts. |
+| `autocaller front contacts [--firm <pif_id> \| --domain <domain>]` | List synced Front contacts with masked emails, matched pif_id, warm score, and tech signals. |
+| `autocaller leads warm-list [--limit 20]` | Print the daily Front-warmed firm/contact list, excluding contacts already emailed. |
 | `autocaller sequences preview <contact_id>` | Render the four-email sequence for one contact, with their real Yelp quote injected. Read-only. |
 | `autocaller sequences start <contact_id>` | Start the 4-step sequence (one contact at a time, by design). Idempotent — second start returns 409. Sends are gated by `ALLOW_SEQUENCE_SEND=true`. UI: `/sequences` page has the same flow with a forced "I've reviewed all drafts" checkbox before the Start button enables. |
 | `autocaller sequences list [--status active\|paused\|completed]` | List sequence rows + step state. |

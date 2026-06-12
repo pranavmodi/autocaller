@@ -843,6 +843,9 @@ class FirmContactRow(Base):
     title: Mapped[str | None] = mapped_column(String(255), nullable=True)
     linkedin_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     source: Mapped[str] = mapped_column(String(32), default="manual")
+    front_contact_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    front_last_seen: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    tech_signals: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), default=_utcnow,
     )
@@ -853,7 +856,60 @@ class FirmContactRow(Base):
     __table_args__ = (
         Index("ix_firm_contacts_pif_id", "pif_id"),
         Index("ix_firm_contacts_email", "email"),
+        Index("ix_firm_contacts_front_contact_id", "front_contact_id"),
     )
+
+
+class FrontContactRow(Base):
+    """Read-only mirror of Front contacts used for person-level freshness."""
+    __tablename__ = "front_contacts"
+
+    front_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    handles: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    primary_email: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    domain: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    first_synced_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow)
+    front_updated_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    raw_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+
+    __table_args__ = (
+        Index("ix_front_contacts_domain", "domain"),
+        Index("ix_front_contacts_primary_email", "primary_email"),
+        Index("ix_front_contacts_front_updated_at", "front_updated_at"),
+    )
+
+
+class FrontFirmActivityRow(Base):
+    """Domain-level Front activity rollup with no message bodies."""
+    __tablename__ = "front_firm_activity"
+
+    domain: Mapped[str] = mapped_column(String(255), primary_key=True)
+    pif_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    contact_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    last_seen_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    last_referral_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    last_records_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    inbox_breakdown: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    tech_signals: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    warm_score: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    synced_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow)
+
+    __table_args__ = (
+        Index("ix_front_firm_activity_pif_id", "pif_id"),
+        Index("ix_front_firm_activity_warm_score", "warm_score"),
+        Index("ix_front_firm_activity_last_seen", "last_seen_at"),
+    )
+
+
+class FrontSyncStateRow(Base):
+    """Cursor/watermark state for budgeted Front API sync runs."""
+    __tablename__ = "front_sync_state"
+
+    key: Mapped[str] = mapped_column(String(128), primary_key=True)
+    cursor: Mapped[str | None] = mapped_column(Text, nullable=True)
+    watermark: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow, onupdate=_utcnow)
 
 
 class EmailSequenceRow(Base):

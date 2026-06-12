@@ -82,6 +82,13 @@ async def lifespan(app: FastAPI):
     # Start explicitly scheduled durable action sends. This does not start the
     # dispatcher; it only drains approved actions with scheduled_for set.
     scheduled_action_task = asyncio.create_task(scheduled_action_loop(interval_seconds=30))
+    from .services.front_sync import front_sync_loop
+    front_sync_task = asyncio.create_task(
+        front_sync_loop(
+            interval_seconds=int(os.getenv("FRONT_SYNC_INTERVAL_SECONDS", "86400")),
+            max_calls=int(os.getenv("FRONT_SYNC_MAX_CALLS", "300")),
+        )
+    )
     from .services.master_agent import (
         heartbeat_interval_seconds,
         master_heartbeat_loop,
@@ -114,6 +121,7 @@ async def lifespan(app: FastAPI):
         vm_followup_task,
         sequence_task,
         scheduled_action_task,
+        front_sync_task,
         reconciler_task,
     ]
     tasks_to_cancel.append(master_heartbeat_task)

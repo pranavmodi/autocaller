@@ -11,6 +11,7 @@ from app.db.models import (
     CallLogRow,
     EmailSequenceRow,
     FirmContactRow,
+    FrontFirmActivityRow,
     LeadGenPolicyVersionRow,
     PatientRow,
     SmsLogRow,
@@ -135,6 +136,10 @@ async def recommend_sequence_contacts(
             select(PatientRow.patient_id, PatientRow.firm_name, PatientRow.state)
             .where(PatientRow.patient_id.in_(patient_keys))
         )).all()
+        front_warm_rows = (await session.execute(
+            select(FrontFirmActivityRow.pif_id, FrontFirmActivityRow.warm_score)
+            .where(FrontFirmActivityRow.pif_id.in_(pif_ids))
+        )).all()
 
     firm_names: dict[str, str] = {}
     states: dict[str, str] = {}
@@ -146,6 +151,11 @@ async def recommend_sequence_contacts(
             firm_names[pif_id] = firm_name
         if state and pif_id not in states:
             states[pif_id] = state
+    front_warm_scores = {
+        str(pif_id): int(warm_score or 0)
+        for pif_id, warm_score in front_warm_rows
+        if pif_id
+    }
 
     best_by_firm: dict[str, Recommendation] = {}
     counts = {
@@ -192,6 +202,7 @@ async def recommend_sequence_contacts(
                 state=states.get(c.pif_id),
                 has_prior_comms=False,
                 has_existing_sequence=False,
+                front_warm_score=front_warm_scores.get(c.pif_id, 0),
             ),
             policy_weights=policy_weights,
         )

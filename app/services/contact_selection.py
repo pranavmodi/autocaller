@@ -92,6 +92,7 @@ class ContactSelectionInput:
     state: str | None = None
     has_prior_comms: bool = False
     has_existing_sequence: bool = False
+    front_warm_score: int = 0
 
 
 @dataclass(frozen=True)
@@ -309,6 +310,14 @@ def score_contact_selection(
         )
         signals.append("history:no_existing_sequence")
 
+    front_policy = policy.get("front_warmth") if isinstance(policy.get("front_warmth"), dict) else {}
+    front_weight = int(front_policy.get("weight") or 0)
+    if front_weight and candidate.front_warm_score > 0:
+        max_bonus = int(front_policy.get("max_bonus") or 75)
+        bonus = min(max_bonus, int(candidate.front_warm_score) * front_weight)
+        score_breakdown["front_warmth:warm_score"] = bonus
+        signals.append("front_warmth:warm_score")
+
     if suppressions:
         for suppression in suppressions:
             score_breakdown[f"risk:{suppression}"] = int(policy["risk"].get(suppression, -1000))
@@ -324,6 +333,7 @@ def score_contact_selection(
         "state": candidate.state,
         "has_prior_comms": candidate.has_prior_comms,
         "has_existing_sequence": candidate.has_existing_sequence,
+        "front_warm_score": candidate.front_warm_score,
     }
     reason_bits = [persona_label] if persona_label else []
     if email_quality == "direct_named_email":
@@ -342,6 +352,8 @@ def score_contact_selection(
     reason_bits.append(
         "no existing sequence" if not candidate.has_existing_sequence else "existing sequence found"
     )
+    if candidate.front_warm_score > 0:
+        reason_bits.append(f"Front warm score {candidate.front_warm_score}")
     reason = "; ".join(reason_bits)
 
     return ContactSelectionScore(

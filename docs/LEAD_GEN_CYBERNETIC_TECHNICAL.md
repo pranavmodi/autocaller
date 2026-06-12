@@ -76,6 +76,10 @@ bin/autocaller lead-gen observations --since 7d
 bin/autocaller lead-gen observations --since 7d --type email_sent --contact <contact_id>
 bin/autocaller lead-gen observations summary --since 7d
 bin/autocaller lead-gen propose <batch_id>
+bin/autocaller front sync --max-calls 300
+bin/autocaller front status
+bin/autocaller front contacts --domain examplelaw.com
+bin/autocaller leads warm-list --limit 20
 bin/autocaller actions list --type send_approved_lead_gen_draft
 bin/autocaller actions list --scheduled
 bin/autocaller actions scheduler-status
@@ -98,6 +102,54 @@ bin/autocaller todos delete <id>
 ```
 
 The CLI reference remains in `docs/cli.md`.
+
+### Front Read-Only Lead Engine
+
+Files:
+
+- Schema: `app/db/models.py` (`FrontContactRow`, `FrontFirmActivityRow`,
+  `FrontSyncStateRow`) and Alembic revision
+  `n6o7p8q9r0s1_add_front_lead_engine.py`.
+- Service: `app/services/front_sync.py`.
+- CLI: `front sync`, `front status`, `front contacts`, and `leads warm-list`.
+
+Tables:
+
+- `front_contacts`: one row per Front contact, keyed by `front_id`, with
+  handles, primary email, domain, Front update time, first sync time, and raw
+  contact JSON.
+- `front_firm_activity`: domain-level metadata aggregate only. It stores
+  contact count, last seen/referral/records timestamps, inbox breakdown, tech
+  signals, matched `pif_id`, and `warm_score`.
+- `front_sync_state`: per-stage cursor and watermark.
+- `firm_contacts` now has nullable `front_contact_id`, `front_last_seen`, and
+  `tech_signals` columns.
+
+Operational constraints implemented:
+
+- Front credentials load from
+  `/root/.openclaw/workspace/secrets/front_precise.env` via dotenv.
+- API stages are read-only GETs.
+- `FrontRateBudget` hard-caps calls per run and enforces at least 1.5 seconds
+  between calls.
+- Contacts sync paginates `/contacts`, persists cursor/watermark after each
+  page, and derives the domain from the primary email handle.
+- Inbox activity sync reads selected inbox conversation metadata only and never
+  stores message bodies.
+- Firm resolution is offline. It reads Mission Control SQLite in read-only
+  mode, matches domains to `pif_firms.website` and `pif_firms.emails`, skips
+  consumer domains, excludes `*.filevineapp.com` robot contacts, and records
+  Filevine as `tech_signals.case_mgmt = "filevine"`.
+- Warm scoring is offline and writes `front_firm_activity.warm_score`.
+
+Policy integration:
+
+- `refresh_warm_scores()` creates `lead-gen-v2` if absent and leaves it
+  inactive.
+- `lead-gen-v2` is a v1-style deterministic policy with
+  `front_warmth.weight` and `front_warmth.max_bonus`.
+- Contact selection reads `front_warm_score` only when the active policy has a
+  Front warmth weight, so v1 behavior remains unchanged.
 
 ### Auto-Observation Contract
 
@@ -365,6 +417,7 @@ Execution flow:
    - approval metadata exists;
    - subject/body are present;
    - subject/body hashes match the approved version;
+   - the rendered subject/body pass `no_patient_data_in_outreach`;
    - Zoho API transport is configured;
    - the batch item exists;
    - the batch item has not already started;
@@ -737,6 +790,8 @@ Front read-only:
 - Secret file currently referenced operationally:
   `/root/.openclaw/workspace/secrets/front_precise.env`
 - Front must remain read-only for this lead-gen function.
+- Default Front activity inboxes are Scheduling & Orders (`inb_qfq9`), Records
+  & Images (`inb_rcld`), and AR Case Updates (`inb_37vb5`).
 
 ## Current Operational Notes
 
@@ -762,7 +817,7 @@ curl -sS -I http://127.0.0.1:3099/login
 Focused backend tests:
 
 ```bash
-.venv/bin/pytest tests/test_contact_selection.py tests/test_lead_gen_action_planner.py tests/test_sequence_templates.py
+.venv/bin/pytest tests/test_outreach_phi_guard.py tests/test_front_sync.py tests/test_contact_selection.py tests/test_lead_gen_action_planner.py tests/test_sequence_templates.py
 ```
 
 Frontend type check:
@@ -777,6 +832,8 @@ Python compile check:
 ```bash
 .venv/bin/python -m py_compile \
   app/services/contact_selection.py \
+  app/services/front_sync.py \
+  app/services/outreach_phi_guard.py \
   app/services/sequence_recommendations.py \
   app/services/lead_gen_action_planner.py \
   app/services/lead_gen_cybernetic.py
@@ -795,7 +852,8 @@ git diff --check
 - Every generated outbound email currently requires human approval.
 - Policy proposals do not apply themselves.
 - There is no first-class suppression table yet.
-- Front is not yet ingested into the production lead-gen selection flow.
+- Front warmth is ingested behind inactive `lead-gen-v2`; orchestrator/operator
+  review is required before activation.
 - Resend webhook code exists, but production must be configured with a deployed
   webhook URL and `RESEND_WEBHOOK_SECRET`.
 - The file name `OperatorNotificationPopup.tsx` is legacy; the component is now

@@ -46,6 +46,7 @@ prompts_app = typer.Typer(help="Prompt-style selector (current | minimal). Paral
 email_app = typer.Typer(help="Outbound email — config check + manual sends (test, one-pager, VM follow-up, consult).", no_args_is_help=True)
 comms_app = typer.Typer(help="Outbound communications dashboard — calls, voicemails, SMS, emails (read-only).", no_args_is_help=True)
 contacts_app = typer.Typer(help="Per-firm contact roster (backfill from PIF Stats + patients).", no_args_is_help=True)
+front_app = typer.Typer(help="Front read-only enrichment sync and warm lead signals.", no_args_is_help=True)
 sequences_app = typer.Typer(help="Email sequences — preview, start, and recommend contacts.", no_args_is_help=True)
 lead_gen_app = typer.Typer(help="Cybernetic lead-generation loop — batches, feedback, learning.", no_args_is_help=True)
 lead_gen_observations_app = typer.Typer(
@@ -81,6 +82,7 @@ app.add_typer(prompts_app, name="prompts")
 app.add_typer(email_app, name="email")
 app.add_typer(comms_app, name="comms")
 app.add_typer(contacts_app, name="contacts")
+app.add_typer(front_app, name="front")
 app.add_typer(sequences_app, name="sequences")
 app.add_typer(lead_gen_app, name="lead-gen")
 app.add_typer(inbound_app, name="inbound")
@@ -253,6 +255,14 @@ def _delete(path: str, timeout: float = 30.0) -> dict:
 def _run(coro):
     """Run an async coroutine to completion for DB-direct CLI commands."""
     return asyncio.run(coro)
+
+
+def _mask_email(value: str | None) -> str:
+    raw = (value or "").strip()
+    if "@" not in raw:
+        return raw or "—"
+    local, domain = raw.split("@", 1)
+    return f"{local[:2]}***@{domain}"
 
 
 def _phone_normalize(raw: str) -> str:
@@ -2882,6 +2892,34 @@ def comms_show(
     console.print_json(data=result)
 
 
+@leads_app.command("warm-list")
+def leads_warm_list(
+    limit: int = typer.Option(20, "--limit", "-n", min=1, max=100),
+    json_output: bool = typer.Option(False, "--json", help="Print raw JSON."),
+):
+    """List top Front-warmed firms with named contacts not yet emailed."""
+    from app.services.front_sync import warm_list
+
+    rows = _run(warm_list(limit=limit))
+    if json_output:
+        console.print_json(data={"warm_list": rows})
+        return
+    table = Table(title=f"Front warm list ({len(rows)})")
+    for col in ["score", "domain", "pif_id", "contact", "email", "last_seen", "tech"]:
+        table.add_column(col, overflow="fold")
+    for row in rows:
+        table.add_row(
+            str(row.get("warm_score") or 0),
+            str(row.get("domain") or ""),
+            str(row.get("pif_id") or ""),
+            str(row.get("contact_name") or ""),
+            _mask_email(row.get("contact_email")),
+            str(row.get("last_seen_at") or row.get("last_referral_at") or ""),
+            json.dumps(row.get("tech_signals") or {}, sort_keys=True),
+        )
+    console.print(table)
+
+
 # ---------------------------------------------------------------------------
 # contacts — firm_contacts roster (backfill + list)
 # ---------------------------------------------------------------------------
@@ -2940,6 +2978,115 @@ def contacts_list(
         )
     console.print(table)
     console.print(f"[dim]{len(rows)} contact(s)[/dim]")
+
+
+# ---------------------------------------------------------------------------
+# front — Precise Front enrichment sync
+# ---------------------------------------------------------------------------
+
+@front_app.command("sync")
+def front_sync_cmd(
+    full: bool = typer.Option(False, "--full", help="Ignore saved cursors/watermarks for this run."),
+    max_calls: int = typer.Option(300, "--max-calls", min=1, max=300, help="Hard Front API call budget for this run."),
+    json_output: bool = typer.Option(False, "--json", help="Print raw JSON."),
+):
+    """Run a budgeted Front contacts/activity sync, then resolve and score offline."""
+    from app.services.front_sync import list_front_contacts, run_front_sync
+
+    async def _run_sync_and_samples():
+        sync_data = await run_front_sync(max_calls=max_calls, full=full)
+        return sync_data, await list_front_contacts(limit=3)
+
+    data, samples = _run(_run_sync_and_samples())
+    if json_output:
+        console.print_json(data=data)
+        return
+    contacts = data.get("contacts") or {}
+    activity = data.get("activity") or {}
+    resolve = data.get("resolve") or {}
+    scores = data.get("scores") or {}
+    counts = (data.get("status") or {}).get("counts") or {}
+    console.print(
+        f"contacts fetched={contacts.get('fetched')} upserted={contacts.get('upserted')} "
+        f"activity fetched={activity.get('fetched', 0)} "
+        f"calls={max(int(contacts.get('calls_made') or 0), int(activity.get('calls_made') or 0))}"
+    )
+    console.print(
+        f"front_contacts={counts.get('front_contacts')} activity_domains={counts.get('front_firm_activity')} "
+        f"matched_domains={counts.get('matched_domains')} warm_domains={counts.get('warm_domains')} "
+        f"resolved_contacts={resolve.get('upserted_contacts')} warm_scores_updated={scores.get('updated')}"
+    )
+    if samples:
+        table = Table(title="Sample Front contacts")
+        for col in ["front_id", "name", "email", "domain", "pif_id", "warm"]:
+            table.add_column(col, overflow="fold")
+        for row in samples:
+            table.add_row(
+                str(row.get("front_id") or ""),
+                str(row.get("name") or ""),
+                _mask_email(row.get("primary_email")),
+                str(row.get("domain") or ""),
+                str(row.get("pif_id") or ""),
+                str(row.get("warm_score") or 0),
+            )
+        console.print(table)
+
+
+@front_app.command("status")
+def front_status_cmd(json_output: bool = typer.Option(False, "--json", help="Print raw JSON.")):
+    """Show Front sync cursors, watermarks, counts, and last synced row."""
+    from app.services.front_sync import front_status
+
+    data = _run(front_status())
+    if json_output:
+        console.print_json(data=data)
+        return
+    counts = data.get("counts") or {}
+    console.print(
+        f"front_contacts={counts.get('front_contacts')} activity_domains={counts.get('front_firm_activity')} "
+        f"matched_domains={counts.get('matched_domains')} warm_domains={counts.get('warm_domains')}"
+    )
+    table = Table(title="Front sync state")
+    for col in ["key", "watermark", "updated", "cursor"]:
+        table.add_column(col, overflow="fold")
+    for row in data.get("states") or []:
+        table.add_row(
+            str(row.get("key") or ""),
+            str(row.get("watermark") or ""),
+            str(row.get("updated_at") or ""),
+            str(row.get("cursor") or "")[:80],
+        )
+    console.print(table)
+
+
+@front_app.command("contacts")
+def front_contacts_cmd(
+    firm: str = typer.Option("", "--firm", help="Filter by matched pif_id."),
+    domain: str = typer.Option("", "--domain", help="Filter by email/domain."),
+    limit: int = typer.Option(50, "--limit", "-n", min=1, max=500),
+    json_output: bool = typer.Option(False, "--json", help="Print raw JSON."),
+):
+    """List synced Front contacts with matched firm and warmth metadata."""
+    from app.services.front_sync import list_front_contacts
+
+    rows = _run(list_front_contacts(firm=firm, domain=domain, limit=limit))
+    if json_output:
+        console.print_json(data={"contacts": rows})
+        return
+    table = Table(title=f"Front contacts ({len(rows)})")
+    for col in ["front_id", "name", "email", "domain", "pif_id", "warm", "tech"]:
+        table.add_column(col, overflow="fold")
+    for row in rows:
+        table.add_row(
+            str(row.get("front_id") or ""),
+            str(row.get("name") or ""),
+            _mask_email(row.get("primary_email")),
+            str(row.get("domain") or ""),
+            str(row.get("pif_id") or ""),
+            str(row.get("warm_score") or 0),
+            json.dumps(row.get("tech_signals") or {}, sort_keys=True),
+        )
+    console.print(table)
 
 
 # ---------------------------------------------------------------------------

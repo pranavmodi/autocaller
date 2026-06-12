@@ -87,6 +87,7 @@ Commands
   leads          Manage leads (import, list, show, add, remove, sync-mission).
   calls          Inspect call history + transcripts + judge.
   dispatcher     Control the auto-dispatcher (start, stop, batch, status, clear-active).
+  front          Sync Precise Front contacts/activity and inspect warm signals.
   config         Config / .env wizard + inspection.
   system         Global on/off — master kill switch.
   mock           Mock-mode toggle (redirect all Twilio calls to a mock phone).
@@ -139,6 +140,9 @@ Every command accepts `--help`. Exit code is `0` on success, `1` on any error
 | `comms show <channel-prefixed-id>` | Print one communication as JSON. ID format: `call:<call_id>` (covers voicemail too), `email:<id>`, `sms:<id>`. |
 | `contacts backfill [--limit=N]` | Pull leadership rosters from PIF Stats + autocaller patient DM rows into `firm_contacts`. Idempotent. Run once before using `sequences start`. |
 | `contacts list [--firm=<pif_id>] [--limit=N]` | List firm_contacts rows. Without `--firm`, walks across firms. |
+| `front sync [--full] [--max-calls N] [--json]` | Budgeted read-only Precise Front sync: contacts, inbox activity metadata, offline firm resolution, and warm-score refresh. Hard-caps API calls and persists cursors/watermarks. |
+| `front status [--json]` | Show Front sync cursors, watermarks, counts, matched domains, and warm-domain counts. |
+| `front contacts [--firm=<pif_id> \| --domain=<domain>] [--limit=N] [--json]` | List synced Front contacts with matched pif_id, masked email display, warm score, and tech signals. |
 | `sequences preview <contact_id>` | Render the four (or three, if no Yelp quote) email drafts for one contact against their actual personalization data. Read-only. |
 | `sequences start <contact_id>` | Start the 4-step sequence for one contact. Idempotent — second start returns 409 with current state. Sends gated by `ALLOW_SEQUENCE_SEND=true`. |
 | `sequences list [--status=active\|paused\|completed]` | List sequence rows + which step each is on. |
@@ -155,17 +159,18 @@ Every command accepts `--help`. Exit code is `0` on success, `1` on any error
 | `lead-gen email-agent-slice [--limit=3 --composer-variant=... --approval-ready --batch=<batch_id> --json]` | Select senior decision-maker contacts, collect bounded internal evidence, compose approval-ready drafts with the Possible Minds email composer skill, and create no-send durable `send_email mode=lead_gen` actions. With `--batch`, skip selection and compose for an existing batch's pending undrafted items (operator- or agent-curated lists, e.g. Front-warm shortlists). |
 | `lead-gen observations [--since=7d --type=<event_type> --contact=<contact_id> --json]` | List automatic lead-gen observations with batch/contact/item linkage. Includes sends, failures, replies, clicks, bookings, call dispositions, cancellations, and reschedules. |
 | `lead-gen observations summary [--since=7d --json]` | Count observations by event type for the weekly learning KPI / qualified-engagement readout. |
+| `leads warm-list [--limit=20] [--json]` | Print the top Front-warmed firms with named contacts that have not yet been emailed. Use after `front sync` for the daily warm-list workflow. |
 | `actions list [--status=approved --type=send_approved_lead_gen_draft --scheduled --json]` | List durable Possible OS action execution records. `--scheduled` shows only future approved scheduled actions ordered by `scheduled_for`; the normal list header includes the pending scheduled count. |
 | `actions show <action_id> [--json]` | Show one action with its append-only event timeline. |
 | `actions scheduler-status [--json]` | Show whether the daemon scheduled-action loop is running, last tick time, pending scheduled count, and due count. |
-| `actions policy-check <action_id> [--actor=operator --json]` | Run the reusable policy checker without executing the action. |
+| `actions policy-check <action_id> [--actor=operator --json]` | Run the reusable policy checker without executing the action. For lead-gen email actions this includes `no_patient_data_in_outreach`, a deterministic + LLM PHI egress guard on the final rendered subject/body. |
 | `actions execute <action_id> [--actor=operator --json]` | Execute one policy-approved action through its narrow executor. |
 | `actions cancel <action_id> [--reason=... --actor=operator --json]` | Cancel an action that is still `waiting_for_approval` or `approved`, including scheduled sends. Refuses terminal/running actions and appends `action_cancelled` to the timeline. |
 | `actions reschedule <action_id> --at "10:30 PT" [--actor=operator --json]` | Move an approved scheduled action to a new future ISO/PT time. Prints old -> new in Pacific and UTC and appends `action_rescheduled`. |
 | `actions execute-approved-lead-gen [--limit=1 --actor=operator --json]` | Execute already-approved `send_email mode=lead_gen` actions through the durable policy gate. This is the narrow action the master agent may use when approved-send automation is enabled. Successful sends link the action result to the `email_logs` row, transport, message id, and log status. |
 | `actions send-approved-lead-gen-draft --item=<batch_item_id> --subject=... --body=... [--approved-by=operator] [--at "09:30 PT"] [--no-execute]` | Create and optionally execute the first high-risk action slice: an exact approved lead-gen email draft sent through the existing Zoho-backed lead-gen path. With `--at`, stores `scheduled_for`, runs policy check, does not execute, and prints PT plus UTC. |
 | `actions send-email --mode=test --to=<email> --subject=... --body=... [--approved-by=operator --from=... --at "2026-06-11T09:30:00-07:00" --no-execute --json]` | Create, policy-check, and optionally execute a regular durable test email action. With `--at`, creates an approved scheduled action and never sends immediately. |
-| `actions send-email --mode=lead_gen --to=<email> --subject=... --body=... --contact=<contact_id> --item=<batch_item_id> [--pif=<pif_id> --firm=... --approved-by=operator --at "09:30 PT" --no-execute --json]` | Create, policy-check, and optionally execute an exact approved lead-gen email action. Policy verifies recipient/contact match, approval hashes, consult link, Zoho transport, no suppression, and no prior successful send for the same item/recipient. With `--at`, the daemon sends when due and expires stale actions more than 24h late. |
+| `actions send-email --mode=lead_gen --to=<email> --subject=... --body=... --contact=<contact_id> --item=<batch_item_id> [--pif=<pif_id> --firm=... --approved-by=operator --at "09:30 PT" --no-execute --json]` | Create, policy-check, and optionally execute an exact approved lead-gen email action. Policy verifies recipient/contact match, approval hashes, consult link, no patient data in outreach, Zoho transport, no suppression, and no prior successful send for the same item/recipient. With `--at`, the daemon sends when due and expires stale actions more than 24h late. |
 | `actions send-test-email --to=<email> [--subject=... --body=... --approved-by=operator --from=... --no-execute --json]` | Convenience alias for `actions send-email --mode=test`. Use the regular email action family for master-agent execution-path tests instead of free-form email shell commands. |
 | `lead-gen edit-draft <batch_item_id> [--at "10:30 PT"] [--editor/--no-editor] [--execute] [--json]` | Open the current `agent_draft` in `$EDITOR`, save it back to the queued action, and keep the batch item's UI draft fields approved/in sync. If a live scheduled action exists, edits update it instead of creating a duplicate; otherwise the command creates a new approved draft action. |
 | `listening brief [--version N]` | Print the Mission Control mindset brief markdown from `http://127.0.0.1:8001/api/listening`. |
@@ -575,6 +580,21 @@ bin/autocaller calls export --outcome demo_scheduled --output demos_booked.csv
 bin/autocaller calls export --outcome callback_requested --output callback_queue.csv
 bin/autocaller calls list --limit 200 | head -50
 ```
+
+### Recipe: "daily warm list from Front"
+Use this to refresh Precise Front person/firm warmth without sending outreach.
+`front sync` is read-only against Front, persists cursors, and stops at the
+hard API call budget.
+
+```bash
+bin/autocaller front sync --max-calls 300
+bin/autocaller front status
+bin/autocaller leads warm-list --limit 20
+```
+
+Review the named contacts before creating a lead-gen batch. The Front-warm
+feature is stored in the inactive `lead-gen-v2` policy until the orchestrator
+activates it after review.
 
 ### Recipe: "something's wrong — triage"
 ```bash
