@@ -769,6 +769,22 @@ function BatchDetail({
   const canQueue =
     data.batch.status === "approved" &&
     data.items.some((item) => item.approval_status === "approved" && canQueueItem(item));
+  // A run is "completed" once there is no further send action to take:
+  // everything sent, or nothing left to queue and nothing left to approve.
+  const isCompletedRun =
+    data.items.length > 0 &&
+    (sentItems.length === data.items.length || (!hasQueueableItems && !canApprove));
+  const REPLY_OUTCOMES = new Set([
+    "positive_reply",
+    "reply",
+    "referral",
+    "forwarded_internally",
+    "owner_introduction",
+  ]);
+  const bouncedCount = data.items.filter((item) => item.outcome === "bounce").length;
+  const repliedCount = data.items.filter(
+    (item) => item.outcome != null && REPLY_OUTCOMES.has(item.outcome),
+  ).length;
   const generateAllDrafts = async () => {
     const remaining = previewableItems.filter(
       (item) => !isEmailSent(item) && !storedAgentDraftStep(item) && draftStatuses[item.id] !== "completed",
@@ -830,13 +846,27 @@ function BatchDetail({
           </div>
           <StatusPill status={data.batch.status} className="ml-auto" />
         </div>
-        {isOlderPlan && (
+        {isOlderPlan && !isCompletedRun && hasQueueableItems && (
           <div className="border-b border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-900">
             This is an older generated plan with {data.items.length} actions. The
             current daily send budget is {dailyEmailBudget}; generate today's
             action plan to create a fresh list for that budget.
           </div>
         )}
+        {isCompletedRun ? (
+          /* Completed run: read-only history summary, no action controls */
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-1 px-4 py-3 text-sm">
+            <span className="text-neutral-900">
+              <span className="font-semibold">{counts.started}</span> sent
+            </span>
+            <span className="text-neutral-500">{bouncedCount} bounced</span>
+            <span className="text-neutral-500">{repliedCount} replied</span>
+            <span className="ml-auto text-xs text-neutral-400">
+              Completed · {formatCaliforniaDate(data.batch.created_at)}
+            </span>
+          </div>
+        ) : (
+          <>
         {/* Essential counts only */}
         <div className="flex flex-wrap items-center gap-x-6 gap-y-1 px-4 py-3 text-sm">
           <span className="text-neutral-900">
@@ -968,6 +998,8 @@ function BatchDetail({
               )}
             </div>
           </div>
+        )}
+          </>
         )}
       </section>
 
@@ -1878,6 +1910,18 @@ function dateTimeMs(value: string | null | undefined) {
 
 function isCaliforniaToday(value: string | null | undefined) {
   return californiaDateKey(value) === californiaDateKey(new Date());
+}
+
+function formatCaliforniaDate(value: string | null | undefined) {
+  if (!value) return "";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "";
+  return parsed.toLocaleDateString("en-US", {
+    timeZone: CALIFORNIA_TIME_ZONE,
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
 }
 
 function summarizeItems(items: LeadGenBatchItem[]) {
