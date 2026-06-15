@@ -88,7 +88,12 @@ function LeadGenPageContent() {
   const dailyRuns = useQuery({
     queryKey: ["lead-gen-daily-runs"],
     queryFn: () => listLeadGenDailyRuns(5),
-    refetchInterval: 30_000,
+    // Poll fast while a run is in flight so stage progress shows live.
+    refetchInterval: (query) => {
+      const runs = (query.state.data as { runs?: LeadGenDailyRun[] } | undefined)?.runs ?? [];
+      const inFlight = runs.some((r) => r.status === "running" || r.status === "pending");
+      return inFlight ? 2_500 : 30_000;
+    },
   });
   const dailyEnabled = useQuery({
     queryKey: ["lead-gen-daily-enabled"],
@@ -163,7 +168,8 @@ function LeadGenPageContent() {
     },
   });
   const runDaily = useMutation({
-    mutationFn: (dryRun: boolean) => runLeadGenDaily({ dry_run: dryRun }),
+    mutationFn: ({ dryRun, force }: { dryRun: boolean; force: boolean }) =>
+      runLeadGenDaily({ dry_run: dryRun, force }),
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ["lead-gen-daily-runs"] });
       qc.invalidateQueries({ queryKey: ["lead-gen-batches"] });
@@ -212,9 +218,10 @@ function LeadGenPageContent() {
             loading={dailyRuns.isLoading || dailyEnabled.isLoading}
             onToggle={(enabled) => toggleDaily.mutate(enabled)}
             toggling={toggleDaily.isPending}
-            onRun={(dryRun) => runDaily.mutate(dryRun)}
+            onRun={(dryRun, force = false) => runDaily.mutate({ dryRun, force })}
             running={runDaily.isPending}
             error={runDaily.isError || toggleDaily.isError}
+            lastRun={runDaily.data ?? null}
           />
           <DailySendBudgetPanel
             dailyEmailBudget={dailyEmailBudget}
@@ -437,21 +444,26 @@ function DailyRunPanel({
   onRun,
   running,
   error,
+  lastRun,
 }: {
   run: LeadGenDailyRun | null;
   enabled: boolean;
   loading: boolean;
   onToggle: (enabled: boolean) => void;
   toggling: boolean;
-  onRun: (dryRun: boolean) => void;
+  onRun: (dryRun: boolean, force?: boolean) => void;
   running: boolean;
   error: boolean;
+  lastRun: LeadGenDailyRun | null;
 }) {
+  const [confirmForce, setConfirmForce] = useState(false);
   const stages = run?.stages ?? {};
   const selectCounts = (stages.select?.counts ?? {}) as Record<string, unknown>;
   const composeCounts = (stages.compose?.counts ?? {}) as Record<string, unknown>;
   const selectedCount = typeof selectCounts.selected === "number" ? selectCounts.selected : null;
   const draftedCount = typeof composeCounts.drafted === "number" ? composeCounts.drafted : null;
+  // Prefer the live-polled run, fall back to the just-finished mutation result.
+  const outcome = dailyRunOutcome(running ? run : (lastRun ?? run), running);
 
   return (
     <section className="rounded-xl border border-neutral-200 bg-white">
@@ -511,7 +523,10 @@ function DailyRunPanel({
           </button>
           <button
             type="button"
-            onClick={() => onRun(false)}
+            onClick={() => {
+              if (isCaliforniaWeekend()) setConfirmForce(true);
+              else onRun(false, false);
+            }}
             disabled={running}
             className="inline-flex items-center justify-center gap-2 rounded-md bg-neutral-900 px-3 py-2 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-60"
           >
@@ -519,14 +534,110 @@ function DailyRunPanel({
             Run now
           </button>
         </div>
-        {error && (
-          <div className="text-xs text-red-600">
-            Daily run request failed.
+        {/* Live progress + outcome (skips and failures no longer silent) */}
+        {(outcome || running) && (
+          <div
+            className={cn(
+              "flex items-start gap-2 rounded-md px-3 py-2 text-xs",
+              outcome?.tone === "ok" && "bg-emerald-50 text-emerald-800",
+              outcome?.tone === "warn" && "bg-amber-50 text-amber-900",
+              outcome?.tone === "err" && "bg-red-50 text-red-700",
+              (!outcome || outcome.tone === "run") && "bg-neutral-50 text-neutral-600",
+            )}
+          >
+            {(running || outcome?.tone === "run") && <Loader2 className="mt-0.5 h-3.5 w-3.5 animate-spin" />}
+            <span>{outcome?.text ?? "Running… this can take a few minutes."}</span>
           </div>
         )}
+        {error && !outcome && (
+          <div className="text-xs text-red-600">Daily run request failed.</div>
+        )}
       </div>
+
+      {confirmForce && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-sm rounded-xl border border-neutral-200 bg-white p-5 shadow-xl">
+            <h3 className="text-sm font-semibold text-neutral-900">Run on a weekend?</h3>
+            <p className="mt-2 text-sm text-neutral-600">
+              The daily pipeline normally runs Monday–Friday, so a normal run today
+              would be skipped at the weekday gate. Run it anyway?
+            </p>
+            <p className="mt-2 text-xs text-neutral-400">
+              This only composes drafts as approval-waiting actions. Nothing sends
+              without your approval.
+            </p>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setConfirmForce(false)}
+                className="rounded-md border border-neutral-200 px-3 py-1.5 text-sm font-medium text-neutral-600 hover:bg-neutral-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onRun(false, true);
+                  setConfirmForce(false);
+                }}
+                className="rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-800"
+              >
+                Run anyway
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
+}
+
+function dailyRunOutcome(
+  run: LeadGenDailyRun | null,
+  running: boolean,
+): { tone: "ok" | "warn" | "err" | "run"; text: string } | null {
+  if (running) {
+    return { tone: "run", text: run?.stage ? `Running… ${run.stage}` : "Running…" };
+  }
+  if (!run) return null;
+  const stages = run.stages ?? {};
+  if (run.status === "completed") {
+    const drafted = (stages.compose?.counts as Record<string, unknown> | undefined)?.drafted;
+    return {
+      tone: "ok",
+      text: typeof drafted === "number" ? `Completed · ${drafted} drafts ready for review` : "Completed",
+    };
+  }
+  if (run.status === "skipped") {
+    let reason = "";
+    for (const stage of Object.values(stages)) {
+      const r =
+        (stage as { counts?: { reason?: unknown }; reason?: unknown })?.counts?.reason ??
+        (stage as { reason?: unknown })?.reason;
+      if (r) {
+        reason = String(r);
+        break;
+      }
+    }
+    return { tone: "warn", text: `Skipped${reason ? `: ${reason.replace(/_/g, " ")}` : ""}` };
+  }
+  if (run.status === "partial" || run.status === "failed") {
+    let stageName = run.stage || "";
+    let err = "";
+    for (const [name, stage] of Object.entries(stages)) {
+      const e = (stage as { error?: unknown })?.error;
+      if (e) {
+        stageName = name;
+        err = String(e);
+        break;
+      }
+    }
+    return {
+      tone: "err",
+      text: `Failed at ${stageName || "run"}${err ? `: ${err.slice(0, 120)}` : ""}`,
+    };
+  }
+  return null;
 }
 
 function DailySendBudgetPanel({
@@ -1994,6 +2105,14 @@ function dateTimeMs(value: string | null | undefined) {
 
 function isCaliforniaToday(value: string | null | undefined) {
   return californiaDateKey(value) === californiaDateKey(new Date());
+}
+
+function isCaliforniaWeekend() {
+  const weekday = new Date().toLocaleDateString("en-US", {
+    timeZone: CALIFORNIA_TIME_ZONE,
+    weekday: "short",
+  });
+  return weekday === "Sat" || weekday === "Sun";
 }
 
 function formatCaliforniaDate(value: string | null | undefined) {
