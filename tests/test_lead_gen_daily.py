@@ -253,3 +253,15 @@ def test_daily_api_smoke(monkeypatch):
     assert client.get("/api/lead-gen/daily-runs?limit=1").json()["runs"][0]["id"] == "run-1"
     assert client.get("/api/lead-gen/daily-run/enabled").json()["enabled"] is False
     assert client.put("/api/lead-gen/daily-run/enabled", json={"enabled": True}).json()["enabled"] is True
+
+
+def test_daily_loop_window_fires_at_8am_ist_weekdays_only():
+    from datetime import datetime, timezone
+    from app.services.lead_gen_daily import _in_daily_loop_window, _date_for_run
+    mon_in = datetime(2026, 6, 15, 2, 40, tzinfo=timezone.utc)   # 08:10 IST Mon
+    assert _in_daily_loop_window(mon_in) is True
+    assert _date_for_run(mon_in).isoformat() == "2026-06-15"
+    assert _in_daily_loop_window(datetime(2026, 6, 15, 2, 20, tzinfo=timezone.utc)) is False  # 07:50 IST
+    assert _in_daily_loop_window(datetime(2026, 6, 15, 3, 30, tzinfo=timezone.utc)) is False  # 09:00 IST
+    assert _in_daily_loop_window(datetime(2026, 6, 13, 2, 40, tzinfo=timezone.utc)) is False  # Sat 08:10 IST
+    assert _in_daily_loop_window(datetime(2026, 6, 14, 2, 40, tzinfo=timezone.utc)) is False  # Sun 08:10 IST

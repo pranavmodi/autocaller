@@ -45,6 +45,13 @@ from app.services.scheduled_time import format_pt, format_utc
 logger = logging.getLogger(__name__)
 
 PT = ZoneInfo("America/Los_Angeles")
+# The pipeline RUN trigger (loop window, run-date, weekday gate) is on the
+# operator's timezone (IST by default) so "runs at 8 AM IST on weekdays" is
+# expressed natively. The SEND window (when emails actually go to US firms)
+# stays on PT — see _send_window / DEFAULT_SEND_WINDOW.
+RUN_TZ = ZoneInfo(os.getenv("DAILY_RUN_TZ", "Asia/Kolkata"))
+RUN_WINDOW_START = time(8, 0)
+RUN_WINDOW_END = time(8, 30)
 DAILY_RUN_CONFIG_KEY = "daily_run_enabled"
 DAILY_RUN_STAGES = (
     "gates",
@@ -92,7 +99,9 @@ def _json_safe(value: Any) -> Any:
 
 
 def _date_for_run(now: datetime | None = None) -> date:
-    return (now or _utcnow()).astimezone(PT).date()
+    # Run-date idempotency key is the operator-timezone (IST) calendar day,
+    # matching the 8 AM IST trigger, so one run per IST weekday.
+    return (now or _utcnow()).astimezone(RUN_TZ).date()
 
 
 def _run_to_dict(row: LeadGenDailyRunRow) -> dict[str, Any]:
@@ -301,7 +310,10 @@ async def _run_gates(
     daily_send_budget = _int_policy(weights, "daily_send_budget", 50, minimum=0, maximum=200)
     if daily_send_budget <= 0:
         return {"passed": False, "reason": "daily_send_budget_zero", "daily_send_budget": daily_send_budget}
-    local_now = (now or _utcnow()).astimezone(PT)
+    # Weekday gate uses the run timezone (IST) so "except weekends" means IST
+    # weekends, consistent with the 8 AM IST trigger. (8 AM IST Monday is
+    # Sunday evening in PT — a PT weekday check would wrongly skip it.)
+    local_now = (now or _utcnow()).astimezone(RUN_TZ)
     weekdays = _weekdays(weights)
     bypassed: list[str] = []
     # Discipline gates: a forced run (operator-confirmed) bypasses these. The
@@ -1043,8 +1055,8 @@ async def set_daily_run_enabled(enabled: bool) -> dict[str, Any]:
 
 
 def _in_daily_loop_window(now: datetime | None = None) -> bool:
-    local = (now or _utcnow()).astimezone(PT)
-    return local.weekday() < 5 and time(6, 30) <= local.time() < time(8, 0)
+    local = (now or _utcnow()).astimezone(RUN_TZ)
+    return local.weekday() < 5 and RUN_WINDOW_START <= local.time() < RUN_WINDOW_END
 
 
 async def daily_run_loop(interval_seconds: int = 600) -> None:
