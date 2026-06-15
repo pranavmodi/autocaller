@@ -424,7 +424,11 @@ async def approve_lead_gen_batch_send_actions(
         ).scalars().all()
         seen_items: set[str] = set()
         for action in actions:
-            payload = action.input_json if isinstance(action.input_json, dict) else {}
+            # Copy the dict so the reassignment below is a new object identity.
+            # action.input_json is plain JSONB (not MutableDict), so mutating it
+            # in place and assigning the same reference back is NOT change-tracked
+            # by SQLAlchemy and the approval block would silently fail to persist.
+            payload = dict(action.input_json) if isinstance(action.input_json, dict) else {}
             item_id = str(payload.get("batch_item_id") or "")
             if item_id not in item_ids or item_id in seen_items:
                 continue
