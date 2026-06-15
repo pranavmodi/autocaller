@@ -92,10 +92,16 @@ DETERMINISTIC_OBSERVATION_CLASSIFICATIONS: dict[str, dict[str, Any]] = {
         "model": "deterministic",
     },
     "email_send_failed": {
-        "outcome": "bounce",
-        "confidence": 80,
-        "next_action": "pause_sequence",
-        "reasoning": "Deterministic observation: lead-gen email send failed before or during transport.",
+        # A send failure is operational (policy refusal, transient SMTP,
+        # timeout) — NOT a delivery bounce or any lead disposition. 'neutral'
+        # keeps it out of the item.outcome terminal-label set so a later
+        # successful resend isn't masked. Genuine bounces arrive as the
+        # distinct email_bounce event. The deliverability circuit-breaker
+        # still counts email_send_failed by event_type, not by this outcome.
+        "outcome": "neutral",
+        "confidence": 100,
+        "next_action": "human_reply",
+        "reasoning": "Deterministic observation: lead-gen email send failed before or during transport (operational, not a bounce).",
         "model": "deterministic",
     },
     "link_clicked": {
