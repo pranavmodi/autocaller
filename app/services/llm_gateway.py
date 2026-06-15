@@ -84,24 +84,71 @@ def clear_skill_cache() -> None:
     _skill_cache.clear()
 
 
+def _balanced_json_objects(text: str):
+    """Yield every top-level brace-balanced {...} substring, in order.
+
+    Tolerates the gateway wrapping the real JSON in agent tool-chatter —
+    including chatter that itself contains braces (e.g.
+    `I tried { something } then: {"contains_phi": false}`), which is why we
+    must try each candidate rather than the first brace span. Respects string
+    literals and escapes so braces inside values don't miscount.
+    """
+    i = 0
+    n = len(text)
+    while i < n:
+        if text[i] != "{":
+            i += 1
+            continue
+        depth = 0
+        in_str = False
+        escape = False
+        for j in range(i, n):
+            ch = text[j]
+            if in_str:
+                if escape:
+                    escape = False
+                elif ch == "\\":
+                    escape = True
+                elif ch == '"':
+                    in_str = False
+                continue
+            if ch == '"':
+                in_str = True
+            elif ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0:
+                    yield text[i : j + 1]
+                    break
+        i += 1
+
+
 def extract_json(content: str) -> dict[str, Any]:
     raw = content.strip()
     if raw.startswith("```"):
         match = _JSON_FENCE_RE.search(raw)
         if match:
             raw = match.group(1).strip()
-    if not raw.startswith("{"):
-        first = raw.find("{")
-        last = raw.rfind("}")
-        if first >= 0 and last > first:
-            raw = raw[first : last + 1]
-    try:
-        parsed = json.loads(raw)
-    except json.JSONDecodeError as e:
-        raise LLMGatewayError(f"gateway returned non-JSON: {e}; first 200 chars: {raw[:200]!r}") from e
-    if not isinstance(parsed, dict):
-        raise LLMGatewayError("gateway JSON root must be an object")
-    return parsed
+    # Try the whole string first, then each balanced {...} candidate, returning
+    # the first that parses to a dict. Handles leading/trailing agent chatter
+    # (even chatter containing its own braces) appended to valid JSON.
+    last_error: json.JSONDecodeError | None = None
+    seen: set[str] = set()
+    for candidate in (raw, *_balanced_json_objects(raw)):
+        if candidate in seen:
+            continue
+        seen.add(candidate)
+        try:
+            parsed = json.loads(candidate)
+        except json.JSONDecodeError as e:
+            last_error = e
+            continue
+        if isinstance(parsed, dict):
+            return parsed
+    raise LLMGatewayError(
+        f"gateway returned non-JSON: {last_error}; first 200 chars: {raw[:200]!r}"
+    )
 
 
 def require_fields(parsed: dict[str, Any], required: list[str]) -> None:
