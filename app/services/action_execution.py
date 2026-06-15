@@ -391,6 +391,87 @@ def action_event_to_dict(row: AgentActionEventRow) -> dict[str, Any]:
     }
 
 
+async def approve_lead_gen_batch_send_actions(
+    *, batch_id: str, approved_by: str = "operator"
+) -> dict[str, Any]:
+    """Approve the reviewed send_email actions for every item in a batch.
+
+    This is what the /lead-gen "Approve & send" button drives: it flips each
+    item's existing waiting-for-approval send_email action to approved with a
+    hash-bound approval block, leaving its scheduled_for intact so the action
+    scheduler sends the exact reviewed draft at its slot. It does NOT queue the
+    legacy sequence flow — the drafts on screen are these actions.
+    """
+    await ensure_agent_tables()
+    now = _utcnow()
+    approved: list[str] = []
+    skipped: list[dict[str, str]] = []
+    async with AsyncSessionLocal() as session:
+        items = (
+            await session.execute(
+                select(LeadGenBatchItemRow).where(LeadGenBatchItemRow.batch_id == batch_id)
+            )
+        ).scalars().all()
+        if not items:
+            raise ValueError("batch_not_found")
+        item_ids = {item.id for item in items}
+        actions = (
+            await session.execute(
+                select(AgentActionRow)
+                .where(AgentActionRow.action_type.in_(["send_email", "send_approved_lead_gen_draft"]))
+                .order_by(desc(AgentActionRow.created_at))
+            )
+        ).scalars().all()
+        seen_items: set[str] = set()
+        for action in actions:
+            payload = action.input_json if isinstance(action.input_json, dict) else {}
+            item_id = str(payload.get("batch_item_id") or "")
+            if item_id not in item_ids or item_id in seen_items:
+                continue
+            seen_items.add(item_id)
+            if action.status not in {"waiting_for_approval", "approved"}:
+                skipped.append({"action_id": action.id, "reason": f"status:{action.status}"})
+                continue
+            subject, body = _action_subject_body(action)
+            recipient = str(payload.get("to") or "").strip().lower()
+            if not has_usable_email(recipient):
+                skipped.append({"action_id": action.id, "reason": "unusable_recipient"})
+                continue
+            subject_hash, body_hash = _sha256(subject), _sha256(body)
+            payload["subject_sha256"] = subject_hash
+            payload["body_sha256"] = body_hash
+            payload["approval"] = {
+                "approved_at": now.isoformat(),
+                "approved_by": approved_by,
+                "subject_sha256": subject_hash,
+                "body_sha256": body_hash,
+                "recipient": recipient,
+            }
+            action.input_json = payload
+            action.status = "approved"
+            action.approved_by = approved_by
+            action.updated_at = now
+            # scheduled_for is left intact — the scheduler sends at the slot.
+            await _record_action_event(
+                session,
+                action_id=action.id,
+                event_type="approved",
+                actor=approved_by,
+                message="Approved via batch Approve & send (reviewed draft).",
+            )
+            approved.append(action.id)
+        for item in items:
+            if item.id in seen_items and item.approval_status in {"pending", "approved"}:
+                item.approval_status = "approved"
+        await session.commit()
+    return {
+        "batch_id": batch_id,
+        "approved_count": len(approved),
+        "approved_action_ids": approved,
+        "skipped": skipped,
+    }
+
+
 async def _record_action_event(
     session,
     *,

@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import {
   approveLeadGenBatch,
+  approveLeadGenBatchActions,
   classifyLeadGenObservation,
   createLeadGenBatch,
   createLeadGenEmailAgentSlice,
@@ -777,6 +778,17 @@ function BatchDetail({
     },
   });
 
+  // Primary "Approve & send": approves the reviewed send_email actions so the
+  // scheduler sends the exact drafts on screen at their slots — NOT the legacy
+  // sequence flow (which `approve` above drives, kept under Advanced).
+  const approveActions = useMutation({
+    mutationFn: () => approveLeadGenBatchActions(batchId, { approved_by: "operator" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["lead-gen-batch", batchId] });
+      qc.invalidateQueries({ queryKey: ["lead-gen-batches"] });
+    },
+  });
+
   const propose = useMutation({
     mutationFn: () => createLeadGenProposal(batchId, "operator"),
     onSuccess: () => {
@@ -1009,14 +1021,14 @@ function BatchDetail({
           <button
             type="button"
             onClick={() => {
-              if (window.confirm(`Approve and send this batch starting ${scheduledStartAt || "now"} California time, staggered over 60 minutes? Email sending requires ALLOW_SEQUENCE_SEND=true.`)) {
-                approve.mutate(true);
+              if (window.confirm("Approve the reviewed drafts in this batch? Each will send at its scheduled slot (the times shown on each draft). This sends exactly what's on screen.")) {
+                approveActions.mutate();
               }
             }}
-            disabled={!((canApprove && hasQueueableItems) || canQueue) || approve.isPending}
+            disabled={approveActions.isPending}
             className="inline-flex items-center gap-2 rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-50"
           >
-            {approve.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+            {approveActions.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
             Approve &amp; send
           </button>
           <button
@@ -1027,6 +1039,12 @@ function BatchDetail({
             Advanced
             <ChevronDown className={`h-3.5 w-3.5 transition-transform ${showAdvanced ? "rotate-180" : ""}`} />
           </button>
+          {approveActions.data && (
+            <span className="inline-flex items-center gap-1 text-xs text-emerald-700">
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              {approveActions.data.approved_count} approved — sending at scheduled slots
+            </span>
+          )}
           {sentItems.length > 0 && (
             <span className="inline-flex items-center gap-1 text-xs text-sky-700">
               <CheckCircle2 className="h-3.5 w-3.5" />

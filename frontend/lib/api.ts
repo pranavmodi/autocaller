@@ -1737,6 +1737,15 @@ export const approveLeadGenBatch = (
     },
   );
 
+export const approveLeadGenBatchActions = (
+  batchId: string,
+  args: { approved_by?: string } = {},
+) =>
+  post<{ batch_id: string; approved_count: number; approved_action_ids: string[]; skipped: { action_id: string; reason: string }[] }>(
+    `/api/lead-gen/batches/${encodeURIComponent(batchId)}/approve-actions`,
+    { approved_by: args.approved_by ?? "operator" },
+  );
+
 export const sendLeadGenBatchItemDraft = (
   batchItemId: string,
   args: {

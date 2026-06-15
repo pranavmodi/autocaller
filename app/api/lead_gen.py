@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from app.db import AsyncSessionLocal
 from app.db.models import FirmContactRow, LeadGenBatchItemRow
 from app.services.action_execution import (
+    approve_lead_gen_batch_send_actions,
     create_send_email_action,
     execute_action,
     find_live_scheduled_action_for_item,
@@ -228,6 +229,19 @@ async def approve_one_batch(batch_id: str, req: ApproveBatchRequest):
     except ValueError as e:
         if str(e) in {"invalid_scheduled_start_at", "invalid_scheduled_timezone"}:
             raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.post("/api/lead-gen/batches/{batch_id}/approve-actions")
+async def approve_batch_send_actions(batch_id: str, req: ApproveBatchRequest):
+    """Approve the reviewed send_email actions for a batch (NOT the legacy
+    sequence flow). The scheduler then sends each exact reviewed draft at its
+    existing scheduled_for slot."""
+    try:
+        return await approve_lead_gen_batch_send_actions(
+            batch_id=batch_id, approved_by=req.approved_by
+        )
+    except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
 
