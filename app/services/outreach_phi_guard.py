@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import hashlib
+import os
 import re
 from pathlib import Path
 from typing import Any
@@ -85,7 +86,7 @@ async def check_no_patient_data_in_outreach(
     try:
         llm = await call_skill_json(
             skill_path=_SKILL_PATH,
-            model="openclaw",
+            model=os.getenv("OUTREACH_PHI_GUARD_MODEL", "openclaw/proxy"),
             payload={"subject": subject, "body": body},
             required_fields=["contains_phi", "reason"],
             timeout_s=150,

@@ -14,7 +14,7 @@ DEFAULT_SKILL_PATH = (
     / ".claude/skills/lead-feedback-classifier/SKILL.md"
 )
 SKILL_PATH = Path(os.getenv("LEAD_FEEDBACK_SKILL_PATH", str(DEFAULT_SKILL_PATH)))
-MODEL = os.getenv("LEAD_FEEDBACK_MODEL", "openclaw")
+MODEL = os.getenv("LEAD_FEEDBACK_MODEL", "openclaw/proxy")
 
 OUTCOMES = {
     "booked_qualified_conversation",

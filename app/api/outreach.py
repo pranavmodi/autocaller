@@ -32,7 +32,7 @@ class CreateCampaignRequest(BaseModel):
     intent: str = "share"
     notes: Optional[str] = None
     with_excerpts: bool = True
-    composer_model: str = "openclaw"
+    composer_model: str = "openclaw/proxy"
 
 
 class CampaignDTO(BaseModel):

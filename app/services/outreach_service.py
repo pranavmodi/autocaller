@@ -136,7 +136,7 @@ async def create_campaign(
     notes: str | None = None,
     created_by: str | None = None,
     with_excerpts: bool = True,
-    composer_model: str = "openclaw",
+    composer_model: str = "openclaw/proxy",
 ) -> CampaignSummary:
     """Create a campaign for a blog post. Fetches post metadata (and
     excerpts) at creation time so the body LLM-composer sees the same

@@ -43,6 +43,26 @@ A reasonable heuristic: if someone three months from now had only the CLI and `d
 
 ## Other standing rules
 
+- **OpenClaw gateway: always use the `openclaw/proxy` agent, never `openclaw`.**
+  Every autocaller LLM call that goes through the OpenClaw gateway
+  (`call_skill_json`, the composer, PHI egress guard, lead-feedback
+  classifier, blog/outreach composer, listening-prep, etc.) MUST target the
+  lightweight **`openclaw/proxy`** agent. The default `openclaw` (main) agent
+  loads the `active-memory` extension, which reads a *daily* memory file
+  (`~/.openclaw/workspace/memory/<date>.md`); when that day's file is missing
+  the tool fails on every turn, which (a) injects `⚠️ 🛠️ … failed` chatter
+  into responses, (b) adds ~30s latency, and (c) causes intermittent
+  "incomplete turn" failures that fail-close the PHI guard and block sends.
+  The proxy agent has no memory extension — it's fast, clean, and stateless,
+  which is correct for autocaller's single-shot JSON tasks (they're fully
+  specified by SKILL.md + payload and gain nothing from cross-session memory).
+  Code defaults are set to `openclaw/proxy`; keep it that way. Env overrides:
+  `OPENCLAW_DEFAULT_MODEL`, `LEAD_EMAIL_COMPOSER_MODEL`, `LEAD_FEEDBACK_MODEL`,
+  `BLOG_OUTREACH_MODEL`, `OUTREACH_PHI_GUARD_MODEL` — all should be
+  `openclaw/proxy` (or another lightweight, memory-less agent), never the bare
+  `openclaw`. Direct-OpenAI calls (`gpt-4o-mini` for the judge, lead-extractor,
+  IVR navigator) do not use the gateway and are unaffected. When the
+  master-agent WIP lands, point `MASTER_AGENT_*_MODEL` at `openclaw/proxy` too.
 - **Long response handling.** Any AI-agent response expected to exceed 50 lines
   must replace `/home/pranav/autocaller/long-response.md` with the full answer
   and keep the chat reply short, pointing to that file. Do not append to the

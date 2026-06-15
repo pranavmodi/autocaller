@@ -550,7 +550,7 @@ async def compose_lead_email(
         composer_experiment_key = EXPERIMENT_KEY
         composer_variant_key = selected_variant.key
         skill_sha256 = selected_variant.skill_sha256
-    selected_model = model or os.getenv("LEAD_EMAIL_COMPOSER_MODEL", "openclaw")
+    selected_model = model or os.getenv("LEAD_EMAIL_COMPOSER_MODEL", "openclaw/proxy")
     trace_context = {
         "firm_name": firm_name,
         "contact_id": contact.id,

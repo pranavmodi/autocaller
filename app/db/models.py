@@ -1127,7 +1127,7 @@ class OutreachCampaignRow(Base):
     sender_email: Mapped[str] = mapped_column(String(320), nullable=False)
     sender_title: Mapped[str | None] = mapped_column(String(128), nullable=True)
     bcc_email: Mapped[str | None] = mapped_column(String(320), nullable=True)
-    composer_model: Mapped[str] = mapped_column(String(64), nullable=False, default="openclaw")
+    composer_model: Mapped[str] = mapped_column(String(64), nullable=False, default="openclaw/proxy")
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_by: Mapped[str | None] = mapped_column(String(128), nullable=True)
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow)

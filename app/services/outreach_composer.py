@@ -37,7 +37,7 @@ SKILL_PATH = Path(os.getenv("BLOG_OUTREACH_SKILL_PATH", str(DEFAULT_SKILL_PATH))
 GATEWAY_URL = os.getenv("OPENCLAW_GATEWAY_URL", "http://127.0.0.1:18789/v1/chat/completions")
 OPENCLAW_CONFIG_PATH = Path(os.getenv("OPENCLAW_CONFIG_PATH", "/root/.openclaw/openclaw.json"))
 
-COMPOSER_MODEL = os.getenv("BLOG_OUTREACH_MODEL", "openclaw")
+COMPOSER_MODEL = os.getenv("BLOG_OUTREACH_MODEL", "openclaw/proxy")
 COMPOSER_TIMEOUT_S = int(os.getenv("BLOG_OUTREACH_TIMEOUT_S", "180"))
 COMPOSER_MAX_TOKENS = int(os.getenv("BLOG_OUTREACH_MAX_TOKENS", "2000"))
 COMPOSER_RETRIES = int(os.getenv("BLOG_OUTREACH_RETRIES", "3"))

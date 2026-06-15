@@ -474,7 +474,11 @@ Flow:
    OpenClaw gateway with contact, firm, history, research, selection evidence,
    policy, proof points, consult-signature constraints, and, when Mission
    Control is reachable, latest listening brief context plus top matched
-   insights.
+   insights. All gateway calls target the `openclaw/proxy` agent, never the
+   main `openclaw` agent — see the CLAUDE.md standing rule "OpenClaw gateway:
+   always use the `openclaw/proxy` agent". The main agent carries the
+   `active-memory` extension (daily memory-file dependency) that is overhead
+   and a failure surface for stateless completions.
 5. The generated subject, body, rationale, angle, CTA, risk flags, composer
    variant, skill path, skill hash, and nullable `brief_version` are stored in
    `lead_gen_batch_items.reason_json.agent_draft`.

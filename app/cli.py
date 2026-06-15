@@ -1826,7 +1826,7 @@ async def _render_listening_prep(context: dict[str, Any], insights: list[dict[st
     from app.services.llm_gateway import DEFAULT_GATEWAY_URL, extract_json, gateway_token, require_fields
 
     url = os.getenv("OPENCLAW_GATEWAY_URL", DEFAULT_GATEWAY_URL)
-    model = os.getenv("LISTENING_PREP_MODEL", os.getenv("OPENCLAW_DEFAULT_MODEL", "openclaw"))
+    model = os.getenv("LISTENING_PREP_MODEL", os.getenv("OPENCLAW_DEFAULT_MODEL", "openclaw/proxy"))
     payload = {
         "firm_context": context,
         "matched_insights": insights[:8],

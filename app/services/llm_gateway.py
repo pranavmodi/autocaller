@@ -172,7 +172,9 @@ async def call_skill_json(
 ) -> GatewayJSONResult:
     """Call OpenClaw gateway with SKILL.md as system prompt and parse JSON."""
     skill = load_skill(skill_path)
-    model_id = model or os.getenv("OPENCLAW_DEFAULT_MODEL", "openclaw")
+    # Default to the lightweight memory-less proxy agent, never the main
+    # `openclaw` agent — see CLAUDE.md "OpenClaw gateway: use the proxy agent".
+    model_id = model or os.getenv("OPENCLAW_DEFAULT_MODEL", "openclaw/proxy")
     url = gateway_url or os.getenv("OPENCLAW_GATEWAY_URL", DEFAULT_GATEWAY_URL)
     timeout = timeout_s or int(os.getenv("OPENCLAW_GATEWAY_TIMEOUT_S", "180"))
     token_limit = max_tokens or int(os.getenv("OPENCLAW_GATEWAY_MAX_TOKENS", "2000"))
