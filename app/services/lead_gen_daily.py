@@ -290,7 +290,11 @@ async def _deliverability_circuit(weights: dict[str, Any], *, now: datetime | No
     }
 
 
-async def _run_gates(weights: dict[str, Any], *, now: datetime | None = None) -> dict[str, Any]:
+async def _run_gates(
+    weights: dict[str, Any], *, now: datetime | None = None, force: bool = False
+) -> dict[str, Any]:
+    # Hard gates always apply, even under force: the system kill-switch and a
+    # zero budget are not "discipline" the operator can wave through.
     settings = await get_settings_provider().get_settings()
     if not settings.system_enabled:
         return {"passed": False, "reason": "system_disabled", "system_enabled": False}
@@ -299,18 +303,27 @@ async def _run_gates(weights: dict[str, Any], *, now: datetime | None = None) ->
         return {"passed": False, "reason": "daily_send_budget_zero", "daily_send_budget": daily_send_budget}
     local_now = (now or _utcnow()).astimezone(PT)
     weekdays = _weekdays(weights)
+    bypassed: list[str] = []
+    # Discipline gates: a forced run (operator-confirmed) bypasses these. The
+    # pipeline only produces approval-waiting drafts, so nothing sends anyway.
     if local_now.weekday() not in weekdays:
-        return {
-            "passed": False,
-            "reason": "weekday_disabled",
-            "weekday": local_now.weekday(),
-            "allowed_weekdays": sorted(weekdays),
-        }
+        if not force:
+            return {
+                "passed": False,
+                "reason": "weekday_disabled",
+                "weekday": local_now.weekday(),
+                "allowed_weekdays": sorted(weekdays),
+            }
+        bypassed.append("weekday_disabled")
     circuit = await _deliverability_circuit(weights, now=now)
     if circuit["tripped"]:
-        return {"passed": False, "reason": "deliverability_circuit_breaker", "deliverability": circuit}
+        if not force:
+            return {"passed": False, "reason": "deliverability_circuit_breaker", "deliverability": circuit}
+        bypassed.append("deliverability_circuit_breaker")
     return {
         "passed": True,
+        "forced": bool(force),
+        "force_bypassed": bypassed,
         "system_enabled": True,
         "daily_send_budget": daily_send_budget,
         "weekday": local_now.weekday(),
@@ -789,7 +802,7 @@ async def run_daily_pipeline(
 
     if dry_run:
         stages: dict[str, Any] = {}
-        gates = await _run_gates(weights, now=now)
+        gates = await _run_gates(weights, now=now, force=force)
         stages["gates"] = {"status": "completed" if gates["passed"] else "skipped", "counts": gates}
         if gates["passed"]:
             status_data = await front_status()
@@ -831,7 +844,7 @@ async def run_daily_pipeline(
     try:
         if not _stage_done(stages, "gates"):
             await _checkpoint(row.id, stage="gates", status="running", run_status="running")
-            gates = await _run_gates(weights, now=now)
+            gates = await _run_gates(weights, now=now, force=force)
             if not gates["passed"]:
                 row = await _checkpoint(
                     row.id,

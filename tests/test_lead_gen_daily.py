@@ -78,6 +78,40 @@ async def test_gates_skip_weekend(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_force_bypasses_weekend_gate(monkeypatch):
+    monkeypatch.setattr(lead_gen_daily, "get_settings_provider", lambda: _settings_provider(True))
+
+    async def _no_circuit(*_args, **_kwargs):
+        return {"tripped": False}
+
+    monkeypatch.setattr(lead_gen_daily, "_deliverability_circuit", _no_circuit)
+
+    result = await lead_gen_daily._run_gates(
+        {"daily_send_budget": 20},
+        now=datetime(2026, 6, 13, 14, 0, tzinfo=timezone.utc),
+        force=True,
+    )
+
+    assert result["passed"] is True
+    assert result["forced"] is True
+    assert "weekday_disabled" in result["force_bypassed"]
+
+
+@pytest.mark.asyncio
+async def test_force_does_not_bypass_hard_gates(monkeypatch):
+    # System kill-switch and zero budget are not waivable by force.
+    monkeypatch.setattr(lead_gen_daily, "get_settings_provider", lambda: _settings_provider(False))
+    disabled = await lead_gen_daily._run_gates({"daily_send_budget": 20}, force=True)
+    assert disabled["passed"] is False
+    assert disabled["reason"] == "system_disabled"
+
+    monkeypatch.setattr(lead_gen_daily, "get_settings_provider", lambda: _settings_provider(True))
+    no_budget = await lead_gen_daily._run_gates({"daily_send_budget": 0}, force=True)
+    assert no_budget["passed"] is False
+    assert no_budget["reason"] == "daily_send_budget_zero"
+
+
+@pytest.mark.asyncio
 async def test_deliverability_circuit_breaker_math(monkeypatch):
     now = datetime(2026, 6, 12, 14, 0, tzinfo=timezone.utc)
     rows = [
