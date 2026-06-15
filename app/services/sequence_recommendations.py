@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
-from sqlalchemy import desc, func, select
+from sqlalchemy import desc, func, or_, select
 
 from app.db import AsyncSessionLocal
 from app.db.models import (
@@ -167,9 +167,19 @@ async def recommend_sequence_contacts(
             )).scalars().all()
             if p
         }
+        # A batch item only counts for cooldown/exclusion if the email actually
+        # SENT (last_sent_at recorded) or it is in an active approved/started
+        # batch about to send. A merely-recommended or failed-compose batch that
+        # never sent must NOT cool the firm — otherwise abandoned/failed runs
+        # cannibalize the eligible pool (observed: a failed compose batch of 20
+        # dropping eligibility from 46 to 8).
+        _item_consumed_a_send = or_(
+            LeadGenBatchItemRow.reason_json["last_sent_at"].astext.isnot(None),
+            LeadGenBatchItemRow.approval_status.in_(["approved", "started"]),
+        )
         batch_contact_ids = {
             c for c in (await session.execute(
-                select(LeadGenBatchItemRow.contact_id)
+                select(LeadGenBatchItemRow.contact_id).where(_item_consumed_a_send)
             )).scalars().all()
             if c
         }
@@ -177,7 +187,7 @@ async def recommend_sequence_contacts(
             p for p in (await session.execute(
                 select(LeadGenBatchItemRow.pif_id)
                 .join(LeadGenBatchRow, LeadGenBatchRow.id == LeadGenBatchItemRow.batch_id)
-                .where(LeadGenBatchRow.created_at >= cooldown_cutoff)
+                .where(LeadGenBatchRow.created_at >= cooldown_cutoff, _item_consumed_a_send)
             )).scalars().all()
             if p
         }
