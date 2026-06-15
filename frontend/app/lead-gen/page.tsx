@@ -603,9 +603,11 @@ function dailyRunOutcome(
   const stages = run.stages ?? {};
   if (run.status === "completed") {
     const drafted = (stages.compose?.counts as Record<string, unknown> | undefined)?.drafted;
+    // "drafts" only — whether they still await review vs. already sent is the
+    // batch's state (shown on the batch card), not the run record's.
     return {
       tone: "ok",
-      text: typeof drafted === "number" ? `Completed · ${drafted} drafts ready for review` : "Completed",
+      text: typeof drafted === "number" ? `Completed · ${drafted} drafts` : "Completed",
     };
   }
   if (run.status === "skipped") {
