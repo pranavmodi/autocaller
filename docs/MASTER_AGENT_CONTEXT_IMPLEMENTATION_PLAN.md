@@ -267,7 +267,7 @@ Add an `Objective status` card in `/agents`:
 Extend:
 
 ```bash
-bin/autocaller agents status --json
+bin/possibleos agents status --json
 ```
 
 No new command unless needed.
@@ -365,7 +365,7 @@ Example rejected request:
 
 Enforce:
 
-- allowed root: `/home/pranav/autocaller`;
+- allowed root: `/home/pranav/possibleos`;
 - repo-relative paths only in public API/CLI;
 - no path traversal outside the repo;
 - no writes;
@@ -432,13 +432,13 @@ Every execution should write:
 Add:
 
 ```bash
-bin/autocaller fs list app/services
-bin/autocaller fs read app/services/master_agent.py --start 1200 --end 1400
-bin/autocaller fs search _build_wake_context app/services
-bin/autocaller fs git-status
-bin/autocaller fs git-diff
-bin/autocaller fs git-log --limit 10
-bin/autocaller fs git-show HEAD --path app/services/master_agent.py
+bin/possibleos fs list app/services
+bin/possibleos fs read app/services/master_agent.py --start 1200 --end 1400
+bin/possibleos fs search _build_wake_context app/services
+bin/possibleos fs git-status
+bin/possibleos fs git-diff
+bin/possibleos fs git-log --limit 10
+bin/possibleos fs git-show HEAD --path app/services/master_agent.py
 ```
 
 ### Capability Registry
@@ -451,8 +451,8 @@ purpose: inspect code, docs, config, and git state without modifying files
 risk: medium
 requires_approval: false
 autonomous_allowed: true
-command shape: bin/autocaller fs <operation> ...
-allowed root: /home/pranav/autocaller
+command shape: bin/possibleos fs <operation> ...
+allowed root: /home/pranav/possibleos
 forbidden: writes, deletes, installs, restarts, network calls, arbitrary shell
 ```
 
@@ -469,8 +469,8 @@ Run:
 ```bash
 python3 -m py_compile app/services/filesystem_read.py app/services/master_agent.py app/cli.py
 .venv/bin/pytest tests/test_filesystem_read.py tests/test_master_agent.py -q
-bin/autocaller fs search _build_wake_context app/services --json
-bin/autocaller fs read app/services/master_agent.py --start 1200 --end 1220 --json
+bin/possibleos fs search _build_wake_context app/services --json
+bin/possibleos fs read app/services/master_agent.py --start 1200 --end 1220 --json
 ```
 
 ### Done When
@@ -495,7 +495,7 @@ Implemented the first horizontal slice of this capability:
   - `git_diff`;
   - `git_log`;
   - `git_show`;
-- added `bin/autocaller fs ...` CLI commands for the same operations;
+- added `bin/possibleos fs ...` CLI commands for the same operations;
 - added policy checks for repo-relative paths, traversal, sensitive files,
   binary files, unsafe globs, unsupported operations, and output limits;
 - added product traces for accepted and rejected read attempts;
@@ -517,7 +517,7 @@ The heartbeat can run a short, bounded multi-step loop:
 wake up
 -> build context
 -> ask LLM what to do next
--> LLM requests a structured read-only tool call
+-> LLM requests a structured bounded tool call
 -> backend validates and executes it
 -> tool result is appended to working context
 -> LLM decides next step
@@ -633,13 +633,12 @@ Allowed LLM decisions:
 - max runtime: 90 seconds;
 - max tool output per call: 50 KB;
 - max accumulated tool context: bounded and summarized;
-- only allow read-only runner tools in V1:
+- only allow approved bounded runner tools in V1:
   - `filesystem_read`;
   - `action_read`;
-- allow bounded writes only through `sandbox_write` under
-  `data/agent-sandbox`;
+  - `sandbox_write`, scoped to `data/agent-sandbox`;
 - reject shell commands, production-file writes, and database mutations;
-- no file modifications in this runner slice;
+- no production file modifications in this runner slice;
 - every tool call is traced;
 - if budget ends before finish, write continuation state.
 
@@ -733,7 +732,7 @@ Implemented the top three preparation steps:
   existing `agent_reports` rows with `agent_id=MasterAgentToolRunner` and
   `status=continuation`;
 - added `app/services/master_agent_runner.py`, a bounded runner module that:
-  - accepts only approved read-only tools in V1;
+  - accepts only approved bounded tools in V1;
   - supports `tool_call`, `finish`, and `blocked` decisions;
   - records compact tool-step summaries;
   - creates `previous_heartbeat_summary`;
@@ -749,7 +748,7 @@ Connected the runner to `run_master_heartbeat()`:
 - added `tool_runner_enabled`, `tool_runner_max_iterations`,
   `tool_runner_max_runtime_seconds`, and `tool_runner_persist_continuation` to
   agent config;
-- exposed those settings through `/api/agents/config`, `bin/autocaller agents
+- exposed those settings through `/api/agents/config`, `bin/possibleos agents
   config`, and the `/agents` settings panel;
 - added `goal_continuation_state` and `previous_heartbeat_summary` to wake
   context;
@@ -811,16 +810,28 @@ Added the first bounded write actuator:
 - rejected absolute paths, `..` traversal, symlink traversal, oversized writes,
   binary reads, and sandbox-root deletion;
 - added CLI helpers:
-  - `bin/autocaller fs sandbox-list`;
-  - `bin/autocaller fs sandbox-read`;
-  - `bin/autocaller fs sandbox-write`;
-  - `bin/autocaller fs sandbox-mkdir`;
-  - `bin/autocaller fs sandbox-delete`;
+  - `bin/possibleos fs sandbox-list`;
+  - `bin/possibleos fs sandbox-read`;
+  - `bin/possibleos fs sandbox-write`;
+  - `bin/possibleos fs sandbox-mkdir`;
+  - `bin/possibleos fs sandbox-delete`;
 - added the `agent sandbox file workspace` capability definition;
 - updated `tool_runner.allowed_tools` to advertise `sandbox_write`;
 - updated `app/skills/master-agent-runner/SKILL.md` so the runner can preserve
   working notes under `data/agent-sandbox`;
 - ignored `data/agent-sandbox/` in git.
+- exposed the max tool-call budget in the Agents UI and CLI. As of 2026-06-09,
+  the live and default value is 5.
+- persisted full runner-iteration debug traces in `product_traces` as
+  `master_agent_runner_iteration`. Each trace captures the full LLM decision
+  payload, parsed decision, requested tool payload, tool result, compact
+  observation, model, and usage metadata.
+- gave each runner iteration its own child trace ID with the heartbeat/request
+  trace as parent so individual iterations are independently inspectable.
+- added `iteration_debug_traces` to `tool_loop` and
+  `iteration_trace_id`/`iteration_trace_row_id` to step summaries so the
+  heartbeat JSON can point to the full debug records without embedding every
+  iteration payload inline.
 
 Behavior change:
 
@@ -832,9 +843,9 @@ Validation:
 ```bash
 python3 -m py_compile app/services/sandbox_write.py app/services/master_agent_runner.py app/services/master_agent.py app/cli.py
 .venv/bin/pytest tests/test_sandbox_write.py tests/test_master_agent_runner.py tests/test_master_agent.py -q
-bin/autocaller fs sandbox-write master-agent-understanding.md --content "smoke" --actor master-agent --json
-bin/autocaller fs sandbox-read master-agent-understanding.md --json
-bin/autocaller fs sandbox-delete master-agent-understanding.md --json
+bin/possibleos fs sandbox-write master-agent-understanding.md --content "smoke" --actor master-agent --json
+bin/possibleos fs sandbox-read master-agent-understanding.md --json
+bin/possibleos fs sandbox-delete master-agent-understanding.md --json
 ```
 
 Promoting sandbox notes into production docs should remain a later, explicit
@@ -844,15 +855,17 @@ capability.
 
 Run a heartbeat with the active codebase-understanding goal and verify:
 
-- runner calls at least one read-only filesystem operation;
+- runner calls at least one bounded tool operation;
 - tool call and result are traced;
+- every LLM runner iteration has a `master_agent_runner_iteration` trace with
+  full input/output context;
 - heartbeat output includes runner iterations;
 - an agent report or event records continuation state;
-- no files are modified by the runner.
+- no production files are modified by the runner.
 
 ### Done When
 
-- the master agent can perform multiple read-only tool calls in one heartbeat;
+- the master agent can perform multiple bounded tool calls in one heartbeat;
 - the loop stops at limits;
 - failures are recorded as blocked evidence;
 - continuation state is durable and visible to future heartbeats.
@@ -963,16 +976,16 @@ Operators and agents can manage user questions from the CLI.
 Add commands:
 
 ```bash
-bin/autocaller agents questions [--status=pending --json]
-bin/autocaller agents ask-user "..." \
+bin/possibleos agents questions [--status=pending --json]
+bin/possibleos agents ask-user "..." \
   --type=clarification \
   --priority=normal \
   --surface=agents \
   --blocking \
   --goal=<goal_id> \
   --task=<task_id>
-bin/autocaller agents answer-question <id> --answer "..."
-bin/autocaller agents dismiss-question <id>
+bin/possibleos agents answer-question <id> --answer "..."
+bin/possibleos agents dismiss-question <id>
 ```
 
 ### Validation
@@ -980,9 +993,9 @@ bin/autocaller agents dismiss-question <id>
 Run:
 
 ```bash
-bin/autocaller agents ask-user "Confirm test question" --json
-bin/autocaller agents questions --json
-bin/autocaller agents answer-question <id> --answer "confirmed" --json
+bin/possibleos agents ask-user "Confirm test question" --json
+bin/possibleos agents questions --json
+bin/possibleos agents answer-question <id> --answer "confirmed" --json
 ```
 
 ### Done When
@@ -1223,10 +1236,10 @@ POST /api/agents/knowledge/sync
 ### CLI
 
 ```bash
-bin/autocaller agents knowledge sync
-bin/autocaller agents knowledge list
-bin/autocaller agents knowledge show <slug>
-bin/autocaller agents knowledge search <query>
+bin/possibleos agents knowledge sync
+bin/possibleos agents knowledge list
+bin/possibleos agents knowledge show <slug>
+bin/possibleos agents knowledge search <query>
 ```
 
 ### Validation

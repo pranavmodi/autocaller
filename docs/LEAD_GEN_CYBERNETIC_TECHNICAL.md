@@ -8,7 +8,7 @@ Use the other lead-gen docs for different purposes:
 
 - Conceptual design: `docs/CYBERNETIC_LEAD_GEN_CONCEPT.md`.
 - Active backlog: DB-backed `todos` table, exposed through `/todos` and
-  `bin/autocaller todos ...`.
+  `bin/possibleos todos ...`.
 - Historical session handoff: `docs/CYBERNETIC_LEAD_GEN_SESSION.md`.
 
 ## Runtime Surfaces
@@ -73,55 +73,55 @@ Lead-gen CLI commands live in `app/cli.py` under the `lead-gen` group.
 Primary commands:
 
 ```bash
-bin/autocaller lead-gen policy
-bin/autocaller lead-gen recommend --template possible_minds_dynamic --limit 50
-bin/autocaller lead-gen email-agent-slice --limit 3 --approval-ready
-bin/autocaller lead-gen email-agent-slice --limit 3 --approve-actions --policy-check-first-action --json
-bin/autocaller lead-gen daily-run --dry-run
-bin/autocaller lead-gen daily-run
-bin/autocaller lead-gen daily-status
-bin/autocaller lead-gen daily-enable
-bin/autocaller lead-gen daily-disable
-bin/autocaller lead-gen batches
-bin/autocaller lead-gen show <batch_id> --observations
-bin/autocaller lead-gen edit-draft <batch_item_id> --at "10:30 PT"
-bin/autocaller lead-gen approve <batch_id>
-bin/autocaller lead-gen approve <batch_id> --start-sequences
-bin/autocaller lead-gen observe --event-type email_reply --item <batch_item_id> --text "..."
-bin/autocaller lead-gen observations --since 7d
-bin/autocaller lead-gen observations --since 7d --type email_sent --contact <contact_id>
-bin/autocaller lead-gen observations summary --since 7d
-bin/autocaller lead-gen propose <batch_id>
-bin/autocaller front sync --max-calls 300
-bin/autocaller front status
-bin/autocaller front contacts --domain examplelaw.com
-bin/autocaller front warm-batch --domains examplelaw.com,anotherfirm.com
-bin/autocaller research status --tasks
-bin/autocaller research firm examplelaw.com --staff --behavior
-bin/autocaller research warm --top 50 --kinds research,staff
-bin/autocaller research sync
-bin/autocaller personas map
-bin/autocaller personas show examplelaw.com
-bin/autocaller leads warm-list --limit 20
-bin/autocaller actions list --type send_approved_lead_gen_draft
-bin/autocaller actions list --scheduled
-bin/autocaller actions scheduler-status
-bin/autocaller actions show <action_id>
-bin/autocaller actions policy-check <action_id>
-bin/autocaller actions execute <action_id>
-bin/autocaller actions cancel <action_id> --reason "operator changed plan"
-bin/autocaller actions reschedule <action_id> --at "11:00 PT"
-bin/autocaller actions execute-approved-lead-gen --limit 1 --actor master-agent
-bin/autocaller actions send-approved-lead-gen-draft --item <batch_item_id> --subject "..." --body "..." --at "09:30 PT"
-bin/autocaller actions send-email --mode lead_gen --to <email> --subject "..." --body "..." --contact <contact_id> --item <batch_item_id> --at "2026-06-11T09:30:00-07:00"
-bin/autocaller listening brief
-bin/autocaller listening search "medical records follow up" --limit 8
-bin/autocaller listening prep "<firm-or-name>"
-bin/autocaller inbound poll --limit 50 --classify
-bin/autocaller todos list --area lead-gen
-bin/autocaller todos add "Review new workflow idea" --area lead-gen --source-url https://...
-bin/autocaller todos update <id> --status done
-bin/autocaller todos delete <id>
+bin/possibleos lead-gen policy
+bin/possibleos lead-gen recommend --template possible_minds_dynamic --limit 50
+bin/possibleos lead-gen email-agent-slice --limit 3 --approval-ready
+bin/possibleos lead-gen email-agent-slice --limit 3 --approve-actions --policy-check-first-action --json
+bin/possibleos lead-gen daily-run --dry-run
+bin/possibleos lead-gen daily-run
+bin/possibleos lead-gen daily-status
+bin/possibleos lead-gen daily-enable
+bin/possibleos lead-gen daily-disable
+bin/possibleos lead-gen batches
+bin/possibleos lead-gen show <batch_id> --observations
+bin/possibleos lead-gen edit-draft <batch_item_id> --at "10:30 PT"
+bin/possibleos lead-gen approve <batch_id>
+bin/possibleos lead-gen approve <batch_id> --start-sequences
+bin/possibleos lead-gen observe --event-type email_reply --item <batch_item_id> --text "..."
+bin/possibleos lead-gen observations --since 7d
+bin/possibleos lead-gen observations --since 7d --type email_sent --contact <contact_id>
+bin/possibleos lead-gen observations summary --since 7d
+bin/possibleos lead-gen propose <batch_id>
+bin/possibleos front sync --max-calls 300
+bin/possibleos front status
+bin/possibleos front contacts --domain examplelaw.com
+bin/possibleos front warm-batch --domains examplelaw.com,anotherfirm.com
+bin/possibleos research status --tasks
+bin/possibleos research firm examplelaw.com --staff --behavior
+bin/possibleos research warm --top 50 --kinds research,staff
+bin/possibleos research sync
+bin/possibleos personas map
+bin/possibleos personas show examplelaw.com
+bin/possibleos leads warm-list --limit 20
+bin/possibleos actions list --type send_approved_lead_gen_draft
+bin/possibleos actions list --scheduled
+bin/possibleos actions scheduler-status
+bin/possibleos actions show <action_id>
+bin/possibleos actions policy-check <action_id>
+bin/possibleos actions execute <action_id>
+bin/possibleos actions cancel <action_id> --reason "operator changed plan"
+bin/possibleos actions reschedule <action_id> --at "11:00 PT"
+bin/possibleos actions execute-approved-lead-gen --limit 1 --actor master-agent
+bin/possibleos actions send-approved-lead-gen-draft --item <batch_item_id> --subject "..." --body "..." --at "09:30 PT"
+bin/possibleos actions send-email --mode lead_gen --to <email> --subject "..." --body "..." --contact <contact_id> --item <batch_item_id> --at "2026-06-11T09:30:00-07:00"
+bin/possibleos listening brief
+bin/possibleos listening search "medical records follow up" --limit 8
+bin/possibleos listening prep "<firm-or-name>"
+bin/possibleos inbound poll --limit 50 --classify
+bin/possibleos todos list --area lead-gen
+bin/possibleos todos add "Review new workflow idea" --area lead-gen --source-url https://...
+bin/possibleos todos update <id> --status done
+bin/possibleos todos delete <id>
 ```
 
 The CLI reference remains in `docs/cli.md`.
@@ -273,7 +273,7 @@ Current event taxonomy:
 The weekly learning KPI is:
 
 ```bash
-bin/autocaller lead-gen observations summary --since 7d
+bin/possibleos lead-gen observations summary --since 7d
 ```
 
 ### Frontend
@@ -445,7 +445,7 @@ limit is `agent_config.auto_execute_approved_lead_gen_email_limit`, clamped to
 1-25. The same settings are exposed by:
 
 ```bash
-bin/autocaller agents config \
+bin/possibleos agents config \
   --auto-send-approved-lead-gen \
   --auto-send-limit 1
 ```
@@ -935,8 +935,8 @@ Front read-only:
 
 ## Current Operational Notes
 
-- Backend service: `autocaller-backend.service`.
-- Frontend service: `autocaller-frontend.service`.
+- Backend service: `possibleos-backend.service`.
+- Frontend service: `possibleos-frontend.service`.
 - Frontend dev server listens on port `3099`.
 - Backend in this deployment listens on port `8099`.
 - Backend health: `GET /health` returns `ok`.
@@ -945,8 +945,8 @@ Front read-only:
 Useful checks:
 
 ```bash
-systemctl is-active autocaller-backend.service
-systemctl is-active autocaller-frontend.service
+systemctl is-active possibleos-backend.service
+systemctl is-active possibleos-frontend.service
 curl -sS http://127.0.0.1:8099/health
 curl -sS http://127.0.0.1:8099/api/lead-gen/policy/current
 curl -sS -I http://127.0.0.1:3099/login

@@ -189,9 +189,9 @@ Score 0-10 per dimension. Output JSON for CI/reporting.
 ### CLI
 
 ```bash
-bin/autocaller simulate --persona=busy_skeptic
-bin/autocaller simulate --all                     # runs every persona, prints summary
-bin/autocaller simulate --persona=busy_skeptic --diff=v1.3    # compare against saved baseline
+bin/possibleos simulate --persona=busy_skeptic
+bin/possibleos simulate --all                     # runs every persona, prints summary
+bin/possibleos simulate --persona=busy_skeptic --diff=v1.3    # compare against saved baseline
 ```
 
 Saves:

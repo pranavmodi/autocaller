@@ -1,0 +1,21 @@
+[Unit]
+Description=Possible OS Backend (FastAPI/uvicorn)
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/home/pranav/possibleos
+ExecStart=/home/pranav/possibleos/run-backend.sh
+Restart=always
+RestartSec=10
+KillSignal=SIGTERM
+KillMode=control-group
+TimeoutStopSec=30
+StandardOutput=append:/var/log/possibleos-backend.log
+StandardError=append:/var/log/possibleos-backend.log
+
+[Install]
+WantedBy=multi-user.target
+Alias=autocaller-backend.service

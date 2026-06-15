@@ -64,6 +64,14 @@ logs/
 
 # Claude
 .claude/
+!.claude/
+.claude/*
+!.claude/skills/
+.claude/skills/*
+!.claude/skills/autocaller/
+!.claude/skills/autocaller/**
+!.claude/skills/possibleos/
+!.claude/skills/possibleos/**
 
 # Testing
 .coverage

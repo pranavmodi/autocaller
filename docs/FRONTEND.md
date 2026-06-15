@@ -15,7 +15,9 @@ without opening a terminal.
    transcript, dispatcher state) streams in real-time. No manual refresh.
 4. **Mobile-first.** Pranav checks this between meetings on a phone.
    Single-column, touch-friendly, readable at a glance.
-5. **One auth bar.** The daemon is behind `autocaller.getpossibleminds.com`;
+5. **One auth bar.** The daemon is behind `possibleos.getpossibleminds.com`
+   (the legacy `autocaller.getpossibleminds.com` alias still resolves so
+   already-sent outreach tracking links keep working);
    add HTTP basic auth in nginx. No in-app user system.
 
 ---
@@ -152,7 +154,7 @@ if it's healthy. Everything else stays CLI.
 ### Phase 2 (2-3 days) — History + Single call
 `/calls` table and `/calls/:id` detail with transcript + recording playback.
 This is where the real value lives — reviewing calls without running
-`bin/autocaller calls transcript <id>` each time.
+`bin/possibleos calls transcript <id>` each time.
 
 ### Phase 3 (2-3 days) — Pipeline + funnel stats
 `/pipeline` queue view and the 7-day funnel block on `/health`. Useful once

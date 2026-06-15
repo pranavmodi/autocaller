@@ -194,7 +194,7 @@ Better:
   "can_do": [
     {
       "name": "execute approved lead-gen email actions",
-      "command": "bin/autocaller actions execute-approved-lead-gen --limit=1 --actor=master-agent --json",
+      "command": "bin/possibleos actions execute-approved-lead-gen --limit=1 --actor=master-agent --json",
       "risk": "high",
       "approval_required": true,
       "autonomous_allowed_when": "auto_execute_approved_lead_gen_email_enabled is true"
@@ -703,7 +703,7 @@ The backend should reject raw command strings:
 
 Policy rules:
 
-- root reads under `/home/pranav/autocaller`;
+- root reads under `/home/pranav/possibleos`;
 - use repo-relative paths at API and CLI boundaries;
 - reject path traversal;
 - reject binary files;
@@ -727,7 +727,7 @@ The architecture should support:
 wake up
 -> build context
 -> ask LLM what to do next
--> LLM requests structured read-only tool call
+-> LLM requests structured bounded tool call
 -> backend validates and executes tool call
 -> tool result is appended to working context
 -> LLM decides next step
@@ -759,11 +759,11 @@ Heartbeat input should expose:
 
 V1 limits:
 
-- only approved read-only tool calls:
+- only approved bounded tool calls:
   - `filesystem_read` for bounded code/docs/git inspection;
   - `action_read` for bounded durable action outcome inspection;
-- bounded file modifications are allowed only through `sandbox_write` under
-  `data/agent-sandbox`;
+  - `sandbox_write` for bounded file modifications only under
+    `data/agent-sandbox`;
 - no production file modifications;
 - no database mutations from runner tools;
 - max 5 tool calls per heartbeat;
@@ -787,6 +787,17 @@ Current implementation:
 - Each tool result is compacted before being passed into the next runner
   decision.
 - The heartbeat output includes `tool_loop`.
+- Each runner LLM iteration is persisted as a `product_traces` row with
+  `event_type=master_agent_runner_iteration`. The trace stores the full
+  decision payload passed to the runner LLM in `input_json`, plus the parsed
+  decision, requested tool payload, tool result, compact observation, model, and
+  token usage in `output_json`/`metadata_json`.
+- Each iteration receives its own `trace_id` with the heartbeat/request trace as
+  `parent_trace_id`, so individual iterations can be opened without losing the
+  parent heartbeat relationship.
+- The compact heartbeat `tool_loop` includes `iteration_debug_traces` and each
+  step includes `iteration_trace_id`/`iteration_trace_row_id`, so the UI can
+  show small heartbeat JSON while retaining full per-iteration debuggability.
 - The heartbeat wake context includes only compact previous continuation state,
   not the full previous transcript.
 - New continuation records merge prior `files_read`, facts, and questions with
@@ -795,8 +806,11 @@ Current implementation:
 - The continuation loader also aggregates recent continuation reports for the
   same goal, so the next heartbeat receives the accumulated inspected-file list
   even if the latest individual run was weak.
-- Config is exposed through `/api/agents/config`, `bin/autocaller agents
+- Config is exposed through `/api/agents/config`, `bin/possibleos agents
   config`, and the `/agents` settings panel.
+- The max tool-call budget is visible to the master agent in
+  `volatile_wake_state.tool_runner.max_iterations` and configurable from the
+  Agents UI and CLI. As of 2026-06-09, the live and default value is 5.
 
 ### Action Outcome Inspection
 
@@ -1472,13 +1486,13 @@ git_show
 3. Add CLI commands:
 
 ```bash
-bin/autocaller fs list ...
-bin/autocaller fs read ...
-bin/autocaller fs search ...
-bin/autocaller fs git-status
-bin/autocaller fs git-diff
-bin/autocaller fs git-log
-bin/autocaller fs git-show
+bin/possibleos fs list ...
+bin/possibleos fs read ...
+bin/possibleos fs search ...
+bin/possibleos fs git-status
+bin/possibleos fs git-diff
+bin/possibleos fs git-log
+bin/possibleos fs git-show
 ```
 
 4. Add the capability registry entry:
@@ -1495,13 +1509,13 @@ Implementation note, 2026-06-06:
 This slice now exists as a structured read-only service and CLI wrapper:
 
 - `app/services/filesystem_read.py`;
-- `bin/autocaller fs list`;
-- `bin/autocaller fs read`;
-- `bin/autocaller fs search`;
-- `bin/autocaller fs git-status`;
-- `bin/autocaller fs git-diff`;
-- `bin/autocaller fs git-log`;
-- `bin/autocaller fs git-show`;
+- `bin/possibleos fs list`;
+- `bin/possibleos fs read`;
+- `bin/possibleos fs search`;
+- `bin/possibleos fs git-status`;
+- `bin/possibleos fs git-diff`;
+- `bin/possibleos fs git-log`;
+- `bin/possibleos fs git-show`;
 - master-agent capability registry entry:
   `read-only filesystem inspection`.
 
@@ -1541,9 +1555,9 @@ POST /api/agents/questions/{id}/answer
 4. Add CLI:
 
 ```bash
-bin/autocaller agents questions
-bin/autocaller agents ask-user ...
-bin/autocaller agents answer-question ...
+bin/possibleos agents questions
+bin/possibleos agents ask-user ...
+bin/possibleos agents answer-question ...
 ```
 
 5. Add `/agents` UI section:

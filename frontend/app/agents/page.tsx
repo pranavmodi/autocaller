@@ -209,6 +209,18 @@ const JSON_KEY_ORDER: Record<string, string[]> = {
     "cached_tokens",
     "prompt_cache",
   ],
+  tool_loop: [
+    "status",
+    "tool_calls_used",
+    "tool_calls_limit",
+    "runtime_seconds",
+    "steps",
+    "iteration_debug_traces",
+    "final_answer",
+    "previous_heartbeat_summary",
+    "goal_continuation_state",
+    "continuation_report_id",
+  ],
   human_status: [
     "state",
     "goal",
@@ -525,7 +537,7 @@ export default function AgentsPage() {
   const [heartbeatEnabledDraft, setHeartbeatEnabledDraft] = useState(true);
   const [heartbeatIntervalDraft, setHeartbeatIntervalDraft] = useState("300");
   const [toolRunnerEnabledDraft, setToolRunnerEnabledDraft] = useState(false);
-  const [toolRunnerIterationsDraft, setToolRunnerIterationsDraft] = useState("3");
+  const [toolRunnerIterationsDraft, setToolRunnerIterationsDraft] = useState("5");
   const [toolRunnerRuntimeDraft, setToolRunnerRuntimeDraft] = useState("90");
   const [toolRunnerPersistDraft, setToolRunnerPersistDraft] = useState(true);
   const [autoSendLeadGenDraft, setAutoSendLeadGenDraft] = useState(false);
@@ -979,7 +991,7 @@ export default function AgentsPage() {
                   onChange={(event) => setToolRunnerEnabledDraft(event.target.checked)}
                   className="h-4 w-4 rounded border-emerald-300"
                 />
-                Master may use read-only tools
+                Master may use bounded tools
               </label>
               <label className="w-28 text-xs font-medium text-neutral-700">
                 Tool calls
@@ -1025,11 +1037,11 @@ export default function AgentsPage() {
               </button>
             </div>
             <div className="mt-2 text-xs text-neutral-500">
-              The Enabled checkbox saves immediately. Period, runner, and approved-send automation changes use Save. The runner only uses bounded read-only filesystem inspection.
+              The Enabled checkbox saves immediately. Period, runner, and approved-send automation changes use Save. The runner can inspect files/actions and write only inside the bounded agent sandbox.
             </div>
             {toolRunnerEnabledDraft ? (
               <div className="mt-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
-                When saved, each manual or scheduled heartbeat may make up to {toolRunnerIterationsDraft || "3"} read-only tool call(s) and save compact continuation notes for the next wake-up.
+                When saved, each manual or scheduled heartbeat may make up to {toolRunnerIterationsDraft || "5"} bounded tool call(s) and save compact continuation notes for the next wake-up.
               </div>
             ) : null}
             {autoSendLeadGenDraft ? (

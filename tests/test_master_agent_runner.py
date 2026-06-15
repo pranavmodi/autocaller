@@ -58,6 +58,74 @@ async def test_runner_executes_bounded_filesystem_call_and_compacts_summary(monk
 
 
 @pytest.mark.asyncio
+async def test_runner_persists_full_iteration_debug_trace(monkeypatch):
+    recorded = []
+
+    async def fake_trace(**kwargs):
+        recorded.append(kwargs)
+        return {"id": len(recorded), "trace_id": f"trace_{len(recorded)}"}
+
+    monkeypatch.setattr("app.services.master_agent_runner.safe_record_product_trace", fake_trace)
+    decisions = iter([
+        {
+            "decision": "tool_call",
+            "tool": "filesystem_read",
+            "operation": "read_file",
+            "path": "app/services/master_agent.py",
+            "reason": "Inspect heartbeat code.",
+            "_llm_metadata": {
+                "model": "openclaw",
+                "usage": {"prompt_tokens": 100, "completion_tokens": 20},
+            },
+        },
+        {
+            "decision": "finish",
+            "summary": "Done.",
+        },
+    ])
+
+    async def provider(payload):
+        return next(decisions)
+
+    async def executor(payload):
+        return {
+            "allowed": True,
+            "result": {
+                "operation": "read_file",
+                "summary": "read app/services/master_agent.py",
+                "files_touched": ["app/services/master_agent.py"],
+                "content": "heartbeat code",
+                "truncated": False,
+            },
+        }
+
+    result = await run_master_agent_tool_loop(
+        wake_context={"kind": "master_agent_wake_context_v2", "volatile_wake_state": {"tool_runner": {"max_iterations": 2}}},
+        active_goal={"id": "goal_1", "goal": "Understand the heartbeat."},
+        decision_provider=provider,
+        tool_executor=executor,
+        persist_continuation=False,
+    )
+
+    iteration_traces = [
+        trace for trace in recorded
+        if trace["event_type"] == "master_agent_runner_iteration"
+    ]
+    assert len(iteration_traces) == 2
+    assert iteration_traces[0]["trace_id"]
+    assert iteration_traces[1]["trace_id"]
+    assert iteration_traces[0]["trace_id"] != iteration_traces[1]["trace_id"]
+    assert iteration_traces[0]["input_json"]["wake_context"]["kind"] == "master_agent_wake_context_v2"
+    assert iteration_traces[0]["output_json"]["decision"]["tool"] == "filesystem_read"
+    assert iteration_traces[0]["output_json"]["tool_result"]["result"]["content"] == "heartbeat code"
+    assert iteration_traces[0]["metadata_json"]["usage"]["prompt_tokens"] == 100
+    assert result["steps"][0]["iteration_trace_id"] == "trace_1"
+    assert result["steps"][0]["iteration_trace_row_id"] == 1
+    assert result["iteration_debug_traces"][0]["trace_id"] == "trace_1"
+    assert result["iteration_debug_traces"][1]["decision"] == "finish"
+
+
+@pytest.mark.asyncio
 async def test_runner_blocks_when_no_decision_provider(monkeypatch):
     async def noop_trace(**kwargs):
         return None

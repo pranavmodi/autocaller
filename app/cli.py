@@ -4,7 +4,7 @@ The CLI is a thin client: call-related commands talk to the running FastAPI
 daemon on loopback, while bulk-lead and config commands touch the DB / .env
 directly. Uses Typer for arg parsing + Rich for tabular output.
 
-Entry point: `python -m app.cli <command>` or `bin/autocaller <command>`.
+Entry point: `python -m app.cli <command>` or `bin/possibleos <command>`.
 """
 from __future__ import annotations
 
@@ -112,7 +112,11 @@ console = Console()
 def _api_base() -> str:
     """Base URL of the FastAPI daemon (loopback by default)."""
     port = os.getenv("BACKEND_PORT", "8000").strip() or "8000"
-    return os.getenv("AUTOCALLER_API_BASE", f"http://127.0.0.1:{port}").rstrip("/")
+    return (
+        os.getenv("POSSIBLEOS_API_BASE")
+        or os.getenv("AUTOCALLER_API_BASE")
+        or f"http://127.0.0.1:{port}"
+    ).rstrip("/")
 
 
 def _http_error_detail(exc: httpx.HTTPError) -> str:
@@ -1900,7 +1904,7 @@ def status():
         s = _get("/api/status")
         console.print_json(data=s)
     except typer.Exit:
-        console.print("[yellow]Daemon unreachable — run `autocaller serve`.[/yellow]")
+        console.print("[yellow]Daemon unreachable - run `possibleos serve`.[/yellow]")
 
 
 @app.command()
@@ -2229,8 +2233,8 @@ def carrier_status():
         console.print(_carrier_block(info, is_default=(name == default)))
         console.print("")
     console.print(
-        "[dim]Switch default: [/dim][bold]autocaller carrier twilio[/bold][dim] / [/dim]"
-        "[bold]autocaller carrier telnyx[/bold][dim]. "
+        "[dim]Switch default: [/dim][bold]possibleos carrier twilio[/bold][dim] / [/dim]"
+        "[bold]possibleos carrier telnyx[/bold][dim]. "
         "Per-call override: [/dim][bold]--carrier=telnyx[/bold][dim] on `call`.[/dim]"
     )
 
@@ -2431,7 +2435,7 @@ def prompts_show():
     console.print(f"Active style  : [bold]{style}[/bold]")
     console.print(f"PROMPT_VERSION: {version}")
     console.print(
-        f"(Switch via [bold]autocaller prompts set <style>[/bold] or the "
+        f"(Switch via [bold]possibleos prompts set <style>[/bold] or the "
         f"/system UI panel. DB-backed, no restart needed. Valid: "
         f"{', '.join(prompt_mod.VALID_STYLES)}.)"
     )
@@ -2966,7 +2970,7 @@ def contacts_list(
                 break
 
     if not rows:
-        console.print("[dim]No contacts. Run `autocaller contacts backfill` first.[/dim]")
+        console.print("[dim]No contacts. Run `possibleos contacts backfill` first.[/dim]")
         return
     table = Table(show_header=True, header_style="bold")
     table.add_column("contact_id", no_wrap=True)

@@ -7,7 +7,7 @@ learns, and what it is allowed to change.
 Keep this file mostly mutually exclusive from the other lead-gen docs:
 
 - Active implementation backlog: DB-backed todos in the `/todos` UI and
-  `bin/autocaller todos ...`.
+  `bin/possibleos todos ...`.
 - Current code/API/schema/operations: `docs/LEAD_GEN_CYBERNETIC_TECHNICAL.md`.
 - Historical session handoff: `docs/CYBERNETIC_LEAD_GEN_SESSION.md`.
 

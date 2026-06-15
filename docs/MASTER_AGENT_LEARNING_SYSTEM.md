@@ -925,7 +925,7 @@ Current heartbeat status implementation:
 - shows the human status and full wake context in `/agents`.
 
 The current goal in the wake context comes from durable `master_goals` rows.
-Manual goals set with `bin/autocaller agents set-goal` override synthesized
+Manual goals set with `bin/possibleos agents set-goal` override synthesized
 goals until expiry. The future long-range planning layer should still add
 `master_plans` and `master_plan_items` for parallel multi-day work.
 
@@ -1205,8 +1205,8 @@ dumps.
 
 Sources should include:
 
-- backend systemd journal for `autocaller-backend.service`;
-- frontend systemd journal and `/var/log/autocaller-frontend.log`;
+- backend systemd journal for `possibleos-backend.service`;
+- frontend systemd journal and `/var/log/possibleos-frontend.log`;
 - product traces;
 - agent task events and reports;
 - API errors;

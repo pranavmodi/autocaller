@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
-# autocaller - compatibility alias for `bin/possibleos`.
+# possibleos - thin wrapper around `python -m app.cli`.
 # Resolves the project root relative to this script, activates the venv if
 # one exists, and forwards args.
 
 set -euo pipefail
-# Resolve symlinks so the wrapper works when invoked via `/usr/local/bin/autocaller`.
+
+# Resolve symlinks so the wrapper works when invoked via `/usr/local/bin/possibleos`.
 SCRIPT_PATH="$(readlink -f -- "${BASH_SOURCE[0]}")"
 SCRIPT_DIR="$(dirname -- "${SCRIPT_PATH}")"
 PROJECT_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"

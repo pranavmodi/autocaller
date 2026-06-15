@@ -11,7 +11,7 @@ from app.services.action_read import run_action_read
 from app.services.filesystem_read import run_filesystem_read
 from app.services.llm_gateway import LLMGatewayError, call_skill_json
 from app.services.master_agent import create_goal_continuation_report
-from app.services.product_traces import safe_record_product_trace
+from app.services.product_traces import current_trace_id, new_trace_id, safe_record_product_trace
 from app.services.sandbox_write import run_sandbox_write
 
 
@@ -162,6 +162,8 @@ def _step_summary(step: dict[str, Any]) -> dict[str, Any]:
         "decision": step.get("decision"),
         "tool": step.get("tool"),
         "operation": step.get("operation"),
+        "iteration_trace_id": step.get("iteration_trace_id"),
+        "iteration_trace_row_id": step.get("iteration_trace_row_id"),
         "allowed": result.get("allowed", step.get("allowed")),
         "result_summary": inner.get("summary") if isinstance(inner, dict) else "",
         "files_touched": inner.get("files_touched") if isinstance(inner, dict) else [],
@@ -319,6 +321,7 @@ async def run_master_agent_tool_loop(
     executor = tool_executor
     started = time.monotonic()
     steps: list[dict[str, Any]] = []
+    iteration_debug_traces: list[dict[str, Any]] = []
     status = "completed"
     final_answer: dict[str, Any] = {}
     calls_used = 0
@@ -354,10 +357,70 @@ async def run_master_agent_tool_loop(
                     "Check the OpenClaw gateway and runner skill before retrying the tool loop.",
                 ],
             }
-        _validate_decision(decision, allowed)
+        iteration_trace: dict[str, Any] | None = None
+        try:
+            _validate_decision(decision, allowed)
+        except Exception as exc:
+            iteration_trace = await safe_record_product_trace(
+                trace_id=new_trace_id(),
+                parent_trace_id=current_trace_id(),
+                actor_type="agent",
+                actor_id=actor,
+                event_type="master_agent_runner_iteration",
+                surface="agents",
+                entity_type="master_agent_tool_loop",
+                entity_id=(active_goal or {}).get("id") or "no-goal",
+                input_json=decision_payload,
+                output_json={
+                    "step": idx,
+                    "decision": decision,
+                    "validation_error": str(exc),
+                },
+                metadata_json={
+                    "step": idx,
+                    "status": "invalid_decision",
+                    "model": ((decision or {}).get("_llm_metadata") or {}).get("model"),
+                    "usage": ((decision or {}).get("_llm_metadata") or {}).get("usage") or {},
+                },
+            )
+            if iteration_trace:
+                iteration_debug_traces.append({
+                    "step": idx,
+                    "trace_id": iteration_trace.get("trace_id"),
+                    "trace_row_id": iteration_trace.get("id"),
+                    "decision": decision.get("decision"),
+                    "status": "invalid_decision",
+                })
+            raise
         kind = str(decision.get("decision"))
 
         if kind == "finish":
+            iteration_trace = await safe_record_product_trace(
+                trace_id=new_trace_id(),
+                parent_trace_id=current_trace_id(),
+                actor_type="agent",
+                actor_id=actor,
+                event_type="master_agent_runner_iteration",
+                surface="agents",
+                entity_type="master_agent_tool_loop",
+                entity_id=(active_goal or {}).get("id") or "no-goal",
+                input_json=decision_payload,
+                output_json={"step": idx, "decision": decision},
+                metadata_json={
+                    "step": idx,
+                    "status": "finish",
+                    "model": ((decision or {}).get("_llm_metadata") or {}).get("model"),
+                    "usage": ((decision or {}).get("_llm_metadata") or {}).get("usage") or {},
+                },
+            )
+            if iteration_trace:
+                iteration_debug_traces.append({
+                    "step": idx,
+                    "trace_id": iteration_trace.get("trace_id"),
+                    "trace_row_id": iteration_trace.get("id"),
+                    "decision": "finish",
+                    "status": "finish",
+                })
             final_answer = {
                 "summary": str(decision.get("summary") or "Runner finished."),
                 "facts_learned": decision.get("facts_learned") or decision.get("learned") or [],
@@ -371,6 +434,32 @@ async def run_master_agent_tool_loop(
             break
 
         if kind == "blocked":
+            iteration_trace = await safe_record_product_trace(
+                trace_id=new_trace_id(),
+                parent_trace_id=current_trace_id(),
+                actor_type="agent",
+                actor_id=actor,
+                event_type="master_agent_runner_iteration",
+                surface="agents",
+                entity_type="master_agent_tool_loop",
+                entity_id=(active_goal or {}).get("id") or "no-goal",
+                input_json=decision_payload,
+                output_json={"step": idx, "decision": decision},
+                metadata_json={
+                    "step": idx,
+                    "status": "blocked",
+                    "model": ((decision or {}).get("_llm_metadata") or {}).get("model"),
+                    "usage": ((decision or {}).get("_llm_metadata") or {}).get("usage") or {},
+                },
+            )
+            if iteration_trace:
+                iteration_debug_traces.append({
+                    "step": idx,
+                    "trace_id": iteration_trace.get("trace_id"),
+                    "trace_row_id": iteration_trace.get("id"),
+                    "decision": "blocked",
+                    "status": "blocked",
+                })
             final_answer = {
                 "summary": str(decision.get("reason") or "Runner blocked."),
                 "facts_learned": decision.get("facts_learned") or [],
@@ -406,6 +495,44 @@ async def run_master_agent_tool_loop(
             "files_touched": inner.get("files_touched") if isinstance(inner, dict) else [],
             "truncated": bool(inner.get("truncated")) if isinstance(inner, dict) else False,
         }
+        iteration_trace = await safe_record_product_trace(
+            trace_id=new_trace_id(),
+            parent_trace_id=current_trace_id(),
+            actor_type="agent",
+            actor_id=actor,
+            event_type="master_agent_runner_iteration",
+            surface="agents",
+            entity_type="master_agent_tool_loop",
+            entity_id=(active_goal or {}).get("id") or "no-goal",
+            input_json=decision_payload,
+            output_json={
+                "step": idx,
+                "decision": decision,
+                "request": payload,
+                "tool_result": tool_result,
+                "observation": _compact_tool_observation(step),
+            },
+            metadata_json={
+                "step": idx,
+                "status": "tool_call_completed",
+                "tool": tool,
+                "operation": payload.get("operation"),
+                "model": ((decision or {}).get("_llm_metadata") or {}).get("model"),
+                "usage": ((decision or {}).get("_llm_metadata") or {}).get("usage") or {},
+            },
+        )
+        if iteration_trace:
+            step["iteration_trace_id"] = iteration_trace.get("trace_id")
+            step["iteration_trace_row_id"] = iteration_trace.get("id")
+            iteration_debug_traces.append({
+                "step": idx,
+                "trace_id": iteration_trace.get("trace_id"),
+                "trace_row_id": iteration_trace.get("id"),
+                "decision": "tool_call",
+                "tool": tool,
+                "operation": payload.get("operation"),
+                "status": "tool_call_completed",
+            })
         steps.append(step)
         await safe_record_product_trace(
             actor_type="agent",
@@ -434,6 +561,7 @@ async def run_master_agent_tool_loop(
         "tool_calls_limit": max_iterations,
         "runtime_seconds": round(time.monotonic() - started, 3),
         "steps": [_step_summary(step) for step in steps],
+        "iteration_debug_traces": iteration_debug_traces,
         "final_answer": final_answer,
         "previous_heartbeat_summary": {},
     }

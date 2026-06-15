@@ -37,7 +37,7 @@ sudo -u postgres psql -d autocaller -tAc "
 
 ## The command
 
-Entry point: `bin/autocaller leads sync-mission` (or
+Entry point: `bin/possibleos leads sync-mission` (or
 `python -m app.cli leads sync-mission`, same thing).
 
 ### Full option surface
@@ -93,28 +93,28 @@ double-dialing.
 
 ### "I'm out of leads; pull more"
 ```bash
-bin/autocaller leads sync-mission --tiers=A,B,C --dm-threshold=4 --limit=500
+bin/possibleos leads sync-mission --tiers=A,B,C --dm-threshold=4 --limit=500
 ```
 Broadens both ICP tier and DM threshold. Typical yield: 100–150 kept
 leads out of 500 fetched.
 
 ### "Pull only the highest-quality partners"
 ```bash
-bin/autocaller leads sync-mission --tiers=A --dm-threshold=7 --limit=200
+bin/possibleos leads sync-mission --tiers=A --dm-threshold=7 --limit=200
 ```
 Tighter filter — partner/managing-partner titles only. Good for a
 "quality not quantity" batch.
 
 ### "Test the extractor without writing to the DB"
 ```bash
-bin/autocaller leads sync-mission --dry-run --limit=50
+bin/possibleos leads sync-mission --dry-run --limit=50
 ```
 Prints what would be kept/skipped, no DB changes. Useful for tuning
 `--dm-threshold`.
 
 ### "Scale the LLM extraction faster"
 ```bash
-bin/autocaller leads sync-mission --concurrency=20 --limit=2000
+bin/possibleos leads sync-mission --concurrency=20 --limit=2000
 ```
 Higher concurrency. Each call is ~300ms latency so default 10 ≈ 3
 firms/sec; 20 ≈ 6 firms/sec. Bounded by OpenAI rate limits on your
@@ -122,7 +122,7 @@ key's tier.
 
 ### "I need to see what got skipped and why"
 ```bash
-bin/autocaller leads sync-mission --dry-run --limit=100 2>&1 | tee /tmp/sync-report.txt
+bin/possibleos leads sync-mission --dry-run --limit=100 2>&1 | tee /tmp/sync-report.txt
 grep -E "skipped|kept|inserted|updated" /tmp/sync-report.txt
 ```
 

@@ -93,7 +93,7 @@ Seconds later it's extracted into typed insights; call notes are flagged
 primary and outrank all scraped signal. This is the system's only ask of you:
 when you encounter signal, paste it.
 
-**Before a call — prep.** `bin/autocaller listening prep "Sweet James"` prints
+**Before a call — prep.** `bin/possibleos listening prep "Sweet James"` prints
 a one-screen brief: likely persona, the three objections to expect, the
 vocabulary to use ("handoff repair," not "automation rate"), and which podcast
 episode their managing partner appeared on. Thirty seconds, no tabs.

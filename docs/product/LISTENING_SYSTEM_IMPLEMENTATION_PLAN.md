@@ -151,7 +151,7 @@ search quotes, and see source freshness; a composed email records its
 `brief_version`.
 
 **Autocaller implementation note (2026-06-10):** `app/services/listening_client.py`
-now consumes the Mission Control listening API read-only. `bin/autocaller
+now consumes the Mission Control listening API read-only. `bin/possibleos
 listening brief/search/quotes/sources/prep` exposes the operator surface.
 Lead-gen email composition adds latest brief context and top matched insights
 when Mission Control is reachable, and `email_logs.brief_version` is nullable so
@@ -249,5 +249,5 @@ while 2–4 are built.
 ## Todo tracking
 
 Add to the autocaller `todos` table (area `listening`): one todo per phase,
-via `bin/autocaller todos add ...`, per the CLAUDE.md rule that active backlog
+via `bin/possibleos todos add ...`, per the CLAUDE.md rule that active backlog
 lives in the DB, not markdown.

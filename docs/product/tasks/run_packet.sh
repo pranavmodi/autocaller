@@ -13,7 +13,7 @@ codex exec \
   -s workspace-write \
   -c 'sandbox_workspace_write.network_access=true' \
   -C "$WORKDIR" \
-  --add-dir /home/pranav/autocaller/docs/product \
+  --add-dir /home/pranav/possibleos/docs/product \
   --skip-git-repo-check \
   --color never \
   "$@" \

@@ -1,0 +1,22 @@
+[Unit]
+Description=Possible OS Frontend (Next.js)
+After=network-online.target possibleos-backend.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/home/pranav/possibleos/frontend
+Environment=PORT=3099
+ExecStart=/usr/bin/npm start
+Restart=always
+RestartSec=10
+KillSignal=SIGTERM
+KillMode=control-group
+TimeoutStopSec=30
+StandardOutput=append:/var/log/possibleos-frontend.log
+StandardError=append:/var/log/possibleos-frontend.log
+
+[Install]
+WantedBy=multi-user.target
+Alias=autocaller-frontend.service

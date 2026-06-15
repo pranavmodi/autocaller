@@ -14,7 +14,7 @@ email sequences, observes replies/delivery feedback/bookings, writes those
 observations back to durable state, and proposes policy/copy changes against
 the target metric of booked qualified conversations. See
 `docs/CYBERNETIC_LEAD_GEN_CONCEPT.md` for the conceptual design,
-the `/todos` UI or `bin/autocaller todos ...` for the active DB-backed backlog,
+the `/todos` UI or `bin/possibleos todos ...` for the active DB-backed backlog,
 and `docs/LEAD_GEN_CYBERNETIC_TECHNICAL.md` for implementation details. Zoho Mail
 can remain the mailbox provider: the system reads inbound
 replies over Zoho IMAP when `ZOHO_IMAP_USER` and `ZOHO_IMAP_PASSWORD` are
@@ -26,15 +26,15 @@ send it back in the same thread through the approved send action.
 ## Quick start
 
 ```bash
-cd /home/pranav/OutboundVoiceAI
+cd /home/pranav/possibleos
 .venv/bin/pip install -r requirements.txt
-bin/autocaller config init              # interactive .env wizard
+bin/possibleos config init              # interactive .env wizard
 .venv/bin/alembic upgrade head          # DB migrations
-bin/autocaller doctor                   # must be all ✓ before live calls
-bin/autocaller serve                    # start daemon (separate terminal / tmux)
-bin/autocaller leads import leads.csv   # bulk-load leads
-bin/autocaller dispatcher start         # begin auto-calling
-bin/autocaller calls list               # review what happened
+bin/possibleos doctor                   # must be all ✓ before live calls
+bin/possibleos serve                    # start daemon (separate terminal / tmux)
+bin/possibleos leads import leads.csv   # bulk-load leads
+bin/possibleos dispatcher start         # begin auto-calling
+bin/possibleos calls list               # review what happened
 ```
 
 ## Documentation
@@ -43,7 +43,7 @@ bin/autocaller calls list               # review what happened
   Command schemas, failure modes, recipes, REST API, DB schema.
 - **[docs/CYBERNETIC_LEAD_GEN_CONCEPT.md](docs/CYBERNETIC_LEAD_GEN_CONCEPT.md)** —
   conceptual design of the lead-generation cybernetic function.
-- **`/todos` UI and `bin/autocaller todos ...`** — DB-backed active backlog.
+- **`/todos` UI and `bin/possibleos todos ...`** — DB-backed active backlog.
 - **[docs/LEAD_GEN_CYBERNETIC_TECHNICAL.md](docs/LEAD_GEN_CYBERNETIC_TECHNICAL.md)** —
   current lead-gen implementation, APIs, tables, services, and operations.
 - Legacy docs under `docs/` (`system-overview.md`, `requirements.md`, etc.)
@@ -54,10 +54,10 @@ bin/autocaller calls list               # review what happened
 
 Two processes:
 
-- **Daemon** (`autocaller serve`): long-running FastAPI app.
+- **Daemon** (`possibleos serve`): long-running FastAPI app.
   Hosts the Twilio webhooks, bridges Twilio media streams to OpenAI Realtime,
   runs the dispatcher polling loop, and persists to Postgres.
-- **CLI** (`bin/autocaller`): thin client. Most commands hit the daemon on
+- **CLI** (`bin/possibleos`): thin client. Most commands hit the daemon on
   loopback REST; bulk lead import/export reads/writes the DB directly.
 
 ```

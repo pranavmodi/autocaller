@@ -12,7 +12,8 @@ interface State {
   error: string | null;
 }
 
-const AUTO_LS_KEY = "autocaller_listen_auto";
+const AUTO_LS_KEY = "possibleos_listen_auto";
+const LEGACY_AUTO_LS_KEY = "autocaller_listen_auto";
 
 function u8ToBase64(bytes: Uint8Array): string {
   // btoa wants a binary string. Loop is fine — frames are 160 bytes.
@@ -48,7 +49,12 @@ export function useLiveListener(callId: string | null) {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    if (window.localStorage.getItem(AUTO_LS_KEY) === "true") {
+    const saved = window.localStorage.getItem(AUTO_LS_KEY);
+    const legacySaved = window.localStorage.getItem(LEGACY_AUTO_LS_KEY);
+    if (saved == null && legacySaved != null) {
+      window.localStorage.setItem(AUTO_LS_KEY, legacySaved);
+    }
+    if ((saved ?? legacySaved) === "true") {
       setState((s) => ({ ...s, autoReconnect: true }));
     }
   }, []);

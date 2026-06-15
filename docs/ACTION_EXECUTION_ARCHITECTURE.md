@@ -25,7 +25,7 @@ Bad pattern:
 ```text
 LLM says:
 Run this shell command:
-bin/autocaller email send --to x@example.com --subject "..." --body "..."
+bin/possibleos email send --to x@example.com --subject "..." --body "..."
 ```
 
 Good pattern:
@@ -453,33 +453,33 @@ Every action capability needs CLI parity.
 Recommended command group:
 
 ```text
-bin/autocaller actions list
-bin/autocaller actions show <action_id>
-bin/autocaller actions approve <action_id>
-bin/autocaller actions reject <action_id>
-bin/autocaller actions execute <action_id>
-bin/autocaller actions run-next
-bin/autocaller actions policy-check <action_id>
+bin/possibleos actions list
+bin/possibleos actions show <action_id>
+bin/possibleos actions approve <action_id>
+bin/possibleos actions reject <action_id>
+bin/possibleos actions execute <action_id>
+bin/possibleos actions run-next
+bin/possibleos actions policy-check <action_id>
 ```
 
 For lead-gen email specifically, current V1 command is:
 
 ```text
-bin/autocaller actions send-approved-lead-gen-draft --item=<batch_item_id> --subject=... --body=...
+bin/possibleos actions send-approved-lead-gen-draft --item=<batch_item_id> --subject=... --body=...
 ```
 
 For a controlled test email of the durable executor:
 
 ```text
-bin/autocaller actions send-email --mode=test --to=<email> --subject=... --body=...
+bin/possibleos actions send-email --mode=test --to=<email> --subject=... --body=...
 ```
 
-`bin/autocaller actions send-test-email ...` remains a convenience alias.
+`bin/possibleos actions send-test-email ...` remains a convenience alias.
 
 or:
 
 ```text
-bin/autocaller actions execute <action_id>
+bin/possibleos actions execute <action_id>
 ```
 
 Rationale:
@@ -658,10 +658,10 @@ This creates one consistent execution path.
 Add:
 
 ```text
-bin/autocaller actions list
-bin/autocaller actions show <id>
-bin/autocaller actions policy-check <id>
-bin/autocaller actions execute <id>
+bin/possibleos actions list
+bin/possibleos actions show <id>
+bin/possibleos actions policy-check <id>
+bin/possibleos actions execute <id>
 ```
 
 Rationale:
@@ -767,13 +767,13 @@ As of this document:
   - `POST /api/actions/lead-gen/send-approved-draft`
   - `POST /api/actions/email/send`
   - `POST /api/actions/email/send-test`
-  - `bin/autocaller actions list`
-  - `bin/autocaller actions show`
-  - `bin/autocaller actions policy-check`
-  - `bin/autocaller actions execute`
-  - `bin/autocaller actions send-approved-lead-gen-draft`
-  - `bin/autocaller actions send-email`
-  - `bin/autocaller actions send-test-email`
+  - `bin/possibleos actions list`
+  - `bin/possibleos actions show`
+  - `bin/possibleos actions policy-check`
+  - `bin/possibleos actions execute`
+  - `bin/possibleos actions send-approved-lead-gen-draft`
+  - `bin/possibleos actions send-email`
+  - `bin/possibleos actions send-test-email`
 - The current action types are:
   - `send_approved_lead_gen_draft`
   - `send_email`

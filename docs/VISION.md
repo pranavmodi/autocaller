@@ -86,7 +86,8 @@ never promises meetings it didn't confirm, and never leaves the line silent.
 
 The pipeline works end to end in proof-of-concept form:
 
-- FastAPI daemon behind `autocaller.getpossibleminds.com` with real TLS.
+- FastAPI daemon behind `possibleos.getpossibleminds.com` with real TLS
+  (legacy `autocaller.getpossibleminds.com` alias still served).
 - Twilio places calls, OpenAI Realtime handles the conversation.
 - Prompt runs discovery, asks ONE quantifying follow-up, proposes a demo.
 - Cal.com integration wired (not yet configured with real event type).

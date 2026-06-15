@@ -10,7 +10,7 @@ only if Resend is misconfigured.
 
 For tracking endpoints to actually reach the daemon from email clients,
 the operator must expose the daemon publicly and set OUTREACH_PUBLIC_BASE_URL
-to that hostname (e.g. https://autocaller.getpossibleminds.com). The
+to that hostname (e.g. https://possibleos.getpossibleminds.com). The
 service does not validate reachability — that's a deploy-time concern.
 """
 from __future__ import annotations
@@ -87,7 +87,7 @@ def _public_base_url() -> str:
         raise RuntimeError(
             "OUTREACH_PUBLIC_BASE_URL is not set. Set it to the hostname "
             "the autocaller daemon is reachable at from email clients "
-            "(e.g. https://autocaller.getpossibleminds.com) so /t/o/ and "
+            "(e.g. https://possibleos.getpossibleminds.com) so /t/o/ and "
             "/t/c/ tracking links work."
         )
     return PUBLIC_BASE_URL

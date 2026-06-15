@@ -94,7 +94,7 @@ Precedence (highest wins):
 3. Env var — `VOICE_PROVIDER=openai|gemini` (default `openai`)
 
 Exposed via:
-- CLI: `bin/autocaller call LEAD-XXX --voice=gemini`
+- CLI: `bin/possibleos call LEAD-XXX --voice=gemini`
 - API: `POST /api/call/start` accepts `voice_provider` in body
 - Frontend Now screen: toggle dropdown (stretch)
 

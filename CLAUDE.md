@@ -9,7 +9,7 @@ Whenever you add a feature:
 1. **Build the backend** — service code, REST endpoint, DB migration, etc.
 2. **Add a CLI wrapper** in `app/cli.py` that drives it. Prefer a top-level group for a new domain (`system`, `mock`, `allowlist`, `followups`, …); subcommands for actions. Use REST on loopback when the daemon is the source of truth; hit the DB directly only for bulk / offline operations.
 3. **Update `docs/cli.md`** — the reference agents and humans read. At minimum add a row in the "New-command reference" table in §3; add a recipe in §10 if the command enables a new workflow.
-4. **Update the skill** at `.claude/skills/autocaller/SKILL.md` **and** sync to `/root/.openclaw/workspace/skills/autocaller/SKILL.md` (or `cp` between them). The skill is what other AI agents load to know the system. If you added a command the skill doesn't mention, the next agent won't find it.
+4. **Update the skill** at `.claude/skills/possibleos/SKILL.md` **and** sync to `/root/.openclaw/workspace/skills/possibleos/SKILL.md` (or `cp` between them). Keep `.claude/skills/autocaller/SKILL.md` as the legacy alias while older agents still load it. The skill is what other AI agents load to know the system. If you added a command the skill doesn't mention, the next agent won't find it.
 5. **Update the vision / feature docs** in `docs/` where the change is material — `VISION.md`, `SELF_IMPROVEMENT.md`, `DISPOSITIONS.md`, `FRONTEND.md`, `SIMULATED_RECEIVER.md`, `VOICE_PROVIDERS.md`.
 
 Lead-generation changes have one additional documentation rule:
@@ -18,7 +18,7 @@ update the clean lead-gen docs according to their scope:
 `docs/LEAD_GEN_CYBERNETIC_TECHNICAL.md` for implemented code, APIs, schema,
 configuration, operations, and tests. Active backlog entries now live in the
 DB-backed `todos` table and should be added through the `/todos` UI or
-`bin/autocaller todos ...`, not through a markdown todo file. Keep the docs
+`bin/possibleos todos ...`, not through a markdown todo file. Keep the docs
 mostly mutually exclusive: do not bury active todos in the concept doc, and do
 not describe aspirational behavior as implemented in the technical doc.
 
@@ -44,7 +44,7 @@ A reasonable heuristic: if someone three months from now had only the CLI and `d
 ## Other standing rules
 
 - **OpenClaw gateway: always use the `openclaw/proxy` agent, never `openclaw`.**
-  Every autocaller LLM call that goes through the OpenClaw gateway
+  Every Possible OS LLM call that goes through the OpenClaw gateway
   (`call_skill_json`, the composer, PHI egress guard, lead-feedback
   classifier, blog/outreach composer, listening-prep, etc.) MUST target the
   lightweight **`openclaw/proxy`** agent. The default `openclaw` (main) agent
@@ -54,7 +54,7 @@ A reasonable heuristic: if someone three months from now had only the CLI and `d
   into responses, (b) adds ~30s latency, and (c) causes intermittent
   "incomplete turn" failures that fail-close the PHI guard and block sends.
   The proxy agent has no memory extension — it's fast, clean, and stateless,
-  which is correct for autocaller's single-shot JSON tasks (they're fully
+  which is correct for Possible OS single-shot JSON tasks (they're fully
   specified by SKILL.md + payload and gain nothing from cross-session memory).
   Code defaults are set to `openclaw/proxy`; keep it that way. Env overrides:
   `OPENCLAW_DEFAULT_MODEL`, `LEAD_EMAIL_COMPOSER_MODEL`, `LEAD_FEEDBACK_MODEL`,
@@ -64,7 +64,7 @@ A reasonable heuristic: if someone three months from now had only the CLI and `d
   IVR navigator) do not use the gateway and are unaffected. When the
   master-agent WIP lands, point `MASTER_AGENT_*_MODEL` at `openclaw/proxy` too.
 - **Long response handling.** Any AI-agent response expected to exceed 50 lines
-  must replace `/home/pranav/autocaller/long-response.md` with the full answer
+  must replace `/home/pranav/possibleos/long-response.md` with the full answer
   and keep the chat reply short, pointing to that file. Do not append to the
   file for these long responses; replace it so the file always contains the
   latest long answer.

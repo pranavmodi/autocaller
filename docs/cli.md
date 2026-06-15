@@ -1,22 +1,23 @@
-# Autocaller CLI — Operator's Guide (for humans and AI agents)
+# Possible OS CLI - Operator's Guide (for humans and AI agents)
 
-This document is the canonical reference for driving the autocaller from the
+This document is the canonical reference for driving Possible OS from the
 command line. It is written to be consumed by an AI agent as well as a human
 operator: commands, argument schemas, return shapes, failure modes, and
 recovery steps are spelled out explicitly.
 
-**Project root:** `/home/pranav/OutboundVoiceAI`
+**Project root:** `/home/pranav/possibleos`
 **Entry points (equivalent):**
-- `bin/autocaller <command>` — shell wrapper, loads `.env`, prefers `.venv`
+- `bin/possibleos <command>` — shell wrapper, loads `.env`, prefers `.venv`
+- `bin/autocaller <command>` — legacy compatibility alias
 - `.venv/bin/python -m app.cli <command>` — direct invocation
 
-All examples below use `bin/autocaller` (referred to as `autocaller` for short).
+All examples below use `bin/possibleos`.
 
 ---
 
 ## 1. System architecture in one paragraph
 
-The autocaller has two processes: the **daemon** (FastAPI, long-running) and
+Possible OS has two processes: the **daemon** (FastAPI, long-running) and
 the **CLI** (short-lived). The daemon receives Twilio webhooks, bridges media
 streams, talks to OpenAI Realtime, and runs the dispatcher poll loop. The CLI
 is a client that either (a) hits the daemon's loopback REST API for live ops
@@ -47,13 +48,13 @@ CLI  ──REST──▶  FastAPI daemon ──▶ Twilio PSTN  ◀────�
 
 ### 2.2 Install deps
 ```bash
-cd /home/pranav/OutboundVoiceAI
+cd /home/pranav/possibleos
 .venv/bin/pip install -r requirements.txt
 ```
 
 ### 2.3 Configure `.env`
 ```bash
-bin/autocaller config init
+bin/possibleos config init
 ```
 This walks through every required variable. Or copy `.env.example` → `.env`
 and fill in by hand. The daemon won't start without `OPENAI_API_KEY`,
@@ -67,7 +68,7 @@ This creates the `patients`, `call_logs`, `system_settings` (and legacy) tables.
 
 ### 2.5 Verify
 ```bash
-bin/autocaller doctor
+bin/possibleos doctor
 ```
 Every row must be `✓` before attempting a live call. See §8 for interpreting
 each row.
@@ -77,7 +78,7 @@ each row.
 ## 3. Top-level command reference
 
 ```
-autocaller <command> [options]
+possibleos <command> [options]
 
 Commands
   serve          Start the FastAPI daemon (foreground).
@@ -138,7 +139,7 @@ Every command accepts `--help`. Exit code is `0` on success, `1` on any error
 | `email send-consult --to=... --name=... --slot="Wed Apr 30 at 2:00 PM PT" [--firm=... --notes=...]` | Manually fire the consult-booking confirmation (same template Cal.com booking flow uses). Includes the Google Meet link from `CONSULT_MEET_URL`. |
 | `comms list [--firm=<pif_id> --channel=call\|voicemail\|sms\|email --since=7d --status=... --q=... --limit=N --raw]` | Cross-firm or per-firm outbound communications feed. Unions `call_logs` (channel = `call` or `voicemail` based on `voicemail_left`), `email_logs`, and `sms_logs` by timestamp. Mirrors the `/comms` UI page. `--raw` prints JSON instead of a table. |
 | `comms show <channel-prefixed-id>` | Print one communication as JSON. ID format: `call:<call_id>` (covers voicemail too), `email:<id>`, `sms:<id>`. |
-| `contacts backfill [--limit=N]` | Pull leadership rosters from PIF Stats + autocaller patient DM rows into `firm_contacts`. Idempotent. Run once before using `sequences start`. |
+| `contacts backfill [--limit=N]` | Pull leadership rosters from PIF Stats + possibleos patient DM rows into `firm_contacts`. Idempotent. Run once before using `sequences start`. |
 | `contacts list [--firm=<pif_id>] [--limit=N]` | List firm_contacts rows. Without `--firm`, walks across firms. |
 | `front sync [--full] [--max-calls N] [--json]` | Budgeted read-only Precise Front sync: contacts, inbox activity metadata, offline firm resolution, and warm-score refresh. Hard-caps API calls and persists cursors/watermarks. |
 | `front status [--json]` | Show Front sync health, cursors, watermarks, table counts, funnel counts, day-over-day deltas, and timing feed data used by `/front`. |
@@ -265,7 +266,7 @@ before generating today's list.
 The smallest master-agent lead-gen slice is:
 
 ```bash
-bin/autocaller lead-gen email-agent-slice --limit 3 --approval-ready
+bin/possibleos lead-gen email-agent-slice --limit 3 --approval-ready
 ```
 
 That command creates a normal lead-gen batch, stores research evidence and an
@@ -274,22 +275,22 @@ That command creates a normal lead-gen batch, stores research evidence and an
 email. For no-send policy validation of an exact approved action, run:
 
 ```bash
-bin/autocaller lead-gen email-agent-slice --limit 3 --approve-actions --policy-check-first-action --json
+bin/possibleos lead-gen email-agent-slice --limit 3 --approve-actions --policy-check-first-action --json
 ```
 
 ---
 
 ## 4. Daemon lifecycle
 
-### `autocaller serve`
+### `possibleos serve`
 Starts the FastAPI daemon in the foreground on `BACKEND_PORT` (default 8000).
 Runs the dispatcher, mounts the Twilio webhooks at `/api/twilio/*`, and exposes
 the REST API.
 
 ```bash
-bin/autocaller serve                 # foreground, production log level
-bin/autocaller serve --reload        # auto-reload on code change (dev only)
-bin/autocaller serve --port 9000     # bind on a different port
+bin/possibleos serve                 # foreground, production log level
+bin/possibleos serve --reload        # auto-reload on code change (dev only)
+bin/possibleos serve --port 9000     # bind on a different port
 ```
 
 **For AI agents / unattended operation:** Run the daemon under a supervisor
@@ -298,13 +299,13 @@ at `http://127.0.0.1:${BACKEND_PORT:-8000}`.
 
 Example `tmux` pattern:
 ```bash
-tmux new -d -s autocaller 'cd /home/pranav/OutboundVoiceAI && bin/autocaller serve'
-tmux capture-pane -t autocaller -p | tail -20   # peek at logs
+tmux new -d -s possibleos 'cd /home/pranav/possibleos && bin/possibleos serve'
+tmux capture-pane -t possibleos -p | tail -20   # peek at logs
 ```
 
 ### Stopping the daemon
 ```bash
-tmux kill-session -t autocaller
+tmux kill-session -t possibleos
 # or: pkill -f 'uvicorn app.main:app'
 ```
 
@@ -315,10 +316,10 @@ outcome `FAILED` (the caller on the other end will hear a hangup).
 
 ## 5. Lead management
 
-### 5.1 CSV import (`autocaller leads import`)
+### 5.1 CSV import (`possibleos leads import`)
 
 ```
-autocaller leads import <csv_path> [--source=csv] [--dry-run]
+possibleos leads import <csv_path> [--source=csv] [--dry-run]
 ```
 
 - `<csv_path>`: existing, readable CSV file.
@@ -357,21 +358,21 @@ Paul Chen,Chen Law Group,415-555-0144,CA,pi + workers comp,paul@chenlaw.legal,Pa
 **Return:** prints `Imported N new, updated M.` on stderr. Exit code `0` iff
 the import committed.
 
-### 5.2 List (`autocaller leads list`)
+### 5.2 List (`possibleos leads list`)
 ```
-autocaller leads list [--state=CA] [--limit=50]
+possibleos leads list [--state=CA] [--limit=50]
 ```
 Table columns: `id, name, firm, state, phone, title, attempts, last_outcome`.
 Sorted by `priority_bucket` then `updated_at desc`.
 
-### 5.3 Show (`autocaller leads show <lead_id>`)
+### 5.3 Show (`possibleos leads show <lead_id>`)
 Prints the full row as JSON (pretty-printed by Rich). Exit code `1` if not
 found — agents should check the exit status, not parse the error string.
 
 ### 5.4 Add / remove
 ```
-autocaller leads add --name "Jane Doe" --phone 555... [--firm ...] [--state CA] [--email ...] [--title Partner] [--practice-area "personal injury"]
-autocaller leads remove <lead_id>
+possibleos leads add --name "Jane Doe" --phone 555... [--firm ...] [--state CA] [--email ...] [--title Partner] [--practice-area "personal injury"]
+possibleos leads remove <lead_id>
 ```
 
 ---
@@ -381,10 +382,10 @@ autocaller leads remove <lead_id>
 There are two ways a call goes out: **manually** (single-shot) or **dispatched**
 (auto polling loop).
 
-### 6.1 Manual single-shot (`autocaller call`)
+### 6.1 Manual single-shot (`possibleos call`)
 
 ```
-autocaller call <lead_id> [--mode=twilio|web]
+possibleos call <lead_id> [--mode=twilio|web]
 ```
 
 - `--mode=twilio` (default): real PSTN call via Twilio. **Requires** `ALLOW_TWILIO_CALLS=true` **and** the lead's phone in `allowed_phones` (until you remove the allowlist).
@@ -396,15 +397,15 @@ The daemon must be running. Returns the created `call` object as JSON (shape des
 | exit | cause | fix |
 |------|-------|-----|
 | 1    | HTTP 400 `patient_id is required` | pass a valid lead id |
-| 1    | HTTP 409 `Call could not be started` | another call in progress, OR `ALLOW_TWILIO_CALLS` gate, OR lead not in `allowed_phones`. Check `autocaller status` and daemon logs. |
-| 1    | network error | daemon not running — `autocaller serve` |
+| 1    | HTTP 409 `Call could not be started` | another call in progress, OR `ALLOW_TWILIO_CALLS` gate, OR lead not in `allowed_phones`. Check `possibleos status` and daemon logs. |
+| 1    | network error | daemon not running — `possibleos serve` |
 
-### 6.2 Auto-dispatched (`autocaller dispatcher …`)
+### 6.2 Auto-dispatched (`possibleos dispatcher …`)
 
 ```
-autocaller dispatcher start    # enable polling (kicks off first call if eligible)
-autocaller dispatcher stop     # pause — in-flight call continues until natural end
-autocaller dispatcher status   # JSON: state, last decision, running flag, config
+possibleos dispatcher start    # enable polling (kicks off first call if eligible)
+possibleos dispatcher stop     # pause — in-flight call continues until natural end
+possibleos dispatcher status   # JSON: state, last decision, running flag, config
 ```
 
 The dispatcher polls every `dispatcher_settings.poll_interval` seconds (default
@@ -424,7 +425,7 @@ starts a call. On call end, the lead's `attempt_count` increments and
 
 **Inspecting a dispatcher decision:**
 ```bash
-autocaller dispatcher status | jq .recent_decisions
+possibleos dispatcher status | jq .recent_decisions
 ```
 Each entry has `{timestamp, decision, detail, state}`. Common `decision` values:
 `started`, `stopped`, `blocked`, `no_candidate`, `starting_call`, `call_started`,
@@ -450,17 +451,17 @@ Each entry has `{timestamp, decision, detail, state}`. Common `decision` values:
 | `no_answer`          | Phone rang out (Twilio reported no answer). |
 
 The legacy outcomes `transferred` and `in_progress` still exist but are
-effectively unused by the attorney autocaller.
+effectively unused by the attorney possibleos.
 
-### 7.2 `autocaller calls list`
+### 7.2 `possibleos calls list`
 
 ```
-autocaller calls list [--limit=25] [--outcome=demo_scheduled]
+possibleos calls list [--limit=25] [--outcome=demo_scheduled]
 ```
 
 Table columns: `call_id (short), lead, firm, state, outcome, duration_s, interest, demo_id, started`.
 
-### 7.3 `autocaller calls show <call_id>`
+### 7.3 `possibleos calls show <call_id>`
 
 Full JSON. Keys include everything on the `CallLog` model plus recording
 metadata. Shape:
@@ -493,7 +494,7 @@ metadata. Shape:
 }
 ```
 
-### 7.4 `autocaller calls transcript <call_id>`
+### 7.4 `possibleos calls transcript <call_id>`
 
 Prints the speaker-tagged transcript line-by-line:
 ```
@@ -502,7 +503,7 @@ patient: Yeah, what's this about?
 ai: We build custom software and AI tools for personal injury firms …
 ```
 
-### 7.5 `autocaller calls export --output file.csv [--outcome=demo_scheduled] [--limit=1000]`
+### 7.5 `possibleos calls export --output file.csv [--outcome=demo_scheduled] [--limit=1000]`
 
 CSV export with a CRM-friendly schema. Columns:
 ```
@@ -516,15 +517,15 @@ Common post-export workflows:
 
 ```bash
 # Demos booked this week
-bin/autocaller calls export --outcome demo_scheduled --output this_week.csv
+bin/possibleos calls export --outcome demo_scheduled --output this_week.csv
 
 # All called-and-didn't-close for follow-up email
-bin/autocaller calls export --outcome not_interested --output to_email.csv
+bin/possibleos calls export --outcome not_interested --output to_email.csv
 ```
 
 ---
 
-## 8. `autocaller doctor` — interpreting results
+## 8. `possibleos doctor` — interpreting results
 
 Each row is a health check. All must be `✓` before a live call.
 
@@ -568,7 +569,7 @@ curl -X POST http://127.0.0.1:8000/api/settings/allow-live-calls \
      -d '{"allowed":true}'
 # 3. make sure env has ALLOW_TWILIO_CALLS=true
 # 4. import yourself as a lead, then:
-bin/autocaller call LEAD-000001
+bin/possibleos call LEAD-000001
 ```
 
 ---
@@ -577,26 +578,26 @@ bin/autocaller call LEAD-000001
 
 ### Recipe: "import leads and start calling"
 ```bash
-bin/autocaller doctor || { echo "fix doctor first"; exit 1; }
-bin/autocaller leads import /tmp/leads_batch.csv
-bin/autocaller dispatcher start
+bin/possibleos doctor || { echo "fix doctor first"; exit 1; }
+bin/possibleos leads import /tmp/leads_batch.csv
+bin/possibleos dispatcher start
 # monitor:
-watch -n 10 'bin/autocaller dispatcher status | jq ".state, .recent_decisions[-3:]"'
+watch -n 10 'bin/possibleos dispatcher status | jq ".state, .recent_decisions[-3:]"'
 ```
 
 ### Recipe: "review last hour of calls"
 ```bash
-bin/autocaller calls list --limit 50
+bin/possibleos calls list --limit 50
 # drill into one:
-bin/autocaller calls show <call_id>
-bin/autocaller calls transcript <call_id>
+bin/possibleos calls show <call_id>
+bin/possibleos calls transcript <call_id>
 ```
 
 ### Recipe: "daily pipeline snapshot"
 ```bash
-bin/autocaller calls export --outcome demo_scheduled --output demos_booked.csv
-bin/autocaller calls export --outcome callback_requested --output callback_queue.csv
-bin/autocaller calls list --limit 200 | head -50
+bin/possibleos calls export --outcome demo_scheduled --output demos_booked.csv
+bin/possibleos calls export --outcome callback_requested --output callback_queue.csv
+bin/possibleos calls list --limit 200 | head -50
 ```
 
 ### Recipe: "daily warm list from Front"
@@ -605,10 +606,10 @@ Use this to refresh Precise Front person/firm warmth without sending outreach.
 hard API call budget.
 
 ```bash
-bin/autocaller front sync --max-calls 300
-bin/autocaller front status
-bin/autocaller leads warm-list --limit 20
-bin/autocaller front warm-batch --domains examplelaw.com,anotherfirm.com --name "Front warm review"
+bin/possibleos front sync --max-calls 300
+bin/possibleos front status
+bin/possibleos leads warm-list --limit 20
+bin/possibleos front warm-batch --domains examplelaw.com,anotherfirm.com --name "Front warm review"
 ```
 
 Review the named contacts before creating a lead-gen batch. `front warm-batch`
@@ -622,12 +623,12 @@ missing personas. PIF Stats research runs on production Precise infrastructure,
 so trigger it manually and respect the POST budget.
 
 ```bash
-bin/autocaller research status --tasks
-bin/autocaller research warm --top 50 --kinds research,staff
-bin/autocaller research sync
-bin/autocaller personas map
-bin/autocaller personas show examplelaw.com
-bin/autocaller front warm-batch --domains examplelaw.com --name "Researched warm review"
+bin/possibleos research status --tasks
+bin/possibleos research warm --top 50 --kinds research,staff
+bin/possibleos research sync
+bin/possibleos personas map
+bin/possibleos personas show examplelaw.com
+bin/possibleos front warm-batch --domains examplelaw.com --name "Researched warm review"
 ```
 
 `research warm` queues only safe PIF Stats task endpoints, skips completed
@@ -642,20 +643,20 @@ stored in DB settings, not env. Enabling it only creates approval-waiting
 scheduled draft actions; approved sends still require operator approval.
 
 ```bash
-bin/autocaller lead-gen daily-status
-bin/autocaller lead-gen daily-run --dry-run
-bin/autocaller lead-gen daily-run
-bin/autocaller lead-gen daily-status
-bin/autocaller actions list --status waiting_for_approval --type send_email
+bin/possibleos lead-gen daily-status
+bin/possibleos lead-gen daily-run --dry-run
+bin/possibleos lead-gen daily-run
+bin/possibleos lead-gen daily-status
+bin/possibleos actions list --status waiting_for_approval --type send_email
 ```
 
 To let the daemon create the morning batch during the 06:30-08:00 PT loop
 window:
 
 ```bash
-bin/autocaller lead-gen daily-enable
-bin/autocaller lead-gen daily-status
-bin/autocaller lead-gen daily-disable
+bin/possibleos lead-gen daily-enable
+bin/possibleos lead-gen daily-status
+bin/possibleos lead-gen daily-disable
 ```
 
 The run checkpoints `gates`, `signals`, `research`, `personas`, `select`,
@@ -666,13 +667,13 @@ America/Los_Angeles, and leaves every action in `waiting_for_approval`.
 
 ### Recipe: "who competes with firm X"
 Use this when a warm-list firm needs local PI competitor context. The rebuild
-uses only local Mission Control cache tables and autocaller Postgres activity;
+uses only local Mission Control cache tables and possibleos Postgres activity;
 it does not call Front and does not call an LLM.
 
 ```bash
-bin/autocaller front competitors rebuild
-bin/autocaller front competitors summary
-bin/autocaller front competitors show examplelaw.com --limit 10
+bin/possibleos front competitors rebuild
+bin/possibleos front competitors summary
+bin/possibleos front competitors show examplelaw.com --limit 10
 ```
 
 The score combines local metro overlap, deterministic case-mix tags from cached
@@ -685,9 +686,9 @@ visualization. Search works across all firms with competitive features, not
 just `/front` warm-list rows.
 
 ```bash
-bin/autocaller front competitors search wilshire
-bin/autocaller front competitors graph wilshirelawfirm.com --depth 1
-bin/autocaller front competitors graph wilshirelawfirm.com --depth 2 --json
+bin/possibleos front competitors search wilshire
+bin/possibleos front competitors graph wilshirelawfirm.com --depth 1
+bin/possibleos front competitors graph wilshirelawfirm.com --depth 2 --json
 ```
 
 Depth 1 returns the center firm, direct neighbors, and all edges among that
@@ -695,10 +696,10 @@ node set. Depth 2 expands outward and caps the graph at 60 highest-score nodes.
 
 ### Recipe: "something's wrong — triage"
 ```bash
-bin/autocaller status               # is daemon alive? any active call?
-bin/autocaller doctor               # all green?
-bin/autocaller dispatcher status    # state + recent_decisions tell you why it's not calling
-tmux capture-pane -t autocaller -p | tail -100   # daemon logs
+bin/possibleos status               # is daemon alive? any active call?
+bin/possibleos doctor               # all green?
+bin/possibleos dispatcher status    # state + recent_decisions tell you why it's not calling
+tmux capture-pane -t possibleos -p | tail -100   # daemon logs
 ```
 
 ### Recipe: "take over a live call"
@@ -712,22 +713,22 @@ Works from any frontend page via the `ActiveCallOverlay`:
 ```
 Or from the CLI for scripting:
 ```bash
-bin/autocaller calls takeover <call_id>         # server-side flag only
-bin/autocaller calls takeover <call_id> --off   # release back to AI
+bin/possibleos calls takeover <call_id>         # server-side flag only
+bin/possibleos calls takeover <call_id> --off   # release back to AI
 ```
 CLI alone doesn't capture your voice — the UI owns the mic. The CLI is for
 scripted mute (e.g., pause AI while an internal tool hands DTMF via Twilio REST).
 
 ### Recipe: "verify email pipeline before relying on follow-ups"
 ```bash
-bin/autocaller email status                            # transport + gates
-bin/autocaller email test --to you@example.com         # plain end-to-end ping
-bin/autocaller email test --to you@example.com \
+bin/possibleos email status                            # transport + gates
+bin/possibleos email test --to you@example.com         # plain end-to-end ping
+bin/possibleos email test --to you@example.com \
     --from "Pranav Modi <pranav@possiblemindshq.com>"
 # preview the actual templates against a real address:
-bin/autocaller email send-onepager --to you@example.com --name "Jane" --firm "Test Firm"
-bin/autocaller email send-vm-followup --to you@example.com --first-name Jane
-bin/autocaller email send-consult --to you@example.com --name "Jane Doe" \
+bin/possibleos email send-onepager --to you@example.com --name "Jane" --firm "Test Firm"
+bin/possibleos email send-vm-followup --to you@example.com --first-name Jane
+bin/possibleos email send-consult --to you@example.com --name "Jane Doe" \
     --slot "Wed Apr 30 at 2:00 PM PT" --firm "Test Firm"
 ```
 If `email status` shows "NOT CONFIGURED", set `RESEND_API_KEY` (preferred) or
@@ -743,7 +744,7 @@ Use this when the operator has approved exact lead-gen drafts but wants them to
 go out at specific Pacific morning times.
 
 ```bash
-bin/autocaller actions send-email \
+bin/possibleos actions send-email \
   --mode lead_gen \
   --to contact@example.com \
   --subject "Quick question" \
@@ -752,8 +753,8 @@ bin/autocaller actions send-email \
   --item <batch_item_id> \
   --at "09:30 PT"
 
-bin/autocaller actions list --scheduled
-bin/autocaller actions scheduler-status
+bin/possibleos actions list --scheduled
+bin/possibleos actions scheduler-status
 ```
 
 `--at` accepts ISO-8601 with an offset, such as
@@ -773,10 +774,10 @@ operator wants to revise the exact copy before it goes out.
 # Subject: ...
 #
 # body...
-bin/autocaller lead-gen edit-draft <batch_item_id> --at "10:30 PT"
+bin/possibleos lead-gen edit-draft <batch_item_id> --at "10:30 PT"
 
-bin/autocaller actions show <action_id>
-bin/autocaller lead-gen show <batch_id>
+bin/possibleos actions show <action_id>
+bin/possibleos lead-gen show <batch_id>
 ```
 
 If `reason_json.send_email_action_id` points to a live approved scheduled
@@ -791,8 +792,8 @@ matches the action queue.
 To operate directly on an action:
 
 ```bash
-bin/autocaller actions reschedule <action_id> --at "11:00 PT"
-bin/autocaller actions cancel <action_id> --reason "operator changed plan"
+bin/possibleos actions reschedule <action_id> --at "11:00 PT"
+bin/possibleos actions cancel <action_id> --reason "operator changed plan"
 ```
 
 ### Recipe: "read the week's feedback"
@@ -801,25 +802,25 @@ observation loop: sends, send failures, matched replies, tracked clicks,
 consult bookings, finalized call dispositions, cancellations, and reschedules.
 
 ```bash
-bin/autocaller lead-gen observations summary --since 7d
-bin/autocaller lead-gen observations --since 7d
-bin/autocaller lead-gen observations --since 7d --type email_reply_received
+bin/possibleos lead-gen observations summary --since 7d
+bin/possibleos lead-gen observations --since 7d
+bin/possibleos lead-gen observations --since 7d --type email_reply_received
 ```
 
 ### Recipe: "morning mindset check"
 ```bash
-bin/autocaller listening brief
-bin/autocaller listening search "medical records follow up" --limit 8
-bin/autocaller listening sources
+bin/possibleos listening brief
+bin/possibleos listening search "medical records follow up" --limit 8
+bin/possibleos listening sources
 ```
 Use this before approving outreach for the day. The brief is read from Mission
 Control on `:8001`; if Mission Control is down the CLI exits non-zero and does
-not alter autocaller state.
+not alter possibleos state.
 
 ### Recipe: "pre-call prep"
 ```bash
-bin/autocaller listening prep "Smith Injury Law"
-bin/autocaller listening quotes --cluster medical-records-workflow --limit 5
+bin/possibleos listening prep "Smith Injury Law"
+bin/possibleos listening quotes --cluster medical-records-workflow --limit 5
 ```
 `listening prep` looks up the firm/contact in local `patients` and
 `firm_contacts`, fetches top matched listening insights, then makes one gateway
@@ -827,25 +828,25 @@ call to render persona, expected objections, and vocabulary. It is read-only.
 
 ### Recipe: "review every outbound touch with one firm"
 ```bash
-bin/autocaller comms list --firm <pif_id> --since 30d --raw | jq '.items[] | {when:.occurred_at, ch:.channel, who:.contact_name, sum:.summary}'
+bin/possibleos comms list --firm <pif_id> --since 30d --raw | jq '.items[] | {when:.occurred_at, ch:.channel, who:.contact_name, sum:.summary}'
 ```
 Or open `https://<host>/firms/<pif_id>` and scroll to the **Communications** panel — same data, same shape, just rendered with channel pills + expandable rows.
 
 ### Recipe: "what went out today across all firms"
 ```bash
-bin/autocaller comms list --since 24h
+bin/possibleos comms list --since 24h
 # narrow to one channel:
-bin/autocaller comms list --since 24h --channel email
+bin/possibleos comms list --since 24h --channel email
 # or browse: open `/comms` in the UI and use the channel + range filters.
 ```
 
 ### Recipe: "stop all calling now"
 ```bash
-bin/autocaller dispatcher stop       # pauses dispatching; in-flight call finishes
+bin/possibleos dispatcher stop       # pauses dispatching; in-flight call finishes
 # to force-end an active call:
 curl -X DELETE http://127.0.0.1:8000/api/calls    # drops the active_call marker
 # or nuke the daemon:
-tmux kill-session -t autocaller
+tmux kill-session -t possibleos
 ```
 
 ---
@@ -855,25 +856,25 @@ LLM composes a personalized email per recipient; you preview each one and send
 manually. No templates — voice is decided by the composer based on post + persona.
 ```bash
 # 1. create the campaign (freezes post snapshot)
-bin/autocaller outreach campaigns create --post-slug=musk-algorithm-ai-pi-firm
+bin/possibleos outreach campaigns create --post-slug=musk-algorithm-ai-pi-firm
 
 # 2. add audience — expand firm IDs into all emailable contacts
-bin/autocaller outreach audience add --campaign=1 \
+bin/possibleos outreach audience add --campaign=1 \
     --pif-ids=03382ee5-...,abcdef01-... --exclude-recent-days=14
 
 # 3. batch-compose so previews don't block on the LLM
-bin/autocaller outreach compose-all --campaign=1
+bin/possibleos outreach compose-all --campaign=1
 
 # 4. step through one at a time — preview, then send or skip
-bin/autocaller outreach next --campaign=1
-bin/autocaller outreach preview --send=42 --html-out=/tmp/preview.html
-bin/autocaller outreach send --send=42
+bin/possibleos outreach next --campaign=1
+bin/possibleos outreach preview --send=42 --html-out=/tmp/preview.html
+bin/possibleos outreach send --send=42
 # or:
-bin/autocaller outreach skip --send=42 --reason="contact is on a competitor's payroll"
+bin/possibleos outreach skip --send=42 --reason="contact is on a competitor's payroll"
 
 # 5. report
-bin/autocaller outreach stats --campaign=1
-bin/autocaller outreach events --campaign=1   # opens + clicks
+bin/possibleos outreach stats --campaign=1
+bin/possibleos outreach events --campaign=1   # opens + clicks
 ```
 Real Resend calls — every `send` is confirm-gated unless you pass `--yes`.
 For tracking links (`/t/o/<token>.gif` opens, `/t/c/<token>` clicks) to reach
@@ -888,7 +889,7 @@ Base URL: `http://127.0.0.1:${BACKEND_PORT:-8000}` (or `PUBLIC_BASE_URL` externa
 
 The in-browser force-directed competitor graph on `/front` is UI-only. The
 same graph data is fully available to agents and scripts through
-`bin/autocaller front competitors graph --json` and
+`bin/possibleos front competitors graph --json` and
 `GET /api/front/competitors/graph`.
 
 Relevant endpoints:
@@ -950,13 +951,13 @@ and operators. It is not arbitrary shell. It only reads inside the repo root,
 blocks traversal and sensitive files, and records product traces.
 
 ```bash
-bin/autocaller fs list app/services --json
-bin/autocaller fs read app/services/master_agent.py --start 1200 --end 1220 --json
-bin/autocaller fs search _build_wake_context app/services --json
-bin/autocaller fs git-status --json
-bin/autocaller fs git-diff --path app/services/master_agent.py --json
-bin/autocaller fs git-log --limit 10 --json
-bin/autocaller fs git-show HEAD --path app/services/master_agent.py --json
+bin/possibleos fs list app/services --json
+bin/possibleos fs read app/services/master_agent.py --start 1200 --end 1220 --json
+bin/possibleos fs search _build_wake_context app/services --json
+bin/possibleos fs git-status --json
+bin/possibleos fs git-diff --path app/services/master_agent.py --json
+bin/possibleos fs git-log --limit 10 --json
+bin/possibleos fs git-show HEAD --path app/services/master_agent.py --json
 ```
 
 Use this for codebase inspection, debugging context, and system understanding.
@@ -974,7 +975,7 @@ Do not replace it with raw shell in the heartbeat runner.
 | every call ends `failed` with `error_code=openai_connect_failed` | `OPENAI_API_KEY` invalid, quota exhausted, or no Realtime access | verify in OpenAI console; `doctor` |
 | `book_demo` always fails | Cal.com key or event type id wrong | `curl -H "Authorization: Bearer $CALCOM_API_KEY" https://api.cal.com/v2/me`; verify `event_type_id` in DB `system_settings.calcom_config` |
 | dispatcher runs but never picks up a lead | all candidates outside state window; or `system_enabled=false` | `dispatcher status` + `settings`; check `per_state_hours` in DB |
-| CLI can't talk to daemon (connection refused) | daemon not running, wrong port, or firewall | `autocaller serve` in one terminal; confirm `BACKEND_PORT` matches |
+| CLI can't talk to daemon (connection refused) | daemon not running, wrong port, or firewall | `possibleos serve` in one terminal; confirm `BACKEND_PORT` matches |
 
 ---
 
