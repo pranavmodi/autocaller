@@ -631,6 +631,7 @@ function BatchDetail({
   const [isGeneratingAllDrafts, setIsGeneratingAllDrafts] = useState(false);
   const [bulkDraftError, setBulkDraftError] = useState<string | null>(null);
   const [selectedComposerVariantKey, setSelectedComposerVariantKey] = useState("");
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const openedRequestKey = useRef("");
   const [scheduledStartAt, setScheduledStartAt] = useState(() =>
     defaultCaliforniaDateTimeLocal(),
@@ -836,101 +837,42 @@ function BatchDetail({
             action plan to create a fresh list for that budget.
           </div>
         )}
-        <div className="grid gap-3 px-4 py-3 md:grid-cols-5">
-          <Metric label="Daily budget" value={String(dailyEmailBudget)} />
-          <Metric label="Planned actions" value={String(data.items.length)} />
-          <Metric label="Approved" value={String(counts.approved)} />
-          <Metric label="Started" value={String(counts.started)} />
-          <Metric label="Observed" value={String(counts.observed)} />
+        {/* Essential counts only */}
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-1 px-4 py-3 text-sm">
+          <span className="text-neutral-900">
+            <span className="font-semibold">{data.items.length}</span> drafts
+          </span>
+          <span className="text-neutral-900">
+            <span className="font-semibold">{counts.started}</span> sent
+          </span>
+          <span className="text-neutral-500">
+            {counts.observed} observed
+          </span>
         </div>
-        <div className="border-t border-neutral-100 px-4 py-3">
-          <label className="block max-w-xs text-xs font-medium text-neutral-600">
-            Start sending (California)
-            <input
-              type="datetime-local"
-              value={scheduledStartAt}
-              onChange={(e) => setScheduledStartAt(e.target.value)}
-              className="mt-1 w-full rounded-md border border-neutral-200 px-2 py-1.5 text-sm text-neutral-900"
-            />
-          </label>
-          <div className="mt-1 text-xs text-neutral-400">
-            Interpreted as America/Los_Angeles, then staggered over 60 minutes.
-          </div>
-        </div>
-        <div className="flex flex-wrap gap-2 border-t border-neutral-100 px-4 py-3">
-          <label className="flex min-w-[260px] max-w-sm flex-1 flex-col gap-1 text-xs font-medium text-neutral-600">
-            Composer variant for drafts
-            <select
-              value={selectedComposerVariantKey}
-              onChange={(event) => {
-                setSelectedComposerVariantKey(event.target.value);
-                setBulkDraftError(null);
-              }}
-              disabled={composerVariants.isLoading}
-              className="rounded-md border border-neutral-200 bg-white px-2 py-2 text-sm font-medium text-neutral-800 disabled:opacity-60"
-            >
-              <option value="">Auto A/B assignment</option>
-              {activeComposerVariants.map((variant) => (
-                <option key={variant.key} value={variant.key}>
-                  {variant.label}
-                </option>
-              ))}
-            </select>
-            <span className="font-normal text-neutral-400">
-              {selectedComposerVariant
-                ? `Uses ${selectedComposerVariant.key} for previews and bulk draft generation.`
-                : "Uses deterministic A/B assignment per contact."}
-            </span>
-          </label>
-          <button
-            type="button"
-            onClick={() => approve.mutate(false)}
-            disabled={!canApprove || approve.isPending}
-            className="inline-flex items-center gap-2 rounded-md border border-neutral-200 px-3 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50 disabled:opacity-50"
-          >
-            {approve.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ClipboardCheck className="h-4 w-4" />}
-            Approve only
-          </button>
+
+        {/* Single primary action */}
+        <div className="flex flex-wrap items-center gap-3 border-t border-neutral-100 px-4 py-3">
           <button
             type="button"
             onClick={() => {
-              if (window.confirm(`Queue queueable outreach runs starting ${scheduledStartAt || "now"} California time, staggered over a 60-minute sending window? Reply actions and existing approval drafts still use the operator action center. Email sending still requires ALLOW_SEQUENCE_SEND=true.`)) {
+              if (window.confirm(`Approve and send this batch starting ${scheduledStartAt || "now"} California time, staggered over 60 minutes? Email sending requires ALLOW_SEQUENCE_SEND=true.`)) {
                 approve.mutate(true);
               }
             }}
             disabled={!((canApprove && hasQueueableItems) || canQueue) || approve.isPending}
-            className="inline-flex items-center gap-2 rounded-md bg-neutral-900 px-3 py-2 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-50"
           >
             {approve.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-            {canQueue ? "Queue approved over 1 hour" : "Approve and queue over 1 hour"}
+            Approve &amp; send
           </button>
           <button
             type="button"
-            onClick={() => propose.mutate()}
-            disabled={propose.isPending}
-            className="inline-flex items-center gap-2 rounded-md border border-neutral-200 px-3 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50 disabled:opacity-50"
+            onClick={() => setShowAdvanced((v) => !v)}
+            className="inline-flex items-center gap-1 text-xs font-medium text-neutral-500 hover:text-neutral-800"
           >
-            {propose.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <BrainCircuit className="h-4 w-4" />}
-            Generate learning proposal
+            Advanced
+            <ChevronDown className={`h-3.5 w-3.5 transition-transform ${showAdvanced ? "rotate-180" : ""}`} />
           </button>
-          <button
-            type="button"
-            onClick={generateAllDrafts}
-            disabled={isGeneratingAllDrafts || previewableItems.length === 0}
-            className="inline-flex items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800 hover:bg-emerald-100 disabled:opacity-50"
-          >
-            {isGeneratingAllDrafts ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <MailPlus className="h-4 w-4" />
-            )}
-            Generate all email drafts
-          </button>
-          {previewableItems.length > 0 && (
-            <span className="inline-flex items-center text-xs text-neutral-500">
-              {completedDraftCount}/{previewableItems.length} drafts generated
-            </span>
-          )}
           {sentItems.length > 0 && (
             <span className="inline-flex items-center gap-1 text-xs text-sky-700">
               <CheckCircle2 className="h-3.5 w-3.5" />
@@ -949,6 +891,84 @@ function BatchDetail({
             </span>
           )}
         </div>
+
+        {/* Advanced: overrides the daily pipeline normally handles */}
+        {showAdvanced && (
+          <div className="space-y-3 border-t border-neutral-100 bg-neutral-50 px-4 py-3">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="block text-xs font-medium text-neutral-600">
+                Start sending (California)
+                <input
+                  type="datetime-local"
+                  value={scheduledStartAt}
+                  onChange={(e) => setScheduledStartAt(e.target.value)}
+                  className="mt-1 w-full rounded-md border border-neutral-200 px-2 py-1.5 text-sm text-neutral-900"
+                />
+                <span className="mt-1 block font-normal text-neutral-400">
+                  America/Los_Angeles, staggered over 60 minutes.
+                </span>
+              </label>
+              <label className="flex flex-col gap-1 text-xs font-medium text-neutral-600">
+                Composer variant (override A/B)
+                <select
+                  value={selectedComposerVariantKey}
+                  onChange={(event) => {
+                    setSelectedComposerVariantKey(event.target.value);
+                    setBulkDraftError(null);
+                  }}
+                  disabled={composerVariants.isLoading}
+                  className="rounded-md border border-neutral-200 bg-white px-2 py-2 text-sm font-medium text-neutral-800 disabled:opacity-60"
+                >
+                  <option value="">Auto A/B assignment</option>
+                  {activeComposerVariants.map((variant) => (
+                    <option key={variant.key} value={variant.key}>
+                      {variant.label}
+                    </option>
+                  ))}
+                </select>
+                <span className="font-normal text-neutral-400">
+                  {selectedComposerVariant
+                    ? `Pins ${selectedComposerVariant.key}.`
+                    : "Deterministic A/B per contact (default)."}
+                </span>
+              </label>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => approve.mutate(false)}
+                disabled={!canApprove || approve.isPending}
+                className="inline-flex items-center gap-2 rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50 disabled:opacity-50"
+              >
+                {approve.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ClipboardCheck className="h-4 w-4" />}
+                Approve without sending
+              </button>
+              <button
+                type="button"
+                onClick={generateAllDrafts}
+                disabled={isGeneratingAllDrafts || previewableItems.length === 0}
+                className="inline-flex items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800 hover:bg-emerald-100 disabled:opacity-50"
+              >
+                {isGeneratingAllDrafts ? <Loader2 className="h-4 w-4 animate-spin" /> : <MailPlus className="h-4 w-4" />}
+                Regenerate drafts
+              </button>
+              <button
+                type="button"
+                onClick={() => propose.mutate()}
+                disabled={propose.isPending}
+                className="inline-flex items-center gap-2 rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50 disabled:opacity-50"
+              >
+                {propose.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <BrainCircuit className="h-4 w-4" />}
+                Generate learning proposal
+              </button>
+              {previewableItems.length > 0 && (
+                <span className="inline-flex items-center text-xs text-neutral-500">
+                  {completedDraftCount}/{previewableItems.length} drafts generated
+                </span>
+              )}
+            </div>
+          </div>
+        )}
       </section>
 
       <DailyActionPlan
