@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import hashlib
@@ -14,6 +15,8 @@ from sqlalchemy import desc, or_, select
 from app.db import AsyncSessionLocal
 from app.db.models import ConsultBookingRow, EmailSequenceRow, FirmContactRow, FrontFirmActivityRow, InboundEmailRow, PatientRow
 from app.services.llm_gateway import LLMGatewayError, call_skill_json
+
+logger = logging.getLogger(__name__)
 from app.services.lead_email_composer_variants import (
     EXPERIMENT_KEY,
     choose_composer_skill_variant,
@@ -119,7 +122,14 @@ def _blog_posts() -> list[dict[str, str]]:
     if not raw:
         return []
     if raw.startswith("["):
-        parsed = json.loads(raw)
+        try:
+            parsed = json.loads(raw)
+        except (json.JSONDecodeError, ValueError):
+            # Optional config: a malformed LEAD_GEN_BLOG_LINKS_JSON (e.g. a
+            # JSON value mangled by `source .env` word-splitting) must never
+            # break composition. Degrade to no blog links.
+            logger.warning("LEAD_GEN_BLOG_LINKS_JSON is not valid JSON; ignoring blog links")
+            return []
         return [
             {"title": str(item.get("title") or ""), "url": str(item.get("url") or "")}
             for item in parsed
