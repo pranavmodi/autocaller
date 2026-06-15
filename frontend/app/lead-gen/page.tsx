@@ -854,17 +854,28 @@ function BatchDetail({
           </div>
         )}
         {isCompletedRun ? (
-          /* Completed run: read-only history summary, no action controls */
-          <div className="flex flex-wrap items-center gap-x-6 gap-y-1 px-4 py-3 text-sm">
-            <span className="text-neutral-900">
-              <span className="font-semibold">{counts.started}</span> sent
-            </span>
-            <span className="text-neutral-500">{bouncedCount} bounced</span>
-            <span className="text-neutral-500">{repliedCount} replied</span>
-            <span className="ml-auto text-xs text-neutral-400">
-              Completed · {formatCaliforniaDate(data.batch.created_at)}
-            </span>
-          </div>
+          /* Completed run: read-only history summary + experiment rollup.
+             Individual sent emails live in Comms, so we don't duplicate them. */
+          <>
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-1 px-4 py-3 text-sm">
+              <span className="text-neutral-900">
+                <span className="font-semibold">{counts.started}</span> sent
+              </span>
+              <span className="text-neutral-500">{bouncedCount} bounced</span>
+              <span className={repliedCount > 0 ? "font-medium text-emerald-700" : "text-neutral-500"}>
+                {repliedCount} replied
+              </span>
+              <span className="ml-auto flex items-center gap-3 text-xs">
+                <span className="text-neutral-400">
+                  Completed · {formatCaliforniaDate(data.batch.created_at)}
+                </span>
+                <Link href="/comms" className="font-medium text-neutral-600 hover:text-neutral-900">
+                  View emails in Comms →
+                </Link>
+              </span>
+            </div>
+            <CompletedRunRollup items={data.items} />
+          </>
         ) : (
           <>
         {/* Essential counts only */}
@@ -1003,13 +1014,15 @@ function BatchDetail({
         )}
       </section>
 
-      <DailyActionPlan
-        items={data.items}
-        draftStatuses={draftStatuses}
-        sentItems={sentItems}
-        onObserve={setObserveItem}
-        onPreview={setPreviewItem}
-      />
+      {!isCompletedRun && (
+        <DailyActionPlan
+          items={data.items}
+          draftStatuses={draftStatuses}
+          sentItems={sentItems}
+          onObserve={setObserveItem}
+          onPreview={setPreviewItem}
+        />
+      )}
       <ObservationsPanel observations={data.observations} />
 
       {previewItem && (
@@ -1031,6 +1044,77 @@ function BatchDetail({
           }}
         />
       )}
+    </div>
+  );
+}
+
+const ROLLUP_REPLY_OUTCOMES = new Set([
+  "positive_reply",
+  "reply",
+  "referral",
+  "forwarded_internally",
+  "owner_introduction",
+]);
+
+type RollupRow = { key: string; sent: number; replied: number; bounced: number };
+
+function rollupBy(
+  items: LeadGenBatchItem[],
+  keyFn: (item: LeadGenBatchItem) => string,
+): RollupRow[] {
+  const map = new Map<string, RollupRow>();
+  for (const item of items) {
+    const key = keyFn(item) || "—";
+    const row = map.get(key) ?? { key, sent: 0, replied: 0, bounced: 0 };
+    if (isEmailSent(item)) row.sent += 1;
+    if (item.outcome === "bounce") row.bounced += 1;
+    else if (item.outcome && ROLLUP_REPLY_OUTCOMES.has(item.outcome)) row.replied += 1;
+    map.set(key, row);
+  }
+  return Array.from(map.values()).sort((a, b) => b.sent - a.sent);
+}
+
+function RollupTable({ title, rows }: { title: string; rows: RollupRow[] }) {
+  return (
+    <div>
+      <div className="mb-1 text-xs font-medium text-neutral-500">{title}</div>
+      <table className="w-full text-left text-xs">
+        <thead className="text-neutral-400">
+          <tr>
+            <th className="py-1 font-normal">{title.replace("By ", "")}</th>
+            <th className="py-1 text-right font-normal">sent</th>
+            <th className="py-1 text-right font-normal">replied</th>
+            <th className="py-1 text-right font-normal">bounced</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.key} className="border-t border-neutral-100">
+              <td className="py-1 font-medium text-neutral-800">{row.key}</td>
+              <td className="py-1 text-right text-neutral-700">{row.sent}</td>
+              <td className={`py-1 text-right ${row.replied > 0 ? "font-medium text-emerald-700" : "text-neutral-400"}`}>
+                {row.replied}
+              </td>
+              <td className={`py-1 text-right ${row.bounced > 0 ? "font-medium text-rose-700" : "text-neutral-400"}`}>
+                {row.bounced}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function CompletedRunRollup({ items }: { items: LeadGenBatchItem[] }) {
+  const byVariant = rollupBy(items, (item) =>
+    String(reasonValue(item, "last_sent_composer_variant_key") || "baseline"),
+  );
+  const byPersona = rollupBy(items, (item) => item.persona || "unknown");
+  return (
+    <div className="grid gap-5 border-t border-neutral-100 px-4 py-3 sm:grid-cols-2">
+      <RollupTable title="By A/B variant" rows={byVariant} />
+      <RollupTable title="By persona" rows={byPersona} />
     </div>
   );
 }
