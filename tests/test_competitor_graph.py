@@ -232,6 +232,37 @@ def _seed_cache(path):
     conn.close()
 
 
+def _create_cache(path, firms, conversations=(), messages=()):
+    conn = sqlite3.connect(path)
+    conn.executescript(
+        """
+        CREATE TABLE pif_firms (
+            id TEXT PRIMARY KEY,
+            firm_name TEXT NOT NULL,
+            website TEXT,
+            emails TEXT DEFAULT '[]',
+            addresses TEXT DEFAULT '[]',
+            conversation_ids TEXT DEFAULT '[]'
+        );
+        CREATE TABLE front_conversations (
+            id TEXT PRIMARY KEY,
+            subject TEXT
+        );
+        CREATE TABLE front_messages (
+            id TEXT PRIMARY KEY,
+            conversation_id TEXT,
+            author_email TEXT,
+            body_text TEXT
+        );
+        """
+    )
+    conn.executemany("INSERT INTO pif_firms VALUES (?, ?, ?, ?, ?, ?)", firms)
+    conn.executemany("INSERT INTO front_conversations VALUES (?, ?)", conversations)
+    conn.executemany("INSERT INTO front_messages VALUES (?, ?, ?, ?)", messages)
+    conn.commit()
+    conn.close()
+
+
 def test_graph_build_top_k_uniqueness_and_switching_probe(tmp_path):
     db_path = tmp_path / "mission.db"
     _seed_cache(db_path)
@@ -256,6 +287,76 @@ def test_graph_build_top_k_uniqueness_and_switching_probe(tmp_path):
     assert {best["firm_a_pif_id"], best["firm_b_pif_id"]} == {"pif-a", "pif-b"}
     assert best["score"] >= 0.65
     assert "substitution" in json.dumps(best["evidence"]).lower()
+
+
+def test_graph_build_excludes_obvious_non_law_vendors(tmp_path):
+    db_path = tmp_path / "mission.db"
+    _create_cache(
+        db_path,
+        [
+            (
+                "pif-law",
+                "Alpha Injury Law",
+                "https://alphainjury.example",
+                json.dumps(["intake@alphainjury.example"]),
+                json.dumps(["100 Wilshire Blvd, Los Angeles, CA 90017"]),
+                json.dumps(["c1"]),
+            ),
+            (
+                "pif-vendor",
+                "Precise Imaging",
+                "https://precisemri.example",
+                json.dumps(["records@precisemri.example"]),
+                json.dumps(["200 Wilshire Blvd, Los Angeles, CA 90017"]),
+                json.dumps(["c2"]),
+            ),
+        ],
+        conversations=[
+            ("c1", "Auto accident lien"),
+            ("c2", "MRI bill"),
+        ],
+        messages=[
+            ("m1", "c1", "intake@alphainjury.example", "Motor vehicle accident lien is $12,000."),
+            ("m2", "c2", "records@precisemri.example", "MRI bill is $12,000."),
+        ],
+    )
+
+    graph = build_competitor_graph_from_cache(mission_db_path=db_path)
+
+    assert graph["excluded_non_competitor_count"] == 1
+    assert {feature["pif_id"] for feature in graph["features"]} == {"pif-law"}
+    assert graph["edges"] == []
+
+
+def test_graph_build_does_not_connect_sparse_other_only_firms(tmp_path):
+    db_path = tmp_path / "mission.db"
+    _create_cache(
+        db_path,
+        [
+            (
+                "pif-a",
+                "Alpha Law",
+                "https://alphalaw.example",
+                json.dumps(["hello@alphalaw.example"]),
+                json.dumps(["100 Wilshire Blvd, Los Angeles, CA 90017"]),
+                json.dumps([]),
+            ),
+            (
+                "pif-b",
+                "Beta Law",
+                "https://betalaw.example",
+                json.dumps(["hello@betalaw.example"]),
+                json.dumps(["200 Wilshire Blvd, Los Angeles, CA 90017"]),
+                json.dumps([]),
+            ),
+        ],
+    )
+
+    graph = build_competitor_graph_from_cache(mission_db_path=db_path)
+
+    assert len(graph["features"]) == 2
+    assert graph["firms_with_case_mix"] == 0
+    assert graph["edges"] == []
 
 
 def test_front_competitor_api_smoke(monkeypatch):

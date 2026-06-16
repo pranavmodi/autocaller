@@ -281,6 +281,23 @@ SWITCHING_RE = re.compile(
     r"substitution of attorney|no longer represents|case has been transferred to|new counsel",
     re.I,
 )
+NON_COMPETITOR_ENTITY_RE = re.compile(
+    r"("
+    r"fax|medical|med[ -]?mri|mri|imaging|radiology|chiro|chiropractic|chiropractor|"
+    r"therapy|rehab|rehabilitation|health|healthcare|clinic|hospital|pharmacy|"
+    r"interpreting|translation|transport|records|copy service|discovery|"
+    r"orthopain|orthopedic|pain management|simonmed|rezolut|"
+    r"funding|financial|finance"
+    r")",
+    re.I,
+)
+LEGAL_FIRM_RE = re.compile(
+    r"\b("
+    r"law|legal|attorney|attorneys|trial|injury|accident|advocate|advocates|"
+    r"counsel|esq|firm|llp|plc|aplc|apc|pc"
+    r")\b",
+    re.I,
+)
 
 
 @dataclass(frozen=True)
@@ -445,6 +462,8 @@ def value_tier_for_amounts(amounts: Sequence[float]) -> tuple[str | None, float 
 
 
 def case_mix_cosine(a: dict[str, float], b: dict[str, float]) -> float:
+    if not _has_case_mix_signal(a) or not _has_case_mix_signal(b):
+        return 0.0
     dot = sum(float(a.get(category, 0)) * float(b.get(category, 0)) for category in CASE_CATEGORIES)
     a_norm = math.sqrt(sum(float(a.get(category, 0)) ** 2 for category in CASE_CATEGORIES))
     b_norm = math.sqrt(sum(float(b.get(category, 0)) ** 2 for category in CASE_CATEGORIES))
@@ -461,6 +480,36 @@ def value_tier_similarity(a: str | None, b: str | None) -> float:
     if abs(VALUE_TIER_RANK.get(a, -9) - VALUE_TIER_RANK.get(b, 9)) == 1:
         return 0.5
     return 0.0
+
+
+def _has_case_mix_signal(case_mix: dict[str, float] | None) -> bool:
+    return any(
+        category != "other" and float((case_mix or {}).get(category, 0) or 0) > 0
+        for category in CASE_CATEGORIES
+    )
+
+
+def _competitor_candidate_text(firm: dict[str, Any], domain: str | None) -> str:
+    pieces = [
+        str(firm.get("firm_name") or ""),
+        str(firm.get("website") or ""),
+        domain or "",
+        " ".join(extract_emails(firm.get("emails"))),
+    ]
+    return " ".join(pieces).lower()
+
+
+def _is_competitor_candidate(firm: dict[str, Any], domain: str | None) -> bool:
+    """Conservative PI-firm universe filter.
+
+    The Mission Control cache contains law-firm-adjacent vendors. Exclude only
+    obvious non-law endpoints, and keep legal-looking names even when a generic
+    word like "medical" appears in a practice-area phrase.
+    """
+    text = _competitor_candidate_text(firm, domain)
+    if not NON_COMPETITOR_ENTITY_RE.search(text):
+        return True
+    return bool(LEGAL_FIRM_RE.search(text))
 
 
 def _domain_candidates(website: str | None, emails: Any) -> set[str]:
@@ -728,8 +777,13 @@ def build_competitor_graph_from_cache(
 
     features: list[dict[str, Any]] = []
     firm_texts: dict[str, list[tuple[str, str]]] = {}
+    excluded_non_competitor_count = 0
     for firm in firms:
         pif_id = firm["pif_id"]
+        domain = _primary_domain(firm.get("website"), firm.get("emails"))
+        if not _is_competitor_candidate(firm, domain):
+            excluded_non_competitor_count += 1
+            continue
         address = parse_first_address(firm.get("addresses"))
         messages = _firm_messages(firm, by_conversation, by_email, by_domain)
         texts = _thread_texts(messages)
@@ -741,7 +795,7 @@ def build_competitor_graph_from_cache(
         feature = {
             "pif_id": pif_id,
             "firm_name": firm["firm_name"] or pif_id,
-            "domain": _primary_domain(firm.get("website"), firm.get("emails")),
+            "domain": domain,
             "metro": address.metro,
             "city": address.city,
             "state": address.state,
@@ -825,9 +879,10 @@ def build_competitor_graph_from_cache(
     return {
         "features": features,
         "edges": edges,
+        "excluded_non_competitor_count": excluded_non_competitor_count,
         "client_switching_hit_count": sum(len(rows) for rows in switch_evidence.values()),
         "firms_with_metro": sum(1 for feature in features if feature.get("metro")),
-        "firms_with_case_mix": sum(1 for feature in features if feature.get("case_mix")),
+        "firms_with_case_mix": sum(1 for feature in features if _has_case_mix_signal(feature.get("case_mix"))),
     }
 
 
@@ -863,6 +918,7 @@ async def rebuild_competitor_graph(*, mission_db_path: Path = MISSION_DB_PATH) -
         "firms_with_metro": graph["firms_with_metro"],
         "firms_with_case_mix": graph["firms_with_case_mix"],
         "edge_count": len(graph["edges"]),
+        "excluded_non_competitors": graph["excluded_non_competitor_count"],
         "client_switching_hit_count": graph["client_switching_hit_count"],
         "duration_seconds": round(time.monotonic() - started, 2),
     }

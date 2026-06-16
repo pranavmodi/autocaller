@@ -3331,6 +3331,7 @@ def front_competitors_rebuild_cmd(
     console.print(
         f"features={data.get('firms_with_features')} with_metro={data.get('firms_with_metro')} "
         f"with_case_mix={data.get('firms_with_case_mix')} edges={data.get('edge_count')} "
+        f"excluded_non_competitors={data.get('excluded_non_competitors')} "
         f"client_switching_hits={data.get('client_switching_hit_count')} duration={data.get('duration_seconds')}s"
     )
 
