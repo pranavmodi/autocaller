@@ -1,5 +1,7 @@
 import json
 
+import pytest
+
 from app.services.lead_email_composer import (
     CONSULT_URL,
     _blog_posts,
@@ -9,13 +11,23 @@ from app.services.lead_email_composer import (
     _sanitize_email_copy,
     _sanitize_subject,
     _sender_payload,
+    fetch_competitive_context_for_email,
 )
 
 
 class ContactStub:
-    def __init__(self, *, first_name: str | None, full_name: str | None):
+    def __init__(
+        self,
+        *,
+        first_name: str | None = None,
+        full_name: str | None = None,
+        pif_id: str | None = None,
+        email: str | None = None,
+    ):
         self.first_name = first_name
         self.full_name = full_name
+        self.pif_id = pif_id
+        self.email = email
 
 
 def test_ensure_consult_signature_appends_required_link(monkeypatch):
@@ -114,3 +126,85 @@ def test_blog_posts_supports_json_and_comma_env(monkeypatch):
         {"title": "", "url": "https://getpossibleminds.com/blog/a"},
         {"title": "", "url": "https://getpossibleminds.com/blog/b"},
     ]
+
+
+@pytest.mark.asyncio
+async def test_competitive_context_filters_dedupes_and_caps(monkeypatch):
+    async def fake_get_competitors(**kwargs):
+        assert kwargs["pif_id"] == "pif-target"
+        return {
+            "firm": {
+                "pif_id": "pif-target",
+                "firm_name": "Target Injury Law",
+                "domain": "targetlaw.com",
+                "metro": "los-angeles",
+            },
+            "competitors": [
+                {
+                    "pif_id": "pif-vendor",
+                    "firm_name": "Precise Imaging",
+                    "domain": "precisemri.com",
+                    "metro": "los-angeles",
+                    "score": 0.99,
+                    "components": {"geo": 1.0, "case_mix": 1.0},
+                    "evidence": {"why": "same metro"},
+                },
+                {
+                    "pif_id": "pif-beta",
+                    "firm_name": "Beta Accident Law",
+                    "domain": "betalaw.com",
+                    "metro": "los-angeles",
+                    "score": 0.91,
+                    "components": {"geo": 1.0, "case_mix": 1.0, "value_tier": 1.0},
+                    "evidence": {"why": "same metro; case mix"},
+                },
+                {
+                    "pif_id": "pif-beta-duplicate",
+                    "firm_name": "Beta Accident Law APC",
+                    "domain": "betalaw.com",
+                    "metro": "los-angeles",
+                    "score": 0.89,
+                    "components": {"geo": 1.0, "case_mix": 1.0},
+                    "evidence": {"why": "duplicate domain"},
+                },
+                {
+                    "pif_id": "pif-gamma",
+                    "firm_name": "Gamma Trial Lawyers",
+                    "domain": "gammatrial.com",
+                    "metro": "los-angeles",
+                    "score": 0.73,
+                    "components": {"geo": 1.0, "case_mix": 0.8},
+                    "evidence": {"why": "same metro"},
+                },
+            ],
+        }
+
+    monkeypatch.setattr("app.services.lead_email_composer._get_competitors_for_context", fake_get_competitors)
+    contact = ContactStub(pif_id="pif-target", email="owner@targetlaw.com")
+
+    context = await fetch_competitive_context_for_email(
+        contact=contact,  # type: ignore[arg-type]
+        firm_name="Target Injury Law",
+        limit=2,
+    )
+
+    assert context["status"] == "ok"
+    assert [row["firm_name"] for row in context["competitors"]] == [
+        "Beta Accident Law",
+        "Gamma Trial Lawyers",
+    ]
+    assert context["competitors"][0]["confidence"] == "high"
+    assert "Do not name competitors" in context["usage_guidance"]
+
+
+@pytest.mark.asyncio
+async def test_competitive_context_soft_fails_without_identifier():
+    contact = ContactStub(pif_id=None, email=None)
+
+    context = await fetch_competitive_context_for_email(
+        contact=contact,  # type: ignore[arg-type]
+        firm_name="Unknown Firm",
+    )
+
+    assert context["status"] == "unavailable"
+    assert context["competitors"] == []

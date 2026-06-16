@@ -81,6 +81,146 @@ def _domain(email: str | None) -> str:
     return value.rsplit("@", 1)[-1]
 
 
+def _normalize_competitor_key(name: str | None, domain: str | None) -> str:
+    clean_domain = (domain or "").strip().lower()
+    if clean_domain:
+        return f"domain:{clean_domain}"
+    return "name:" + re.sub(r"[^a-z0-9]+", " ", (name or "").lower()).strip()
+
+
+def _competitor_confidence(row: dict[str, Any]) -> str:
+    score = float(row.get("score") or 0)
+    components = row.get("components") if isinstance(row.get("components"), dict) else {}
+    if score >= 0.75 and (
+        float(components.get("case_mix") or 0) > 0
+        or float(components.get("value_tier") or 0) > 0
+        or float(components.get("client_switching") or 0) > 0
+    ):
+        return "high"
+    if score >= 0.5:
+        return "medium"
+    return "low"
+
+
+async def _get_competitors_for_context(**kwargs) -> dict[str, Any]:
+    from app.services.competitor_graph import get_competitors
+
+    return await get_competitors(**kwargs)
+
+
+def _is_competitor_candidate_for_context(firm_name: str | None, domain: str | None) -> bool:
+    from app.services.competitor_graph import is_competitor_candidate_name_domain
+
+    return is_competitor_candidate_name_domain(firm_name, domain)
+
+
+def _clean_competitor_rows(
+    rows: list[dict[str, Any]],
+    *,
+    target_pif_id: str | None,
+    target_name: str,
+    limit: int,
+) -> list[dict[str, Any]]:
+    target_key = _normalize_name(target_name)
+    seen: set[str] = set()
+    cleaned: list[dict[str, Any]] = []
+    for row in sorted(rows, key=lambda item: (-float(item.get("score") or 0), str(item.get("firm_name") or ""))):
+        firm_name = str(row.get("firm_name") or "").strip()
+        domain = (str(row.get("domain") or "").strip().lower() or None)
+        pif_id = str(row.get("pif_id") or "").strip()
+        if not firm_name:
+            continue
+        if target_pif_id and pif_id == target_pif_id:
+            continue
+        if _normalize_name(firm_name) == target_key:
+            continue
+        if not _is_competitor_candidate_for_context(firm_name, domain):
+            continue
+        key = _normalize_competitor_key(firm_name, domain)
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        evidence = row.get("evidence") if isinstance(row.get("evidence"), dict) else {}
+        components = row.get("components") if isinstance(row.get("components"), dict) else {}
+        cleaned.append({
+            "firm_name": firm_name,
+            "domain": domain,
+            "pif_id": pif_id or None,
+            "metro": row.get("metro"),
+            "score": round(float(row.get("score") or 0), 4),
+            "confidence": _competitor_confidence(row),
+            "why": str(evidence.get("why") or "").strip(),
+            "signals": {
+                "geo": components.get("geo"),
+                "case_mix": components.get("case_mix"),
+                "value_tier": components.get("value_tier"),
+                "shared_front_activity": components.get("shared_orbit"),
+                "client_switching": components.get("client_switching"),
+            },
+        })
+        if len(cleaned) >= limit:
+            break
+    return cleaned
+
+
+async def fetch_competitive_context_for_email(
+    *,
+    contact: FirmContactRow,
+    firm_name: str,
+    limit: int | None = None,
+) -> dict[str, Any]:
+    safe_limit = max(1, min(int(limit or os.getenv("LEAD_EMAIL_COMPETITOR_LIMIT", "8")), 12))
+    if not contact.pif_id and not _domain(contact.email):
+        return {
+            "status": "unavailable",
+            "source": "local_competitor_graph",
+            "reason": "missing_pif_id_or_domain",
+            "competitors": [],
+            "usage_guidance": "No competitor context available; do not infer or name competitors.",
+        }
+    try:
+        data = await _get_competitors_for_context(
+            pif_id=contact.pif_id or "",
+            domain=_domain(contact.email),
+            limit=max(safe_limit * 2, 10),
+        )
+    except Exception as e:
+        logger.warning("competitor context lookup failed for %s: %s", contact.pif_id or firm_name, e)
+        return {
+            "status": "unavailable",
+            "source": "local_competitor_graph",
+            "reason": f"{type(e).__name__}: {str(e)[:160]}",
+            "competitors": [],
+            "usage_guidance": "Competitor lookup failed; do not infer or name competitors.",
+        }
+
+    firm = data.get("firm") if isinstance(data.get("firm"), dict) else None
+    rows = data.get("competitors") if isinstance(data.get("competitors"), list) else []
+    competitors = _clean_competitor_rows(
+        [row for row in rows if isinstance(row, dict)],
+        target_pif_id=contact.pif_id,
+        target_name=firm_name,
+        limit=safe_limit,
+    )
+    status = "ok" if competitors else "not_found"
+    return {
+        "status": status,
+        "source": "local_competitor_graph",
+        "target": {
+            "firm_name": firm.get("firm_name") if firm else firm_name,
+            "domain": firm.get("domain") if firm else _domain(contact.email),
+            "pif_id": firm.get("pif_id") if firm else contact.pif_id,
+            "metro": firm.get("metro") if firm else None,
+        },
+        "competitors": competitors,
+        "limit": safe_limit,
+        "usage_guidance": (
+            "Use as private market context to choose angle and urgency. "
+            "Do not name competitors in outbound copy unless the payload gives explicit permission."
+        ),
+    }
+
+
 def _excerpt(value: str | None, limit: int = 700) -> str:
     text = " ".join((value or "").split())
     return text[:limit]
@@ -528,6 +668,10 @@ async def build_lead_email_context(
 
     sender = _sender_payload()
     signals = _derive_pif_signals(pif_row, contact.email)
+    competitive_context = await fetch_competitive_context_for_email(
+        contact=contact,
+        firm_name=firm_name,
+    )
     return {
         "firm": {
             "name": firm_name,
@@ -610,6 +754,7 @@ async def build_lead_email_context(
         # actually is. Drives a firm-specific pain pivot instead of a generic one.
         "firm_behavior": signals["firm_behavior"],
         "inferred_pain_points": signals["inferred_pain_points"],
+        "competitive_context": competitive_context,
         "blog_posts": _blog_posts(),
         "policy": {
             "target_metric": "booked_qualified_conversations",
@@ -701,6 +846,7 @@ async def compose_lead_email(
             "firm": payload.get("firm", {}),
             "contact": payload.get("contact", {}),
             "conversation_state": payload.get("conversation_state", {}),
+            "competitive_context": payload.get("competitive_context", {}),
             "policy": payload.get("policy", {}),
             "listening_mindset": payload.get("listening_mindset_context") or {
                 "available": False,

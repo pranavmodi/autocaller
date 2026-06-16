@@ -72,6 +72,9 @@ Use the payload fields when present:
 - `history.booked_consults`: patterns from booked consults and known winning
   pain points.
 - `front_signals`: read-only derived signals from Precise/Front inboxes.
+- `competitive_context`: clean local competitor graph context for this firm
+  when available. Use it to understand market pressure and likely operating
+  model, not as a list to name-drop.
 - `precise_signals`: derived signals about Precise Imaging workflows,
   autoresponders, or relationship context.
 - `proof_points`: approved Possible Minds project proof points, outcomes, or
@@ -423,6 +426,11 @@ brief when choosing the angle:
 - `firm.size_hint` / `firm.icp_tier`: calibrate the economics. A small firm (1-4
   attorneys) hears staff-time and leverage in human terms; a larger firm hears
   throughput and queue scale. Do not put big-firm economics on a solo shop.
+- `competitive_context.competitors`: use the list only as private context for
+  positioning. If competitors are mostly same-metro PI firms, you may frame the
+  pain around response speed, intake leakage, throughput, or status visibility
+  in a competitive market. Do not mention competitor names or imply direct
+  comparisons unless the payload explicitly says competitor naming is allowed.
 
 These are operational aggregates (role counts, after-hours ratio, topic mix) and
 firm research — never patient data. Do not reference anything patient-specific.

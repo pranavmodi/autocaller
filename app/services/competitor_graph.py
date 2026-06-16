@@ -512,6 +512,13 @@ def _is_competitor_candidate(firm: dict[str, Any], domain: str | None) -> bool:
     return bool(LEGAL_FIRM_RE.search(text))
 
 
+def is_competitor_candidate_name_domain(firm_name: str | None, domain: str | None) -> bool:
+    return _is_competitor_candidate(
+        {"firm_name": firm_name or "", "website": domain or "", "emails": []},
+        domain,
+    )
+
+
 def _domain_candidates(website: str | None, emails: Any) -> set[str]:
     domains: set[str] = set()
     for candidate in [website, *extract_emails(emails)]:
