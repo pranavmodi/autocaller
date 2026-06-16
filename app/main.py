@@ -77,7 +77,7 @@ async def lifespan(app: FastAPI):
     # Start the voicemail / no-reach follow-up emailer (gated by
     # ALLOW_VOICEMAIL_EMAIL=true — loop ticks but no-ops without the flag).
     vm_followup_task = asyncio.create_task(voicemail_followup_loop(interval_seconds=120))
-    # Start the 4-step email sequence scheduler. Gated by
+    # Start the email sequence scheduler. Gated by
     # ALLOW_SEQUENCE_SEND=true — loop ticks but no-ops without the flag.
     sequence_task = asyncio.create_task(sequence_loop(interval_seconds=60))
     # Start explicitly scheduled durable action sends. This does not start the

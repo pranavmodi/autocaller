@@ -19,7 +19,7 @@ import logging
 import os
 import uuid
 import asyncio
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from sqlalchemy import select, update
@@ -30,6 +30,7 @@ from app.services.lead_email_composer import LeadEmailComposerError, compose_lea
 from app.services.operator_notifications import create_operator_notification
 from app.services.sequences.registry import (
     DEFAULT_TEMPLATE_KEY,
+    cadence_for,
     normalize_template_key,
     steps_total,
     variant_for,
@@ -46,8 +47,25 @@ def _gate_open() -> bool:
     return _is_truthy(os.getenv("ALLOW_SEQUENCE_SEND", "false"))
 
 
+def sequences_enabled() -> bool:
+    return _is_truthy(os.getenv("SEQUENCES_ENABLED", "false"))
+
+
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _as_utc(value: datetime) -> datetime:
+    if value.tzinfo is None or value.utcoffset() is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
+def _variant_for_first_touch(template_key: str, variant: Optional[str]) -> str:
+    candidate = (variant or "").strip()
+    if candidate and len(candidate) <= 32:
+        return candidate
+    return variant_for(template_key, pain_quote=None)
 
 
 # ---------------------------------------------------------------------------
@@ -105,6 +123,62 @@ async def start_sequence(
             frozen_pain_quote=pain_quote if variant == "with_quote" else None,
             frozen_reviewer_name=reviewer_name if variant == "with_quote" else None,
             frozen_review_date=review_date if variant == "with_quote" else None,
+            started_by=started_by,
+        )
+        session.add(row)
+        await session.commit()
+        await session.refresh(row)
+        return row
+
+
+async def ensure_sequence_after_first_touch(
+    *,
+    contact_id: str,
+    template_key: str = DEFAULT_TEMPLATE_KEY,
+    sent_at: datetime,
+    variant: Optional[str] = None,
+    started_by: str = "lead_gen_daily",
+) -> EmailSequenceRow | None:
+    """Create the post-first-touch sequence row if one does not already exist.
+
+    Unlike `start_sequence`, this records that step 1 already went out through
+    the daily lead-gen pipeline, so the scheduler resumes at step 2.
+    """
+    contact_id = (contact_id or "").strip()
+    if not contact_id:
+        return None
+    template_key = normalize_template_key(template_key)
+    safe_variant = _variant_for_first_touch(template_key, variant)
+    total_steps = steps_total(template_key, safe_variant)
+    cadence = cadence_for(template_key, safe_variant)
+    sent_at = _as_utc(sent_at)
+    gap_days = cadence[1] - cadence[0] if len(cadence) >= 2 else 0
+
+    async with AsyncSessionLocal() as session:
+        existing = (await session.execute(
+            select(EmailSequenceRow).where(
+                EmailSequenceRow.contact_id == contact_id,
+                EmailSequenceRow.template_key == template_key,
+            )
+        )).scalar_one_or_none()
+        if existing:
+            return existing
+
+        row = EmailSequenceRow(
+            id=uuid.uuid4().hex,
+            contact_id=contact_id,
+            template_key=template_key,
+            status="active",
+            current_step=1,
+            steps_total=total_steps,
+            variant=safe_variant,
+            last_sent_at=sent_at,
+            next_step_due_at=sent_at + timedelta(days=gap_days),
+            paused_reason=None,
+            pain_point_key=None,
+            frozen_pain_quote=None,
+            frozen_reviewer_name=None,
+            frozen_review_date=None,
             started_by=started_by,
         )
         session.add(row)

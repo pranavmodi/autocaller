@@ -3518,7 +3518,7 @@ def sequences_start(
         help="Sequence template key.",
     ),
 ):
-    """Start the 4-step sequence for one contact. Idempotent — second
+    """Start the configured email sequence for one contact. Idempotent — second
     start returns 409 with current state.
 
     The scheduler picks step 1 up within ~60s. Sends are gated by

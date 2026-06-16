@@ -162,8 +162,8 @@ Every command accepts `--help`. Exit code is `0` on success, `1` on any error
 | `front competitors show <domain-or-name> [--limit=N] [--json]` | Show who competes with one firm, including score, neighbor name/domain/metro, and one-line evidence. |
 | `front competitors search <q> [--limit=N] [--json]` | Search any firm with local competitive features by firm-name or domain substring, including edge count and warm-list status. |
 | `front competitors graph <domain-or-name> [--depth=1] [--json]` | Print a firm's competitive ego network: node/link counts plus top edges, or raw graph payload for scripts with `--json`. |
-| `sequences preview <contact_id>` | Render the four (or three, if no Yelp quote) email drafts for one contact against their actual personalization data. Read-only. |
-| `sequences start <contact_id>` | Start the 4-step sequence for one contact. Idempotent — second start returns 409 with current state. Sends gated by `ALLOW_SEQUENCE_SEND=true`. |
+| `sequences preview <contact_id>` | Render the configured dynamic email sequence for one contact against their actual personalization data. Read-only. |
+| `sequences start <contact_id>` | Start the configured sequence for one contact. Idempotent — second start returns 409 with current state. Sends gated by `ALLOW_SEQUENCE_SEND=true`. |
 | `sequences list [--status=active\|paused\|completed]` | List sequence rows + which step each is on. |
 | `inbound status` | Show whether Zoho IMAP inbox reading is configured. Sensitive values masked. |
 | `inbound poll [--limit=N --classify --mark-seen]` | Poll Zoho IMAP for unread/recent replies, store inbound rows, match lead-gen contacts, and create observations. |

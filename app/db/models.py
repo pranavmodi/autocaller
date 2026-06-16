@@ -986,7 +986,7 @@ class CompetitorEdgeRow(Base):
 
 
 class EmailSequenceRow(Base):
-    """4-step email sequence state for one (contact, template_key) pair.
+    """Email sequence state for one (contact, template_key) pair.
     Strict v1 invariant: at most one sequence per template per contact.
     Restarts unsupported. The personalization fields (`frozen_*`) are
     captured at start-time so re-extracting Yelp reviews mid-sequence

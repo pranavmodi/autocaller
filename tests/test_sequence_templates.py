@@ -23,8 +23,18 @@ def test_registry_lists_only_dynamic_composer_template():
     assert keys == {"possible_minds_dynamic"}
     assert is_dynamic_template("possible_minds_dynamic")
     variant = variant_for("possible_minds_dynamic", pain_quote=None)
+    assert steps_total("possible_minds_dynamic", variant) == 3
+    assert cadence_for("possible_minds_dynamic", variant) == [0, 3, 7]
+
+
+def test_dynamic_sequence_count_and_cadence_can_be_overridden(monkeypatch):
+    monkeypatch.setenv("SEQUENCE_STEPS", "4")
+    monkeypatch.setenv("SEQUENCE_CADENCE_DAYS", "0,2,5,9")
+
+    variant = variant_for("possible_minds_dynamic", pain_quote=None)
+
     assert steps_total("possible_minds_dynamic", variant) == 4
-    assert cadence_for("possible_minds_dynamic", variant) == [0, 3, 7, 14]
+    assert cadence_for("possible_minds_dynamic", variant) == [0, 2, 5, 9]
 
 
 def test_unknown_sequence_template_is_rejected():

@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.db.models import AgentActionRow, LeadGenObservationRow
+from app.db.models import AgentActionRow, EmailSequenceRow, LeadGenObservationRow
 from app.services.action_execution import SEND_EMAIL, execute_action
 from app.services.lead_feedback_classifier import FeedbackClassification
 from app.services.lead_gen_cybernetic import record_observation
@@ -168,6 +168,37 @@ class _ActionSession:
         return None
 
 
+class _SequenceScalarResult:
+    def __init__(self, row=None):
+        self.row = row
+
+    def scalar_one_or_none(self):
+        return self.row
+
+
+class _SequenceSession:
+    def __init__(self, rows):
+        self.rows = rows
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        return False
+
+    async def execute(self, _stmt):
+        return _SequenceScalarResult(self.rows[0] if self.rows else None)
+
+    def add(self, row):
+        self.rows.append(row)
+
+    async def commit(self):
+        return None
+
+    async def refresh(self, _row):
+        return None
+
+
 @pytest.mark.asyncio
 async def test_scheduled_execute_action_records_email_sent_observation(monkeypatch):
     scheduled_for = datetime.now(timezone.utc) + timedelta(minutes=5)
@@ -245,3 +276,96 @@ async def test_scheduled_execute_action_records_email_sent_observation(monkeypat
     ]
     assert observations[0][1]["action_id"] == "action_scheduled"
     assert observations[0][1]["brief_version"] == 4
+
+
+@pytest.mark.asyncio
+async def test_successful_first_touch_send_starts_sequence_when_flag_enabled(monkeypatch):
+    sent_at = datetime(2026, 6, 16, 12, 0, tzinfo=timezone.utc)
+    action = SimpleNamespace(
+        id="action_sequence_seed",
+        action_type=SEND_EMAIL,
+        status="approved",
+        risk_level="high",
+        requested_by="operator",
+        approved_by="operator",
+        entity_type="lead_gen_email",
+        entity_id="item_1",
+        input_json={
+            "mode": "lead_gen",
+            "to": "lead@example.test",
+            "subject": "Subject",
+            "body": "Body with https://getpossibleminds.com/consult",
+            "contact_id": "contact_1",
+            "batch_item_id": "item_1",
+            "composer_variant_key": "subject-pain-led",
+            "brief_version": 4,
+        },
+        policy_result_json={},
+        execution_result_json={},
+        error=None,
+        trace_id=None,
+        scheduled_for=None,
+        started_at=None,
+        completed_at=None,
+        created_at=sent_at,
+        updated_at=sent_at,
+    )
+    sequence_rows = []
+
+    async def noop(*args, **kwargs):
+        return None
+
+    async def fake_policy(*args, **kwargs):
+        return {"allowed": True, "action_type": SEND_EMAIL}
+
+    async def fake_send(payload):
+        assert payload["mode"] == "lead_gen"
+        return {
+            "sent_message_id": "msg_1",
+            "sent_at": sent_at.isoformat(),
+            "email_log_id": 12,
+            "transport": "zoho_api",
+            "email_log_status": "sent",
+        }
+
+    async def fake_record(*args, **kwargs):
+        return {"id": "obs_1", "existing": False}
+
+    async def fake_get_action(action_id):
+        return {"action": {"id": action_id, "status": action.status}, "events": []}
+
+    monkeypatch.setenv("SEQUENCES_ENABLED", "1")
+    monkeypatch.delenv("SEQUENCE_STEPS", raising=False)
+    monkeypatch.delenv("SEQUENCE_CADENCE_DAYS", raising=False)
+    monkeypatch.setattr("app.services.action_execution.AsyncSessionLocal", lambda: _ActionSession(action))
+    monkeypatch.setattr("app.services.sequence_scheduler.AsyncSessionLocal", lambda: _SequenceSession(sequence_rows))
+    monkeypatch.setattr("app.services.action_execution.ensure_agent_tables", noop)
+    monkeypatch.setattr("app.services.action_execution.check_action_policy", fake_policy)
+    monkeypatch.setattr("app.services.action_execution._execute_send_email", fake_send)
+    monkeypatch.setattr("app.services.action_execution.safe_record_product_trace", noop)
+    monkeypatch.setattr("app.services.action_execution.record_observation", fake_record)
+    monkeypatch.setattr("app.services.action_execution.get_action", fake_get_action)
+
+    first = await execute_action("action_sequence_seed", actor="scheduler")
+    second = await execute_action("action_sequence_seed", actor="scheduler")
+
+    assert first["executed"] is True
+    assert second["executed"] is True
+    assert len(sequence_rows) == 1
+    row = sequence_rows[0]
+    assert isinstance(row, EmailSequenceRow)
+    assert row.contact_id == "contact_1"
+    assert row.template_key == "possible_minds_dynamic"
+    assert row.current_step == 1
+    assert row.steps_total == 3
+    assert row.status == "active"
+    assert row.started_by == "lead_gen_daily"
+    assert row.variant == "subject-pain-led"
+    assert row.last_sent_at == sent_at
+    assert row.next_step_due_at == sent_at + timedelta(days=3)
+
+    sequence_rows = []
+    monkeypatch.delenv("SEQUENCES_ENABLED", raising=False)
+    await execute_action("action_sequence_seed", actor="scheduler")
+
+    assert sequence_rows == []

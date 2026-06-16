@@ -657,6 +657,8 @@ Files:
 Responsibilities:
 
 - start sequence rows;
+- seed a sequence after a successful first-touch daily lead-gen send when
+  `SEQUENCES_ENABLED` is true;
 - render or compose due steps;
 - create operator approval notifications for dynamic generated outbound emails;
 - send only when allowed by execution gates;
@@ -664,6 +666,12 @@ Responsibilities:
 
 Execution gate:
 
+- Daily first-touch sends only create sequence rows when `SEQUENCES_ENABLED` is
+  truthy (`1`, `true`, `yes`, or `on`). The default is off, so the daily
+  pipeline does not create sequence rows unless explicitly enabled.
+- The dynamic Possible Minds template defaults to three steps at absolute day
+  offsets `0,3,7`. `SEQUENCE_STEPS` and `SEQUENCE_CADENCE_DAYS` can override
+  those values when needed.
 - Actual scheduled sequence sending still requires `ALLOW_SEQUENCE_SEND=true`.
 
 ### Inbound Email Sensor
@@ -842,6 +850,10 @@ it with CLI/API/UI.
    operator opens that notification.
 7. Actual sending remains manual: the operator must edit/review and click send
    from the action center.
+8. When `SEQUENCES_ENABLED=true`, a successful daily first-touch
+   `send_email mode=lead_gen` action seeds a dynamic sequence at
+   `current_step=1` so the scheduler resumes at step 2 and never re-sends the
+   opener.
 
 ### Compose And Approve Email
 
@@ -900,6 +912,9 @@ Email sending:
 - `SMTP_FROM_EMAIL`
 - `SMTP_FROM_NAME`
 - `SMTP_REPLY_TO`
+- `SEQUENCES_ENABLED`
+- `SEQUENCE_STEPS`
+- `SEQUENCE_CADENCE_DAYS`
 - `ALLOW_SEQUENCE_SEND`
 - `EMAIL_TRANSPORT` optional override, `zoho_api`, `smtp`, or `resend`
 - Resend-related configuration only if Resend is intentionally selected.

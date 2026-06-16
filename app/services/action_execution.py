@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import os
 import uuid
 from datetime import datetime, timezone
@@ -30,7 +31,13 @@ from app.services.master_agent import ensure_agent_tables
 from app.services.outreach_phi_guard import PHI_GUARD_CHECK_NAME, check_no_patient_data_in_outreach
 from app.services.product_traces import safe_record_product_trace
 from app.services.scheduled_time import format_pt, format_utc
+from app.services.sequence_scheduler import (
+    ensure_sequence_after_first_touch,
+    sequences_enabled,
+)
 
+
+logger = logging.getLogger(__name__)
 
 SEND_APPROVED_LEAD_GEN_DRAFT = "send_approved_lead_gen_draft"
 SEND_EMAIL = "send_email"
@@ -52,6 +59,17 @@ def _as_utc(value: datetime) -> datetime:
     if value.tzinfo is None or value.utcoffset() is None:
         return value.replace(tzinfo=timezone.utc)
     return value.astimezone(timezone.utc)
+
+
+def _parse_sent_at(value: Any) -> datetime:
+    if isinstance(value, datetime):
+        return _as_utc(value)
+    if isinstance(value, str) and value.strip():
+        try:
+            return _as_utc(datetime.fromisoformat(value.strip().replace("Z", "+00:00")))
+        except ValueError:
+            return _utcnow()
+    return _utcnow()
 
 
 def _new_id(prefix: str) -> str:
@@ -1499,6 +1517,26 @@ async def execute_action(action_id: str, *, actor: str = "operator") -> dict[str
             )
             await session.commit()
             succeeded_action = action
+    if (
+        succeeded_action
+        and succeeded_action.action_type == SEND_EMAIL
+        and str(payload.get("mode") or "").strip().lower() == "lead_gen"
+        and sequences_enabled()
+    ):
+        try:
+            await ensure_sequence_after_first_touch(
+                contact_id=str(payload.get("contact_id") or ""),
+                template_key="possible_minds_dynamic",
+                sent_at=_parse_sent_at(result.get("sent_at")),
+                variant=payload.get("composer_variant_key"),
+                started_by="lead_gen_daily",
+            )
+        except Exception:
+            logger.exception(
+                "failed to ensure lead-gen sequence after first-touch send "
+                "for action %s",
+                action_id,
+            )
     await safe_record_product_trace(
         actor_type="user" if actor == "operator" else "agent",
         actor_id=actor,
