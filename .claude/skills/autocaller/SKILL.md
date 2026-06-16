@@ -129,7 +129,7 @@ from emailtag instead of the stale mission.db cache. `bin/possibleos pif sync`
 pulls the full pif-info directory (~3,500 firms, with all extracted data:
 titled contacts, leadership, per-contact behavioral profiles, sender-role
 distributions, ICP scores) into Postgres table `pif_directory_firms`;
-`pif status` shows counts/tiers/freshness. Gated by `PIF_DIRECTORY_NATIVE`
+`pif status` shows counts/tiers/freshness; `pif ingest-contacts` folds the directory's titled contacts + leadership into firm_contacts (personas + firm names for free — the lead-supply unlock, runs after each sync when the flag is on). Gated by `PIF_DIRECTORY_NATIVE`
 (default off): when off, `front sync` resolves domains against mission.db
 (legacy, frozen since March 2026); when "1", it resolves against the native
 directory and a daily loop refreshes it. `pif sync` is safe to run regardless

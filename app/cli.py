@@ -6031,5 +6031,13 @@ def pif_sync():
     console.print_json(data=_post("/api/pif/sync", json_body=None, timeout=600.0))
 
 
+@pif_app.command("ingest-contacts")
+def pif_ingest_contacts():
+    """Populate firm_contacts from the directory's titled contacts + leadership,
+    then map personas. Local-only; this is the lead-supply unlock (titles ->
+    personas, firm names) that lifts daily eligible leads."""
+    console.print_json(data=_post("/api/pif/ingest-contacts", json_body=None, timeout=600.0))
+
+
 if __name__ == "__main__":
     app()

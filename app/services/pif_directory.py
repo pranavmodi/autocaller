@@ -234,6 +234,12 @@ async def pif_directory_sync_loop(*, interval_seconds: int = 86400) -> None:
         try:
             if pif_native_enabled():
                 await sync_pif_directory()
+                # Roadmap step 1: fold the directory's titled contacts +
+                # leadership into firm_contacts so daily selection has named,
+                # persona-mapped decision-makers. Local-only.
+                from app.services.firm_contacts_service import ingest_pif_directory_contacts
+                ingest = await ingest_pif_directory_contacts()
+                logger.info("pif_directory contact ingest: %s", ingest)
         except asyncio.CancelledError:
             raise
         except Exception:

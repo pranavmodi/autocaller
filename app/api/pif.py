@@ -23,3 +23,15 @@ async def post_pif_sync(page_size: int = Query(100, ge=1, le=100)):
         return await sync_pif_directory(page_size=page_size)
     except Exception as exc:  # surface upstream API failures clearly to the CLI
         raise HTTPException(status_code=502, detail=f"{type(exc).__name__}: {str(exc)[:300]}")
+
+
+@router.post("/ingest-contacts")
+async def post_pif_ingest_contacts():
+    """Populate firm_contacts from the synced directory's titled contacts +
+    leadership, then map personas. Local-only (no upstream API calls)."""
+    from app.services.firm_contacts_service import ingest_pif_directory_contacts
+
+    try:
+        return await ingest_pif_directory_contacts()
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"{type(exc).__name__}: {str(exc)[:300]}")

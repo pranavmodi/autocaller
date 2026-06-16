@@ -428,3 +428,98 @@ async def fetch_pain_quote_for_firm(pif_id: str) -> dict:
         "pain_point_key": "client_communication",
         "extracted_at": extracted_at,
     }
+
+
+async def ingest_pif_directory_contacts(*, map_personas_after: bool = True) -> dict:
+    """Bulk-populate firm_contacts from the locally-synced PI-firm directory.
+
+    Roadmap step 1: emailtag already extracts named, titled contacts +
+    leadership per firm. Pull those (from pif_directory_firms, no API calls) into
+    FirmContactRow so we get titles (-> personas via map_personas) and firm names
+    for free — instead of re-deriving title-less contacts from raw inbox senders,
+    which is what suppresses selection (missing firm name / non-persona) down to a
+    handful of eligible leads.
+
+    Enriches existing title-less rows AND inserts new contacts for firms that had
+    none. In-memory dedup keyed by (pif_id, email|name); single commit. Then runs
+    the idempotent persona mapper so the new/enriched contacts become selectable.
+    """
+    from app.db.models import PifFirmRow
+
+    counts = {"firms": 0, "persons": 0, "inserted": 0, "updated": 0, "skipped": 0}
+    async with AsyncSessionLocal() as session:
+        firm_rows = (await session.execute(
+            select(PifFirmRow.id, PifFirmRow.leadership, PifFirmRow.contacts)
+        )).all()
+        existing_rows = (await session.execute(select(FirmContactRow))).scalars().all()
+        by_email: dict[tuple[str, str], FirmContactRow] = {}
+        by_name: dict[tuple[str, str], FirmContactRow] = {}
+        for r in existing_rows:
+            if r.email:
+                by_email[(r.pif_id, r.email.strip().lower())] = r
+            elif r.full_name:
+                by_name[(r.pif_id, r.full_name.strip().lower())] = r
+
+        for pif_id, leadership, contacts in firm_rows:
+            pid = str(pif_id)
+            people = [(p, "pif_leadership") for p in (leadership or [])]
+            people += [(p, "pif_contacts") for p in (contacts or [])]
+            if not people:
+                continue
+            counts["firms"] += 1
+            for person, src in people:
+                if not isinstance(person, dict):
+                    continue
+                counts["persons"] += 1
+                # Clamp to column widths — emailtag values can exceed them
+                # (e.g. multi-number phone strings > varchar(32)).
+                full = (person.get("name") or "").strip()[:255]
+                email = (_norm_email(person.get("email")) or "")[:320] or None
+                phone = (_normalize_phone(person.get("phone")) or "")[:32] or None
+                title = ((person.get("title") or person.get("role")) or "").strip()[:255] or None
+                li = ((person.get("linkedin_url") or person.get("linkedin")) or "").strip()[:512] or None
+                if not full and not email:
+                    counts["skipped"] += 1
+                    continue
+                existing = None
+                if email:
+                    existing = by_email.get((pid, email))
+                if existing is None and full:
+                    existing = by_name.get((pid, full.lower()))
+                if existing is not None:
+                    changed = False
+                    if not existing.email and email:
+                        existing.email = email; by_email[(pid, email)] = existing; changed = True
+                    if not existing.phone and phone:
+                        existing.phone = phone; changed = True
+                    if not existing.title and title:
+                        existing.title = title; changed = True
+                    if not existing.linkedin_url and li:
+                        existing.linkedin_url = li; changed = True
+                    if not existing.first_name and full:
+                        existing.first_name = _first_name_of(full); changed = True
+                    counts["updated" if changed else "skipped"] += 1
+                else:
+                    row = FirmContactRow(
+                        id=uuid.uuid4().hex,
+                        pif_id=pid,
+                        full_name=full,
+                        first_name=_first_name_of(full),
+                        email=email,
+                        phone=phone,
+                        title=title,
+                        linkedin_url=li,
+                        source=src,
+                    )
+                    session.add(row)
+                    if email:
+                        by_email[(pid, email)] = row
+                    elif full:
+                        by_name[(pid, full.lower())] = row
+                    counts["inserted"] += 1
+        await session.commit()
+
+    if map_personas_after:
+        from app.services.persona_mapper import map_personas
+        counts["personas"] = await map_personas()
+    return counts
