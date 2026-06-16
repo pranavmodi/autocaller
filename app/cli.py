@@ -44,6 +44,7 @@ ivr_app = typer.Typer(help="Phone-tree (IVR) navigation — press digits to reac
 carrier_app = typer.Typer(help="Inspect the active telephony carrier account (Twilio)", no_args_is_help=True)
 prompts_app = typer.Typer(help="Prompt-style selector (current | minimal). Parallel prompt versions.", no_args_is_help=True)
 email_app = typer.Typer(help="Outbound email — config check + manual sends (test, one-pager, VM follow-up, consult).", no_args_is_help=True)
+pif_app = typer.Typer(help="Native PI-firm directory — pull emailtag's pif-info into possibleos (replaces mission.db).", no_args_is_help=True)
 comms_app = typer.Typer(help="Outbound communications dashboard — calls, voicemails, SMS, emails (read-only).", no_args_is_help=True)
 contacts_app = typer.Typer(help="Per-firm contact roster (backfill from PIF Stats + patients).", no_args_is_help=True)
 front_app = typer.Typer(help="Front read-only enrichment sync and warm lead signals.", no_args_is_help=True)
@@ -85,6 +86,7 @@ app.add_typer(ivr_app, name="ivr")
 app.add_typer(carrier_app, name="carrier")
 app.add_typer(prompts_app, name="prompts")
 app.add_typer(email_app, name="email")
+app.add_typer(pif_app, name="pif")
 app.add_typer(comms_app, name="comms")
 app.add_typer(contacts_app, name="contacts")
 app.add_typer(front_app, name="front")
@@ -6011,6 +6013,22 @@ def composer_ab_report_cmd(
     console.print(table)
     for w in report["warnings"]:
         console.print(f"[yellow]warning:[/yellow] {w}")
+
+
+@pif_app.command("status")
+def pif_status():
+    """Show the native PI-firm directory status (firm count, ICP tiers, last sync)."""
+    console.print_json(data=_get("/api/pif/status"))
+
+
+@pif_app.command("sync")
+def pif_sync():
+    """Pull the full PI-firm directory from emailtag's pif-info API into possibleos.
+
+    Safe to run regardless of the PIF_DIRECTORY_NATIVE flag — the flag only
+    governs whether lead-gen *matching* reads from this table, so you can warm
+    it before cutover."""
+    console.print_json(data=_post("/api/pif/sync", json_body=None, timeout=600.0))
 
 
 if __name__ == "__main__":

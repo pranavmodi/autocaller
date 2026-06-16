@@ -575,7 +575,17 @@ def _new_contact_id() -> str:
 
 
 async def resolve_firms(*, mission_db_path: Path = MISSION_DB_PATH) -> dict[str, Any]:
-    domain_map = _load_pif_domain_map(mission_db_path)
+    # When the native pif directory is enabled, match against possibleos's own
+    # pulled directory (pif_directory_firms) rather than the stale mission.db
+    # cache. Lazy import avoids a circular dependency (pif_directory imports
+    # helpers from this module). mission.db stays the fallback when the flag
+    # is off, so enabling/disabling is a single env change.
+    from app.services.pif_directory import load_pif_domain_map_from_db, pif_native_enabled
+
+    if pif_native_enabled():
+        domain_map = await load_pif_domain_map_from_db()
+    else:
+        domain_map = _load_pif_domain_map(mission_db_path)
     matched = upserted_contacts = skipped_consumer = skipped_filevine = tech_signal_domains = 0
     async with AsyncSessionLocal() as session:
         await _refresh_contact_counts(session)

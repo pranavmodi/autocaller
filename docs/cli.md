@@ -105,6 +105,8 @@ Every command accepts `--help`. Exit code is `0` on success, `1` on any error
 
 | command | purpose |
 |---|---|
+| `pif sync` | Pull the full PI-firm directory from emailtag's pif-info API into Postgres (`pif_directory_firms`), capturing all extracted data (titled contacts, leadership, behavioral profiles, ICP scores). ~3,500 firms. Safe regardless of the `PIF_DIRECTORY_NATIVE` flag — the flag only governs whether matching *reads* from it, so you can warm the table before cutover. |
+| `pif status` | Show native-directory state: firm count, ICP-tier breakdown, last sync time, source-update freshness, and whether `PIF_DIRECTORY_NATIVE` is enabled. |
 | `system on \| off \| status` | Master kill switch. `off` blocks all calls regardless of dispatcher state. |
 | `mock on <phone> \| off \| status` | Redirect every Twilio call to `<phone>` for safe testing. |
 | `allowlist list \| add <phone> \| remove <phone> \| clear \| set-from-leads [--state=CA --dm-only --limit=20]` | Manage `allowed_phones`. `set-from-leads` populates it from the top-N priority-sorted leads in the DB. |

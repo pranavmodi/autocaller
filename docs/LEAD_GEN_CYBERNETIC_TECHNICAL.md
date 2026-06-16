@@ -998,3 +998,48 @@ git diff --check
   webhook URL and `RESEND_WEBHOOK_SECRET`.
 - The file name `OperatorNotificationPopup.tsx` is legacy; the component is now
   a non-blocking action center.
+
+## Native PI-firm directory (pif_directory_firms)
+
+The lead-gen matching universe historically came from `mission.db` (the Mission
+Control SQLite cache), read read-only by `front_sync._load_pif_domain_map`. That
+cache is populated by a Mission Control sync that **stopped running in March
+2026**, freezing the directory at ~1,711 firms while the live source (emailtag's
+`PifInfo`, served at the pif-info API) had grown to ~3,500+ — starving daily lead
+selection.
+
+`app/services/pif_directory.py` pulls the directory **directly from emailtag into
+Postgres** (`pif_directory_firms`, model `PifFirmRow`), so possibleos owns the
+refresh cadence and no longer depends on the dead mission.db sync.
+
+- **Schema:** mirrors every `PifInfo` field — scalars (`firm_name`, `website`,
+  `icp_score`, `icp_tier`, …) plus JSONB for `emails`, `phones`, `addresses`,
+  `contacts`, `leadership`, `staff`, `contact_profiles`, `research_data`,
+  `behavioral_data`, `score_breakdown`, `conversation_ids` — and `raw_json`, the
+  untouched API record, so no future field is ever lost.
+- **Sync:** `sync_pif_directory()` paginates `GET {PIFSTATS_BASE_URL}/`
+  (page_size capped at 100) and upserts by `id`. `pif_directory_sync_loop`
+  refreshes daily; it no-ops while the flag is off.
+- **Flag:** `PIF_DIRECTORY_NATIVE` (default off). When off, `resolve_firms` reads
+  the mission.db map (legacy). When "1", it reads `load_pif_domain_map_from_db()`
+  (the native directory; ~2,175 matchable domains vs ~1,141 from mission.db).
+  `pif sync` is safe regardless of the flag — warm the table, then cut over.
+- **Surface:** REST `POST /api/pif/sync`, `GET /api/pif/status`; CLI
+  `bin/possibleos pif sync | status`.
+- **PHI:** `extraction_notes` and conversation context can contain patient names.
+  This data is internal-only for selection/targeting; the PHI egress guard
+  remains authoritative for anything emitted in outreach.
+
+### Data captured but not yet exploited
+possibleos currently uses only `website` + `emails` (domain matching). emailtag
+also extracts, per firm: **titled contacts** (`contacts[].title`), **leadership
+with bio + LinkedIn**, **per-contact behavioral profiles** (`contact_profiles`:
+role, persona, topic_mix, after_hours_ratio, message_count), **firm sender-role
+distributions** (`behavioral_data.sender_roles`), and **ICP scores/breakdowns**.
+These directly address current selection suppressors (missing firm name, no
+mapped persona) and enable behavioral pain-point targeting. Proposed roadmap:
+(1) ingest `contacts`/`leadership` as titled, persona-ready `FirmContactRow`s to
+lift daily eligible leads; (2) derive persona from `contact_profiles`/titles;
+(3) feed `sender_roles`/`topic_mix`/`after_hours_ratio` into the composer for
+per-firm pain hooks; (4) order selection by `icp_score`; (5) target `leadership`
+decision-makers and wire their LinkedIn into the outreach skills.

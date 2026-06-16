@@ -124,6 +124,19 @@ the PT morning window. It never approves or sends. Check state with
 startup but defaults disabled in DB settings (`daily_run_enabled=false`) and
 no-ops while disabled.
 
+The PI-firm directory that matching resolves against can be pulled natively
+from emailtag instead of the stale mission.db cache. `bin/possibleos pif sync`
+pulls the full pif-info directory (~3,500 firms, with all extracted data:
+titled contacts, leadership, per-contact behavioral profiles, sender-role
+distributions, ICP scores) into Postgres table `pif_directory_firms`;
+`pif status` shows counts/tiers/freshness. Gated by `PIF_DIRECTORY_NATIVE`
+(default off): when off, `front sync` resolves domains against mission.db
+(legacy, frozen since March 2026); when "1", it resolves against the native
+directory and a daily loop refreshes it. `pif sync` is safe to run regardless
+of the flag (warm the table before cutover). See
+docs/LEAD_GEN_CYBERNETIC_TECHNICAL.md for the field map and the data not yet
+exploited (contacts/personas/behavioral pain signals).
+
 Front read-only enrichment is available through
 `bin/possibleos front sync --max-calls <N>`, `front status`,
 `front contacts [--firm=<pif_id>|--domain=<domain>|--q=<text>]`, and

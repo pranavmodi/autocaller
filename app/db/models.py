@@ -1422,3 +1422,61 @@ class LeadGenPolicyProposalRow(Base):
         Index("ix_lead_gen_policy_proposals_source_batch", "source_batch_id"),
         Index("ix_lead_gen_policy_proposals_created_at", "created_at"),
     )
+
+
+class PifFirmRow(Base):
+    """Native mirror of emailtag's PifInfo — the PI-firm directory.
+
+    Pulled directly from the emailtag pif-info API into possibleos Postgres so
+    the lead-gen matching universe no longer depends on mission.db (whose
+    Mission Control sync stopped running in March 2026). Captures every
+    extracted field; `raw_json` holds the untouched API record so no future
+    field is ever lost. Population is gated by PIF_DIRECTORY_NATIVE.
+
+    Note: `extraction_notes` (and conversation context) can contain patient
+    names (PHI). This data is for internal selection/targeting only and must
+    never be emitted in outreach — the PHI egress guard remains authoritative.
+    """
+    __tablename__ = "pif_directory_firms"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)  # emailtag uuid
+    firm_name: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    website: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    entity_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    fax: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    icp_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    icp_tier: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    research_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    staff_research_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
+
+    # Full extracted data (kept as JSONB to mirror emailtag exactly).
+    emails: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    phones: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    addresses: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    contacts: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    leadership: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    staff: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    contact_profiles: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    research_data: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    behavioral_data: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    score_breakdown: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    conversation_ids: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    extraction_notes: Mapped[str | None] = mapped_column(Text, nullable=True)  # PHI-bearing; internal only
+    raw_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)  # full untouched record
+
+    # Source timestamps (from emailtag).
+    source_created_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    source_updated_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    last_researched_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    icp_scored_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+
+    # Local bookkeeping.
+    synced_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow)
+
+    __table_args__ = (
+        Index("ix_pif_directory_firms_icp_score", "icp_score"),
+        Index("ix_pif_directory_firms_website", "website"),
+        Index("ix_pif_directory_firms_source_updated_at", "source_updated_at"),
+    )
