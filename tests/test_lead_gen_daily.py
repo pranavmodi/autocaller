@@ -134,6 +134,25 @@ async def test_deliverability_circuit_breaker_math(monkeypatch):
     assert result["tripped"] is True
 
 
+@pytest.mark.asyncio
+async def test_deliverability_circuit_ignores_operational_send_failures(monkeypatch):
+    # Regression for the false skip on 2026-06-16: operational `email_send_failed`
+    # events the classifier marks neutral (policy refusals, transport timeouts)
+    # never reach a recipient mailbox and must NOT trip the bounce breaker.
+    now = datetime(2026, 6, 16, 2, 33, tzinfo=timezone.utc)
+    rows = [("email_sent", "neutral")] * 19 + [("email_send_failed", "neutral")] * 5
+    monkeypatch.setattr(lead_gen_daily, "AsyncSessionLocal", lambda: _Session(rows))
+
+    result = await lead_gen_daily._deliverability_circuit(
+        {"deliverability_circuit_breaker_threshold": 0.25, "deliverability_circuit_breaker_min_sends": 4},
+        now=now,
+    )
+
+    assert result["sends"] == 19
+    assert result["failures"] == 0
+    assert result["tripped"] is False
+
+
 def test_persona_quota_shortfall_fill_and_one_per_firm():
     recs = [
         {"contact_id": "a1", "pif_id": "p1", "firm_name": "A", "persona": "founder_owner", "score": 100},

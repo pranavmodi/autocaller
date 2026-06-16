@@ -282,11 +282,13 @@ async def _deliverability_circuit(weights: dict[str, Any], *, now: datetime | No
             .where(LeadGenObservationRow.created_at >= cutoff)
         )).all()
     sends = sum(1 for event_type, _outcome in rows if event_type == "email_sent")
-    failures = sum(
-        1
-        for event_type, outcome in rows
-        if event_type == "email_send_failed" or outcome == "bounce"
-    )
+    # Deliverability == recipient-side bounces, which is what risks sender
+    # reputation and is the thing this breaker exists to protect. Operational
+    # `email_send_failed` events (the classifier marks these neutral — e.g. a
+    # pre-transport policy refusal, or a transient SSL/transport timeout) never
+    # reached a recipient mailbox and carry no reputation signal, so they must
+    # NOT trip this breaker. Count only true bounces.
+    failures = sum(1 for _event_type, outcome in rows if outcome == "bounce")
     ratio = (failures / sends) if sends else 0.0
     tripped = sends >= min_sends and ratio > threshold
     return {
