@@ -15,7 +15,7 @@ from typing import Any
 from sqlalchemy import select
 
 from app.db import AsyncSessionLocal
-from app.db.models import FirmContactRow, LeadGenBatchItemRow, LeadGenBatchRow, PatientRow
+from app.db.models import EmailSequenceRow, FirmContactRow, LeadGenBatchItemRow, LeadGenBatchRow, PatientRow
 from app.services.action_execution import check_action_policy, create_send_email_action
 from app.services.contact_selection import classify_email_quality
 from app.services.lead_email_composer import compose_lead_email
@@ -117,6 +117,22 @@ def _agent_sequence_stub(template_key: str) -> SimpleNamespace:
         variant="agent_slice",
         status="drafting",
     )
+
+
+async def _sequence_context_for_item(item: dict[str, Any]) -> tuple[Any, int]:
+    reason = item.get("reason") or {}
+    if reason.get("action_type") != "follow_up":
+        return _agent_sequence_stub(item["template_key"]), 1
+
+    sequence_id = str(reason.get("sequence_id") or "").strip()
+    step_num = int(reason.get("step_num") or 0)
+    if not sequence_id or step_num <= 1:
+        raise ValueError("follow_up_sequence_metadata_missing")
+    async with AsyncSessionLocal() as session:
+        sequence = await session.get(EmailSequenceRow, sequence_id)
+    if not sequence:
+        raise ValueError("follow_up_sequence_not_found")
+    return sequence, step_num
 
 
 async def create_lead_gen_email_agent_slice(
@@ -251,6 +267,7 @@ async def _compose_batch_items(
             firm_name=item["firm_name"],
             selection_reason=item.get("reason") or {},
         )
+        sequence, step_num = await _sequence_context_for_item(item)
         selection_evidence = {
             "why_this_contact_was_selected": item.get("reason", {}).get("reason")
             or item.get("reason", {}).get("basis")
@@ -265,12 +282,14 @@ async def _compose_batch_items(
         composition = await compose_lead_email(
             contact=contact,
             firm_name=item["firm_name"],
-            sequence=_agent_sequence_stub(item["template_key"]),
-            step_num=1,
+            sequence=sequence,
+            step_num=step_num,
             composer_variant_key=composer_variant_key,
             research_evidence=research,
             selection_evidence=selection_evidence,
         )
+        reason = item.get("reason") or {}
+        is_follow_up = reason.get("action_type") == "follow_up"
         action = await create_send_email_action(
             mode="lead_gen",
             to=item["contact_email"],
@@ -287,6 +306,9 @@ async def _compose_batch_items(
             skill_path=composition.skill_path,
             skill_sha256=composition.skill_sha256,
             brief_version=composition.brief_version,
+            lead_gen_action_type="follow_up" if is_follow_up else None,
+            sequence_id=reason.get("sequence_id") if is_follow_up else None,
+            sequence_step_num=reason.get("step_num") if is_follow_up else None,
         )
         action_ids.append(action["id"])
         if policy_check_first_action and first_policy is None:

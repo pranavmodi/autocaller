@@ -17,7 +17,9 @@ from sqlalchemy import desc, func, select
 from app.db import AsyncSessionLocal
 from app.db.models import (
     AgentActionRow,
+    EmailSequenceRow,
     FrontFirmActivityRow,
+    FirmContactRow,
     LeadGenBatchItemRow,
     LeadGenBatchRow,
     LeadGenDailyRunRow,
@@ -39,6 +41,8 @@ from app.services.lead_gen_email_agent import _compose_batch_items
 from app.services.persona_mapper import map_personas
 from app.services.sequence_recommendations import recommend_sequence_contacts
 from app.services.sequences.registry import DEFAULT_TEMPLATE_KEY
+from app.services.sequence_scheduler import sequences_enabled
+from app.services.firm_contacts_service import resolve_firm_name
 from app.services.scheduled_time import format_pt, format_utc
 
 
@@ -443,6 +447,125 @@ async def _select_contacts(
     }
 
 
+async def _select_due_followups(
+    *,
+    batch_size: int,
+    template_key: str,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    due_at = now or _utcnow()
+    selected: list[dict[str, Any]] = []
+    async with AsyncSessionLocal() as session:
+        due_total = (await session.execute(
+            select(func.count(EmailSequenceRow.id)).where(
+                EmailSequenceRow.status == "active",
+                EmailSequenceRow.template_key == template_key,
+                EmailSequenceRow.next_step_due_at != None,  # noqa: E711
+                EmailSequenceRow.next_step_due_at <= due_at,
+            )
+        )).scalar_one()
+        rows = (await session.execute(
+            select(EmailSequenceRow, FirmContactRow)
+            .join(FirmContactRow, FirmContactRow.id == EmailSequenceRow.contact_id)
+            .where(
+                EmailSequenceRow.status == "active",
+                EmailSequenceRow.template_key == template_key,
+                EmailSequenceRow.next_step_due_at != None,  # noqa: E711
+                EmailSequenceRow.next_step_due_at <= due_at,
+                EmailSequenceRow.current_step < EmailSequenceRow.steps_total,
+                FirmContactRow.email != None,  # noqa: E711
+            )
+            .order_by(EmailSequenceRow.next_step_due_at.asc())
+            .limit(batch_size)
+        )).all()
+
+    for seq, contact in rows:
+        email = (contact.email or "").strip().lower()
+        if not email:
+            continue
+        step_num = int(seq.current_step or 0) + 1
+        selected.append({
+            "contact_id": contact.id,
+            "pif_id": contact.pif_id,
+            "firm_name": await resolve_firm_name(contact.pif_id),
+            "contact_name": contact.full_name or "",
+            "contact_email": email,
+            "contact_title": contact.title or "",
+            "persona": contact.persona or "",
+            "score": 1000 - len(selected),
+            "reason": (
+                f"Due sequence follow-up step {step_num} "
+                f"(due {seq.next_step_due_at.isoformat() if seq.next_step_due_at else 'now'})."
+            ),
+            "action_type": "follow_up",
+            "priority_bucket": "due_follow_up",
+            "source_type": "email_sequence",
+            "source_id": seq.id,
+            "sequence_id": seq.id,
+            "step_num": step_num,
+            "steps_total": seq.steps_total,
+            "current_step": seq.current_step,
+            "next_step_due_at": seq.next_step_due_at.isoformat() if seq.next_step_due_at else None,
+            "selection_signals": ["sequence_due"],
+            "suppressions": [],
+        })
+    return {
+        "selected": selected[:batch_size],
+        "followups_due_total": int(due_total or 0),
+    }
+
+
+async def _select_daily_contacts(
+    *,
+    weights: dict[str, Any],
+    batch_size: int,
+    template_key: str,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    if not sequences_enabled():
+        return await _select_contacts(
+            weights=weights,
+            batch_size=batch_size,
+            template_key=template_key,
+        )
+
+    followups = await _select_due_followups(
+        batch_size=batch_size,
+        template_key=template_key,
+        now=now,
+    )
+    followup_selected = list(followups.get("selected") or [])[:batch_size]
+    fresh_limit = max(0, batch_size - len(followup_selected))
+    if fresh_limit:
+        fresh_result = await _select_contacts(
+            weights=weights,
+            batch_size=fresh_limit,
+            template_key=template_key,
+        )
+    else:
+        fresh_result = {
+            "selected": [],
+            "recommendation_counts": {},
+            "quota": _persona_quota(weights),
+            "batch_size": 0,
+            "persona_mix": {},
+            "excluded": {},
+            "behavior_by_pif": {},
+        }
+
+    selected = followup_selected + list(fresh_result.get("selected") or [])
+    persona_mix = Counter(str(row.get("persona") or "unknown") for row in selected)
+    return {
+        **fresh_result,
+        "selected": selected,
+        "batch_size": batch_size,
+        "persona_mix": dict(persona_mix),
+        "followups_selected": len(followup_selected),
+        "fresh_selected": len(fresh_result.get("selected") or []),
+        "followups_due_total": int(followups.get("followups_due_total") or 0),
+    }
+
+
 async def _create_daily_batch(
     *,
     run_id: str,
@@ -473,6 +596,15 @@ async def _create_daily_batch(
                 "persona_mix": select_result.get("persona_mix") or {},
                 "persona_quota": select_result.get("quota") or {},
                 "excluded": select_result.get("excluded") or {},
+                **(
+                    {
+                        "followups_selected": select_result.get("followups_selected", 0),
+                        "fresh_selected": select_result.get("fresh_selected", len(selected)),
+                        "followups_due_total": select_result.get("followups_due_total", 0),
+                    }
+                    if sequences_enabled()
+                    else {}
+                ),
             },
             created_by=created_by,
         )
@@ -480,16 +612,17 @@ async def _create_daily_batch(
         await session.flush()
         for rec in selected:
             behavior = behavior_by_pif.get(str(rec.get("pif_id") or ""), {})
+            action_type = str(rec.get("action_type") or "first_touch")
             reason_json = {
                 "basis": "daily-run",
                 "reason": rec.get("reason") or "",
                 "contact_source": rec.get("contact_source") or "",
                 "policy_version": active_policy.version,
                 "daily_run_id": run_id,
-                "action_type": "first_touch",
-                "priority_bucket": "new_conversation",
-                "source_type": "lead_gen_daily_run",
-                "source_id": rec.get("contact_id"),
+                "action_type": action_type,
+                "priority_bucket": rec.get("priority_bucket") or "new_conversation",
+                "source_type": rec.get("source_type") or "lead_gen_daily_run",
+                "source_id": rec.get("source_id") or rec.get("contact_id"),
                 "signals": rec.get("selection_signals") or rec.get("signals") or [],
                 "next_operator_action": "review_edit_approve_send",
                 "selection_policy_version": rec.get("policy_version") or active_policy.version,
@@ -502,6 +635,14 @@ async def _create_daily_batch(
                     "primary_pain_point": behavior.get("primary_pain_point"),
                 },
             }
+            if action_type == "follow_up":
+                reason_json.update({
+                    "sequence_id": rec.get("sequence_id"),
+                    "step_num": rec.get("step_num"),
+                    "steps_total": rec.get("steps_total"),
+                    "current_step": rec.get("current_step"),
+                    "next_step_due_at": rec.get("next_step_due_at"),
+                })
             session.add(LeadGenBatchItemRow(
                 id=_new_id(),
                 batch_id=batch_id,
@@ -517,6 +658,18 @@ async def _create_daily_batch(
                 reason_json=reason_json,
                 approval_status="pending",
             ))
+            if action_type == "follow_up" and rec.get("sequence_id"):
+                seq = await session.get(EmailSequenceRow, str(rec.get("sequence_id")))
+                if (
+                    seq
+                    and seq.status == "active"
+                    and int(seq.current_step or 0) + 1 == int(rec.get("step_num") or 0)
+                ):
+                    # The autonomous scheduler only selects active+due rows,
+                    # so this daily-run claim prevents double-drafting.
+                    seq.status = "paused"
+                    seq.paused_reason = f"awaiting_operator_send_approval:daily_run:{run_id}"
+                    seq.next_step_due_at = None
         await session.commit()
     return batch_id
 
@@ -824,14 +977,26 @@ async def run_daily_pipeline(
             stages["signals"] = {"status": "completed", "counts": {"front_last_run_age_hours": age, "would_refresh": age is None or age > 30}}
             stages["research"] = {"status": "skipped", "reason": "dry_run"}
             stages["personas"] = {"status": "skipped", "reason": "dry_run"}
-            selected = await _select_contacts(weights=weights, batch_size=batch_size, template_key=template_key)
+            selected = await _select_daily_contacts(
+                weights=weights,
+                batch_size=batch_size,
+                template_key=template_key,
+                now=now,
+            )
+            select_counts = {
+                "selected": len(selected["selected"]),
+                "persona_mix": selected["persona_mix"],
+                "excluded": selected["excluded"],
+            }
+            if sequences_enabled():
+                select_counts.update({
+                    "followups_selected": selected.get("followups_selected", 0),
+                    "fresh_selected": selected.get("fresh_selected", len(selected["selected"])),
+                    "followups_due_total": selected.get("followups_due_total", 0),
+                })
             stages["select"] = {
                 "status": "completed",
-                "counts": {
-                    "selected": len(selected["selected"]),
-                    "persona_mix": selected["persona_mix"],
-                    "excluded": selected["excluded"],
-                },
+                "counts": select_counts,
             }
             stages["batch"] = {"status": "skipped", "reason": "dry_run"}
             stages["compose"] = {"status": "skipped", "reason": "dry_run"}
@@ -917,25 +1082,42 @@ async def run_daily_pipeline(
 
         if not _stage_done(row.stages_json or {}, "select"):
             await _checkpoint(row.id, stage="select", status="running")
-            select_result = await _select_contacts(weights=weights, batch_size=batch_size, template_key=template_key)
+            select_result = await _select_daily_contacts(
+                weights=weights,
+                batch_size=batch_size,
+                template_key=template_key,
+                now=now,
+            )
+            select_counts = {
+                "selected": len(select_result["selected"]),
+                "batch_size": batch_size,
+                "persona_mix": select_result["persona_mix"],
+                "excluded": select_result["excluded"],
+                "recommendation_counts": select_result["recommendation_counts"],
+            }
+            if sequences_enabled():
+                select_counts.update({
+                    "followups_selected": select_result.get("followups_selected", 0),
+                    "fresh_selected": select_result.get("fresh_selected", len(select_result["selected"])),
+                    "followups_due_total": select_result.get("followups_due_total", 0),
+                })
             row = await _checkpoint(
                 row.id,
                 stage="select",
                 status="completed",
-                counts={
-                    "selected": len(select_result["selected"]),
-                    "batch_size": batch_size,
-                    "persona_mix": select_result["persona_mix"],
-                    "excluded": select_result["excluded"],
-                    "recommendation_counts": select_result["recommendation_counts"],
-                },
+                counts=select_counts,
                 extra={"selected_contact_ids": [r["contact_id"] for r in select_result["selected"]]},
             )
 
         if not _stage_done(row.stages_json or {}, "batch"):
             await _checkpoint(row.id, stage="batch", status="running")
             if select_result is None:
-                select_result = await _select_contacts(weights=weights, batch_size=batch_size, template_key=template_key)
+                select_result = await _select_daily_contacts(
+                    weights=weights,
+                    batch_size=batch_size,
+                    template_key=template_key,
+                    now=now,
+                )
             batch_id = await _create_daily_batch(
                 run_id=row.id,
                 run_date=target_date,

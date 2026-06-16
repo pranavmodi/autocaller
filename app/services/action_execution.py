@@ -32,6 +32,7 @@ from app.services.outreach_phi_guard import PHI_GUARD_CHECK_NAME, check_no_patie
 from app.services.product_traces import safe_record_product_trace
 from app.services.scheduled_time import format_pt, format_utc
 from app.services.sequence_scheduler import (
+    advance_sequence_after_followup_send,
     ensure_sequence_after_first_touch,
     sequences_enabled,
 )
@@ -78,6 +79,52 @@ def _new_id(prefix: str) -> str:
 
 def _json_object(value: dict[str, Any] | None) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
+
+
+def _int_or_none(value: Any) -> int | None:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return None
+    return parsed if parsed > 0 else None
+
+
+def _lead_gen_followup_metadata_from_item(
+    payload: dict[str, Any],
+    item: LeadGenBatchItemRow | None = None,
+) -> dict[str, Any] | None:
+    action_type = str(payload.get("lead_gen_action_type") or "").strip().lower()
+    sequence_id = str(payload.get("sequence_id") or "").strip()
+    step_num = _int_or_none(payload.get("sequence_step_num"))
+    template_key = str(payload.get("template_key") or "").strip() or "possible_minds_dynamic"
+
+    if item and (action_type != "follow_up" or not sequence_id or not step_num):
+        reason = dict(item.reason_json or {})
+        if not action_type:
+            action_type = str(reason.get("action_type") or "").strip().lower()
+        sequence_id = sequence_id or str(reason.get("sequence_id") or "").strip()
+        step_num = step_num or _int_or_none(reason.get("step_num"))
+        template_key = item.template_key or template_key
+
+    if action_type == "follow_up" and sequence_id and step_num and step_num > 1:
+        return {
+            "sequence_id": sequence_id,
+            "step_num": step_num,
+            "template_key": template_key,
+        }
+    return None
+
+
+async def _lead_gen_followup_metadata(payload: dict[str, Any]) -> dict[str, Any] | None:
+    meta = _lead_gen_followup_metadata_from_item(payload)
+    if meta:
+        return meta
+    batch_item_id = str(payload.get("batch_item_id") or "").strip()
+    if not batch_item_id:
+        return None
+    async with AsyncSessionLocal() as session:
+        item = await session.get(LeadGenBatchItemRow, batch_item_id)
+    return _lead_gen_followup_metadata_from_item(payload, item)
 
 
 def _sha256(value: str) -> str:
@@ -1009,6 +1056,9 @@ async def create_send_email_action(
     skill_path: str | None = None,
     skill_sha256: str | None = None,
     brief_version: int | None = None,
+    lead_gen_action_type: str | None = None,
+    sequence_id: str | None = None,
+    sequence_step_num: int | None = None,
     scheduled_for: datetime | None = None,
 ) -> dict[str, Any]:
     await ensure_agent_tables()
@@ -1055,6 +1105,13 @@ async def create_send_email_action(
         "test_email": email_mode == "test",
         "approval": approval_json,
     }
+    if email_mode == "lead_gen":
+        if lead_gen_action_type:
+            input_json["lead_gen_action_type"] = str(lead_gen_action_type)
+        if sequence_id:
+            input_json["sequence_id"] = str(sequence_id)
+        if sequence_step_num:
+            input_json["sequence_step_num"] = int(sequence_step_num)
     entity_type = "test_email" if email_mode == "test" else "lead_gen_email"
     entity_id = recipient if email_mode == "test" else (batch_item_id or contact_id or recipient)
     async with AsyncSessionLocal() as session:
@@ -1308,6 +1365,7 @@ async def _check_send_email_policy_in_session(session, action: AgentActionRow) -
             add("batch_item_not_already_started", batch_item.approval_status != "started", batch_item.approval_status)
             suppressions = (batch_item.reason_json or {}).get("suppressions") or []
             add("not_suppressed_by_selection", len(suppressions) == 0, ", ".join(str(x) for x in suppressions))
+        followup_meta = _lead_gen_followup_metadata_from_item(payload, batch_item)
         add("consult_link_present", "getpossibleminds.com/consult" in body.lower(), "")
         guard_cache = dict(payload.get("phi_egress_guard_cache") or {})
         guard = await check_no_patient_data_in_outreach(subject=subject, body=body, cache=guard_cache)
@@ -1333,16 +1391,34 @@ async def _check_send_email_policy_in_session(session, action: AgentActionRow) -
                 ).limit(1)
             )).scalar_one_or_none()
         add("no_prior_successful_lead_gen_action_for_item", existing_item_success is None, existing_item_success.id if existing_item_success else "")
-        existing_recipient_success = (await session.execute(
-            select(AgentActionRow).where(
-                AgentActionRow.id != action.id,
-                AgentActionRow.action_type == SEND_EMAIL,
-                AgentActionRow.entity_type == "lead_gen_email",
-                AgentActionRow.status == "succeeded",
-                AgentActionRow.input_json["to"].as_string() == recipient,
-            ).limit(1)
-        )).scalar_one_or_none()
-        add("no_prior_successful_lead_gen_action_for_recipient", existing_recipient_success is None, existing_recipient_success.id if existing_recipient_success else "")
+        if followup_meta:
+            existing_step_success = (await session.execute(
+                select(AgentActionRow).where(
+                    AgentActionRow.id != action.id,
+                    AgentActionRow.action_type == SEND_EMAIL,
+                    AgentActionRow.entity_type == "lead_gen_email",
+                    AgentActionRow.status == "succeeded",
+                    AgentActionRow.input_json["sequence_id"].as_string() == followup_meta["sequence_id"],
+                    AgentActionRow.input_json["sequence_step_num"].as_string() == str(followup_meta["step_num"]),
+                ).limit(1)
+            )).scalar_one_or_none()
+            add(
+                "no_prior_successful_lead_gen_sequence_step",
+                existing_step_success is None,
+                existing_step_success.id if existing_step_success else "",
+            )
+            add("no_prior_successful_lead_gen_action_for_recipient", True, "follow_up_sequence_step")
+        else:
+            existing_recipient_success = (await session.execute(
+                select(AgentActionRow).where(
+                    AgentActionRow.id != action.id,
+                    AgentActionRow.action_type == SEND_EMAIL,
+                    AgentActionRow.entity_type == "lead_gen_email",
+                    AgentActionRow.status == "succeeded",
+                    AgentActionRow.input_json["to"].as_string() == recipient,
+                ).limit(1)
+            )).scalar_one_or_none()
+            add("no_prior_successful_lead_gen_action_for_recipient", existing_recipient_success is None, existing_recipient_success.id if existing_recipient_success else "")
 
     allowed = all(check["passed"] for check in checks)
     failed = [check for check in checks if not check["passed"]]
@@ -1524,16 +1600,26 @@ async def execute_action(action_id: str, *, actor: str = "operator") -> dict[str
         and sequences_enabled()
     ):
         try:
-            await ensure_sequence_after_first_touch(
-                contact_id=str(payload.get("contact_id") or ""),
-                template_key="possible_minds_dynamic",
-                sent_at=_parse_sent_at(result.get("sent_at")),
-                variant=payload.get("composer_variant_key"),
-                started_by="lead_gen_daily",
-            )
+            followup_meta = await _lead_gen_followup_metadata(payload)
+            if followup_meta:
+                await advance_sequence_after_followup_send(
+                    contact_id=str(payload.get("contact_id") or ""),
+                    template_key=followup_meta["template_key"],
+                    sent_at=_parse_sent_at(result.get("sent_at")),
+                    step_just_sent=followup_meta["step_num"],
+                    sequence_id=followup_meta["sequence_id"],
+                )
+            else:
+                await ensure_sequence_after_first_touch(
+                    contact_id=str(payload.get("contact_id") or ""),
+                    template_key="possible_minds_dynamic",
+                    sent_at=_parse_sent_at(result.get("sent_at")),
+                    variant=payload.get("composer_variant_key"),
+                    started_by="lead_gen_daily",
+                )
         except Exception:
             logger.exception(
-                "failed to ensure lead-gen sequence after first-touch send "
+                "failed to update lead-gen sequence after send "
                 "for action %s",
                 action_id,
             )

@@ -187,6 +187,72 @@ async def ensure_sequence_after_first_touch(
         return row
 
 
+def _apply_followup_send_to_sequence(
+    row: EmailSequenceRow,
+    *,
+    step_just_sent: int,
+    sent_at: datetime,
+) -> EmailSequenceRow:
+    sent_at = _as_utc(sent_at)
+    safe_step = max(1, int(step_just_sent or 0))
+    if safe_step <= int(row.current_step or 0):
+        return row
+    if safe_step != int(row.current_step or 0) + 1:
+        raise ValueError("sequence_step_not_next")
+
+    row.current_step = safe_step
+    row.last_sent_at = sent_at
+    if row.current_step >= int(row.steps_total or 0):
+        row.status = "completed"
+        row.next_step_due_at = None
+        row.paused_reason = None
+        return row
+
+    cadence = cadence_for(row.template_key, row.variant)
+    current_index = row.current_step
+    previous_index = row.current_step - 1
+    if current_index >= len(cadence) or previous_index < 0:
+        gap_days = 0
+    else:
+        gap_days = max(0, int(cadence[current_index]) - int(cadence[previous_index]))
+    row.status = "active"
+    row.next_step_due_at = sent_at + timedelta(days=gap_days)
+    row.paused_reason = None
+    return row
+
+
+async def advance_sequence_after_followup_send(
+    *,
+    contact_id: str,
+    template_key: str = DEFAULT_TEMPLATE_KEY,
+    sent_at: datetime,
+    step_just_sent: int,
+    sequence_id: str | None = None,
+) -> EmailSequenceRow | None:
+    contact_id = (contact_id or "").strip()
+    if not contact_id:
+        return None
+    template_key = normalize_template_key(template_key)
+    async with AsyncSessionLocal() as session:
+        stmt = select(EmailSequenceRow).where(
+            EmailSequenceRow.contact_id == contact_id,
+            EmailSequenceRow.template_key == template_key,
+        )
+        if sequence_id:
+            stmt = stmt.where(EmailSequenceRow.id == sequence_id)
+        row = (await session.execute(stmt)).scalar_one_or_none()
+        if not row:
+            return None
+        _apply_followup_send_to_sequence(
+            row,
+            step_just_sent=step_just_sent,
+            sent_at=sent_at,
+        )
+        await session.commit()
+        await session.refresh(row)
+        return row
+
+
 async def get_active_sequence(contact_id: str) -> Optional[EmailSequenceRow]:
     async with AsyncSessionLocal() as session:
         return (await session.execute(
@@ -506,6 +572,8 @@ async def tick(limit: int = 25, dry_run: bool = False) -> list[dict]:
         return [{"skipped_all": "ALLOW_SEQUENCE_SEND=false"}]
 
     async with AsyncSessionLocal() as session:
+        # Daily lead-gen claims its selected follow-ups by pausing them, so
+        # this active+due query naturally skips daily-run-owned drafts.
         due_ids = (await session.execute(
             select(EmailSequenceRow.id).where(
                 EmailSequenceRow.status == "active",

@@ -673,6 +673,16 @@ Execution gate:
   offsets `0,3,7`. `SEQUENCE_STEPS` and `SEQUENCE_CADENCE_DAYS` can override
   those values when needed.
 - Actual scheduled sequence sending still requires `ALLOW_SEQUENCE_SEND=true`.
+- Successful follow-up `send_email mode=lead_gen` actions advance the existing
+  sequence row to the sent step, set `last_sent_at`, reactivate it with the
+  next cadence gap, or mark it completed after the final step.
+
+TODO:
+
+- Add an optional fresh-lead floor mode if strict follow-ups-first starves
+  first touches.
+- Add stop-on-bounce and unsubscribe handling beyond the existing reply pause
+  and delivery-risk pauses.
 
 ### Inbound Email Sensor
 
@@ -812,15 +822,29 @@ Important behavior:
   `daily_research_budget` (default `10`) and proceeds on timeout. Research
   errors are non-fatal.
 - Persona mapping runs before selection.
-- Selection uses `recommend_sequence_contacts`, excludes `precisemri.com` and
-  Front suppress-flagged firms, applies `daily_persona_quota`, keeps one
-  contact per firm, then fills any shortfall by score order up to
-  `daily_batch_size` (default `20`).
+- With `SEQUENCES_ENABLED=false` (default), selection uses
+  `recommend_sequence_contacts`, excludes `precisemri.com` and Front
+  suppress-flagged firms, applies `daily_persona_quota`, keeps one contact per
+  firm, then fills any shortfall by score order up to `daily_batch_size`
+  (default `20`).
+- With `SEQUENCES_ENABLED=true`, the daily run is the sole owner of the daily
+  lead-gen email quota. It selects due active sequence follow-ups first
+  (`next_step_due_at <= now`, oldest due first), then fills only the remaining
+  capacity with fresh first-touch contacts. If due follow-ups meet or exceed
+  `daily_batch_size`, fresh selection is zero for that run.
 - The batch is named `Daily run YYYY-MM-DD`. Item `reason_json` includes
   `basis=daily-run`, quota, selection features/suppressions, and behavior facts
-  from `front_firm_activity.behavioral_json`.
+  from `front_firm_activity.behavioral_json`. Follow-up items also include
+  `action_type=follow_up`, `sequence_id`, and `step_num`.
 - Compose reuses the existing batch-compose path in chunks of five, leaving
   transient failures as `partial` so the next run resumes undrafted items.
+  Follow-up items compose with the claimed sequence row and next step number,
+  so the composer uses follow-up framing rather than the first-touch opener.
+- Due follow-up rows selected by the daily run are paused as
+  `awaiting_operator_send_approval:daily_run:<run_id>` when the batch is
+  created. The autonomous sequence loop selects only `active` rows with a due
+  timestamp, so it skips daily-run-claimed follow-ups and cannot double-draft
+  the same step.
 - Schedule spreads drafted items across `daily_send_window` (default
   `09:00-11:30 America/Los_Angeles`) and leaves every action in
   `waiting_for_approval`. The scheduled-action daemon only drains `approved`

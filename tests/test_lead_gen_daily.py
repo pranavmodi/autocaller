@@ -171,6 +171,108 @@ def test_persona_quota_shortfall_fill_and_one_per_firm():
     assert len({row["pif_id"] for row in selected}) == 3
 
 
+@pytest.mark.asyncio
+async def test_daily_selection_prioritizes_due_followups_then_fresh(monkeypatch):
+    followups = [
+        {"contact_id": "fu-1", "pif_id": "p1", "firm_name": "A", "persona": "owner"},
+        {"contact_id": "fu-2", "pif_id": "p2", "firm_name": "B", "persona": "ops"},
+    ]
+    fresh = [
+        {"contact_id": "fresh-1", "pif_id": "p3", "firm_name": "C", "persona": "intake"},
+    ]
+
+    async def fake_followups(**kwargs):
+        assert kwargs["batch_size"] == 3
+        return {"selected": followups, "followups_due_total": 5}
+
+    async def fake_fresh(**kwargs):
+        assert kwargs["batch_size"] == 1
+        return {
+            "selected": fresh,
+            "recommendation_counts": {"eligible": 10},
+            "quota": {"owner": 3},
+            "batch_size": 1,
+            "persona_mix": {"intake": 1},
+            "excluded": {},
+            "behavior_by_pif": {},
+        }
+
+    monkeypatch.setattr(lead_gen_daily, "sequences_enabled", lambda: True)
+    monkeypatch.setattr(lead_gen_daily, "_select_due_followups", fake_followups)
+    monkeypatch.setattr(lead_gen_daily, "_select_contacts", fake_fresh)
+
+    result = await lead_gen_daily._select_daily_contacts(
+        weights={},
+        batch_size=3,
+        template_key="possible_minds_dynamic",
+    )
+
+    assert [row["contact_id"] for row in result["selected"]] == ["fu-1", "fu-2", "fresh-1"]
+    assert result["followups_selected"] == 2
+    assert result["fresh_selected"] == 1
+    assert result["followups_due_total"] == 5
+
+
+@pytest.mark.asyncio
+async def test_daily_selection_uses_zero_fresh_when_followups_fill_quota(monkeypatch):
+    followups = [
+        {"contact_id": "fu-1", "pif_id": "p1", "firm_name": "A", "persona": "owner"},
+        {"contact_id": "fu-2", "pif_id": "p2", "firm_name": "B", "persona": "ops"},
+    ]
+
+    async def fake_followups(**_kwargs):
+        return {"selected": followups, "followups_due_total": 4}
+
+    async def fail_fresh(**_kwargs):
+        raise AssertionError("fresh selector should not run when follow-ups fill quota")
+
+    monkeypatch.setattr(lead_gen_daily, "sequences_enabled", lambda: True)
+    monkeypatch.setattr(lead_gen_daily, "_select_due_followups", fake_followups)
+    monkeypatch.setattr(lead_gen_daily, "_select_contacts", fail_fresh)
+
+    result = await lead_gen_daily._select_daily_contacts(
+        weights={},
+        batch_size=2,
+        template_key="possible_minds_dynamic",
+    )
+
+    assert [row["contact_id"] for row in result["selected"]] == ["fu-1", "fu-2"]
+    assert result["followups_selected"] == 2
+    assert result["fresh_selected"] == 0
+
+
+@pytest.mark.asyncio
+async def test_daily_selection_flag_off_uses_original_fresh_selector(monkeypatch):
+    fresh_result = {
+        "selected": [{"contact_id": "fresh-1"}],
+        "recommendation_counts": {},
+        "quota": {},
+        "batch_size": 3,
+        "persona_mix": {},
+        "excluded": {},
+        "behavior_by_pif": {},
+    }
+
+    async def fail_followups(**_kwargs):
+        raise AssertionError("follow-up selector should not run when sequences are disabled")
+
+    async def fake_fresh(**kwargs):
+        assert kwargs["batch_size"] == 3
+        return fresh_result
+
+    monkeypatch.setattr(lead_gen_daily, "sequences_enabled", lambda: False)
+    monkeypatch.setattr(lead_gen_daily, "_select_due_followups", fail_followups)
+    monkeypatch.setattr(lead_gen_daily, "_select_contacts", fake_fresh)
+
+    result = await lead_gen_daily._select_daily_contacts(
+        weights={},
+        batch_size=3,
+        template_key="possible_minds_dynamic",
+    )
+
+    assert result == fresh_result
+
+
 def test_schedule_spread_same_day_and_next_weekday():
     same_day = lead_gen_daily.spread_schedule_times(
         item_ids=["a", "b", "c"],
