@@ -1785,6 +1785,31 @@ export const sendLeadGenBatchItemDraft = (
     },
   );
 
+export type BatchItemVariantDraft = {
+  variant_key: string;
+  label: string;
+  is_baseline?: boolean;
+  subject?: string;
+  body?: string;
+  angle?: string;
+  cta?: string;
+  reasoning?: string;
+  requires_human_review?: boolean;
+  error?: string;
+};
+
+export const composeBatchItemVariants = (batchItemId: string) =>
+  post<{ batch_item_id: string; selected_variant_key: string | null; variants: BatchItemVariantDraft[] }>(
+    `/api/lead-gen/batch-items/${encodeURIComponent(batchItemId)}/compose-variants`,
+    {},
+  );
+
+export const selectBatchItemVariant = (batchItemId: string, variantKey: string) =>
+  post<{ batch_item_id: string; selected_variant_key: string; draft: Record<string, unknown> }>(
+    `/api/lead-gen/batch-items/${encodeURIComponent(batchItemId)}/select-variant`,
+    { variant_key: variantKey },
+  );
+
 export type ComposerSkillVariantStats = {
   key: string;
   label: string;

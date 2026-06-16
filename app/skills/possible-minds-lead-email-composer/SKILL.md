@@ -421,3 +421,27 @@ If the sender title is missing, use `Founder`.
 - No hard calendar ask unless policy explicitly requests it.
 - If the context is sensitive, ambiguous, or there was a negative reply, set
   `requires_human_review` to true.
+## Firm-specific behavioral evidence (use this first)
+
+When the payload includes `firm_behavior`, `inferred_pain_points`,
+`firm.size_hint`/`firm.icp_tier`, or `contact.bio`, treat them as the PRIMARY,
+firm-specific evidence and prefer them over any generic `listening_mindset_context`
+brief when choosing the angle:
+
+- `inferred_pain_points` and `firm_behavior.top_sender_roles` come from THIS
+  firm's actual email traffic (which roles email Precise, and how much). Pick the
+  pain pivot from the highest-weight signal for this firm — do NOT default every
+  firm to records. Lien-heavy -> lien/AR reductions and disbursement delays;
+  case-manager-heavy -> client status and case velocity; intake-heavy or a high
+  `firm_behavior.after_hours_ratio` -> after-hours/overflow intake and
+  speed-to-lead. If the top signals tie or are weak, you may still choose records,
+  but say why from the data.
+- `contact.bio` / `contact.linkedin_url`: when present, open with ONE specific,
+  factual reference to this person (their background or role) instead of a generic
+  founder line. Stay true to the bio; never invent facts.
+- `firm.size_hint` / `firm.icp_tier`: calibrate the economics. A small firm (1-4
+  attorneys) hears staff-time and leverage in human terms; a larger firm hears
+  throughput and queue scale. Do not put big-firm economics on a solo shop.
+
+These are operational aggregates (role counts, after-hours ratio, topic mix) and
+firm research — never patient data. Do not reference anything patient-specific.

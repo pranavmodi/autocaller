@@ -5179,6 +5179,28 @@ def lead_gen_show(
         _print_lead_gen_observations(data.get("observations") or [])
 
 
+@lead_gen_app.command("compose-variants")
+def lead_gen_compose_variants(
+    batch_item_id: str = typer.Argument(..., help="lead_gen_batch_items.id"),
+):
+    """Compose this item's email with every active composer variant (on-demand)
+    so the preview can compare them. Persists reason_json.variant_drafts."""
+    console.print_json(
+        data=_post(f"/api/lead-gen/batch-items/{batch_item_id}/compose-variants", json_body=None, timeout=180.0)
+    )
+
+
+@lead_gen_app.command("select-variant")
+def lead_gen_select_variant(
+    batch_item_id: str = typer.Argument(..., help="lead_gen_batch_items.id"),
+    variant_key: str = typer.Argument(..., help="composer variant key to send (see composer-ab list)"),
+):
+    """Set which composed variant is the active draft / will be sent for an item."""
+    console.print_json(
+        data=_post(f"/api/lead-gen/batch-items/{batch_item_id}/select-variant", json_body={"variant_key": variant_key})
+    )
+
+
 @lead_gen_app.command("edit-draft")
 def lead_gen_edit_draft(
     batch_item_id: str = typer.Argument(..., help="lead_gen_batch_items.id"),

@@ -13,7 +13,7 @@ from typing import Any
 from sqlalchemy import desc, or_, select
 
 from app.db import AsyncSessionLocal
-from app.db.models import ConsultBookingRow, EmailSequenceRow, FirmContactRow, FrontFirmActivityRow, InboundEmailRow, PatientRow
+from app.db.models import ConsultBookingRow, EmailSequenceRow, FirmContactRow, FrontFirmActivityRow, InboundEmailRow, PatientRow, PifFirmRow
 from app.services.llm_gateway import LLMGatewayError, call_skill_json
 
 logger = logging.getLogger(__name__)
@@ -351,6 +351,111 @@ def _validate(parsed: dict[str, Any]) -> None:
         raise LeadEmailComposerError("composer body appears to expose sensitive Front/patient context")
 
 
+# P1: map the firm's observed email sender-role mix to concrete operational pains.
+# These are the personas that actually email Precise from the firm; the volume is
+# evidence of where the firm's operational drag sits. founder_owner / unknown are
+# not pains.
+_ROLE_PAIN: dict[str, tuple[str, str]] = {
+    "records": ("records_status_followup", "records and bills chase, status reconstruction across portals and faxes"),
+    "lien_settlement": ("liens_ar_negotiation", "lien reduction cycles, disbursement delays, and provider follow-up"),
+    "case_manager": ("client_status_case_velocity", "client status updates and case velocity, fewer 'any update?' loops"),
+    "intake": ("intake_after_hours", "after-hours and overflow intake, speed-to-lead, missed calls"),
+    "coo_ops": ("ops_queue_visibility", "queue visibility, handoffs, exception-only workflows, staff workload"),
+    "paralegal": ("file_status_followup", "file status and document follow-up"),
+    "attorney": ("litigation_status_followup", "records, bills, and status follow-up on every file"),
+    "marketing": ("lead_response_conversion", "lead response time, conversion leakage, attribution"),
+}
+
+
+def _derive_pif_signals(pif_row: PifFirmRow | None, contact_email: str | None) -> dict[str, Any]:
+    """Turn the emailtag-extracted firm record into composer inputs:
+    P1 behavioral pains + firm_behavior, P2 leadership bio/linkedin, P4 ICP/size."""
+    empty = {
+        "inferred_pain_points": [],
+        "firm_behavior": {},
+        "firm_meta": {},
+        "contact_bio": None,
+        "contact_linkedin": None,
+    }
+    if pif_row is None:
+        return empty
+
+    bd = pif_row.behavioral_data if isinstance(pif_row.behavioral_data, dict) else {}
+    sender_roles = bd.get("sender_roles") if isinstance(bd.get("sender_roles"), dict) else {}
+    ranked = sorted(
+        (
+            (str(r), int(c))
+            for r, c in sender_roles.items()
+            if r not in {"unknown", "founder_owner"} and isinstance(c, (int, float)) and c > 0
+        ),
+        key=lambda x: -x[1],
+    )
+    pains: list[dict[str, Any]] = []
+    for role, count in ranked[:3]:
+        m = _ROLE_PAIN.get(role)
+        if not m:
+            continue
+        key, desc = m
+        pains.append({"pain": key, "description": desc, "signal": f"{count} {role} emails observed", "weight": count})
+
+    # P1: after-hours intake signal, weighted by message volume across contacts.
+    profiles = bd.get("contact_profiles") if isinstance(bd.get("contact_profiles"), dict) else {}
+    if not profiles and isinstance(pif_row.contact_profiles, dict):
+        profiles = pif_row.contact_profiles
+    num = den = 0.0
+    topics: dict[str, int] = {}
+    for prof in profiles.values():
+        if not isinstance(prof, dict):
+            continue
+        mc = float(prof.get("message_count") or 0)
+        ahr = prof.get("after_hours_ratio")
+        if ahr is not None and mc > 0:
+            num += mc * float(ahr)
+            den += mc
+        for t, c in (prof.get("topic_mix") or {}).items():
+            topics[str(t)] = topics.get(str(t), 0) + int(c or 0)
+    after_hours = round(num / den, 2) if den else None
+    if after_hours is not None and after_hours >= 0.25:
+        pains.insert(0, {
+            "pain": "after_hours_intake",
+            "description": "a meaningful share of inbound arrives after hours, so leads and requests sit until morning",
+            "signal": f"after-hours email ratio {after_hours}",
+            "weight": None,
+        })
+    top_topics = [t for t, _ in sorted(topics.items(), key=lambda x: -x[1])[:4]]
+
+    sb = pif_row.score_breakdown if isinstance(pif_row.score_breakdown, dict) else {}
+    firm_meta = {
+        "icp_score": pif_row.icp_score,
+        "icp_tier": pif_row.icp_tier,
+        "size_hint": sb.get("firm_size_reason"),
+    }
+
+    # P2: leadership bio + LinkedIn for this contact (match by email).
+    bio = linkedin = None
+    ce = (contact_email or "").strip().lower()
+    if ce:
+        for person in (pif_row.leadership or []):
+            if not isinstance(person, dict):
+                continue
+            if (person.get("email") or "").strip().lower() == ce:
+                bio = _excerpt(person.get("bio"), 600) or None
+                linkedin = person.get("linkedin") or person.get("linkedin_url")
+                break
+
+    return {
+        "inferred_pain_points": pains,
+        "firm_behavior": {
+            "top_sender_roles": [{"role": r, "count": c} for r, c in ranked[:5]],
+            "after_hours_ratio": after_hours,
+            "top_topics": top_topics,
+        },
+        "firm_meta": firm_meta,
+        "contact_bio": bio,
+        "contact_linkedin": linkedin,
+    }
+
+
 async def build_lead_email_context(
     *,
     contact: FirmContactRow,
@@ -389,6 +494,7 @@ async def build_lead_email_context(
                 .order_by(desc(FrontFirmActivityRow.warm_score), desc(FrontFirmActivityRow.last_seen_at))
                 .limit(1)
             )).scalar_one_or_none()
+        pif_row = await session.get(PifFirmRow, contact.pif_id) if contact.pif_id else None
         replies = (await session.execute(
             select(InboundEmailRow)
             .where(
@@ -421,12 +527,17 @@ async def build_lead_email_context(
         )).scalars().all()
 
     sender = _sender_payload()
+    signals = _derive_pif_signals(pif_row, contact.email)
     return {
         "firm": {
             "name": firm_name,
             "pif_id": contact.pif_id,
             "domain": contact_domain,
             "relationship_signals": [],
+            # P4: ICP + size so framing/economics language is calibrated.
+            "icp_score": signals["firm_meta"].get("icp_score"),
+            "icp_tier": signals["firm_meta"].get("icp_tier"),
+            "size_hint": signals["firm_meta"].get("size_hint"),
         },
         "contact": {
             "id": contact.id,
@@ -438,6 +549,9 @@ async def build_lead_email_context(
             "persona_source": contact.persona_source,
             "persona_confidence": contact.persona_confidence,
             "source": contact.source,
+            # P2: personalize from the leadership bio / LinkedIn when present.
+            "bio": signals["contact_bio"],
+            "linkedin_url": contact.linkedin_url or signals["contact_linkedin"],
         },
         "history": {
             "previous_emails": [],
@@ -491,7 +605,11 @@ async def build_lead_email_context(
         "front_signals": {
             "behavior": (activity.behavioral_json if activity else None) or {},
         },
-        "inferred_pain_points": [],
+        # P1: the firm's observed email sender-role mix, top topics, and
+        # after-hours ratio — evidence of where this firm's operational pain
+        # actually is. Drives a firm-specific pain pivot instead of a generic one.
+        "firm_behavior": signals["firm_behavior"],
+        "inferred_pain_points": signals["inferred_pain_points"],
         "blog_posts": _blog_posts(),
         "policy": {
             "target_metric": "booked_qualified_conversations",

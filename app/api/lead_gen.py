@@ -344,6 +344,38 @@ async def edit_batch_item_draft(batch_item_id: str, req: EditBatchItemDraftReque
         )
 
 
+@router.post("/api/lead-gen/batch-items/{batch_item_id}/compose-variants")
+async def compose_batch_item_variants(batch_item_id: str):
+    """Compose this item's email with every active composer variant (on-demand)
+    so the preview can show all options. Persists reason_json.variant_drafts."""
+    from app.services.lead_gen_email_agent import compose_item_all_variants
+
+    try:
+        return await compose_item_all_variants(batch_item_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404 if "not_found" in str(e) else 400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"compose_variants_failed: {type(e).__name__}: {str(e)[:300]}")
+
+
+class SelectVariantRequest(BaseModel):
+    variant_key: str
+    actor: str = "operator"
+
+
+@router.post("/api/lead-gen/batch-items/{batch_item_id}/select-variant")
+async def select_batch_item_variant(batch_item_id: str, req: SelectVariantRequest):
+    """Promote a composed variant to the item's active draft + send action."""
+    from app.services.lead_gen_email_agent import select_item_variant
+
+    try:
+        return await select_item_variant(batch_item_id, req.variant_key, actor=req.actor)
+    except ValueError as e:
+        raise HTTPException(status_code=404 if "not_found" in str(e) else 400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"select_variant_failed: {type(e).__name__}: {str(e)[:300]}")
+
+
 @router.post("/api/lead-gen/observations/classify")
 async def classify_observation(req: ObservationRequest):
     if not req.batch_item_id and not (req.batch_id and req.contact_id):

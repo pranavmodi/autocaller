@@ -7,6 +7,7 @@ approval-ready drafts and optional no-send action records.
 """
 from __future__ import annotations
 
+import asyncio
 import uuid
 from types import SimpleNamespace
 from typing import Any
@@ -363,3 +364,109 @@ async def _compose_batch_items(
         "first_policy": first_policy,
         "no_email_sent": True,
     }
+
+
+async def compose_item_all_variants(batch_item_id: str, *, actor: str = "operator") -> dict[str, Any]:
+    """On-demand: compose this batch item's email with every active composer
+    variant and persist them under reason_json.variant_drafts, so the preview UI
+    can show all variants and let the operator pick which one to send. Default
+    selected variant is the item's current draft variant (or baseline)."""
+    from app.services.lead_email_composer_variants import discover_composer_skill_variants
+
+    async with AsyncSessionLocal() as session:
+        row = await session.get(LeadGenBatchItemRow, batch_item_id)
+        if not row:
+            raise ValueError("batch_item_not_found")
+        batch_id = row.batch_id
+    batch_data = await get_batch(batch_id, include_observations=False)
+    item = next((i for i in (batch_data.get("items") or []) if i.get("id") == batch_item_id), None)
+    if not item:
+        raise ValueError("batch_item_not_found")
+    async with AsyncSessionLocal() as session:
+        contact = await session.get(FirmContactRow, item["contact_id"])
+    if not contact:
+        raise ValueError("contact_not_found")
+
+    reason0 = item.get("reason") or {}
+    research = await research_contact_context(
+        contact=contact, firm_name=item["firm_name"], selection_reason=reason0,
+    )
+    selection_evidence = {
+        "why_this_contact_was_selected": reason0.get("reason") or reason0.get("basis") or "",
+        "persona": item.get("persona") or "",
+        "score": item.get("score"),
+        "score_breakdown": reason0.get("score_breakdown") or {},
+        "selection_features": reason0.get("selection_features") or {},
+        "signals": reason0.get("signals") or [],
+        "suppressions": reason0.get("suppressions") or [],
+    }
+    template_key = item.get("template_key") or "possible_minds_dynamic"
+
+    active_variants = [x for x in discover_composer_skill_variants() if x.active]
+
+    async def _one(v):
+        # Compose a single variant; one failure must not sink the rest.
+        try:
+            comp = await compose_lead_email(
+                contact=contact,
+                firm_name=item["firm_name"],
+                sequence=_agent_sequence_stub(template_key),
+                step_num=1,
+                composer_variant_key=v.key,
+                research_evidence=research,
+                selection_evidence=selection_evidence,
+            )
+            return v.key, {
+                "variant_key": v.key, "label": v.label, "is_baseline": v.is_baseline,
+                "subject": comp.subject, "body": comp.body, "angle": comp.angle,
+                "cta": comp.cta, "reasoning": comp.reasoning,
+                "requires_human_review": comp.requires_human_review,
+            }
+        except Exception as e:
+            return v.key, {"variant_key": v.key, "label": v.label, "is_baseline": v.is_baseline,
+                           "error": f"{type(e).__name__}: {str(e)[:200]}"}
+
+    # Compose all variants concurrently so the preview "Compare" click returns
+    # in roughly one compose's time, not the sum.
+    results = await asyncio.gather(*[_one(v) for v in active_variants])
+    out: dict[str, dict[str, Any]] = {k: val for k, val in results}
+
+    async with AsyncSessionLocal() as session:
+        row = await session.get(LeadGenBatchItemRow, batch_item_id)
+        reason = dict(row.reason_json or {})  # copy: JSONB change-tracking
+        reason["variant_drafts"] = out
+        if not reason.get("selected_variant_key"):
+            cur = (reason.get("agent_draft") or {}).get("composer_variant_key")
+            usable = [k for k, vv in out.items() if vv.get("subject")]
+            baseline = next((k for k, vv in out.items() if vv.get("is_baseline") and vv.get("subject")), None)
+            reason["selected_variant_key"] = cur or baseline or (usable[0] if usable else None)
+        row.reason_json = reason
+        await session.commit()
+        selected = reason.get("selected_variant_key")
+
+    return {"batch_item_id": batch_item_id, "selected_variant_key": selected,
+            "variants": list(out.values())}
+
+
+async def select_item_variant(batch_item_id: str, variant_key: str, *, actor: str = "operator") -> dict[str, Any]:
+    """Promote a previously-composed variant to the item's active draft + send
+    action (reuses the edit-draft path so hashes/scheduling are rebound)."""
+    from app.services.action_execution import save_edited_lead_gen_draft
+
+    async with AsyncSessionLocal() as session:
+        row = await session.get(LeadGenBatchItemRow, batch_item_id)
+        if not row:
+            raise ValueError("batch_item_not_found")
+        reason = dict(row.reason_json or {})
+        vd = (reason.get("variant_drafts") or {}).get(variant_key)
+        if not vd or vd.get("error") or not vd.get("subject"):
+            raise ValueError("variant_not_composed")
+        subject, body = vd["subject"], vd["body"]
+        reason["selected_variant_key"] = variant_key
+        row.reason_json = reason
+        await session.commit()
+
+    result = await save_edited_lead_gen_draft(
+        batch_item_id=batch_item_id, subject=subject, body=body, actor=actor,
+    )
+    return {"batch_item_id": batch_item_id, "selected_variant_key": variant_key, "draft": result}
