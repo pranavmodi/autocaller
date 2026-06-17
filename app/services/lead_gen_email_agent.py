@@ -256,6 +256,10 @@ async def _compose_batch_items(
             i for i in items
             if i.get("approval_status") in ("pending", "approved")
             and not (i.get("reason") or {}).get("agent_draft")
+            # Held items (gate: no usable review evidence) are terminal for this
+            # run — exclude them so they don't re-enter the compose work-set and
+            # stall the chunk loop. A re-run re-evaluates them once evidence lands.
+            and not (i.get("reason") or {}).get("held_reason")
         ][: max(1, limit)]
     drafts: list[dict[str, Any]] = []
     held: list[dict[str, Any]] = []

@@ -684,6 +684,9 @@ async def _compose_batch(*, batch_id: str, created_by: str, template_key: str) -
             item for item in before.get("items") or []
             if item.get("approval_status") in {"pending", "approved"}
             and not (item.get("reason") or {}).get("agent_draft")
+            # Held items never get a draft; exclude them so the loop makes
+            # progress to the rest instead of re-grabbing the same held chunk.
+            and not (item.get("reason") or {}).get("held_reason")
         ]
         if not pending:
             break
@@ -713,13 +716,18 @@ async def _compose_batch(*, batch_id: str, created_by: str, template_key: str) -
     final = await get_batch(batch_id, include_observations=False)
     items = final.get("items") or []
     drafted = sum(1 for item in items if (item.get("reason") or {}).get("agent_draft"))
+    held = sum(1 for item in items if (item.get("reason") or {}).get("held_reason"))
+    # "Complete" = every non-held item is drafted. Held items (no usable review
+    # evidence) are an intended terminal state, not unfinished work — they must
+    # not keep the run in 'partial' and skip schedule/notify.
     return {
         "drafts": all_drafts,
         "action_ids": action_ids,
         "drafted": drafted,
+        "held": held,
         "total": len(items),
         "errors": errors,
-        "complete": drafted >= len(items),
+        "complete": drafted >= (len(items) - held),
     }
 
 
