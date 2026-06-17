@@ -973,6 +973,13 @@ Email sending:
   at execution, spreads across the 9–11:30 PT window, and respects the
   deliverability breaker + suppression. Code default stays OFF so a fresh deploy
   never auto-sends. (Operator-authorized 2026-06-17, D-2026-06-17-26.)
+- `OUTREACH_PHI_GUARD_LLM_ENABLED` (default `true`; **set `false` in this deploy**)
+  — when false, the PHI egress guard skips its LLM classifier and passes any body
+  that clears the **deterministic** PHI regex (DOB / MRN / case# / patient-context,
+  which always run and always block). Disabled because outreach legitimately cites
+  public Yelp review quotes that the strict classifier over-flags as "identifiable
+  individuals." Re-enable (or switch the review-evidence variant to anonymized
+  attribution) for the durable fix. (Operator-authorized 2026-06-17.)
 - `REQUIRE_REVIEW_EVIDENCE_FIRST_TOUCH` — when truthy (default `true`),
   first-touch items whose firm has **no usable review evidence of the allowed
   kinds** are **blocked**: `_compose_batch_items` skips composition, queues no

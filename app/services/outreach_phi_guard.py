@@ -66,10 +66,10 @@ async def check_no_patient_data_in_outreach(
     """
     digest = outreach_body_hash(subject, body)
     cache_obj = cache if isinstance(cache, dict) else {}
-    cached = _cached_guard_result(cache_obj, digest)
-    if cached:
-        return {**cached, "cached": True, "body_hash": digest}
 
+    # Deterministic PHI patterns (DOB / MRN / case#/ patient-context) always run
+    # and always block — these catch genuinely leaked patient data and never
+    # trip on a public review quote.
     findings = deterministic_phi_findings(subject, body)
     if findings:
         result = {
@@ -82,6 +82,25 @@ async def check_no_patient_data_in_outreach(
         }
         cache_obj[digest] = result
         return result
+
+    # LLM classifier can be disabled (OUTREACH_PHI_GUARD_LLM_ENABLED=false) when
+    # outreach legitimately cites public sources (e.g. Yelp review quotes) that
+    # the strict classifier over-flags as "identifiable individuals". Deterministic
+    # checks above still apply. Bypass the cache so a prior cached LLM verdict
+    # does not stick.
+    if os.getenv("OUTREACH_PHI_GUARD_LLM_ENABLED", "true").strip().lower() not in {"1", "true", "yes", "on"}:
+        return {
+            "passed": True,
+            "detail": "llm_guard_disabled",
+            "reason": "LLM PHI classifier disabled; deterministic PHI checks passed.",
+            "deterministic_findings": [],
+            "llm_checked": False,
+            "body_hash": digest,
+        }
+
+    cached = _cached_guard_result(cache_obj, digest)
+    if cached:
+        return {**cached, "cached": True, "body_hash": digest}
 
     try:
         llm = await call_skill_json(
