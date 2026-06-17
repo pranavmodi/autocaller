@@ -941,24 +941,32 @@ Email sending:
 - `SEQUENCE_CADENCE_DAYS`
 - `ALLOW_SEQUENCE_SEND`
 - `LEAD_GEN_FIRST_TOUCH_VARIANT` — composer variant key forced on first-touch
-  (non-follow_up) items in `_compose_batch_items`. Defaults to
-  `yelp-pain-quote`; set empty to disable forcing (first-touch then uses the
-  random A/B rendezvous pool). An explicit `composer_variant_key` (e.g. preview
-  "compare variants") always overrides this. Follow-up steps are never forced.
-  The `yelp-pain-quote` variant cites the firm's extracted Yelp
-  client-communication quote verbatim + attributed when one exists (via
-  `review_evidence` in the composer payload, sourced from
-  `fetch_pain_quote_for_firm`), and falls back to a clean baseline email with no
-  review mention when none is extracted. It carries `allocation_weight=0` so it
-  is excluded from random A/B assignment and only used when explicitly forced.
-- `REQUIRE_YELP_QUOTE_FIRST_TOUCH` — when truthy (default `true`), first-touch
-  (non-follow_up) items whose firm has no citable Yelp quote are **blocked**:
-  `_compose_batch_items` skips composition and queues no send for them, marks the
-  batch item `reason_json.held_reason="awaiting_yelp_quote"` (and clears any prior
-  `agent_draft`), and leaves it undrafted so a re-run composes it once a quote is
-  extracted. The firm is still selected, so the `yelp_review_needed` action-center
-  prompt still fires. Follow-up steps are never gated. Set `0`/`false` to revert
-  to the old behavior (first-touch composes immediately, baseline fallback).
+  (non-follow_up) items in `_compose_batch_items`. Defaults to `review-evidence`
+  (Phase 3); set empty to disable forcing (first-touch then uses the random A/B
+  rendezvous pool). An explicit `composer_variant_key` (preview "compare
+  variants") always overrides. Follow-up steps are never forced. The
+  `review-evidence` variant frames the first-touch hook by
+  `review_evidence.primary.kind` — **complaint** ("we fix this"), **praise**
+  ("scale what you're known for"), **outcome** (credibility), **fact**
+  (research-proof personalization) — citing the item verbatim + attributed
+  (facts use `paraphrase`, never a fabricated quote), and falls back to a clean
+  baseline email when no usable evidence exists. `allocation_weight=0` (forced
+  only, never random A/B). The legacy `yelp-pain-quote` variant is RETIRED
+  (`active=false`), superseded by `review-evidence`.
+- `REVIEW_EVIDENCE_GATE_KINDS` (default `complaint,praise,fact`) — which evidence
+  kinds count as "enough to personalize a first-touch email." Used by both the
+  compose gate and the composer's primary-hook pick (via
+  `evidence_gate_kinds()`), so they agree. Set `=complaint` for the strict
+  old behavior (only firms with a real grievance compose).
+- `REQUIRE_REVIEW_EVIDENCE_FIRST_TOUCH` — when truthy (default `true`),
+  first-touch items whose firm has **no usable review evidence of the allowed
+  kinds** are **blocked**: `_compose_batch_items` skips composition, queues no
+  send, marks the batch item `reason_json.held_reason="awaiting_review_evidence"`
+  (clearing any prior `agent_draft`), and leaves it undrafted so a re-run
+  composes once evidence exists. The firm is still selected, so the
+  `yelp_review_needed` action-center prompt still fires. Follow-ups are never
+  gated. Legacy alias `REQUIRE_YELP_QUOTE_FIRST_TOUCH` is still honored. Set
+  `0`/`false` to disable the gate.
 - `REVIEW_AUTO_EXTRACT` (default `true`) — when on, pasting raw Yelp reviews via
   `PUT /api/firms/{pif_id}/reviews` fires a background extraction
   (`app/services/review_extraction.py`) that writes the `<!-- EXTRACTED v1 ... -->`

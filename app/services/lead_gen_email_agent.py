@@ -275,38 +275,49 @@ async def _compose_batch_items(
         sequence, step_num = await _sequence_context_for_item(item)
         reason = item.get("reason") or {}
         is_follow_up = reason.get("action_type") == "follow_up"
-        # Gate: block first-touch composition for firms with no citable Yelp
-        # quote yet. The firm stays selected (so the action center prompts for
-        # its reviews), but no email is composed or queued until a quote is
-        # extracted. The item is left undrafted (held), so a re-run picks it up
-        # once the quote is pasted. Disable via REQUIRE_YELP_QUOTE_FIRST_TOUCH=0.
-        if (
-            not is_follow_up
-            and os.getenv("REQUIRE_YELP_QUOTE_FIRST_TOUCH", "true").strip().lower()
-            in {"1", "true", "yes", "on"}
-        ):
-            from app.services.firm_contacts_service import fetch_pain_quote_for_firm
-            from app.services.review_extraction import ensure_review_extracted
+        # Gate: block first-touch composition for firms with no usable review
+        # evidence yet. The firm stays selected (so the action center prompts
+        # for its reviews), but no email is composed or queued until evidence
+        # exists. Held items are left undrafted, so a re-run picks them up once
+        # reviews are pasted + extracted. "Evidence" = any outreach-usable item
+        # of the allowed kinds (REVIEW_EVIDENCE_GATE_KINDS, default
+        # complaint,praise,fact) — so a firm with only praise/facts qualifies.
+        # Disable via REQUIRE_REVIEW_EVIDENCE_FIRST_TOUCH=0 (legacy alias:
+        # REQUIRE_YELP_QUOTE_FIRST_TOUCH).
+        _gate_flag = os.getenv(
+            "REQUIRE_REVIEW_EVIDENCE_FIRST_TOUCH",
+            os.getenv("REQUIRE_YELP_QUOTE_FIRST_TOUCH", "true"),
+        ).strip().lower()
+        if not is_follow_up and _gate_flag in {"1", "true", "yes", "on"}:
+            from app.services.review_extraction import (
+                ensure_review_extracted,
+                evidence_gate_kinds,
+                fetch_review_evidence,
+            )
             pif_id = item.get("pif_id")
-            # Safety net: if the firm has raw reviews pasted but no (current)
-            # extraction, extract now so the gate sees the quote. Cheap no-op
-            # when already extracted; the save-time auto-extract covers the
-            # common path, this covers anything that slipped through.
+            # Safety net: extract on demand if raw reviews were pasted but not
+            # yet extracted. Cheap no-op when current.
             if pif_id:
                 try:
                     await ensure_review_extracted(pif_id, firm_name=item.get("firm_name"))
                 except Exception:
                     logger.exception("pre-gate review extraction failed for %s", pif_id)
             try:
-                quote = await fetch_pain_quote_for_firm(pif_id) if pif_id else {}
+                ev = await fetch_review_evidence(
+                    pif_id, kinds=evidence_gate_kinds(),
+                    outreach_usable_only=True, require_quote=False, limit=1,
+                ) if pif_id else {"items": []}
             except Exception:
-                quote = {}
-            if not quote.get("pain_quote"):
+                ev = {"items": []}
+            has_evidence = any(
+                (e.get("quote") or e.get("paraphrase")) for e in ev.get("items") or []
+            )
+            if not has_evidence:
                 async with AsyncSessionLocal() as session:
                     row = await session.get(LeadGenBatchItemRow, item["id"])
                     if row:
                         r = dict(row.reason_json or {})
-                        r["held_reason"] = "awaiting_yelp_quote"
+                        r["held_reason"] = "awaiting_review_evidence"
                         r["next_operator_action"] = "paste_yelp_reviews"
                         r.pop("agent_draft", None)
                         row.reason_json = r
@@ -315,17 +326,18 @@ async def _compose_batch_items(
                     "batch_item_id": item["id"],
                     "firm_name": item["firm_name"],
                     "pif_id": pif_id,
-                    "held_reason": "awaiting_yelp_quote",
+                    "held_reason": "awaiting_review_evidence",
                 })
                 continue
-        # First-touch emails use the Yelp-pain-quote variant by default (it
-        # cites a real review when one is extracted, falls back to baseline
-        # otherwise). Follow-up steps keep their sequence/explicit variant. An
-        # explicit composer_variant_key (e.g. preview "compare variants") always
-        # wins. Override via LEAD_GEN_FIRST_TOUCH_VARIANT ("" disables).
+        # First-touch emails use the angle-aware review-evidence variant by
+        # default (it frames the hook by the primary evidence kind — complaint /
+        # praise / fact / outcome — and falls back to baseline when none). Follow-
+        # up steps keep their sequence/explicit variant. An explicit
+        # composer_variant_key (preview "compare variants") always wins. Override
+        # via LEAD_GEN_FIRST_TOUCH_VARIANT ("" disables).
         item_variant_key = composer_variant_key
         if item_variant_key is None and not is_follow_up:
-            forced = os.getenv("LEAD_GEN_FIRST_TOUCH_VARIANT", "yelp-pain-quote").strip()
+            forced = os.getenv("LEAD_GEN_FIRST_TOUCH_VARIANT", "review-evidence").strip()
             if forced:
                 item_variant_key = forced
         selection_evidence = {

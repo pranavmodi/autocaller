@@ -668,16 +668,36 @@ async def build_lead_email_context(
 
     sender = _sender_payload()
     signals = _derive_pif_signals(pif_row, contact.email)
-    # Yelp pain quote (when extracted for this firm) — the yelp-pain-quote
-    # variant cites it; other variants ignore it. Never fabricated: only the
-    # stored extraction is surfaced.
-    review = {}
+    # Review intelligence (when extracted for this firm) — the review-evidence
+    # variant frames the hook by primary.kind; the legacy yelp-pain-quote variant
+    # reads pain_quote. Never fabricated: only the stored extraction is surfaced.
+    review_items: list[dict] = []
+    review_summary = None
+    review = {"pain_quote": None, "reviewer_name": None, "review_date": None, "pain_point_key": None}
+    primary_evidence = None
     if contact.pif_id:
         try:
-            from app.services.firm_contacts_service import fetch_pain_quote_for_firm
-            review = await fetch_pain_quote_for_firm(contact.pif_id)
+            from app.services.review_extraction import fetch_review_evidence, select_primary_evidence
+            ev = await fetch_review_evidence(
+                contact.pif_id, outreach_usable_only=True, require_quote=False, limit=6
+            )
+            review_items = ev.get("items") or []
+            review_summary = ev.get("firm_summary")
+            primary_evidence = select_primary_evidence(review_items)
+            complaint = next(
+                (e for e in review_items
+                 if e.get("kind") == "complaint" and e.get("theme") == "client_communication" and e.get("quote")),
+                None,
+            )
+            if complaint:
+                review = {
+                    "pain_quote": complaint.get("quote"),
+                    "reviewer_name": complaint.get("reviewer_name"),
+                    "review_date": complaint.get("review_date"),
+                    "pain_point_key": "client_communication",
+                }
         except Exception:
-            review = {}
+            review_items, primary_evidence, review_summary = [], None, None
     competitive_context = await fetch_competitive_context_for_email(
         contact=contact,
         firm_name=firm_name,
@@ -765,6 +785,10 @@ async def build_lead_email_context(
         "firm_behavior": signals["firm_behavior"],
         "review_evidence": {
             "source": "yelp",
+            "primary": primary_evidence,
+            "items": review_items,
+            "firm_summary": review_summary,
+            # Back-compat fields for the legacy yelp-pain-quote variant:
             "pain_quote": review.get("pain_quote"),
             "reviewer_name": review.get("reviewer_name"),
             "review_date": review.get("review_date"),

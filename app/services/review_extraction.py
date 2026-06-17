@@ -74,6 +74,40 @@ def _render_block(extraction: dict[str, Any], raw: str) -> str:
 _COMPLAINT_DEFAULT_SENTIMENT = -0.6
 _EVIDENCE_KINDS = {"complaint", "praise", "fact", "request", "outcome"}
 
+# Preference order when choosing the single primary hook for an email. Complaint
+# is the strongest hook for our product (we solve ops/communication pain), then
+# praise ("scale what you're known for"), then outcome, then fact.
+_KIND_PRIORITY = {"complaint": 0, "praise": 1, "outcome": 2, "fact": 3, "request": 4}
+
+
+def evidence_gate_kinds() -> set[str]:
+    """Which evidence kinds count as 'enough to personalize a first-touch email'
+    — used by both the compose gate and the composer's primary-hook pick so they
+    agree. Override via REVIEW_EVIDENCE_GATE_KINDS (comma-separated)."""
+    raw = os.getenv("REVIEW_EVIDENCE_GATE_KINDS", "complaint,praise,fact")
+    kinds = {k.strip().lower() for k in raw.split(",") if k.strip()}
+    return {k for k in kinds if k in _EVIDENCE_KINDS} or {"complaint"}
+
+
+def _has_content(item: dict[str, Any]) -> bool:
+    return bool(item.get("quote") or item.get("paraphrase"))
+
+
+def select_primary_evidence(
+    items: list[dict[str, Any]], *, kinds: set[str] | None = None
+) -> dict[str, Any] | None:
+    """Pick the single best hook from a ranked evidence list: among items of the
+    allowed kinds that carry usable content, prefer by kind priority then the
+    list's existing confidence ranking."""
+    allowed = kinds or evidence_gate_kinds()
+    candidates = [e for e in items if e.get("kind") in allowed and _has_content(e)]
+    if not candidates:
+        return None
+    return min(
+        enumerate(candidates),
+        key=lambda iv: (_KIND_PRIORITY.get(iv[1].get("kind"), 9), iv[0]),
+    )[1]
+
 
 def _normalize_evidence_item(raw: dict[str, Any], *, idx: int) -> dict[str, Any]:
     try:

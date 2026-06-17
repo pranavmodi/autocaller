@@ -1,0 +1,7 @@
+{
+  "key": "review-evidence",
+  "label": "Review evidence (angle-aware)",
+  "description": "First-touch hook framed by the firm's strongest usable review signal — complaint, praise, fact, or outcome — cited verbatim/attributed; baseline fallback when none. Supersedes yelp-pain-quote.",
+  "active": true,
+  "allocation_weight": 0
+}

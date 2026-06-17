@@ -614,5 +614,12 @@ the open internet, or tracking links in recipient inboxes go nowhere.
   outreach_usable_only=, limit=)` (understands v1 + v2). `fetch_pain_quote_for_firm`
   is now a back-compat wrapper over it (complaint + client_communication only),
   so the gate + yelp-pain-quote variant are UNCHANGED — still complaint-only.
-  Using praise/facts in emails (angle-aware composer + policy gate) is the
-  not-yet-built Phase 3.
+  **Phase 3 (live):** first-touch now uses the angle-aware `review-evidence`
+  variant (default `LEAD_GEN_FIRST_TOUCH_VARIANT`) — it frames the hook by the
+  primary evidence kind: complaint → "we fix this", praise → "scale what you're
+  known for", outcome → credibility, fact → research-proof personalization;
+  baseline fallback when none. The gate (`REQUIRE_REVIEW_EVIDENCE_FIRST_TOUCH`,
+  default true) blocks first-touch only when the firm has no usable evidence of
+  the allowed kinds (`REVIEW_EVIDENCE_GATE_KINDS`, default complaint,praise,fact
+  — set `=complaint` for the strict old behavior). So a praise/fact-only firm
+  now composes instead of staying held. `yelp-pain-quote` variant is retired.
