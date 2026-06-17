@@ -12,6 +12,8 @@ without clobbering the other.
 """
 from __future__ import annotations
 
+import asyncio
+import logging
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -22,6 +24,9 @@ from sqlalchemy import select
 from app.db import AsyncSessionLocal
 from app.db.models import FirmReviewRow
 from app.services.pifstats_sync import sync_pifstats_to_patients
+from app.services.review_extraction import auto_extract_enabled, ensure_review_extracted
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/firms", tags=["firms"])
 
@@ -390,7 +395,28 @@ async def put_reviews(pif_id: str, body: ReviewsBody) -> ReviewsResponse:
             row.updated_at = datetime.now(timezone.utc)
         await session.commit()
         await session.refresh(row)
+
+    # Auto-extract pain-point quotes from the freshly-pasted Yelp text so the
+    # lead-gen gate / composer can cite them without a manual extraction step.
+    # Fire-and-forget: never block or fail the save on the gateway.
+    if body.yelp is not None and auto_extract_enabled():
+        async def _bg(pid: str) -> None:
+            try:
+                await ensure_review_extracted(pid)
+            except Exception:
+                logger.exception("auto review extraction failed for %s", pid)
+        asyncio.create_task(_bg(pif_id))
+
     return _row_to_response(pif_id, row)
+
+
+@router.post("/{pif_id}/extract")
+async def extract_reviews_endpoint(pif_id: str, force: bool = False) -> dict:
+    """Run pain-point quote extraction on a firm's pasted raw Yelp reviews and
+    persist the structured block. Idempotent (no-op when unchanged) unless
+    force=true."""
+    from app.services.review_extraction import extract_review_quotes
+    return await extract_review_quotes(pif_id, force=force)
 
 
 class DeleteFirmResponse(BaseModel):

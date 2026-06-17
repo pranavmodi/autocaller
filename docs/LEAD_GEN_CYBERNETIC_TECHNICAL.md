@@ -959,6 +959,22 @@ Email sending:
   extracted. The firm is still selected, so the `yelp_review_needed` action-center
   prompt still fires. Follow-up steps are never gated. Set `0`/`false` to revert
   to the old behavior (first-touch composes immediately, baseline fallback).
+- `REVIEW_AUTO_EXTRACT` (default `true`) — when on, pasting raw Yelp reviews via
+  `PUT /api/firms/{pif_id}/reviews` fires a background extraction
+  (`app/services/review_extraction.py`) that writes the `<!-- EXTRACTED v1 ... -->`
+  block read by the gate + composer. The lead-gen compose gate also calls
+  `ensure_review_extracted` as a pre-gate safety net (self-heals firms whose raw
+  reviews slipped through). Extraction is idempotent — it re-runs only when the
+  raw text changes (tracked by `content_hash`). `REVIEW_EXTRACTOR_MODEL` (default
+  `openclaw/proxy`) selects the gateway agent. Manual control:
+  `bin/possibleos reviews extract <pif_id> [--force]` and
+  `bin/possibleos reviews extract-all-pending [--limit N] [--force]`; REST:
+  `POST /api/firms/{pif_id}/extract`. The extraction system prompt is
+  `app/skills/review-quote-extractor/SKILL.md` (single-shot, strict v1 JSON);
+  the `yelp-review-quotes` skill remains the human/agent runbook + taxonomy
+  source. Note: extraction currently captures only `client_communication`
+  complaints — firms whose reviews have none get no quote (correctly, no
+  fabrication) and stay held; broadening to praise/facts is the v2 design.
 - `EMAIL_TRANSPORT` optional override, `zoho_api`, `smtp`, or `resend`
 - Resend-related configuration only if Resend is intentionally selected.
 

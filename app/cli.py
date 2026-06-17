@@ -45,6 +45,7 @@ carrier_app = typer.Typer(help="Inspect the active telephony carrier account (Tw
 prompts_app = typer.Typer(help="Prompt-style selector (current | minimal). Parallel prompt versions.", no_args_is_help=True)
 email_app = typer.Typer(help="Outbound email — config check + manual sends (test, one-pager, VM follow-up, consult).", no_args_is_help=True)
 pif_app = typer.Typer(help="Native PI-firm directory — pull emailtag's pif-info into possibleos (replaces mission.db).", no_args_is_help=True)
+reviews_app = typer.Typer(help="Yelp-review extraction — turn pasted raw reviews into citable pain-point quotes.", no_args_is_help=True)
 decisions_app = typer.Typer(help="Append/read the repo decision log (docs/decisions/<UTC-date>.md). Format: docs/decisions/README.md.", no_args_is_help=True)
 comms_app = typer.Typer(help="Outbound communications dashboard — calls, voicemails, SMS, emails (read-only).", no_args_is_help=True)
 contacts_app = typer.Typer(help="Per-firm contact roster (backfill from PIF Stats + patients).", no_args_is_help=True)
@@ -88,6 +89,7 @@ app.add_typer(carrier_app, name="carrier")
 app.add_typer(prompts_app, name="prompts")
 app.add_typer(email_app, name="email")
 app.add_typer(pif_app, name="pif")
+app.add_typer(reviews_app, name="reviews")
 app.add_typer(decisions_app, name="decisions")
 app.add_typer(comms_app, name="comms")
 app.add_typer(contacts_app, name="contacts")
@@ -6062,6 +6064,28 @@ def pif_ingest_contacts():
     then map personas. Local-only; this is the lead-supply unlock (titles ->
     personas, firm names) that lifts daily eligible leads."""
     console.print_json(data=_post("/api/pif/ingest-contacts", json_body=None, timeout=600.0))
+
+
+@reviews_app.command("extract")
+def reviews_extract(
+    pif_id: str = typer.Argument(..., help="Firm pif_id whose pasted Yelp reviews to extract."),
+    force: bool = typer.Option(False, "--force", help="Re-extract even if the raw text is unchanged."),
+):
+    """Extract citable pain-point quotes from a firm's pasted raw Yelp reviews
+    (writes the structured block read by the lead-gen gate + composer)."""
+    console.print_json(data=_post(f"/api/firms/{pif_id}/extract?force={str(force).lower()}", json_body=None, timeout=240.0))
+
+
+@reviews_app.command("extract-all-pending")
+def reviews_extract_all(
+    limit: int = typer.Option(200, help="Max firms to process."),
+    force: bool = typer.Option(False, "--force", help="Re-extract even if unchanged."),
+):
+    """Backfill: extract every firm with raw Yelp reviews but a missing/stale
+    extraction. Runs the service directly (bulk/offline; avoids HTTP timeout)."""
+    import asyncio as _asyncio
+    from app.services.review_extraction import extract_all_pending
+    console.print_json(data=_asyncio.run(extract_all_pending(limit=limit, force=force)))
 
 
 _DECISION_AREAS = {"lead-gen", "deliverability", "data-arch", "website", "infra", "process", "product"}

@@ -599,3 +599,13 @@ the open internet, or tracking links in recipient inboxes go nowhere.
   undrafted so a re-run composes + queues it once you paste the firm's reviews.
   The firm is still selected and still raises a `yelp_review_needed` prompt.
   Follow-ups are never gated. Set `REQUIRE_YELP_QUOTE_FIRST_TOUCH=0` to disable.
+- **Auto-extraction (default on, `REVIEW_AUTO_EXTRACT`):** pasting raw Yelp
+  reviews via `PUT /api/firms/{pif_id}/reviews` now fires background extraction
+  (`app/services/review_extraction.py`) that writes the `<!-- EXTRACTED v1 -->`
+  block the gate/composer read — no manual skill run needed. The compose gate
+  also self-heals via `ensure_review_extracted` (pre-gate safety net).
+  Idempotent (re-extracts only when raw text changes, via `content_hash`).
+  Manual: `bin/possibleos reviews extract <pif_id> [--force]` /
+  `reviews extract-all-pending`; REST `POST /api/firms/{pif_id}/extract`.
+  Extraction captures only `client_communication` today — firms with no such
+  complaint get no quote (no fabrication) and stay held under the gate.

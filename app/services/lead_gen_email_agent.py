@@ -8,6 +8,7 @@ approval-ready drafts and optional no-send action records.
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import uuid
 from types import SimpleNamespace
@@ -24,6 +25,8 @@ from app.services.lead_gen_cybernetic import TARGET_METRIC, ensure_default_polic
 from app.services.product_traces import safe_record_product_trace
 from app.services.sequence_recommendations import recommend_sequence_contacts
 from app.services.sequences.registry import DEFAULT_TEMPLATE_KEY
+
+logger = logging.getLogger(__name__)
 
 
 def _pif_patient_ids(pif_id: str) -> list[str]:
@@ -283,7 +286,17 @@ async def _compose_batch_items(
             in {"1", "true", "yes", "on"}
         ):
             from app.services.firm_contacts_service import fetch_pain_quote_for_firm
+            from app.services.review_extraction import ensure_review_extracted
             pif_id = item.get("pif_id")
+            # Safety net: if the firm has raw reviews pasted but no (current)
+            # extraction, extract now so the gate sees the quote. Cheap no-op
+            # when already extracted; the save-time auto-extract covers the
+            # common path, this covers anything that slipped through.
+            if pif_id:
+                try:
+                    await ensure_review_extracted(pif_id, firm_name=item.get("firm_name"))
+                except Exception:
+                    logger.exception("pre-gate review extraction failed for %s", pif_id)
             try:
                 quote = await fetch_pain_quote_for_firm(pif_id) if pif_id else {}
             except Exception:
