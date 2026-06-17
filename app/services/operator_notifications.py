@@ -47,6 +47,13 @@ def notification_to_dict(row: OperatorNotificationRow) -> dict[str, Any]:
 # /lead-gen, not here.
 _SUPPRESSED_NOTIFICATION_TYPES = {"lead_sequence_email_approval"}
 
+# Allowlist of notification types the operator action center (bottom-right
+# popup + /actions page) surfaces. Other types (e.g. seo_action) still persist
+# — the /seo page reads them — but are not shown here. For now the action
+# center is scoped to the Yelp-review-needed workflow only. To re-surface a
+# type, add it here (and restart the backend).
+_ACTION_CENTER_SURFACED_TYPES = {"yelp_review_needed"}
+
 
 async def create_operator_notification(
     session: AsyncSession,
@@ -108,6 +115,7 @@ async def list_pending_notifications(limit: int = 10) -> list[dict[str, Any]]:
             .where(
                 OperatorNotificationRow.status == "pending",
                 OperatorNotificationRow.acknowledged_at.is_(None),
+                OperatorNotificationRow.notification_type.in_(_ACTION_CENTER_SURFACED_TYPES),
             )
             .order_by(OperatorNotificationRow.created_at.desc(), OperatorNotificationRow.id.desc())
             .limit(limit)
