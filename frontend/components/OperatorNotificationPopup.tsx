@@ -87,14 +87,21 @@ export function OperatorNotificationPopup() {
                 {latest.body}
               </div>
               <div className="mt-3 flex items-center gap-2">
-                <Link
-                  href={`/actions?notification=${latest.id}`}
-                  onClick={() => setDismissedToastId(latest.id)}
-                  className="inline-flex items-center gap-1.5 rounded-md bg-neutral-900 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-neutral-800"
-                >
-                  <PanelRightOpen className="h-3.5 w-3.5" />
-                  Review
-                </Link>
+                {(() => {
+                  const action = ((latest as { suggested_action?: { url?: string; label?: string } }).suggested_action) || {};
+                  const href = action.url || `/actions?notification=${latest.id}`;
+                  const label = action.label || "Review";
+                  return (
+                    <Link
+                      href={href}
+                      onClick={() => setDismissedToastId(latest.id)}
+                      className="inline-flex items-center gap-1.5 rounded-md bg-neutral-900 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-neutral-800"
+                    >
+                      <PanelRightOpen className="h-3.5 w-3.5" />
+                      {label}
+                    </Link>
+                  );
+                })()}
                 <button
                   type="button"
                   onClick={() => setDismissedToastId(latest.id)}

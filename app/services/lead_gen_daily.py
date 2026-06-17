@@ -946,6 +946,56 @@ async def _notify_operator(
         return {"sent": False, "error": "openclaw_cli_not_found", "to": to, "message": message}
 
 
+async def _notify_yelp_reviews_needed(select_result: dict[str, Any]) -> dict[str, int]:
+    """Prompt the operator (action center) to paste Yelp reviews for each
+    selected FIRST-TOUCH firm that has no citable quote yet, and resolve prompts
+    for firms that now have one. Deduped per pif_id; top-ranked firms get high
+    priority. This is what turns "select the ideal firm" into a "go get its Yelp
+    review" ask, so the Yelp-quote email can cite a real complaint."""
+    from app.services.firm_contacts_service import fetch_pain_quote_for_firm
+    from app.services.operator_notifications import create_operator_notification, resolve_notifications
+
+    selected = select_result.get("selected") or []
+    followups_n = int(select_result.get("followups_selected") or 0)
+    fresh = selected[followups_n:]  # first-touch items only (followups are first)
+
+    created = resolved = 0
+    seen: set[str] = set()
+    for rank, item in enumerate(fresh):
+        pif_id = str(item.get("pif_id") or "").strip()
+        if not pif_id or pif_id in seen:
+            continue
+        seen.add(pif_id)
+        firm_name = str(item.get("firm_name") or "").strip() or "this firm"
+        try:
+            quote = await fetch_pain_quote_for_firm(pif_id)
+        except Exception:
+            quote = {}
+        if quote.get("pain_quote"):
+            resolved += await resolve_notifications(notification_type="yelp_review_needed", source_id=pif_id)
+            continue
+        try:
+            async with AsyncSessionLocal() as session:
+                await create_operator_notification(
+                    session,
+                    notification_type="yelp_review_needed",
+                    title=f"Yelp reviews needed: {firm_name}",
+                    body=(f"{firm_name} is queued for outbound but has no citable Yelp quote. "
+                          f"Paste its Yelp reviews so the first email can cite a real client complaint."),
+                    source_type="firm",
+                    source_id=pif_id,
+                    priority="high" if rank < 3 else "normal",
+                    context={"pif_id": pif_id, "firm_name": firm_name, "rank": rank, "persona": item.get("persona")},
+                    suggested_action={"kind": "paste_yelp_reviews", "label": "Paste Yelp reviews", "url": f"/firms/{pif_id}"},
+                )
+                await session.commit()
+            created += 1
+        except Exception:
+            logger.exception("failed to create yelp_review_needed notification for %s", pif_id)
+    logger.info("yelp_review_needed prompts: created=%d resolved=%d", created, resolved)
+    return {"created": created, "resolved": resolved}
+
+
 async def run_daily_pipeline(
     *,
     dry_run: bool = False,
@@ -1134,6 +1184,12 @@ async def run_daily_pipeline(
                 counts={"items": len(select_result["selected"])},
                 batch_id=batch_id,
             )
+            # Ask the operator (action center) to paste Yelp reviews for selected
+            # first-touch firms missing a citable quote; resolve ones now covered.
+            try:
+                await _notify_yelp_reviews_needed(select_result)
+            except Exception:
+                logger.exception("yelp_review_needed notification pass failed")
 
         if not _stage_done(row.stages_json or {}, "compose"):
             await _checkpoint(row.id, stage="compose", status="running")

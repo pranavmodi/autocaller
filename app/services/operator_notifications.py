@@ -41,6 +41,13 @@ def notification_to_dict(row: OperatorNotificationRow) -> dict[str, Any]:
     }
 
 
+# Notification types we intentionally do NOT surface in the operator action
+# center. lead_sequence_email_approval duplicated the /lead-gen review surface
+# and made the bottom-right action center noisy — drafts are reviewed on
+# /lead-gen, not here.
+_SUPPRESSED_NOTIFICATION_TYPES = {"lead_sequence_email_approval"}
+
+
 async def create_operator_notification(
     session: AsyncSession,
     *,
@@ -54,6 +61,18 @@ async def create_operator_notification(
     context: dict[str, Any] | None = None,
     suggested_action: dict[str, Any] | None = None,
 ) -> OperatorNotificationRow:
+    if notification_type in _SUPPRESSED_NOTIFICATION_TYPES:
+        # Transient, un-persisted row: callers that read `.id` (paused_reason
+        # bookkeeping) keep working; nothing is written to the DB.
+        return OperatorNotificationRow(
+            notification_type=notification_type[:64],
+            priority=(priority or "normal")[:16],
+            title=title[:255],
+            body=body or "",
+            source_type=source_type[:64],
+            source_id=source_id[:128],
+            status="suppressed",
+        )
     existing = (await session.execute(
         select(OperatorNotificationRow).where(
             OperatorNotificationRow.notification_type == notification_type,
@@ -112,6 +131,33 @@ async def acknowledge_notification(
             await session.commit()
             await session.refresh(row)
         return notification_to_dict(row)
+
+
+async def resolve_notifications(
+    *,
+    notification_type: str,
+    source_id: str,
+    resolved_by: str = "system",
+) -> int:
+    """Mark all pending notifications of a type+source as resolved. Used to
+    auto-clear a `yelp_review_needed` prompt once the firm has a usable quote.
+    Returns the count resolved."""
+    async with AsyncSessionLocal() as session:
+        rows = list((await session.execute(
+            select(OperatorNotificationRow).where(
+                OperatorNotificationRow.notification_type == notification_type,
+                OperatorNotificationRow.source_id == source_id,
+                OperatorNotificationRow.status == "pending",
+            )
+        )).scalars().all())
+        now = datetime.now(timezone.utc)
+        for row in rows:
+            row.status = "resolved"
+            row.acknowledged_at = now
+            row.acknowledged_by = resolved_by[:128]
+        if rows:
+            await session.commit()
+        return len(rows)
 
 
 def _truthy(value: str) -> bool:
