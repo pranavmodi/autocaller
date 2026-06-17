@@ -49,10 +49,9 @@ _SUPPRESSED_NOTIFICATION_TYPES = {"lead_sequence_email_approval"}
 
 # Allowlist of notification types the operator action center (bottom-right
 # popup + /actions page) surfaces. Other types (e.g. seo_action) still persist
-# — the /seo page reads them — but are not shown here. For now the action
-# center is scoped to the Yelp-review-needed workflow only. To re-surface a
-# type, add it here (and restart the backend).
-_ACTION_CENTER_SURFACED_TYPES = {"yelp_review_needed"}
+# — the /seo page reads them — but are not shown here. To re-surface a type,
+# add it here (and restart the backend).
+_ACTION_CENTER_SURFACED_TYPES = {"yelp_review_needed", "lead_email_reply"}
 
 
 async def create_operator_notification(
