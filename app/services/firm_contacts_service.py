@@ -384,49 +384,38 @@ async def get_contact(contact_id: str) -> Optional[dict]:
 
 
 async def fetch_pain_quote_for_firm(pif_id: str) -> dict:
-    """Pulls the highest-confidence client_communication quote from the
-    firm's stored Yelp extraction. Returns dict with pain_quote /
-    reviewer_name / review_date / pain_point_key — any of which may be
-    None when no usable quote exists. Caller decides 'with_quote' vs
-    'without_quote' variant from the truthiness of pain_quote."""
-    import json
-    import re as _re
-    from app.db.models import FirmReviewRow
+    """Back-compat wrapper over fetch_review_evidence: the highest-confidence
+    client_communication COMPLAINT quote for a firm. Returns pain_quote /
+    reviewer_name / review_date / pain_point_key (any may be None). Preserved
+    contract — the gate and yelp-pain-quote composer variant call this and stay
+    complaint-only. Reads both v1 and v2 extraction blocks. For richer use
+    (praise, facts, other themes) call fetch_review_evidence directly."""
+    from app.services.review_extraction import fetch_review_evidence
 
-    async with AsyncSessionLocal() as session:
-        row = (await session.execute(
-            select(FirmReviewRow).where(FirmReviewRow.pif_id == pif_id)
-        )).scalar_one_or_none()
-
-    blank = {
-        "pain_quote": None,
-        "reviewer_name": None,
-        "review_date": None,
-        "pain_point_key": None,
-        "extracted_at": None,
-    }
-    if not row or not row.yelp_content:
-        return blank
-    m = _re.search(
-        r"<!--\s*EXTRACTED v\d+\s*([\s\S]*?)\s*-->", row.yelp_content
+    res = await fetch_review_evidence(
+        pif_id,
+        kinds={"complaint"},
+        themes={"client_communication"},
+        outreach_usable_only=True,
+        require_quote=True,
+        limit=1,
     )
-    if not m:
-        return blank
-    try:
-        data = json.loads(m.group(1))
-    except Exception:
-        return blank
-    extracted_at = data.get("extracted_at")
-    quotes = (data.get("pain_points") or {}).get("client_communication") or []
-    if not quotes:
-        return {**blank, "extracted_at": extracted_at}
-    top = max(quotes, key=lambda q: q.get("confidence", 0))
+    items = res.get("items") or []
+    if not items:
+        return {
+            "pain_quote": None,
+            "reviewer_name": None,
+            "review_date": None,
+            "pain_point_key": None,
+            "extracted_at": res.get("extracted_at"),
+        }
+    top = items[0]
     return {
         "pain_quote": top.get("quote"),
         "reviewer_name": top.get("reviewer_name"),
         "review_date": top.get("review_date"),
         "pain_point_key": "client_communication",
-        "extracted_at": extracted_at,
+        "extracted_at": res.get("extracted_at"),
     }
 
 

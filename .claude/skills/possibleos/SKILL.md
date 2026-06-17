@@ -607,5 +607,12 @@ the open internet, or tracking links in recipient inboxes go nowhere.
   Idempotent (re-extracts only when raw text changes, via `content_hash`).
   Manual: `bin/possibleos reviews extract <pif_id> [--force]` /
   `reviews extract-all-pending`; REST `POST /api/firms/{pif_id}/extract`.
-  Extraction captures only `client_communication` today — firms with no such
-  complaint get no quote (no fabrication) and stay held under the gate.
+  Extraction emits the **v2 review-intelligence** schema: a list of typed
+  evidence items (`kind` ∈ complaint/praise/fact/request/outcome, open `theme`,
+  verbatim `quote`, `sentiment`, `confidence`, `outreach_usable`) + a
+  `firm_summary`. Read it with `fetch_review_evidence(pif_id, kinds=, themes=,
+  outreach_usable_only=, limit=)` (understands v1 + v2). `fetch_pain_quote_for_firm`
+  is now a back-compat wrapper over it (complaint + client_communication only),
+  so the gate + yelp-pain-quote variant are UNCHANGED — still complaint-only.
+  Using praise/facts in emails (angle-aware composer + policy gate) is the
+  not-yet-built Phase 3.

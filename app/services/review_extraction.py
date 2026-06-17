@@ -68,7 +68,115 @@ def _raw_hash(raw: str) -> str:
 
 def _render_block(extraction: dict[str, Any], raw: str) -> str:
     body = json.dumps(extraction, indent=2, ensure_ascii=False)
-    return f"<!-- EXTRACTED v1\n{body}\n-->\n\n{_RAW_MARKER}\n{raw}"
+    return f"<!-- EXTRACTED v2\n{body}\n-->\n\n{_RAW_MARKER}\n{raw}"
+
+
+_COMPLAINT_DEFAULT_SENTIMENT = -0.6
+_EVIDENCE_KINDS = {"complaint", "praise", "fact", "request", "outcome"}
+
+
+def _normalize_evidence_item(raw: dict[str, Any], *, idx: int) -> dict[str, Any]:
+    try:
+        confidence = float(raw.get("confidence")) if raw.get("confidence") is not None else 0.0
+    except (TypeError, ValueError):
+        confidence = 0.0
+    kind = str(raw.get("kind") or "complaint").strip().lower()
+    return {
+        "id": raw.get("id") or f"ev_{idx:02d}",
+        "kind": kind if kind in _EVIDENCE_KINDS else "complaint",
+        "theme": str(raw.get("theme") or "").strip(),
+        "quote": raw.get("quote"),
+        "paraphrase": raw.get("paraphrase"),
+        "reviewer_name": raw.get("reviewer_name"),
+        "review_date": raw.get("review_date"),
+        "star_rating": raw.get("star_rating"),
+        "sentiment": raw.get("sentiment"),
+        "confidence": confidence,
+        "outreach_usable": bool(raw.get("outreach_usable", True)),
+        "usable_reason": raw.get("usable_reason"),
+        "tags": raw.get("tags") or [],
+    }
+
+
+def evidence_items_from_extraction(extraction: dict[str, Any] | None) -> list[dict[str, Any]]:
+    """Normalize a stored extraction block into a flat list of typed evidence
+    items. Understands BOTH the v2 `evidence` list and the legacy v1
+    `pain_points` map (mapped to kind=complaint), so old blocks keep working."""
+    if not isinstance(extraction, dict):
+        return []
+    if isinstance(extraction.get("evidence"), list):
+        return [
+            _normalize_evidence_item(e, idx=i)
+            for i, e in enumerate(extraction["evidence"], 1)
+            if isinstance(e, dict)
+        ]
+    # Legacy v1: pain_points: { <theme>: [ {quote, reviewer_name, ...} ] }
+    out: list[dict[str, Any]] = []
+    i = 1
+    for theme, quotes in (extraction.get("pain_points") or {}).items():
+        for q in quotes or []:
+            if not isinstance(q, dict):
+                continue
+            out.append(_normalize_evidence_item({
+                "kind": "complaint",
+                "theme": theme,
+                "quote": q.get("quote"),
+                "reviewer_name": q.get("reviewer_name"),
+                "review_date": q.get("review_date"),
+                "star_rating": q.get("star_rating"),
+                "confidence": q.get("confidence"),
+                "sentiment": _COMPLAINT_DEFAULT_SENTIMENT,
+                "outreach_usable": bool(q.get("quote")),
+            }, idx=i))
+            i += 1
+    return out
+
+
+async def fetch_review_evidence(
+    pif_id: str,
+    *,
+    kinds: set[str] | None = None,
+    themes: set[str] | None = None,
+    min_confidence: float = 0.0,
+    outreach_usable_only: bool = True,
+    require_quote: bool = True,
+    limit: int = 5,
+    purpose: str = "compose",
+) -> dict[str, Any]:
+    """Generalized reader over a firm's stored review extraction. Returns a
+    ranked list of typed evidence items plus firm-level signals. Callers select
+    the slice they want (compose hook, gate check, targeting). Reads both v1 and
+    v2 blocks. `purpose` is reserved for future ranking tweaks."""
+    async with AsyncSessionLocal() as session:
+        row = (await session.execute(
+            select(FirmReviewRow).where(FirmReviewRow.pif_id == pif_id)
+        )).scalar_one_or_none()
+        yelp = row.yelp_content if row else None
+
+    extraction = existing_extraction(yelp) or {}
+    items = evidence_items_from_extraction(extraction)
+    if kinds:
+        items = [e for e in items if e["kind"] in kinds]
+    if themes:
+        items = [e for e in items if e["theme"] in themes]
+    if outreach_usable_only:
+        items = [e for e in items if e.get("outreach_usable")]
+    items = [e for e in items if (e.get("confidence") or 0.0) >= min_confidence]
+    if require_quote:
+        items = [e for e in items if e.get("quote")]
+    items.sort(
+        key=lambda e: ((e.get("confidence") or 0.0), e.get("review_date") or ""),
+        reverse=True,
+    )
+    return {
+        "pif_id": pif_id,
+        "items": items[: max(1, limit)],
+        "firm_summary": extraction.get("firm_summary"),
+        "themes_present": extraction.get("themes_present") or {},
+        "themes_absent": extraction.get("themes_absent") or {},
+        "extracted_at": extraction.get("extracted_at"),
+        "extractor_version": extraction.get("extractor_version"),
+    }
 
 
 def is_extraction_current(yelp_content: str | None) -> bool:
@@ -109,7 +217,7 @@ async def extract_review_quotes(
         result = await call_skill_json(
             skill_path=_SKILL_PATH,
             payload={"firm_name": firm_name or "", "raw_reviews": raw[:20000]},
-            required_fields=["pain_points"],
+            required_fields=["evidence"],
             model=os.getenv("REVIEW_EXTRACTOR_MODEL", "openclaw/proxy"),
         )
     except LLMGatewayError as exc:
@@ -117,12 +225,15 @@ async def extract_review_quotes(
         return {"pif_id": pif_id, "status": "gateway_error", "error": str(exc)[:200]}
 
     parsed = result.parsed or {}
+    evidence = parsed.get("evidence") if isinstance(parsed.get("evidence"), list) else []
     extraction = {
-        "extractor_version": "yelp-quotes-v1",
+        "extractor_version": "review-intel-v2",
         "extracted_at": datetime.now(timezone.utc).isoformat(),
         "content_hash": raw_h,
-        "pain_points": parsed.get("pain_points") or {},
-        "absent_pain_points": parsed.get("absent_pain_points") or {},
+        "evidence": evidence,
+        "themes_present": parsed.get("themes_present") or {},
+        "themes_absent": parsed.get("themes_absent") or {},
+        "firm_summary": parsed.get("firm_summary"),
     }
     block = _render_block(extraction, raw)
 
@@ -138,12 +249,15 @@ async def extract_review_quotes(
             row.updated_at = datetime.now(timezone.utc)
         await session.commit()
 
-    quote_count = sum(len(v or []) for v in (extraction["pain_points"] or {}).values())
+    kinds = sorted({str(e.get("kind")) for e in evidence if isinstance(e, dict) and e.get("kind")})
+    usable = sum(1 for e in evidence if isinstance(e, dict) and e.get("outreach_usable") and e.get("quote"))
     return {
         "pif_id": pif_id,
         "status": "extracted",
-        "quote_count": quote_count,
-        "pain_point_keys": sorted((extraction["pain_points"] or {}).keys()),
+        "evidence_count": len(evidence),
+        "usable_quote_count": usable,
+        "kinds": kinds,
+        "themes": sorted((extraction["themes_present"] or {}).keys()),
     }
 
 

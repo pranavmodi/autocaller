@@ -971,10 +971,22 @@ Email sending:
   `bin/possibleos reviews extract-all-pending [--limit N] [--force]`; REST:
   `POST /api/firms/{pif_id}/extract`. The extraction system prompt is
   `app/skills/review-quote-extractor/SKILL.md` (single-shot, strict v1 JSON);
-  the `yelp-review-quotes` skill remains the human/agent runbook + taxonomy
-  source. Note: extraction currently captures only `client_communication`
-  complaints — firms whose reviews have none get no quote (correctly, no
-  fabrication) and stay held; broadening to praise/facts is the v2 design.
+  the `yelp-review-quotes` skill remains the human/agent runbook.
+
+  **v2 review-intelligence schema (Phase 1).** Extraction now emits an
+  `<!-- EXTRACTED v2 ... -->` block with a flat list of typed **evidence
+  items** — `kind` ∈ {complaint, praise, fact, request, outcome}, an open
+  snake_case `theme`, verbatim `quote` (or `paraphrase` for facts), `sentiment`,
+  `confidence`, and an `outreach_usable` safety flag — plus `themes_present`,
+  `themes_absent`, and a `firm_summary`. The generalized reader
+  `fetch_review_evidence(pif_id, kinds=, themes=, min_confidence=,
+  outreach_usable_only=, limit=)` returns a ranked slice for any purpose and
+  understands **both** v1 (`pain_points`, mapped to kind=complaint) and v2
+  blocks, so old extractions keep working. `fetch_pain_quote_for_firm` is now a
+  thin back-compat wrapper (`kinds={complaint}, themes={client_communication},
+  outreach_usable_only=True`) — the gate and yelp-pain-quote composer variant
+  are UNCHANGED and stay complaint-only. Broadening the gate/composer to praise
+  and facts (using `kind`) is Phase 3; this phase only ships the capability.
 - `EMAIL_TRANSPORT` optional override, `zoho_api`, `smtp`, or `resend`
 - Resend-related configuration only if Resend is intentionally selected.
 
