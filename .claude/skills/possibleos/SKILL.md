@@ -592,3 +592,10 @@ the open internet, or tracking links in recipient inboxes go nowhere.
   selected firm, extract it via the `yelp-review-quotes` skill; the action-center
   popup surfaces "Yelp review needed" prompts for fresh first-touch firms lacking
   a quote (see operator notifications).
+- **Hard gate (default on):** `REQUIRE_YELP_QUOTE_FIRST_TOUCH=true` blocks
+  first-touch composition entirely for firms without a citable Yelp quote —
+  `_compose_batch_items` skips them (no email composed, nothing queued), marks
+  the batch item `reason_json.held_reason="awaiting_yelp_quote"`, and leaves it
+  undrafted so a re-run composes + queues it once you paste the firm's reviews.
+  The firm is still selected and still raises a `yelp_review_needed` prompt.
+  Follow-ups are never gated. Set `REQUIRE_YELP_QUOTE_FIRST_TOUCH=0` to disable.

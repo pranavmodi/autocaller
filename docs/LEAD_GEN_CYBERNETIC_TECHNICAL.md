@@ -951,6 +951,14 @@ Email sending:
   `fetch_pain_quote_for_firm`), and falls back to a clean baseline email with no
   review mention when none is extracted. It carries `allocation_weight=0` so it
   is excluded from random A/B assignment and only used when explicitly forced.
+- `REQUIRE_YELP_QUOTE_FIRST_TOUCH` — when truthy (default `true`), first-touch
+  (non-follow_up) items whose firm has no citable Yelp quote are **blocked**:
+  `_compose_batch_items` skips composition and queues no send for them, marks the
+  batch item `reason_json.held_reason="awaiting_yelp_quote"` (and clears any prior
+  `agent_draft`), and leaves it undrafted so a re-run composes it once a quote is
+  extracted. The firm is still selected, so the `yelp_review_needed` action-center
+  prompt still fires. Follow-up steps are never gated. Set `0`/`false` to revert
+  to the old behavior (first-touch composes immediately, baseline fallback).
 - `EMAIL_TRANSPORT` optional override, `zoho_api`, `smtp`, or `resend`
 - Resend-related configuration only if Resend is intentionally selected.
 

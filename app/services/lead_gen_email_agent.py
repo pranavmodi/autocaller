@@ -255,6 +255,7 @@ async def _compose_batch_items(
             and not (i.get("reason") or {}).get("agent_draft")
         ][: max(1, limit)]
     drafts: list[dict[str, Any]] = []
+    held: list[dict[str, Any]] = []
     action_ids: list[str] = []
     first_policy: dict[str, Any] | None = None
 
@@ -271,6 +272,39 @@ async def _compose_batch_items(
         sequence, step_num = await _sequence_context_for_item(item)
         reason = item.get("reason") or {}
         is_follow_up = reason.get("action_type") == "follow_up"
+        # Gate: block first-touch composition for firms with no citable Yelp
+        # quote yet. The firm stays selected (so the action center prompts for
+        # its reviews), but no email is composed or queued until a quote is
+        # extracted. The item is left undrafted (held), so a re-run picks it up
+        # once the quote is pasted. Disable via REQUIRE_YELP_QUOTE_FIRST_TOUCH=0.
+        if (
+            not is_follow_up
+            and os.getenv("REQUIRE_YELP_QUOTE_FIRST_TOUCH", "true").strip().lower()
+            in {"1", "true", "yes", "on"}
+        ):
+            from app.services.firm_contacts_service import fetch_pain_quote_for_firm
+            pif_id = item.get("pif_id")
+            try:
+                quote = await fetch_pain_quote_for_firm(pif_id) if pif_id else {}
+            except Exception:
+                quote = {}
+            if not quote.get("pain_quote"):
+                async with AsyncSessionLocal() as session:
+                    row = await session.get(LeadGenBatchItemRow, item["id"])
+                    if row:
+                        r = dict(row.reason_json or {})
+                        r["held_reason"] = "awaiting_yelp_quote"
+                        r["next_operator_action"] = "paste_yelp_reviews"
+                        r.pop("agent_draft", None)
+                        row.reason_json = r
+                        await session.commit()
+                held.append({
+                    "batch_item_id": item["id"],
+                    "firm_name": item["firm_name"],
+                    "pif_id": pif_id,
+                    "held_reason": "awaiting_yelp_quote",
+                })
+                continue
         # First-touch emails use the Yelp-pain-quote variant by default (it
         # cites a real review when one is extracted, falls back to baseline
         # otherwise). Follow-up steps keep their sequence/explicit variant. An
@@ -383,6 +417,7 @@ async def _compose_batch_items(
         },
         output_json={
             "draft_count": len(drafts),
+            "held_count": len(held),
             "action_ids": action_ids,
             "first_policy": first_policy,
         },
@@ -393,6 +428,7 @@ async def _compose_batch_items(
         "items": final_batch["items"],
         "observations": final_batch["observations"],
         "drafts": drafts,
+        "held": held,
         "action_ids": action_ids,
         "first_policy": first_policy,
         "no_email_sent": True,
