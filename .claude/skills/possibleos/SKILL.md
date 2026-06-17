@@ -623,3 +623,15 @@ the open internet, or tracking links in recipient inboxes go nowhere.
   the allowed kinds (`REVIEW_EVIDENCE_GATE_KINDS`, default complaint,praise,fact
   — set `=complaint` for the strict old behavior). So a praise/fact-only firm
   now composes instead of staying held. `yelp-pain-quote` variant is retired.
+- **Evidence-aware selection** (`LEAD_GEN_EVIDENCE_AWARE_SELECTION`, default on):
+  daily selection prefers firms that already have usable review evidence so the
+  slots fill with composable firms, reserving `LEAD_GEN_NO_EVIDENCE_RESERVE`
+  (default 3) slots for no-evidence firms to keep the paste-reviews loop fed. The
+  real daily ceiling is now evidence coverage among *eligible* (not-recently-
+  contacted) firms — to raise volume, paste/extract reviews for more firms.
+- **Autonomous send** (`LEAD_GEN_AUTO_APPROVE_SEND`, code default OFF, ON in this
+  deploy): composed first-touch drafts are auto-approved and sent at their
+  9–11:30 PT window slot with NO manual approval. Removes only the human click —
+  the PHI egress guard (`check_action_policy`), send-window spread, and
+  deliverability breaker still gate every send. Do not reintroduce a manual
+  approval step (operator-authorized 2026-06-17).

@@ -958,6 +958,21 @@ Email sending:
   compose gate and the composer's primary-hook pick (via
   `evidence_gate_kinds()`), so they agree. Set `=complaint` for the strict
   old behavior (only firms with a real grievance compose).
+- `LEAD_GEN_EVIDENCE_AWARE_SELECTION` (default `true`) — daily fresh first-touch
+  selection prefers firms that already have usable review evidence (so slots
+  fill with composable, not gate-held, firms), reserving
+  `LEAD_GEN_NO_EVIDENCE_RESERVE` (default `3`) slots for top no-evidence firms to
+  keep the paste-reviews discovery loop fed. Candidate pool widened to
+  `batch_size*10`. The binding constraint becomes evidence coverage among
+  *eligible* (not-recently-contacted) firms.
+- `LEAD_GEN_AUTO_APPROVE_SEND` (code default `false`; **enabled in this deploy's
+  `.env`**) — autonomous send: `_schedule_drafted_items` creates/flips scheduled
+  send actions to `approved` so the action scheduler sends them at their window
+  slot without a manual approval click. **This removes only the human approval
+  step.** Every send still passes `check_action_policy` (the PHI egress guard)
+  at execution, spreads across the 9–11:30 PT window, and respects the
+  deliverability breaker + suppression. Code default stays OFF so a fresh deploy
+  never auto-sends. (Operator-authorized 2026-06-17, D-2026-06-17-26.)
 - `REQUIRE_REVIEW_EVIDENCE_FIRST_TOUCH` — when truthy (default `true`),
   first-touch items whose firm has **no usable review evidence of the allowed
   kinds** are **blocked**: `_compose_batch_items` skips composition, queues no

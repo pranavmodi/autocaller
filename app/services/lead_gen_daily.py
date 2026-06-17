@@ -354,35 +354,56 @@ def _select_by_persona_quota(
     *,
     quota: dict[str, int],
     batch_size: int,
+    evidence_pifs: set[str] | None = None,
+    no_evidence_reserve: int = 0,
 ) -> list[dict[str, Any]]:
-    selected: list[dict[str, Any]] = []
-    used_firms: set[str] = set()
-    counts: Counter[str] = Counter()
+    """Pick up to batch_size, persona-quota first then relaxed, ranked by score.
+
+    Evidence-aware mode (evidence_pifs given): prefer firms that already have
+    usable review evidence so the daily slots fill with composable (not held)
+    firms, while reserving up to `no_evidence_reserve` slots for the
+    highest-scoring no-evidence firms — that keeps surfacing firms to paste
+    reviews for (the discovery loop) instead of starving it."""
     ordered = sorted(
         list(recommendations),
         key=lambda row: (-int(row.get("score") or 0), str(row.get("firm_name") or "").lower()),
     )
-    for rec in ordered:
-        if len(selected) >= batch_size:
-            break
-        pif_id = str(rec.get("pif_id") or "")
-        persona = str(rec.get("persona") or "")
-        if pif_id in used_firms:
-            continue
-        if counts[persona] >= quota.get(persona, 0):
-            continue
-        selected.append(rec)
-        used_firms.add(pif_id)
-        counts[persona] += 1
-    for rec in ordered:
-        if len(selected) >= batch_size:
-            break
-        pif_id = str(rec.get("pif_id") or "")
-        if pif_id in used_firms:
-            continue
-        selected.append(rec)
-        used_firms.add(pif_id)
-        counts[str(rec.get("persona") or "")] += 1
+    selected: list[dict[str, Any]] = []
+    used_firms: set[str] = set()
+    counts: Counter[str] = Counter()
+
+    def _take(pool: list[dict[str, Any]], limit: int, respect_quota: bool) -> None:
+        for rec in pool:
+            if len(selected) >= limit:
+                break
+            pif_id = str(rec.get("pif_id") or "")
+            persona = str(rec.get("persona") or "")
+            if pif_id in used_firms:
+                continue
+            if respect_quota and counts[persona] >= quota.get(persona, 0):
+                continue
+            selected.append(rec)
+            used_firms.add(pif_id)
+            counts[persona] += 1
+
+    if not evidence_pifs:
+        _take(ordered, batch_size, True)
+        _take(ordered, batch_size, False)
+        return selected
+
+    ev = [r for r in ordered if str(r.get("pif_id") or "") in evidence_pifs]
+    non_ev = [r for r in ordered if str(r.get("pif_id") or "") not in evidence_pifs]
+    reserve = min(max(0, no_evidence_reserve), len(non_ev))
+    ev_target = max(0, batch_size - reserve)
+    # 1) evidence firms up to the evidence budget (quota first, then relaxed)
+    _take(ev, ev_target, True)
+    _take(ev, ev_target, False)
+    # 2) reserve discovery slots for top no-evidence firms (fills to batch_size)
+    _take(non_ev, batch_size, True)
+    _take(non_ev, batch_size, False)
+    # 3) any slots still open (no-evidence exhausted) -> remaining evidence firms
+    _take(ev, batch_size, True)
+    _take(ev, batch_size, False)
     return selected
 
 
@@ -416,7 +437,9 @@ async def _select_contacts(
     batch_size: int,
     template_key: str,
 ) -> dict[str, Any]:
-    rec_limit = max(batch_size * 5, 100)
+    # Widen the candidate pool so evidence-bearing firms (which may rank below
+    # the top-20 by base score) are in scope for the evidence-aware preference.
+    rec_limit = max(batch_size * 10, 200)
     rec_data = await recommend_sequence_contacts(template_key=template_key, limit=rec_limit)
     recs = list(rec_data.get("recommended") or [])
     pif_ids = {str(r.get("pif_id") or "") for r in recs if r.get("pif_id")}
@@ -434,7 +457,25 @@ async def _select_contacts(
             continue
         filtered.append(rec)
     quota = _persona_quota(weights)
-    selected = _select_by_persona_quota(filtered, quota=quota, batch_size=batch_size)
+    # Evidence-aware selection: prefer firms with usable review evidence so the
+    # daily slots fill with composable firms, but reserve a few slots for top
+    # no-evidence firms to keep the "paste reviews" discovery loop fed.
+    evidence_pifs: set[str] | None = None
+    reserve = 0
+    if os.getenv("LEAD_GEN_EVIDENCE_AWARE_SELECTION", "true").strip().lower() in {"1", "true", "yes", "on"}:
+        try:
+            from app.services.review_extraction import firms_with_usable_evidence
+            evidence_pifs = await firms_with_usable_evidence(
+                {str(r.get("pif_id") or "") for r in filtered}
+            )
+            reserve = int(os.getenv("LEAD_GEN_NO_EVIDENCE_RESERVE", "3"))
+        except Exception:
+            logger.exception("evidence-aware selection lookup failed; falling back to score-only")
+            evidence_pifs = None
+    selected = _select_by_persona_quota(
+        filtered, quota=quota, batch_size=batch_size,
+        evidence_pifs=evidence_pifs, no_evidence_reserve=reserve,
+    )
     persona_mix = Counter(str(row.get("persona") or "unknown") for row in selected)
     return {
         "selected": selected,
@@ -444,6 +485,7 @@ async def _select_contacts(
         "persona_mix": dict(persona_mix),
         "excluded": dict(excluded),
         "behavior_by_pif": behavior_by_pif,
+        "evidence_selected": sum(1 for r in selected if evidence_pifs and str(r.get("pif_id") or "") in evidence_pifs) if evidence_pifs else None,
     }
 
 
@@ -807,6 +849,13 @@ async def _schedule_drafted_items(
         item for item in batch.get("items") or []
         if (item.get("reason") or {}).get("agent_draft")
     ]
+    # Autonomous send (operator-authorized): create scheduled send actions as
+    # already-approved so the action scheduler sends them at their window time
+    # without a manual approval click. Code default OFF — enabled via env. This
+    # only removes the human approval step; every send still passes the policy /
+    # PHI egress guard at execution time and is spread across the send window.
+    auto_approve = os.getenv("LEAD_GEN_AUTO_APPROVE_SEND", "false").strip().lower() in {"1", "true", "yes", "on"}
+    approver = "auto-approve" if auto_approve else None
     scheduled_times = spread_schedule_times(
         item_ids=[item["id"] for item in drafted],
         now=now,
@@ -830,12 +879,19 @@ async def _schedule_drafted_items(
             if row:
                 row.scheduled_for = scheduled_for
                 row.updated_at = _utcnow()
+                if approver and row.status == "waiting_for_approval":
+                    row.status = "approved"
+                    row.approved_by = approver
+                    row.approved_at = _utcnow()
                 await _record_action_event(
                     session,
                     action_id=row.id,
                     event_type="action_scheduled",
                     actor=created_by,
-                    message="Daily run scheduled draft awaiting approval.",
+                    message=(
+                        "Daily run scheduled draft (auto-approved for send)."
+                        if approver else "Daily run scheduled draft awaiting approval."
+                    ),
                     input_json={"scheduled_for": scheduled_for.isoformat(), "batch_item_id": item["id"]},
                 )
                 item_row = await session.get(LeadGenBatchItemRow, item["id"])
@@ -850,7 +906,9 @@ async def _schedule_drafted_items(
                     })
                     item_reason["agent_draft"] = item_draft
                     item_reason["send_email_action_id"] = row.id
-                    item_reason["next_operator_action"] = "review_approve_scheduled_send"
+                    item_reason["next_operator_action"] = (
+                        "auto_send_scheduled" if approver else "review_approve_scheduled_send"
+                    )
                     item_row.reason_json = item_reason
                 await session.commit()
                 await session.refresh(row)
@@ -867,7 +925,7 @@ async def _schedule_drafted_items(
                     subject=str(draft.get("subject") or ""),
                     body=str(draft.get("body") or ""),
                     requested_by=created_by,
-                    approved_by=None,
+                    approved_by=approver,
                     contact_id=item["contact_id"],
                     batch_item_id=item["id"],
                     pif_id=item["pif_id"],

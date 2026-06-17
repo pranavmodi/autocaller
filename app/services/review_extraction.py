@@ -166,6 +166,33 @@ def evidence_items_from_extraction(extraction: dict[str, Any] | None) -> list[di
     return out
 
 
+async def firms_with_usable_evidence(
+    pif_ids: set[str], *, kinds: set[str] | None = None
+) -> set[str]:
+    """Batch: of the given firms, which have >=1 outreach-usable evidence item
+    of the allowed kinds (with a quote or paraphrase). One query + in-memory
+    parse — cheap enough to run over the daily candidate pool during selection."""
+    pif_ids = {p for p in pif_ids if p}
+    if not pif_ids:
+        return set()
+    allowed = kinds or evidence_gate_kinds()
+    out: set[str] = set()
+    async with AsyncSessionLocal() as session:
+        rows = (await session.execute(
+            select(FirmReviewRow).where(FirmReviewRow.pif_id.in_(pif_ids))
+        )).scalars().all()
+    for row in rows:
+        for item in evidence_items_from_extraction(existing_extraction(row.yelp_content)):
+            if (
+                item.get("kind") in allowed
+                and item.get("outreach_usable")
+                and (item.get("quote") or item.get("paraphrase"))
+            ):
+                out.add(row.pif_id)
+                break
+    return out
+
+
 async def fetch_review_evidence(
     pif_id: str,
     *,
