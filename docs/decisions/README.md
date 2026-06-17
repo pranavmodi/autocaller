@@ -35,6 +35,16 @@ strategic things, skip mechanical ones.
 3. **Tag the `Area`** on every entry (taxonomy below).
 4. Keep entries short. Link commits/PRs/flags where useful.
 
+## Easiest way to add one: the CLI
+```
+bin/possibleos decisions add "<title>" --area <area> \
+  --decision "<what we decided>" --why "<rationale>" [--status accepted] [--refs "<sha/flag/file>"]
+```
+It auto-creates today's file, auto-assigns the next `D-<date>-NN` id, and appends
+the formatted entry (append-only). `bin/possibleos decisions today` prints the
+day's log; `decisions areas` lists the taxonomy. (You can also hand-edit the
+markdown in the format below — both are fine.)
+
 ## Entry format
 Append entries under the day's file. Use a stable id `D-YYYY-MM-DD-NN`.
 

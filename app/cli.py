@@ -45,6 +45,7 @@ carrier_app = typer.Typer(help="Inspect the active telephony carrier account (Tw
 prompts_app = typer.Typer(help="Prompt-style selector (current | minimal). Parallel prompt versions.", no_args_is_help=True)
 email_app = typer.Typer(help="Outbound email — config check + manual sends (test, one-pager, VM follow-up, consult).", no_args_is_help=True)
 pif_app = typer.Typer(help="Native PI-firm directory — pull emailtag's pif-info into possibleos (replaces mission.db).", no_args_is_help=True)
+decisions_app = typer.Typer(help="Append/read the repo decision log (docs/decisions/<UTC-date>.md). Format: docs/decisions/README.md.", no_args_is_help=True)
 comms_app = typer.Typer(help="Outbound communications dashboard — calls, voicemails, SMS, emails (read-only).", no_args_is_help=True)
 contacts_app = typer.Typer(help="Per-firm contact roster (backfill from PIF Stats + patients).", no_args_is_help=True)
 front_app = typer.Typer(help="Front read-only enrichment sync and warm lead signals.", no_args_is_help=True)
@@ -87,6 +88,7 @@ app.add_typer(carrier_app, name="carrier")
 app.add_typer(prompts_app, name="prompts")
 app.add_typer(email_app, name="email")
 app.add_typer(pif_app, name="pif")
+app.add_typer(decisions_app, name="decisions")
 app.add_typer(comms_app, name="comms")
 app.add_typer(contacts_app, name="contacts")
 app.add_typer(front_app, name="front")
@@ -6060,6 +6062,83 @@ def pif_ingest_contacts():
     then map personas. Local-only; this is the lead-supply unlock (titles ->
     personas, firm names) that lifts daily eligible leads."""
     console.print_json(data=_post("/api/pif/ingest-contacts", json_body=None, timeout=600.0))
+
+
+_DECISION_AREAS = {"lead-gen", "deliverability", "data-arch", "website", "infra", "process", "product"}
+
+
+def _decisions_dir() -> Path:
+    # app/cli.py -> repo root is parents[1]
+    return Path(__file__).resolve().parents[1] / "docs" / "decisions"
+
+
+def _decision_file_for(day: str) -> Path:
+    return _decisions_dir() / f"{day}.md"
+
+
+def _next_decision_id(text: str, day: str) -> str:
+    nums = [int(m) for m in re.findall(rf"^## D-{re.escape(day)}-(\d+)", text, re.M)]
+    return f"D-{day}-{(max(nums) + 1) if nums else 1:02d}"
+
+
+@decisions_app.command("add")
+def decisions_add(
+    title: str = typer.Argument(..., help="Short decision title."),
+    area: str = typer.Option(..., "--area", help=f"One of: {', '.join(sorted(_DECISION_AREAS))}"),
+    why: str = typer.Option("", "--why", help="Rationale / what it beats."),
+    decision: str = typer.Option("", "--decision", help="Full decision text (defaults to the title)."),
+    status: str = typer.Option("accepted", "--status", help="accepted | superseded by D-… | reversed"),
+    refs: str = typer.Option("", "--refs", help="commit sha / flag / file / PR (optional)."),
+):
+    """Append a formatted decision to today's (UTC) decision log.
+
+    Creates docs/decisions/<UTC-date>.md with a header if it doesn't exist, and
+    auto-assigns the next D-<date>-NN id. Append-only — never rewrites history.
+    """
+    from datetime import datetime, timezone
+
+    if area not in _DECISION_AREAS:
+        console.print(f"[yellow]warning:[/yellow] area '{area}' not in taxonomy ({', '.join(sorted(_DECISION_AREAS))}). "
+                      f"Add it to docs/decisions/README.md if it's a real new area.")
+    day = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    path = _decision_file_for(day)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    existing = path.read_text() if path.exists() else ""
+    if not existing:
+        existing = f"# Decisions — {day}\n"
+    did = _next_decision_id(existing, day)
+    entry = [
+        f"\n## {did} — {title}",
+        f"- **Area:** {area}",
+        f"- **Status:** {status}",
+        f"- **Decision:** {decision.strip() or title}",
+        f"- **Why:** {why.strip()}",
+    ]
+    if refs.strip():
+        entry.append(f"- **Refs:** {refs.strip()}")
+    entry.append("")
+    path.write_text(existing.rstrip("\n") + "\n" + "\n".join(entry))
+    console.print(f"[green]logged[/green] {did} → {path.relative_to(_decisions_dir().parents[1])}")
+
+
+@decisions_app.command("today")
+def decisions_today():
+    """Print today's (UTC) decision log file."""
+    from datetime import datetime, timezone
+
+    day = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    path = _decision_file_for(day)
+    if not path.exists():
+        console.print(f"[dim]No decisions logged yet for {day} ({path}).[/dim]")
+        return
+    console.print(path.read_text())
+
+
+@decisions_app.command("areas")
+def decisions_areas():
+    """List the decision-log area taxonomy."""
+    for a in sorted(_DECISION_AREAS):
+        console.print(f"- {a}")
 
 
 if __name__ == "__main__":
