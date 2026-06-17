@@ -940,6 +940,17 @@ Email sending:
 - `SEQUENCE_STEPS`
 - `SEQUENCE_CADENCE_DAYS`
 - `ALLOW_SEQUENCE_SEND`
+- `LEAD_GEN_FIRST_TOUCH_VARIANT` — composer variant key forced on first-touch
+  (non-follow_up) items in `_compose_batch_items`. Defaults to
+  `yelp-pain-quote`; set empty to disable forcing (first-touch then uses the
+  random A/B rendezvous pool). An explicit `composer_variant_key` (e.g. preview
+  "compare variants") always overrides this. Follow-up steps are never forced.
+  The `yelp-pain-quote` variant cites the firm's extracted Yelp
+  client-communication quote verbatim + attributed when one exists (via
+  `review_evidence` in the composer payload, sourced from
+  `fetch_pain_quote_for_firm`), and falls back to a clean baseline email with no
+  review mention when none is extracted. It carries `allocation_weight=0` so it
+  is excluded from random A/B assignment and only used when explicitly forced.
 - `EMAIL_TRANSPORT` optional override, `zoho_api`, `smtp`, or `resend`
 - Resend-related configuration only if Resend is intentionally selected.
 

@@ -8,6 +8,7 @@ approval-ready drafts and optional no-send action records.
 from __future__ import annotations
 
 import asyncio
+import os
 import uuid
 from types import SimpleNamespace
 from typing import Any
@@ -268,6 +269,18 @@ async def _compose_batch_items(
             selection_reason=item.get("reason") or {},
         )
         sequence, step_num = await _sequence_context_for_item(item)
+        reason = item.get("reason") or {}
+        is_follow_up = reason.get("action_type") == "follow_up"
+        # First-touch emails use the Yelp-pain-quote variant by default (it
+        # cites a real review when one is extracted, falls back to baseline
+        # otherwise). Follow-up steps keep their sequence/explicit variant. An
+        # explicit composer_variant_key (e.g. preview "compare variants") always
+        # wins. Override via LEAD_GEN_FIRST_TOUCH_VARIANT ("" disables).
+        item_variant_key = composer_variant_key
+        if item_variant_key is None and not is_follow_up:
+            forced = os.getenv("LEAD_GEN_FIRST_TOUCH_VARIANT", "yelp-pain-quote").strip()
+            if forced:
+                item_variant_key = forced
         selection_evidence = {
             "why_this_contact_was_selected": item.get("reason", {}).get("reason")
             or item.get("reason", {}).get("basis")
@@ -284,12 +297,10 @@ async def _compose_batch_items(
             firm_name=item["firm_name"],
             sequence=sequence,
             step_num=step_num,
-            composer_variant_key=composer_variant_key,
+            composer_variant_key=item_variant_key,
             research_evidence=research,
             selection_evidence=selection_evidence,
         )
-        reason = item.get("reason") or {}
-        is_follow_up = reason.get("action_type") == "follow_up"
         action = await create_send_email_action(
             mode="lead_gen",
             to=item["contact_email"],

@@ -668,6 +668,16 @@ async def build_lead_email_context(
 
     sender = _sender_payload()
     signals = _derive_pif_signals(pif_row, contact.email)
+    # Yelp pain quote (when extracted for this firm) — the yelp-pain-quote
+    # variant cites it; other variants ignore it. Never fabricated: only the
+    # stored extraction is surfaced.
+    review = {}
+    if contact.pif_id:
+        try:
+            from app.services.firm_contacts_service import fetch_pain_quote_for_firm
+            review = await fetch_pain_quote_for_firm(contact.pif_id)
+        except Exception:
+            review = {}
     competitive_context = await fetch_competitive_context_for_email(
         contact=contact,
         firm_name=firm_name,
@@ -753,6 +763,13 @@ async def build_lead_email_context(
         # after-hours ratio — evidence of where this firm's operational pain
         # actually is. Drives a firm-specific pain pivot instead of a generic one.
         "firm_behavior": signals["firm_behavior"],
+        "review_evidence": {
+            "source": "yelp",
+            "pain_quote": review.get("pain_quote"),
+            "reviewer_name": review.get("reviewer_name"),
+            "review_date": review.get("review_date"),
+            "pain_point_key": review.get("pain_point_key"),
+        },
         "inferred_pain_points": signals["inferred_pain_points"],
         "competitive_context": competitive_context,
         "blog_posts": _blog_posts(),

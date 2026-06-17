@@ -573,3 +573,22 @@ the open internet, or tracking links in recipient inboxes go nowhere.
   until then verdicts use reply rate only.
 - Declared winners get merged into the base skill; losers retired via
   variant.json active=false; next axis (opener/CTA/evidence) starts after.
+
+## First-touch Yelp-pain-quote variant
+- All first-touch (non-follow_up) lead-gen emails are forced to the
+  `yelp-pain-quote` composer variant by default (env
+  `LEAD_GEN_FIRST_TOUCH_VARIANT`, set empty to disable; an explicit
+  `composer_variant_key` from preview "compare variants" still overrides).
+  Follow-up steps are never forced.
+- When the firm has an extracted Yelp client-communication quote (see the
+  `yelp-review-quotes` skill + `firm_reviews`), the email cites it **verbatim and
+  attributed** as the hook, then pivots empathetically. When none is extracted it
+  **falls back to a clean baseline email with no review mention** — it never
+  fabricates a review. The quote is surfaced to the composer as
+  `review_evidence` in the payload via `fetch_pain_quote_for_firm`.
+- The variant carries `allocation_weight=0`: it is excluded from the random A/B
+  rendezvous pool (so follow-ups / other callers are never randomly assigned it)
+  and only ever used when explicitly forced. To get a quote into emails for a
+  selected firm, extract it via the `yelp-review-quotes` skill; the action-center
+  popup surfaces "Yelp review needed" prompts for fresh first-touch firms lacking
+  a quote (see operator notifications).

@@ -1,0 +1,7 @@
+{
+  "key": "yelp-pain-quote",
+  "label": "Yelp pain quote",
+  "description": "Cites a real Yelp client-communication complaint as the first-touch hook when one exists; falls back to baseline when none.",
+  "active": true,
+  "allocation_weight": 0
+}
