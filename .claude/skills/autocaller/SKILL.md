@@ -5,6 +5,8 @@ description: Legacy alias for the Possible OS operator skill. Prefer the `possib
 
 # Autocaller operator skill
 
+
+Decision log: record important decisions (architecture, policy, flag flips, tooling/transport, deferrals, reversals — not routine fixes) by appending to `docs/decisions/<YYYY-MM-DD>.md` (append-only, tag each with an `Area`). Rules in `docs/decisions/README.md`; mandated in `CLAUDE.md`.
 This is the legacy skill name. The active repo identity is Possible OS at
 `/home/pranav/possibleos`; the primary CLI is `bin/possibleos`. The
 `bin/autocaller` wrapper remains available for compatibility with older agent

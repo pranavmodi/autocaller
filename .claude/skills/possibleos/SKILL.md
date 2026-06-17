@@ -16,6 +16,12 @@ routing action, or implemented capability, update that document in the same
 change set. Keep its `What Exists Today`, feedback sources, degrees of freedom,
 and open gaps accurate.
 
+Decision log: record important decisions (architecture, policy, flag flips,
+tooling/transport choices, deferrals, reversals — not routine fixes) by
+appending to `docs/decisions/<YYYY-MM-DD>.md`, append-only, each entry tagged
+with an `Area`. Format + rules in `docs/decisions/README.md`; mandated in
+`CLAUDE.md`. Shared cross-session record of why things are the way they are.
+
 Zoho Mail is the current inbound mailbox provider. Use `bin/possibleos inbound
 status`, `bin/possibleos inbound poll`, and `bin/possibleos inbound list` to read
 inbound replies through IMAP. Credentials come from `ZOHO_IMAP_*` env vars; do

@@ -43,6 +43,24 @@ A reasonable heuristic: if someone three months from now had only the CLI and `d
 
 ## Other standing rules
 
+- **Decision log — record important decisions every session.** Architectural,
+  strategic, policy, tooling/transport, flag-flip, deferral, and reversal
+  decisions MUST be appended to `docs/decisions/<YYYY-MM-DD>.md` (UTC date), in
+  the format in `docs/decisions/README.md`. This is the cross-session,
+  cross-agent memory of *why* things are the way they are — every chat window
+  working in this repo contributes to it. Rules:
+  - **Append-only.** Never rewrite or delete a past decision. To change one, add
+    a NEW entry and mark the old one `Status: superseded by <id>`.
+  - **Incremental.** Add entries as decisions are made, or at end of session —
+    do NOT batch weeks of history into one dump.
+  - **Tag every entry with an `area:`** (`lead-gen`, `deliverability`,
+    `data-arch`, `website`, `infra`, `process`, `product`) so the log stays
+    grep-able by topic — that gives the by-function-area view without storing
+    by area (storage is by date, which is append-only and conflict-free across
+    parallel windows).
+  - **Log decisions, not activity.** A routine bugfix, refactor, or rename is not
+    a decision; a choice between approaches, a policy/flag change, a deferral, or
+    a reversal is. One line per decision is fine.
 - **OpenClaw gateway: always use the `openclaw/proxy` agent, never `openclaw`.**
   Every Possible OS LLM call that goes through the OpenClaw gateway
   (`call_skill_json`, the composer, PHI egress guard, lead-feedback
