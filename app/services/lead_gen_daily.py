@@ -44,7 +44,13 @@ from app.services.sequence_recommendations import recommend_sequence_contacts
 from app.services.sequences.registry import DEFAULT_TEMPLATE_KEY
 from app.services.sequence_scheduler import sequences_enabled
 from app.services.firm_contacts_service import resolve_firm_name
-from app.services.review_extraction import firms_with_usable_evidence, split_raw_reviews
+from app.services.review_extraction import (
+    evidence_gate_kinds,
+    evidence_items_from_extraction,
+    existing_extraction,
+    firms_with_usable_evidence,
+    split_raw_reviews,
+)
 from app.services.scheduled_time import format_pt, format_utc
 
 
@@ -1439,6 +1445,7 @@ async def get_daily_run_throughput(*, run_date: date | None = None) -> dict[str,
     sending_today = 0
     sent_today = 0
     raw_review_pifs: set[str] = set()
+    yelp_by_pif: dict[str, str] = {}
     if item_ids or pif_ids:
         async with AsyncSessionLocal() as session:
             if item_ids:
@@ -1472,11 +1479,36 @@ async def get_daily_run_throughput(*, run_date: date | None = None) -> dict[str,
                     for row in review_rows
                     if split_raw_reviews(row.yelp_content).strip()
                 }
+                yelp_by_pif = {row.pif_id: row.yelp_content for row in review_rows}
+
+    gate_kinds = evidence_gate_kinds()
+
+    def _evidence_status(pif_id: str) -> tuple[str, str]:
+        """Distinguish never-pasted / pasted-not-extracted / extracted-but-unusable
+        / usable, with a short reason — so the UI badge is honest about what
+        happened on save (the LLM may extract quotes but reject them, e.g. too
+        old to cite)."""
+        if pif_id not in raw_review_pifs:
+            return "none", "No reviews pasted yet."
+        extraction = existing_extraction(yelp_by_pif.get(pif_id))
+        if not extraction:
+            return "extracting", "Reviews saved; extraction pending."
+        items_ev = evidence_items_from_extraction(extraction)
+        usable = [
+            e for e in items_ev
+            if e.get("kind") in gate_kinds and e.get("outreach_usable") and (e.get("quote") or e.get("paraphrase"))
+        ]
+        if usable:
+            return "usable", ""
+        # Extracted but nothing citable — surface why (top item's reason).
+        detail = next((str(e.get("usable_reason")) for e in items_ev if e.get("usable_reason")), "")
+        return "extracted_no_usable", detail or "Extracted, but no quote is usable for outreach."
 
     held_firms = []
     for rank, item in enumerate(sorted(held_items, key=lambda i: int(i.get("score") or 0), reverse=True), 1):
         reason = dict(item.get("reason") or {})
         pif_id = str(item.get("pif_id") or "")
+        ev_status, ev_detail = _evidence_status(pif_id)
         held_firms.append({
             "pif_id": pif_id,
             "firm_name": item.get("firm_name") or "",
@@ -1487,6 +1519,8 @@ async def get_daily_run_throughput(*, run_date: date | None = None) -> dict[str,
             "contact_email": item.get("contact_email") or "",
             "has_raw_reviews": pif_id in raw_review_pifs,
             "has_usable_evidence": pif_id in evidence_pifs,
+            "evidence_status": ev_status,
+            "evidence_detail": ev_detail,
             "held_reason": reason.get("held_reason") or "",
         })
 

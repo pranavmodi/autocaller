@@ -688,7 +688,14 @@ function UnblockFirmRow({ firm }: { firm: LeadGenThroughputHeldFirm }) {
 }
 
 function ReviewEvidenceBadge({ firm }: { firm: LeadGenThroughputHeldFirm }) {
-  if (firm.has_usable_evidence) {
+  const status =
+    firm.evidence_status ||
+    (firm.has_usable_evidence
+      ? "usable"
+      : firm.has_raw_reviews
+        ? "extracted_no_usable"
+        : "none");
+  if (status === "usable") {
     return (
       <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-1 text-xs font-medium text-emerald-800">
         <CheckCircle2 className="h-3.5 w-3.5" />
@@ -696,18 +703,29 @@ function ReviewEvidenceBadge({ firm }: { firm: LeadGenThroughputHeldFirm }) {
       </span>
     );
   }
-  if (firm.has_raw_reviews) {
+  if (status === "extracting") {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-1 text-xs font-medium text-amber-800">
+      <span className="inline-flex items-center gap-1 rounded-full bg-sky-100 px-2 py-1 text-xs font-medium text-sky-800">
         <Clock className="h-3.5 w-3.5" />
-        raw, not extracted
+        extracting...
+      </span>
+    );
+  }
+  if (status === "extracted_no_usable") {
+    return (
+      <span
+        title={firm.evidence_detail || "Extracted, but no quote is usable for outreach."}
+        className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-1 text-xs font-medium text-amber-800"
+      >
+        <AlertTriangle className="h-3.5 w-3.5" />
+        extracted · no usable quote
       </span>
     );
   }
   return (
     <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-1 text-xs font-medium text-red-800">
       <AlertTriangle className="h-3.5 w-3.5" />
-      none
+      no reviews
     </span>
   );
 }

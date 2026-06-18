@@ -1663,6 +1663,8 @@ export type LeadGenThroughputHeldFirm = {
   contact_email: string;
   has_raw_reviews: boolean;
   has_usable_evidence: boolean;
+  evidence_status?: "none" | "extracting" | "extracted_no_usable" | "usable";
+  evidence_detail?: string;
   held_reason: string;
 };
 
