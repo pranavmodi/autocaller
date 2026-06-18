@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
+  AlertTriangle,
   BrainCircuit,
   ChevronDown,
   CheckCircle2,
@@ -32,9 +33,11 @@ import {
   getLeadGenBatch,
   getLeadGenDailyEnabled,
   getLeadGenPolicy,
+  getLeadGenThroughput,
   listLeadGenBatches,
   listLeadGenDailyRuns,
   previewSequence,
+  putFirmReviews,
   runLeadGenDaily,
   sendLeadGenBatchItemDraft,
   composeBatchItemVariants,
@@ -46,6 +49,8 @@ import {
   type LeadGenBatchItem,
   type LeadGenDailyRun,
   type LeadGenObservation,
+  type LeadGenThroughput,
+  type LeadGenThroughputHeldFirm,
   type RenderedSequenceStep,
   type ComposerSkillVariant,
 } from "@/lib/api";
@@ -103,6 +108,11 @@ function LeadGenPageContent() {
     queryKey: ["lead-gen-daily-enabled"],
     queryFn: getLeadGenDailyEnabled,
     refetchInterval: 30_000,
+  });
+  const throughput = useQuery({
+    queryKey: ["lead-gen-throughput"],
+    queryFn: () => getLeadGenThroughput(),
+    refetchInterval: 15_000,
   });
 
   useEffect(() => {
@@ -176,6 +186,7 @@ function LeadGenPageContent() {
       runLeadGenDaily({ dry_run: dryRun, force }),
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ["lead-gen-daily-runs"] });
+      qc.invalidateQueries({ queryKey: ["lead-gen-throughput"] });
       qc.invalidateQueries({ queryKey: ["lead-gen-batches"] });
       if (data.batch_id) setBatchId(data.batch_id);
     },
@@ -212,6 +223,14 @@ function LeadGenPageContent() {
       </div>
 
       <SafetyBand />
+      <ThroughputPanel throughput={throughput.data ?? null} loading={throughput.isLoading} error={throughput.isError} />
+      {throughput.data && throughput.data.funnel.sending_today < throughput.data.target && (
+        <UnblockPanel
+          throughput={throughput.data}
+          onRerun={() => runDaily.mutate({ dryRun: false, force: true })}
+          rerunning={runDaily.isPending}
+        />
+      )}
       <LeadGenProcessExplanation />
 
       <div className="grid gap-4 lg:grid-cols-12">
@@ -226,6 +245,7 @@ function LeadGenPageContent() {
             running={runDaily.isPending}
             error={runDaily.isError || toggleDaily.isError}
             lastRun={runDaily.data ?? null}
+            throughput={throughput.data ?? null}
           />
           <DailySendBudgetPanel
             dailyEmailBudget={dailyEmailBudget}
@@ -239,12 +259,12 @@ function LeadGenPageContent() {
           />
           <section className="rounded-xl border border-neutral-200 bg-white p-4">
             <div className="text-xs font-semibold uppercase tracking-wider text-neutral-400">
-              Agent slice
+              Manual agent slice
             </div>
             <p className="mt-2 text-sm leading-6 text-neutral-600">
-              Selects 3 senior decision-maker contacts, adds internal evidence,
-              composes drafts with the email skill, and creates approval-ready
-              send actions. No email is sent.
+              Creates a small draft batch for up to 3 eligible contacts and
+              leaves send actions waiting for review. Daily autonomous send
+              runs through the daily pipeline.
             </p>
             <button
               type="button"
@@ -257,7 +277,7 @@ function LeadGenPageContent() {
               ) : (
                 <Sparkles className="h-4 w-4" />
               )}
-              Create 3 approval-ready drafts
+              Create 3 draft actions
             </button>
             {createAgentSlice.isError && (
               <div className="mt-2 text-xs text-red-600">
@@ -317,7 +337,7 @@ const leadGenProcessSteps = [
     step: "3",
     title: "Approve and queue",
     current:
-      "Approving a batch can mark items approved. Approve-and-queue creates outreach run state for the approved contacts and staggers their first due time over the configured California-time send window.",
+      "The daily runner schedules composed lead-gen send actions across the configured California-time send window. When autonomous send is enabled, those actions are created as approved; otherwise they wait for operator approval.",
     ideal:
       "A daily operating policy should decide whether a batch is auto-created but still keep send approval manual. It should enforce daily caps, sender/domain limits, cooldowns, and first-class suppressions before any outreach run is queued.",
   },
@@ -333,7 +353,7 @@ const leadGenProcessSteps = [
     step: "5",
     title: "Review before send",
     current:
-      "Every generated outbound email creates an operator notification. The outreach run pauses as awaiting_operator_send_approval. The non-blocking action center shows firm/contact context, editable subject/body, rationale, angle, CTA, blog link when used, and model metadata.",
+      "Manual review remains available for edited or manually generated draft actions. The action center shows firm/contact context, editable subject/body, rationale, angle, CTA, blog link when used, and model metadata.",
     ideal:
       "The action center should also show the exact evidence packet used, policy constraints, risk flags, prior touches, deliverability warnings, and alternate draft options. Approval, edits, and rejection reasons should become learning observations.",
   },
@@ -341,7 +361,7 @@ const leadGenProcessSteps = [
     step: "6",
     title: "Send and advance",
     current:
-      "Only Approve & send sends the edited draft through the configured email transport, writes email_logs, marks the notification actioned, advances the outreach step, and schedules the next due step by cadence.",
+      "The scheduled-action daemon sends approved lead-gen drafts through the configured email transport, writes email_logs, records action execution evidence, and observes the send for the learning loop.",
     ideal:
       "The send path should attach experiment IDs, composer skill version, policy version, sender identity, selected blog link, and full render metadata so every outcome can be traced back to the decision that produced it.",
   },
@@ -430,13 +450,294 @@ function SafetyBand() {
   return (
     <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
       <ShieldCheck className="h-4 w-4" />
-      <span className="font-medium">Human approval stays in the loop.</span>
+      <span className="font-medium">Autonomous send is ON.</span>
       <span className="text-amber-800">
-        Approving can queue outreach runs, but email sending still requires
-        ALLOW_SEQUENCE_SEND=true on the backend.
+        Composed first-touch drafts auto-approve and send in the 9-11:30 PT
+        window. Guards still apply: deterministic PHI patterns, send window,
+        deliverability breaker.
       </span>
     </div>
   );
+}
+
+function ThroughputPanel({
+  throughput,
+  loading,
+  error,
+}: {
+  throughput: LeadGenThroughput | null;
+  loading: boolean;
+  error: boolean;
+}) {
+  const funnel = throughput?.funnel;
+  const target = throughput?.target ?? DEFAULT_DAILY_EMAIL_BUDGET;
+  const stages = [
+    { key: "selected", label: "Selected", value: funnel?.selected ?? 0 },
+    { key: "with_evidence", label: "With evidence", value: funnel?.with_evidence ?? 0 },
+    { key: "composed", label: "Composed", value: funnel?.composed ?? 0 },
+    { key: "sending_today", label: "Sending today", value: funnel?.sending_today ?? 0 },
+    { key: "target", label: "Target", value: target },
+  ];
+  const collapseKey = firstCollapseStage(stages);
+  const verdict = throughput?.verdict;
+  const onTrack = Boolean(verdict?.will_hit_target);
+  const sentLine = throughput
+    ? `Yesterday: ${throughput.history.yesterday_sent} sent · 7-day: ${throughput.history.seven_day_sent} / ${throughput.target * 7}`
+    : "Yesterday: - sent · 7-day: -";
+
+  return (
+    <section className="rounded-xl border border-neutral-200 bg-white">
+      <div className="flex flex-wrap items-center gap-3 border-b border-neutral-100 px-4 py-3">
+        <div>
+          <h2 className="text-base font-semibold text-neutral-900">Daily throughput</h2>
+          <div className="mt-0.5 text-xs text-neutral-500">
+            {throughput?.run_date ?? californiaDateKey(new Date())} · run {throughput?.run_status ?? "loading"}
+          </div>
+        </div>
+        <span
+          className={cn(
+            "ml-auto inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium",
+            throughput?.auto_send_on ? "bg-emerald-100 text-emerald-800" : "bg-neutral-100 text-neutral-600",
+          )}
+        >
+          Auto-send: {throughput?.auto_send_on ? "ON" : "OFF"}
+        </span>
+        {loading && <Loader2 className="h-4 w-4 animate-spin text-neutral-400" />}
+      </div>
+      <div className="space-y-4 px-4 py-4">
+        <div className="grid gap-2 md:grid-cols-5">
+          {stages.map((stage, index) => (
+            <div
+              key={stage.key}
+              className={cn(
+                "rounded-lg border px-3 py-3",
+                collapseKey === stage.key
+                  ? "border-red-200 bg-red-50"
+                  : onTrack && stage.key === "sending_today"
+                    ? "border-emerald-200 bg-emerald-50"
+                    : "border-neutral-200 bg-neutral-50",
+              )}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-[11px] font-semibold uppercase tracking-wider text-neutral-500">
+                  {stage.label}
+                </div>
+                {index < stages.length - 1 && (
+                  <span className="text-xs text-neutral-300">→</span>
+                )}
+              </div>
+              <div
+                className={cn(
+                  "mt-2 text-2xl font-semibold",
+                  collapseKey === stage.key ? "text-red-700" : "text-neutral-900",
+                )}
+              >
+                {stage.value}
+              </div>
+            </div>
+          ))}
+        </div>
+        {error ? (
+          <div className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
+            Could not load the throughput funnel.
+          </div>
+        ) : onTrack ? (
+          <div className="flex flex-wrap items-center gap-2 rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+            <CheckCircle2 className="h-4 w-4" />
+            On track. {funnel?.sending_today ?? 0} sending today.
+          </div>
+        ) : (
+          <div className="flex flex-wrap items-center gap-2 rounded-md bg-red-50 px-3 py-2 text-sm text-red-800">
+            <AlertTriangle className="h-4 w-4" />
+            {(funnel?.sending_today ?? 0)} of {target} will send today. Blocker: {blockerText(verdict?.blocker)}.
+          </div>
+        )}
+        <div className="text-xs text-neutral-500">{sentLine}</div>
+      </div>
+    </section>
+  );
+}
+
+function UnblockPanel({
+  throughput,
+  onRerun,
+  rerunning,
+}: {
+  throughput: LeadGenThroughput;
+  onRerun: () => void;
+  rerunning: boolean;
+}) {
+  const held = throughput.held_firms;
+  return (
+    <section className="rounded-xl border border-red-200 bg-white">
+      <div className="flex flex-wrap items-center gap-3 border-b border-red-100 bg-red-50 px-4 py-3">
+        <div>
+          <h2 className="text-base font-semibold text-red-950">Unblock today</h2>
+          <div className="mt-0.5 text-sm text-red-800">
+            Paste reviews for not-yet-covered firms.
+          </div>
+        </div>
+        <div className="ml-auto text-xs font-medium text-red-900">
+          Est. sends after re-run: {throughput.funnel.with_evidence}
+        </div>
+        <button
+          type="button"
+          onClick={onRerun}
+          disabled={rerunning}
+          className="inline-flex items-center gap-2 rounded-md bg-neutral-900 px-3 py-2 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-60"
+        >
+          {rerunning ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+          Re-run now
+        </button>
+      </div>
+      <div className="divide-y divide-neutral-100">
+        {held.length === 0 ? (
+          <div className="px-4 py-4 text-sm text-neutral-500">
+            No held firms in the current run.
+          </div>
+        ) : (
+          held.slice(0, 20).map((firm) => (
+            <UnblockFirmRow key={`${firm.pif_id}:${firm.contact_email}`} firm={firm} />
+          ))
+        )}
+      </div>
+    </section>
+  );
+}
+
+type ReviewSaveStatus = "idle" | "extracting" | "evidence" | "none" | "error";
+
+function UnblockFirmRow({ firm }: { firm: LeadGenThroughputHeldFirm }) {
+  const qc = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [yelp, setYelp] = useState("");
+  const [status, setStatus] = useState<ReviewSaveStatus>("idle");
+  const saveReviews = useMutation({
+    mutationFn: async () => {
+      setStatus("extracting");
+      await putFirmReviews(firm.pif_id, { yelp });
+      for (let attempt = 0; attempt < 4; attempt += 1) {
+        await sleep(1500);
+        const fresh = await qc.fetchQuery({
+          queryKey: ["lead-gen-throughput"],
+          queryFn: () => getLeadGenThroughput(),
+        });
+        const updated = fresh.held_firms.find((row) => row.pif_id === firm.pif_id);
+        if (!updated || updated.has_usable_evidence) return "evidence" as const;
+      }
+      return "none" as const;
+    },
+    onSuccess: (nextStatus) => {
+      setStatus(nextStatus);
+      qc.invalidateQueries({ queryKey: ["lead-gen-throughput"] });
+      qc.invalidateQueries({ queryKey: ["lead-gen-daily-runs"] });
+      if (nextStatus === "evidence") setOpen(false);
+    },
+    onError: () => setStatus("error"),
+  });
+
+  return (
+    <div className="px-4 py-3">
+      <div className="grid gap-3 text-sm lg:grid-cols-[64px_minmax(0,1.2fr)_90px_160px_auto] lg:items-center">
+        <div className="text-xs font-mono text-neutral-500">#{firm.rank}</div>
+        <div className="min-w-0">
+          <div className="truncate font-medium text-neutral-900">{firm.firm_name}</div>
+          <div className="mt-0.5 truncate text-xs text-neutral-500">
+            {firm.persona || "unknown"} · {firm.contact_name || "Unknown"} · {firm.contact_email || "no email"}
+          </div>
+        </div>
+        <div className="text-xs text-neutral-600">
+          warm {firm.warm_score ?? "-"}
+        </div>
+        <ReviewEvidenceBadge firm={firm} />
+        <button
+          type="button"
+          onClick={() => setOpen((value) => !value)}
+          className="inline-flex items-center justify-center rounded-md border border-neutral-200 px-3 py-2 text-xs font-medium text-neutral-700 hover:bg-neutral-50"
+        >
+          Paste reviews
+        </button>
+      </div>
+      {open && (
+        <div className="mt-3 grid gap-2 lg:grid-cols-[minmax(0,1fr)_auto]">
+          <textarea
+            value={yelp}
+            onChange={(event) => setYelp(event.target.value)}
+            rows={5}
+            placeholder="Paste Yelp review text for this firm"
+            className="min-h-32 w-full rounded-md border border-neutral-200 px-3 py-2 text-sm text-neutral-900 placeholder:text-neutral-400"
+          />
+          <div className="flex flex-col items-start gap-2">
+            <button
+              type="button"
+              onClick={() => saveReviews.mutate()}
+              disabled={!yelp.trim() || saveReviews.isPending}
+              className="inline-flex items-center gap-2 rounded-md bg-neutral-900 px-3 py-2 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-60"
+            >
+              {saveReviews.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+              Save
+            </button>
+            <div className={cn("text-xs", status === "error" ? "text-red-600" : "text-neutral-500")}>
+              {reviewSaveStatusText(status)}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ReviewEvidenceBadge({ firm }: { firm: LeadGenThroughputHeldFirm }) {
+  if (firm.has_usable_evidence) {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-1 text-xs font-medium text-emerald-800">
+        <CheckCircle2 className="h-3.5 w-3.5" />
+        evidence
+      </span>
+    );
+  }
+  if (firm.has_raw_reviews) {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-1 text-xs font-medium text-amber-800">
+        <Clock className="h-3.5 w-3.5" />
+        raw, not extracted
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-1 text-xs font-medium text-red-800">
+      <AlertTriangle className="h-3.5 w-3.5" />
+      none
+    </span>
+  );
+}
+
+function blockerText(blocker: string | undefined) {
+  if (blocker === "no_review_evidence") return "no selected firm has usable reviews";
+  if (blocker === "below_target") return "below target";
+  return "none";
+}
+
+function firstCollapseStage(stages: Array<{ key: string; value: number }>) {
+  for (let i = 1; i < stages.length; i += 1) {
+    const prev = stages[i - 1];
+    const current = stages[i];
+    if (current.key === "target") continue;
+    if (prev.value > 0 && current.value < prev.value) return current.key;
+  }
+  return "";
+}
+
+function reviewSaveStatusText(status: ReviewSaveStatus) {
+  if (status === "extracting") return "extracting...";
+  if (status === "evidence") return "evidence found";
+  if (status === "none") return "no usable quote yet";
+  if (status === "error") return "could not save reviews";
+  return "";
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
 function DailyRunPanel({
@@ -449,6 +750,7 @@ function DailyRunPanel({
   running,
   error,
   lastRun,
+  throughput,
 }: {
   run: LeadGenDailyRun | null;
   enabled: boolean;
@@ -459,15 +761,17 @@ function DailyRunPanel({
   running: boolean;
   error: boolean;
   lastRun: LeadGenDailyRun | null;
+  throughput: LeadGenThroughput | null;
 }) {
   const [confirmForce, setConfirmForce] = useState(false);
   const stages = run?.stages ?? {};
   const selectCounts = (stages.select?.counts ?? {}) as Record<string, unknown>;
   const composeCounts = (stages.compose?.counts ?? {}) as Record<string, unknown>;
   const selectedCount = typeof selectCounts.selected === "number" ? selectCounts.selected : null;
-  const draftedCount = typeof composeCounts.drafted === "number" ? composeCounts.drafted : null;
+  const draftedCount = throughput ? throughput.funnel.composed : typeof composeCounts.drafted === "number" ? composeCounts.drafted : null;
+  const heldCount = throughput ? throughput.funnel.held : typeof composeCounts.held === "number" ? composeCounts.held : null;
   // Prefer the live-polled run, fall back to the just-finished mutation result.
-  const outcome = dailyRunOutcome(running ? run : (lastRun ?? run), running);
+  const outcome = dailyRunOutcome(running ? run : (lastRun ?? run), running, throughput);
 
   return (
     <section className="rounded-xl border border-neutral-200 bg-white">
@@ -501,9 +805,10 @@ function DailyRunPanel({
             {enabled ? "Enabled" : "Disabled"}
           </button>
         </div>
-        <div className="grid grid-cols-3 gap-2 text-center">
+        <div className="grid grid-cols-4 gap-2 text-center">
           <Metric label="Selected" value={selectedCount === null ? "-" : String(selectedCount)} />
           <Metric label="Drafted" value={draftedCount === null ? "-" : String(draftedCount)} />
+          <Metric label="Held" value={heldCount === null ? "-" : String(heldCount)} />
           <Metric label="Batch" value={run?.batch_id ? "Yes" : "-"} />
         </div>
         {run?.batch_id && (
@@ -563,12 +868,12 @@ function DailyRunPanel({
           <div className="w-full max-w-sm rounded-xl border border-neutral-200 bg-white p-5 shadow-xl">
             <h3 className="text-sm font-semibold text-neutral-900">Run on a weekend?</h3>
             <p className="mt-2 text-sm text-neutral-600">
-              The daily pipeline normally runs Monday–Friday, so a normal run today
+              The daily pipeline normally runs Monday-Friday, so a normal run today
               would be skipped at the weekday gate. Run it anyway?
             </p>
             <p className="mt-2 text-xs text-neutral-400">
-              This only composes drafts as approval-waiting actions. Nothing sends
-              without your approval.
+              This composes drafts and, when autonomous send is enabled, schedules
+              approved send actions inside the PT send window.
             </p>
             <div className="mt-4 flex justify-end gap-2">
               <button
@@ -599,6 +904,7 @@ function DailyRunPanel({
 function dailyRunOutcome(
   run: LeadGenDailyRun | null,
   running: boolean,
+  throughput?: LeadGenThroughput | null,
 ): { tone: "ok" | "warn" | "err" | "run"; text: string } | null {
   if (running) {
     return { tone: "run", text: run?.stage ? `Running… ${run.stage}` : "Running…" };
@@ -606,6 +912,16 @@ function dailyRunOutcome(
   if (!run) return null;
   const stages = run.stages ?? {};
   if (run.status === "completed") {
+    if (throughput) {
+      const composed = throughput.funnel.composed;
+      const held = throughput.funnel.held;
+      if (held > 0) {
+        return {
+          tone: composed > 0 ? "warn" : "err",
+          text: `${composed} drafted · ${held} held (awaiting reviews)`,
+        };
+      }
+    }
     const drafted = (stages.compose?.counts as Record<string, unknown> | undefined)?.drafted;
     // "drafts" only — whether they still await review vs. already sent is the
     // batch's state (shown on the batch card), not the run record's.
@@ -809,6 +1125,14 @@ function BatchDetail({
     () => (data?.items ?? []).filter(isEmailSent),
     [data?.items],
   );
+  const composedItemCount = useMemo(
+    () => (data?.items ?? []).filter((item) => Boolean(storedAgentDraftStep(item))).length,
+    [data?.items],
+  );
+  const heldItemCount = useMemo(
+    () => (data?.items ?? []).filter((item) => Boolean(reasonValue(item, "held_reason"))).length,
+    [data?.items],
+  );
   const activeComposerVariants = useMemo(
     () => (composerVariants.data?.variants ?? []).filter((variant) => variant.active),
     [composerVariants.data?.variants],
@@ -1009,7 +1333,10 @@ function BatchDetail({
         {/* Essential counts only */}
         <div className="flex flex-wrap items-center gap-x-6 gap-y-1 px-4 py-3 text-sm">
           <span className="text-neutral-900">
-            <span className="font-semibold">{data.items.length}</span> drafts
+            <span className="font-semibold">{composedItemCount}</span> drafted
+            {heldItemCount > 0 && (
+              <span className="text-red-700"> · {heldItemCount} held (awaiting reviews)</span>
+            )}
           </span>
           <span className="text-neutral-900">
             <span className="font-semibold">{counts.started}</span> sent
@@ -1045,7 +1372,7 @@ function BatchDetail({
           {approveActions.data && (
             <span className="inline-flex items-center gap-1 text-xs text-emerald-700">
               <CheckCircle2 className="h-3.5 w-3.5" />
-              {approveActions.data.approved_count} approved — sending at scheduled slots
+              {approveActions.data.approved_count} approved, sending at scheduled slots
             </span>
           )}
           {sentItems.length > 0 && (
@@ -1198,7 +1525,7 @@ function rollupBy(
 ): RollupRow[] {
   const map = new Map<string, RollupRow>();
   for (const item of items) {
-    const key = keyFn(item) || "—";
+    const key = keyFn(item) || "-";
     const row = map.get(key) ?? { key, sent: 0, replied: 0, bounced: 0 };
     if (isEmailSent(item)) row.sent += 1;
     if (item.outcome === "bounce") row.bounced += 1;
@@ -1332,7 +1659,7 @@ function DailyActionPlan({
               {!isEmailSent(item) && scheduledSendPt(item) && (
                 <div className="mt-2 inline-flex items-center gap-1 rounded-full bg-violet-100 px-2 py-0.5 text-[11px] font-medium text-violet-800">
                   <Clock className="h-3 w-3" />
-                  Scheduled — sends {scheduledSendPt(item)}
+                  Scheduled, sends {scheduledSendPt(item)}
                 </div>
               )}
               {!isEmailSent(item) && !scheduledSendPt(item) && (draftStatuses[item.id] === "completed" || storedAgentDraftStep(item)) && (
@@ -1732,8 +2059,8 @@ function PreviewModal({
                 <div className="font-medium">Scheduled for auto-send at {scheduledSendPt(item)}.</div>
                 <div className="mt-0.5 text-xs">
                   The daemon will send this automatically. To change it, use{" "}
-                  <code>actions reschedule</code> / <code>actions cancel</code> or the /actions page —
-                  manual send is disabled to prevent a duplicate.
+                  <code>actions reschedule</code> / <code>actions cancel</code> or the /actions page.
+                  Manual send is disabled to prevent a duplicate.
                 </div>
               </div>
             </div>

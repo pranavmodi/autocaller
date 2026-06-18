@@ -1653,6 +1653,45 @@ export type LeadGenDailyRun = {
   dry_run?: boolean;
 };
 
+export type LeadGenThroughputHeldFirm = {
+  pif_id: string;
+  firm_name: string;
+  rank: number;
+  warm_score: number | null;
+  persona: string;
+  contact_name: string;
+  contact_email: string;
+  has_raw_reviews: boolean;
+  has_usable_evidence: boolean;
+  held_reason: string;
+};
+
+export type LeadGenThroughput = {
+  run_date: string;
+  run_status: string;
+  batch_id: string | null;
+  target: number;
+  auto_send_on: boolean;
+  history: {
+    yesterday_sent: number;
+    seven_day_sent: number;
+  };
+  funnel: {
+    selected: number;
+    with_evidence: number;
+    composed: number;
+    sending_today: number;
+    sent_today: number;
+    held: number;
+  };
+  verdict: {
+    will_hit_target: boolean;
+    shortfall: number;
+    blocker: "none" | "no_review_evidence" | "below_target" | string;
+  };
+  held_firms: LeadGenThroughputHeldFirm[];
+};
+
 export const getLeadGenPolicy = () =>
   get<LeadGenPolicy>("/api/lead-gen/policy/current");
 
@@ -1696,6 +1735,11 @@ export const runLeadGenDaily = (args: { dry_run?: boolean; force?: boolean } = {
 
 export const listLeadGenDailyRuns = (limit = 5) =>
   get<{ runs: LeadGenDailyRun[] }>(`/api/lead-gen/daily-runs?limit=${limit}`);
+
+export const getLeadGenThroughput = (runDate?: string) => {
+  const qs = runDate ? `?run_date=${encodeURIComponent(runDate)}` : "";
+  return get<LeadGenThroughput>(`/api/lead-gen/daily-run/throughput${qs}`);
+};
 
 export const getLeadGenDailyEnabled = () =>
   get<{ enabled: boolean; key: string }>("/api/lead-gen/daily-run/enabled");

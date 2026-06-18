@@ -20,6 +20,7 @@ from app.db.models import (
     EmailSequenceRow,
     FrontFirmActivityRow,
     FirmContactRow,
+    FirmReviewRow,
     LeadGenBatchItemRow,
     LeadGenBatchRow,
     LeadGenDailyRunRow,
@@ -43,6 +44,7 @@ from app.services.sequence_recommendations import recommend_sequence_contacts
 from app.services.sequences.registry import DEFAULT_TEMPLATE_KEY
 from app.services.sequence_scheduler import sequences_enabled
 from app.services.firm_contacts_service import resolve_firm_name
+from app.services.review_extraction import firms_with_usable_evidence, split_raw_reviews
 from app.services.scheduled_time import format_pt, format_utc
 
 
@@ -84,6 +86,16 @@ DEFAULT_SEND_WINDOW = {
     "timezone": "America/Los_Angeles",
 }
 HARD_EXCLUDED_DOMAINS = {"precisemri.com"}
+
+
+def auto_approve_send_enabled() -> bool:
+    return os.getenv("LEAD_GEN_AUTO_APPROVE_SEND", "false").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _pt_day_bounds(target: date) -> tuple[datetime, datetime]:
+    start = datetime.combine(target, time.min, tzinfo=PT)
+    end = start + timedelta(days=1)
+    return start.astimezone(timezone.utc), end.astimezone(timezone.utc)
 
 
 def _utcnow() -> datetime:
@@ -854,7 +866,7 @@ async def _schedule_drafted_items(
     # without a manual approval click. Code default OFF — enabled via env. This
     # only removes the human approval step; every send still passes the policy /
     # PHI egress guard at execution time and is spread across the send window.
-    auto_approve = os.getenv("LEAD_GEN_AUTO_APPROVE_SEND", "false").strip().lower() in {"1", "true", "yes", "on"}
+    auto_approve = auto_approve_send_enabled()
     approver = "auto-approve" if auto_approve else None
     scheduled_times = spread_schedule_times(
         item_ids=[item["id"] for item in drafted],
@@ -1337,6 +1349,170 @@ async def get_daily_run(*, run_date: date | None = None) -> dict[str, Any] | Non
             select(LeadGenDailyRunRow).where(LeadGenDailyRunRow.run_date == target)
         )).scalar_one_or_none()
     return _run_to_dict(row) if row else None
+
+
+def _int_or_none(value: Any) -> int | None:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _item_warm_score(reason: dict[str, Any]) -> int | None:
+    features = reason.get("selection_features")
+    if isinstance(features, dict):
+        score = _int_or_none(features.get("front_warm_score"))
+        if score is not None:
+            return score
+    for key in ("front_warm_score", "warm_score"):
+        score = _int_or_none(reason.get(key))
+        if score is not None:
+            return score
+    return None
+
+
+async def _sent_lead_gen_count(start_utc: datetime, end_utc: datetime) -> int:
+    async with AsyncSessionLocal() as session:
+        return int((await session.execute(
+            select(func.count(AgentActionRow.id))
+            .where(AgentActionRow.action_type == SEND_EMAIL)
+            .where(AgentActionRow.entity_type == "lead_gen_email")
+            .where(AgentActionRow.status == "succeeded")
+            .where(AgentActionRow.completed_at >= start_utc)
+            .where(AgentActionRow.completed_at < end_utc)
+        )).scalar_one() or 0)
+
+
+async def get_daily_run_throughput(*, run_date: date | None = None) -> dict[str, Any]:
+    """Read-only daily throughput view for the operator control panel."""
+    target_date = run_date or _date_for_run()
+    today_start_utc, today_end_utc = _pt_day_bounds(target_date)
+    yesterday_start_utc, _ = _pt_day_bounds(target_date - timedelta(days=1))
+    seven_day_start_utc, _ = _pt_day_bounds(target_date - timedelta(days=6))
+    policy = await _active_policy()
+    target = _int_policy(_policy_weights(policy), "daily_send_budget", 50, minimum=1, maximum=200)
+    history = {
+        "yesterday_sent": await _sent_lead_gen_count(yesterday_start_utc, today_start_utc),
+        "seven_day_sent": await _sent_lead_gen_count(seven_day_start_utc, today_end_utc),
+    }
+
+    async with AsyncSessionLocal() as session:
+        run = (await session.execute(
+            select(LeadGenDailyRunRow).where(LeadGenDailyRunRow.run_date == target_date)
+        )).scalar_one_or_none()
+
+    base = {
+        "run_date": target_date.isoformat(),
+        "run_status": "none",
+        "batch_id": None,
+        "target": target,
+        "auto_send_on": auto_approve_send_enabled(),
+        "history": history,
+        "funnel": {
+            "selected": 0,
+            "with_evidence": 0,
+            "composed": 0,
+            "sending_today": 0,
+            "sent_today": 0,
+            "held": 0,
+        },
+        "verdict": {"will_hit_target": False, "shortfall": target, "blocker": "below_target"},
+        "held_firms": [],
+    }
+    if not run or not run.batch_id:
+        return base
+
+    try:
+        batch = await get_batch(run.batch_id, include_observations=False)
+    except ValueError:
+        base["run_status"] = run.status
+        base["batch_id"] = run.batch_id
+        return base
+
+    items = list(batch.get("items") or [])
+    item_ids = [str(item.get("id")) for item in items if item.get("id")]
+    pif_ids = {str(item.get("pif_id")) for item in items if item.get("pif_id")}
+    evidence_pifs = await firms_with_usable_evidence(pif_ids)
+    composed = sum(1 for item in items if (item.get("reason") or {}).get("agent_draft"))
+    held_items = [item for item in items if (item.get("reason") or {}).get("held_reason")]
+
+    sending_today = 0
+    sent_today = 0
+    raw_review_pifs: set[str] = set()
+    if item_ids or pif_ids:
+        async with AsyncSessionLocal() as session:
+            if item_ids:
+                actions = (await session.execute(
+                    select(AgentActionRow)
+                    .where(AgentActionRow.action_type == SEND_EMAIL)
+                    .where(AgentActionRow.entity_type == "lead_gen_email")
+                    .where(AgentActionRow.entity_id.in_(item_ids))
+                    .where(AgentActionRow.status.in_(["approved", "queued", "running", "succeeded"]))
+                )).scalars().all()
+                for action in actions:
+                    if (
+                        action.status in {"approved", "queued", "running"}
+                        and action.scheduled_for
+                        and today_start_utc <= action.scheduled_for < today_end_utc
+                    ):
+                        sending_today += 1
+                    elif (
+                        action.status == "succeeded"
+                        and action.completed_at
+                        and today_start_utc <= action.completed_at < today_end_utc
+                    ):
+                        sending_today += 1
+                        sent_today += 1
+            if pif_ids:
+                review_rows = (await session.execute(
+                    select(FirmReviewRow).where(FirmReviewRow.pif_id.in_(pif_ids))
+                )).scalars().all()
+                raw_review_pifs = {
+                    row.pif_id
+                    for row in review_rows
+                    if split_raw_reviews(row.yelp_content).strip()
+                }
+
+    held_firms = []
+    for rank, item in enumerate(sorted(held_items, key=lambda i: int(i.get("score") or 0), reverse=True), 1):
+        reason = dict(item.get("reason") or {})
+        pif_id = str(item.get("pif_id") or "")
+        held_firms.append({
+            "pif_id": pif_id,
+            "firm_name": item.get("firm_name") or "",
+            "rank": rank,
+            "warm_score": _item_warm_score(reason),
+            "persona": item.get("persona") or "",
+            "contact_name": item.get("contact_name") or "",
+            "contact_email": item.get("contact_email") or "",
+            "has_raw_reviews": pif_id in raw_review_pifs,
+            "has_usable_evidence": pif_id in evidence_pifs,
+            "held_reason": reason.get("held_reason") or "",
+        })
+
+    blocker = "none"
+    if sending_today < target:
+        blocker = "no_review_evidence" if items and len(evidence_pifs) == 0 else "below_target"
+    funnel = {
+        "selected": len(items),
+        "with_evidence": len(evidence_pifs),
+        "composed": composed,
+        "sending_today": sending_today,
+        "sent_today": sent_today,
+        "held": len(held_items),
+    }
+    return {
+        **base,
+        "run_status": run.status,
+        "batch_id": run.batch_id,
+        "funnel": funnel,
+        "verdict": {
+            "will_hit_target": sending_today >= target,
+            "shortfall": max(0, target - sending_today),
+            "blocker": blocker,
+        },
+        "held_firms": held_firms,
+    }
 
 
 async def get_daily_run_enabled() -> dict[str, Any]:

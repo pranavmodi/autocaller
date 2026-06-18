@@ -1,6 +1,7 @@
 """Cybernetic lead-generation loop endpoints."""
 from __future__ import annotations
 
+from datetime import date
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
@@ -30,6 +31,7 @@ from app.services.lead_gen_cybernetic import (
 from app.services.lead_gen_email_agent import create_lead_gen_email_agent_slice
 from app.services.lead_gen_daily import (
     get_daily_run_enabled,
+    get_daily_run_throughput,
     list_daily_runs,
     run_daily_pipeline,
     set_daily_run_enabled,
@@ -192,6 +194,17 @@ async def get_daily_runs(
     limit: int = Query(20, ge=1, le=100),
 ):
     return {"runs": await list_daily_runs(limit=limit)}
+
+
+@router.get("/api/lead-gen/daily-run/throughput")
+async def get_daily_throughput(run_date: Optional[str] = Query(None)):
+    parsed_date = None
+    if run_date:
+        try:
+            parsed_date = date.fromisoformat(run_date)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail="invalid_run_date") from e
+    return await get_daily_run_throughput(run_date=parsed_date)
 
 
 @router.get("/api/lead-gen/daily-run/enabled")

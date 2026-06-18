@@ -25,9 +25,10 @@ Important routes:
 | `GET` | `/api/lead-gen/policy/current` | active policy, weights, suppressions, daily send budget |
 | `PUT` | `/api/lead-gen/settings/daily-send-budget` | persist daily send budget on active policy |
 | `POST` | `/api/lead-gen/batches` | create a daily action plan batch |
-| `POST` | `/api/lead-gen/email-agent/slice` | create a no-send 3-contact email-agent slice with research evidence, composer drafts, and durable `send_email mode=lead_gen` actions |
+| `POST` | `/api/lead-gen/email-agent/slice` | create a bounded email-agent slice with research evidence, composer drafts, and durable `send_email mode=lead_gen` actions |
 | `POST` | `/api/lead-gen/daily-run` | run or dry-run the checkpointed daily lead-selection and drafting pipeline |
 | `GET` | `/api/lead-gen/daily-runs` | list recent daily-run checkpoints |
+| `GET` | `/api/lead-gen/daily-run/throughput` | read the daily send-throughput funnel, target verdict, auto-send state, history counts, and held firms needing review evidence |
 | `GET` | `/api/lead-gen/daily-run/enabled` | read the persisted daemon-loop flag, default false |
 | `PUT` | `/api/lead-gen/daily-run/enabled` | enable or disable the default-off daily-run daemon loop |
 | `GET` | `/api/lead-gen/batches` | list batches |
@@ -80,6 +81,7 @@ bin/possibleos lead-gen email-agent-slice --limit 3 --approve-actions --policy-c
 bin/possibleos lead-gen daily-run --dry-run
 bin/possibleos lead-gen daily-run
 bin/possibleos lead-gen daily-status
+bin/possibleos lead-gen throughput
 bin/possibleos lead-gen daily-enable
 bin/possibleos lead-gen daily-disable
 bin/possibleos lead-gen batches

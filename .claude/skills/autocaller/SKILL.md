@@ -105,7 +105,7 @@ what actually happened.
 
 For the current master-agent lead-generation slice, use
 `bin/possibleos lead-gen email-agent-slice --limit 3 --approval-ready`. To compose for a hand-curated batch instead of auto-selection: `lead-gen email-agent-slice --batch <batch_id> --limit 10`.
-It selects senior decision-maker contacts from `firm_contacts`, collects
+It selects eligible contacts from `firm_contacts`, collects
 bounded internal evidence, composes drafts with
 `app/skills/possible-minds-lead-email-composer/SKILL.md`, stores each
 `agent_draft` on the lead-gen batch item, and creates no-send durable
@@ -119,9 +119,11 @@ daily-run [--dry-run] [--force]`. It gates on system enabled, active policy
 daily budget, weekday, and recent deliverability; refreshes stale Front-derived
 signals without Front API calls; queues bounded PIF Stats research; maps
 personas; creates a persona-mixed `Daily run YYYY-MM-DD` batch; composes drafts;
-and schedules `waiting_for_approval` `send_email mode=lead_gen` actions across
-the PT morning window. It never approves or sends. Check state with
-`lead-gen daily-status`; enable or disable the daemon loop with
+and schedules `send_email mode=lead_gen` actions across the PT morning window.
+When `LEAD_GEN_AUTO_APPROVE_SEND=true`, composed first-touch drafts are
+auto-approved for the scheduler; otherwise they wait for approval. Check state
+with `lead-gen daily-status` and the send-throughput funnel with
+`lead-gen throughput`; enable or disable the daemon loop with
 `lead-gen daily-enable` / `lead-gen daily-disable`. The loop is wired at daemon
 startup but defaults disabled in DB settings (`daily_run_enabled=false`) and
 no-ops while disabled.
@@ -504,7 +506,7 @@ Common causes: Geo permissions not enabled, AMD mis-classifying carrier voicemai
 | `possibleos sequences start <contact_id>` | Start the configured sequence (one contact at a time, by design). Idempotent — second start returns 409. Sends are gated by `ALLOW_SEQUENCE_SEND=true`. UI: `/sequences` page has the same flow with a forced "I've reviewed all drafts" checkbox before the Start button enables. |
 | `possibleos sequences list [--status active\|paused\|completed]` | List sequence rows + step state. |
 | `possibleos lead-gen policy\|recommend\|batches\|show\|approve\|observe\|observations\|propose` | Cybernetic lead-generation loop for Precise Imaging. Recommends bounded batches, requires approval, and creates lightweight operator action-center approvals immediately when selected email sequences are queued; drafts compose lazily when an action is opened. Automatic observations capture sends, failures, replies, clicks, bookings, call dispositions, cancellations, and reschedules. Use `lead-gen observations summary --since 7d` for the weekly learning KPI. UI: `/lead-gen`. Concept doc: `docs/CYBERNETIC_LEAD_GEN_CONCEPT.md`. |
-| `possibleos lead-gen daily-run\|daily-status\|daily-enable\|daily-disable` | Daily lead-selection and drafting pipeline. `daily-run --dry-run` is no-write/no-action validation. A real run creates a checkpointed daily batch, drafts emails, and schedules approval-waiting actions only. The daemon loop defaults off and is controlled by persisted `daily_run_enabled`. |
+| `possibleos lead-gen daily-run\|daily-status\|throughput\|daily-enable\|daily-disable` | Daily lead-selection and drafting pipeline. `daily-run --dry-run` is no-write/no-action validation. A real run creates a checkpointed daily batch, drafts emails, and schedules send actions. `throughput` shows selected, with evidence, composed, sending today, held, shortfall, and blocker. The daemon loop defaults off and is controlled by persisted `daily_run_enabled`. |
 | `possibleos actions list\|show\|policy-check\|execute` | Durable Possible OS action execution queue. Supported high-risk actions must be policy-checked and use narrow executors. |
 | `possibleos actions list [--scheduled]` | List durable action records. `--scheduled` shows future approved scheduled sends ordered by send time. |
 | `possibleos actions scheduler-status` | Show daemon scheduled-action loop status, last tick, pending scheduled count, and due count. |

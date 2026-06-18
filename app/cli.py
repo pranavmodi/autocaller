@@ -5108,6 +5108,52 @@ def lead_gen_daily_status(
     _print_daily_run(runs[0])
 
 
+@lead_gen_app.command("throughput")
+def lead_gen_throughput(
+    date_: str = typer.Option("", "--date", help="Run date YYYY-MM-DD. Defaults to today's daily-run date."),
+    json_output: bool = typer.Option(False, "--json", help="Print raw JSON."),
+):
+    """Show today's lead-gen send-throughput funnel and blocker."""
+    params = {"run_date": date_} if date_ else {}
+    data = _get("/api/lead-gen/daily-run/throughput", **params)
+    if json_output:
+        console.print_json(data=data)
+        return
+    funnel = data.get("funnel") or {}
+    verdict = data.get("verdict") or {}
+    history = data.get("history") or {}
+    target = int(data.get("target") or 0)
+    table = Table(title=f"Lead-gen throughput {data.get('run_date')} ({data.get('run_status')})")
+    table.add_column("stage")
+    table.add_column("count", justify="right")
+    for key, label in [
+        ("selected", "Selected"),
+        ("with_evidence", "With evidence"),
+        ("composed", "Composed"),
+        ("sending_today", "Sending today"),
+        ("sent_today", "Sent today"),
+        ("held", "Held"),
+    ]:
+        table.add_row(label, str(funnel.get(key, 0)))
+    table.add_row("Target", str(target))
+    console.print(table)
+    blocker = str(verdict.get("blocker") or "none").replace("_", " ")
+    if verdict.get("will_hit_target"):
+        console.print(f"[green]On track[/green] - {funnel.get('sending_today', 0)} sending today.")
+    else:
+        console.print(
+            f"[red]Shortfall[/red] - {funnel.get('sending_today', 0)} of {target} sending today; "
+            f"blocker: {blocker}; shortfall={verdict.get('shortfall', 0)}."
+        )
+    console.print(
+        f"auto_send_on={data.get('auto_send_on')} "
+        f"yesterday_sent={history.get('yesterday_sent', 0)} "
+        f"seven_day_sent={history.get('seven_day_sent', 0)} "
+        f"held_firms={len(data.get('held_firms') or [])} "
+        f"batch={data.get('batch_id') or '-'}"
+    )
+
+
 @lead_gen_app.command("daily-enable")
 def lead_gen_daily_enable(json_output: bool = typer.Option(False, "--json", help="Print raw JSON.")):
     """Enable the persisted daily lead-gen loop flag."""
