@@ -897,19 +897,12 @@ async def _schedule_drafted_items(
             if row:
                 row.scheduled_for = scheduled_for
                 row.updated_at = _utcnow()
-                if approver and row.status == "waiting_for_approval":
-                    row.status = "approved"
-                    row.approved_by = approver
-                    row.approved_at = _utcnow()
                 await _record_action_event(
                     session,
                     action_id=row.id,
                     event_type="action_scheduled",
                     actor=created_by,
-                    message=(
-                        "Daily run scheduled draft (auto-approved for send)."
-                        if approver else "Daily run scheduled draft awaiting approval."
-                    ),
+                    message="Daily run scheduled draft.",
                     input_json={"scheduled_for": scheduled_for.isoformat(), "batch_item_id": item["id"]},
                 )
                 item_row = await session.get(LeadGenBatchItemRow, item["id"])
@@ -928,10 +921,6 @@ async def _schedule_drafted_items(
                         "auto_send_scheduled" if approver else "review_approve_scheduled_send"
                     )
                     item_row.reason_json = item_reason
-                    # Keep the item's approval_status in sync with the action so
-                    # the UI "State" reflects reality (auto-approved == approved).
-                    if approver and item_row.approval_status in {"pending", "approved"}:
-                        item_row.approval_status = "approved"
                 await session.commit()
                 await session.refresh(row)
                 updated += 1
@@ -969,11 +958,26 @@ async def _schedule_drafted_items(
                 "scheduled_for_pt": format_pt(scheduled_for),
                 "scheduled_for_utc": format_utc(scheduled_for),
             })
+
+    # Autonomous send: write the hash-bound approval block via the same path the
+    # manual "Approve & send" button uses, so scheduled sends pass the policy gate
+    # (human_approval_present + subject/body/recipient hash match) and the action
+    # scheduler actually sends them. Also syncs item.approval_status -> approved.
+    approved_count = 0
+    if approver:
+        from app.services.action_execution import approve_lead_gen_batch_send_actions
+        try:
+            appr = await approve_lead_gen_batch_send_actions(batch_id=batch_id, approved_by=approver)
+            approved_count = int(appr.get("approved_count") or 0)
+        except Exception:
+            logger.exception("auto-approve of scheduled lead-gen sends failed for batch %s", batch_id)
+
     return {
         "scheduled": len(action_ids),
         "created": created,
         "updated": updated,
         "skipped": skipped,
+        "auto_approved": approved_count,
         "action_ids": action_ids,
         "subjects": [s for s in subjects if s][:3],
         "items": scheduled,
