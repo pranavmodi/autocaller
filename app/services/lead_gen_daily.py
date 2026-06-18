@@ -928,6 +928,10 @@ async def _schedule_drafted_items(
                         "auto_send_scheduled" if approver else "review_approve_scheduled_send"
                     )
                     item_row.reason_json = item_reason
+                    # Keep the item's approval_status in sync with the action so
+                    # the UI "State" reflects reality (auto-approved == approved).
+                    if approver and item_row.approval_status in {"pending", "approved"}:
+                        item_row.approval_status = "approved"
                 await session.commit()
                 await session.refresh(row)
                 updated += 1
