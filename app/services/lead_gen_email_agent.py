@@ -355,15 +355,38 @@ async def _compose_batch_items(
             "signals": item.get("reason", {}).get("signals") or [],
             "suppressions": item.get("reason", {}).get("suppressions") or [],
         }
-        composition = await compose_lead_email(
-            contact=contact,
-            firm_name=item["firm_name"],
-            sequence=sequence,
-            step_num=step_num,
-            composer_variant_key=item_variant_key,
-            research_evidence=research,
-            selection_evidence=selection_evidence,
-        )
+        try:
+            composition = await compose_lead_email(
+                contact=contact,
+                firm_name=item["firm_name"],
+                sequence=sequence,
+                step_num=step_num,
+                composer_variant_key=item_variant_key,
+                research_evidence=research,
+                selection_evidence=selection_evidence,
+            )
+        except Exception as exc:
+            # A single item's compose failure (e.g. a transient gateway error)
+            # must NOT abort the whole batch. Mark it held so it leaves the
+            # undrafted-pending pool; the rest of the batch composes + sends. A
+            # later re-run retries it (held items are re-evaluated on --force).
+            logger.exception("compose failed for batch item %s; holding", item["id"])
+            async with AsyncSessionLocal() as session:
+                row = await session.get(LeadGenBatchItemRow, item["id"])
+                if row:
+                    r = dict(row.reason_json or {})
+                    r["held_reason"] = "compose_error"
+                    r["compose_error"] = f"{type(exc).__name__}: {str(exc)[:200]}"
+                    r.pop("agent_draft", None)
+                    row.reason_json = r
+                    await session.commit()
+            held.append({
+                "batch_item_id": item["id"],
+                "firm_name": item["firm_name"],
+                "pif_id": item.get("pif_id"),
+                "held_reason": "compose_error",
+            })
+            continue
         action = await create_send_email_action(
             mode="lead_gen",
             to=item["contact_email"],
