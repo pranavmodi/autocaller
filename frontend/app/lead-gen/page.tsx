@@ -605,33 +605,53 @@ function UnblockPanel({
   );
 }
 
-type ReviewSaveStatus = "idle" | "extracting" | "evidence" | "none" | "error";
+type ReviewSaveStatus =
+  | "idle"
+  | "extracting"
+  | "evidence"
+  | "no_usable"
+  | "still_extracting"
+  | "error";
 
 function UnblockFirmRow({ firm }: { firm: LeadGenThroughputHeldFirm }) {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [yelp, setYelp] = useState("");
   const [status, setStatus] = useState<ReviewSaveStatus>("idle");
+  const [detail, setDetail] = useState("");
   const saveReviews = useMutation({
     mutationFn: async () => {
       setStatus("extracting");
+      setDetail("");
       await putFirmReviews(firm.pif_id, { yelp });
-      for (let attempt = 0; attempt < 4; attempt += 1) {
-        await sleep(1500);
+      // Extraction is a background gateway call; long reviews can take 20-30s.
+      // Poll evidence_status (not just has_usable_evidence) so we report the
+      // true terminal state instead of a premature "no usable quote".
+      for (let attempt = 0; attempt < 14; attempt += 1) {
+        await sleep(2500);
         const fresh = await qc.fetchQuery({
           queryKey: ["lead-gen-throughput"],
           queryFn: () => getLeadGenThroughput(),
         });
         const updated = fresh.held_firms.find((row) => row.pif_id === firm.pif_id);
-        if (!updated || updated.has_usable_evidence) return "evidence" as const;
+        // No longer held -> it composed; treat as success.
+        if (!updated) return { status: "evidence" as const, detail: "" };
+        if (updated.evidence_status === "usable" || updated.has_usable_evidence) {
+          return { status: "evidence" as const, detail: "" };
+        }
+        if (updated.evidence_status === "extracted_no_usable") {
+          return { status: "no_usable" as const, detail: updated.evidence_detail || "" };
+        }
+        // "extracting" / "none" -> extraction still in flight; keep polling.
       }
-      return "none" as const;
+      return { status: "still_extracting" as const, detail: "" };
     },
-    onSuccess: (nextStatus) => {
-      setStatus(nextStatus);
+    onSuccess: (result) => {
+      setStatus(result.status);
+      setDetail(result.detail);
       qc.invalidateQueries({ queryKey: ["lead-gen-throughput"] });
       qc.invalidateQueries({ queryKey: ["lead-gen-daily-runs"] });
-      if (nextStatus === "evidence") setOpen(false);
+      if (result.status === "evidence") setOpen(false);
     },
     onError: () => setStatus("error"),
   });
@@ -677,8 +697,8 @@ function UnblockFirmRow({ firm }: { firm: LeadGenThroughputHeldFirm }) {
               {saveReviews.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
               Save
             </button>
-            <div className={cn("text-xs", status === "error" ? "text-red-600" : "text-neutral-500")}>
-              {reviewSaveStatusText(status)}
+            <div className={cn("text-xs", status === "error" ? "text-red-600" : status === "no_usable" ? "text-amber-700" : "text-neutral-500")}>
+              {reviewSaveStatusText(status, detail)}
             </div>
           </div>
         </div>
@@ -746,10 +766,11 @@ function firstCollapseStage(stages: Array<{ key: string; value: number }>) {
   return "";
 }
 
-function reviewSaveStatusText(status: ReviewSaveStatus) {
+function reviewSaveStatusText(status: ReviewSaveStatus, detail?: string) {
   if (status === "extracting") return "extracting...";
-  if (status === "evidence") return "evidence found";
-  if (status === "none") return "no usable quote yet";
+  if (status === "evidence") return "evidence found - will compose on next run";
+  if (status === "no_usable") return `extracted, no usable quote${detail ? `: ${detail}` : ""}`;
+  if (status === "still_extracting") return "still extracting - refresh in a moment";
   if (status === "error") return "could not save reviews";
   return "";
 }
