@@ -7,6 +7,7 @@ from app.services.lead_email_composer import (
     _blog_posts,
     _conversation_state,
     _ensure_consult_signature,
+    _ensure_signature,
     _sanitize_body_salutation,
     _sanitize_email_copy,
     _sanitize_subject,
@@ -23,7 +24,9 @@ class ContactStub:
         full_name: str | None = None,
         pif_id: str | None = None,
         email: str | None = None,
+        id: str = "contact-1",
     ):
+        self.id = id
         self.first_name = first_name
         self.full_name = full_name
         self.pif_id = pif_id
@@ -43,6 +46,40 @@ def test_ensure_consult_signature_does_not_duplicate_link():
     body = f"Hi Sarah,\n\n-- Pranav\nFounder, Possible Minds\n{CONSULT_URL}"
 
     assert _ensure_consult_signature(body, {"name": "Pranav", "title": "Founder"}) == body
+
+
+def test_ensure_signature_adds_consult_and_audit_links(monkeypatch):
+    monkeypatch.setenv("AIAUDIT_LINK_SECRET", "test-secret")
+    monkeypatch.setenv("OUTREACH_PUBLIC_BASE_URL", "https://possible.example")
+    contact = ContactStub(pif_id="pif-1")
+
+    body = _ensure_signature(
+        "Hi Sarah,\n\nQuick note.",
+        {"name": "Pranav", "title": "Founder"},
+        contact=contact,  # type: ignore[arg-type]
+        variant_key="baseline",
+    )
+
+    assert CONSULT_URL in body
+    assert "https://possible.example/aiaudit/go?t=" in body
+    assert "AI readiness audit:" in body
+
+
+def test_ensure_signature_uses_audit_as_primary_cta_for_audit_variant(monkeypatch):
+    monkeypatch.setenv("AIAUDIT_LINK_SECRET", "test-secret")
+    monkeypatch.setenv("OUTREACH_PUBLIC_BASE_URL", "https://possible.example")
+    contact = ContactStub(pif_id="pif-1")
+
+    body = _ensure_signature(
+        "Hi Sarah,\n\nI made a quick AI-readiness read for your firm.",
+        {"name": "Pranav", "title": "Founder"},
+        contact=contact,  # type: ignore[arg-type]
+        variant_key="ai-audit",
+    )
+
+    assert CONSULT_URL not in body
+    assert "https://possible.example/aiaudit/go?t=" in body
+    assert "AI readiness audit:" in body
 
 
 def test_sanitize_email_copy_removes_generated_dash_punctuation():

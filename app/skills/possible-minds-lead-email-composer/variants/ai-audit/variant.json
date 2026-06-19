@@ -1,0 +1,8 @@
+{
+  "key": "ai-audit",
+  "label": "AI Audit",
+  "description": "Forced-only first-touch variant that offers the AI-readiness audit as the primary CTA.",
+  "allocation_weight": 0,
+  "active": true
+}
+

@@ -14,6 +14,7 @@ from sqlalchemy import desc, or_, select
 
 from app.db import AsyncSessionLocal
 from app.db.models import ConsultBookingRow, EmailSequenceRow, FirmContactRow, FrontFirmActivityRow, InboundEmailRow, PatientRow, PifFirmRow
+from app.services.aiaudit_links import build_audit_link
 from app.services.llm_gateway import LLMGatewayError, call_skill_json
 
 logger = logging.getLogger(__name__)
@@ -31,6 +32,7 @@ DEFAULT_SKILL_PATH = (
     / "skills/possible-minds-lead-email-composer/SKILL.md"
 )
 CONSULT_URL = "https://getpossibleminds.com/consult"
+AI_AUDIT_PATH = "/aiaudit/go?t="
 EMAIL_DASH_TRANSLATION = str.maketrans({"—": "-", "–": "-"})
 ORG_NAME_WORDS = {
     "accident",
@@ -285,6 +287,41 @@ def _ensure_consult_signature(body: str, sender: dict[str, str]) -> str:
     name = sender.get("name") or "Pranav"
     title = sender.get("title") or "Founder"
     return f"{body}\n\n-- {name}\n{title}, Possible Minds\n{CONSULT_URL}".strip()
+
+
+def _has_audit_link(body: str) -> bool:
+    public_url = os.getenv("AIAUDIT_PUBLIC_URL", "").strip().rstrip("/")
+    return AI_AUDIT_PATH in body or (public_url and public_url in body)
+
+
+def _ensure_signature(
+    body: str,
+    sender: dict[str, str],
+    *,
+    contact: FirmContactRow,
+    variant_key: str | None,
+) -> str:
+    body = (body or "").strip()
+    name = sender.get("name") or "Pranav"
+    title = sender.get("title") or "Founder"
+    is_audit_variant = (variant_key or "").strip() == "ai-audit"
+    audit_source = "ai_audit_email" if is_audit_variant else "ai_audit_signature"
+    audit_url = build_audit_link(contact, source=audit_source)
+    has_audit = _has_audit_link(body)
+
+    if is_audit_variant:
+        if has_audit:
+            return body
+        return (
+            f"{body}\n\n-- {name}\n{title}, Possible Minds\n"
+            f"AI readiness audit: {audit_url}"
+        ).strip()
+
+    if CONSULT_URL not in body:
+        body = f"{body}\n\n-- {name}\n{title}, Possible Minds\n{CONSULT_URL}".strip()
+    if not has_audit:
+        body = f"{body}\nAI readiness audit: {audit_url}".strip()
+    return body
 
 
 def _sanitize_email_copy(value: str | None) -> str:
@@ -802,7 +839,7 @@ async def build_lead_email_context(
             "hard_rules": [
                 "Plaintext only",
                 "Do not mention private Front message details",
-                "Always include consult URL in signature",
+                "Do not write signature URLs; signature links are appended by code",
                 "Use at most one blog link",
             ],
         },
@@ -924,7 +961,7 @@ async def compose_lead_email(
     _validate(parsed)
     body = _sanitize_email_copy(str(parsed.get("body") or ""))
     body = _sanitize_body_salutation(body, contact=contact, firm_name=firm_name)
-    body = _ensure_consult_signature(body, payload["sender"])
+    body = _ensure_signature(body, payload["sender"], contact=contact, variant_key=composer_variant_key)
     composition = LeadEmailComposition(
         subject=_sanitize_subject(str(parsed.get("subject") or ""))[:500],
         body=body,

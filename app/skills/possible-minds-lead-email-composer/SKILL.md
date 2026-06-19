@@ -1,6 +1,6 @@
 ---
 name: possible-minds-lead-email-composer
-description: Compose policy-controlled Possible Minds lead-generation emails for PI firms, healthcare providers, and adjacent operational buyers using firm context, prior emails, replies, Front/Precise relationship signals, booked consult learnings, inferred pain points, optional blog links, and a required consult signature link.
+description: Compose policy-controlled Possible Minds lead-generation emails for PI firms, healthcare providers, and adjacent operational buyers using firm context, prior emails, replies, Front/Precise relationship signals, booked consult learnings, inferred pain points, and optional blog links. Signature links are appended by code.
 ---
 
 # Possible Minds Lead Email Composer
@@ -83,7 +83,7 @@ Use the payload fields when present:
 - `inferred_pain_points`: ranked operational pains.
 - `blog_posts`: allowed getpossibleminds.com blog links.
 - `policy`: send rules, target metric, safety constraints, allowed CTA style.
-- `sender`: sender name, title, company, consult URL.
+- `sender`: sender name, title, and company. Signature links are appended by code.
 
 ## Strategy Selection
 
@@ -377,14 +377,17 @@ link into a reply where a direct answer is better.
 
 Only use links provided in `blog_posts` or links on `https://getpossibleminds.com`.
 
-## Required Signature
+## Signature
 
-Every email body must end with a signature that includes the consult page link:
+Do not write signature URLs yourself. The application appends the sender
+signature, consult link, and AI-readiness audit link in deterministic code after
+your JSON response.
+
+End the body naturally before the signature. If you include a signoff, keep it to:
 
 ```text
 -- {sender.name}
 {sender.title}, Possible Minds
-https://getpossibleminds.com/consult
 ```
 
 If the sender title is missing, use `Founder`.

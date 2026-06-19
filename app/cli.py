@@ -60,6 +60,7 @@ lead_gen_observations_app = typer.Typer(
     help="List and summarize automatic lead-generation observations.",
     no_args_is_help=False,
 )
+aiaudit_app = typer.Typer(help="AI Audit tracked links and click attribution.", no_args_is_help=True)
 inbound_app = typer.Typer(help="Inbound email ingestion — Zoho IMAP reader for replies.", no_args_is_help=True)
 outreach_app = typer.Typer(help="Blog-post outreach campaigns — LLM-composed, per-recipient, tracked.", no_args_is_help=True)
 todos_app = typer.Typer(help="Editable project todo backlog.", no_args_is_help=True)
@@ -99,6 +100,7 @@ app.add_typer(personas_app, name="personas")
 app.add_typer(composer_ab_app, name="composer-ab")
 app.add_typer(sequences_app, name="sequences")
 app.add_typer(lead_gen_app, name="lead-gen")
+app.add_typer(aiaudit_app, name="aiaudit")
 app.add_typer(inbound_app, name="inbound")
 app.add_typer(outreach_app, name="outreach")
 app.add_typer(todos_app, name="todos")
@@ -6209,6 +6211,91 @@ def decisions_areas():
     """List the decision-log area taxonomy."""
     for a in sorted(_DECISION_AREAS):
         console.print(f"- {a}")
+
+
+def _parse_since_days(value: str) -> int:
+    raw = (value or "7d").strip().lower()
+    if raw.endswith("d"):
+        raw = raw[:-1]
+    try:
+        days = int(raw)
+    except ValueError:
+        raise typer.BadParameter("Use a day value like 7d or 30d.")
+    if days < 1:
+        raise typer.BadParameter("Since must be at least 1 day.")
+    return days
+
+
+@aiaudit_app.command("link")
+def aiaudit_link(
+    contact_id: str = typer.Option(..., "--contact", help="firm_contacts.id to attribute the audit link to."),
+    source: str = typer.Option("ai_audit_signature", "--source", help="ai_audit_signature | ai_audit_email"),
+):
+    """Print a contact-attributed AI Audit redirect link."""
+    async def _run() -> int:
+        from app.db import AsyncSessionLocal
+        from app.db.models import FirmContactRow
+        from app.services.aiaudit_links import build_audit_link
+
+        async with AsyncSessionLocal() as session:
+            contact = await session.get(FirmContactRow, contact_id)
+        if not contact:
+            console.print(f"[red]contact not found:[/red] {contact_id}")
+            return 1
+        console.print(build_audit_link(contact, source=source))
+        return 0
+
+    raise typer.Exit(asyncio.run(_run()))
+
+
+@aiaudit_app.command("clicks")
+def aiaudit_clicks(
+    since: str = typer.Option("7d", "--since", help="Window in days, e.g. 7d or 30d."),
+    limit: int = typer.Option(50, "--limit", min=1, max=500),
+):
+    """List recent AI Audit link clicks."""
+    async def _run() -> None:
+        from datetime import datetime, timedelta, timezone
+        from sqlalchemy import desc, select
+        from app.db import AsyncSessionLocal
+        from app.db.models import AuditLinkClickRow, FirmContactRow, LeadGenObservationRow
+
+        cutoff = datetime.now(timezone.utc) - timedelta(days=_parse_since_days(since))
+        async with AsyncSessionLocal() as session:
+            rows = (await session.execute(
+                select(AuditLinkClickRow, FirmContactRow)
+                .join(FirmContactRow, FirmContactRow.id == AuditLinkClickRow.contact_id)
+                .where(AuditLinkClickRow.clicked_at >= cutoff)
+                .order_by(desc(AuditLinkClickRow.clicked_at))
+                .limit(limit)
+            )).all()
+            obs_count = (await session.execute(
+                select(LeadGenObservationRow.id)
+                .where(LeadGenObservationRow.event_type == "link_clicked")
+                .where(LeadGenObservationRow.created_at >= cutoff)
+                .where(LeadGenObservationRow.raw_event_json["channel"].astext == "ai_audit")
+            )).all()
+
+        table = Table(title=f"AI Audit clicks since {since}")
+        table.add_column("clicked_at")
+        table.add_column("contact")
+        table.add_column("email")
+        table.add_column("pif_id")
+        table.add_column("source")
+        table.add_column("click_id")
+        for click, contact in rows:
+            table.add_row(
+                click.clicked_at.isoformat() if click.clicked_at else "",
+                contact.full_name or "",
+                contact.email or "",
+                click.pif_id or "",
+                click.source,
+                click.id,
+            )
+        console.print(table)
+        console.print(f"[dim]{len(rows)} click rows, {len(obs_count)} AI Audit link_clicked observations in window[/dim]")
+
+    asyncio.run(_run())
 
 
 if __name__ == "__main__":

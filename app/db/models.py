@@ -1221,6 +1221,30 @@ class LinkEventRow(Base):
     )
 
 
+class AuditLinkClickRow(Base):
+    """Append-only click log for contact-attributed AI Audit links."""
+    __tablename__ = "audit_link_clicks"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    contact_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("firm_contacts.id", ondelete="CASCADE"), nullable=False,
+    )
+    batch_item_id: Mapped[str | None] = mapped_column(
+        String(64), ForeignKey("lead_gen_batch_items.id", ondelete="SET NULL"), nullable=True,
+    )
+    pif_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    source: Mapped[str] = mapped_column(String(64), nullable=False)
+    ip: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    user_agent: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    referer: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    clicked_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow)
+
+    __table_args__ = (
+        Index("ix_audit_link_clicks_contact_id", "contact_id"),
+        Index("ix_audit_link_clicks_clicked_at", "clicked_at"),
+    )
+
+
 class LeadGenPolicyVersionRow(Base):
     """Versioned, auditable scoring policy for cybernetic lead generation.
 

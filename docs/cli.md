@@ -184,6 +184,8 @@ Every command accepts `--help`. Exit code is `0` on success, `1` on any error
 | `lead-gen daily-enable` / `lead-gen daily-disable` | Flip the persisted `daily_run_enabled` flag. The daemon loop is wired on boot but defaults disabled and no-ops until an operator enables it. |
 | `lead-gen observations [--since=7d --type=<event_type> --contact=<contact_id> --json]` | List automatic lead-gen observations with batch/contact/item linkage. Includes sends, failures, replies, clicks, bookings, call dispositions, cancellations, and reschedules. |
 | `lead-gen observations summary [--since=7d --json]` | Count observations by event type for the weekly learning KPI / qualified-engagement readout. |
+| `aiaudit link --contact <contact_id> [--source ai_audit_signature\|ai_audit_email]` | Print a contact-attributed AI Audit redirect URL using `OUTREACH_PUBLIC_BASE_URL` and signed by `AIAUDIT_LINK_SECRET`. |
+| `aiaudit clicks [--since 7d] [--limit 50]` | List recent `audit_link_clicks` rows and matching AI Audit `link_clicked` observations. |
 | `leads warm-list [--limit=20] [--json]` | Print the top Front-warmed firms with named contacts that have not yet been emailed. Use after `front sync` for the daily warm-list workflow. |
 | `actions list [--status=approved --type=send_approved_lead_gen_draft --scheduled --json]` | List durable Possible OS action execution records. `--scheduled` shows only future approved scheduled actions ordered by `scheduled_for`; the normal list header includes the pending scheduled count. |
 | `actions show <action_id> [--json]` | Show one action with its append-only event timeline. |
@@ -812,6 +814,20 @@ bin/possibleos lead-gen observations summary --since 7d
 bin/possibleos lead-gen observations --since 7d
 bin/possibleos lead-gen observations --since 7d --type email_reply_received
 ```
+
+### Recipe: "check AI Audit attribution"
+Use this when checking the AI-readiness freeware funnel from lead-gen email.
+
+```bash
+bin/possibleos aiaudit link --contact <contact_id>
+bin/possibleos aiaudit clicks --since 7d
+bin/possibleos lead-gen observations --since 7d --type link_clicked
+```
+
+The public redirect is `/aiaudit/go?t=<signed-token>`. It logs
+`audit_link_clicks`, records a deterministic `link_clicked` observation with
+`raw_event_json.channel = "ai_audit"`, and redirects to `AIAUDIT_PUBLIC_URL`
+with non-PHI prefill plus `c=<click_id>`.
 
 ### Recipe: "morning mindset check"
 ```bash

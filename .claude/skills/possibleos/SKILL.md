@@ -493,6 +493,7 @@ Common causes: Geo permissions not enabled, AMD mis-classifying carrier voicemai
 | `Possible OS sequences list [--status active\|paused\|completed]` | List sequence rows + step state. |
 | `Possible OS lead-gen policy\|recommend\|batches\|show\|approve\|observe\|observations\|propose` | Cybernetic lead-generation loop for Precise Imaging. Recommends bounded batches, requires approval, and creates lightweight operator action-center approvals immediately when selected email sequences are queued; drafts compose lazily when an action is opened. Automatic observations capture sends, failures, replies, clicks, bookings, call dispositions, cancellations, and reschedules. Use `lead-gen observations summary --since 7d` for the weekly learning KPI. UI: `/lead-gen`. Concept doc: `docs/CYBERNETIC_LEAD_GEN_CONCEPT.md`. |
 | `Possible OS lead-gen daily-run\|daily-status\|throughput\|daily-enable\|daily-disable` | Daily lead-selection and drafting pipeline. `daily-run --dry-run` is no-write/no-action validation. A real run creates a checkpointed daily batch, drafts emails, and schedules send actions. `throughput` shows selected, with evidence, composed, sending today, held, shortfall, and blocker. The daemon loop defaults off and is controlled by persisted `daily_run_enabled`. |
+| `Possible OS aiaudit link --contact <contact_id>` / `aiaudit clicks --since 7d` | AI Audit freeware attribution. `link` prints a contact-attributed signed redirect URL; `clicks` lists `audit_link_clicks` and AI Audit `link_clicked` observations. Public redirect: `/aiaudit/go?t=<signed-token>`. |
 | `Possible OS actions list\|show\|policy-check\|execute` | Durable Possible OS action execution queue. Supported high-risk actions must be policy-checked and use narrow executors. |
 | `Possible OS actions list [--scheduled]` | List durable action records. `--scheduled` shows future approved scheduled sends ordered by send time. |
 | `Possible OS actions scheduler-status` | Show daemon scheduled-action loop status, last tick, pending scheduled count, and due count. |
@@ -576,11 +577,12 @@ the open internet, or tracking links in recipient inboxes go nowhere.
 - Declared winners get merged into the base skill; losers retired via
   variant.json active=false; next axis (opener/CTA/evidence) starts after.
 
-## First-touch Yelp-pain-quote variant
-- All first-touch (non-follow_up) lead-gen emails are forced to the
-  `yelp-pain-quote` composer variant by default (env
-  `LEAD_GEN_FIRST_TOUCH_VARIANT`, set empty to disable; an explicit
-  `composer_variant_key` from preview "compare variants" still overrides).
+## First-touch composer variants
+- All first-touch (non-follow_up) lead-gen emails are forced to the configured
+  `LEAD_GEN_FIRST_TOUCH_VARIANT` when set (current default may be
+  `review-evidence`; `ai-audit` is available as a forced-only variant for the
+  AI Audit freeware CTA; an explicit `composer_variant_key` from preview
+  "compare variants" still overrides).
   Follow-up steps are never forced.
 - When the firm has an extracted Yelp client-communication quote (see the
   `yelp-review-quotes` skill + `firm_reviews`), the email cites it **verbatim and
