@@ -1,6 +1,11 @@
 from types import SimpleNamespace
 
+import pytest
+
+from app.api import aiaudit
+from app.db.models import FirmContactRow
 from app.services.aiaudit_links import build_audit_link, build_audit_token, verify_audit_token
+from app.services.aiaudit_prefill import audit_preanswer_params
 
 
 def test_audit_token_round_trip(monkeypatch):
@@ -40,3 +45,53 @@ def test_build_audit_link_uses_outreach_public_base(monkeypatch):
 
     assert url.startswith("https://possible.example/aiaudit/go?t=")
     assert verify_audit_token(url.split("t=", 1)[1])["contact_id"] == "contact-1"
+
+
+def test_audit_token_uses_auth_session_secret_fallback(monkeypatch):
+    monkeypatch.delenv("AIAUDIT_LINK_SECRET", raising=False)
+    monkeypatch.setenv("AUTH_SESSION_SECRET", "session-secret")
+
+    token = build_audit_token(contact_id="contact-1", source="ai_audit_email")
+
+    assert verify_audit_token(token)["contact_id"] == "contact-1"
+
+
+def test_audit_preanswer_params_only_uses_high_confidence_case_systems():
+    assert audit_preanswer_params(
+        contact_tech_signals={"case_mgmt": "Filevine"}
+    ) == {"pa.case_system": "3"}
+    assert audit_preanswer_params(
+        contact_tech_signals={"case_mgmt": "unknown"}
+    ) == {}
+    assert audit_preanswer_params(contact_tech_signals={}) == {}
+
+
+@pytest.mark.asyncio
+async def test_prefill_for_payload_adds_case_system_preanswer(monkeypatch):
+    class FakeSession:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return None
+
+        async def get(self, model, key):
+            if model is FirmContactRow:
+                return SimpleNamespace(
+                    pif_id="pif-1",
+                    tech_signals={"case_mgmt": "filevine"},
+                )
+            return None
+
+    monkeypatch.setattr(aiaudit, "AsyncSessionLocal", lambda: FakeSession())
+
+    async def fake_resolve_firm_name(pif_id):
+        return "Demo Firm"
+
+    monkeypatch.setattr(aiaudit, "resolve_firm_name", fake_resolve_firm_name)
+
+    query = await aiaudit._prefill_for_payload({"contact_id": "contact-1"})
+
+    assert query["firm"] == "Demo Firm"
+    assert query["case_mgmt"] == "filevine"
+    assert query["pa.case_system"] == "3"
