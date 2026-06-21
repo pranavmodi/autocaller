@@ -42,10 +42,10 @@ function shortDate(value: string | null | undefined) {
   });
 }
 
-function ptDate(value: string | null | undefined) {
+function istDate(value: string | null | undefined) {
   if (!value) return "";
-  return new Date(value).toLocaleString("en-US", {
-    timeZone: "America/Los_Angeles",
+  return new Date(value).toLocaleString("en-IN", {
+    timeZone: "Asia/Kolkata",
     month: "short",
     day: "numeric",
     hour: "numeric",
@@ -387,7 +387,7 @@ function ScheduledActionsPanel({
                       </div>
                       <div className="mt-2 flex flex-wrap items-center gap-2">
                         <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[11px] font-medium text-sky-800">
-                          {ptDate(action.scheduled_for)}
+                          {istDate(action.scheduled_for)}
                         </span>
                         <span className="text-[11px] font-medium text-neutral-500">
                           {relativeSchedule(action.scheduled_for)}
@@ -420,7 +420,7 @@ function ScheduledActionDetail({ action }: { action: AgentAction }) {
           Scheduled pending
         </span>
         <span className="text-xs text-neutral-500">
-          {ptDate(action.scheduled_for)} - {relativeSchedule(action.scheduled_for)}
+          {istDate(action.scheduled_for)} - {relativeSchedule(action.scheduled_for)}
         </span>
       </div>
       <h3 className="mt-2 text-base font-semibold text-neutral-950">

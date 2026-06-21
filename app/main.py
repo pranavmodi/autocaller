@@ -194,6 +194,7 @@ _AUTH_EXEMPT_PREFIXES = (
     # clients, no session cookie possible.
     "/t/o/",
     "/t/c/",
+    "/a/",
     "/aiaudit/go",
 )
 

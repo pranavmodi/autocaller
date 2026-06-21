@@ -22,6 +22,23 @@ DB-backed `todos` table and should be added through the `/todos` UI or
 mostly mutually exclusive: do not bury active todos in the concept doc, and do
 not describe aspirational behavior as implemented in the technical doc.
 
+## Key GTM / strategy docs
+
+- **Freeware wedge GTM (portfolio):** `docs/product/FREEWARE_GTM_STRATEGY.md` —
+  umbrella strategy for Possible Minds' free, firm-specific diagnostic tools
+  (aiscan = AI Search Visibility, aiaudit = AI Readiness Audit, + future tools).
+  Defines the franchise rules every new freeware tool must inherit. Read this
+  before building or pitching a new free diagnostic.
+- **Founder persona + new-tool backlog:** `docs/product/PI_FOUNDER_PERSONA_AND_FREEWARE_IDEAS.md`
+  — research-grounded PI owner persona, ranked pain map, and the ranked backlog of
+  next freeware tools (top: Ghost Lead Test, Intake Conversion Teardown).
+- **Per-tool spec (aiscan):** `docs/product/AI_SEARCH_VISIBILITY_TOOL_SPEC.md`.
+- **Per-tool spec (aiaudit):** `/home/pranav/AIAudit/` (separate repo, README +
+  `docs/`).
+- **GTM reasoning / channel + ICP:** `docs/product/GTM_STRATEGY_2026-06.md`.
+- **Outbound BD vision:** `docs/VISION.md`. **Lead-gen loop:**
+  `docs/CYBERNETIC_LEAD_GEN_CONCEPT.md`.
+
 Concrete examples of features that **must** have CLI commands, not just REST:
 - Global on/off switches (`system on/off`, `mock on/off`)
 - Safety rails (`allowlist add/remove/list/clear`)

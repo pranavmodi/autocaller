@@ -62,7 +62,28 @@ def test_ensure_signature_adds_consult_and_audit_links(monkeypatch):
 
     assert CONSULT_URL in body
     assert "https://possible.example/aiaudit/go?t=" in body
-    assert "AI readiness audit:" in body
+    assert "Is your firm ready to leverage AI?" in body
+
+
+def test_ensure_signature_removes_generated_duplicate_signature(monkeypatch):
+    monkeypatch.setenv("AIAUDIT_LINK_SECRET", "test-secret")
+    monkeypatch.setenv("OUTREACH_PUBLIC_BASE_URL", "https://possible.example")
+    contact = ContactStub(pif_id="pif-1")
+
+    body = _ensure_signature(
+        "Hi Sarah,\n\nQuick note.\n\n-- Pranav\nFounder, Possible Minds",
+        {"name": "Pranav", "title": "Founder"},
+        contact=contact,  # type: ignore[arg-type]
+        variant_key="baseline",
+        audit_url="https://possible.example/a/abc123",
+    )
+
+    assert body.count("-- Pranav") == 1
+    assert body.count("Founder, Possible Minds") == 1
+    assert (
+        "Is your firm ready to leverage AI? What's blocking your transformation? "
+        "Find out in 10 minutes: https://possible.example/a/abc123"
+    ) in body
 
 
 def test_ensure_signature_uses_audit_as_primary_cta_for_audit_variant(monkeypatch):
@@ -77,9 +98,16 @@ def test_ensure_signature_uses_audit_as_primary_cta_for_audit_variant(monkeypatc
         variant_key="ai-audit",
     )
 
-    assert CONSULT_URL not in body
     assert "https://possible.example/aiaudit/go?t=" in body
-    assert "AI readiness audit:" in body
+    assert "Is your firm ready to leverage AI?" in body
+    # For the audit variant the link is the primary CTA: it must sit in the body
+    # ABOVE the sign-off, never inside the signature.
+    assert body.index("/aiaudit/go?t=") < body.index("-- Pranav")
+    sign_off_tail = body[body.index("-- Pranav"):]
+    assert "/aiaudit/go?t=" not in sign_off_tail
+    # The consult link appears in the signature for every variant, including
+    # the audit variant.
+    assert f"Book a consult: {CONSULT_URL}" in sign_off_tail
 
 
 def test_sanitize_email_copy_removes_generated_dash_punctuation():

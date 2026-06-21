@@ -9,13 +9,24 @@ import os
 import secrets
 from typing import Any
 
+from sqlalchemy.exc import IntegrityError
+
+from app.db import AsyncSessionLocal
+from app.db.models import AuditLinkRow
+
 VALID_SOURCES = {"ai_audit_signature", "ai_audit_email"}
 
 
 def _secret() -> bytes:
-    secret = os.getenv("AIAUDIT_LINK_SECRET", "").strip()
+    # Signed attribution prevents forged /aiaudit/go URLs from polluting
+    # lead-gen observations. Use the existing app session secret by default so
+    # AI Audit tracking does not require a second operational secret.
+    secret = (
+        os.getenv("AIAUDIT_LINK_SECRET", "").strip()
+        or os.getenv("AUTH_SESSION_SECRET", "").strip()
+    )
     if not secret:
-        raise RuntimeError("AIAUDIT_LINK_SECRET is not set")
+        raise RuntimeError("AUTH_SESSION_SECRET is not set")
     return secret.encode("utf-8")
 
 
@@ -27,6 +38,13 @@ def _public_base_url() -> str:
             "possibleos is reachable at from email clients."
         )
     return value
+
+
+def _link_public_base_url() -> str:
+    return (
+        os.getenv("AIAUDIT_LINK_BASE_URL", "").strip().rstrip("/")
+        or _public_base_url()
+    )
 
 
 def _b64encode(raw: bytes) -> str:
@@ -102,3 +120,57 @@ def build_audit_link(contact: Any, *, batch_item_id: str | None = None, source: 
         source=source,
     )
     return f"{_public_base_url()}/aiaudit/go?t={token}"
+
+
+def _new_short_code() -> str:
+    return secrets.token_urlsafe(6).rstrip("_-")
+
+
+async def build_short_audit_link(
+    contact: Any,
+    *,
+    batch_item_id: str | None = None,
+    source: str,
+) -> str:
+    clean_source = str(source or "").strip()
+    if clean_source not in VALID_SOURCES:
+        raise ValueError(f"invalid AI Audit link source: {source}")
+    contact_id = str(getattr(contact, "id", "") or "").strip()
+    if not contact_id:
+        raise ValueError("contact_id_required")
+    pif_id = str(getattr(contact, "pif_id", "") or "").strip() or None
+    clean_batch_item_id = str(batch_item_id or "").strip() or None
+
+    async with AsyncSessionLocal() as session:
+        for _ in range(8):
+            code = _new_short_code()
+            session.add(AuditLinkRow(
+                code=code,
+                contact_id=contact_id,
+                batch_item_id=clean_batch_item_id,
+                pif_id=pif_id,
+                source=clean_source,
+            ))
+            try:
+                await session.commit()
+                return f"{_link_public_base_url()}/a/{code}"
+            except IntegrityError:
+                await session.rollback()
+    raise RuntimeError("audit_short_code_collision")
+
+
+async def resolve_short_audit_code(code: str | None) -> dict[str, Any] | None:
+    clean_code = str(code or "").strip()
+    if not clean_code:
+        return None
+    async with AsyncSessionLocal() as session:
+        row = await session.get(AuditLinkRow, clean_code)
+    if not row:
+        return None
+    return {
+        "contact_id": row.contact_id,
+        "batch_item_id": row.batch_item_id,
+        "pif_id": row.pif_id,
+        "source": row.source,
+        "link_code": row.code,
+    }

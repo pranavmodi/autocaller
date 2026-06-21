@@ -1245,6 +1245,27 @@ class AuditLinkClickRow(Base):
     )
 
 
+class AuditLinkRow(Base):
+    """Short, clickable AI Audit redirect codes used in plaintext email."""
+    __tablename__ = "audit_links"
+
+    code: Mapped[str] = mapped_column(String(32), primary_key=True)
+    contact_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("firm_contacts.id", ondelete="CASCADE"), nullable=False,
+    )
+    batch_item_id: Mapped[str | None] = mapped_column(
+        String(64), ForeignKey("lead_gen_batch_items.id", ondelete="SET NULL"), nullable=True,
+    )
+    pif_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    source: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow)
+
+    __table_args__ = (
+        Index("ix_audit_links_contact_id", "contact_id"),
+        Index("ix_audit_links_created_at", "created_at"),
+    )
+
+
 class LeadGenPolicyVersionRow(Base):
     """Versioned, auditable scoring policy for cybernetic lead generation.
 

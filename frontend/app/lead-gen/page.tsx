@@ -38,6 +38,7 @@ import {
   listLeadGenDailyRuns,
   previewSequence,
   putFirmReviews,
+  recomposeLeadGenBatchItemDraft,
   runLeadGenDaily,
   sendLeadGenBatchItemDraft,
   composeBatchItemVariants,
@@ -57,7 +58,10 @@ import {
 import { cn } from "@/lib/utils";
 
 const DEFAULT_TEMPLATE = "possible_minds_dynamic";
-const CALIFORNIA_TIME_ZONE = "America/Los_Angeles";
+// Operator is in India: all displayed dates/times and day-boundary logic use IST.
+// The US-recipient send window (when firms are at their desks) is enforced in the
+// backend; here we only convert what the operator sees and the times they pick.
+const DISPLAY_TIME_ZONE = "Asia/Kolkata";
 const DEFAULT_DAILY_EMAIL_BUDGET = 50;
 type DraftGenerationStatus = "generating" | "completed" | "failed";
 
@@ -158,7 +162,7 @@ function LeadGenPageContent() {
         approved_by: "operator",
         start_sequences: true,
         stagger_minutes: 60,
-        scheduled_timezone: CALIFORNIA_TIME_ZONE,
+        scheduled_timezone: DISPLAY_TIME_ZONE,
       });
     },
     onSuccess: (data) => {
@@ -199,7 +203,7 @@ function LeadGenPageContent() {
   });
 
   const todayDailyRun =
-    (dailyRuns.data?.runs ?? []).find((run) => run.run_date === californiaDateKey(new Date())) ??
+    (dailyRuns.data?.runs ?? []).find((run) => run.run_date === istDateKey(new Date())) ??
     (dailyRuns.data?.runs ?? [])[0] ??
     null;
 
@@ -316,70 +320,144 @@ function LeadGenPageContent() {
   );
 }
 
-const leadGenProcessSteps = [
+// OPERATOR-FACING DESCRIPTION OF THE LIVE PIPELINE. Keep "current" text in sync
+// with the actual code whenever the pipeline changes — these are the files that
+// back each step:
+//   1-2 selection/batch  app/services/lead_gen_daily.py (_select_daily_contacts,
+//        _select_contacts, _select_by_persona_quota, _create_daily_batch),
+//        app/services/sequence_recommendations.py (recommend_sequence_contacts),
+//        app/services/contact_selection.py (score_contact_selection)
+//   3   queue/approve     lead_gen_daily.py (_schedule_drafted_items, spread_schedule_times)
+//   4   compose           lead_gen_email_agent.py (_compose_batch_items + review-evidence gate),
+//        lead_email_composer.py (compose_lead_email),
+//        lead_email_composer_variants.py (choose_composer_skill_variant, rendezvous A/B)
+//   6   send              action_execution.py / scheduled_action_loop + PHI guard
+type LoopBullet = { k?: string; v: string };
+type LoopStep = {
+  step: string;
+  title: string;
+  summary: string;
+  current: LoopBullet[];
+  ideal: string[];
+};
+
+const leadGenProcessSteps: LoopStep[] = [
   {
     step: "1",
     title: "Select daily actions",
-    current:
-      "Today the planner spends the daily budget across pending replies, already-composed drafts, due follow-ups, and new first-touch contacts. New starts come from firm_contacts, require a usable email, skip firms with prior call/email/SMS history, skip existing outreach runs, filter obvious non-law records, and run an explainable contact-selection scorer using persona, firm-fit, relationship, email-quality, and history components. The selected item stores the score breakdown, features, policy version, suppressions, and reason trace.",
-    ideal:
-      "Add Front read-only relationship signals, booked consult patterns, firm size, website/leadership context, inferred operational pain, prior engagement, and suppression history so the daily batch is selected by likelihood of booked qualified conversation with richer evidence.",
+    summary: "Spend the budget on due follow-ups first, then the best fresh first-touch firms.",
+    current: [
+      { k: "Trigger", v: "Fires 8 AM IST. Weekdays only (IST); weekends skip unless an operator forces a run." },
+      { k: "Fill order", v: "Due sequence follow-ups first (oldest-due first), then fresh first-touch contacts top up the remaining slots." },
+      { k: "Candidate pool", v: "recommend_sequence_contacts returns one founder/COO-style contact per untouched firm (pool = budget×10, min 200)." },
+      { k: "Suppression", v: "Drops any contact ever sent to or already in a send batch; firms emailed/batched within 14 days (EMAIL_FIRM_COOLDOWN_DAYS); firms with an existing sequence or prior call/SMS; collections/non-payment Front flags; non-law and hard-excluded domains." },
+      { k: "Scoring", v: "score_contact_selection — additive, policy-weighted over persona, email quality (direct-named > role > generic), firm fit (PI/legal marker, state), lead source, history (no prior comms, no existing sequence), and capped Front warm-score; risk flags apply large negatives." },
+      { k: "Quota + evidence", v: "Persona quotas fill first, then relax. Evidence-aware selection prefers firms with usable Yelp evidence, reserving 3 slots (LEAD_GEN_NO_EVIDENCE_RESERVE) for top no-evidence firms to feed the paste-reviews loop." },
+      { k: "Trace", v: "Each item stores its score breakdown, features, signals, suppressions, policy version, and reason." },
+    ],
+    ideal: [
+      "Add Front relationship signals, booked-consult patterns, firm size, website/leadership context, and inferred operational pain.",
+      "Rank directly by likelihood of a booked qualified conversation rather than proxy features.",
+    ],
   },
   {
     step: "2",
     title: "Create the batch",
-    current:
-      "Creating a batch stores lead_gen_batches and lead_gen_batch_items as a ranked daily action plan. Items carry an action type such as reply_to_inbound, approve_existing_draft, follow_up, or first_touch plus the contact-selection trace used to rank that item. No email can be sent at this stage.",
-    ideal:
-      "The daily runner should create a policy-explained batch automatically, attach recommendation evidence for each firm, and separate eligible, suppressed, already-contacted, and needs-review candidates.",
+    summary: "Persist the ranked plan with full traces; nothing can send yet.",
+    current: [
+      { k: "Storage", v: "_create_daily_batch writes lead_gen_batches + lead_gen_batch_items as the ranked daily plan." },
+      { k: "Per item", v: "Carries an action type — reply_to_inbound, approve_existing_draft, follow_up, or first_touch — plus the full selection trace (score breakdown, features, signals, suppressions, persona, policy version)." },
+      { k: "Safety", v: "No email can be sent at this stage; the batch is just the explained plan." },
+    ],
+    ideal: [
+      "Attach a recommendation-evidence packet per firm.",
+      "Separate eligible, suppressed, already-contacted, and needs-review candidates as first-class buckets.",
+    ],
   },
   {
     step: "3",
-    title: "Approve and queue",
-    current:
-      "The daily runner schedules composed lead-gen send actions across the configured California-time send window. When autonomous send is enabled, those actions are created as approved; otherwise they wait for operator approval.",
-    ideal:
-      "A daily operating policy should decide whether a batch is auto-created but still keep send approval manual. It should enforce daily caps, sender/domain limits, cooldowns, and first-class suppressions before any outreach run is queued.",
+    title: "Queue and approve",
+    summary: "Spread sends across the window; auto-approve when enabled.",
+    current: [
+      { k: "Scheduling", v: "_schedule_drafted_items spreads drafts across the US-morning window (9:30 PM–12 AM IST / 9–11:30 AM PT) via spread_schedule_times — one send_email action per draft." },
+      { k: "Autonomous ON", v: "Writes the hash-bound approval block via approve_lead_gen_batch_send_actions (same path as the manual Approve & send), so each action is created already-approved and fires without a click." },
+      { k: "Autonomous OFF", v: "Actions wait for operator approval." },
+      { k: "Always", v: "The send still passes the execution-time policy and PHI egress guard." },
+    ],
+    ideal: [
+      "A versioned daily operating policy that decides auto-create vs. manual approval per batch.",
+      "Enforce daily caps, sender/domain limits, cooldowns, and suppressions as explicit gates before queueing.",
+    ],
   },
   {
     step: "4",
     title: "Compose each email",
-    current:
-      "All lead-gen batches use the possible_minds_dynamic composer. When an outreach step becomes due, the backend builds context from the contact, firm, prior outbound emails, inbound replies, booked consult patterns, optional blog links, and policy, then calls app/skills/possible-minds-lead-email-composer/SKILL.md to choose the strategy and draft plaintext copy.",
-    ideal:
-      "The composer should also receive Front-derived workflow signals, CRM state, firm-size/leadership intelligence, website evidence, experiment assignment, known winning consult patterns, and skill-version history. The skill should be updated from reviewed feedback over time.",
+    summary: "Gate on review evidence, pick the skill variant, draft subject/body.",
+    current: [
+      { k: "Evidence gate", v: "First-touch items with no outreach-usable Yelp evidence of the allowed kinds (default complaint/praise/fact) are HELD (awaiting_review_evidence) and stay selected so the Unblock panel prompts for reviews — no draft until evidence lands." },
+      { k: "Default variant", v: "First-touch drafts use the angle-aware review-evidence variant (LEAD_GEN_FIRST_TOUCH_VARIANT), framing the hook by the primary evidence kind; falls back to baseline when none. Follow-ups keep their sequence variant." },
+      { k: "Skill selection", v: "An explicit composer_variant_key (preview Compare-variants) always wins; otherwise choose_composer_skill_variant assigns an A/B arm by rendezvous hashing over active variants with allocation_weight > 0, weighted and keyed by contact — stable as variants are added (weight-0 = forcible by key, excluded from random A/B)." },
+      { k: "Context", v: "compose_lead_email builds context from the contact, firm, prior outbound + inbound emails, booked-consult patterns, optional blog links, the selected review-evidence quote, and the selection trace, then calls the chosen SKILL.md for subject/body JSON." },
+      { k: "Resilience", v: "A compose failure is caught and held (compose_error) so one bad item never strands the rest of the batch." },
+    ],
+    ideal: [
+      "Feed the composer Front workflow signals, CRM state, firm-size/leadership intelligence, and website evidence.",
+      "Let reviewed outcomes update the SKILL.md examples and variant weights over time.",
+    ],
   },
   {
     step: "5",
     title: "Review before send",
-    current:
-      "Manual review remains available for edited or manually generated draft actions. The action center shows firm/contact context, editable subject/body, rationale, angle, CTA, blog link when used, and model metadata.",
-    ideal:
-      "The action center should also show the exact evidence packet used, policy constraints, risk flags, prior touches, deliverability warnings, and alternate draft options. Approval, edits, and rejection reasons should become learning observations.",
+    summary: "Inspect, edit, or unblock before anything goes out.",
+    current: [
+      { k: "When", v: "Available for edited/manual drafts and for any run with autonomous send off." },
+      { k: "Shows", v: "Firm + contact context, editable subject/body, rationale, angle, CTA, blog link, the selected review-evidence quote, and model/variant metadata." },
+      { k: "Unblock", v: "The Unblock panel surfaces held firms with their evidence status so reviews can be pasted inline." },
+    ],
+    ideal: [
+      "Also show the exact evidence packet, policy constraints, risk flags, prior touches, deliverability warnings, and alternate drafts.",
+      "Turn every approval, edit, and rejection reason into a learning observation.",
+    ],
   },
   {
     step: "6",
     title: "Send and advance",
-    current:
-      "The scheduled-action daemon sends approved lead-gen drafts through the configured email transport, writes email_logs, records action execution evidence, and observes the send for the learning loop.",
-    ideal:
-      "The send path should attach experiment IDs, composer skill version, policy version, sender identity, selected blog link, and full render metadata so every outcome can be traced back to the decision that produced it.",
+    summary: "The scheduler fires approved sends and logs everything.",
+    current: [
+      { k: "Daemon", v: "scheduled_action_loop (~30s tick) picks up approved actions whose scheduled time has arrived." },
+      { k: "Guard", v: "Re-runs the policy + PHI egress guard at execution time, then sends through the configured email transport." },
+      { k: "Records", v: "Writes email_logs, records action-execution evidence, advances the sequence step, and emits a send observation." },
+      { k: "Stamping", v: "Each action carries its composer experiment + variant key, skill path/sha, and brief version." },
+    ],
+    ideal: [
+      "Also attach policy version, sender identity, and full render metadata so each outcome traces to the exact decision behind it.",
+    ],
   },
   {
     step: "7",
     title: "Observe feedback",
-    current:
-      "The loop can ingest Zoho inbound replies, Resend delivery events when configured, manual observations, operator notifications, and booked consults in the Possible OS database. Replies pause outreach runs and create review tasks.",
-    ideal:
-      "Add automated polling jobs, production Resend webhook config, Front read-only ingestion, calendar lifecycle events, CRM/deal outcomes, landing-page analytics, and normalized observation records across all feedback sources.",
+    summary: "Pull replies and events back into the loop.",
+    current: [
+      { k: "Sources", v: "Zoho inbound replies, Resend delivery events (when configured), manual observations, operator notifications, and booked consults." },
+      { k: "Effect", v: "Replies pause the outreach run and create a review task; observations link back to the batch item and its composer variant." },
+    ],
+    ideal: [
+      "Add automated polling, a production Resend webhook, Front read-only ingestion, calendar lifecycle events, CRM/deal outcomes, and landing-page analytics.",
+      "Normalize into one observation record across all sources.",
+    ],
   },
   {
     step: "8",
     title: "Learn and update policy",
-    current:
-      "Observations and proposal generation exist, but scoring, copy doctrine, skill examples, sender strategy, suppression rules, and policy versions are not automatically updated from feedback.",
-    ideal:
-      "Aggregate feedback into human-reviewed proposals: change targeting weights, suppressions, cadence, blog-link choices, composer instructions, examples, and policy versions. Apply changes only after approval until the loop has enough evidence for low-risk automation.",
+    summary: "Feedback informs proposals; updates stay operator-driven.",
+    current: [
+      { k: "Exists", v: "Observations, proposal generation, and a composer A/B report (beta-binomial P(beats baseline) on opens/replies per variant×persona)." },
+      { k: "Gap", v: "Scoring weights, copy doctrine, skill examples, sender strategy, suppression rules, and policy versions are not yet auto-updated — changes are operator-driven." },
+    ],
+    ideal: [
+      "Aggregate feedback into human-reviewed proposals adjusting weights, suppressions, cadence, blog-link choices, composer instructions/examples, and policy versions.",
+      "Apply only after approval until there's enough evidence for low-risk automation.",
+    ],
   },
 ];
 
@@ -416,7 +494,7 @@ function LeadGenProcessExplanation() {
           {leadGenProcessSteps.map((item) => (
             <div
               key={item.step}
-              className="grid gap-3 px-4 py-3 text-sm xl:grid-cols-[220px_minmax(0,1fr)_minmax(0,1fr)]"
+              className="grid gap-3 px-4 py-4 text-sm xl:grid-cols-[220px_minmax(0,1fr)_minmax(0,1fr)]"
             >
               <div className="flex min-w-0 items-start gap-3">
                 <span className="flex h-7 w-7 flex-none items-center justify-center rounded-full bg-neutral-900 text-xs font-semibold text-white">
@@ -424,19 +502,23 @@ function LeadGenProcessExplanation() {
                 </span>
                 <div className="min-w-0">
                   <div className="font-medium text-neutral-900">{item.title}</div>
+                  <p className="mt-0.5 text-xs leading-snug text-neutral-500">{item.summary}</p>
                 </div>
               </div>
-              <div className="min-w-0 rounded-md bg-neutral-50 px-3 py-2">
-                <div className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-neutral-400">
+              <div className="min-w-0 rounded-md bg-neutral-50 px-3 py-2.5">
+                <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-neutral-400">
                   Now
                 </div>
-                <p className="text-xs leading-relaxed text-neutral-700">{item.current}</p>
+                <LoopBulletList bullets={item.current} tone="now" />
               </div>
-              <div className="min-w-0 rounded-md bg-emerald-50 px-3 py-2">
-                <div className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-emerald-700">
+              <div className="min-w-0 rounded-md bg-emerald-50 px-3 py-2.5">
+                <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-emerald-700">
                   Ideal
                 </div>
-                <p className="text-xs leading-relaxed text-emerald-900">{item.ideal}</p>
+                <LoopBulletList
+                  bullets={item.ideal.map((v) => ({ v }))}
+                  tone="ideal"
+                />
               </div>
             </div>
           ))}
@@ -446,15 +528,57 @@ function LeadGenProcessExplanation() {
   );
 }
 
+function LoopBulletList({
+  bullets,
+  tone,
+}: {
+  bullets: LoopBullet[];
+  tone: "now" | "ideal";
+}) {
+  return (
+    <ul className="space-y-1.5">
+      {bullets.map((bullet, index) => (
+        <li
+          key={index}
+          className={cn(
+            "flex gap-2 text-xs leading-relaxed",
+            tone === "ideal" ? "text-emerald-900" : "text-neutral-700",
+          )}
+        >
+          <span
+            className={cn(
+              "mt-[6px] h-1 w-1 flex-none rounded-full",
+              tone === "ideal" ? "bg-emerald-500" : "bg-neutral-400",
+            )}
+          />
+          <span>
+            {bullet.k && (
+              <span
+                className={cn(
+                  "font-semibold",
+                  tone === "ideal" ? "text-emerald-950" : "text-neutral-900",
+                )}
+              >
+                {bullet.k}:{" "}
+              </span>
+            )}
+            {bullet.v}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 function SafetyBand() {
   return (
     <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
       <ShieldCheck className="h-4 w-4" />
       <span className="font-medium">Autonomous send is ON.</span>
       <span className="text-amber-800">
-        Composed first-touch drafts auto-approve and send in the 9-11:30 PT
-        window. Guards still apply: deterministic PHI patterns, send window,
-        deliverability breaker.
+        Composed first-touch drafts auto-approve and send in the US-morning
+        window (9:30 PM–12 AM IST / 9–11:30 AM PT). Guards still apply:
+        deterministic PHI patterns, send window, deliverability breaker.
       </span>
     </div>
   );
@@ -491,7 +615,7 @@ function ThroughputPanel({
         <div>
           <h2 className="text-base font-semibold text-neutral-900">Daily throughput</h2>
           <div className="mt-0.5 text-xs text-neutral-500">
-            {throughput?.run_date ?? californiaDateKey(new Date())} · run {throughput?.run_status ?? "loading"}
+            {throughput?.run_date ?? istDateKey(new Date())} · run {throughput?.run_status ?? "loading"}
           </div>
         </div>
         <span
@@ -825,7 +949,7 @@ function DailyRunPanel({
         <div className="flex items-center justify-between gap-3">
           <div>
             <div className="text-sm font-medium text-neutral-900">
-              {run?.run_date ?? californiaDateKey(new Date())}
+              {run?.run_date ?? istDateKey(new Date())}
             </div>
             <div className="mt-0.5 text-xs text-neutral-500">
               {run ? `${run.status} at ${run.stage}` : "No run recorded today"}
@@ -872,7 +996,7 @@ function DailyRunPanel({
           <button
             type="button"
             onClick={() => {
-              if (isCaliforniaWeekend()) setConfirmForce(true);
+              if (isIstWeekend()) setConfirmForce(true);
               else onRun(false, false);
             }}
             disabled={running}
@@ -912,7 +1036,7 @@ function DailyRunPanel({
             </p>
             <p className="mt-2 text-xs text-neutral-400">
               This composes drafts and, when autonomous send is enabled, schedules
-              approved send actions inside the PT send window.
+              approved send actions inside the US-morning send window (9:30 PM–12 AM IST).
             </p>
             <div className="mt-4 flex justify-end gap-2">
               <button
@@ -1106,7 +1230,7 @@ function BatchDetail({
   const [showAdvanced, setShowAdvanced] = useState(false);
   const openedRequestKey = useRef("");
   const [scheduledStartAt, setScheduledStartAt] = useState(() =>
-    defaultCaliforniaDateTimeLocal(),
+    defaultIstDateTimeLocal(),
   );
 
   const q = useQuery({
@@ -1127,7 +1251,7 @@ function BatchDetail({
         start_sequences: startSequences,
         stagger_minutes: 60,
         scheduled_start_at: startSequences ? scheduledStartAt : undefined,
-        scheduled_timezone: CALIFORNIA_TIME_ZONE,
+        scheduled_timezone: DISPLAY_TIME_ZONE,
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["lead-gen-batch", batchId] });
@@ -1255,7 +1379,7 @@ function BatchDetail({
   }
 
   const canApprove = data.batch.status === "recommended";
-  const isOlderPlan = !isCaliforniaToday(data.batch.created_at);
+  const isOlderPlan = !isIstToday(data.batch.created_at);
   const hasQueueableItems = data.items.some(canQueueItem);
   const canQueue =
     data.batch.status === "approved" &&
@@ -1358,7 +1482,7 @@ function BatchDetail({
               </span>
               <span className="ml-auto flex items-center gap-3 text-xs">
                 <span className="text-neutral-400">
-                  Completed · {formatCaliforniaDate(data.batch.created_at)}
+                  Completed · {formatIstDate(data.batch.created_at)}
                 </span>
                 <Link href="/comms" className="font-medium text-neutral-600 hover:text-neutral-900">
                   View emails in Comms →
@@ -1438,7 +1562,7 @@ function BatchDetail({
           <div className="space-y-3 border-t border-neutral-100 bg-neutral-50 px-4 py-3">
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="block text-xs font-medium text-neutral-600">
-                Start sending (California)
+                Start sending (IST)
                 <input
                   type="datetime-local"
                   value={scheduledStartAt}
@@ -1446,7 +1570,7 @@ function BatchDetail({
                   className="mt-1 w-full rounded-md border border-neutral-200 px-2 py-1.5 text-sm text-neutral-900"
                 />
                 <span className="mt-1 block font-normal text-neutral-400">
-                  America/Los_Angeles, staggered over 60 minutes.
+                  Asia/Kolkata, staggered over 60 minutes.
                 </span>
               </label>
               <label className="flex flex-col gap-1 text-xs font-medium text-neutral-600">
@@ -1941,6 +2065,10 @@ function objectValue(value: unknown): Record<string, unknown> | null {
 
 function storedAgentDraftStep(item: LeadGenBatchItem): RenderedSequenceStep | null {
   const draft = objectValue(item.reason?.agent_draft);
+  return draftPayloadToRenderedStep(draft);
+}
+
+function draftPayloadToRenderedStep(draft: Record<string, unknown> | null): RenderedSequenceStep | null {
   if (!draft) return null;
   const subject = typeof draft.subject === "string" ? draft.subject : "";
   const body = typeof draft.body === "string" ? draft.body : "";
@@ -1976,6 +2104,7 @@ function PreviewModal({
   const isDynamic = isDynamicComposer(item.template_key);
   const alreadySent = isEmailSent(item);
   const storedDraft = useMemo(() => storedAgentDraftStep(item), [item]);
+  const [recomposedStep, setRecomposedStep] = useState<RenderedSequenceStep | null>(null);
   const canSendDraft = canSendFromPreview(item);
   const [draftSubject, setDraftSubject] = useState("");
   const [draftBody, setDraftBody] = useState("");
@@ -1994,13 +2123,17 @@ function PreviewModal({
     staleTime: 5 * 60_000,
   });
   const nextStep = useMemo(() => {
+    if (recomposedStep) return recomposedStep;
     if (storedDraft) return storedDraft;
     const steps = q.data ?? [];
     const sequence = detail.data?.sequence;
     if (sequence && sequence.current_step >= sequence.steps_total) return undefined;
     const nextStepNumber = sequence ? sequence.current_step + 1 : 1;
     return steps.find((step) => step.step === nextStepNumber) ?? steps[0];
-  }, [detail.data?.sequence, q.data, storedDraft]);
+  }, [detail.data?.sequence, q.data, recomposedStep, storedDraft]);
+  useEffect(() => {
+    setRecomposedStep(null);
+  }, [item.id]);
   useEffect(() => {
     if (nextStep) {
       setDraftSubject(nextStep.subject);
@@ -2050,6 +2183,43 @@ function PreviewModal({
       onClose();
     },
   });
+  const recomposeDraft = useMutation({
+    mutationFn: () =>
+      recomposeLeadGenBatchItemDraft(item.id, {
+        actor: "operator",
+        composer_variant_key: composerVariantKey || undefined,
+      }),
+    onSuccess: (data) => {
+      const freshStep = draftPayloadToRenderedStep(objectValue(data.draft));
+      if (freshStep) {
+        setRecomposedStep(freshStep);
+        setDraftSubject(freshStep.subject);
+        setDraftBody(freshStep.body);
+        setDraftTouched(false);
+      }
+      setVariants(null);
+      setSelectedVariantKey(null);
+      qc.invalidateQueries({ queryKey: ["lead-gen-batch", item.batch_id] });
+      qc.invalidateQueries({ queryKey: ["lead-gen-batches"] });
+      qc.invalidateQueries({ queryKey: ["lead-gen-throughput"] });
+    },
+  });
+  const redoCompose = () => {
+    if (
+      draftTouched &&
+      !window.confirm("Redo compose and replace your current edits?")
+    ) {
+      return;
+    }
+    const scheduledAt = scheduledSendPt(item);
+    if (
+      scheduledAt &&
+      !window.confirm(`Redo this scheduled email compose? The queued send stays scheduled for ${scheduledAt}, but its subject/body and approval hash will be replaced.`)
+    ) {
+      return;
+    }
+    recomposeDraft.mutate();
+  };
 
   // Multi-variant compare: generate all composer variants on-demand, pick one to send.
   const [variants, setVariants] = useState<BatchItemVariantDraft[] | null>(null);
@@ -2245,6 +2415,26 @@ function PreviewModal({
           )}
         </div>
         <div className="flex flex-wrap justify-end gap-2 border-t border-neutral-100 px-5 py-3">
+          {storedDraft && !alreadySent && (
+            <button
+              type="button"
+              onClick={redoCompose}
+              disabled={
+                recomposeDraft.isPending ||
+                sendDraft.isPending ||
+                composeVariants.isPending ||
+                selectVariant.isPending
+              }
+              className="mr-auto inline-flex items-center gap-2 rounded-md border border-neutral-200 px-3 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50 disabled:opacity-60"
+            >
+              {recomposeDraft.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
+              Redo compose
+            </button>
+          )}
           {nextStep && !storedDraft && (
             <button
               type="button"
@@ -2283,6 +2473,13 @@ function PreviewModal({
               {sendDraft.error instanceof Error
                 ? sendDraft.error.message
                 : "Could not send this email."}
+            </div>
+          )}
+          {recomposeDraft.isError && (
+            <div className="basis-full text-right text-xs text-red-600">
+              {recomposeDraft.error instanceof Error
+                ? recomposeDraft.error.message
+                : "Could not redo compose for this email."}
             </div>
           )}
         </div>
@@ -2554,12 +2751,12 @@ function defaultDailyPlanName(dailyEmailBudget: number) {
   return `Daily action plan - ${clampDailyEmailBudget(dailyEmailBudget)} emails`;
 }
 
-function californiaDateKey(value: Date | string | null | undefined) {
+function istDateKey(value: Date | string | null | undefined) {
   if (!value) return "";
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return "";
   const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: CALIFORNIA_TIME_ZONE,
+    timeZone: DISPLAY_TIME_ZONE,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -2573,8 +2770,8 @@ function selectBatchForDisplay(batches: LeadGenBatch[]) {
     (a, b) => dateTimeMs(b.created_at) - dateTimeMs(a.created_at),
   );
   return (
-    sorted.find((batch) => batch.template_key === DEFAULT_TEMPLATE && isCaliforniaToday(batch.created_at)) ??
-    sorted.find((batch) => isCaliforniaToday(batch.created_at)) ??
+    sorted.find((batch) => batch.template_key === DEFAULT_TEMPLATE && isIstToday(batch.created_at)) ??
+    sorted.find((batch) => isIstToday(batch.created_at)) ??
     sorted.find((batch) => batch.template_key === DEFAULT_TEMPLATE) ??
     sorted[0] ??
     null
@@ -2587,24 +2784,24 @@ function dateTimeMs(value: string | null | undefined) {
   return Number.isNaN(timestamp) ? 0 : timestamp;
 }
 
-function isCaliforniaToday(value: string | null | undefined) {
-  return californiaDateKey(value) === californiaDateKey(new Date());
+function isIstToday(value: string | null | undefined) {
+  return istDateKey(value) === istDateKey(new Date());
 }
 
-function isCaliforniaWeekend() {
+function isIstWeekend() {
   const weekday = new Date().toLocaleDateString("en-US", {
-    timeZone: CALIFORNIA_TIME_ZONE,
+    timeZone: DISPLAY_TIME_ZONE,
     weekday: "short",
   });
   return weekday === "Sat" || weekday === "Sun";
 }
 
-function formatCaliforniaDate(value: string | null | undefined) {
+function formatIstDate(value: string | null | undefined) {
   if (!value) return "";
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return "";
-  return parsed.toLocaleDateString("en-US", {
-    timeZone: CALIFORNIA_TIME_ZONE,
+  return parsed.toLocaleDateString("en-IN", {
+    timeZone: DISPLAY_TIME_ZONE,
     month: "short",
     day: "numeric",
     year: "numeric",
@@ -2623,12 +2820,12 @@ function summarizeItems(items: LeadGenBatchItem[]) {
   );
 }
 
-function defaultCaliforniaDateTimeLocal() {
+function defaultIstDateTimeLocal() {
   const now = new Date();
   now.setMinutes(now.getMinutes() + 15);
   now.setSeconds(0, 0);
   const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: CALIFORNIA_TIME_ZONE,
+    timeZone: DISPLAY_TIME_ZONE,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -2644,7 +2841,8 @@ function formatDate(value: string | null) {
   if (!value) return "-";
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return value.slice(0, 19);
-  return d.toLocaleString(undefined, {
+  return d.toLocaleString("en-IN", {
+    timeZone: DISPLAY_TIME_ZONE,
     month: "short",
     day: "numeric",
     hour: "numeric",

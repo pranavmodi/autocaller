@@ -28,7 +28,7 @@ from app.services.lead_gen_cybernetic import (
     list_batches,
     set_daily_send_budget,
 )
-from app.services.lead_gen_email_agent import create_lead_gen_email_agent_slice
+from app.services.lead_gen_email_agent import create_lead_gen_email_agent_slice, recompose_item_draft
 from app.services.lead_gen_daily import (
     get_daily_run_enabled,
     get_daily_run_throughput,
@@ -101,6 +101,11 @@ class LeadGenEmailAgentSliceRequest(BaseModel):
     approve_actions: bool = False
     policy_check_first_action: bool = False
     batch_id: Optional[str] = Field(default=None, max_length=64)
+
+
+class RecomposeBatchItemDraftRequest(BaseModel):
+    actor: str = Field("operator", max_length=128)
+    composer_variant_key: Optional[str] = None
 
 
 class DailyRunRequest(BaseModel):
@@ -354,6 +359,28 @@ async def edit_batch_item_draft(batch_item_id: str, req: EditBatchItemDraftReque
         raise HTTPException(
             status_code=400,
             detail=f"edit_draft_failed: {type(e).__name__}: {str(e)[:300]}",
+        )
+
+
+@router.post("/api/lead-gen/batch-items/{batch_item_id}/recompose-draft")
+async def recompose_batch_item_draft(batch_item_id: str, req: RecomposeBatchItemDraftRequest):
+    try:
+        return await recompose_item_draft(
+            batch_item_id=batch_item_id,
+            actor=req.actor,
+            composer_variant_key=req.composer_variant_key,
+        )
+    except ValueError as e:
+        detail = str(e)
+        if detail in {"batch_item_not_found", "contact_not_found"}:
+            raise HTTPException(status_code=404, detail=detail)
+        if detail == "email_already_sent" or detail.startswith("action_cannot_be_recomposed"):
+            raise HTTPException(status_code=409, detail=detail)
+        raise HTTPException(status_code=400, detail=detail)
+    except Exception as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"recompose_draft_failed: {type(e).__name__}: {str(e)[:300]}",
         )
 
 

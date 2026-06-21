@@ -606,6 +606,70 @@ export const createTaskPacketForFinding = (findingId: string) =>
 export const getTaskPackets = (limit = 100) =>
   get<{ task_packets: CodexTaskPacket[] }>(`/api/learning/task-packets?limit=${limit}`);
 
+export type ClickAnalyticsGroupBy =
+  | "app_name"
+  | "source"
+  | "firm_name"
+  | "contact"
+  | "persona"
+  | "pif_id"
+  | "batch_item"
+  | "day";
+
+export type ClickAnalyticsGroup = {
+  key: string;
+  label: string;
+  click_count: number;
+  contact_count: number;
+  firm_count: number;
+  first_clicked_at: string | null;
+  last_clicked_at: string | null;
+};
+
+export type ClickAnalyticsRow = {
+  id: string;
+  clicked_at: string | null;
+  app_name: string;
+  source: string;
+  source_label: string;
+  firm_name: string;
+  contact_name: string;
+  contact_email: string;
+  persona: string;
+  pif_id: string | null;
+  batch_item_id: string | null;
+  ip: string | null;
+  user_agent: string | null;
+};
+
+export type ClickAnalyticsResponse = {
+  since_days: number;
+  group_by: ClickAnalyticsGroupBy;
+  group_label: string;
+  available_groups: Array<{ key: ClickAnalyticsGroupBy; label: string }>;
+  summary: {
+    click_count: number;
+    contact_count: number;
+    firm_count: number;
+    first_clicked_at: string | null;
+    last_clicked_at: string | null;
+  };
+  groups: ClickAnalyticsGroup[];
+  recent_clicks: ClickAnalyticsRow[];
+};
+
+export const getClickAnalytics = (args: {
+  sinceDays?: number;
+  groupBy?: ClickAnalyticsGroupBy;
+  limit?: number;
+} = {}) => {
+  const params = new URLSearchParams();
+  params.set("since_days", String(args.sinceDays ?? 30));
+  params.set("group_by", args.groupBy ?? "firm_name");
+  params.set("limit", String(args.limit ?? 50));
+  return get<ClickAnalyticsResponse>(`/api/aiaudit/click-analytics?${params.toString()}`);
+};
+
 async function get<T>(path: string, options?: ApiRequestOptions): Promise<T> {
   const res = await fetch(apiUrl(path), {
     credentials: "include",
@@ -1779,7 +1843,7 @@ export const approveLeadGenBatch = (
       start_sequences: args.start_sequences ?? false,
       stagger_minutes: args.stagger_minutes ?? 60,
       scheduled_start_at: args.scheduled_start_at,
-      scheduled_timezone: args.scheduled_timezone ?? "America/Los_Angeles",
+      scheduled_timezone: args.scheduled_timezone ?? "Asia/Kolkata",
     },
   );
 
@@ -1828,6 +1892,29 @@ export const sendLeadGenBatchItemDraft = (
       composer_variant_key: args.composer_variant_key,
       skill_path: args.skill_path,
       skill_sha256: args.skill_sha256,
+    },
+  );
+
+export const recomposeLeadGenBatchItemDraft = (
+  batchItemId: string,
+  args: {
+    actor?: string;
+    composer_variant_key?: string | null;
+  } = {},
+) =>
+  post<{
+    batch_item_id: string;
+    draft: Record<string, unknown> | null;
+    action?: Record<string, unknown> | null;
+    updated_existing?: boolean;
+    created?: boolean;
+    scheduled_for_pt?: string | null;
+    scheduled_for_utc?: string | null;
+  }>(
+    `/api/lead-gen/batch-items/${encodeURIComponent(batchItemId)}/recompose-draft`,
+    {
+      actor: args.actor ?? "operator",
+      composer_variant_key: args.composer_variant_key ?? undefined,
     },
   );
 

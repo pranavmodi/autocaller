@@ -289,7 +289,8 @@ function ActiveSequencesPanel({
 	                  </td>
                   <td data-label="Next due" className="px-2 py-2 font-mono text-[11px] text-neutral-500">
                     {s.next_step_due_at
-                      ? new Date(s.next_step_due_at).toLocaleString(undefined, {
+                      ? new Date(s.next_step_due_at).toLocaleString("en-IN", {
+                          timeZone: "Asia/Kolkata",
                           month: "short",
                           day: "numeric",
                           hour: "numeric",
@@ -968,7 +969,7 @@ function SequenceStatePanel({
   });
 
   const next = sequence.next_step_due_at
-    ? new Date(sequence.next_step_due_at).toLocaleString()
+    ? new Date(sequence.next_step_due_at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })
     : "—";
 
   const tone = isPaused

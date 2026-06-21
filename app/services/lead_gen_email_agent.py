@@ -11,14 +11,15 @@ import asyncio
 import logging
 import os
 import uuid
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from typing import Any
 
 from sqlalchemy import select
 
 from app.db import AsyncSessionLocal
-from app.db.models import EmailSequenceRow, FirmContactRow, LeadGenBatchItemRow, LeadGenBatchRow, PatientRow
-from app.services.action_execution import check_action_policy, create_send_email_action
+from app.db.models import AgentActionRow, EmailSequenceRow, FirmContactRow, LeadGenBatchItemRow, LeadGenBatchRow, PatientRow
+from app.services.action_execution import check_action_policy, create_send_email_action, save_edited_lead_gen_draft
 from app.services.contact_selection import classify_email_quality
 from app.services.lead_email_composer import compose_lead_email
 from app.services.lead_gen_cybernetic import TARGET_METRIC, ensure_default_policy, get_batch
@@ -361,6 +362,7 @@ async def _compose_batch_items(
                 firm_name=item["firm_name"],
                 sequence=sequence,
                 step_num=step_num,
+                batch_item_id=item["id"],
                 composer_variant_key=item_variant_key,
                 research_evidence=research,
                 selection_evidence=selection_evidence,
@@ -533,6 +535,7 @@ async def compose_item_all_variants(batch_item_id: str, *, actor: str = "operato
                 firm_name=item["firm_name"],
                 sequence=_agent_sequence_stub(template_key),
                 step_num=1,
+                batch_item_id=batch_item_id,
                 composer_variant_key=v.key,
                 research_evidence=research,
                 selection_evidence=selection_evidence,
@@ -591,3 +594,152 @@ async def select_item_variant(batch_item_id: str, variant_key: str, *, actor: st
         batch_item_id=batch_item_id, subject=subject, body=body, actor=actor,
     )
     return {"batch_item_id": batch_item_id, "selected_variant_key": variant_key, "draft": result}
+
+
+async def recompose_item_draft(
+    batch_item_id: str,
+    *,
+    actor: str = "operator",
+    composer_variant_key: str | None = None,
+) -> dict[str, Any]:
+    """Re-run the email composer for an already drafted item and rebind the
+    existing queued send action to the new exact subject/body.
+
+    This keeps scheduled actions scheduled, but refreshes their approval hash
+    and stored body so today's queued emails can be regenerated without creating
+    duplicate sends.
+    """
+    async with AsyncSessionLocal() as session:
+        row = await session.get(LeadGenBatchItemRow, batch_item_id)
+        if not row:
+            raise ValueError("batch_item_not_found")
+        reason = dict(row.reason_json or {})
+        if row.approval_status == "started" or reason.get("last_sent_at") or reason.get("last_sent_message_id"):
+            raise ValueError("email_already_sent")
+        draft = reason.get("agent_draft") or {}
+        action_id = str(reason.get("send_email_action_id") or (draft if isinstance(draft, dict) else {}).get("action_id") or "").strip()
+        action = await session.get(AgentActionRow, action_id) if action_id else None
+        if action and action.status not in {"waiting_for_approval", "approved"}:
+            raise ValueError(f"action_cannot_be_recomposed_from_status:{action.status}")
+        batch_id = row.batch_id
+
+    batch_data = await get_batch(batch_id, include_observations=False)
+    item = next((i for i in (batch_data.get("items") or []) if i.get("id") == batch_item_id), None)
+    if not item:
+        raise ValueError("batch_item_not_found")
+
+    async with AsyncSessionLocal() as session:
+        contact = await session.get(FirmContactRow, item["contact_id"])
+    if not contact:
+        raise ValueError("contact_not_found")
+
+    reason0 = item.get("reason") or {}
+    research = await research_contact_context(
+        contact=contact,
+        firm_name=item["firm_name"],
+        selection_reason=reason0,
+    )
+    sequence, step_num = await _sequence_context_for_item(item)
+    is_follow_up = reason0.get("action_type") == "follow_up"
+    item_variant_key = composer_variant_key
+    if item_variant_key is None and not is_follow_up:
+        forced = os.getenv("LEAD_GEN_FIRST_TOUCH_VARIANT", "review-evidence").strip()
+        if forced:
+            item_variant_key = forced
+    selection_evidence = {
+        "why_this_contact_was_selected": reason0.get("reason") or reason0.get("basis") or "",
+        "persona": item.get("persona") or "",
+        "score": item.get("score"),
+        "score_breakdown": reason0.get("score_breakdown") or {},
+        "selection_features": reason0.get("selection_features") or {},
+        "signals": reason0.get("signals") or [],
+        "suppressions": reason0.get("suppressions") or [],
+    }
+    composition = await compose_lead_email(
+        contact=contact,
+        firm_name=item["firm_name"],
+        sequence=sequence,
+        step_num=step_num,
+        batch_item_id=batch_item_id,
+        composer_variant_key=item_variant_key,
+        research_evidence=research,
+        selection_evidence=selection_evidence,
+    )
+
+    saved = await save_edited_lead_gen_draft(
+        batch_item_id=batch_item_id,
+        subject=composition.subject,
+        body=composition.body,
+        actor=actor or "operator",
+    )
+    saved_action = saved.get("action") if isinstance(saved, dict) else None
+    new_action_id = str((saved_action or {}).get("id") or "")
+    now = datetime.now(timezone.utc)
+    draft_payload: dict[str, Any] = {
+        "subject": composition.subject,
+        "body": composition.body,
+        "rationale": composition.reasoning,
+        "angle": composition.angle,
+        "cta": composition.cta,
+        "risk_flags": composition.risk_flags,
+        "requires_human_review": composition.requires_human_review,
+        "blog_link_used": composition.blog_link_used,
+        "composer_experiment_key": composition.composer_experiment_key,
+        "composer_variant_key": composition.composer_variant_key,
+        "skill_path": composition.skill_path,
+        "skill_sha256": composition.skill_sha256,
+        "brief_version": composition.brief_version,
+        "action_id": new_action_id or action_id,
+        "action_status": str((saved_action or {}).get("status") or ""),
+        "research": research,
+        "selection": selection_evidence,
+        "recomposed": True,
+        "recomposed_by": actor or "operator",
+        "recomposed_at": now.isoformat(),
+    }
+    if saved.get("scheduled_for_pt"):
+        draft_payload["scheduled_for_pt"] = saved.get("scheduled_for_pt")
+    if saved.get("scheduled_for_utc"):
+        draft_payload["scheduled_for_utc"] = saved.get("scheduled_for_utc")
+
+    async with AsyncSessionLocal() as session:
+        row = await session.get(LeadGenBatchItemRow, batch_item_id)
+        if row:
+            reason = dict(row.reason_json or {})
+            existing_draft = dict(reason.get("agent_draft") or {})
+            if existing_draft.get("scheduled_for_pt") and not draft_payload.get("scheduled_for_pt"):
+                draft_payload["scheduled_for_pt"] = existing_draft.get("scheduled_for_pt")
+            if existing_draft.get("scheduled_for_utc") and not draft_payload.get("scheduled_for_utc"):
+                draft_payload["scheduled_for_utc"] = existing_draft.get("scheduled_for_utc")
+            reason["agent_draft"] = {**existing_draft, **draft_payload}
+            reason["research_evidence"] = research
+            if new_action_id:
+                reason["send_email_action_id"] = new_action_id
+            reason["selected_variant_key"] = composition.composer_variant_key
+            reason.pop("held_reason", None)
+            reason.pop("compose_error", None)
+            row.reason_json = reason
+            row.updated_at = now
+        action = await session.get(AgentActionRow, new_action_id) if new_action_id else None
+        if action:
+            payload = dict(action.input_json or {})
+            payload.update({
+                "composer_experiment_key": composition.composer_experiment_key,
+                "composer_variant_key": composition.composer_variant_key,
+                "skill_path": composition.skill_path,
+                "skill_sha256": composition.skill_sha256,
+                "brief_version": composition.brief_version,
+            })
+            action.input_json = payload
+            action.updated_at = now
+        await session.commit()
+
+    return {
+        "batch_item_id": batch_item_id,
+        "draft": draft_payload,
+        "action": saved_action,
+        "updated_existing": bool(saved.get("updated_existing")),
+        "created": bool(saved.get("created")),
+        "scheduled_for_pt": saved.get("scheduled_for_pt"),
+        "scheduled_for_utc": saved.get("scheduled_for_utc"),
+    }

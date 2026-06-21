@@ -226,9 +226,13 @@ def _sync_lead_gen_scheduled_draft_fields(
     })
     reason["agent_draft"] = existing_draft
     reason["send_email_action_id"] = action.id
-    reason["next_operator_action"] = "scheduled_send_queued" if scheduled_for else "approved_send_queued"
+    if action.status == "approved":
+        reason["next_operator_action"] = "scheduled_send_queued" if scheduled_for else "approved_send_queued"
+        item.approval_status = "approved"
+    else:
+        reason["next_operator_action"] = "review_edit_approve_send"
+        item.approval_status = "pending"
     item.reason_json = reason
-    item.approval_status = "approved"
     item.updated_at = _utcnow()
     return reason
 
@@ -814,7 +818,7 @@ async def save_edited_lead_gen_draft(
         draft = dict(reason.get("agent_draft") or {})
         action_id = str(reason.get("send_email_action_id") or draft.get("action_id") or "").strip()
         action = await session.get(AgentActionRow, action_id) if action_id else None
-        if _action_is_live_scheduled(action):
+        if action and action.status in {"waiting_for_approval", "approved"}:
             old_scheduled_for = _as_utc(action.scheduled_for) if action.scheduled_for else None
             old_subject, old_body = _action_subject_body(action)
             hashes = _update_action_draft_payload(

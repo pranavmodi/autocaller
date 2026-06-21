@@ -14,7 +14,7 @@ from sqlalchemy import desc, or_, select
 
 from app.db import AsyncSessionLocal
 from app.db.models import ConsultBookingRow, EmailSequenceRow, FirmContactRow, FrontFirmActivityRow, InboundEmailRow, PatientRow, PifFirmRow
-from app.services.aiaudit_links import build_audit_link
+from app.services.aiaudit_links import build_audit_link, build_short_audit_link
 from app.services.llm_gateway import LLMGatewayError, call_skill_json
 
 logger = logging.getLogger(__name__)
@@ -33,6 +33,10 @@ DEFAULT_SKILL_PATH = (
 )
 CONSULT_URL = "https://getpossibleminds.com/consult"
 AI_AUDIT_PATH = "/aiaudit/go?t="
+AI_AUDIT_CTA = (
+    "Is your firm ready to leverage AI? What's blocking your transformation? "
+    "Find out in 10 minutes:"
+)
 EMAIL_DASH_TRANSLATION = str.maketrans({"—": "-", "–": "-"})
 ORG_NAME_WORDS = {
     "accident",
@@ -289,9 +293,46 @@ def _ensure_consult_signature(body: str, sender: dict[str, str]) -> str:
     return f"{body}\n\n-- {name}\n{title}, Possible Minds\n{CONSULT_URL}".strip()
 
 
+def _strip_trailing_signature(body: str, sender: dict[str, str]) -> str:
+    text = (body or "").strip()
+    if not text:
+        return ""
+    sender_name = re.escape(sender.get("name") or "Pranav")
+    lines = text.splitlines()
+    signature_starts = [
+        index for index, line in enumerate(lines)
+        if re.match(rf"^\s*(?:--\s*)?(?:{sender_name}|Pranav(?:\s+Modi)?)\s*$", line.strip(), re.IGNORECASE)
+    ]
+    for index in reversed(signature_starts):
+        tail = "\n".join(lines[index:]).lower()
+        if (
+            "founder" in tail
+            and (
+                "possible minds" in tail
+                or "getpossibleminds.com/consult" in tail
+                or "ai readiness audit" in tail
+                or "/aiaudit/go" in tail
+                or "/a/" in tail
+            )
+        ):
+            first_index = index
+            for previous in reversed([i for i in signature_starts if i < index]):
+                previous_tail = "\n".join(lines[previous:index]).lower()
+                if "founder" in previous_tail and len(lines) - previous <= 12:
+                    first_index = previous
+                else:
+                    break
+            return "\n".join(lines[:first_index]).strip()
+    return text
+
+
 def _has_audit_link(body: str) -> bool:
     public_url = os.getenv("AIAUDIT_PUBLIC_URL", "").strip().rstrip("/")
-    return AI_AUDIT_PATH in body or (public_url and public_url in body)
+    return AI_AUDIT_PATH in body or "/a/" in body or (public_url and public_url in body)
+
+
+def _audit_cta_line(audit_url: str) -> str:
+    return f"{AI_AUDIT_CTA} {audit_url}"
 
 
 def _ensure_signature(
@@ -300,27 +341,31 @@ def _ensure_signature(
     *,
     contact: FirmContactRow,
     variant_key: str | None,
+    audit_url: str | None = None,
 ) -> str:
-    body = (body or "").strip()
+    body = _strip_trailing_signature(body, sender)
     name = sender.get("name") or "Pranav"
     title = sender.get("title") or "Founder"
     is_audit_variant = (variant_key or "").strip() == "ai-audit"
     audit_source = "ai_audit_email" if is_audit_variant else "ai_audit_signature"
-    audit_url = build_audit_link(contact, source=audit_source)
+    audit_url = audit_url or build_audit_link(contact, source=audit_source)
     has_audit = _has_audit_link(body)
 
     if is_audit_variant:
-        if has_audit:
-            return body
-        return (
-            f"{body}\n\n-- {name}\n{title}, Possible Minds\n"
-            f"AI readiness audit: {audit_url}"
-        ).strip()
+        # The audit is this email's primary CTA, so it goes in the body above
+        # the sign-off — never inside the signature. The consult link still
+        # appears in the signature, same as every other variant.
+        if not has_audit:
+            body = f"{body}\n\n{_audit_cta_line(audit_url)}".strip()
+        sign_off = f"-- {name}\n{title}, Possible Minds"
+        if CONSULT_URL not in body:
+            sign_off = f"{sign_off}\nBook a consult: {CONSULT_URL}"
+        return f"{body}\n\n{sign_off}".strip()
 
     if CONSULT_URL not in body:
-        body = f"{body}\n\n-- {name}\n{title}, Possible Minds\n{CONSULT_URL}".strip()
+        body = f"{body}\n\n-- {name}\n{title}, Possible Minds\nBook a consult: {CONSULT_URL}".strip()
     if not has_audit:
-        body = f"{body}\nAI readiness audit: {audit_url}".strip()
+        body = f"{body}\n{_audit_cta_line(audit_url)}".strip()
     return body
 
 
@@ -853,6 +898,7 @@ async def compose_lead_email(
     firm_name: str,
     sequence: EmailSequenceRow,
     step_num: int,
+    batch_item_id: str | None = None,
     model: str | None = None,
     composer_variant_key: str | None = None,
     research_evidence: dict[str, Any] | None = None,
@@ -961,7 +1007,15 @@ async def compose_lead_email(
     _validate(parsed)
     body = _sanitize_email_copy(str(parsed.get("body") or ""))
     body = _sanitize_body_salutation(body, contact=contact, firm_name=firm_name)
-    body = _ensure_signature(body, payload["sender"], contact=contact, variant_key=composer_variant_key)
+    audit_source = "ai_audit_email" if (composer_variant_key or "").strip() == "ai-audit" else "ai_audit_signature"
+    audit_url = await build_short_audit_link(contact, batch_item_id=batch_item_id, source=audit_source)
+    body = _ensure_signature(
+        body,
+        payload["sender"],
+        contact=contact,
+        variant_key=composer_variant_key,
+        audit_url=audit_url,
+    )
     composition = LeadEmailComposition(
         subject=_sanitize_subject(str(parsed.get("subject") or ""))[:500],
         body=body,
