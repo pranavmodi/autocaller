@@ -78,3 +78,6 @@ logs/
 htmlcov/
 .pytest_cache/
 docs/product/tasks/logs/
+
+# Generated validation/analysis output
+reports/
