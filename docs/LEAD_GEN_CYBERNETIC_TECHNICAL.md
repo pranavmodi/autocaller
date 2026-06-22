@@ -379,14 +379,15 @@ Policy checks verify:
 - batch item is not already started;
 - selection suppressions are empty;
 - consult link is present in the body;
-- Zoho API transport is configured;
+- at least one lead-gen transport has remaining provider capacity today
+  (`zoho_api` first, capped by policy, then `resend`);
 - active daily budget is readable and greater than zero;
 - no prior successful `lead_gen` action exists for the same batch item;
 - no prior successful `lead_gen` action exists for the same recipient.
 
-Execution sends through `_send_email(..., transport="zoho_api")`, then writes
-send metadata back onto both the durable action result and
-`lead_gen_batch_items.reason_json`.
+Execution chooses the lead-gen transport from policy/provider caps, sends
+through `_send_email(..., transport=...)`, then writes send metadata back onto
+both the durable action result and `lead_gen_batch_items.reason_json`.
 
 The durable action result includes:
 
@@ -925,6 +926,27 @@ it with CLI/API/UI.
 
 ## Configuration
 
+LLM model routing (lead-gen + adjacent text tasks):
+
+- The lead-gen **composer**, **lead-extractor**, and **name classifier** call the
+  OpenClaw **proxy gateway** (`call_skill_json`), which authenticates to OpenAI
+  via **ChatGPT OAuth** ("Sign in with ChatGPT"), not a platform `sk-` API key.
+  Each is driven by a `SKILL.md` under `app/skills/` and parses tolerant JSON.
+- `LEAD_EMAIL_COMPOSER_MODEL` (default `openclaw/proxy`) — composer agent/model.
+- `LEAD_EXTRACTOR_MODEL` (default `openclaw/proxy`) — `app/services/lead_extractor.py`
+  via `app/skills/lead-extractor/SKILL.md`. (Was direct `gpt-4o-mini`; migrated
+  to OAuth/gateway, D-2026-06-22-02.)
+- `LEAD_NAME_CLASSIFIER_MODEL` (default `openclaw/proxy`) — the
+  `leads backfill-names` person-vs-firm classifier, via
+  `app/skills/lead-name-classifier/SKILL.md`.
+- `PHONE_SIM_REPLY_MODEL` (default `openclaw/proxy`) — the local voice-call
+  simulator reply (`app/llm.py`), via `app/skills/phone-sim-reply/SKILL.md`.
+- **Still on the platform `OPENAI_API_KEY` (cannot use OAuth):** STT (Whisper),
+  TTS, the Realtime calling engine — all audio, which the OAuth/gateway path
+  can't serve — and the **live IVR navigator** (`IVR_NAV_MODEL`, default
+  `gpt-4o-mini`), kept on the fast direct API for latency. The judge
+  (`app/services/judge.py`) also remains on direct `gpt-4o-mini`.
+
 Email sending:
 
 - `ZOHO_MAIL_CLIENT_ID`
@@ -1039,9 +1061,12 @@ Email sending:
 - `EMAIL_TRANSPORT` optional override, `zoho_api`, `smtp`, or `resend`
 - Resend-related configuration only if Resend is intentionally selected.
 
-Lead-gen draft sends and notification draft sends force `zoho_api`. The shared
-sender also prefers `zoho_api` when `ZOHO_MAIL_REFRESH_TOKEN` is configured.
-SMTP remains as a fallback for hosts that allow outbound SMTP.
+Lead-gen draft sends route through the provider-aware lead-gen transport policy:
+Zoho API first, capped at 20/day by default, then Resend for the remaining daily
+budget. Notification draft replies still force `zoho_api` so replies stay tied to
+the mailbox thread. The shared sender also prefers `zoho_api` when
+`ZOHO_MAIL_REFRESH_TOKEN` is configured. SMTP remains as a fallback for hosts
+that allow outbound SMTP outside the lead-gen path.
 
 Zoho inbound:
 

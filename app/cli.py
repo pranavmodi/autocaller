@@ -767,18 +767,20 @@ def leads_backfill_names(
 ):
     """Classify all leads: is the name a real person or a firm/brand?
 
-    Uses gpt-4o-mini to judge each lead where name_is_person has not been
-    explicitly set (defaults to true). Updates the DB so render_system_prompt
-    uses 'the managing partner' instead of a firm name as a person.
+    Uses the OpenClaw proxy gateway (OAuth) to judge each lead where
+    name_is_person has not been explicitly set (defaults to true). Updates the DB
+    so render_system_prompt uses 'the managing partner' instead of a firm name as
+    a person.
     """
     async def _backfill():
-        import json as _json
+        from pathlib import Path as _Path
         from app.db import AsyncSessionLocal
         from app.db.models import PatientRow
         from sqlalchemy import select
-        from openai import AsyncOpenAI
+        from app.services.llm_gateway import call_skill_json
 
-        client = AsyncOpenAI(api_key=os.environ["OPENAI_API_KEY"])
+        skill_path = _Path(__file__).resolve().parent / "skills/lead-name-classifier/SKILL.md"
+        nav_model = os.getenv("LEAD_NAME_CLASSIFIER_MODEL", "openclaw/proxy")
 
         async with AsyncSessionLocal() as session:
             result = await session.execute(select(PatientRow))
@@ -792,17 +794,14 @@ def leads_backfill_names(
         async def _classify(pid: str, name: str, firm: str, title: str):
             async with sem:
                 try:
-                    resp = await client.chat.completions.create(
-                        model="gpt-4o-mini",
-                        messages=[
-                            {"role": "system", "content": "You classify whether a name is a real person or a firm/brand. Reply with JSON: {\"is_person\": true/false}."},
-                            {"role": "user", "content": _json.dumps({"name": name, "firm_name": firm, "title": title or ""})},
-                        ],
-                        response_format={"type": "json_object"},
-                        temperature=0,
+                    result = await call_skill_json(
+                        skill_path=skill_path,
+                        payload={"name": name, "firm_name": firm, "title": title or ""},
+                        required_fields=["is_person"],
+                        model=nav_model,
+                        max_tokens=int(os.getenv("LEAD_NAME_CLASSIFIER_MAX_TOKENS", "60")),
                     )
-                    data = _json.loads(resp.choices[0].message.content or "{}")
-                    return pid, bool(data.get("is_person", True))
+                    return pid, bool(result.parsed.get("is_person", True))
                 except Exception as e:
                     logger.warning("classify failed for %s: %s", pid, e)
                     return pid, True
