@@ -46,6 +46,7 @@ import {
   type BatchItemVariantDraft,
   setLeadGenDailyEnabled,
   updateLeadGenDailySendBudget,
+  type LeadGenPolicy,
   type LeadGenBatch,
   type LeadGenBatchItem,
   type LeadGenDailyRun,
@@ -63,6 +64,7 @@ const DEFAULT_TEMPLATE = "possible_minds_dynamic";
 // backend; here we only convert what the operator sees and the times they pick.
 const DISPLAY_TIME_ZONE = "Asia/Kolkata";
 const DEFAULT_DAILY_EMAIL_BUDGET = 50;
+const ZOHO_DAILY_EMAIL_CAP = 20;
 type DraftGenerationStatus = "generating" | "completed" | "failed";
 
 export default function LeadGenPage() {
@@ -85,6 +87,9 @@ function LeadGenPageContent() {
   const searchParams = useSearchParams();
   const [batchId, setBatchId] = useState<string>("");
   const [dailyEmailBudget, setDailyEmailBudget] = useState(DEFAULT_DAILY_EMAIL_BUDGET);
+  const [resendDailyEmailBudget, setResendDailyEmailBudget] = useState(
+    DEFAULT_DAILY_EMAIL_BUDGET - ZOHO_DAILY_EMAIL_CAP,
+  );
   const requestedBatchId = searchParams.get("batch") || "";
   const requestedItemId = searchParams.get("item") || "";
   const requestedContactId = searchParams.get("contact") || "";
@@ -122,8 +127,9 @@ function LeadGenPageContent() {
   useEffect(() => {
     if (policy.data?.daily_send_budget) {
       setDailyEmailBudget(clampDailyEmailBudget(policy.data.daily_send_budget));
+      setResendDailyEmailBudget(resendBudgetFromPolicy(policy.data));
     }
-  }, [policy.data?.daily_send_budget]);
+  }, [policy.data]);
 
   useEffect(() => {
     if (batchId) return;
@@ -143,10 +149,15 @@ function LeadGenPageContent() {
   }, [batchId, requestedBatchId]);
 
   const saveBudget = useMutation({
-    mutationFn: () => updateLeadGenDailySendBudget(dailyEmailBudget),
+    mutationFn: () => updateLeadGenDailySendBudget(
+      ZOHO_DAILY_EMAIL_CAP + resendDailyEmailBudget,
+      resendDailyEmailBudget,
+    ),
     onSuccess: (data) => {
       setDailyEmailBudget(clampDailyEmailBudget(data.daily_send_budget));
+      setResendDailyEmailBudget(resendBudgetFromWeights(data.weights));
       qc.invalidateQueries({ queryKey: ["lead-gen-policy"] });
+      qc.invalidateQueries({ queryKey: ["lead-gen-throughput"] });
     },
   });
 
@@ -253,7 +264,12 @@ function LeadGenPageContent() {
           />
           <DailySendBudgetPanel
             dailyEmailBudget={dailyEmailBudget}
-            onDailyEmailBudgetChange={setDailyEmailBudget}
+            resendDailyEmailBudget={resendDailyEmailBudget}
+            onResendDailyEmailBudgetChange={(value) => {
+              const resendBudget = clampResendDailyEmailBudget(value);
+              setResendDailyEmailBudget(resendBudget);
+              setDailyEmailBudget(clampDailyEmailBudget(ZOHO_DAILY_EMAIL_CAP + resendBudget));
+            }}
             onSave={() => saveBudget.mutate()}
             isSaving={saveBudget.isPending}
             saveError={saveBudget.isError}
@@ -608,6 +624,9 @@ function ThroughputPanel({
   const sentLine = throughput
     ? `Yesterday: ${throughput.history.yesterday_sent} sent · 7-day: ${throughput.history.seven_day_sent} / ${throughput.target * 7}`
     : "Yesterday: - sent · 7-day: -";
+  const providerLine = throughput?.provider_transport?.providers
+    ?.map((provider) => `${transportLabel(provider.transport)} ${provider.sent_today}/${provider.cap}`)
+    .join(" · ");
 
   return (
     <section className="rounded-xl border border-neutral-200 bg-white">
@@ -676,10 +695,19 @@ function ThroughputPanel({
             {(funnel?.sending_today ?? 0)} of {target} will send today. Blocker: {blockerText(verdict?.blocker)}.
           </div>
         )}
-        <div className="text-xs text-neutral-500">{sentLine}</div>
+        <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-neutral-500">
+          <span>{sentLine}</span>
+          {providerLine && <span>{providerLine}</span>}
+        </div>
       </div>
     </section>
   );
+}
+
+function transportLabel(value: string) {
+  if (value === "zoho_api") return "Zoho";
+  if (value === "resend") return "Resend";
+  return value;
 }
 
 function UnblockPanel({
@@ -1154,7 +1182,8 @@ function dailyRunOutcome(
 
 function DailySendBudgetPanel({
   dailyEmailBudget,
-  onDailyEmailBudgetChange,
+  resendDailyEmailBudget,
+  onResendDailyEmailBudgetChange,
   onSave,
   isSaving,
   saveError,
@@ -1163,7 +1192,8 @@ function DailySendBudgetPanel({
   generateError,
 }: {
   dailyEmailBudget: number;
-  onDailyEmailBudgetChange: (value: number) => void;
+  resendDailyEmailBudget: number;
+  onResendDailyEmailBudgetChange: (value: number) => void;
   onSave: () => void;
   isSaving: boolean;
   saveError: boolean;
@@ -1180,20 +1210,45 @@ function DailySendBudgetPanel({
         </h2>
       </div>
       <div className="space-y-3 px-4 py-3">
-        <div className="flex items-end gap-2">
+        <div className="grid gap-2">
+          <div className="grid grid-cols-2 gap-2">
+            <div className="rounded-md border border-neutral-200 bg-neutral-50 px-2 py-2">
+              <div className="text-[11px] font-semibold uppercase tracking-wider text-neutral-500">
+                Zoho
+              </div>
+              <div className="mt-1 text-lg font-semibold text-neutral-900">
+                {ZOHO_DAILY_EMAIL_CAP}
+              </div>
+            </div>
+            <label
+              htmlFor="resend-daily-email-budget"
+              className="block rounded-md border border-neutral-200 px-2 py-2 text-xs font-medium text-neutral-600"
+            >
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-neutral-500">
+                Resend
+              </span>
+              <input
+                id="resend-daily-email-budget"
+                type="number"
+                min={0}
+                max={200}
+                value={resendDailyEmailBudget}
+                onChange={(e) => onResendDailyEmailBudgetChange(Number(e.target.value))}
+                className="mt-1 w-full border-0 p-0 text-lg font-semibold text-neutral-900 outline-none"
+              />
+            </label>
+          </div>
           <label
             htmlFor="daily-email-budget"
             className="block flex-1 text-xs font-medium text-neutral-600"
           >
-            Emails per day
+            Total emails per day
             <input
               id="daily-email-budget"
               type="number"
-              min={1}
-              max={200}
+              readOnly
               value={dailyEmailBudget}
-              onChange={(e) => onDailyEmailBudgetChange(clampDailyEmailBudget(Number(e.target.value)))}
-              className="mt-1 w-full rounded-md border border-neutral-200 px-2 py-1.5 text-sm text-neutral-900"
+              className="mt-1 w-full rounded-md border border-neutral-200 bg-neutral-50 px-2 py-1.5 text-sm text-neutral-900"
             />
           </label>
           <button
@@ -1250,6 +1305,7 @@ function BatchDetail({
   const qc = useQueryClient();
   const [observeItem, setObserveItem] = useState<LeadGenBatchItem | null>(null);
   const [previewItem, setPreviewItem] = useState<LeadGenBatchItem | null>(null);
+  const [showAllDrafts, setShowAllDrafts] = useState(false);
   const [draftStatuses, setDraftStatuses] = useState<Record<string, DraftGenerationStatus>>({});
   const [isGeneratingAllDrafts, setIsGeneratingAllDrafts] = useState(false);
   const [bulkDraftError, setBulkDraftError] = useState<string | null>(null);
@@ -1442,15 +1498,26 @@ function BatchDetail({
     const workerCount = Math.min(3, remaining.length);
     const generateOne = async (item: LeadGenBatchItem) => {
       setDraftStatuses((prev) => ({ ...prev, [item.id]: "generating" }));
-      try {
-        await recomposeLeadGenBatchItemDraft(item.id, {
-          actor: "operator",
-          composer_variant_key: selectedComposerVariantKey || null,
-        });
-        setDraftStatuses((prev) => ({ ...prev, [item.id]: "completed" }));
-      } catch {
-        failed += 1;
-        setDraftStatuses((prev) => ({ ...prev, [item.id]: "failed" }));
+      // Retry transient composer/gateway failures so a single hiccup doesn't
+      // silently leave an item on its old draft (the bug that left 3/20 items
+      // unconverted on the 2026-06-22 ai-audit regenerate). 3 attempts w/ backoff.
+      const maxAttempts = 3;
+      for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+        try {
+          await recomposeLeadGenBatchItemDraft(item.id, {
+            actor: "operator",
+            composer_variant_key: selectedComposerVariantKey || null,
+          });
+          setDraftStatuses((prev) => ({ ...prev, [item.id]: "completed" }));
+          return;
+        } catch {
+          if (attempt < maxAttempts) {
+            await new Promise((resolve) => setTimeout(resolve, 800 * attempt));
+            continue;
+          }
+          failed += 1;
+          setDraftStatuses((prev) => ({ ...prev, [item.id]: "failed" }));
+        }
       }
     };
     const runWorker = async () => {
@@ -1630,6 +1697,15 @@ function BatchDetail({
               </button>
               <button
                 type="button"
+                onClick={() => setShowAllDrafts(true)}
+                disabled={composedItemCount === 0}
+                className="inline-flex items-center gap-2 rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50 disabled:opacity-50"
+              >
+                <Eye className="h-4 w-4" />
+                View all drafts
+              </button>
+              <button
+                type="button"
                 onClick={generateAllDrafts}
                 disabled={isGeneratingAllDrafts || previewableItems.length === 0}
                 className="inline-flex items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800 hover:bg-emerald-100 disabled:opacity-50"
@@ -1668,6 +1744,17 @@ function BatchDetail({
         />
       )}
       <ObservationsPanel observations={data.observations} />
+
+      {showAllDrafts && (
+        <AllDraftsModal
+          items={data.items}
+          onClose={() => setShowAllDrafts(false)}
+          onOpenOne={(item) => {
+            setShowAllDrafts(false);
+            setPreviewItem(item);
+          }}
+        />
+      )}
 
       {previewItem && (
         <PreviewModal
@@ -2109,6 +2196,105 @@ function draftPayloadToRenderedStep(draft: Record<string, unknown> | null): Rend
     requires_human_review: true,
     risk_flags: Array.isArray(draft.risk_flags) ? draft.risk_flags.map(String) : [],
   };
+}
+
+function AllDraftsModal({
+  items,
+  onClose,
+  onOpenOne,
+}: {
+  items: LeadGenBatchItem[];
+  onClose: () => void;
+  onOpenOne: (item: LeadGenBatchItem) => void;
+}) {
+  // Read-only quick-review of every composed (or already-sent) email in the
+  // batch, so the operator can scan the day's drafts in one place instead of
+  // opening each preview. All data comes from the already-loaded batch
+  // (reason.agent_draft / last_sent_*), so there are no extra fetches.
+  const drafted = useMemo(
+    () => items.filter((it) => storedAgentDraftStep(it) || isEmailSent(it)),
+    [items],
+  );
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4">
+      <div className="flex max-h-[90vh] w-full max-w-3xl flex-col rounded-xl bg-white shadow-xl">
+        <div className="flex items-center justify-between border-b border-neutral-100 px-5 py-4">
+          <div>
+            <h3 className="text-sm font-semibold text-neutral-900">
+              All drafted emails ({drafted.length})
+            </h3>
+            <p className="mt-1 text-xs text-neutral-500">
+              Read-only review of today&apos;s batch. Click Open on any one to edit or send it.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md border border-neutral-200 px-3 py-1.5 text-sm font-medium text-neutral-600 hover:bg-neutral-50"
+          >
+            Close
+          </button>
+        </div>
+        <div className="space-y-4 overflow-y-auto px-5 py-4">
+          {drafted.length === 0 && (
+            <p className="text-sm text-neutral-500">No drafts composed yet.</p>
+          )}
+          {drafted.map((item, idx) => {
+            const step = storedAgentDraftStep(item);
+            const sent = isEmailSent(item);
+            const subject =
+              step?.subject || reasonValue(item, "last_sent_subject") || "(no subject)";
+            const body = step?.body || reasonValue(item, "last_sent_body") || "";
+            const variant =
+              step?.composer_variant_key ||
+              reasonValue(item, "last_sent_composer_variant_key") ||
+              "—";
+            const scheduled = scheduledSendPt(item);
+            const words = body.trim() ? body.trim().split(/\s+/).length : 0;
+            return (
+              <div key={item.id} className="rounded-lg border border-neutral-200">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-neutral-100 bg-neutral-50 px-3 py-2 text-xs">
+                  <span className="font-semibold text-neutral-700">{idx + 1}.</span>
+                  <span className="font-medium text-neutral-800">{item.firm_name}</span>
+                  <span className="text-neutral-500">
+                    {item.contact_name || "—"}
+                    {item.contact_title ? ` (${item.contact_title})` : ""} ·{" "}
+                    {item.contact_email || "no email"}
+                  </span>
+                  <span className="ml-auto rounded bg-neutral-200 px-1.5 py-0.5 text-[11px] text-neutral-700">
+                    {variant}
+                  </span>
+                  {sent ? (
+                    <span className="rounded bg-sky-100 px-1.5 py-0.5 text-[11px] text-sky-800">
+                      sent
+                    </span>
+                  ) : scheduled ? (
+                    <span className="rounded bg-violet-100 px-1.5 py-0.5 text-[11px] text-violet-800">
+                      sends {scheduled}
+                    </span>
+                  ) : null}
+                  <span className="text-[11px] text-neutral-400">{words}w</span>
+                  <button
+                    type="button"
+                    onClick={() => onOpenOne(item)}
+                    className="rounded border border-neutral-200 bg-white px-2 py-0.5 text-[11px] font-medium text-neutral-600 hover:bg-neutral-50"
+                  >
+                    Open
+                  </button>
+                </div>
+                <div className="px-3 py-2">
+                  <p className="text-sm font-semibold text-neutral-900">{subject}</p>
+                  <pre className="mt-1 whitespace-pre-wrap font-sans text-sm text-neutral-700">
+                    {body}
+                  </pre>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function PreviewModal({
@@ -2765,6 +2951,27 @@ function formatComposerKey(value: string) {
 function clampDailyEmailBudget(value: number) {
   if (!Number.isFinite(value)) return DEFAULT_DAILY_EMAIL_BUDGET;
   return Math.max(1, Math.min(200, Math.trunc(value)));
+}
+
+function clampResendDailyEmailBudget(value: number) {
+  if (!Number.isFinite(value)) return DEFAULT_DAILY_EMAIL_BUDGET - ZOHO_DAILY_EMAIL_CAP;
+  return Math.max(0, Math.min(200, Math.trunc(value)));
+}
+
+function resendBudgetFromPolicy(policy: LeadGenPolicy) {
+  return resendBudgetFromWeights(policy.weights, policy.daily_send_budget);
+}
+
+function resendBudgetFromWeights(
+  weights: Record<string, unknown> | undefined,
+  totalBudget = DEFAULT_DAILY_EMAIL_BUDGET,
+) {
+  const caps = weights?.provider_daily_caps;
+  if (caps && typeof caps === "object" && "resend" in caps) {
+    const value = Number((caps as Record<string, unknown>).resend);
+    return clampResendDailyEmailBudget(value);
+  }
+  return clampResendDailyEmailBudget(clampDailyEmailBudget(totalBudget) - ZOHO_DAILY_EMAIL_CAP);
 }
 
 function defaultDailyPlanName(dailyEmailBudget: number) {
