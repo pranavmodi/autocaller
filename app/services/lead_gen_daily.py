@@ -39,6 +39,7 @@ from app.services.firm_research import orchestrate_warm_research
 from app.services.front_sync import front_status, normalize_domain, refresh_warm_scores, resolve_firms
 from app.services.lead_gen_cybernetic import TARGET_METRIC, ensure_default_policy, get_batch
 from app.services.lead_gen_email_agent import _compose_batch_items
+from app.services.lead_gen_transport import lead_gen_transport_availability
 from app.services.persona_mapper import map_personas
 from app.services.sequence_recommendations import recommend_sequence_contacts
 from app.services.sequences.registry import DEFAULT_TEMPLATE_KEY
@@ -1425,7 +1426,13 @@ async def get_daily_run_throughput(*, run_date: date | None = None) -> dict[str,
     yesterday_start_utc, _ = _pt_day_bounds(target_date - timedelta(days=1))
     seven_day_start_utc, _ = _pt_day_bounds(target_date - timedelta(days=6))
     policy = await _active_policy()
-    target = _int_policy(_policy_weights(policy), "daily_send_budget", 50, minimum=1, maximum=200)
+    weights = _policy_weights(policy)
+    target = _int_policy(weights, "daily_send_budget", 50, minimum=1, maximum=200)
+    provider_transport = await lead_gen_transport_availability(
+        weights,
+        run_date=target_date,
+        total_daily_budget=target,
+    )
     history = {
         "yesterday_sent": await _sent_lead_gen_count(yesterday_start_utc, today_start_utc),
         "seven_day_sent": await _sent_lead_gen_count(seven_day_start_utc, today_end_utc),
@@ -1442,6 +1449,7 @@ async def get_daily_run_throughput(*, run_date: date | None = None) -> dict[str,
         "batch_id": None,
         "target": target,
         "auto_send_on": auto_approve_send_enabled(),
+        "provider_transport": provider_transport,
         "history": history,
         "funnel": {
             "selected": 0,

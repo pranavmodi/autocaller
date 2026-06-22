@@ -72,6 +72,7 @@ class ProposalRequest(BaseModel):
 
 class DailySendBudgetRequest(BaseModel):
     budget: int = Field(default=50, ge=1, le=200)
+    resend_daily_budget: Optional[int] = Field(default=None, ge=0, le=200)
     updated_by: str = "operator"
 
 
@@ -138,7 +139,11 @@ async def current_policy():
 
 @router.put("/api/lead-gen/settings/daily-send-budget")
 async def update_daily_send_budget(req: DailySendBudgetRequest):
-    row = await set_daily_send_budget(budget=req.budget, updated_by=req.updated_by)
+    row = await set_daily_send_budget(
+        budget=req.budget,
+        updated_by=req.updated_by,
+        resend_daily_budget=req.resend_daily_budget,
+    )
     return {
         "daily_send_budget": daily_send_budget_from_policy(row),
         "policy_version": row.version,

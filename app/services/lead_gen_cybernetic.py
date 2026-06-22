@@ -34,6 +34,12 @@ from app.services.lead_gen_action_planner import QUEUEABLE_ACTIONS, plan_daily_l
 from app.services.lead_email_composer import _sanitize_email_copy
 from app.services.lead_feedback_classifier import classify_feedback_event
 from app.services.email_notification_service import _send_email
+from app.services.lead_gen_transport import (
+    DEFAULT_LEAD_GEN_TRANSPORT_STRATEGY,
+    DEFAULT_ZOHO_DAILY_CAP,
+    choose_lead_gen_transport,
+    provider_daily_caps_from_weights,
+)
 from app.services.sequence_scheduler import (
     create_sequence_approval_placeholder,
     get_sequence,
@@ -226,6 +232,8 @@ def _default_weights() -> dict[str, Any]:
         },
         "target_metric": TARGET_METRIC,
         "daily_send_budget": DEFAULT_DAILY_SEND_BUDGET,
+        "provider_daily_caps": {"zoho_api": DEFAULT_ZOHO_DAILY_CAP},
+        "lead_gen_transport_strategy": DEFAULT_LEAD_GEN_TRANSPORT_STRATEGY,
     })
     return weights
 
@@ -234,6 +242,8 @@ def _effective_weights(weights: dict[str, Any] | None) -> dict[str, Any]:
     merged = contact_selection_weights(weights or {})
     merged.setdefault("target_metric", TARGET_METRIC)
     merged.setdefault("daily_send_budget", DEFAULT_DAILY_SEND_BUDGET)
+    merged.setdefault("provider_daily_caps", {"zoho_api": DEFAULT_ZOHO_DAILY_CAP})
+    merged.setdefault("lead_gen_transport_strategy", DEFAULT_LEAD_GEN_TRANSPORT_STRATEGY)
     return merged
 
 
@@ -245,6 +255,13 @@ def daily_send_budget_from_policy(policy: LeadGenPolicyVersionRow) -> int:
     except (TypeError, ValueError):
         value = DEFAULT_DAILY_SEND_BUDGET
     return max(1, min(200, value))
+
+
+def provider_daily_caps_from_policy(policy: LeadGenPolicyVersionRow) -> dict[str, int]:
+    return provider_daily_caps_from_weights(
+        policy.weights_json or {},
+        total_daily_budget=daily_send_budget_from_policy(policy),
+    )
 
 
 async def ensure_default_policy() -> LeadGenPolicyVersionRow:
@@ -294,8 +311,18 @@ async def ensure_default_policy() -> LeadGenPolicyVersionRow:
         return row
 
 
-async def set_daily_send_budget(*, budget: int, updated_by: str = "operator") -> LeadGenPolicyVersionRow:
+async def set_daily_send_budget(
+    *,
+    budget: int,
+    updated_by: str = "operator",
+    resend_daily_budget: int | None = None,
+) -> LeadGenPolicyVersionRow:
     safe_budget = max(1, min(200, int(budget)))
+    safe_resend_budget = (
+        None
+        if resend_daily_budget is None
+        else max(0, min(200, int(resend_daily_budget)))
+    )
     policy = await ensure_default_policy()
     async with AsyncSessionLocal() as session:
         row = (await session.execute(
@@ -305,6 +332,12 @@ async def set_daily_send_budget(*, budget: int, updated_by: str = "operator") ->
         )).scalar_one()
         weights = dict(row.weights_json or {})
         weights["daily_send_budget"] = safe_budget
+        caps = dict(weights.get("provider_daily_caps") or {})
+        caps["zoho_api"] = DEFAULT_ZOHO_DAILY_CAP
+        if safe_resend_budget is not None:
+            caps["resend"] = safe_resend_budget
+        weights["provider_daily_caps"] = caps
+        weights["lead_gen_transport_strategy"] = DEFAULT_LEAD_GEN_TRANSPORT_STRATEGY
         weights["daily_send_budget_updated_by"] = updated_by
         weights["daily_send_budget_updated_at"] = _utcnow().isoformat()
         row.weights_json = weights
@@ -361,6 +394,11 @@ async def send_batch_item_draft(
     if step_num > seq.steps_total:
         raise ValueError("sequence_completed")
 
+    policy = await ensure_default_policy()
+    transport = await choose_lead_gen_transport(
+        policy.weights_json or {},
+        total_daily_budget=daily_send_budget_from_policy(policy),
+    )
     msg_id = _send_email(
         draft_subject,
         draft_body,
@@ -368,7 +406,7 @@ async def send_batch_item_draft(
         message_type="dynamic_lead_email",
         pif_id=contact.pif_id,
         recipient_name=contact.full_name,
-        transport="zoho_api",
+        transport=transport,
         brief_version=brief_version,
     )
 
@@ -384,6 +422,7 @@ async def send_batch_item_draft(
             reason["last_sent_at"] = sent_at.isoformat()
             reason["last_sent_message_id"] = msg_id
             reason["last_sent_subject"] = draft_subject
+            reason["last_sent_transport"] = transport
             if composer_experiment_key:
                 reason["last_sent_composer_experiment_key"] = composer_experiment_key
             if composer_variant_key:
@@ -447,7 +486,7 @@ async def send_batch_item_draft(
                 "sent_at": sent_at.isoformat(),
                 "sent_by": sent_by or "operator",
                 "sent_message_id": msg_id,
-                "sent_transport": "zoho_api",
+                "sent_transport": transport,
                 "sent_to": contact.email,
                 "sent_subject": draft_subject,
                 "sent_body": draft_body,

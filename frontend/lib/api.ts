@@ -1738,6 +1738,18 @@ export type LeadGenThroughput = {
   batch_id: string | null;
   target: number;
   auto_send_on: boolean;
+  provider_transport?: {
+    strategy: string;
+    available: boolean;
+    providers: {
+      transport: string;
+      configured: boolean;
+      sent_today: number;
+      cap: number;
+      remaining: number;
+      available: boolean;
+    }[];
+  };
   history: {
     yesterday_sent: number;
     seven_day_sent: number;
@@ -1761,13 +1773,17 @@ export type LeadGenThroughput = {
 export const getLeadGenPolicy = () =>
   get<LeadGenPolicy>("/api/lead-gen/policy/current");
 
-export const updateLeadGenDailySendBudget = (budget: number) =>
+export const updateLeadGenDailySendBudget = (
+  budget: number,
+  resendDailyBudget?: number,
+) =>
   put<{
     daily_send_budget: number;
     policy_version: string;
     weights: Record<string, unknown>;
   }>("/api/lead-gen/settings/daily-send-budget", {
     budget,
+    resend_daily_budget: resendDailyBudget,
     updated_by: "operator",
   });
 

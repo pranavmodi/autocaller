@@ -27,6 +27,10 @@ from app.services.lead_gen_cybernetic import (
     record_observation,
     send_batch_item_draft,
 )
+from app.services.lead_gen_transport import (
+    choose_lead_gen_transport,
+    lead_gen_transport_availability,
+)
 from app.services.master_agent import ensure_agent_tables
 from app.services.outreach_phi_guard import PHI_GUARD_CHECK_NAME, check_no_patient_data_in_outreach
 from app.services.product_traces import safe_record_product_trace
@@ -249,6 +253,19 @@ def _terminal_policy_block_reason(policy: dict[str, Any]) -> str:
         if name in TERMINAL_SEND_POLICY_REASONS:
             return name
     return ""
+
+
+def _transport_availability_detail(snapshot: dict[str, Any]) -> str:
+    parts = []
+    for provider in snapshot.get("providers") or []:
+        if not isinstance(provider, dict):
+            continue
+        parts.append(
+            f"{provider.get('transport')} "
+            f"{provider.get('sent_today', 0)}/{provider.get('cap', 0)} "
+            f"configured={bool(provider.get('configured'))}"
+        )
+    return "; ".join(parts)
 
 
 def _email_log_snapshot(row: EmailLogRow | None) -> dict[str, Any]:
@@ -1264,7 +1281,20 @@ async def _check_action_policy_in_session(session, action: AgentActionRow) -> di
     add("body_present", bool(body.strip()), "")
     add("subject_hash_matches_approval", _sha256(subject) == approval.get("subject_sha256"), "")
     add("body_hash_matches_approval", _sha256(body) == approval.get("body_sha256"), "")
-    add("zoho_api_configured", bool(os.getenv("ZOHO_MAIL_REFRESH_TOKEN", "").strip()), "")
+    try:
+        policy = await ensure_default_policy()
+        budget = daily_send_budget_from_policy(policy)
+        transport_availability = await lead_gen_transport_availability(
+            policy.weights_json or {},
+            total_daily_budget=budget,
+        )
+        add(
+            "lead_gen_transport_available",
+            bool(transport_availability.get("available")),
+            _transport_availability_detail(transport_availability),
+        )
+    except Exception as exc:
+        add("lead_gen_transport_available", False, f"{type(exc).__name__}: {str(exc)[:120]}")
     guard_cache = dict(payload.get("phi_egress_guard_cache") or {})
     guard = await check_no_patient_data_in_outreach(subject=subject, body=body, cache=guard_cache)
     payload["phi_egress_guard_cache"] = guard_cache
@@ -1376,11 +1406,19 @@ async def _check_send_email_policy_in_session(session, action: AgentActionRow) -
         payload["phi_egress_guard_cache"] = guard_cache
         action.input_json = payload
         add(PHI_GUARD_CHECK_NAME, bool(guard.get("passed")), str(guard.get("detail") or ""))
-        add("zoho_api_configured", bool(os.getenv("ZOHO_MAIL_REFRESH_TOKEN", "").strip()), "")
         try:
             policy = await ensure_default_policy()
             budget = daily_send_budget_from_policy(policy)
             add("daily_budget_available", budget >= 1, str(budget))
+            transport_availability = await lead_gen_transport_availability(
+                policy.weights_json or {},
+                total_daily_budget=budget,
+            )
+            add(
+                "lead_gen_transport_available",
+                bool(transport_availability.get("available")),
+                _transport_availability_detail(transport_availability),
+            )
         except Exception as exc:
             add("daily_budget_available", False, f"{type(exc).__name__}: {str(exc)[:120]}")
         existing_item_success = None
@@ -1718,6 +1756,13 @@ async def _execute_send_email(payload: dict[str, Any]) -> dict[str, Any]:
             if contact:
                 recipient_name = contact.full_name or recipient_name
                 pif_id = contact.pif_id or pif_id
+    transport = None
+    if mode == "lead_gen":
+        policy = await ensure_default_policy()
+        transport = await choose_lead_gen_transport(
+            policy.weights_json or {},
+            total_daily_budget=daily_send_budget_from_policy(policy),
+        )
     msg_id = _send_email(
         subject,
         body,
@@ -1726,7 +1771,7 @@ async def _execute_send_email(payload: dict[str, Any]) -> dict[str, Any]:
         message_type=f"possible_os_action_{mode}",
         recipient_name=recipient_name,
         pif_id=pif_id,
-        transport="zoho_api" if mode == "lead_gen" else None,
+        transport=transport,
         brief_version=int(payload["brief_version"]) if payload.get("brief_version") else None,
     )
     email_log: EmailLogRow | None = None

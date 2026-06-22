@@ -55,6 +55,7 @@ def _interpret_action(action: dict[str, Any]) -> dict[str, Any]:
         requires_user_help = reason in {
             "email_transport_configured",
             "zoho_api_configured",
+            "lead_gen_transport_available",
             "daily_budget_available",
         }
         return {
