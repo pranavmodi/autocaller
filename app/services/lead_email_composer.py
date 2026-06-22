@@ -13,7 +13,7 @@ from typing import Any
 from sqlalchemy import desc, or_, select
 
 from app.db import AsyncSessionLocal
-from app.db.models import ConsultBookingRow, EmailSequenceRow, FirmContactRow, FrontFirmActivityRow, InboundEmailRow, PatientRow, PifFirmRow
+from app.db.models import ConsultBookingRow, EmailLogRow, EmailSequenceRow, FirmContactRow, FrontFirmActivityRow, InboundEmailRow, PatientRow, PifFirmRow
 from app.services.aiaudit_links import build_audit_link, build_short_audit_link
 from app.services.llm_gateway import LLMGatewayError, call_skill_json
 
@@ -33,9 +33,19 @@ DEFAULT_SKILL_PATH = (
 )
 CONSULT_URL = "https://getpossibleminds.com/consult"
 AI_AUDIT_PATH = "/aiaudit/go?t="
-AI_AUDIT_CTA = (
-    "Is your firm ready to leverage AI? What's blocking your transformation? "
-    "Find out in 10 minutes:"
+# Two context-specific link intros. The old single line ("Is your firm ready to
+# leverage AI? What's blocking your transformation? Find out in 10 minutes:") was
+# generic landing-page copy that clashed with the bespoke body — especially on
+# the ai-audit variant, whose body already sets up the diagnosis. Keep these
+# plain so they hand off to the link instead of re-selling.
+#  - PRIMARY: ai-audit variant, where the body has already framed the diagnosis,
+#    so the line just points to it.
+#  - FOOTER: non-audit variants, where the audit is a soft secondary offer under
+#    the signature and needs one line of its own context.
+AI_AUDIT_CTA_PRIMARY = "Here it is — about 10 minutes, no sign-up:"
+AI_AUDIT_CTA_FOOTER = (
+    "P.S. If you're weighing AI tools, here's a 10-minute read on whether your "
+    "firm is set up to benefit before you buy:"
 )
 EMAIL_DASH_TRANSLATION = str.maketrans({"—": "-", "–": "-"})
 ORG_NAME_WORDS = {
@@ -236,15 +246,23 @@ def _conversation_state(
     *,
     reply_count: int,
     zoho_sent_count: int,
+    resend_sent_count: int = 0,
 ) -> dict[str, Any]:
-    prior_outbound_count = zoho_sent_count
+    prior_outbound_count = zoho_sent_count + resend_sent_count
+    if zoho_sent_count and resend_sent_count:
+        prior_outbound_source = "zoho_sent+resend_logs"
+    elif resend_sent_count:
+        prior_outbound_source = "resend_logs"
+    else:
+        prior_outbound_source = "zoho_sent"
     return {
         "is_first_touch": prior_outbound_count == 0 and reply_count == 0,
         "prior_outbound_count": prior_outbound_count,
         "prior_reply_count": reply_count,
         "has_replies": reply_count > 0,
         "has_zoho_sent_history": zoho_sent_count > 0,
-        "prior_outbound_source": "zoho_sent",
+        "has_resend_sent_history": resend_sent_count > 0,
+        "prior_outbound_source": prior_outbound_source,
         "composer_goal": (
             "Compose the next appropriate email from the real conversation "
             "history and firm/contact context. Do not follow fixed template copy."
@@ -331,8 +349,9 @@ def _has_audit_link(body: str) -> bool:
     return AI_AUDIT_PATH in body or "/a/" in body or (public_url and public_url in body)
 
 
-def _audit_cta_line(audit_url: str) -> str:
-    return f"{AI_AUDIT_CTA} {audit_url}"
+def _audit_cta_line(audit_url: str, *, primary: bool) -> str:
+    intro = AI_AUDIT_CTA_PRIMARY if primary else AI_AUDIT_CTA_FOOTER
+    return f"{intro} {audit_url}"
 
 
 def _ensure_signature(
@@ -356,7 +375,7 @@ def _ensure_signature(
         # the sign-off — never inside the signature. The consult link still
         # appears in the signature, same as every other variant.
         if not has_audit:
-            body = f"{body}\n\n{_audit_cta_line(audit_url)}".strip()
+            body = f"{body}\n\n{_audit_cta_line(audit_url, primary=True)}".strip()
         sign_off = f"-- {name}\n{title}, Possible Minds"
         if CONSULT_URL not in body:
             sign_off = f"{sign_off}\nBook a consult: {CONSULT_URL}"
@@ -365,7 +384,7 @@ def _ensure_signature(
     if CONSULT_URL not in body:
         body = f"{body}\n\n-- {name}\n{title}, Possible Minds\nBook a consult: {CONSULT_URL}".strip()
     if not has_audit:
-        body = f"{body}\n{_audit_cta_line(audit_url)}".strip()
+        body = f"{body}\n\n{_audit_cta_line(audit_url, primary=False)}".strip()
     return body
 
 
@@ -729,6 +748,14 @@ async def build_lead_email_context(
             .order_by(desc(InboundEmailRow.received_at))
             .limit(8)
         )).scalars().all()
+        resend_sent_logs = (await session.execute(
+            select(EmailLogRow)
+            .where(EmailLogRow.recipient_email == (contact.email or "").strip().lower())
+            .where(EmailLogRow.status == "sent")
+            .where(EmailLogRow.transport == "resend")
+            .order_by(desc(EmailLogRow.sent_at))
+            .limit(8)
+        )).scalars().all()
         consult_filters = []
         if contact_domain:
             consult_filters.append(ConsultBookingRow.email.ilike(f"%@{contact_domain}"))
@@ -810,7 +837,17 @@ async def build_lead_email_context(
             "linkedin_url": contact.linkedin_url or signals["contact_linkedin"],
         },
         "history": {
-            "previous_emails": [],
+            "previous_emails": [
+                {
+                    "subject": row.subject,
+                    "excerpt": _excerpt(row.body_excerpt),
+                    "sent_at": row.sent_at.isoformat() if row.sent_at else None,
+                    "transport": row.transport,
+                    "message_type": row.message_type,
+                    "message_id": row.message_id,
+                }
+                for row in resend_sent_logs
+            ],
             "zoho_sent_emails": [
                 {
                     "subject": msg.subject,
@@ -824,6 +861,17 @@ async def build_lead_email_context(
                 for msg in zoho_sent_messages
             ],
             "zoho_sent_lookup": zoho_sent_lookup,
+            "resend_sent_emails": [
+                {
+                    "subject": row.subject,
+                    "excerpt": _excerpt(row.body_excerpt),
+                    "sent_at": row.sent_at.isoformat() if row.sent_at else None,
+                    "transport": row.transport,
+                    "message_type": row.message_type,
+                    "message_id": row.message_id,
+                }
+                for row in resend_sent_logs
+            ],
             "replies": [
                 {
                     "subject": row.subject,
@@ -857,6 +905,7 @@ async def build_lead_email_context(
         "conversation_state": _conversation_state(
             reply_count=len(replies),
             zoho_sent_count=len(zoho_sent_messages),
+            resend_sent_count=len(resend_sent_logs),
         ),
         "front_signals": {
             "behavior": (activity.behavioral_json if activity else None) or {},

@@ -62,7 +62,7 @@ def test_ensure_signature_adds_consult_and_audit_links(monkeypatch):
 
     assert CONSULT_URL in body
     assert "https://possible.example/aiaudit/go?t=" in body
-    assert "Is your firm ready to leverage AI?" in body
+    assert "P.S. If you're weighing AI tools" in body
 
 
 def test_ensure_signature_removes_generated_duplicate_signature(monkeypatch):
@@ -81,8 +81,8 @@ def test_ensure_signature_removes_generated_duplicate_signature(monkeypatch):
     assert body.count("-- Pranav") == 1
     assert body.count("Founder, Possible Minds") == 1
     assert (
-        "Is your firm ready to leverage AI? What's blocking your transformation? "
-        "Find out in 10 minutes: https://possible.example/a/abc123"
+        "P.S. If you're weighing AI tools, here's a 10-minute read on whether your "
+        "firm is set up to benefit before you buy: https://possible.example/a/abc123"
     ) in body
 
 
@@ -99,7 +99,7 @@ def test_ensure_signature_uses_audit_as_primary_cta_for_audit_variant(monkeypatc
     )
 
     assert "https://possible.example/aiaudit/go?t=" in body
-    assert "Is your firm ready to leverage AI?" in body
+    assert "Here it is — about 10 minutes, no sign-up:" in body
     # For the audit variant the link is the primary CTA: it must sit in the body
     # ABOVE the sign-off, never inside the signature.
     assert body.index("/aiaudit/go?t=") < body.index("-- Pranav")
@@ -173,6 +173,17 @@ def test_conversation_state_replaces_sequence_payload():
     assert state["prior_reply_count"] == 2
     assert state["has_zoho_sent_history"]
     assert state["prior_outbound_source"] == "zoho_sent"
+
+    resend_state = _conversation_state(
+        reply_count=0,
+        zoho_sent_count=0,
+        resend_sent_count=1,
+    )
+
+    assert not resend_state["is_first_touch"]
+    assert resend_state["prior_outbound_count"] == 1
+    assert resend_state["has_resend_sent_history"]
+    assert resend_state["prior_outbound_source"] == "resend_logs"
 
 
 def test_blog_posts_supports_json_and_comma_env(monkeypatch):

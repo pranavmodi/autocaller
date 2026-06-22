@@ -11,15 +11,19 @@ is operator-approved before send.
 
 ## Variant Goal
 
-Lead with a concrete observation about the firm, then offer the AI-readiness
+Lead with one concrete observation about the firm, then offer the AI-readiness
 audit as the single primary CTA. The email should feel like a diagnostic, not a
-demo pitch.
+demo pitch — and it should be **short**.
 
-Use this outbound angle from the AI Audit UX spec:
+Use this outbound angle from the AI Audit UX spec, kept tight:
 
-Most firms that buy AI tools never see results because the firm was not set up
-to benefit. Offer a quick read on where the firm stands and the three things
-that would have to be true first. No demo, just the diagnosis.
+Most firms that buy AI never see results because the firm wasn't set up to
+benefit. Offer a quick read on where they stand and what has to be true first.
+No demo, just the diagnosis.
+
+Keep that idea to **one or two short sentences** — do not spell out "the three
+things that would have to be true first" as a clause every time; "what would
+have to be true first" is enough.
 
 ## Required First-Touch Opener (Precise proof)
 
@@ -65,19 +69,32 @@ audit link; do not write any URL.
 For follow-ups (not first touch), you may skip the full Precise opener if prior
 emails already established it; keep the audit as the primary CTA.
 
-Example first-touch shape:
+Example first-touch shape (snappy — note the length):
 
 ```text
 Hi Marcus,
 
-Pranav from Possible Minds. If Harbor & Vance refers clients to Precise Imaging,
-you've seen the automated status replies they send: we built that system. Precise
-receives about 600 inbound emails a day; the system triages them and auto-answers
-the routine ones so staff only touch the exceptions.
+Pranav from Possible Minds — we built the automated status-reply system Precise
+Imaging uses to triage ~600 inbound emails a day.
 
-Most firms that buy AI never see results because the firm was not set up to
-benefit. I put together a quick read on where a firm like yours stands and the
-three things that would have to be true first. No demo, just the diagnosis.
+One thing I see at firms like Harbor & Vance: the bottleneck isn't finding AI
+tools, it's whether the workflow underneath is set up so a tool actually helps.
+
+Most firms that buy AI never see results because they weren't set up to benefit.
+I put together a quick read on where you stand and what has to be true first.
+No demo, just the diagnosis.
+```
+
+Example follow-up shape (even tighter — no Precise opener needed):
+
+```text
+Hi Marcus,
+
+Quick follow-up. The real blocker at most PI firms isn't the AI tool — it's that
+records, status, and file updates are too scattered for one to help.
+
+I put together a quick read on where you stand and what has to be true first.
+No demo, just the diagnosis.
 ```
 
 ## Output Contract
@@ -124,7 +141,19 @@ Required fields: `subject`, `body`, `angle`, `cta`, `reasoning`,
 - Do not ask for a meeting in the body.
 - Do not include the consult URL, audit URL, or any other signature URL. The
   application injects the audit link and signature in code.
-- Keep the body concise enough for a cold first touch.
+
+## Brevity (hard rules — emails were running too long)
+
+- **Body ≤ 90 words.** Follow-ups should be ≤ 70. Count the words.
+- **3 short paragraphs max**, 1–3 sentences each. Prefer short sentences.
+- **No throat-clearing.** Cut openers like "Stepping back for a second,"
+  "I realize my last notes were…," "Rather than send another pitch," and
+  "You strike me as someone who…". Get to the observation immediately.
+- **One observation only.** Do not list multiple operational pains
+  ("payoff checks, reduction follow-up, provider back-and-forth, handoffs…").
+  Name the single sharpest one.
+- Plain, direct words. No stacked qualifiers ("usually… typically… often…").
+- If a sentence doesn't earn its place, delete it. Snappy beats thorough.
 
 ## Safety Rules
 
