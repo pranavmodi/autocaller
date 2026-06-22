@@ -100,6 +100,34 @@ def test_compact_visibility_report_keeps_email_package():
     assert compact["estimate"]["email_case_band"]["low"]["display"] == "1"
 
 
+def test_visibility_report_status_by_domain(monkeypatch):
+    def fake_json(_cli, args, *, timeout):
+        assert args == [
+            "trace-status-for-domain",
+            "example.com",
+            "--stale-after-seconds",
+            "120",
+        ]
+        assert timeout == 60
+        return {
+            "scan_id": "scan-1",
+            "phase": "running",
+            "is_stuck": False,
+            "progress": {"queries_done": 2, "queries_total": 13},
+        }
+
+    monkeypatch.setattr(bridge, "_run_aivis_json", fake_json)
+
+    result = bridge.visibility_report_status(
+        domain="https://www.example.com/path",
+        stale_after_seconds=120,
+        aivis_cli="/fake/aivis",
+    )
+
+    assert result["phase"] == "running"
+    assert result["progress"]["queries_done"] == 2
+
+
 def test_ai_visibility_report_variant_is_forced_only_active():
     variant = get_composer_skill_variant("ai-visibility-report")
 

@@ -207,6 +207,35 @@ def find_existing_visibility_report(
     return None
 
 
+def visibility_report_status(
+    *,
+    domain: str | None = None,
+    scan_id: str | None = None,
+    stale_after_seconds: int = 300,
+    aivis_cli: str | None = None,
+) -> dict[str, Any]:
+    cli = aivis_cli or os.getenv("AI_VISIBILITY_CLI") or DEFAULT_AIVIS_CLI
+    args: list[str]
+    if scan_id:
+        args = [
+            "trace-status",
+            scan_id,
+            "--stale-after-seconds",
+            str(stale_after_seconds),
+        ]
+    else:
+        wanted_domain = normalize_domain(domain)
+        if not wanted_domain:
+            raise ValueError("scan_id_or_domain_required")
+        args = [
+            "trace-status-for-domain",
+            wanted_domain,
+            "--stale-after-seconds",
+            str(stale_after_seconds),
+        ]
+    return _run_aivis_json(cli, args, timeout=60)
+
+
 async def batch_item_visibility_report(batch_item_id: str) -> dict[str, Any] | None:
     async with AsyncSessionLocal() as session:
         item = await session.get(LeadGenBatchItemRow, batch_item_id)

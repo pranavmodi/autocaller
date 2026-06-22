@@ -5317,6 +5317,54 @@ def lead_gen_visibility_report(
     console.print("compose with: possibleos lead-gen email-agent-slice --batch <batch_id> --composer-variant ai-visibility-report")
 
 
+@lead_gen_app.command("visibility-report-status")
+def lead_gen_visibility_report_status(
+    scan_id: str = typer.Option("", "--scan-id", help="AI Visibility scan id to poll."),
+    domain: str = typer.Option("", "--domain", help="Firm website/domain to find the newest matching scan."),
+    stale_after_seconds: int = typer.Option(300, "--stale-after-seconds", min=30, help="Mark running scans silent longer than this as stuck."),
+    aivis_cli: str = typer.Option("", "--aivis-cli", help="Path to ai-visibility bin/aivis. Defaults to AI_VISIBILITY_CLI or /home/pranav/ai-visibility/bin/aivis."),
+    json_output: bool = typer.Option(False, "--json", help="Print raw JSON."),
+):
+    """Check whether an AI Visibility report is queued, running, ready, or stuck."""
+    from app.services.ai_visibility_bridge import visibility_report_status
+
+    if not scan_id and not domain:
+        console.print("[red]Provide --scan-id or --domain.[/red]")
+        raise typer.Exit(code=1)
+    try:
+        data = visibility_report_status(
+            scan_id=scan_id or None,
+            domain=domain or None,
+            stale_after_seconds=stale_after_seconds,
+            aivis_cli=aivis_cli or None,
+        )
+    except Exception as exc:
+        console.print(f"[red]AI visibility status failed: {type(exc).__name__}: {str(exc)[:500]}[/red]")
+        raise typer.Exit(code=1) from exc
+
+    if json_output:
+        console.print_json(data=data)
+        return
+    progress = data.get("progress") or {}
+    last_event = data.get("last_event") or {}
+    console.print(
+        f"[green]{data.get('phase')}[/green] "
+        f"scan={data.get('scan_id') or '-'} "
+        f"status={data.get('status') or '-'} "
+        f"progress={progress.get('queries_done', 0)}/{progress.get('queries_total', 0)} "
+        f"stuck={str(bool(data.get('is_stuck'))).lower()}"
+    )
+    if data.get("stuck_reason"):
+        console.print(f"stuck_reason={data.get('stuck_reason')}")
+    if last_event:
+        console.print(
+            f"last_event={last_event.get('event_type')} "
+            f"age_seconds={data.get('last_event_age_seconds')} "
+            f"query={last_event.get('query_id') or '-'}"
+        )
+    console.print(f"next_action={data.get('next_action') or '-'}")
+
+
 @lead_gen_app.command("select-variant")
 def lead_gen_select_variant(
     batch_item_id: str = typer.Argument(..., help="lead_gen_batch_items.id"),
