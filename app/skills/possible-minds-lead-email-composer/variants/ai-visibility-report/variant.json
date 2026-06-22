@@ -1,0 +1,7 @@
+{
+  "key": "ai-visibility-report",
+  "label": "AI Visibility Report",
+  "description": "Forced-only variant for pre-generated AI Search Visibility reports. Uses only cached report facts and generated report-email variants; excluded from random A/B.",
+  "allocation_weight": 0,
+  "active": true
+}

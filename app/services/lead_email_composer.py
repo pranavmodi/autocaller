@@ -15,6 +15,7 @@ from sqlalchemy import desc, or_, select
 from app.db import AsyncSessionLocal
 from app.db.models import ConsultBookingRow, EmailLogRow, EmailSequenceRow, FirmContactRow, FrontFirmActivityRow, InboundEmailRow, PatientRow, PifFirmRow
 from app.services.aiaudit_links import build_audit_link, build_short_audit_link
+from app.services.ai_visibility_bridge import batch_item_visibility_report
 from app.services.llm_gateway import LLMGatewayError, call_skill_json
 
 logger = logging.getLogger(__name__)
@@ -380,6 +381,11 @@ def _ensure_signature(
         if CONSULT_URL not in body:
             sign_off = f"{sign_off}\nBook a consult: {CONSULT_URL}"
         return f"{body}\n\n{sign_off}".strip()
+
+    if (variant_key or "").strip() == "ai-visibility-report":
+        if CONSULT_URL not in body:
+            body = f"{body}\n\n-- {name}\n{title}, Possible Minds\nBook a consult: {CONSULT_URL}".strip()
+        return body
 
     if CONSULT_URL not in body:
         body = f"{body}\n\n-- {name}\n{title}, Possible Minds\nBook a consult: {CONSULT_URL}".strip()
@@ -968,6 +974,10 @@ async def compose_lead_email(
         payload["research_evidence"] = research_evidence
     if selection_evidence:
         payload["selection_evidence"] = selection_evidence
+    if batch_item_id:
+        visibility_report = await batch_item_visibility_report(batch_item_id)
+        if visibility_report:
+            payload["ai_visibility_report"] = visibility_report
     env_skill_path = os.getenv("LEAD_EMAIL_COMPOSER_SKILL_PATH", "").strip()
     if env_skill_path:
         skill_path = env_skill_path
@@ -1021,6 +1031,7 @@ async def compose_lead_email(
             "conversation_state": payload.get("conversation_state", {}),
             "competitive_context": payload.get("competitive_context", {}),
             "policy": payload.get("policy", {}),
+            "ai_visibility_report": payload.get("ai_visibility_report") or {},
             "listening_mindset": payload.get("listening_mindset_context") or {
                 "available": False,
                 "brief_version": None,

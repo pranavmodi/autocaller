@@ -5253,6 +5253,70 @@ def lead_gen_compose_variants(
     )
 
 
+@lead_gen_app.command("visibility-report")
+def lead_gen_visibility_report(
+    batch_item_id: str = typer.Option("", "--batch-item", help="lead_gen_batch_items.id to infer firm/contact and cache the report on."),
+    firm_name: str = typer.Option("", "--firm-name", help="Firm name for direct report generation."),
+    domain: str = typer.Option("", "--domain", help="Firm website/domain for direct report generation."),
+    market: str = typer.Option("", "--market", help='Market like "Los Angeles, CA". Defaults to AI_VISIBILITY_DEFAULT_MARKET.'),
+    practice: str = typer.Option("auto accidents", "--practice", help="Practice focus passed to AI Visibility."),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Run AI Visibility in deterministic dry-run mode when generating."),
+    force: bool = typer.Option(False, "--force", help="Generate a fresh report even if one already exists."),
+    aivis_cli: str = typer.Option("", "--aivis-cli", help="Path to ai-visibility bin/aivis. Defaults to AI_VISIBILITY_CLI or /home/pranav/ai-visibility/bin/aivis."),
+    json_output: bool = typer.Option(False, "--json", help="Print raw JSON."),
+):
+    """Ensure an AI Search Visibility report exists and optionally cache it on a batch item.
+
+    Existing scanned reports are reused by domain/firm. Use with
+    `--batch-item <id>`, then compose with `--composer-variant ai-visibility-report`.
+    """
+    from app.services.ai_visibility_bridge import (
+        ensure_visibility_report,
+        ensure_visibility_report_for_batch_item,
+    )
+
+    try:
+        if batch_item_id:
+            data = asyncio.run(
+                ensure_visibility_report_for_batch_item(
+                    batch_item_id,
+                    dry_run=dry_run,
+                    force=force,
+                    aivis_cli=aivis_cli or None,
+                )
+            )
+        else:
+            if not firm_name or not domain:
+                console.print("[red]Provide either --batch-item or both --firm-name and --domain.[/red]")
+                raise typer.Exit(code=1)
+            data = ensure_visibility_report(
+                firm_name=firm_name,
+                domain=domain,
+                market=market,
+                practice=practice,
+                dry_run=dry_run,
+                force=force,
+                aivis_cli=aivis_cli or None,
+            )
+    except Exception as exc:
+        console.print(f"[red]AI visibility report failed: {type(exc).__name__}: {str(exc)[:500]}[/red]")
+        raise typer.Exit(code=1) from exc
+
+    if json_output:
+        console.print_json(data=data)
+        return
+    report = data.get("report") or {}
+    console.print(
+        f"[green]{data.get('status')}[/green] "
+        f"scan={report.get('scan_id') or data.get('scan_id') or '-'} "
+        f"firm={report.get('firm_name') or firm_name or '-'} "
+        f"url={report.get('report_url') or ((report.get('meta') or {}).get('report_url')) or '-'}"
+    )
+    if batch_item_id:
+        console.print(f"cached_on_batch_item={batch_item_id}")
+    console.print("compose with: possibleos lead-gen email-agent-slice --batch <batch_id> --composer-variant ai-visibility-report")
+
+
 @lead_gen_app.command("select-variant")
 def lead_gen_select_variant(
     batch_item_id: str = typer.Argument(..., help="lead_gen_batch_items.id"),
