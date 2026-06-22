@@ -577,13 +577,20 @@ the open internet, or tracking links in recipient inboxes go nowhere.
 - Declared winners get merged into the base skill; losers retired via
   variant.json active=false; next axis (opener/CTA/evidence) starts after.
 
-## First-touch composer variants
-- All first-touch (non-follow_up) lead-gen emails are forced to the configured
-  `LEAD_GEN_FIRST_TOUCH_VARIANT` when set (current default may be
-  `review-evidence`; `ai-audit` is available as a forced-only variant for the
-  AI Audit freeware CTA; an explicit `composer_variant_key` from preview
-  "compare variants" still overrides).
-  Follow-up steps are never forced.
+## Composer variant selection (first-touch + follow-up)
+- **First-touch** (non-follow_up) emails are forced to `LEAD_GEN_FIRST_TOUCH_VARIANT`
+  when set (default `review-evidence`; `ai-audit` is available as a forced-only
+  variant for the AI Audit freeware CTA).
+- **Follow-up** steps default to the per-contact rendezvous A/B (weight>0 variants
+  only), but can be pinned via `LEAD_GEN_FOLLOW_UP_VARIANT` (default "" = unchanged
+  A/B). Set it to e.g. `ai-audit` to drive the audit CTA on follow-ups too.
+- **Per-run override (highest precedence):** pass a variant to the whole run and it
+  pins that variant on **every** email, first-touch and follow-up, ignoring both env
+  knobs. UI: the "Composer variant (this run)" picker in the Daily run panel. CLI:
+  `bin/possibleos lead-gen daily-run --variant <key>`. REST: `composer_variant_key`
+  on `POST /api/lead-gen/daily-run` (validated against active variants → 400 if
+  unknown). An explicit `composer_variant_key` from preview "compare variants" also
+  overrides per-item. Precedence: per-run/explicit key > env knob > auto A/B.
 - When the firm has an extracted Yelp client-communication quote (see the
   `yelp-review-quotes` skill + `firm_reviews`), the email cites it **verbatim and
   attributed** as the hook, then pivots empathetically. When none is extracted it

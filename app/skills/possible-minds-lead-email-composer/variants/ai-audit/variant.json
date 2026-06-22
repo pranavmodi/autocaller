@@ -1,7 +1,7 @@
 {
   "key": "ai-audit",
   "label": "AI Audit",
-  "description": "Forced-only first-touch variant that offers the AI-readiness audit as the primary CTA.",
+  "description": "Forced-only variant (weight 0, excluded from random A/B) that offers the AI-readiness audit as the primary CTA. Usable on first-touch and follow-up: pin per-run from the UI/CLI, or set LEAD_GEN_FIRST_TOUCH_VARIANT / LEAD_GEN_FOLLOW_UP_VARIANT=ai-audit.",
   "allocation_weight": 0,
   "active": true
 }

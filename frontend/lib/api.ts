@@ -1792,11 +1792,14 @@ export const createLeadGenEmailAgentSlice = (args: {
   no_email_sent: boolean;
 }>("/api/lead-gen/email-agent/slice", args);
 
-export const runLeadGenDaily = (args: { dry_run?: boolean; force?: boolean } = {}) =>
+export const runLeadGenDaily = (
+  args: { dry_run?: boolean; force?: boolean; composer_variant_key?: string } = {},
+) =>
   post<LeadGenDailyRun>("/api/lead-gen/daily-run", {
     dry_run: args.dry_run ?? false,
     force: args.force ?? false,
     created_by: "operator",
+    composer_variant_key: args.composer_variant_key || null,
   });
 
 export const listLeadGenDailyRuns = (limit = 5) =>

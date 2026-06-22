@@ -958,6 +958,20 @@ Email sending:
   baseline email when no usable evidence exists. `allocation_weight=0` (forced
   only, never random A/B). The legacy `yelp-pain-quote` variant is RETIRED
   (`active=false`), superseded by `review-evidence`.
+- `LEAD_GEN_FOLLOW_UP_VARIANT` — composer variant key forced on follow-up
+  (`action_type=follow_up`) items in `_compose_batch_items`, symmetric to the
+  first-touch knob. Default `""` = unchanged behavior (follow-ups use the random
+  A/B rendezvous pool over weight>0 variants). Set e.g. `ai-audit` to drive the
+  audit CTA on follow-ups. A per-run/explicit `composer_variant_key` still wins.
+- **Per-run composer override** — `composer_variant_key` on
+  `POST /api/lead-gen/daily-run` (and `--variant` on `lead-gen daily-run`, and the
+  "Composer variant (this run)" picker in the Daily run panel) pins one active
+  variant on **every** composed email in that run — first-touch and follow-up —
+  taking precedence over both env knobs and the A/B. It is plumbed
+  `run_daily_pipeline → _compose_batch → _compose_batch_items(composer_variant_key=…)`
+  and validated against active variants (400 on unknown). Recorded on the run as
+  `compose.counts.composer_variant_override`. Precedence:
+  per-run/explicit key > `LEAD_GEN_*_VARIANT` env > auto A/B.
 - `REVIEW_EVIDENCE_GATE_KINDS` (default `complaint,praise,fact`) — which evidence
   kinds count as "enough to personalize a first-touch email." Used by both the
   compose gate and the composer's primary-hook pick (via

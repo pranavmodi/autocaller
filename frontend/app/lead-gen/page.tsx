@@ -186,8 +186,8 @@ function LeadGenPageContent() {
     },
   });
   const runDaily = useMutation({
-    mutationFn: ({ dryRun, force }: { dryRun: boolean; force: boolean }) =>
-      runLeadGenDaily({ dry_run: dryRun, force }),
+    mutationFn: ({ dryRun, force, composerVariantKey }: { dryRun: boolean; force: boolean; composerVariantKey?: string }) =>
+      runLeadGenDaily({ dry_run: dryRun, force, composer_variant_key: composerVariantKey }),
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ["lead-gen-daily-runs"] });
       qc.invalidateQueries({ queryKey: ["lead-gen-throughput"] });
@@ -245,7 +245,7 @@ function LeadGenPageContent() {
             loading={dailyRuns.isLoading || dailyEnabled.isLoading}
             onToggle={(enabled) => toggleDaily.mutate(enabled)}
             toggling={toggleDaily.isPending}
-            onRun={(dryRun, force = false) => runDaily.mutate({ dryRun, force })}
+            onRun={(dryRun, force = false, composerVariantKey) => runDaily.mutate({ dryRun, force, composerVariantKey })}
             running={runDaily.isPending}
             error={runDaily.isError || toggleDaily.isError}
             lastRun={runDaily.data ?? null}
@@ -920,13 +920,21 @@ function DailyRunPanel({
   loading: boolean;
   onToggle: (enabled: boolean) => void;
   toggling: boolean;
-  onRun: (dryRun: boolean, force?: boolean) => void;
+  onRun: (dryRun: boolean, force?: boolean, composerVariantKey?: string) => void;
   running: boolean;
   error: boolean;
   lastRun: LeadGenDailyRun | null;
   throughput: LeadGenThroughput | null;
 }) {
   const [confirmForce, setConfirmForce] = useState(false);
+  const [composerVariant, setComposerVariant] = useState("");
+  const composerVariants = useQuery({
+    queryKey: ["composer-variants"],
+    queryFn: getComposerVariants,
+    staleTime: 60_000,
+  });
+  const activeVariants = (composerVariants.data?.variants ?? []).filter((v) => v.active);
+  const variantArg = composerVariant || undefined;
   const stages = run?.stages ?? {};
   const selectCounts = (stages.select?.counts ?? {}) as Record<string, unknown>;
   const composeCounts = (stages.compose?.counts ?? {}) as Record<string, unknown>;
@@ -983,10 +991,29 @@ function DailyRunPanel({
             Open batch
           </Link>
         )}
+        <label className="block text-xs font-medium text-neutral-600">
+          Composer variant (this run)
+          <select
+            value={composerVariant}
+            onChange={(e) => setComposerVariant(e.target.value)}
+            disabled={composerVariants.isLoading || running}
+            className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-2 py-1.5 text-sm font-medium text-neutral-800 disabled:opacity-60"
+          >
+            <option value="">Default (per-item A/B)</option>
+            {activeVariants.map((v) => (
+              <option key={v.key} value={v.key}>{v.label}</option>
+            ))}
+          </select>
+          <span className="mt-1 block font-normal text-neutral-400">
+            {composerVariant
+              ? `Pins ${composerVariant} on every email (first-touch + follow-up) this run.`
+              : "Each email keeps its default / A/B variant."}
+          </span>
+        </label>
         <div className="grid grid-cols-2 gap-2">
           <button
             type="button"
-            onClick={() => onRun(true)}
+            onClick={() => onRun(true, false, variantArg)}
             disabled={running}
             className="inline-flex items-center justify-center gap-2 rounded-md border border-neutral-200 px-3 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50 disabled:opacity-60"
           >
@@ -997,7 +1024,7 @@ function DailyRunPanel({
             type="button"
             onClick={() => {
               if (isIstWeekend()) setConfirmForce(true);
-              else onRun(false, false);
+              else onRun(false, false, variantArg);
             }}
             disabled={running}
             className="inline-flex items-center justify-center gap-2 rounded-md bg-neutral-900 px-3 py-2 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-60"
@@ -1049,7 +1076,7 @@ function DailyRunPanel({
               <button
                 type="button"
                 onClick={() => {
-                  onRun(false, true);
+                  onRun(false, true, variantArg);
                   setConfirmForce(false);
                 }}
                 className="rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-800"
@@ -1401,9 +1428,12 @@ function BatchDetail({
     (item) => item.outcome != null && REPLY_OUTCOMES.has(item.outcome),
   ).length;
   const generateAllDrafts = async () => {
-    const remaining = previewableItems.filter(
-      (item) => !isEmailSent(item) && !storedAgentDraftStep(item) && draftStatuses[item.id] !== "completed",
-    );
+    // Force-recompose every unsent previewable item server-side so the new draft
+    // is persisted (and its send action rescheduled), honoring the variant picked
+    // in the "Composer variant" dropdown. Unlike the old preview-cache approach,
+    // this overwrites already-composed drafts — which is the whole point of
+    // re-running the batch through a different variant (e.g. ai-audit).
+    const remaining = previewableItems.filter((item) => !isEmailSent(item));
     if (remaining.length === 0) return;
     setIsGeneratingAllDrafts(true);
     setBulkDraftError(null);
@@ -1413,22 +1443,10 @@ function BatchDetail({
     const generateOne = async (item: LeadGenBatchItem) => {
       setDraftStatuses((prev) => ({ ...prev, [item.id]: "generating" }));
       try {
-        await Promise.all([
-          qc.fetchQuery({
-            queryKey: sequencePreviewQueryKey(item, selectedComposerVariantKey),
-            queryFn: () => previewSequence(
-              item.contact_id,
-              item.template_key,
-              sequencePreviewOptions(item, selectedComposerVariantKey),
-            ),
-            staleTime: 5 * 60_000,
-          }),
-          qc.fetchQuery({
-            queryKey: contactDetailQueryKey(item),
-            queryFn: () => getContactDetail(item.contact_id, item.template_key),
-            staleTime: 5 * 60_000,
-          }),
-        ]);
+        await recomposeLeadGenBatchItemDraft(item.id, {
+          actor: "operator",
+          composer_variant_key: selectedComposerVariantKey || null,
+        });
         setDraftStatuses((prev) => ({ ...prev, [item.id]: "completed" }));
       } catch {
         failed += 1;
@@ -1443,8 +1461,10 @@ function BatchDetail({
       }
     };
     await Promise.all(Array.from({ length: workerCount }, runWorker));
+    // Pull the freshly persisted drafts back into the batch view.
+    await qc.invalidateQueries({ queryKey: ["lead-gen-batch", batchId] });
     if (failed > 0) {
-      setBulkDraftError(`${failed} draft${failed === 1 ? "" : "s"} could not be generated.`);
+      setBulkDraftError(`${failed} draft${failed === 1 ? "" : "s"} could not be regenerated.`);
     }
     setIsGeneratingAllDrafts(false);
   };

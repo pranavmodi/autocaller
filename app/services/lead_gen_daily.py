@@ -734,7 +734,10 @@ async def _create_daily_batch(
     return batch_id
 
 
-async def _compose_batch(*, batch_id: str, created_by: str, template_key: str) -> dict[str, Any]:
+async def _compose_batch(
+    *, batch_id: str, created_by: str, template_key: str,
+    composer_variant_key: str | None = None,
+) -> dict[str, Any]:
     all_drafts: list[dict[str, Any]] = []
     action_ids: list[str] = []
     errors: list[str] = []
@@ -757,7 +760,11 @@ async def _compose_batch(*, batch_id: str, created_by: str, template_key: str) -
                 result = await _compose_batch_items(
                     batch_id=batch_id,
                     created_by=created_by,
-                    composer_variant_key=None,
+                    # When set (per-run override), this forces the variant for
+                    # every item — first-touch and follow-up alike. When None, each
+                    # item resolves its own variant (first-touch default / follow-up
+                    # auto A/B or the LEAD_GEN_*_VARIANT env knobs).
+                    composer_variant_key=composer_variant_key,
                     approve_actions=False,
                     policy_check_first_action=False,
                     template_key=template_key,
@@ -788,6 +795,7 @@ async def _compose_batch(*, batch_id: str, created_by: str, template_key: str) -
         "total": len(items),
         "errors": errors,
         "complete": drafted >= (len(items) - held),
+        "composer_variant_override": composer_variant_key,
     }
 
 
@@ -1094,6 +1102,7 @@ async def run_daily_pipeline(
     force: bool = False,
     created_by: str = "daily-run",
     run_date: date | None = None,
+    composer_variant_key: str | None = None,
     now: datetime | None = None,
 ) -> dict[str, Any]:
     """Run or resume today's deterministic daily lead-gen pipeline.
@@ -1101,7 +1110,13 @@ async def run_daily_pipeline(
     Dry runs intentionally avoid writes and external side effects so operators
     can validate live selection without creating actions or consuming research
     API budget.
+
+    `composer_variant_key`, when set, pins that composer skill variant on every
+    composed email in the run (first-touch and follow-up), overriding the
+    per-item default / A/B assignment. It must be a known active variant; the
+    caller (API/CLI) validates and surfaces a clean error.
     """
+    composer_variant_key = (composer_variant_key or "").strip() or None
     now = now or _utcnow()
     target_date = run_date or _date_for_run(now)
     policy = await _active_policy()
@@ -1152,6 +1167,7 @@ async def run_daily_pipeline(
             "stages": stages,
             "batch_id": None,
             "dry_run": True,
+            "composer_variant_override": composer_variant_key,
         }
 
     row, should_run = await _create_or_get_run(run_date=target_date, created_by=created_by, force=force)
@@ -1287,7 +1303,12 @@ async def run_daily_pipeline(
             await _checkpoint(row.id, stage="compose", status="running")
             if not row.batch_id:
                 raise ValueError("batch_id_missing_for_compose")
-            compose = await _compose_batch(batch_id=row.batch_id, created_by=created_by, template_key=template_key)
+            compose = await _compose_batch(
+                batch_id=row.batch_id,
+                created_by=created_by,
+                template_key=template_key,
+                composer_variant_key=composer_variant_key,
+            )
             row = await _checkpoint(
                 row.id,
                 stage="compose",
@@ -1583,9 +1604,61 @@ def _in_daily_loop_window(now: datetime | None = None) -> bool:
     return local.weekday() < 5 and RUN_WINDOW_START <= local.time() < RUN_WINDOW_END
 
 
+async def reconcile_interrupted_runs(*, max_age_minutes: int = 60) -> dict[str, Any]:
+    """Close out daily runs frozen in `running` because the daemon was killed
+    mid-stage — neither the stage-complete checkpoint nor the pipeline's failure
+    handler got to run, so the row sticks at status=running forever (e.g. the
+    06-18 run wedged at `notify` when the backend restarted mid-WhatsApp-ping).
+
+    A genuinely-progressing run rewrites `updated_at` on every checkpoint, so a
+    stale `updated_at` is the orphan signal — we never touch a run that is still
+    advancing. A run that already produced a batch did its real work (selection,
+    compose, schedule all ran), so we mark it `partial`; one that died earlier is
+    `failed`. Called once at daemon startup."""
+    cutoff = _utcnow() - timedelta(minutes=max(1, max_age_minutes))
+    reconciled: list[dict[str, Any]] = []
+    async with AsyncSessionLocal() as session:
+        rows = (await session.execute(
+            select(LeadGenDailyRunRow).where(
+                LeadGenDailyRunRow.status == "running",
+                LeadGenDailyRunRow.updated_at < cutoff,
+            )
+        )).scalars().all()
+        for row in rows:
+            stages = dict(row.stages_json or {})
+            stage = row.stage or "unknown"
+            entry = dict(stages.get(stage) or {})
+            entry["status"] = "failed"
+            entry["finished_at"] = _utcnow().isoformat()
+            entry["error"] = (
+                "interrupted: daemon restarted mid-stage "
+                "(closed out by startup reconciler)"
+            )
+            stages[stage] = entry
+            row.stages_json = stages
+            row.status = "partial" if row.batch_id else "failed"
+            row.updated_at = _utcnow()
+            reconciled.append({
+                "run_date": row.run_date.isoformat() if row.run_date else None,
+                "stage": stage,
+                "new_status": row.status,
+            })
+        if rows:
+            await session.commit()
+    if reconciled:
+        logger.warning("reconciled %d interrupted daily run(s): %s", len(reconciled), reconciled)
+    return {"count": len(reconciled), "reconciled": reconciled}
+
+
 async def daily_run_loop(interval_seconds: int = 600) -> None:
     """Background loop. Wired on startup, but default-off and no-op disabled."""
     logger.info("lead_gen_daily_run_loop starting (interval=%ss, default disabled)", interval_seconds)
+    # Sweep any run wedged in `running` by a prior mid-stage restart, so the
+    # daily-run list reflects reality and stale rows don't block re-runs.
+    try:
+        await reconcile_interrupted_runs()
+    except Exception:
+        logger.exception("startup reconcile_interrupted_runs failed")
     while True:
         try:
             enabled = await get_daily_run_enabled()

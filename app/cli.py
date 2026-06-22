@@ -5037,9 +5037,14 @@ def lead_gen_email_agent_slice(
 
 
 def _print_daily_run(data: dict) -> None:
+    override = (
+        data.get("composer_variant_override")
+        or ((data.get("stages") or {}).get("compose") or {}).get("counts", {}).get("composer_variant_override")
+    )
     console.print(
         f"[bold]daily-run[/bold] date={data.get('run_date')} status={data.get('status')} "
         f"stage={data.get('stage')} batch={data.get('batch_id') or '-'}"
+        + (f" variant={override}" if override else "")
     )
     table = Table(show_header=True, header_style="bold")
     table.add_column("stage", no_wrap=True)
@@ -5077,12 +5082,18 @@ def _print_daily_run(data: dict) -> None:
 def lead_gen_daily_run(
     dry_run: bool = typer.Option(False, "--dry-run", help="Plan without DB writes, research API calls, actions, or WhatsApp."),
     force: bool = typer.Option(False, "--force", help="Re-run today's checkpointed pipeline."),
+    variant: str = typer.Option("", "--variant", help="Pin one composer variant for every email this run (first-touch + follow-up). See `composer-ab variants` for keys."),
     json_output: bool = typer.Option(False, "--json", help="Print raw JSON."),
 ):
     """Run the deterministic daily lead-selection and drafting pipeline now."""
     data = _post(
         "/api/lead-gen/daily-run",
-        json_body={"dry_run": dry_run, "force": force, "created_by": "operator"},
+        json_body={
+            "dry_run": dry_run,
+            "force": force,
+            "created_by": "operator",
+            "composer_variant_key": variant or None,
+        },
         timeout=900.0,
     )
     if json_output:

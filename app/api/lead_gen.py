@@ -112,6 +112,9 @@ class DailyRunRequest(BaseModel):
     dry_run: bool = False
     force: bool = False
     created_by: str = Field("operator", max_length=128)
+    # Pin one composer variant for every email in this run (first-touch + follow-
+    # up), overriding the per-item default / A/B. Empty/None = normal behavior.
+    composer_variant_key: Optional[str] = Field(None, max_length=120)
 
 
 class DailyRunEnabledRequest(BaseModel):
@@ -187,10 +190,23 @@ async def get_batches(
 
 @router.post("/api/lead-gen/daily-run")
 async def run_daily_lead_gen(req: DailyRunRequest):
+    variant_key = (req.composer_variant_key or "").strip() or None
+    if variant_key:
+        from app.services.lead_email_composer_variants import (
+            discover_composer_skill_variants,
+            get_composer_skill_variant,
+        )
+        if get_composer_skill_variant(variant_key) is None:
+            valid = [v.key for v in discover_composer_skill_variants() if v.active]
+            raise HTTPException(
+                status_code=400,
+                detail=f"unknown or inactive composer variant '{variant_key}'. Active: {', '.join(valid)}",
+            )
     return await run_daily_pipeline(
         dry_run=req.dry_run,
         force=req.force,
         created_by=req.created_by,
+        composer_variant_key=variant_key,
     )
 
 

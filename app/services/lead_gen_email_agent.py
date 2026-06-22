@@ -345,6 +345,15 @@ async def _compose_batch_items(
             forced = os.getenv("LEAD_GEN_FIRST_TOUCH_VARIANT", "review-evidence").strip()
             if forced:
                 item_variant_key = forced
+        # Follow-up override, symmetric to the first-touch one. Default "" leaves
+        # follow-ups on the auto A/B per-contact assignment (unchanged behavior);
+        # set LEAD_GEN_FOLLOW_UP_VARIANT to pin a variant (e.g. ai-audit) on every
+        # follow-up the daily run composes. A per-run/explicit composer_variant_key
+        # still wins (it's set above before this branch).
+        if item_variant_key is None and is_follow_up:
+            forced_fu = os.getenv("LEAD_GEN_FOLLOW_UP_VARIANT", "").strip()
+            if forced_fu:
+                item_variant_key = forced_fu
         selection_evidence = {
             "why_this_contact_was_selected": item.get("reason", {}).get("reason")
             or item.get("reason", {}).get("basis")
@@ -646,6 +655,10 @@ async def recompose_item_draft(
         forced = os.getenv("LEAD_GEN_FIRST_TOUCH_VARIANT", "review-evidence").strip()
         if forced:
             item_variant_key = forced
+    if item_variant_key is None and is_follow_up:
+        forced_fu = os.getenv("LEAD_GEN_FOLLOW_UP_VARIANT", "").strip()
+        if forced_fu:
+            item_variant_key = forced_fu
     selection_evidence = {
         "why_this_contact_was_selected": reason0.get("reason") or reason0.get("basis") or "",
         "persona": item.get("persona") or "",
