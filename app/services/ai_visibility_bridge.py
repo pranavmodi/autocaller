@@ -85,6 +85,7 @@ async def ensure_visibility_report_for_batch_item(
     *,
     dry_run: bool = False,
     force: bool = False,
+    scan_profile: str = "email-draft",
     aivis_cli: str | None = None,
 ) -> dict[str, Any]:
     async with AsyncSessionLocal() as session:
@@ -110,6 +111,7 @@ async def ensure_visibility_report_for_batch_item(
         domain=domain,
         market=market,
         practice=DEFAULT_PRACTICE,
+        scan_profile=scan_profile,
         dry_run=dry_run,
         force=force,
         aivis_cli=aivis_cli,
@@ -137,6 +139,7 @@ def ensure_visibility_report(
     domain: str,
     market: str,
     practice: str = DEFAULT_PRACTICE,
+    scan_profile: str = "email-draft",
     dry_run: bool = False,
     force: bool = False,
     aivis_cli: str | None = None,
@@ -145,10 +148,13 @@ def ensure_visibility_report(
     domain = normalize_domain(domain)
     market = (market or os.getenv("AI_VISIBILITY_DEFAULT_MARKET") or DEFAULT_MARKET).strip()
     practice = (practice or DEFAULT_PRACTICE).strip()
+    scan_profile = (scan_profile or "email-draft").strip()
     if not firm_name:
         raise ValueError("firm_name_required")
     if not domain:
         raise ValueError("domain_required")
+    if scan_profile not in {"full", "email-draft"}:
+        raise ValueError("invalid_scan_profile")
     cli = aivis_cli or os.getenv("AI_VISIBILITY_CLI") or DEFAULT_AIVIS_CLI
 
     if not force:
@@ -168,6 +174,8 @@ def ensure_visibility_report(
         practice,
         "--source",
         "outbound_email",
+        "--profile",
+        scan_profile,
     ]
     if dry_run:
         scan_args.append("--dry-run")

@@ -5260,6 +5260,7 @@ def lead_gen_visibility_report(
     domain: str = typer.Option("", "--domain", help="Firm website/domain for direct report generation."),
     market: str = typer.Option("", "--market", help='Market like "Los Angeles, CA". Defaults to AI_VISIBILITY_DEFAULT_MARKET.'),
     practice: str = typer.Option("auto accidents", "--practice", help="Practice focus passed to AI Visibility."),
+    scan_profile: str = typer.Option("email-draft", "--scan-profile", help="AI Visibility scan profile: email-draft or full."),
     dry_run: bool = typer.Option(False, "--dry-run", help="Run AI Visibility in deterministic dry-run mode when generating."),
     force: bool = typer.Option(False, "--force", help="Generate a fresh report even if one already exists."),
     aivis_cli: str = typer.Option("", "--aivis-cli", help="Path to ai-visibility bin/aivis. Defaults to AI_VISIBILITY_CLI or /home/pranav/ai-visibility/bin/aivis."),
@@ -5282,6 +5283,7 @@ def lead_gen_visibility_report(
                     batch_item_id,
                     dry_run=dry_run,
                     force=force,
+                    scan_profile=scan_profile,
                     aivis_cli=aivis_cli or None,
                 )
             )
@@ -5294,6 +5296,7 @@ def lead_gen_visibility_report(
                 domain=domain,
                 market=market,
                 practice=practice,
+                scan_profile=scan_profile,
                 dry_run=dry_run,
                 force=force,
                 aivis_cli=aivis_cli or None,

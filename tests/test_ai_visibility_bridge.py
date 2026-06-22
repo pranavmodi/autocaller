@@ -55,6 +55,8 @@ def test_visibility_report_generates_when_missing(monkeypatch):
     def fake_text(_cli, args, *, timeout):
         calls.append(tuple(args))
         assert args[0] == "scan"
+        assert "--profile" in args
+        assert args[args.index("--profile") + 1] == "email-draft"
         return "Created scan: abc123abc123abc123abc123abc123ab\n"
 
     monkeypatch.setattr(bridge, "_run_aivis_json", fake_json)
