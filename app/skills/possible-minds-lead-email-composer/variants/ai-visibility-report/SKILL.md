@@ -20,6 +20,15 @@ return a short draft that requires human review and explains in `reasoning` that
 the AI Visibility report must be generated first. Do not invent visibility
 numbers.
 
+If the selected `email_variants[*].gates.outbound_ready` is `false` (or
+`gates.blocking_reasons` is non-empty — e.g. `competitors_not_reviewed`,
+`scan_not_outbound_ready`), the report exists but is **not cleared for cold
+outbound**. Compose the draft from the gated body, but set
+`requires_human_review: true` and add `gates.blocking_reasons` to `risk_flags`.
+Never imply a competitor count or name that the gated body does not already
+contain — when `gates.named_competitor` is `false`, do not add any rival firm
+name, even one you see elsewhere in the payload.
+
 ## Output Contract
 
 Return only JSON:
