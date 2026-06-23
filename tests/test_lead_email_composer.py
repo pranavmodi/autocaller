@@ -8,10 +8,12 @@ from app.services.lead_email_composer import (
     _conversation_state,
     _ensure_consult_signature,
     _ensure_signature,
+    _has_visibility_report_link,
     _sanitize_body_salutation,
     _sanitize_email_copy,
     _sanitize_subject,
     _sender_payload,
+    _visibility_report_outbound_ready,
     fetch_competitive_context_for_email,
 )
 
@@ -108,6 +110,20 @@ def test_ensure_signature_uses_audit_as_primary_cta_for_audit_variant(monkeypatc
     # The consult link appears in the signature for every variant, including
     # the audit variant.
     assert f"Book a consult: {CONSULT_URL}" in sign_off_tail
+
+
+def test_visibility_report_link_detection_and_gates():
+    assert _has_visibility_report_link("View it: https://possible.example/v/abc123")
+    assert _has_visibility_report_link("View it: https://visibility.example/r/scan-123")
+    assert not _has_visibility_report_link("No report link here.")
+
+    assert _visibility_report_outbound_ready({
+        "email_variants": [{"gates": {"outbound_ready": True}}],
+    })
+    assert not _visibility_report_outbound_ready({
+        "email_variants": [{"gates": {"outbound_ready": False}}],
+    })
+    assert not _visibility_report_outbound_ready({})
 
 
 def test_sanitize_email_copy_removes_generated_dash_punctuation():

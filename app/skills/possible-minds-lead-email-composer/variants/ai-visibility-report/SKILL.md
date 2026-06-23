@@ -58,7 +58,8 @@ Primary input:
 - `ai_visibility_report.entity_split`: first-class identity-split finding.
 - `ai_visibility_report.estimate.email_case_band`: conservative modeled case band.
 - `ai_visibility_report.engine_coverage`: honesty guard.
-- `ai_visibility_report.report_url`: link to the full report UI.
+- `ai_visibility_report.scan_id`: report identity used by the application for
+  tracked-link creation.
 - `ai_visibility_report.one_pager`: measured/modeled assumption trail.
 
 Secondary input:
@@ -82,19 +83,14 @@ Secondary input:
   body already does.
 - Do not include the consult URL or generic AI-readiness audit URL. The
   application appends the Possible Minds signature.
-- Include the full report URL when available, but do not call it "attached."
+- Do not include any report URL, `report_url`, `/r/`, or `/v/` link. The
+  application appends the tracked full-report link after composition when the
+  selected report variant is outbound-ready.
 
 ## Preferred Shape
 
-Keep the report-generated body mostly intact. If you add the report URL, put it
-near the end:
-
-```text
-I can send the one-pager with the exact answers and math, or you can view it here:
-{report_url}
-```
-
-Then close with the meeting ask already present in the generated variant, or a
+Keep the report-generated body mostly intact. Close with the meeting ask
+already present in the generated variant, or a
 plain:
 
 ```text

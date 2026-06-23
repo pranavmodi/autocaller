@@ -494,6 +494,7 @@ Common causes: Geo permissions not enabled, AMD mis-classifying carrier voicemai
 | `Possible OS lead-gen policy\|recommend\|batches\|show\|approve\|observe\|observations\|propose` | Cybernetic lead-generation loop for Precise Imaging. Recommends bounded batches, requires approval, and creates lightweight operator action-center approvals immediately when selected email sequences are queued; drafts compose lazily when an action is opened. Automatic observations capture sends, failures, replies, clicks, bookings, call dispositions, cancellations, and reschedules. Use `lead-gen observations summary --since 7d` for the weekly learning KPI. UI: `/lead-gen`. Concept doc: `docs/CYBERNETIC_LEAD_GEN_CONCEPT.md`. |
 | `Possible OS lead-gen daily-run\|daily-status\|throughput\|daily-enable\|daily-disable` | Daily lead-selection and drafting pipeline. `daily-run --dry-run` is no-write/no-action validation. A real run creates a checkpointed daily batch, drafts emails, and schedules send actions. `throughput` shows selected, with evidence, composed, sending today, held, shortfall, and blocker. The daemon loop defaults off and is controlled by persisted `daily_run_enabled`. |
 | `Possible OS aiaudit link --contact <contact_id>` / `aiaudit clicks --since 7d` | AI Audit freeware attribution. `link` prints a contact-attributed signed redirect URL; `clicks` lists `audit_link_clicks` and AI Audit `link_clicked` observations. Public redirect: `/aiaudit/go?t=<signed-token>`. |
+| `Possible OS visibility-clicks --days 7` | AI Search Visibility report-link attribution. Lists `audit_link_clicks` rows where `source=visibility_report_email`, joined to contact and firm. Public redirect: `/v/<code>` to `AIVIS_REPORT_BASE_URL/r/<scan_id>`. |
 | `Possible OS actions list\|show\|policy-check\|execute` | Durable Possible OS action execution queue. Supported high-risk actions must be policy-checked and use narrow executors. |
 | `Possible OS actions list [--scheduled]` | List durable action records. `--scheduled` shows future approved scheduled sends ordered by send time. |
 | `Possible OS actions scheduler-status` | Show daemon scheduled-action loop status, last tick, pending scheduled count, and due count. |
@@ -563,6 +564,9 @@ The `/t/*` routes are exempt from the daemon's session middleware (see
 `_AUTH_EXEMPT_PREFIXES` in `app/main.py`) — email clients can't carry the
 session cookie. They must be reachable at `OUTREACH_PUBLIC_BASE_URL` from
 the open internet, or tracking links in recipient inboxes go nowhere.
+AI Visibility report emails also need `AIVIS_REPORT_BASE_URL`; set
+`VISIBILITY_LINK_BASE_URL` only if `/v/<code>` should use a different public
+hostname than `OUTREACH_PUBLIC_BASE_URL`.
 
 ## Composer A/B testing (subject-line experiment)
 - Active experiment: subject-line axis, 3 arms — baseline (Precise-flavored

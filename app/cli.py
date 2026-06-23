@@ -6423,5 +6423,65 @@ def aiaudit_clicks(
     asyncio.run(_run())
 
 
+@app.command("visibility-clicks")
+def visibility_clicks(
+    days: int = typer.Option(7, "--days", min=1, max=3650, help="Window in days."),
+    limit: int = typer.Option(50, "--limit", min=1, max=500),
+):
+    """List AI Visibility report-link click attribution."""
+    async def _run() -> None:
+        from datetime import datetime, timedelta, timezone
+        from sqlalchemy import desc, select
+        from app.db import AsyncSessionLocal
+        from app.db.models import AuditLinkClickRow, FirmContactRow, LeadGenBatchItemRow, LeadGenObservationRow, PifFirmRow
+
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+        async with AsyncSessionLocal() as session:
+            rows = (await session.execute(
+                select(AuditLinkClickRow, FirmContactRow, LeadGenBatchItemRow, PifFirmRow)
+                .join(FirmContactRow, FirmContactRow.id == AuditLinkClickRow.contact_id)
+                .outerjoin(LeadGenBatchItemRow, LeadGenBatchItemRow.id == AuditLinkClickRow.batch_item_id)
+                .outerjoin(PifFirmRow, PifFirmRow.id == AuditLinkClickRow.pif_id)
+                .where(AuditLinkClickRow.source == "visibility_report_email")
+                .where(AuditLinkClickRow.clicked_at >= cutoff)
+                .order_by(desc(AuditLinkClickRow.clicked_at))
+                .limit(limit)
+            )).all()
+            obs_count = (await session.execute(
+                select(LeadGenObservationRow.id)
+                .where(LeadGenObservationRow.event_type == "link_clicked")
+                .where(LeadGenObservationRow.created_at >= cutoff)
+                .where(LeadGenObservationRow.raw_event_json["channel"].astext == "ai_visibility")
+            )).all()
+
+        table = Table(title=f"AI Visibility report clicks in last {days}d")
+        table.add_column("clicked_at")
+        table.add_column("firm")
+        table.add_column("contact")
+        table.add_column("email")
+        table.add_column("pif_id")
+        table.add_column("batch_item")
+        table.add_column("click_id")
+        for click, contact, item, firm in rows:
+            firm_name = (
+                (item.firm_name if item else None)
+                or (firm.firm_name if firm else None)
+                or ""
+            )
+            table.add_row(
+                click.clicked_at.isoformat() if click.clicked_at else "",
+                firm_name,
+                contact.full_name or "",
+                contact.email or "",
+                click.pif_id or "",
+                click.batch_item_id or "",
+                click.id,
+            )
+        console.print(table)
+        console.print(f"[dim]{len(rows)} click rows, {len(obs_count)} AI Visibility link_clicked observations in window[/dim]")
+
+    asyncio.run(_run())
+
+
 if __name__ == "__main__":
     app()

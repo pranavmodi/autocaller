@@ -1222,7 +1222,7 @@ class LinkEventRow(Base):
 
 
 class AuditLinkClickRow(Base):
-    """Append-only click log for contact-attributed AI Audit links."""
+    """Append-only click log for contact-attributed freeware links."""
     __tablename__ = "audit_link_clicks"
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
@@ -1263,6 +1263,28 @@ class AuditLinkRow(Base):
     __table_args__ = (
         Index("ix_audit_links_contact_id", "contact_id"),
         Index("ix_audit_links_created_at", "created_at"),
+    )
+
+
+class VisibilityLinkRow(Base):
+    """Short, clickable AI Visibility report redirect codes used in plaintext email."""
+    __tablename__ = "visibility_links"
+
+    code: Mapped[str] = mapped_column(String(32), primary_key=True)
+    contact_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("firm_contacts.id", ondelete="CASCADE"), nullable=False,
+    )
+    batch_item_id: Mapped[str | None] = mapped_column(
+        String(64), ForeignKey("lead_gen_batch_items.id", ondelete="SET NULL"), nullable=True,
+    )
+    pif_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    scan_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    source: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow)
+
+    __table_args__ = (
+        Index("ix_visibility_links_contact_id", "contact_id"),
+        Index("ix_visibility_links_created_at", "created_at"),
     )
 
 

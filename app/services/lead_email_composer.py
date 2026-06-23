@@ -17,6 +17,7 @@ from app.db.models import ConsultBookingRow, EmailLogRow, EmailSequenceRow, Firm
 from app.services.aiaudit_links import build_audit_link, build_short_audit_link
 from app.services.ai_visibility_bridge import batch_item_visibility_report
 from app.services.llm_gateway import LLMGatewayError, call_skill_json
+from app.services.visibility_links import build_short_visibility_link
 
 logger = logging.getLogger(__name__)
 from app.services.lead_email_composer_variants import (
@@ -350,6 +351,31 @@ def _has_audit_link(body: str) -> bool:
     return AI_AUDIT_PATH in body or "/a/" in body or (public_url and public_url in body)
 
 
+def _has_visibility_report_link(body: str) -> bool:
+    return bool(re.search(r"https?://\S+/(?:v|r)/\S+|/(?:v|r)/\S+", body or ""))
+
+
+def _visibility_report_scan_id(report: dict[str, Any] | None) -> str | None:
+    if not isinstance(report, dict):
+        return None
+    return str(report.get("scan_id") or "").strip() or None
+
+
+def _visibility_report_outbound_ready(report: dict[str, Any] | None) -> bool:
+    if not isinstance(report, dict):
+        return False
+    variants = report.get("email_variants")
+    if not isinstance(variants, list) or not variants:
+        return False
+    first = variants[0] if isinstance(variants[0], dict) else {}
+    gates = first.get("gates") if isinstance(first.get("gates"), dict) else {}
+    return gates.get("outbound_ready") is not False
+
+
+def _visibility_report_cta_line(url: str) -> str:
+    return f"View your full report: {url}"
+
+
 def _audit_cta_line(audit_url: str, *, primary: bool) -> str:
     intro = AI_AUDIT_CTA_PRIMARY if primary else AI_AUDIT_CTA_FOOTER
     return f"{intro} {audit_url}"
@@ -367,6 +393,13 @@ def _ensure_signature(
     name = sender.get("name") or "Pranav"
     title = sender.get("title") or "Founder"
     is_audit_variant = (variant_key or "").strip() == "ai-audit"
+    is_visibility_variant = (variant_key or "").strip() == "ai-visibility-report"
+
+    if is_visibility_variant:
+        if CONSULT_URL not in body:
+            body = f"{body}\n\n-- {name}\n{title}, Possible Minds\nBook a consult: {CONSULT_URL}".strip()
+        return body
+
     audit_source = "ai_audit_email" if is_audit_variant else "ai_audit_signature"
     audit_url = audit_url or build_audit_link(contact, source=audit_source)
     has_audit = _has_audit_link(body)
@@ -381,11 +414,6 @@ def _ensure_signature(
         if CONSULT_URL not in body:
             sign_off = f"{sign_off}\nBook a consult: {CONSULT_URL}"
         return f"{body}\n\n{sign_off}".strip()
-
-    if (variant_key or "").strip() == "ai-visibility-report":
-        if CONSULT_URL not in body:
-            body = f"{body}\n\n-- {name}\n{title}, Possible Minds\nBook a consult: {CONSULT_URL}".strip()
-        return body
 
     if CONSULT_URL not in body:
         body = f"{body}\n\n-- {name}\n{title}, Possible Minds\nBook a consult: {CONSULT_URL}".strip()
@@ -1067,8 +1095,27 @@ async def compose_lead_email(
     _validate(parsed)
     body = _sanitize_email_copy(str(parsed.get("body") or ""))
     body = _sanitize_body_salutation(body, contact=contact, firm_name=firm_name)
-    audit_source = "ai_audit_email" if (composer_variant_key or "").strip() == "ai-audit" else "ai_audit_signature"
-    audit_url = await build_short_audit_link(contact, batch_item_id=batch_item_id, source=audit_source)
+    variant_key = (composer_variant_key or "").strip()
+    visibility_report = payload.get("ai_visibility_report") if isinstance(payload.get("ai_visibility_report"), dict) else None
+    if (
+        variant_key == "ai-visibility-report"
+        and not bool(parsed.get("requires_human_review"))
+        and _visibility_report_outbound_ready(visibility_report)
+        and not _has_visibility_report_link(body)
+    ):
+        scan_id = _visibility_report_scan_id(visibility_report)
+        if scan_id:
+            visibility_url = await build_short_visibility_link(
+                contact,
+                scan_id=scan_id,
+                batch_item_id=batch_item_id,
+                source="visibility_report_email",
+            )
+            body = f"{body}\n\n{_visibility_report_cta_line(visibility_url)}".strip()
+    audit_url = None
+    if variant_key != "ai-visibility-report":
+        audit_source = "ai_audit_email" if variant_key == "ai-audit" else "ai_audit_signature"
+        audit_url = await build_short_audit_link(contact, batch_item_id=batch_item_id, source=audit_source)
     body = _ensure_signature(
         body,
         payload["sender"],

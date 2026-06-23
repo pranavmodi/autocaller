@@ -249,8 +249,13 @@ async def batch_item_visibility_report(batch_item_id: str) -> dict[str, Any] | N
         item = await session.get(LeadGenBatchItemRow, batch_item_id)
         if item is None:
             return None
-        report = (item.reason_json or {}).get("ai_visibility_report")
-        return report if isinstance(report, dict) else None
+        reason = item.reason_json or {}
+        report = reason.get("ai_visibility_report")
+        if not isinstance(report, dict):
+            return None
+        if not report.get("scan_id") and reason.get("ai_visibility_report_scan_id"):
+            report = {**report, "scan_id": reason.get("ai_visibility_report_scan_id")}
+        return report
 
 
 def _infer_market(*, pif: PifFirmRow | None, features: FirmCompetitiveFeatureRow | None) -> str:

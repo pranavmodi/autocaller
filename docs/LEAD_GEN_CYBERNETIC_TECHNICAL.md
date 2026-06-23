@@ -50,6 +50,7 @@ Important routes:
 | `POST` | `/api/actions/lead-gen/send-approved-draft` | create, and optionally execute, a high-risk approved lead-gen email action |
 | `POST` | `/api/inbound-email/poll` | poll Zoho IMAP and create reply observations/actions |
 | `GET` | `/aiaudit/go?t=<signed-token>` | public AI Audit redirect; verifies token, writes `audit_link_clicks`, records `link_clicked`, redirects to `AIAUDIT_PUBLIC_URL` with non-PHI prefill |
+| `GET` | `/v/<code>` | public AI Visibility report redirect; resolves `visibility_links`, writes `audit_link_clicks` with `source=visibility_report_email`, records `link_clicked`, redirects to `AIVIS_REPORT_BASE_URL/r/<scan_id>?c=<click_id>&src=visibility_report_email` |
 | `GET` | `/api/inbound-email` | list stored inbound messages |
 | `GET` | `/api/inbound-email/config` | masked IMAP config |
 | `POST` | `/api/resend/webhook` | ingest Resend delivery/engagement events |
@@ -96,6 +97,7 @@ bin/possibleos lead-gen observations --since 7d --type email_sent --contact <con
 bin/possibleos lead-gen observations summary --since 7d
 bin/possibleos aiaudit link --contact <contact_id>
 bin/possibleos aiaudit clicks --since 7d
+bin/possibleos visibility-clicks --days 7
 bin/possibleos lead-gen propose <batch_id>
 bin/possibleos front sync --max-calls 300
 bin/possibleos front status
@@ -269,7 +271,7 @@ Current event taxonomy:
 | `email_sent` | successful `send_email mode=lead_gen` or approved lead-gen draft execution, including scheduled daemon execution | deterministic neutral / continue sequence |
 | `email_send_failed` | transport exception or policy refusal in `execute_action` | deterministic failure / pause sequence |
 | `email_reply_received` | Zoho inbound reply matched to a lead-gen contact/batch item | existing LLM feedback classifier |
-| `link_clicked` | tracked `link_events` click attributed to an outreach send, or `audit_link_clicks` from `/aiaudit/go` with `raw_event_json.channel = "ai_audit"` | deterministic opened-or-clicked |
+| `link_clicked` | tracked `link_events` click attributed to an outreach send, `audit_link_clicks` from `/aiaudit/go` with `raw_event_json.channel = "ai_audit"`, or AI Visibility report clicks from `/v/<code>` with `raw_event_json.channel = "ai_visibility"` | deterministic opened-or-clicked |
 | `consult_booked` | website consult booking or Cal.com booking made during a call | deterministic booked qualified conversation |
 | `call_disposition` | judge persistence after outbound call review finalizes GTM disposition | deterministic mapping from GTM disposition |
 | `email_action_cancelled` | approved/waiting lead-gen email action cancellation | deterministic audit trail |
