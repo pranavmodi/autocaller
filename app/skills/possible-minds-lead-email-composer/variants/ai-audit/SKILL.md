@@ -11,19 +11,65 @@ is operator-approved before send.
 
 ## Variant Goal
 
-Lead with one concrete observation about the firm, then offer the AI-readiness
+Lead with one concrete *operational* observation, then offer the AI-readiness
 audit as the single primary CTA. The email should feel like a diagnostic, not a
 demo pitch — and it should be **short**.
 
-Use this outbound angle from the AI Audit UX spec, kept tight:
+The core idea (from the AI Audit UX spec): firms that buy AI usually see no
+results because the firm wasn't set up to benefit, so the offer is a quick read
+on where they stand and what has to be true first — no demo, just the diagnosis.
 
-Most firms that buy AI never see results because the firm wasn't set up to
-benefit. Offer a quick read on where they stand and what has to be true first.
-No demo, just the diagnosis.
+**This idea is the BRIDGE, not the opener.** Express it in your own words, in one
+short clause, and only AFTER the operational observation. Do not begin the email
+with "Most firms that buy AI…" — that sentence must never be the first line of
+the body. Keep it to one or two short sentences; "what would have to be true
+first" is enough (don't enumerate "the three things").
 
-Keep that idea to **one or two short sentences** — do not spell out "the three
-things that would have to be true first" as a clause every time; "what would
-have to be true first" is enough.
+## Required structure (follow exactly)
+
+```
+Hi {first_name},            <- or "Hi," if no real person name
+
+Quick follow-up.            <- or a one-clause callback to the prior touch
+
+{OPERATIONAL OBSERVATION}   <- REQUIRED first body sentence; see Opener rules.
+                               Must NOT start with "Most firms", "Most teams",
+                               "That is why", or "I put together".
+
+{bridge in your own words} — most tools fail because the firm isn't set up to
+benefit, so I pulled a quick read on where {firm} stands and what would have to
+be true first. No demo, just the diagnosis.
+```
+
+The audit link/CTA line is appended by code — do not write it.
+
+## Opener rules (the first line — no boilerplate)
+
+The opener is the single biggest quality lever. It MUST be one concrete
+operational observation, never generic filler.
+
+**NEVER open with:**
+- Praise, mission, or values language — e.g. "At a firm built around service and
+  compassion…", "known for client care", "a firm that values results". This is
+  website-tagline boilerplate; it reads as scraped and says nothing.
+- Any characterization of the firm's brand, reputation, or character.
+- The canonical "Most firms that buy AI never see results…" line. That is the
+  **bridge**, not the opener — it comes AFTER your observation, in one short
+  clause.
+- A restatement of the CTA ("I put together a quick read…") as the first line.
+
+**ALWAYS open with** ONE concrete operational reality tied to this contact's
+persona / practice area / role — the workflow friction a person in that seat
+actually lives with. Right altitude:
+- managing partner / owner: "client updates still ride on whoever remembers to
+  send them, so status lives in scattered inboxes."
+- records desk: "request status is spread across portals, fax, and re-requests,
+  so someone rebuilds the picture by hand."
+- lien desk: "disbursement stalls on one missing payoff or status update."
+
+If you have no firm- or persona-specific signal, lead with the sharpest
+operational pattern for that practice area — still concrete, **never** brand
+flattery and **never** the generic "most firms" line.
 
 ## Required First-Touch Opener (Precise proof)
 
