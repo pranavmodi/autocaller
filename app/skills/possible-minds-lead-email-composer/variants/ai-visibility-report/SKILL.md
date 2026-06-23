@@ -89,13 +89,11 @@ Secondary input:
 
 ## Preferred Shape
 
-Keep the report-generated body mostly intact. Close with the meeting ask
-already present in the generated variant, or a
-plain:
-
-```text
-Worth 15 minutes this week?
-```
+Keep the report-generated body mostly intact. Do NOT add a meeting or call ask
+(no "15 minutes", no "worth a call", no calendar request). The call-to-action is
+the full report: the application appends a `View your full report: <url>` line
+after composition. End the body on the report-generated closing line that leads
+into that link; do not replace it with a meeting request.
 
 ## Missing Report Fallback
 
