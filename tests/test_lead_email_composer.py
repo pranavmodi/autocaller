@@ -101,7 +101,7 @@ def test_ensure_signature_uses_audit_as_primary_cta_for_audit_variant(monkeypatc
     )
 
     assert "https://possible.example/aiaudit/go?t=" in body
-    assert "Here it is — about 10 minutes, no sign-up:" in body
+    assert "Here it is — about 10 minutes:" in body
     # For the audit variant the link is the primary CTA: it must sit in the body
     # ABOVE the sign-off, never inside the signature.
     assert body.index("/aiaudit/go?t=") < body.index("-- Pranav")

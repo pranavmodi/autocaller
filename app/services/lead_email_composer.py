@@ -44,7 +44,7 @@ AI_AUDIT_PATH = "/aiaudit/go?t="
 #    so the line just points to it.
 #  - FOOTER: non-audit variants, where the audit is a soft secondary offer under
 #    the signature and needs one line of its own context.
-AI_AUDIT_CTA_PRIMARY = "Here it is — about 10 minutes, no sign-up:"
+AI_AUDIT_CTA_PRIMARY = "Here it is — about 10 minutes:"
 AI_AUDIT_CTA_FOOTER = (
     "P.S. If you're weighing AI tools, here's a 10-minute read on whether your "
     "firm is set up to benefit before you buy:"
