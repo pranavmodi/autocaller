@@ -5081,6 +5081,7 @@ def _print_daily_run(data: dict) -> None:
 def lead_gen_daily_run(
     dry_run: bool = typer.Option(False, "--dry-run", help="Plan without DB writes, research API calls, actions, or WhatsApp."),
     force: bool = typer.Option(False, "--force", help="Re-run today's checkpointed pipeline."),
+    cancel_existing: bool = typer.Option(False, "--cancel-existing", help="With --force: cancel the superseded same-day batch's pending sends first (avoids double-emailing leads)."),
     variant: str = typer.Option("", "--variant", help="Pin one composer variant for every email this run (first-touch + follow-up). See `composer-ab variants` for keys."),
     json_output: bool = typer.Option(False, "--json", help="Print raw JSON."),
 ):
@@ -5090,6 +5091,7 @@ def lead_gen_daily_run(
         json_body={
             "dry_run": dry_run,
             "force": force,
+            "cancel_existing": cancel_existing,
             "created_by": "operator",
             "composer_variant_key": variant or None,
         },

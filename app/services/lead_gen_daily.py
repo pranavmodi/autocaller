@@ -186,11 +186,42 @@ async def _checkpoint(
         return row
 
 
+async def _cancel_batch_sends(batch_id: str, *, actor: str = "daily-run-force") -> int:
+    """Cancel a batch's still-pending (approved/waiting) lead-gen send actions.
+
+    Used when a forced re-run supersedes an earlier same-day batch: without this,
+    the old batch's queued sends and the new batch's sends would BOTH fire,
+    double-emailing the leads. Only `approved`/`waiting_for_approval` actions are
+    cancellable — anything already started/sent is left untouched.
+    """
+    from app.services.action_execution import cancel_action
+
+    async with AsyncSessionLocal() as session:
+        action_ids = (await session.execute(
+            select(AgentActionRow.id).where(
+                AgentActionRow.entity_type == "lead_gen_email",
+                AgentActionRow.entity_id.in_(
+                    select(LeadGenBatchItemRow.id).where(LeadGenBatchItemRow.batch_id == batch_id)
+                ),
+                AgentActionRow.status.in_(["approved", "waiting_for_approval"]),
+            )
+        )).scalars().all()
+    cancelled = 0
+    for action_id in action_ids:
+        try:
+            await cancel_action(action_id, actor=actor, reason="superseded by forced daily re-run")
+            cancelled += 1
+        except ValueError:
+            pass  # already sent/started/cancelled between query and cancel — skip
+    return cancelled
+
+
 async def _create_or_get_run(
     *,
     run_date: date,
     created_by: str,
     force: bool,
+    cancel_existing: bool = False,
 ) -> tuple[LeadGenDailyRunRow, bool]:
     async with AsyncSessionLocal() as session:
         existing = (await session.execute(
@@ -199,6 +230,13 @@ async def _create_or_get_run(
         if existing and not force:
             return existing, False
         if existing and force:
+            old_batch_id = existing.batch_id
+            if cancel_existing and old_batch_id:
+                cancelled = await _cancel_batch_sends(old_batch_id)
+                logger.info(
+                    "forced re-run cancelled %d pending sends from superseded batch %s",
+                    cancelled, old_batch_id,
+                )
             existing.status = "running"
             existing.stage = "pending"
             existing.stages_json = {}
@@ -1101,6 +1139,7 @@ async def run_daily_pipeline(
     *,
     dry_run: bool = False,
     force: bool = False,
+    cancel_existing: bool = False,
     created_by: str = "daily-run",
     run_date: date | None = None,
     composer_variant_key: str | None = None,
@@ -1171,7 +1210,9 @@ async def run_daily_pipeline(
             "composer_variant_override": composer_variant_key,
         }
 
-    row, should_run = await _create_or_get_run(run_date=target_date, created_by=created_by, force=force)
+    row, should_run = await _create_or_get_run(
+        run_date=target_date, created_by=created_by, force=force, cancel_existing=cancel_existing,
+    )
     if not should_run and row.status != "partial":
         return _run_to_dict(row)
 

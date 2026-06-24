@@ -112,6 +112,9 @@ class RecomposeBatchItemDraftRequest(BaseModel):
 class DailyRunRequest(BaseModel):
     dry_run: bool = False
     force: bool = False
+    # On a forced re-run, cancel the superseded same-day batch's still-pending
+    # (approved/waiting) sends first, so the day's leads aren't double-emailed.
+    cancel_existing: bool = False
     created_by: str = Field("operator", max_length=128)
     # Pin one composer variant for every email in this run (first-touch + follow-
     # up), overriding the per-item default / A/B. Empty/None = normal behavior.
@@ -210,6 +213,7 @@ async def run_daily_lead_gen(req: DailyRunRequest):
     return await run_daily_pipeline(
         dry_run=req.dry_run,
         force=req.force,
+        cancel_existing=req.cancel_existing,
         created_by=req.created_by,
         composer_variant_key=variant_key,
     )
