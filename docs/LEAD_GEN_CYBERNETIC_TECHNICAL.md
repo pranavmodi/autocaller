@@ -33,7 +33,7 @@ Important routes:
 | `GET` | `/api/lead-gen/daily-run/enabled` | read the persisted daemon-loop flag, default false |
 | `PUT` | `/api/lead-gen/daily-run/enabled` | enable or disable the default-off daily-run daemon loop |
 | `GET` | `/api/lead-gen/batches` | list batches |
-| `GET` | `/api/lead-gen/batches/{batch_id}` | get batch, items, optional observations |
+| `GET` | `/api/lead-gen/batches/{batch_id}` | get batch, items, optional observations, and each item's `predicted_transport` display hint |
 | `POST` | `/api/lead-gen/batches/{batch_id}/approve` | approve batch and optionally queue sequences |
 | `POST` | `/api/lead-gen/batch-items/{batch_item_id}/send-draft` | create and execute a durable `send_email mode=lead_gen` action for the exact edited draft |
 | `GET` | `/api/lead-gen/batch-items/{batch_item_id}/draft` | load the current editable draft, preferring the referenced action's subject/body when present |
@@ -1084,6 +1084,17 @@ budget. Notification draft replies still force `zoho_api` so replies stay tied t
 the mailbox thread. The shared sender also prefers `zoho_api` when
 `ZOHO_MAIL_REFRESH_TOKEN` is configured. SMTP remains as a fallback for hosts
 that allow outbound SMTP outside the lead-gen path.
+
+The `/lead-gen` draft review UI reads `predicted_transport` from each item in
+`GET /api/lead-gen/batches/{batch_id}`. Shape:
+`{"channel":"zoho_api"|"resend"|"over_budget"|"sent:<transport>",
+"scheduled_for":<iso|null>,"sent_at"?:<iso|null>,"action_id"?:<id|null>,
+"status"?:<status|null>}`. The backend computes this globally per PT send day:
+already-sent lead-gen actions keep their recorded email-log transport, and
+approved not-yet-started `send_email mode=lead_gen` actions scheduled for that
+day consume the configured provider caps in `scheduled_for, id` order using the
+active `lead_gen_transport_strategy` (`zoho_first_then_resend` or
+`resend_first_then_zoho`).
 
 Zoho inbound:
 

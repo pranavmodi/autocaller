@@ -710,6 +710,46 @@ function transportLabel(value: string) {
   return value;
 }
 
+function ChannelBadge({
+  item,
+  className,
+}: {
+  item: LeadGenBatchItem;
+  className?: string;
+}) {
+  const plan = item.predicted_transport;
+  if (!plan?.channel) return null;
+  const channel = plan.channel;
+  let label = "";
+  let tone = "bg-neutral-100 text-neutral-600";
+  if (channel.startsWith("sent:")) {
+    label = `sent via ${transportLabel(channel.slice("sent:".length))}`;
+    tone = "bg-neutral-100 text-neutral-500";
+  } else if (channel === "zoho_api" || channel === "resend") {
+    label = transportLabel(channel);
+    tone = channel === "zoho_api"
+      ? "bg-sky-100 text-sky-800"
+      : "bg-emerald-100 text-emerald-800";
+  } else if (channel === "over_budget") {
+    label = "over budget";
+    tone = "bg-amber-100 text-amber-800";
+  } else {
+    label = transportLabel(channel);
+  }
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium",
+        tone,
+        className,
+      )}
+      title={plan.scheduled_for ? `Scheduled ${formatDate(plan.scheduled_for)}` : undefined}
+    >
+      {label}
+    </span>
+  );
+}
+
 function UnblockPanel({
   throughput,
   onRerun,
@@ -1903,19 +1943,25 @@ function DailyActionPlan({
                 {item.contact_email}
               </div>
               {isEmailSent(item) ? (
-                <div className="mt-2 inline-flex items-center gap-1 rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-medium text-sky-800">
-                  <CheckCircle2 className="h-3 w-3" />
-                  Email sent
+                <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-medium text-sky-800">
+                    <CheckCircle2 className="h-3 w-3" />
+                    Email sent
+                  </span>
+                  <ChannelBadge item={item} />
                 </div>
               ) : canPreviewItem(item) ? (
-                <button
-                  type="button"
-                  onClick={() => onPreview(item)}
-                  className="mt-2 inline-flex items-center gap-1 rounded-md border border-neutral-200 px-2 py-1 text-xs font-medium text-neutral-600 hover:bg-neutral-50"
-                >
-                  <MailPlus className="h-3.5 w-3.5" />
-                  {previewButtonLabel(item)}
-                </button>
+                <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => onPreview(item)}
+                    className="inline-flex items-center gap-1 rounded-md border border-neutral-200 px-2 py-1 text-xs font-medium text-neutral-600 hover:bg-neutral-50"
+                  >
+                    <MailPlus className="h-3.5 w-3.5" />
+                    {previewButtonLabel(item)}
+                  </button>
+                  <ChannelBadge item={item} />
+                </div>
               ) : (
                 <div className="mt-2 text-xs text-neutral-400">
                   This action opens in its owning workflow.
@@ -2264,6 +2310,7 @@ function AllDraftsModal({
                   <span className="ml-auto rounded bg-neutral-200 px-1.5 py-0.5 text-[11px] text-neutral-700">
                     {variant}
                   </span>
+                  <ChannelBadge item={item} className="rounded px-1.5" />
                   {sent ? (
                     <span className="rounded bg-sky-100 px-1.5 py-0.5 text-[11px] text-sky-800">
                       sent
@@ -2460,6 +2507,9 @@ function PreviewModal({
           <p className="mt-1 text-xs text-neutral-500">
             {item.contact_email} - {item.firm_name} - Composer: {formatComposerKey(item.template_key)}
           </p>
+          <div className="mt-2">
+            <ChannelBadge item={item} />
+          </div>
           {nextStep?.composer_variant_key && (
             <p className="mt-1 text-xs text-neutral-400">
               Skill variant: {nextStep.composer_variant_key}
@@ -2482,7 +2532,10 @@ function PreviewModal({
           )}
           {alreadySent ? (
             <div className="rounded-md border border-sky-200 bg-sky-50 px-3 py-3 text-sm text-sky-900">
-              <div className="font-medium">This email has already been sent.</div>
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="font-medium">This email has already been sent.</div>
+                <ChannelBadge item={item} />
+              </div>
               {reasonValue(item, "last_sent_subject") && (
                 <div className="mt-2 text-xs">
                   Subject: {reasonValue(item, "last_sent_subject")}

@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
@@ -12,6 +13,9 @@ from app.services import lead_gen_daily
 class _Result:
     def __init__(self, rows):
         self.rows = rows
+
+    def scalars(self):
+        return self
 
     def all(self):
         return self.rows
@@ -38,6 +42,20 @@ def _settings_provider(enabled=True):
     return SimpleNamespace(get_settings=get_settings)
 
 
+class _QueuedSession:
+    def __init__(self, result_sets):
+        self.result_sets = list(result_sets)
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        return None
+
+    async def execute(self, _stmt):
+        return _Result(self.result_sets.pop(0))
+
+
 @pytest.mark.asyncio
 async def test_gates_skip_when_system_disabled(monkeypatch):
     monkeypatch.setattr(lead_gen_daily, "get_settings_provider", lambda: _settings_provider(False))
@@ -49,6 +67,51 @@ async def test_gates_skip_when_system_disabled(monkeypatch):
 
     assert result["passed"] is False
     assert result["reason"] == "system_disabled"
+
+
+def test_daily_channel_plan_assigns_provider_caps_by_scheduled_order(monkeypatch):
+    run_date = datetime(2026, 6, 24, tzinfo=timezone.utc).date()
+    scheduled_start = datetime(2026, 6, 24, 16, 0, tzinfo=timezone.utc)
+    actions = [
+        SimpleNamespace(
+            id=f"action_{idx:02d}",
+            input_json={"mode": "lead_gen", "batch_item_id": f"item_{idx:02d}"},
+            entity_id=f"item_{idx:02d}",
+            scheduled_for=scheduled_start + timedelta(minutes=idx),
+            execution_result_json={},
+            completed_at=None,
+            status="approved",
+            started_at=None,
+        )
+        for idx in range(40)
+    ]
+
+    async def fake_active_policy():
+        return SimpleNamespace(weights_json={
+            "daily_send_budget": 40,
+            "provider_daily_caps": {"zoho_api": 20, "resend": 20},
+        })
+
+    async def fake_sent_counts_by_transport_for_day(*, run_date=None):
+        return {"zoho_api": 0, "resend": 0}
+
+    monkeypatch.setattr(lead_gen_daily, "_active_policy", fake_active_policy)
+    monkeypatch.setattr(
+        lead_gen_daily,
+        "sent_counts_by_transport_for_day",
+        fake_sent_counts_by_transport_for_day,
+    )
+    monkeypatch.setattr(
+        lead_gen_daily,
+        "AsyncSessionLocal",
+        lambda: _QueuedSession([actions, []]),
+    )
+
+    plan = asyncio.run(lead_gen_daily.daily_channel_plan(run_date=run_date))
+
+    assert [plan[f"item_{idx:02d}"]["channel"] for idx in range(20)] == ["zoho_api"] * 20
+    assert [plan[f"item_{idx:02d}"]["channel"] for idx in range(20, 40)] == ["resend"] * 20
+    assert plan["item_00"]["scheduled_for"] == scheduled_start.isoformat()
 
 
 @pytest.mark.asyncio

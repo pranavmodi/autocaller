@@ -1668,6 +1668,13 @@ export type LeadGenBatchItem = {
   sequence_id: string | null;
   outcome: string | null;
   outcome_confidence: number | null;
+  predicted_transport: {
+    channel: "zoho_api" | "resend" | "over_budget" | string;
+    scheduled_for: string | null;
+    sent_at?: string | null;
+    action_id?: string | null;
+    status?: string | null;
+  } | null;
   created_at: string | null;
   updated_at: string | null;
 };

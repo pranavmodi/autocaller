@@ -30,6 +30,7 @@ from app.services.lead_gen_cybernetic import (
 )
 from app.services.lead_gen_email_agent import create_lead_gen_email_agent_slice, recompose_item_draft
 from app.services.lead_gen_daily import (
+    daily_channel_plan,
     get_daily_run_enabled,
     get_daily_run_throughput,
     list_daily_runs,
@@ -274,7 +275,20 @@ async def get_one_batch(
     include_observations: bool = Query(False),
 ):
     try:
-        return await get_batch(batch_id, include_observations=include_observations)
+        batch = await get_batch(batch_id, include_observations=include_observations)
+        channel_plan = await daily_channel_plan()
+        for item in batch.get("items") or []:
+            predicted = channel_plan.get(item.get("id"))
+            if not predicted and (item.get("reason") or {}).get("last_sent_transport"):
+                predicted = {
+                    "channel": f"sent:{(item.get('reason') or {}).get('last_sent_transport')}",
+                    "scheduled_for": None,
+                    "sent_at": (item.get("reason") or {}).get("last_sent_at"),
+                    "action_id": (item.get("reason") or {}).get("send_email_action_id"),
+                    "status": "succeeded",
+                }
+            item["predicted_transport"] = predicted
+        return batch
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 

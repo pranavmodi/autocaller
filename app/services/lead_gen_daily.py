@@ -17,6 +17,7 @@ from sqlalchemy import desc, func, or_, select
 from app.db import AsyncSessionLocal
 from app.db.models import (
     AgentActionRow,
+    EmailLogRow,
     EmailSequenceRow,
     FrontFirmActivityRow,
     FirmContactRow,
@@ -39,7 +40,14 @@ from app.services.firm_research import orchestrate_warm_research
 from app.services.front_sync import front_status, normalize_domain, refresh_warm_scores, resolve_firms
 from app.services.lead_gen_cybernetic import TARGET_METRIC, ensure_default_policy, get_batch
 from app.services.lead_gen_email_agent import _compose_batch_items
-from app.services.lead_gen_transport import lead_gen_transport_availability
+from app.services.lead_gen_transport import (
+    RESEND,
+    ZOHO_API,
+    lead_gen_transport_availability,
+    lead_gen_transport_strategy,
+    provider_daily_caps_from_weights,
+    sent_counts_by_transport_for_day,
+)
 from app.services.persona_mapper import map_personas
 from app.services.sequence_recommendations import recommend_sequence_contacts
 from app.services.sequences.registry import DEFAULT_TEMPLATE_KEY
@@ -1533,6 +1541,115 @@ async def get_daily_run(*, run_date: date | None = None) -> dict[str, Any] | Non
             select(LeadGenDailyRunRow).where(LeadGenDailyRunRow.run_date == target)
         )).scalar_one_or_none()
     return _run_to_dict(row) if row else None
+
+
+async def daily_channel_plan(*, run_date: date | None = None) -> dict[str, dict[str, Any]]:
+    """Predict today's provider channel for approved, not-yet-started sends.
+
+    This mirrors the runtime transport selector: actual sent rows keep their
+    recorded transport, while remaining approved sends consume the same per-day
+    provider caps in scheduled order.
+    """
+    target_date = run_date or _date_for_run()
+    start_utc, end_utc = _pt_day_bounds(target_date)
+    policy = await _active_policy()
+    weights = _policy_weights(policy)
+    target = _int_policy(weights, "daily_send_budget", 50, minimum=0, maximum=200)
+    caps = provider_daily_caps_from_weights(weights, total_daily_budget=target)
+    strategy = lead_gen_transport_strategy(weights)
+    order = (RESEND, ZOHO_API) if strategy == "resend_first_then_zoho" else (ZOHO_API, RESEND)
+
+    sent_counts = await sent_counts_by_transport_for_day(run_date=target_date)
+    remaining = {
+        transport: max(0, int(caps.get(transport, 0)) - int(sent_counts.get(transport, 0) or 0))
+        for transport in order
+    }
+
+    async with AsyncSessionLocal() as session:
+        pending_actions = (await session.execute(
+            select(AgentActionRow)
+            .where(AgentActionRow.action_type == SEND_EMAIL)
+            .where(AgentActionRow.entity_type == "lead_gen_email")
+            .where(AgentActionRow.status == "approved")
+            .where(AgentActionRow.started_at.is_(None))
+            .where(AgentActionRow.input_json["mode"].as_string() == "lead_gen")
+            .where(AgentActionRow.scheduled_for >= start_utc)
+            .where(AgentActionRow.scheduled_for < end_utc)
+            .order_by(AgentActionRow.scheduled_for.asc(), AgentActionRow.id.asc())
+        )).scalars().all()
+        sent_actions = (await session.execute(
+            select(AgentActionRow)
+            .where(AgentActionRow.action_type == SEND_EMAIL)
+            .where(AgentActionRow.entity_type == "lead_gen_email")
+            .where(AgentActionRow.status == "succeeded")
+            .where(AgentActionRow.input_json["mode"].as_string() == "lead_gen")
+            .where(AgentActionRow.completed_at >= start_utc)
+            .where(AgentActionRow.completed_at < end_utc)
+        )).scalars().all()
+
+        email_log_ids = [
+            str((row.execution_result_json or {}).get("email_log_id"))
+            for row in sent_actions
+            if (row.execution_result_json or {}).get("email_log_id") is not None
+        ]
+        email_logs_by_id: dict[str, EmailLogRow] = {}
+        if email_log_ids:
+            email_logs = (await session.execute(
+                select(EmailLogRow).where(EmailLogRow.id.in_(email_log_ids))
+            )).scalars().all()
+            email_logs_by_id = {str(row.id): row for row in email_logs}
+
+    plan: dict[str, dict[str, Any]] = {}
+
+    for action in sent_actions:
+        payload = action.input_json or {}
+        item_id = str(payload.get("batch_item_id") or action.entity_id or "").strip()
+        if not item_id:
+            continue
+        result = action.execution_result_json or {}
+        log_id = result.get("email_log_id")
+        email_log = email_logs_by_id.get(str(log_id)) if log_id is not None else None
+        transport = (
+            getattr(email_log, "transport", None)
+            or result.get("transport")
+            or ((result.get("email_log") or {}).get("transport") if isinstance(result.get("email_log"), dict) else None)
+            or "unknown"
+        )
+        sent_at = getattr(email_log, "sent_at", None) or result.get("sent_at") or action.completed_at
+        plan[item_id] = {
+            "channel": f"sent:{transport}",
+            "scheduled_for": action.scheduled_for.isoformat() if action.scheduled_for else None,
+            "sent_at": sent_at.isoformat() if isinstance(sent_at, datetime) else sent_at,
+            "action_id": action.id,
+            "status": action.status,
+        }
+
+    pending_actions = sorted(
+        pending_actions,
+        key=lambda row: (
+            row.scheduled_for or datetime.max.replace(tzinfo=timezone.utc),
+            row.id,
+        ),
+    )
+    for action in pending_actions:
+        payload = action.input_json or {}
+        item_id = str(payload.get("batch_item_id") or action.entity_id or "").strip()
+        if not item_id:
+            continue
+        channel = "over_budget"
+        for transport in order:
+            if remaining.get(transport, 0) > 0:
+                channel = transport
+                remaining[transport] -= 1
+                break
+        plan[item_id] = {
+            "channel": channel,
+            "scheduled_for": action.scheduled_for.isoformat() if action.scheduled_for else None,
+            "action_id": action.id,
+            "status": action.status,
+        }
+
+    return plan
 
 
 def _int_or_none(value: Any) -> int | None:
