@@ -27,6 +27,7 @@ Important routes:
 | `POST` | `/api/lead-gen/batches` | create a daily action plan batch |
 | `POST` | `/api/lead-gen/email-agent/slice` | create a bounded email-agent slice with research evidence, composer drafts, and durable `send_email mode=lead_gen` actions |
 | `POST` | `/api/lead-gen/daily-run` | run or dry-run the checkpointed daily lead-selection and drafting pipeline |
+| `POST` | `/api/lead-gen/daily-run/top-up` | add fresh first-touch sends to today's run-date via a sidecar daily batch, excluding contacts already batched that run date |
 | `GET` | `/api/lead-gen/daily-runs` | list recent daily-run checkpoints |
 | `GET` | `/api/lead-gen/daily-run/throughput` | read the daily send-throughput funnel, target verdict, auto-send state, history counts, and held firms needing review evidence |
 | `GET` | `/api/lead-gen/daily-run/enabled` | read the persisted daemon-loop flag, default false |
@@ -82,6 +83,7 @@ bin/possibleos lead-gen email-agent-slice --limit 3 --approval-ready
 bin/possibleos lead-gen email-agent-slice --limit 3 --approve-actions --policy-check-first-action --json
 bin/possibleos lead-gen daily-run --dry-run
 bin/possibleos lead-gen daily-run
+bin/possibleos lead-gen top-up --count 20 --variant ai-audit
 bin/possibleos lead-gen daily-status
 bin/possibleos lead-gen throughput
 bin/possibleos lead-gen daily-enable
@@ -844,6 +846,15 @@ Important behavior:
   `basis=daily-run`, quota, selection features/suppressions, and behavior facts
   from `front_firm_activity.behavioral_json`. Follow-up items also include
   `action_type=follow_up`, `sequence_id`, and `step_num`.
+- `top_up_daily_run(n, composer_variant_key=...)` resolves the same run date
+  (`DAILY_RUN_TZ`, default Asia/Kolkata), builds an exclusion set from every
+  contact already in a daily-run or daily-run top-up batch for that date, selects
+  only fresh first-touch contacts through `_select_contacts`, creates a sidecar
+  batch named `Daily run YYYY-MM-DD top-up`, composes via `_compose_batch`, and
+  schedules/auto-approves via `_schedule_drafted_items`. The REST endpoint is
+  `POST /api/lead-gen/daily-run/top-up` with `{ "n": 1..40,
+  "composer_variant_key": "..." }`; the CLI wrapper is
+  `lead-gen top-up --count N [--variant <key>]`.
 - Compose reuses the existing batch-compose path in chunks of five, leaving
   transient failures as `partial` so the next run resumes undrafted items.
   Follow-up items compose with the claimed sequence row and next step number,
@@ -987,15 +998,17 @@ Email sending:
   first-touch knob. Default `""` = unchanged behavior (follow-ups use the random
   A/B rendezvous pool over weight>0 variants). Set e.g. `ai-audit` to drive the
   audit CTA on follow-ups. A per-run/explicit `composer_variant_key` still wins.
-- **Per-run composer override** — `composer_variant_key` on
-  `POST /api/lead-gen/daily-run` (and `--variant` on `lead-gen daily-run`, and the
-  "Composer variant (this run)" picker in the Daily run panel) pins one active
-  variant on **every** composed email in that run — first-touch and follow-up —
-  taking precedence over both env knobs and the A/B. It is plumbed
-  `run_daily_pipeline → _compose_batch → _compose_batch_items(composer_variant_key=…)`
-  and validated against active variants (400 on unknown). Recorded on the run as
-  `compose.counts.composer_variant_override`. Precedence:
-  per-run/explicit key > `LEAD_GEN_*_VARIANT` env > auto A/B.
+- **Per-run/top-up composer override** — `composer_variant_key` on
+  `POST /api/lead-gen/daily-run` or `/api/lead-gen/daily-run/top-up` (and
+  `--variant` on `lead-gen daily-run` / `lead-gen top-up`, plus the "Composer
+  variant (this run)" picker in the Daily run panel) pins one active variant on
+  every composed email in that run, taking precedence over both env knobs and
+  the A/B. It is plumbed through `_compose_batch →
+  _compose_batch_items(composer_variant_key=...)` and validated against active
+  variants (400 on unknown). Daily runs record
+  `compose.counts.composer_variant_override`; top-ups return
+  `composer_variant_override` in the endpoint payload. Precedence:
+  per-run/top-up/explicit key > `LEAD_GEN_*_VARIANT` env > auto A/B.
 - `REVIEW_EVIDENCE_GATE_KINDS` (default `complaint,praise,fact`) — which evidence
   kinds count as "enough to personalize a first-touch email." Used by both the
   compose gate and the composer's primary-hook pick (via
@@ -1030,8 +1043,10 @@ Email sending:
   (clearing any prior `agent_draft`), and leaves it undrafted so a re-run
   composes once evidence exists. The firm is still selected, so the
   `yelp_review_needed` action-center prompt still fires. Follow-ups are never
-  gated. Legacy alias `REQUIRE_YELP_QUOTE_FIRST_TOUCH` is still honored. Set
-  `0`/`false` to disable the gate.
+  gated. Resolved evidence-exempt first-touch variants (`ai-audit`) bypass this
+  hold because they use a generic AI-readiness pitch rather than review evidence.
+  Legacy alias `REQUIRE_YELP_QUOTE_FIRST_TOUCH` is still honored. Set `0`/`false`
+  to disable the gate.
 - `REVIEW_AUTO_EXTRACT` (default `true`) — when on, pasting raw Yelp reviews via
   `PUT /api/firms/{pif_id}/reviews` fires a background extraction
   (`app/services/review_extraction.py`) that writes the `<!-- EXTRACTED v1 ... -->`

@@ -12,7 +12,7 @@ from datetime import date, datetime, time, timedelta, timezone
 from typing import Any, Iterable
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import desc, func, select
+from sqlalchemy import desc, func, or_, select
 
 from app.db import AsyncSessionLocal
 from app.db.models import (
@@ -493,6 +493,7 @@ async def _select_contacts(
     weights: dict[str, Any],
     batch_size: int,
     template_key: str,
+    exclude_contact_ids: set[str] | None = None,
 ) -> dict[str, Any]:
     # Widen the candidate pool so evidence-bearing firms (which may rank below
     # the top-20 by base score) are in scope for the evidence-aware preference.
@@ -503,7 +504,12 @@ async def _select_contacts(
     suppressed_pifs, behavior_by_pif = await _suppressed_pifs_and_behavior(pif_ids)
     filtered: list[dict[str, Any]] = []
     excluded = Counter()
+    exclude_contact_ids = {str(x) for x in (exclude_contact_ids or set()) if x}
     for rec in recs:
+        contact_id = str(rec.get("contact_id") or "")
+        if contact_id in exclude_contact_ids:
+            excluded["already_batched_today"] += 1
+            continue
         pif_id = str(rec.get("pif_id") or "")
         domain = normalize_domain(str(rec.get("contact_email") or ""))
         if domain in HARD_EXCLUDED_DOMAINS:
@@ -674,6 +680,9 @@ async def _create_daily_batch(
     policy: LeadGenPolicyVersionRow | None,
     created_by: str,
     template_key: str,
+    batch_name: str | None = None,
+    basis: str = "daily-run",
+    extra_counts: dict[str, Any] | None = None,
 ) -> str:
     active_policy = policy or await ensure_default_policy()
     batch_id = _new_id()
@@ -681,20 +690,22 @@ async def _create_daily_batch(
     async with AsyncSessionLocal() as session:
         batch = LeadGenBatchRow(
             id=batch_id,
-            name=f"Daily run {run_date.isoformat()}",
+            name=batch_name or f"Daily run {run_date.isoformat()}",
             target_metric=TARGET_METRIC,
             template_key=template_key,
             policy_version=active_policy.version,
             status="recommended",
             counts_json={
                 **(select_result.get("recommendation_counts") or {}),
-                "basis": "daily-run",
+                "basis": basis,
                 "daily_run_id": run_id,
+                "run_date": run_date.isoformat(),
                 "requested": select_result.get("batch_size"),
                 "returned": len(selected),
                 "persona_mix": select_result.get("persona_mix") or {},
                 "persona_quota": select_result.get("quota") or {},
                 "excluded": select_result.get("excluded") or {},
+                **(extra_counts or {}),
                 **(
                     {
                         "followups_selected": select_result.get("followups_selected", 0),
@@ -713,11 +724,12 @@ async def _create_daily_batch(
             behavior = behavior_by_pif.get(str(rec.get("pif_id") or ""), {})
             action_type = str(rec.get("action_type") or "first_touch")
             reason_json = {
-                "basis": "daily-run",
+                "basis": basis,
                 "reason": rec.get("reason") or "",
                 "contact_source": rec.get("contact_source") or "",
                 "policy_version": active_policy.version,
                 "daily_run_id": run_id,
+                "run_date": run_date.isoformat(),
                 "action_type": action_type,
                 "priority_bucket": rec.get("priority_bucket") or "new_conversation",
                 "source_type": rec.get("source_type") or "lead_gen_daily_run",
@@ -771,6 +783,101 @@ async def _create_daily_batch(
                     seq.next_step_due_at = None
         await session.commit()
     return batch_id
+
+
+async def _daily_run_batch_contact_ids(run_date: date) -> set[str]:
+    day = run_date.isoformat()
+    async with AsyncSessionLocal() as session:
+        rows = (await session.execute(
+            select(LeadGenBatchItemRow.contact_id)
+            .join(LeadGenBatchRow, LeadGenBatchRow.id == LeadGenBatchItemRow.batch_id)
+            .outerjoin(LeadGenDailyRunRow, LeadGenDailyRunRow.batch_id == LeadGenBatchRow.id)
+            .where(or_(
+                LeadGenDailyRunRow.run_date == run_date,
+                LeadGenBatchRow.counts_json["run_date"].astext == day,
+            ))
+        )).scalars().all()
+    return {str(contact_id) for contact_id in rows if contact_id}
+
+
+async def _existing_daily_run_id(run_date: date) -> str | None:
+    async with AsyncSessionLocal() as session:
+        row = (await session.execute(
+            select(LeadGenDailyRunRow)
+            .where(LeadGenDailyRunRow.run_date == run_date)
+            .order_by(desc(LeadGenDailyRunRow.created_at))
+            .limit(1)
+        )).scalar_one_or_none()
+    return row.id if row else None
+
+
+async def top_up_daily_run(
+    *,
+    n: int,
+    composer_variant_key: str | None = None,
+    created_by: str = "operator",
+    run_date: date | None = None,
+) -> dict[str, Any]:
+    """Add fresh first-touch daily-run sends without touching the existing batch."""
+    count = max(1, min(int(n), 40))
+    composer_variant_key = (composer_variant_key or "").strip() or None
+    target_date = run_date or _date_for_run()
+    policy = await _active_policy()
+    weights = _policy_weights(policy)
+    template_key = str(weights.get("daily_template_key") or DEFAULT_TEMPLATE_KEY)
+    exclude_contact_ids = await _daily_run_batch_contact_ids(target_date)
+    select_result = await _select_contacts(
+        weights=weights,
+        batch_size=count,
+        template_key=template_key,
+        exclude_contact_ids=exclude_contact_ids,
+    )
+    selected = list(select_result.get("selected") or [])[:count]
+    run_id = await _existing_daily_run_id(target_date) or f"top-up-{target_date.isoformat()}-{_new_id()[:8]}"
+    batch_id = await _create_daily_batch(
+        run_id=run_id,
+        run_date=target_date,
+        selected=selected,
+        select_result={
+            **select_result,
+            "selected": selected,
+            "batch_size": count,
+        },
+        policy=policy,
+        created_by=created_by,
+        template_key=template_key,
+        batch_name=f"Daily run {target_date.isoformat()} top-up",
+        basis="daily-run-top-up",
+        extra_counts={
+            "top_up": True,
+            "excluded_today_contacts": len(exclude_contact_ids),
+            "composer_variant_override": composer_variant_key,
+        },
+    )
+    compose = await _compose_batch(
+        batch_id=batch_id,
+        created_by=created_by,
+        template_key=template_key,
+        composer_variant_key=composer_variant_key,
+    )
+    schedule = await _schedule_drafted_items(
+        batch_id=batch_id,
+        created_by=created_by,
+        weights=weights,
+    )
+    return {
+        "run_date": target_date.isoformat(),
+        "batch_id": batch_id,
+        "requested": count,
+        "selected": len(selected),
+        "composed": int(compose.get("drafted") or 0),
+        "held": int(compose.get("held") or 0),
+        "scheduled": int(schedule.get("scheduled") or 0),
+        "approved": int(schedule.get("auto_approved") or 0),
+        "composer_variant_override": composer_variant_key,
+        "excluded_today_contacts": len(exclude_contact_ids),
+        "compose_complete": bool(compose.get("complete")),
+    }
 
 
 async def _compose_batch(

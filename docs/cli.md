@@ -180,6 +180,7 @@ Every command accepts `--help`. Exit code is `0` on success, `1` on any error
 | `lead-gen email-agent-slice [--limit=3 --composer-variant=... --approval-ready --batch=<batch_id> --json]` | Select eligible contacts, collect bounded internal evidence, compose drafts with the Possible Minds email composer skill, and create durable `send_email mode=lead_gen` actions for review or policy checks. With `--batch`, skip selection and compose for an existing batch's pending undrafted items (operator- or agent-curated lists, e.g. Front-warm shortlists). |
 | `lead-gen visibility-report [--batch-item=<id> \| --firm-name=... --domain=...] [--market=...] [--dry-run] [--force] [--json]` | Ensure an AI Search Visibility report exists through the `ai-visibility` CLI. Existing scanned reports are reused by domain/firm unless `--force` is passed. With `--batch-item`, caches a compact report package at `reason_json.ai_visibility_report` for the `ai-visibility-report` composer variant. |
 | `lead-gen daily-run [--dry-run] [--force] [--variant=<key>] [--json]` | Run the deterministic daily lead-selection pipeline now. It gates on system enabled, active policy budget, weekday, and deliverability health; refreshes stale Front-derived signals without Front API calls; queues bounded research; maps personas; creates a persona-mixed batch; composes drafts; and schedules `waiting_for_approval` lead-gen email actions in the PT morning window. `--dry-run` performs no writes, no external research calls, no actions, and no WhatsApp. `--variant=<key>` pins one composer skill variant on **every** email in the run — first-touch and follow-up — overriding the per-item default/A-B (must be an active variant; see `composer-ab variants`). Without it, first-touch uses `LEAD_GEN_FIRST_TOUCH_VARIANT` (default `review-evidence`), follow-ups use the per-contact A/B unless `LEAD_GEN_FOLLOW_UP_VARIANT` is set. |
+| `lead-gen top-up --count N [--variant=<key>] [--json]` | Add `N` fresh first-touch sends to today's daily run without recomposing the existing batch. It excludes every contact already batched for that run date, creates a sidecar `Daily run <date> top-up` batch, composes with the optional active variant, and schedules/auto-approves through the same daily-run send-action path. |
 | `lead-gen daily-status [--date YYYY-MM-DD] [--json]` | Show the checkpointed daily-run stage table, status, batch id, counts, and errors. Partial runs resume incomplete stages when `daily-run` is called again. |
 | `lead-gen throughput [--date YYYY-MM-DD] [--json]` | Show the daily send-throughput funnel: selected, with review evidence, composed, scheduled/sending today, sent today, held firms, auto-send state, shortfall, and the current blocker. |
 | `lead-gen daily-enable` / `lead-gen daily-disable` | Flip the persisted `daily_run_enabled` flag. The daemon loop is wired on boot but defaults disabled and no-ops until an operator enables it. |
@@ -675,6 +676,9 @@ bin/possibleos actions list --status waiting_for_approval --type send_email
 # Pin one composer variant for the whole run (every email, first-touch + follow-up):
 bin/possibleos composer-ab variants                 # list valid keys + active state
 bin/possibleos lead-gen daily-run --variant ai-audit
+
+# Add more first-touch sends to today's existing daily run:
+bin/possibleos lead-gen top-up --count 20 --variant ai-audit
 ```
 
 To let the daemon create the morning batch during the 06:30-08:00 PT loop

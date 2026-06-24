@@ -35,6 +35,7 @@ from app.services.lead_gen_daily import (
     list_daily_runs,
     run_daily_pipeline,
     set_daily_run_enabled,
+    top_up_daily_run,
 )
 from app.services.sequences.registry import DEFAULT_TEMPLATE_KEY
 
@@ -121,8 +122,29 @@ class DailyRunRequest(BaseModel):
     composer_variant_key: Optional[str] = Field(None, max_length=120)
 
 
+class DailyRunTopUpRequest(BaseModel):
+    n: int = Field(..., ge=1, le=40)
+    composer_variant_key: Optional[str] = Field(None, max_length=120)
+
+
 class DailyRunEnabledRequest(BaseModel):
     enabled: bool
+
+
+def _validate_composer_variant_key(raw_key: Optional[str]) -> Optional[str]:
+    variant_key = (raw_key or "").strip() or None
+    if variant_key:
+        from app.services.lead_email_composer_variants import (
+            discover_composer_skill_variants,
+            get_composer_skill_variant,
+        )
+        if get_composer_skill_variant(variant_key) is None:
+            valid = [v.key for v in discover_composer_skill_variants() if v.active]
+            raise HTTPException(
+                status_code=400,
+                detail=f"unknown or inactive composer variant '{variant_key}'. Active: {', '.join(valid)}",
+            )
+    return variant_key
 
 
 @router.get("/api/lead-gen/policy/current")
@@ -198,24 +220,23 @@ async def get_batches(
 
 @router.post("/api/lead-gen/daily-run")
 async def run_daily_lead_gen(req: DailyRunRequest):
-    variant_key = (req.composer_variant_key or "").strip() or None
-    if variant_key:
-        from app.services.lead_email_composer_variants import (
-            discover_composer_skill_variants,
-            get_composer_skill_variant,
-        )
-        if get_composer_skill_variant(variant_key) is None:
-            valid = [v.key for v in discover_composer_skill_variants() if v.active]
-            raise HTTPException(
-                status_code=400,
-                detail=f"unknown or inactive composer variant '{variant_key}'. Active: {', '.join(valid)}",
-            )
+    variant_key = _validate_composer_variant_key(req.composer_variant_key)
     return await run_daily_pipeline(
         dry_run=req.dry_run,
         force=req.force,
         cancel_existing=req.cancel_existing,
         created_by=req.created_by,
         composer_variant_key=variant_key,
+    )
+
+
+@router.post("/api/lead-gen/daily-run/top-up")
+async def top_up_daily_lead_gen(req: DailyRunTopUpRequest):
+    variant_key = _validate_composer_variant_key(req.composer_variant_key)
+    return await top_up_daily_run(
+        n=req.n,
+        composer_variant_key=variant_key,
+        created_by="operator",
     )
 
 

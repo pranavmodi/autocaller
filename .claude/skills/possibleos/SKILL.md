@@ -492,7 +492,7 @@ Common causes: Geo permissions not enabled, AMD mis-classifying carrier voicemai
 | `Possible OS sequences start <contact_id>` | Start the configured sequence (one contact at a time, by design). Idempotent — second start returns 409. Sends are gated by `ALLOW_SEQUENCE_SEND=true`. UI: `/sequences` page has the same flow with a forced "I've reviewed all drafts" checkbox before the Start button enables. |
 | `Possible OS sequences list [--status active\|paused\|completed]` | List sequence rows + step state. |
 | `Possible OS lead-gen policy\|recommend\|batches\|show\|approve\|observe\|observations\|propose` | Cybernetic lead-generation loop for Precise Imaging. Recommends bounded batches, requires approval, and creates lightweight operator action-center approvals immediately when selected email sequences are queued; drafts compose lazily when an action is opened. Automatic observations capture sends, failures, replies, clicks, bookings, call dispositions, cancellations, and reschedules. Use `lead-gen observations summary --since 7d` for the weekly learning KPI. UI: `/lead-gen`. Concept doc: `docs/CYBERNETIC_LEAD_GEN_CONCEPT.md`. |
-| `Possible OS lead-gen daily-run\|daily-status\|throughput\|daily-enable\|daily-disable` | Daily lead-selection and drafting pipeline. `daily-run --dry-run` is no-write/no-action validation. A real run creates a checkpointed daily batch, drafts emails, and schedules send actions. `throughput` shows selected, with evidence, composed, sending today, held, shortfall, and blocker. The daemon loop defaults off and is controlled by persisted `daily_run_enabled`. |
+| `Possible OS lead-gen daily-run\|top-up\|daily-status\|throughput\|daily-enable\|daily-disable` | Daily lead-selection and drafting pipeline. `daily-run --dry-run` is no-write/no-action validation. A real run creates a checkpointed daily batch, drafts emails, and schedules send actions. `top-up --count N --variant ai-audit` adds fresh first-touch sends to today's run via a sidecar batch without recomposing the existing batch, excluding contacts already batched that run date. `throughput` shows selected, with evidence, composed, sending today, held, shortfall, and blocker. The daemon loop defaults off and is controlled by persisted `daily_run_enabled`. |
 | `Possible OS aiaudit link --contact <contact_id>` / `aiaudit clicks --since 7d` | AI Audit freeware attribution. `link` prints a contact-attributed signed redirect URL; `clicks` lists `audit_link_clicks` and AI Audit `link_clicked` observations. Public redirect: `/aiaudit/go?t=<signed-token>`. |
 | `Possible OS visibility-clicks --days 7` | AI Search Visibility report-link attribution. Lists `audit_link_clicks` rows where `source=visibility_report_email`, joined to contact and firm. Public redirect: `/v/<code>` to `AIVIS_REPORT_BASE_URL/r/<scan_id>`. |
 | `Possible OS actions list\|show\|policy-check\|execute` | Durable Possible OS action execution queue. Supported high-risk actions must be policy-checked and use narrow executors. |
@@ -588,13 +588,15 @@ hostname than `OUTREACH_PUBLIC_BASE_URL`.
 - **Follow-up** steps default to the per-contact rendezvous A/B (weight>0 variants
   only), but can be pinned via `LEAD_GEN_FOLLOW_UP_VARIANT` (default "" = unchanged
   A/B). Set it to e.g. `ai-audit` to drive the audit CTA on follow-ups too.
-- **Per-run override (highest precedence):** pass a variant to the whole run and it
+- **Per-run/top-up override (highest precedence):** pass a variant to the whole run and it
   pins that variant on **every** email, first-touch and follow-up, ignoring both env
   knobs. UI: the "Composer variant (this run)" picker in the Daily run panel. CLI:
-  `bin/possibleos lead-gen daily-run --variant <key>`. REST: `composer_variant_key`
-  on `POST /api/lead-gen/daily-run` (validated against active variants → 400 if
+  `bin/possibleos lead-gen daily-run --variant <key>` or
+  `bin/possibleos lead-gen top-up --count N --variant <key>`. REST:
+  `composer_variant_key` on `POST /api/lead-gen/daily-run` and
+  `/api/lead-gen/daily-run/top-up` (validated against active variants → 400 if
   unknown). An explicit `composer_variant_key` from preview "compare variants" also
-  overrides per-item. Precedence: per-run/explicit key > env knob > auto A/B.
+  overrides per-item. Precedence: per-run/top-up/explicit key > env knob > auto A/B.
 - When the firm has an extracted Yelp client-communication quote (see the
   `yelp-review-quotes` skill + `firm_reviews`), the email cites it **verbatim and
   attributed** as the hook, then pivots empathetically. When none is extracted it

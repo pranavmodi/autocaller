@@ -172,6 +172,49 @@ def test_persona_quota_shortfall_fill_and_one_per_firm():
 
 
 @pytest.mark.asyncio
+async def test_select_contacts_excludes_already_batched_contacts(monkeypatch):
+    async def fake_recommend(**_kwargs):
+        return {
+            "recommended": [
+                {
+                    "contact_id": "already",
+                    "pif_id": "p1",
+                    "firm_name": "Already LLP",
+                    "contact_email": "a@example.com",
+                    "persona": "founder_owner",
+                    "score": 100,
+                },
+                {
+                    "contact_id": "fresh",
+                    "pif_id": "p2",
+                    "firm_name": "Fresh LLP",
+                    "contact_email": "f@example.com",
+                    "persona": "founder_owner",
+                    "score": 90,
+                },
+            ],
+            "counts": {"eligible": 2},
+        }
+
+    async def fake_suppressed(_pif_ids):
+        return set(), {}
+
+    monkeypatch.setattr(lead_gen_daily, "recommend_sequence_contacts", fake_recommend)
+    monkeypatch.setattr(lead_gen_daily, "_suppressed_pifs_and_behavior", fake_suppressed)
+    monkeypatch.setenv("LEAD_GEN_EVIDENCE_AWARE_SELECTION", "0")
+
+    result = await lead_gen_daily._select_contacts(
+        weights={},
+        batch_size=1,
+        template_key="possible_minds_dynamic",
+        exclude_contact_ids={"already"},
+    )
+
+    assert [row["contact_id"] for row in result["selected"]] == ["fresh"]
+    assert result["excluded"]["already_batched_today"] == 1
+
+
+@pytest.mark.asyncio
 async def test_daily_selection_prioritizes_due_followups_then_fresh(monkeypatch):
     followups = [
         {"contact_id": "fu-1", "pif_id": "p1", "firm_name": "A", "persona": "owner"},
@@ -374,6 +417,111 @@ def test_daily_api_smoke(monkeypatch):
     assert client.get("/api/lead-gen/daily-runs?limit=1").json()["runs"][0]["id"] == "run-1"
     assert client.get("/api/lead-gen/daily-run/enabled").json()["enabled"] is False
     assert client.put("/api/lead-gen/daily-run/enabled", json={"enabled": True}).json()["enabled"] is True
+
+
+@pytest.mark.asyncio
+async def test_top_up_daily_run_returns_counts_and_uses_exclude_set(monkeypatch):
+    async def fake_active_policy():
+        return SimpleNamespace(version="v1", weights_json={"daily_template_key": "possible_minds_dynamic"})
+
+    async def fake_exclude(run_date):
+        assert run_date.isoformat() == "2026-06-24"
+        return {"already"}
+
+    async def fake_existing_run(run_date):
+        assert run_date.isoformat() == "2026-06-24"
+        return "run-1"
+
+    async def fake_select(**kwargs):
+        assert kwargs["batch_size"] == 2
+        assert kwargs["exclude_contact_ids"] == {"already"}
+        return {
+            "selected": [
+                {
+                    "contact_id": "fresh",
+                    "pif_id": "p2",
+                    "firm_name": "Fresh LLP",
+                    "contact_email": "fresh@example.com",
+                    "persona": "founder_owner",
+                    "score": 90,
+                }
+            ],
+            "recommendation_counts": {"eligible": 10},
+            "quota": {},
+            "batch_size": 2,
+            "persona_mix": {"founder_owner": 1},
+            "excluded": {"already_batched_today": 1},
+            "behavior_by_pif": {},
+        }
+
+    async def fake_create(**kwargs):
+        assert kwargs["run_id"] == "run-1"
+        assert kwargs["batch_name"] == "Daily run 2026-06-24 top-up"
+        assert kwargs["basis"] == "daily-run-top-up"
+        assert kwargs["extra_counts"]["excluded_today_contacts"] == 1
+        return "batch-top-up"
+
+    async def fake_compose(**kwargs):
+        assert kwargs["batch_id"] == "batch-top-up"
+        assert kwargs["composer_variant_key"] == "ai-audit"
+        return {"drafted": 1, "held": 0, "complete": True}
+
+    async def fake_schedule(**kwargs):
+        assert kwargs["batch_id"] == "batch-top-up"
+        return {"scheduled": 1, "auto_approved": 1}
+
+    monkeypatch.setattr(lead_gen_daily, "_active_policy", fake_active_policy)
+    monkeypatch.setattr(lead_gen_daily, "_daily_run_batch_contact_ids", fake_exclude)
+    monkeypatch.setattr(lead_gen_daily, "_existing_daily_run_id", fake_existing_run)
+    monkeypatch.setattr(lead_gen_daily, "_select_contacts", fake_select)
+    monkeypatch.setattr(lead_gen_daily, "_create_daily_batch", fake_create)
+    monkeypatch.setattr(lead_gen_daily, "_compose_batch", fake_compose)
+    monkeypatch.setattr(lead_gen_daily, "_schedule_drafted_items", fake_schedule)
+
+    result = await lead_gen_daily.top_up_daily_run(
+        n=2,
+        composer_variant_key="ai-audit",
+        run_date=datetime(2026, 6, 24, tzinfo=timezone.utc).date(),
+    )
+
+    assert result == {
+        "run_date": "2026-06-24",
+        "batch_id": "batch-top-up",
+        "requested": 2,
+        "selected": 1,
+        "composed": 1,
+        "held": 0,
+        "scheduled": 1,
+        "approved": 1,
+        "composer_variant_override": "ai-audit",
+        "excluded_today_contacts": 1,
+        "compose_complete": True,
+    }
+
+
+def test_top_up_api_smoke(monkeypatch):
+    app = FastAPI()
+    app.include_router(lead_gen_router)
+
+    async def fake_top_up(**kwargs):
+        assert kwargs["n"] == 3
+        return {
+            "run_date": "2026-06-24",
+            "batch_id": "batch-top-up",
+            "requested": 3,
+            "selected": 3,
+            "composed": 3,
+            "held": 0,
+            "scheduled": 3,
+            "approved": 3,
+        }
+
+    monkeypatch.setattr("app.api.lead_gen.top_up_daily_run", fake_top_up)
+
+    client = TestClient(app)
+    data = client.post("/api/lead-gen/daily-run/top-up", json={"n": 3}).json()
+    assert data["batch_id"] == "batch-top-up"
+    assert data["scheduled"] == 3
 
 
 def test_daily_loop_window_fires_at_8am_ist_weekdays_only():

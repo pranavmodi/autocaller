@@ -28,6 +28,7 @@ from app.services.sequence_recommendations import recommend_sequence_contacts
 from app.services.sequences.registry import DEFAULT_TEMPLATE_KEY
 
 logger = logging.getLogger(__name__)
+FIRST_TOUCH_EVIDENCE_EXEMPT_VARIANTS = {"ai-audit"}
 
 
 def _pif_patient_ids(pif_id: str) -> list[str]:
@@ -122,6 +123,19 @@ def _agent_sequence_stub(template_key: str) -> SimpleNamespace:
         variant="agent_slice",
         status="drafting",
     )
+
+
+def _resolve_item_variant_key(*, composer_variant_key: str | None, is_follow_up: bool) -> str | None:
+    item_variant_key = (composer_variant_key or "").strip() or None
+    if item_variant_key is None and not is_follow_up:
+        forced = os.getenv("LEAD_GEN_FIRST_TOUCH_VARIANT", "review-evidence").strip()
+        if forced:
+            item_variant_key = forced
+    if item_variant_key is None and is_follow_up:
+        forced_fu = os.getenv("LEAD_GEN_FOLLOW_UP_VARIANT", "").strip()
+        if forced_fu:
+            item_variant_key = forced_fu
+    return item_variant_key
 
 
 async def _sequence_context_for_item(item: dict[str, Any]) -> tuple[Any, int]:
@@ -280,6 +294,16 @@ async def _compose_batch_items(
         sequence, step_num = await _sequence_context_for_item(item)
         reason = item.get("reason") or {}
         is_follow_up = reason.get("action_type") == "follow_up"
+        # First-touch emails use the angle-aware review-evidence variant by
+        # default (it frames the hook by the primary evidence kind — complaint /
+        # praise / fact / outcome — and falls back to baseline when none). Follow-
+        # up steps keep their sequence/explicit variant. An explicit
+        # composer_variant_key (preview "compare variants") always wins. Override
+        # via LEAD_GEN_FIRST_TOUCH_VARIANT ("" disables).
+        item_variant_key = _resolve_item_variant_key(
+            composer_variant_key=composer_variant_key,
+            is_follow_up=is_follow_up,
+        )
         # Gate: block first-touch composition for firms with no usable review
         # evidence yet. The firm stays selected (so the action center prompts
         # for its reviews), but no email is composed or queued until evidence
@@ -293,7 +317,8 @@ async def _compose_batch_items(
             "REQUIRE_REVIEW_EVIDENCE_FIRST_TOUCH",
             os.getenv("REQUIRE_YELP_QUOTE_FIRST_TOUCH", "true"),
         ).strip().lower()
-        if not is_follow_up and _gate_flag in {"1", "true", "yes", "on"}:
+        evidence_exempt = (item_variant_key or "") in FIRST_TOUCH_EVIDENCE_EXEMPT_VARIANTS
+        if not is_follow_up and not evidence_exempt and _gate_flag in {"1", "true", "yes", "on"}:
             from app.services.review_extraction import (
                 ensure_review_extracted,
                 evidence_gate_kinds,
@@ -334,26 +359,6 @@ async def _compose_batch_items(
                     "held_reason": "awaiting_review_evidence",
                 })
                 continue
-        # First-touch emails use the angle-aware review-evidence variant by
-        # default (it frames the hook by the primary evidence kind — complaint /
-        # praise / fact / outcome — and falls back to baseline when none). Follow-
-        # up steps keep their sequence/explicit variant. An explicit
-        # composer_variant_key (preview "compare variants") always wins. Override
-        # via LEAD_GEN_FIRST_TOUCH_VARIANT ("" disables).
-        item_variant_key = composer_variant_key
-        if item_variant_key is None and not is_follow_up:
-            forced = os.getenv("LEAD_GEN_FIRST_TOUCH_VARIANT", "review-evidence").strip()
-            if forced:
-                item_variant_key = forced
-        # Follow-up override, symmetric to the first-touch one. Default "" leaves
-        # follow-ups on the auto A/B per-contact assignment (unchanged behavior);
-        # set LEAD_GEN_FOLLOW_UP_VARIANT to pin a variant (e.g. ai-audit) on every
-        # follow-up the daily run composes. A per-run/explicit composer_variant_key
-        # still wins (it's set above before this branch).
-        if item_variant_key is None and is_follow_up:
-            forced_fu = os.getenv("LEAD_GEN_FOLLOW_UP_VARIANT", "").strip()
-            if forced_fu:
-                item_variant_key = forced_fu
         selection_evidence = {
             "why_this_contact_was_selected": item.get("reason", {}).get("reason")
             or item.get("reason", {}).get("basis")

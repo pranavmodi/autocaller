@@ -5103,6 +5103,34 @@ def lead_gen_daily_run(
     _print_daily_run(data)
 
 
+@lead_gen_app.command("top-up")
+def lead_gen_top_up(
+    count: int = typer.Option(..., "--count", "-n", min=1, max=40, help="Number of additional first-touch sends to add to today's daily run."),
+    variant: str = typer.Option("", "--variant", help="Pin one composer variant for the top-up (for example: ai-audit)."),
+    json_output: bool = typer.Option(False, "--json", help="Print raw JSON."),
+):
+    """Add fresh first-touch sends to today's daily run without recomposing it."""
+    data = _post(
+        "/api/lead-gen/daily-run/top-up",
+        json_body={
+            "n": count,
+            "composer_variant_key": variant or None,
+        },
+        timeout=900.0,
+    )
+    if json_output:
+        console.print_json(data=data)
+        return
+    console.print(
+        f"[bold]lead-gen top-up[/bold] date={data.get('run_date')} "
+        f"batch={data.get('batch_id') or '-'} requested={data.get('requested')} "
+        f"selected={data.get('selected')} composed={data.get('composed')} "
+        f"held={data.get('held')} scheduled={data.get('scheduled')} "
+        f"approved={data.get('approved')}"
+        + (f" variant={data.get('composer_variant_override')}" if data.get("composer_variant_override") else "")
+    )
+
+
 @lead_gen_app.command("daily-status")
 def lead_gen_daily_status(
     date_: str = typer.Option("", "--date", help="Run date YYYY-MM-DD. Defaults to latest/today."),
