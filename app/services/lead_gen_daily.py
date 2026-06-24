@@ -691,43 +691,48 @@ async def _create_daily_batch(
     batch_name: str | None = None,
     basis: str = "daily-run",
     extra_counts: dict[str, Any] | None = None,
+    append_to_batch_id: str | None = None,
 ) -> str:
     active_policy = policy or await ensure_default_policy()
-    batch_id = _new_id()
+    # When append_to_batch_id is set, add the selected items to that existing
+    # batch (e.g. a top-up adding to today's daily-run batch) instead of
+    # spawning a sidecar batch.
+    batch_id = append_to_batch_id or _new_id()
     behavior_by_pif = select_result.get("behavior_by_pif") or {}
     async with AsyncSessionLocal() as session:
-        batch = LeadGenBatchRow(
-            id=batch_id,
-            name=batch_name or f"Daily run {run_date.isoformat()}",
-            target_metric=TARGET_METRIC,
-            template_key=template_key,
-            policy_version=active_policy.version,
-            status="recommended",
-            counts_json={
-                **(select_result.get("recommendation_counts") or {}),
-                "basis": basis,
-                "daily_run_id": run_id,
-                "run_date": run_date.isoformat(),
-                "requested": select_result.get("batch_size"),
-                "returned": len(selected),
-                "persona_mix": select_result.get("persona_mix") or {},
-                "persona_quota": select_result.get("quota") or {},
-                "excluded": select_result.get("excluded") or {},
-                **(extra_counts or {}),
-                **(
-                    {
-                        "followups_selected": select_result.get("followups_selected", 0),
-                        "fresh_selected": select_result.get("fresh_selected", len(selected)),
-                        "followups_due_total": select_result.get("followups_due_total", 0),
-                    }
-                    if sequences_enabled()
-                    else {}
-                ),
-            },
-            created_by=created_by,
-        )
-        session.add(batch)
-        await session.flush()
+        if not append_to_batch_id:
+            batch = LeadGenBatchRow(
+                id=batch_id,
+                name=batch_name or f"Daily run {run_date.isoformat()}",
+                target_metric=TARGET_METRIC,
+                template_key=template_key,
+                policy_version=active_policy.version,
+                status="recommended",
+                counts_json={
+                    **(select_result.get("recommendation_counts") or {}),
+                    "basis": basis,
+                    "daily_run_id": run_id,
+                    "run_date": run_date.isoformat(),
+                    "requested": select_result.get("batch_size"),
+                    "returned": len(selected),
+                    "persona_mix": select_result.get("persona_mix") or {},
+                    "persona_quota": select_result.get("quota") or {},
+                    "excluded": select_result.get("excluded") or {},
+                    **(extra_counts or {}),
+                    **(
+                        {
+                            "followups_selected": select_result.get("followups_selected", 0),
+                            "fresh_selected": select_result.get("fresh_selected", len(selected)),
+                            "followups_due_total": select_result.get("followups_due_total", 0),
+                        }
+                        if sequences_enabled()
+                        else {}
+                    ),
+                },
+                created_by=created_by,
+            )
+            session.add(batch)
+            await session.flush()
         for rec in selected:
             behavior = behavior_by_pif.get(str(rec.get("pif_id") or ""), {})
             action_type = str(rec.get("action_type") or "first_touch")
@@ -819,6 +824,18 @@ async def _existing_daily_run_id(run_date: date) -> str | None:
     return row.id if row else None
 
 
+async def _daily_run_batch_id(run_date: date) -> str | None:
+    """The batch_id of today's daily run, if it has one (for top-up append)."""
+    async with AsyncSessionLocal() as session:
+        row = (await session.execute(
+            select(LeadGenDailyRunRow)
+            .where(LeadGenDailyRunRow.run_date == run_date)
+            .order_by(desc(LeadGenDailyRunRow.created_at))
+            .limit(1)
+        )).scalar_one_or_none()
+    return row.batch_id if row and row.batch_id else None
+
+
 async def top_up_daily_run(
     *,
     n: int,
@@ -842,6 +859,9 @@ async def top_up_daily_run(
     )
     selected = list(select_result.get("selected") or [])[:count]
     run_id = await _existing_daily_run_id(target_date) or f"top-up-{target_date.isoformat()}-{_new_id()[:8]}"
+    # Append to today's existing daily-run batch (one coherent batch of N), not a
+    # sidecar — so the daily-run panel + throughput funnel count the top-up too.
+    existing_batch_id = await _daily_run_batch_id(target_date)
     batch_id = await _create_daily_batch(
         run_id=run_id,
         run_date=target_date,
@@ -854,13 +874,14 @@ async def top_up_daily_run(
         policy=policy,
         created_by=created_by,
         template_key=template_key,
-        batch_name=f"Daily run {target_date.isoformat()} top-up",
+        batch_name=f"Daily run {target_date.isoformat()}",
         basis="daily-run-top-up",
         extra_counts={
             "top_up": True,
             "excluded_today_contacts": len(exclude_contact_ids),
             "composer_variant_override": composer_variant_key,
         },
+        append_to_batch_id=existing_batch_id,
     )
     compose = await _compose_batch(
         batch_id=batch_id,

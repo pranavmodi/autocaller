@@ -517,25 +517,32 @@ async def test_top_up_daily_run_returns_counts_and_uses_exclude_set(monkeypatch)
             "behavior_by_pif": {},
         }
 
+    async def fake_daily_run_batch_id(run_date):
+        assert run_date.isoformat() == "2026-06-24"
+        return "today-batch"
+
     async def fake_create(**kwargs):
         assert kwargs["run_id"] == "run-1"
-        assert kwargs["batch_name"] == "Daily run 2026-06-24 top-up"
+        # Top-up now APPENDS to today's daily-run batch (no sidecar).
+        assert kwargs["batch_name"] == "Daily run 2026-06-24"
         assert kwargs["basis"] == "daily-run-top-up"
+        assert kwargs["append_to_batch_id"] == "today-batch"
         assert kwargs["extra_counts"]["excluded_today_contacts"] == 1
-        return "batch-top-up"
+        return "today-batch"
 
     async def fake_compose(**kwargs):
-        assert kwargs["batch_id"] == "batch-top-up"
+        assert kwargs["batch_id"] == "today-batch"
         assert kwargs["composer_variant_key"] == "ai-audit"
         return {"drafted": 1, "held": 0, "complete": True}
 
     async def fake_schedule(**kwargs):
-        assert kwargs["batch_id"] == "batch-top-up"
+        assert kwargs["batch_id"] == "today-batch"
         return {"scheduled": 1, "auto_approved": 1}
 
     monkeypatch.setattr(lead_gen_daily, "_active_policy", fake_active_policy)
     monkeypatch.setattr(lead_gen_daily, "_daily_run_batch_contact_ids", fake_exclude)
     monkeypatch.setattr(lead_gen_daily, "_existing_daily_run_id", fake_existing_run)
+    monkeypatch.setattr(lead_gen_daily, "_daily_run_batch_id", fake_daily_run_batch_id)
     monkeypatch.setattr(lead_gen_daily, "_select_contacts", fake_select)
     monkeypatch.setattr(lead_gen_daily, "_create_daily_batch", fake_create)
     monkeypatch.setattr(lead_gen_daily, "_compose_batch", fake_compose)
@@ -549,7 +556,7 @@ async def test_top_up_daily_run_returns_counts_and_uses_exclude_set(monkeypatch)
 
     assert result == {
         "run_date": "2026-06-24",
-        "batch_id": "batch-top-up",
+        "batch_id": "today-batch",
         "requested": 2,
         "selected": 1,
         "composed": 1,
