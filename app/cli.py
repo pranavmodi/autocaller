@@ -5131,6 +5131,31 @@ def lead_gen_top_up(
     )
 
 
+@lead_gen_app.command("backfill-consult-links")
+def lead_gen_backfill_consult_links(
+    scope: str = typer.Option("today", "--scope", help="'today' (live daily batch) or 'all' (every unsent lead-gen send)."),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Report what would change without modifying anything."),
+    json_output: bool = typer.Option(False, "--json", help="Print raw JSON."),
+):
+    """Swap the bare consult URL for a per-recipient tracked /c link in unsent
+    lead-gen sends, re-approving each at its existing slot (idempotent)."""
+    data = _post(
+        "/api/lead-gen/backfill-consult-links",
+        json_body={"scope": scope, "dry_run": dry_run, "actor": "operator"},
+        timeout=300.0,
+    )
+    if json_output:
+        console.print_json(data=data)
+        return
+    console.print(
+        f"[bold]backfill-consult-links[/bold] scope={data.get('scope')} "
+        f"dry_run={data.get('dry_run')} updated={data.get('updated_count')} "
+        f"skipped={data.get('skipped_count')}"
+    )
+    for u in (data.get("updated") or [])[:60]:
+        console.print(f"  [green]+[/green] {u.get('firm') or u.get('action_id')} -> {u.get('tracked_url')}")
+
+
 @lead_gen_app.command("daily-status")
 def lead_gen_daily_status(
     date_: str = typer.Option("", "--date", help="Run date YYYY-MM-DD. Defaults to latest/today."),

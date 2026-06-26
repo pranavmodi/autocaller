@@ -1246,7 +1246,13 @@ class AuditLinkClickRow(Base):
 
 
 class AuditLinkRow(Base):
-    """Short, clickable AI Audit redirect codes used in plaintext email."""
+    """Short, clickable redirect codes used in plaintext lead-gen email.
+
+    Reused for two destinations: the AI Audit page (kind="audit", the
+    historical default) and the consult page (kind="consult"). Both record
+    a click + lead-gen observation on resolve; only the redirect target and
+    the observation channel differ.
+    """
     __tablename__ = "audit_links"
 
     code: Mapped[str] = mapped_column(String(32), primary_key=True)
@@ -1258,6 +1264,9 @@ class AuditLinkRow(Base):
     )
     pif_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     source: Mapped[str] = mapped_column(String(64), nullable=False)
+    kind: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="audit", server_default="audit",
+    )
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow)
 
     __table_args__ = (

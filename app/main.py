@@ -190,6 +190,8 @@ _AUTH_EXEMPT_PREFIXES = (
     # Only the book/slots paths are exempt; list/admin is still gated.
     "/api/consults/slots",
     "/api/consults/book",
+    # Early-access / design-partner capture from a product solution page.
+    "/api/lead-gen/product-interest",
     # Outreach open-pixel + click-redirect — fetched by recipients' email
     # clients, no session cookie possible.
     "/t/o/",

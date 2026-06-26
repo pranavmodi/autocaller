@@ -120,14 +120,28 @@ async def _prefill_for_payload(payload: dict[str, Any]) -> dict[str, str]:
     return {"firm": firm, "city": city, "case_mgmt": case_mgmt, **preanswers}
 
 
-async def _audit_redirect_for_payload(
-    request: Request,
-    payload: dict[str, Any] | None,
-) -> RedirectResponse:
-    base = _audit_public_url()
-    if not payload:
-        return RedirectResponse(url=base, status_code=302)
+def _consult_public_url() -> str:
+    # The consult page lives on the main marketing site, NOT the aiaudit
+    # subdomain, so do not derive this from AIAUDIT_PUBLIC_URL.
+    return os.getenv("CONSULT_URL", "https://getpossibleminds.com/consult").rstrip("/")
 
+
+def _solution_public_url() -> str:
+    # The product/solution page lives on the main marketing site.
+    return os.getenv(
+        "OUTBOUND_VOICE_SOLUTION_URL",
+        "https://getpossibleminds.com/solutions/outbound-voice-ai",
+    ).rstrip("/")
+
+
+async def _record_link_click(
+    request: Request,
+    payload: dict[str, Any],
+    *,
+    channel: str,
+) -> str | None:
+    """Persist a click row + lead-gen link_clicked observation. Returns the
+    click_id (or None on failure). Shared by the audit and consult redirects."""
     click_id = _new_id()
     contact_id = _clean(payload.get("contact_id"), 64)
     batch_item_id = _clean(payload.get("batch_item_id"), 64) or None
@@ -136,10 +150,9 @@ async def _audit_redirect_for_payload(
     ip = request.client.host if request.client else None
     ua = request.headers.get("user-agent")
     referer = request.headers.get("referer")
-
     try:
         async with AsyncSessionLocal() as session:
-            click = AuditLinkClickRow(
+            session.add(AuditLinkClickRow(
                 id=click_id,
                 contact_id=contact_id,
                 batch_item_id=batch_item_id,
@@ -148,14 +161,13 @@ async def _audit_redirect_for_payload(
                 ip=(ip or "")[:64] or None,
                 user_agent=(ua or "")[:512] or None,
                 referer=(referer or "")[:1024] or None,
-            )
-            session.add(click)
+            ))
             await session.commit()
         await record_observation(
             event_type="link_clicked",
             raw_event={
                 "source": source,
-                "channel": "ai_audit",
+                "channel": channel,
                 "click_id": click_id,
                 "pif_id": pif_id,
                 "link_code": _clean(payload.get("link_code"), 64) or None,
@@ -163,18 +175,89 @@ async def _audit_redirect_for_payload(
             contact_id=contact_id,
             batch_item_id=batch_item_id,
         )
-        prefill = await _prefill_for_payload(payload)
+        return click_id
     except Exception:
-        prefill = {}
+        return None
+
+
+async def _audit_redirect_for_payload(
+    request: Request,
+    payload: dict[str, Any] | None,
+) -> RedirectResponse:
+    base = _audit_public_url()
+    if not payload:
+        return RedirectResponse(url=base, status_code=302)
+
+    click_id = await _record_link_click(request, payload, channel="ai_audit")
+    prefill: dict[str, Any] = {}
+    if click_id:
+        try:
+            prefill = await _prefill_for_payload(payload)
+        except Exception:
+            prefill = {}
 
     query = {key: value for key, value in (prefill or {}).items() if value}
-    query["c"] = click_id
+    if click_id:
+        query["c"] = click_id
     return RedirectResponse(url=f"{base}/?{urlencode(query)}", status_code=302)
+
+
+async def _consult_redirect_for_payload(
+    request: Request,
+    payload: dict[str, Any] | None,
+) -> RedirectResponse:
+    """Consult link redirect: record the click, then send to the consult page.
+    Unknown/forged codes still redirect to consult (never error the visitor)."""
+    dest = _consult_public_url()
+    if not payload:
+        return RedirectResponse(url=dest, status_code=302)
+    await _record_link_click(request, payload, channel="consult")
+    return RedirectResponse(url=dest, status_code=302)
+
+
+async def _solution_redirect_for_payload(
+    request: Request,
+    payload: dict[str, Any] | None,
+) -> RedirectResponse:
+    """Solution/product link redirect: record the click, then send to the
+    solution page. Carries the link code as a query param so the page's
+    early-access form can attribute the signup back to this recipient."""
+    dest = _solution_public_url()
+    if not payload:
+        return RedirectResponse(url=dest, status_code=302)
+    click_id = await _record_link_click(request, payload, channel="solution")
+    code = _clean(payload.get("link_code"), 64)
+    params = {}
+    if code:
+        params["lc"] = code
+    if click_id:
+        params["c"] = click_id
+    sep = "&" if "?" in dest else "?"
+    url = f"{dest}{sep}{urlencode(params)}" if params else dest
+    return RedirectResponse(url=url, status_code=302)
 
 
 @router.get("/a/{code}")
 async def aiaudit_short_go(code: str, request: Request) -> RedirectResponse:
     return await _audit_redirect_for_payload(request, await resolve_short_audit_code(code))
+
+
+@router.get("/c/{code}")
+async def consult_short_go(code: str, request: Request) -> RedirectResponse:
+    payload = await resolve_short_audit_code(code)
+    # Defensive: a code that exists but is not a consult code should not leak
+    # the audit prefill flow; treat only kind="consult" as a consult click.
+    if payload and payload.get("kind") != "consult":
+        payload = None
+    return await _consult_redirect_for_payload(request, payload)
+
+
+@router.get("/s/{code}")
+async def solution_short_go(code: str, request: Request) -> RedirectResponse:
+    payload = await resolve_short_audit_code(code)
+    if payload and payload.get("kind") != "solution":
+        payload = None
+    return await _solution_redirect_for_payload(request, payload)
 
 
 @router.get("/aiaudit/go")
@@ -185,6 +268,8 @@ async def aiaudit_go(request: Request) -> RedirectResponse:
 def _app_name_expr():
     return case(
         (AuditLinkClickRow.source.in_(["ai_audit_signature", "ai_audit_email"]), "AI Audit"),
+        (AuditLinkClickRow.source.in_(["consult_email", "consult_signature"]), "Consult"),
+        (AuditLinkClickRow.source.in_(["solution_email", "solution_signature"]), "Solution"),
         else_="Unknown",
     )
 

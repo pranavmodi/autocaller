@@ -1,0 +1,7 @@
+{
+  "key": "missed-call-ranking",
+  "label": "Missed-call ranking decay (voice-AI intake)",
+  "description": "First-touch built on the missed-call -> Google map-pack ranking-decay insight, leading to voice-AI intake. Primary CTA is a binary reply question; secondary is a per-recipient tracked /s/ link to the outbound voice-AI solution page (early-access capture).",
+  "active": true,
+  "allocation_weight": 0
+}

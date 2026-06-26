@@ -15,6 +15,12 @@ from app.db import AsyncSessionLocal
 from app.db.models import AuditLinkRow
 
 VALID_SOURCES = {"ai_audit_signature", "ai_audit_email"}
+# Consult short links reuse the audit_links table (kind="consult"); they share
+# the click/observation machinery but redirect to the consult page instead.
+VALID_CONSULT_SOURCES = {"consult_email", "consult_signature"}
+# Solution/product short links (kind="solution") redirect to a product solution
+# page (e.g. the outbound voice-AI page) with the same per-recipient attribution.
+VALID_SOLUTION_SOURCES = {"solution_email", "solution_signature"}
 
 
 def _secret() -> bytes:
@@ -150,6 +156,7 @@ async def build_short_audit_link(
                 batch_item_id=clean_batch_item_id,
                 pif_id=pif_id,
                 source=clean_source,
+                kind="audit",
             ))
             try:
                 await session.commit()
@@ -157,6 +164,84 @@ async def build_short_audit_link(
             except IntegrityError:
                 await session.rollback()
     raise RuntimeError("audit_short_code_collision")
+
+
+async def build_short_consult_link(
+    contact: Any,
+    *,
+    batch_item_id: str | None = None,
+    source: str = "consult_email",
+) -> str:
+    """Per-recipient tracked consult link (kind="consult") -> /c/{code}.
+
+    Mirrors build_short_audit_link so the consult CTA gets the same
+    per-recipient click attribution the audit link already has.
+    """
+    clean_source = str(source or "").strip()
+    if clean_source not in VALID_CONSULT_SOURCES:
+        raise ValueError(f"invalid consult link source: {source}")
+    contact_id = str(getattr(contact, "id", "") or "").strip()
+    if not contact_id:
+        raise ValueError("contact_id_required")
+    pif_id = str(getattr(contact, "pif_id", "") or "").strip() or None
+    clean_batch_item_id = str(batch_item_id or "").strip() or None
+
+    async with AsyncSessionLocal() as session:
+        for _ in range(8):
+            code = _new_short_code()
+            session.add(AuditLinkRow(
+                code=code,
+                contact_id=contact_id,
+                batch_item_id=clean_batch_item_id,
+                pif_id=pif_id,
+                source=clean_source,
+                kind="consult",
+            ))
+            try:
+                await session.commit()
+                return f"{_link_public_base_url()}/c/{code}"
+            except IntegrityError:
+                await session.rollback()
+    raise RuntimeError("consult_short_code_collision")
+
+
+async def build_short_solution_link(
+    contact: Any,
+    *,
+    batch_item_id: str | None = None,
+    source: str = "solution_email",
+) -> str:
+    """Per-recipient tracked product/solution link (kind="solution") -> /s/{code}.
+
+    Same per-recipient attribution as the audit/consult links; the /s/ route
+    redirects to the configured solution page (default: the outbound voice-AI
+    solution page on getpossibleminds.com)."""
+    clean_source = str(source or "").strip()
+    if clean_source not in VALID_SOLUTION_SOURCES:
+        raise ValueError(f"invalid solution link source: {source}")
+    contact_id = str(getattr(contact, "id", "") or "").strip()
+    if not contact_id:
+        raise ValueError("contact_id_required")
+    pif_id = str(getattr(contact, "pif_id", "") or "").strip() or None
+    clean_batch_item_id = str(batch_item_id or "").strip() or None
+
+    async with AsyncSessionLocal() as session:
+        for _ in range(8):
+            code = _new_short_code()
+            session.add(AuditLinkRow(
+                code=code,
+                contact_id=contact_id,
+                batch_item_id=clean_batch_item_id,
+                pif_id=pif_id,
+                source=clean_source,
+                kind="solution",
+            ))
+            try:
+                await session.commit()
+                return f"{_link_public_base_url()}/s/{code}"
+            except IntegrityError:
+                await session.rollback()
+    raise RuntimeError("solution_short_code_collision")
 
 
 async def resolve_short_audit_code(code: str | None) -> dict[str, Any] | None:
@@ -172,5 +257,6 @@ async def resolve_short_audit_code(code: str | None) -> dict[str, Any] | None:
         "batch_item_id": row.batch_item_id,
         "pif_id": row.pif_id,
         "source": row.source,
+        "kind": getattr(row, "kind", "audit") or "audit",
         "link_code": row.code,
     }

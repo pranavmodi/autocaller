@@ -26,6 +26,7 @@ from app.services.lead_gen_cybernetic import (
     ensure_default_policy,
     get_batch,
     list_batches,
+    record_observation,
     set_daily_send_budget,
 )
 from app.services.lead_gen_email_agent import create_lead_gen_email_agent_slice, recompose_item_draft
@@ -321,6 +322,67 @@ async def approve_batch_send_actions(batch_id: str, req: ApproveBatchRequest):
         )
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+
+class BackfillConsultLinksRequest(BaseModel):
+    scope: str = Field(default="today", pattern="^(today|all)$")
+    actor: str = "operator"
+    dry_run: bool = False
+
+
+class ProductInterestRequest(BaseModel):
+    email: str = Field(..., min_length=3, max_length=320)
+    firm: Optional[str] = Field(default=None, max_length=300)
+    name: Optional[str] = Field(default=None, max_length=200)
+    product: str = Field(default="outbound-voice-ai", max_length=64)
+    link_code: Optional[str] = Field(default=None, max_length=64)
+    source: str = Field(default="solution_page_early_access", max_length=64)
+
+
+@router.post("/api/lead-gen/product-interest")
+async def product_interest(req: ProductInterestRequest):
+    """Early-access / design-partner signup from a product solution page. When
+    a tracked solution link code (`link_code`, the /s/ `lc` param) is supplied,
+    the signup is attributed to that recipient and lands as a lead-gen
+    `product_interest` observation so it joins the funnel."""
+    email = req.email.strip().lower()
+    if "@" not in email or "." not in email.split("@")[-1]:
+        raise HTTPException(status_code=400, detail="invalid_email")
+    contact_id = batch_item_id = pif_id = None
+    if req.link_code:
+        from app.services.aiaudit_links import resolve_short_audit_code
+        payload = await resolve_short_audit_code(req.link_code)
+        if payload:
+            contact_id = payload.get("contact_id")
+            batch_item_id = payload.get("batch_item_id")
+            pif_id = payload.get("pif_id")
+    await record_observation(
+        event_type="product_interest",
+        raw_event={
+            "email": email,
+            "firm": (req.firm or "").strip() or None,
+            "name": (req.name or "").strip() or None,
+            "product": req.product,
+            "channel": "solution",
+            "source": req.source,
+            "link_code": req.link_code,
+            "pif_id": pif_id,
+        },
+        contact_id=contact_id,
+        batch_item_id=batch_item_id,
+    )
+    return {"ok": True, "attributed": bool(contact_id)}
+
+
+@router.post("/api/lead-gen/backfill-consult-links")
+async def backfill_consult_links(req: BackfillConsultLinksRequest):
+    """Swap the bare consult URL for a per-recipient tracked /c/{code} link in
+    unsent lead-gen sends, re-approving each at its existing slot. scope=today
+    targets the live daily batch; scope=all covers every unsent lead-gen send."""
+    from app.services.action_execution import backfill_consult_short_links
+    return await backfill_consult_short_links(
+        scope=req.scope, actor=req.actor, dry_run=req.dry_run
+    )
 
 
 @router.post("/api/lead-gen/batch-items/{batch_item_id}/send-draft")

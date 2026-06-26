@@ -20,7 +20,7 @@ from app.db.models import (
 )
 from app.services.contact_selection import has_usable_email
 from app.services.email_notification_service import _send_email
-from app.services.lead_email_composer import _sanitize_email_copy
+from app.services.lead_email_composer import CONSULT_URL, _has_consult_link, _sanitize_email_copy
 from app.services.lead_gen_cybernetic import (
     daily_send_budget_from_policy,
     ensure_default_policy,
@@ -558,6 +558,137 @@ async def approve_lead_gen_batch_send_actions(
         "batch_id": batch_id,
         "approved_count": len(approved),
         "approved_action_ids": approved,
+        "skipped": skipped,
+    }
+
+
+async def backfill_consult_short_links(
+    *, scope: str = "today", actor: str = "operator", dry_run: bool = False
+) -> dict[str, Any]:
+    """Replace the bare consult URL with a per-recipient tracked /c/{code} link
+    in unsent lead-gen send actions, re-hashing and re-approving each so the
+    scheduler still sends the exact (now-tracked) draft at its slot.
+
+    scope="today": only actions scheduled for today (the live daily batch).
+    scope="all": every unsent (approved / waiting_for_approval) lead-gen send.
+    Idempotent: actions already carrying a /c/ link are skipped.
+    """
+    from app.services.aiaudit_links import build_short_consult_link
+
+    await ensure_agent_tables()
+    now = _utcnow()
+    today = now.date()
+    updated: list[dict[str, Any]] = []
+    skipped: list[dict[str, str]] = []
+    async with AsyncSessionLocal() as session:
+        actions = (
+            await session.execute(
+                select(AgentActionRow)
+                .where(
+                    AgentActionRow.action_type.in_([SEND_EMAIL, SEND_APPROVED_LEAD_GEN_DRAFT]),
+                    AgentActionRow.entity_type == "lead_gen_email",
+                    AgentActionRow.status.in_(["approved", "waiting_for_approval"]),
+                )
+                .order_by(AgentActionRow.scheduled_for.asc())
+            )
+        ).scalars().all()
+        async def _sync_item_display_body(batch_item_id: str | None, target_body: str) -> bool:
+            """Keep the batch item's agent_draft.body (what the UI previews) in
+            sync with the action body (what actually sends). Returns True if it
+            changed. JSONB is not change-tracked in place, so reassign the dict."""
+            if not batch_item_id:
+                return False
+            item_row = await session.get(LeadGenBatchItemRow, batch_item_id)
+            if not item_row:
+                return False
+            item_reason = dict(item_row.reason_json or {})
+            item_draft = dict(item_reason.get("agent_draft") or {})
+            if not item_draft or item_draft.get("body") == target_body:
+                return False
+            item_draft["body"] = target_body
+            item_reason["agent_draft"] = item_draft
+            item_row.reason_json = item_reason
+            item_row.updated_at = now
+            return True
+
+        for action in actions:
+            payload = dict(action.input_json) if isinstance(action.input_json, dict) else {}
+            body = str(payload.get("body") or "")
+            firm = str(payload.get("firm_name") or "")
+            batch_item_id = str(payload.get("batch_item_id") or "") or None
+            if scope == "today":
+                sf = action.scheduled_for
+                if not sf or _as_utc(sf).date() != today:
+                    skipped.append({"action_id": action.id, "reason": "not_scheduled_today"})
+                    continue
+            # Action body already tracked: nothing to re-approve, but the UI
+            # display copy may still be stale -> sync it (self-healing).
+            if "/c/" in body:
+                if dry_run:
+                    skipped.append({"action_id": action.id, "reason": "already_tracked"})
+                    continue
+                if await _sync_item_display_body(batch_item_id, body):
+                    updated.append({"action_id": action.id, "firm": firm, "tracked_url": "(display synced)"})
+                else:
+                    skipped.append({"action_id": action.id, "reason": "already_tracked"})
+                continue
+            if CONSULT_URL not in body:
+                skipped.append({"action_id": action.id, "reason": "no_bare_consult_link"})
+                continue
+            contact_id = str(payload.get("contact_id") or "")
+            contact = await session.get(FirmContactRow, contact_id) if contact_id else None
+            if not contact:
+                skipped.append({"action_id": action.id, "reason": "contact_not_found"})
+                continue
+            if dry_run:
+                updated.append({"action_id": action.id, "firm": firm, "tracked_url": "(dry-run)"})
+                continue
+            tracked = await build_short_consult_link(
+                contact,
+                batch_item_id=batch_item_id,
+                source="consult_email",
+            )
+            new_body = body.replace(CONSULT_URL, tracked)
+            subject = str(payload.get("subject") or "")
+            # Hash the SANITIZED copy, matching how approval hashes are computed
+            # at approve time (_action_subject_body), so the scheduler's
+            # send-time hash check still passes.
+            subject_hash = _sha256(_sanitize_email_copy(subject))
+            body_hash = _sha256(_sanitize_email_copy(new_body))
+            payload["body"] = new_body
+            payload["subject_sha256"] = subject_hash
+            payload["body_sha256"] = body_hash
+            # Re-bind the approval block to the new body so an already-approved
+            # action stays validly approved with its slot intact.
+            if action.status == "approved" or "approval" in payload:
+                payload["approval"] = {
+                    "approved_at": now.isoformat(),
+                    "approved_by": actor,
+                    "subject_sha256": subject_hash,
+                    "body_sha256": body_hash,
+                    "recipient": str(payload.get("to") or "").strip().lower(),
+                }
+            action.input_json = payload
+            action.updated_at = now
+            # Keep the UI preview in sync with the (now tracked) send body.
+            await _sync_item_display_body(batch_item_id, new_body)
+            await _record_action_event(
+                session,
+                action_id=action.id,
+                event_type="consult_link_backfilled",
+                actor=actor,
+                message="Replaced bare consult URL with tracked /c link; re-approved at existing slot.",
+                input_json={"tracked_url": tracked, "scope": scope},
+            )
+            updated.append({"action_id": action.id, "firm": firm, "tracked_url": tracked})
+        if not dry_run:
+            await session.commit()
+    return {
+        "scope": scope,
+        "dry_run": dry_run,
+        "updated_count": len(updated),
+        "skipped_count": len(skipped),
+        "updated": updated,
         "skipped": skipped,
     }
 
@@ -1400,7 +1531,9 @@ async def _check_send_email_policy_in_session(session, action: AgentActionRow) -
             suppressions = (batch_item.reason_json or {}).get("suppressions") or []
             add("not_suppressed_by_selection", len(suppressions) == 0, ", ".join(str(x) for x in suppressions))
         followup_meta = _lead_gen_followup_metadata_from_item(payload, batch_item)
-        add("consult_link_present", "getpossibleminds.com/consult" in body.lower(), "")
+        # Accepts the bare consult URL OR a per-recipient tracked /c/ consult
+        # link (the tracking feature replaces the bare URL with /c/{code}).
+        add("consult_link_present", _has_consult_link(body), "")
         guard_cache = dict(payload.get("phi_egress_guard_cache") or {})
         guard = await check_no_patient_data_in_outreach(subject=subject, body=body, cache=guard_cache)
         payload["phi_egress_guard_cache"] = guard_cache

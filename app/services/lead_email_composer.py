@@ -14,7 +14,12 @@ from sqlalchemy import desc, or_, select
 
 from app.db import AsyncSessionLocal
 from app.db.models import ConsultBookingRow, EmailLogRow, EmailSequenceRow, FirmContactRow, FrontFirmActivityRow, InboundEmailRow, PatientRow, PifFirmRow
-from app.services.aiaudit_links import build_audit_link, build_short_audit_link
+from app.services.aiaudit_links import (
+    build_audit_link,
+    build_short_audit_link,
+    build_short_consult_link,
+    build_short_solution_link,
+)
 from app.services.ai_visibility_bridge import batch_item_visibility_report
 from app.services.llm_gateway import LLMGatewayError, call_skill_json
 from app.services.visibility_links import build_short_visibility_link
@@ -34,6 +39,11 @@ DEFAULT_SKILL_PATH = (
     / "skills/possible-minds-lead-email-composer/SKILL.md"
 )
 CONSULT_URL = "https://getpossibleminds.com/consult"
+SOLUTION_URL = "https://getpossibleminds.com/solutions/outbound-voice-ai"
+# Secondary CTA footer for the missed-call-ranking variant: points at the
+# outbound voice-AI solution page (with early-access capture), per-recipient
+# tracked. Kept as a soft P.S. so the primary reply CTA still leads.
+SOLUTION_CTA_FOOTER = "P.S. Here's what we're building for PI firms to fix this, and how to get early access:"
 AI_AUDIT_PATH = "/aiaudit/go?t="
 # Two context-specific link intros. The old single line ("Is your firm ready to
 # leverage AI? What's blocking your transformation? Find out in 10 minutes:") was
@@ -304,13 +314,29 @@ def _blog_posts() -> list[dict[str, str]]:
     return [{"title": "", "url": url.strip()} for url in raw.split(",") if url.strip()]
 
 
-def _ensure_consult_signature(body: str, sender: dict[str, str]) -> str:
+def _has_consult_link(body: str) -> bool:
+    """True if the body already carries a consult link, bare or per-recipient
+    tracked (/c/{code}). Used so we never double-append the consult CTA."""
+    text = body or ""
+    return CONSULT_URL in text or "getpossibleminds.com/consult" in text or "/c/" in text
+
+
+def _has_solution_link(body: str) -> bool:
+    """True if the body already carries the solution-page link, bare or tracked
+    (/s/{code})."""
+    text = body or ""
+    return SOLUTION_URL in text or "/solutions/outbound-voice-ai" in text or "/s/" in text
+
+
+def _ensure_consult_signature(
+    body: str, sender: dict[str, str], *, consult_url: str | None = None
+) -> str:
     body = (body or "").strip()
-    if CONSULT_URL in body:
+    if _has_consult_link(body):
         return body
     name = sender.get("name") or "Pranav"
     title = sender.get("title") or "Founder"
-    return f"{body}\n\n-- {name}\n{title}, Possible Minds\n{CONSULT_URL}".strip()
+    return f"{body}\n\n-- {name}\n{title}, Possible Minds\n{consult_url or CONSULT_URL}".strip()
 
 
 def _strip_trailing_signature(body: str, sender: dict[str, str]) -> str:
@@ -388,16 +414,32 @@ def _ensure_signature(
     contact: FirmContactRow,
     variant_key: str | None,
     audit_url: str | None = None,
+    consult_url: str | None = None,
+    solution_url: str | None = None,
 ) -> str:
     body = _strip_trailing_signature(body, sender)
     name = sender.get("name") or "Pranav"
     title = sender.get("title") or "Founder"
+    # Per-recipient tracked consult link (mirrors audit_url). Falls back to the
+    # bare constant when no tracked link was built (e.g. legacy callers / tests).
+    consult_url = consult_url or CONSULT_URL
     is_audit_variant = (variant_key or "").strip() == "ai-audit"
     is_visibility_variant = (variant_key or "").strip() == "ai-visibility-report"
+    is_solution_variant = (variant_key or "").strip() == "missed-call-ranking"
 
     if is_visibility_variant:
-        if CONSULT_URL not in body:
-            body = f"{body}\n\n-- {name}\n{title}, Possible Minds\nBook a consult: {CONSULT_URL}".strip()
+        if not _has_consult_link(body):
+            body = f"{body}\n\n-- {name}\n{title}, Possible Minds\nBook a consult: {consult_url}".strip()
+        return body
+
+    if is_solution_variant:
+        # Primary CTA (a binary reply question) stays in the LLM body. We add the
+        # consult signature, then a soft P.S. with the per-recipient tracked
+        # solution-page link as the secondary CTA. No audit link on this variant.
+        if not _has_consult_link(body):
+            body = f"{body}\n\n-- {name}\n{title}, Possible Minds\nBook a consult: {consult_url}".strip()
+        if solution_url and not _has_solution_link(body):
+            body = f"{body}\n\n{SOLUTION_CTA_FOOTER} {solution_url}".strip()
         return body
 
     audit_source = "ai_audit_email" if is_audit_variant else "ai_audit_signature"
@@ -411,12 +453,12 @@ def _ensure_signature(
         if not has_audit:
             body = f"{body}\n\n{_audit_cta_line(audit_url, primary=True)}".strip()
         sign_off = f"-- {name}\n{title}, Possible Minds"
-        if CONSULT_URL not in body:
-            sign_off = f"{sign_off}\nBook a consult: {CONSULT_URL}"
+        if not _has_consult_link(body):
+            sign_off = f"{sign_off}\nBook a consult: {consult_url}"
         return f"{body}\n\n{sign_off}".strip()
 
-    if CONSULT_URL not in body:
-        body = f"{body}\n\n-- {name}\n{title}, Possible Minds\nBook a consult: {CONSULT_URL}".strip()
+    if not _has_consult_link(body):
+        body = f"{body}\n\n-- {name}\n{title}, Possible Minds\nBook a consult: {consult_url}".strip()
     if not has_audit:
         body = f"{body}\n\n{_audit_cta_line(audit_url, primary=False)}".strip()
     return body
@@ -620,7 +662,7 @@ def _validate(parsed: dict[str, Any]) -> None:
     if missing:
         raise LeadEmailComposerError(f"composer JSON missing fields: {missing}")
     body = str(parsed.get("body") or "")
-    if CONSULT_URL not in body:
+    if not _has_consult_link(body):
         return
     if "patient" in body.lower() and "front" in body.lower():
         raise LeadEmailComposerError("composer body appears to expose sensitive Front/patient context")
@@ -1113,15 +1155,37 @@ async def compose_lead_email(
             )
             body = f"{body}\n\n{_visibility_report_cta_line(visibility_url)}".strip()
     audit_url = None
-    if variant_key != "ai-visibility-report":
+    if variant_key not in ("ai-visibility-report", "missed-call-ranking"):
         audit_source = "ai_audit_email" if variant_key == "ai-audit" else "ai_audit_signature"
         audit_url = await build_short_audit_link(contact, batch_item_id=batch_item_id, source=audit_source)
+    # Per-recipient tracked consult link so consult-page clicks attribute back to
+    # this contact, the same way the audit link does. Never block compose on it.
+    consult_url = None
+    try:
+        consult_url = await build_short_consult_link(
+            contact, batch_item_id=batch_item_id, source="consult_email"
+        )
+    except Exception:
+        logger.exception("consult short-link build failed; using bare consult URL")
+    # Per-recipient tracked solution-page link, used as the secondary CTA on the
+    # missed-call-ranking variant only.
+    solution_url = None
+    if variant_key == "missed-call-ranking":
+        try:
+            solution_url = await build_short_solution_link(
+                contact, batch_item_id=batch_item_id, source="solution_email"
+            )
+        except Exception:
+            logger.exception("solution short-link build failed; using bare solution URL")
+            solution_url = SOLUTION_URL
     body = _ensure_signature(
         body,
         payload["sender"],
         contact=contact,
         variant_key=composer_variant_key,
         audit_url=audit_url,
+        consult_url=consult_url,
+        solution_url=solution_url,
     )
     composition = LeadEmailComposition(
         subject=_sanitize_subject(str(parsed.get("subject") or ""))[:500],

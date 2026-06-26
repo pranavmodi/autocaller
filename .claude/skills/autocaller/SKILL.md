@@ -492,8 +492,12 @@ Common causes: Geo permissions not enabled, AMD mis-classifying carrier voicemai
 | `Possible OS sequences start <contact_id>` | Start the configured sequence (one contact at a time, by design). Idempotent — second start returns 409. Sends are gated by `ALLOW_SEQUENCE_SEND=true`. UI: `/sequences` page has the same flow with a forced "I've reviewed all drafts" checkbox before the Start button enables. |
 | `Possible OS sequences list [--status active\|paused\|completed]` | List sequence rows + step state. |
 | `Possible OS lead-gen policy\|recommend\|batches\|show\|approve\|observe\|observations\|propose` | Cybernetic lead-generation loop for Precise Imaging. Recommends bounded batches, requires approval, and creates lightweight operator action-center approvals immediately when selected email sequences are queued; drafts compose lazily when an action is opened. Automatic observations capture sends, failures, replies, clicks, bookings, call dispositions, cancellations, and reschedules. Use `lead-gen observations summary --since 7d` for the weekly learning KPI. UI: `/lead-gen`. Concept doc: `docs/CYBERNETIC_LEAD_GEN_CONCEPT.md`. |
-| `Possible OS lead-gen daily-run\|daily-status\|throughput\|daily-enable\|daily-disable` | Daily lead-selection and drafting pipeline. `daily-run --dry-run` is no-write/no-action validation. A real run creates a checkpointed daily batch, drafts emails, and schedules send actions. `throughput` shows selected, with evidence, composed, sending today, held, shortfall, and blocker. The daemon loop defaults off and is controlled by persisted `daily_run_enabled`. |
-| `Possible OS aiaudit link --contact <contact_id>` / `aiaudit clicks --since 7d` | AI Audit freeware attribution. `link` prints a contact-attributed signed redirect URL; `clicks` lists `audit_link_clicks` and AI Audit `link_clicked` observations. Public redirect: `/aiaudit/go?t=<signed-token>`. |
+| `Possible OS lead-gen daily-run\|top-up\|daily-status\|throughput\|daily-enable\|daily-disable` | Daily lead-selection and drafting pipeline. `daily-run --dry-run` is no-write/no-action validation. A real run creates a checkpointed daily batch, drafts emails, and schedules send actions. `top-up --count N --variant ai-audit` adds fresh first-touch sends to today's run via a sidecar batch without recomposing the existing batch, excluding contacts already batched that run date. `throughput` shows selected, with evidence, composed, sending today, held, shortfall, and blocker. The daemon loop defaults off and is controlled by persisted `daily_run_enabled`. |
+| `Possible OS lead-gen backfill-consult-links [--scope today\|all] [--dry-run]` | Swap the bare `getpossibleminds.com/consult` link for a per-recipient tracked `/c/{code}` short link in **unsent** lead-gen sends, re-hashing + re-approving each at its existing slot (keeps `scheduled_for`; idempotent). `--scope today`=live daily batch, `--scope all`=every unsent approved/waiting send. New composes already emit the tracked link, so this is only for emails composed before the feature. |
+| `Possible OS aiaudit link --contact <contact_id>` / `aiaudit clicks --since 7d` | AI Audit freeware attribution. `link` prints a contact-attributed signed redirect URL; `clicks` lists `audit_link_clicks` and AI Audit `link_clicked` observations. Public redirect: `/aiaudit/go?t=<signed-token>`. **Consult link** now has the same per-recipient tracking: the consult CTA renders as `/c/{code}` (reuses `audit_links`, `kind=consult`, `source=consult_email`), logs a `link_clicked` observation with `channel=consult`, then 302s to `getpossibleminds.com/consult`. **Solution link** works identically: `/s/{code}` (`kind=solution`, `source=solution_email`, `channel=solution`) 302s to the outbound voice-AI solution page and appends `?lc=<code>` so the page's early-access form can attribute the signup. nginx on `aiaudit.getpossibleminds.com` proxies `/a/`, `/c/`, and `/s/` to possibleos. |
+| Composer variant `missed-call-ranking` | First-touch angle (from the E1085 local-SEO podcast): a missed call both loses the case and decays the firm's Google map-pack ranking -> our voice-AI intake. Primary CTA is a binary reply question; the composer appends the consult signature plus a P.S. with a per-recipient tracked `/s/` link to the solution page. `active`, `allocation_weight=0` (pin explicitly via `--variant missed-call-ranking` or per-item recompose; not in the auto A/B). Recompose today's sends to it with `recompose_item_draft(item_id, composer_variant_key="missed-call-ranking")` (rebinds the queued send action, refreshes the approval hash, keeps the slot). |
+| `POST /api/lead-gen/product-interest` (public) | Early-access / design-partner capture from a product solution page. Body `{email, firm?, name?, product, link_code?, source}`. When `link_code` (the `/s/` `lc` param) is supplied, the signup is attributed to that recipient and recorded as a lead-gen `product_interest` observation. Auth-exempt (the marketing site posts it unauthenticated, like `/api/consults/book`). |
+| `Possible OS visibility-clicks --days 7` | AI Search Visibility report-link attribution. Lists `audit_link_clicks` rows where `source=visibility_report_email`, joined to contact and firm. Public redirect: `/v/<code>` to `AIVIS_REPORT_BASE_URL/r/<scan_id>`. |
 | `Possible OS actions list\|show\|policy-check\|execute` | Durable Possible OS action execution queue. Supported high-risk actions must be policy-checked and use narrow executors. |
 | `Possible OS actions list [--scheduled]` | List durable action records. `--scheduled` shows future approved scheduled sends ordered by send time. |
 | `Possible OS actions scheduler-status` | Show daemon scheduled-action loop status, last tick, pending scheduled count, and due count. |
@@ -563,6 +567,9 @@ The `/t/*` routes are exempt from the daemon's session middleware (see
 `_AUTH_EXEMPT_PREFIXES` in `app/main.py`) — email clients can't carry the
 session cookie. They must be reachable at `OUTREACH_PUBLIC_BASE_URL` from
 the open internet, or tracking links in recipient inboxes go nowhere.
+AI Visibility report emails also need `AIVIS_REPORT_BASE_URL`; set
+`VISIBILITY_LINK_BASE_URL` only if `/v/<code>` should use a different public
+hostname than `OUTREACH_PUBLIC_BASE_URL`.
 
 ## Composer A/B testing (subject-line experiment)
 - Active experiment: subject-line axis, 3 arms — baseline (Precise-flavored
@@ -584,13 +591,15 @@ the open internet, or tracking links in recipient inboxes go nowhere.
 - **Follow-up** steps default to the per-contact rendezvous A/B (weight>0 variants
   only), but can be pinned via `LEAD_GEN_FOLLOW_UP_VARIANT` (default "" = unchanged
   A/B). Set it to e.g. `ai-audit` to drive the audit CTA on follow-ups too.
-- **Per-run override (highest precedence):** pass a variant to the whole run and it
+- **Per-run/top-up override (highest precedence):** pass a variant to the whole run and it
   pins that variant on **every** email, first-touch and follow-up, ignoring both env
   knobs. UI: the "Composer variant (this run)" picker in the Daily run panel. CLI:
-  `bin/possibleos lead-gen daily-run --variant <key>`. REST: `composer_variant_key`
-  on `POST /api/lead-gen/daily-run` (validated against active variants → 400 if
+  `bin/possibleos lead-gen daily-run --variant <key>` or
+  `bin/possibleos lead-gen top-up --count N --variant <key>`. REST:
+  `composer_variant_key` on `POST /api/lead-gen/daily-run` and
+  `/api/lead-gen/daily-run/top-up` (validated against active variants → 400 if
   unknown). An explicit `composer_variant_key` from preview "compare variants" also
-  overrides per-item. Precedence: per-run/explicit key > env knob > auto A/B.
+  overrides per-item. Precedence: per-run/top-up/explicit key > env knob > auto A/B.
 - When the firm has an extracted Yelp client-communication quote (see the
   `yelp-review-quotes` skill + `firm_reviews`), the email cites it **verbatim and
   attributed** as the hook, then pivots empathetically. When none is extracted it

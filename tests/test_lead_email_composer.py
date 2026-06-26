@@ -4,10 +4,13 @@ import pytest
 
 from app.services.lead_email_composer import (
     CONSULT_URL,
+    SOLUTION_CTA_FOOTER,
     _blog_posts,
     _conversation_state,
     _ensure_consult_signature,
     _ensure_signature,
+    _has_consult_link,
+    _has_solution_link,
     _has_visibility_report_link,
     _sanitize_body_salutation,
     _sanitize_email_copy,
@@ -65,6 +68,90 @@ def test_ensure_signature_adds_consult_and_audit_links(monkeypatch):
     assert CONSULT_URL in body
     assert "https://possible.example/aiaudit/go?t=" in body
     assert "P.S. If you're weighing AI tools" in body
+
+
+def test_has_consult_link_detects_bare_and_tracked():
+    assert _has_consult_link(f"foo {CONSULT_URL} bar") is True
+    assert _has_consult_link("Book a consult: https://possible.example/c/Ab-3_xK9") is True
+    assert _has_consult_link("getpossibleminds.com/consult") is True
+    assert _has_consult_link("no link here") is False
+
+
+def test_ensure_signature_uses_tracked_consult_url_when_provided(monkeypatch):
+    monkeypatch.setenv("AIAUDIT_LINK_SECRET", "test-secret")
+    monkeypatch.setenv("OUTREACH_PUBLIC_BASE_URL", "https://possible.example")
+    contact = ContactStub(pif_id="pif-1")
+    tracked = "https://possible.example/c/Ab-3_xK9"
+
+    body = _ensure_signature(
+        "Hi Sarah,\n\nQuick note.",
+        {"name": "Pranav", "title": "Founder"},
+        contact=contact,  # type: ignore[arg-type]
+        variant_key="baseline",
+        consult_url=tracked,
+    )
+
+    # The tracked link replaces the bare consult URL in the signature, and the
+    # bare URL must not appear at all.
+    assert tracked in body
+    assert CONSULT_URL not in body
+
+
+def test_ensure_signature_audit_variant_uses_tracked_consult_url():
+    contact = ContactStub(pif_id="pif-2")
+    tracked = "https://possible.example/c/Zz9_qP-1"
+    audit = "https://possible.example/a/AUDITCODE"
+
+    body = _ensure_signature(
+        "Hi Sarah,\n\nQuick note.",
+        {"name": "Pranav", "title": "Founder"},
+        contact=contact,  # type: ignore[arg-type]
+        variant_key="ai-audit",
+        audit_url=audit,
+        consult_url=tracked,
+    )
+
+    assert f"Book a consult: {tracked}" in body
+    assert audit in body
+    assert CONSULT_URL not in body
+
+
+def test_has_solution_link_detects_bare_and_tracked():
+    assert _has_solution_link("see https://getpossibleminds.com/solutions/outbound-voice-ai") is True
+    assert _has_solution_link("https://possible.example/s/Ab-3_xK9") is True
+    assert _has_solution_link("nothing here") is False
+
+
+def test_missed_call_ranking_variant_adds_consult_and_solution_no_audit():
+    contact = ContactStub(pif_id="pif-mc")
+    solution = "https://possible.example/s/SolCode1"
+    consult = "https://possible.example/c/ConCode1"
+
+    body = _ensure_signature(
+        "Hi Alex,\n\nMissed calls also drag your map-pack ranking.\n\nIs after-hours intake the leak you'd most want closed?",
+        {"name": "Pranav", "title": "Founder"},
+        contact=contact,  # type: ignore[arg-type]
+        variant_key="missed-call-ranking",
+        consult_url=consult,
+        solution_url=solution,
+    )
+
+    assert f"Book a consult: {consult}" in body
+    assert f"{SOLUTION_CTA_FOOTER} {solution}" in body
+    assert CONSULT_URL not in body
+    # No audit link on this variant.
+    assert "/a/" not in body and "/aiaudit/go" not in body
+
+
+def test_ensure_consult_signature_uses_tracked_url():
+    tracked = "https://possible.example/c/Tracked01"
+    body = _ensure_consult_signature(
+        "Hi Sarah,\n\nQuick note.",
+        {"name": "Pranav", "title": "Founder"},
+        consult_url=tracked,
+    )
+    assert body.endswith(tracked)
+    assert CONSULT_URL not in body
 
 
 def test_ensure_signature_removes_generated_duplicate_signature(monkeypatch):
