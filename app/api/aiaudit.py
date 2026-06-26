@@ -9,7 +9,7 @@ from urllib.parse import urlencode
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
-from sqlalchemy import case, desc, func, select
+from sqlalchemy import Integer, case, cast, desc, func, select
 
 from app.db import AsyncSessionLocal
 from app.db.models import (
@@ -17,6 +17,7 @@ from app.db.models import (
     FirmCompetitiveFeatureRow,
     FirmContactRow,
     FrontFirmActivityRow,
+    LeadGenObservationRow,
     LeadGenBatchItemRow,
     PifFirmRow,
 )
@@ -324,6 +325,103 @@ def _click_where(stmt, *, since_days: int):
     return stmt
 
 
+def _human_session_where(stmt, *, since_days: int):
+    stmt = stmt.where(LeadGenObservationRow.event_type == "page_session")
+    if since_days > 0:
+        cutoff = datetime.now(timezone.utc) - timedelta(days=since_days)
+        stmt = stmt.where(LeadGenObservationRow.created_at >= cutoff)
+    return stmt
+
+
+def _human_session_time_ms_expr():
+    value = LeadGenObservationRow.raw_event_json["time_on_page_ms"].astext
+    return case(
+        (value.op("~")(r"^[0-9]+$"), cast(value, Integer)),
+        else_=None,
+    )
+
+
+async def _human_session_analytics(session, *, since_days: int, limit: int, click_count: int):
+    page_expr = func.coalesce(
+        LeadGenObservationRow.raw_event_json["page"].astext,
+        "unknown",
+    ).label("page")
+    day_expr = func.to_char(LeadGenObservationRow.created_at, "YYYY-MM-DD").label("day")
+    session_id_expr = LeadGenObservationRow.raw_event_json["session_id"].astext
+    time_ms_expr = _human_session_time_ms_expr()
+    median_time_expr = (
+        func.percentile_cont(0.5)
+        .within_group(time_ms_expr)
+        .filter(time_ms_expr > 0)
+        .label("median_time_on_page_ms")
+    )
+
+    summary_stmt = _human_session_where(
+        select(
+            func.count(LeadGenObservationRow.id).label("human_session_count"),
+            func.count(func.distinct(session_id_expr)).label("distinct_human_sessions"),
+        ),
+        since_days=since_days,
+    )
+    by_page_stmt = _human_session_where(
+        select(
+            page_expr,
+            func.count(LeadGenObservationRow.id).label("sessions"),
+            func.count(func.distinct(session_id_expr)).label("distinct_sessions"),
+            median_time_expr,
+        )
+        .group_by(page_expr)
+        .order_by(desc("sessions"))
+        .limit(limit),
+        since_days=since_days,
+    )
+    by_day_stmt = _human_session_where(
+        select(
+            day_expr,
+            func.count(func.distinct(session_id_expr)).label("distinct_sessions"),
+        )
+        .group_by(day_expr)
+        .order_by(day_expr),
+        since_days=since_days,
+    )
+
+    summary_row = (await session.execute(summary_stmt)).one()
+    by_page_rows = (await session.execute(by_page_stmt)).all()
+    by_day_rows = (await session.execute(by_day_stmt)).all()
+
+    human_session_count = int(summary_row.human_session_count or 0)
+    distinct_human_sessions = int(summary_row.distinct_human_sessions or 0)
+    ratio = round(distinct_human_sessions / click_count, 3) if click_count else 0
+
+    return {
+        "summary": {
+            "human_session_count": human_session_count,
+            "distinct_human_sessions": distinct_human_sessions,
+            "human_to_click_ratio": ratio,
+        },
+        "human_sessions_by_page": [
+            {
+                "page": row.page or "unknown",
+                "sessions": int(row.sessions or 0),
+                "distinct_sessions": int(row.distinct_sessions or 0),
+                "median_time_on_page_ms": (
+                    float(row.median_time_on_page_ms)
+                    if row.median_time_on_page_ms is not None
+                    else None
+                ),
+            }
+            for row in by_page_rows
+        ],
+        "human_sessions_by_day": [
+            {
+                "day": row.day,
+                "distinct_sessions": int(row.distinct_sessions or 0),
+            }
+            for row in by_day_rows
+        ],
+    }
+
+
 def _source_label(source: str) -> str:
     labels = {
         "ai_audit_signature": "Signature CTA",
@@ -376,6 +474,14 @@ async def audit_click_analytics(
         rollup_rows = (await session.execute(rollup_stmt)).all()
         recent_rows = (await session.execute(recent_stmt)).all()
         summary_row = (await session.execute(summary_stmt)).one()
+        total_clicks, total_contacts, total_firms, first_click, last_click = summary_row
+        total_click_count = int(total_clicks or 0)
+        human_session_analytics = await _human_session_analytics(
+            session,
+            since_days=since_days,
+            limit=limit,
+            click_count=total_click_count,
+        )
 
     groups = []
     for row in rollup_rows:
@@ -413,7 +519,6 @@ async def audit_click_analytics(
             "user_agent": click.user_agent,
         })
 
-    total_clicks, total_contacts, total_firms, first_click, last_click = summary_row
     return {
         "since_days": since_days,
         "group_by": group_by,
@@ -423,12 +528,15 @@ async def audit_click_analytics(
             for key, label in CLICK_ANALYTICS_GROUPS.items()
         ],
         "summary": {
-            "click_count": int(total_clicks or 0),
+            "click_count": total_click_count,
             "contact_count": int(total_contacts or 0),
             "firm_count": int(total_firms or 0),
             "first_clicked_at": first_click.isoformat() if first_click else None,
             "last_clicked_at": last_click.isoformat() if last_click else None,
+            **human_session_analytics["summary"],
         },
+        "human_sessions_by_page": human_session_analytics["human_sessions_by_page"],
+        "human_sessions_by_day": human_session_analytics["human_sessions_by_day"],
         "groups": groups,
         "recent_clicks": clicks,
     }

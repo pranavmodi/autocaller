@@ -642,6 +642,18 @@ export type ClickAnalyticsRow = {
   user_agent: string | null;
 };
 
+export type HumanSessionsByPageRow = {
+  page: string;
+  sessions: number;
+  distinct_sessions: number;
+  median_time_on_page_ms: number | null;
+};
+
+export type HumanSessionsByDayRow = {
+  day: string;
+  distinct_sessions: number;
+};
+
 export type ClickAnalyticsResponse = {
   since_days: number;
   group_by: ClickAnalyticsGroupBy;
@@ -653,7 +665,12 @@ export type ClickAnalyticsResponse = {
     firm_count: number;
     first_clicked_at: string | null;
     last_clicked_at: string | null;
+    human_session_count?: number;
+    distinct_human_sessions?: number;
+    human_to_click_ratio?: number;
   };
+  human_sessions_by_page?: HumanSessionsByPageRow[];
+  human_sessions_by_day?: HumanSessionsByDayRow[];
   groups: ClickAnalyticsGroup[];
   recent_clicks: ClickAnalyticsRow[];
 };

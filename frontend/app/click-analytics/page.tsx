@@ -46,6 +46,15 @@ function shortId(value: string | null) {
   return value ? value.slice(0, 10) : "-";
 }
 
+function formatRatio(value: number | undefined) {
+  return typeof value === "number" ? value.toFixed(3) : "0.000";
+}
+
+function formatMs(value: number | null | undefined) {
+  if (typeof value !== "number") return "-";
+  return `${Math.round(value).toLocaleString()} ms`;
+}
+
 function Metric({ label, value }: { label: string; value: string | number }) {
   return (
     <div className="rounded-md border border-neutral-100 bg-neutral-50 px-3 py-2">
@@ -117,6 +126,7 @@ export default function ClickAnalyticsPage() {
   const groups = analytics.data?.groups ?? [];
   const recentClicks = analytics.data?.recent_clicks ?? [];
   const summary = analytics.data?.summary;
+  const humanSessionsByPage = analytics.data?.human_sessions_by_page ?? [];
   const maxGroupClicks = useMemo(
     () => Math.max(...groups.map((group) => group.click_count), 1),
     [groups],
@@ -185,13 +195,70 @@ export default function ClickAnalyticsPage() {
           </label>
         </div>
 
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-7">
           <Metric label="Clicks" value={summary?.click_count ?? 0} />
+          <Metric label="Human sessions" value={summary?.distinct_human_sessions ?? 0} />
+          <Metric label="Human/click" value={formatRatio(summary?.human_to_click_ratio)} />
           <Metric label="Contacts" value={summary?.contact_count ?? 0} />
           <Metric label="Firms" value={summary?.firm_count ?? 0} />
           <Metric label="First click" value={formatDateTime(summary?.first_clicked_at ?? null)} />
           <Metric label="Last click" value={formatDateTime(summary?.last_clicked_at ?? null)} />
         </div>
+      </section>
+
+      <section className="rounded-xl border border-neutral-200 bg-white">
+        <div className="border-b border-neutral-100 px-4 py-3">
+          <h2 className="text-sm font-semibold text-neutral-950">
+            Human sessions by page
+          </h2>
+          <p className="mt-0.5 text-xs text-neutral-500">
+            browser beacon sessions grouped by landing page
+          </p>
+        </div>
+        {analytics.isLoading ? (
+          <div className="flex items-center gap-2 px-4 py-8 text-sm text-neutral-500">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Loading human sessions...
+          </div>
+        ) : humanSessionsByPage.length === 0 ? (
+          <div className="px-4 py-8 text-sm text-neutral-500">
+            No human sessions in this window.
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-left">
+              <thead className="bg-neutral-50 text-[11px] uppercase tracking-wider text-neutral-400">
+                <tr>
+                  <th className="px-3 py-2 font-semibold">Page</th>
+                  <th className="px-3 py-2 text-right font-semibold">Sessions</th>
+                  <th className="px-3 py-2 text-right font-semibold">Median time</th>
+                </tr>
+              </thead>
+              <tbody>
+                {humanSessionsByPage.map((page) => (
+                  <tr key={page.page} className="border-t border-neutral-100">
+                    <td className="px-3 py-2">
+                      <div className="max-w-3xl truncate text-sm font-medium text-neutral-900">
+                        {page.page || "unknown"}
+                      </div>
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-2 text-right text-sm font-semibold text-neutral-900">
+                      {page.distinct_sessions}
+                      {page.sessions !== page.distinct_sessions ? (
+                        <span className="ml-1 text-xs font-normal text-neutral-400">
+                          ({page.sessions})
+                        </span>
+                      ) : null}
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-2 text-right text-sm text-neutral-600">
+                      {formatMs(page.median_time_on_page_ms)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </section>
 
       <section className="rounded-xl border border-neutral-200 bg-white">
