@@ -211,7 +211,18 @@ async def _consult_redirect_for_payload(
     dest = _consult_public_url()
     if not payload:
         return RedirectResponse(url=dest, status_code=302)
-    await _record_link_click(request, payload, channel="consult")
+    click_id = await _record_link_click(request, payload, channel="consult")
+    # Carry the link code (+click id) so the consult page's beacon can attribute
+    # a human session back to this recipient, same as the /s/ redirect.
+    code = _clean(payload.get("link_code"), 64)
+    params = {}
+    if code:
+        params["lc"] = code
+    if click_id:
+        params["c"] = click_id
+    if params:
+        sep = "&" if "?" in dest else "?"
+        dest = f"{dest}{sep}{urlencode(params)}"
     return RedirectResponse(url=dest, status_code=302)
 
 

@@ -374,6 +374,47 @@ async def product_interest(req: ProductInterestRequest):
     return {"ok": True, "attributed": bool(contact_id)}
 
 
+class PageEventRequest(BaseModel):
+    event: str = Field(default="session_ready", max_length=32)
+    page: str = Field(default="", max_length=64)
+    link_code: Optional[str] = Field(default=None, max_length=64)
+    session_id: Optional[str] = Field(default=None, max_length=64)
+    time_on_page_ms: Optional[int] = Field(default=None, ge=0, le=86_400_000)
+
+
+@router.post("/api/lead-gen/page-event")
+async def page_event(req: PageEventRequest):
+    """Bot-resistant human-session beacon from a tracked landing page (consult,
+    solution, ...). A `session_ready` event only fires when a real browser runs
+    JS, which email-security scanners do not, so this is the human-confirmation
+    signal the redirect click cannot give. Attributed to a contact via the `/s/`
+    or `/c/` link code (`lc`). Recorded as a `page_session` lead-gen observation.
+    Public (auth-exempt), like the early-access form."""
+    contact_id = batch_item_id = pif_id = None
+    if req.link_code:
+        from app.services.aiaudit_links import resolve_short_audit_code
+        resolved = await resolve_short_audit_code(req.link_code)
+        if resolved:
+            contact_id = resolved.get("contact_id")
+            batch_item_id = resolved.get("batch_item_id")
+            pif_id = resolved.get("pif_id")
+    await record_observation(
+        event_type="page_session",
+        raw_event={
+            "event": (req.event or "session_ready").strip(),
+            "page": (req.page or "").strip() or None,
+            "session_id": (req.session_id or "").strip() or None,
+            "time_on_page_ms": req.time_on_page_ms,
+            "channel": "page_beacon",
+            "link_code": req.link_code,
+            "pif_id": pif_id,
+        },
+        contact_id=contact_id,
+        batch_item_id=batch_item_id,
+    )
+    return {"ok": True, "attributed": bool(contact_id)}
+
+
 @router.post("/api/lead-gen/backfill-consult-links")
 async def backfill_consult_links(req: BackfillConsultLinksRequest):
     """Swap the bare consult URL for a per-recipient tracked /c/{code} link in

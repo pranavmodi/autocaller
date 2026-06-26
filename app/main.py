@@ -192,6 +192,8 @@ _AUTH_EXEMPT_PREFIXES = (
     "/api/consults/book",
     # Early-access / design-partner capture from a product solution page.
     "/api/lead-gen/product-interest",
+    # Human-session beacon from tracked landing pages (consult, solution, ...).
+    "/api/lead-gen/page-event",
     # Outreach open-pixel + click-redirect — fetched by recipients' email
     # clients, no session cookie possible.
     "/t/o/",
