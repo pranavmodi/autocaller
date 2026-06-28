@@ -32,6 +32,11 @@ not describe aspirational behavior as implemented in the technical doc.
 - **Founder persona + new-tool backlog:** `docs/product/PI_FOUNDER_PERSONA_AND_FREEWARE_IDEAS.md`
   — research-grounded PI owner persona, ranked pain map, and the ranked backlog of
   next freeware tools (top: Ghost Lead Test, Intake Conversion Teardown).
+- **Firm Intelligence Contract (possibleos↔emailtag co-design):**
+  `/home/pranav/emailtag/docs/FIRM_INTELLIGENCE_CONTRACT.md` — the versioned
+  data-product interface EmailTag publishes and possibleos consumes (website-keyed
+  firm identity, layered raw→refined store, the `firm_profile` object, outcome
+  feedback loop). Keystone for eliminating possibleos's direct Front dependency.
 - **Per-tool spec (aiscan):** `docs/product/AI_SEARCH_VISIBILITY_TOOL_SPEC.md`.
 - **Per-tool spec (aiaudit):** `/home/pranav/AIAudit/` (separate repo, README +
   `docs/`).

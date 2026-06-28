@@ -183,6 +183,45 @@ class CallLogRow(Base):
     )
 
 
+class IntakeCallSessionRow(Base):
+    """Inbound after-hours PI intake calls.
+
+    Kept separate from outbound `call_logs` because these calls are product
+    demos / client intake sessions, not Possible Minds sales touches.
+    """
+    __tablename__ = "intake_call_sessions"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    stream_id: Mapped[str] = mapped_column(String(128), nullable=False, unique=True)
+    carrier: Mapped[str] = mapped_column(String(16), nullable=False, default="telnyx")
+    carrier_call_control_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    caller_number: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    dialed_number: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="started")
+    language: Mapped[str] = mapped_column(String(16), nullable=False, default="en")
+    consent_recording: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    transcript: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    intake_packet: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    urgency_flags: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    summary_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    notification_recipient: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    notification_sent_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    notification_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    started_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow)
+    ended_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), default=_utcnow, onupdate=_utcnow,
+    )
+
+    __table_args__ = (
+        Index("ix_intake_call_sessions_started_at", "started_at"),
+        Index("ix_intake_call_sessions_status", "status"),
+        Index("ix_intake_call_sessions_caller_number", "caller_number"),
+        Index("ix_intake_call_sessions_stream_id", "stream_id"),
+    )
+
+
 class SystemSettingsRow(Base):
     __tablename__ = "system_settings"
 

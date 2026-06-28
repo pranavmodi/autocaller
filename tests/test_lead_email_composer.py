@@ -44,7 +44,13 @@ def test_ensure_consult_signature_appends_required_link(monkeypatch):
 
     body = _ensure_consult_signature("Hi Sarah,\n\nQuick note.", _sender_payload())
 
-    assert body.endswith(f"-- Pranav\nFounder, Possible Minds\n{CONSULT_URL}")
+    assert body.endswith(
+        "-- Pranav\n"
+        "Founder, Possible Minds\n"
+        "Ex-McKinsey\n"
+        "LinkedIn: https://in.linkedin.com/in/pranav-modi-5a3a9b7\n"
+        f"{CONSULT_URL}"
+    )
 
 
 def test_ensure_consult_signature_does_not_duplicate_link():
@@ -160,7 +166,7 @@ def test_ensure_signature_removes_generated_duplicate_signature(monkeypatch):
     contact = ContactStub(pif_id="pif-1")
 
     body = _ensure_signature(
-        "Hi Sarah,\n\nQuick note.\n\n-- Pranav\nFounder, Possible Minds",
+        "Hi Sarah,\n\nQuick note.\n\n-- Pranav\nFounder, Possible Minds\nEx-McKinsey\nLinkedIn: https://in.linkedin.com/in/pranav-modi-5a3a9b7",
         {"name": "Pranav", "title": "Founder"},
         contact=contact,  # type: ignore[arg-type]
         variant_key="baseline",
@@ -169,6 +175,8 @@ def test_ensure_signature_removes_generated_duplicate_signature(monkeypatch):
 
     assert body.count("-- Pranav") == 1
     assert body.count("Founder, Possible Minds") == 1
+    assert body.count("Ex-McKinsey") == 1
+    assert body.count("LinkedIn: https://in.linkedin.com/in/pranav-modi-5a3a9b7") == 1
     assert (
         "P.S. If you're weighing AI tools, here's a 10-minute read on whether your "
         "firm is set up to benefit before you buy: https://possible.example/a/abc123"
@@ -194,6 +202,8 @@ def test_ensure_signature_uses_audit_as_primary_cta_for_audit_variant(monkeypatc
     assert body.index("/aiaudit/go?t=") < body.index("-- Pranav")
     sign_off_tail = body[body.index("-- Pranav"):]
     assert "/aiaudit/go?t=" not in sign_off_tail
+    assert "Ex-McKinsey" in sign_off_tail
+    assert "LinkedIn: https://in.linkedin.com/in/pranav-modi-5a3a9b7" in sign_off_tail
     # The consult link appears in the signature for every variant, including
     # the audit variant.
     assert f"Book a consult: {CONSULT_URL}" in sign_off_tail

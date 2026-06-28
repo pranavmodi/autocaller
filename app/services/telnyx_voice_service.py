@@ -36,7 +36,7 @@ import logging
 import os
 import time
 import uuid
-from typing import Optional
+from typing import Awaitable, Callable, Optional
 
 import httpx
 from fastapi import WebSocket
@@ -131,6 +131,7 @@ class TelnyxMediaBridge:
         # on `_broadcast_audio` and `_ai_pacer_loop` for why.
         self._ai_pacer_queue: asyncio.Queue[bytes] = asyncio.Queue()
         self._ai_pacer_task: Optional[asyncio.Task] = None
+        self.on_stream_end: Optional[Callable[[Optional[str], str], Awaitable[None]]] = None
 
     # ------------------------------------------------------------------
     # Listener fan-out (identical to Twilio bridge)
@@ -467,6 +468,7 @@ class TelnyxMediaBridge:
     async def handle_carrier_ws(self, websocket: WebSocket):
         """Handle an incoming Telnyx media stream WebSocket."""
         self._ws = websocket
+        end_reason = "websocket_closed"
         logger.info("Telnyx media stream WebSocket connected")
 
         try:
@@ -576,6 +578,7 @@ class TelnyxMediaBridge:
 
                 elif event == "stop":
                     reason = msg.get("stop", {}).get("reason", "unknown")
+                    end_reason = reason
                     print(
                         f"[TelnyxMedia] stop event: reason={reason}, "
                         f"call={self._call_sid}"
@@ -587,8 +590,14 @@ class TelnyxMediaBridge:
                         print(f"[TelnyxMedia] Unexpected event: {event}")
 
         except Exception as e:
+            end_reason = f"error: {type(e).__name__}"
             print(f"[TelnyxMedia] Bridge error: {type(e).__name__}: {e}")
         finally:
+            if self.on_stream_end:
+                try:
+                    await self.on_stream_end(self._call_sid, end_reason)
+                except Exception as e:
+                    logger.warning("Telnyx on_stream_end callback failed: %s", e)
             self._ws = None
             self._connected.clear()
             if self._ai_pacer_task is not None and not self._ai_pacer_task.done():

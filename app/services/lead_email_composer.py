@@ -287,8 +287,23 @@ def _sender_payload() -> dict[str, str]:
         "name": os.getenv("SALES_REP_NAME", "").strip() or "Pranav",
         "title": os.getenv("SALES_REP_TITLE", "").strip() or "Founder",
         "company": "Possible Minds",
+        "background": os.getenv("SALES_REP_BACKGROUND", "").strip() or "Ex-McKinsey",
+        "linkedin_url": os.getenv("SALES_REP_LINKEDIN_URL", "").strip()
+        or "https://in.linkedin.com/in/pranav-modi-5a3a9b7",
         "consult_url": CONSULT_URL,
     }
+
+
+def _sender_background(sender: dict[str, str]) -> str:
+    return (sender.get("background") or os.getenv("SALES_REP_BACKGROUND", "").strip() or "Ex-McKinsey").strip()
+
+
+def _sender_linkedin_url(sender: dict[str, str]) -> str:
+    return (
+        sender.get("linkedin_url")
+        or os.getenv("SALES_REP_LINKEDIN_URL", "").strip()
+        or "https://in.linkedin.com/in/pranav-modi-5a3a9b7"
+    ).strip()
 
 
 def _blog_posts() -> list[dict[str, str]]:
@@ -336,7 +351,15 @@ def _ensure_consult_signature(
         return body
     name = sender.get("name") or "Pranav"
     title = sender.get("title") or "Founder"
-    return f"{body}\n\n-- {name}\n{title}, Possible Minds\n{consult_url or CONSULT_URL}".strip()
+    background = _sender_background(sender)
+    linkedin_url = _sender_linkedin_url(sender)
+    signature_lines = [f"-- {name}", f"{title}, Possible Minds"]
+    if background:
+        signature_lines.append(background)
+    if linkedin_url:
+        signature_lines.append(f"LinkedIn: {linkedin_url}")
+    signature_lines.append(consult_url or CONSULT_URL)
+    return f"{body}\n\n" + "\n".join(signature_lines).strip()
 
 
 def _strip_trailing_signature(body: str, sender: dict[str, str]) -> str:
@@ -420,6 +443,15 @@ def _ensure_signature(
     body = _strip_trailing_signature(body, sender)
     name = sender.get("name") or "Pranav"
     title = sender.get("title") or "Founder"
+    background = _sender_background(sender)
+    linkedin_url = _sender_linkedin_url(sender)
+
+    signature_lines = [f"-- {name}", f"{title}, Possible Minds"]
+    if background:
+        signature_lines.append(background)
+    if linkedin_url:
+        signature_lines.append(f"LinkedIn: {linkedin_url}")
+
     # Per-recipient tracked consult link (mirrors audit_url). Falls back to the
     # bare constant when no tracked link was built (e.g. legacy callers / tests).
     consult_url = consult_url or CONSULT_URL
@@ -429,7 +461,7 @@ def _ensure_signature(
 
     if is_visibility_variant:
         if not _has_consult_link(body):
-            body = f"{body}\n\n-- {name}\n{title}, Possible Minds\nBook a consult: {consult_url}".strip()
+            body = f"{body}\n\n" + "\n".join(signature_lines + [f"Book a consult: {consult_url}"]).strip()
         return body
 
     if is_solution_variant:
@@ -437,7 +469,7 @@ def _ensure_signature(
         # consult signature, then a soft P.S. with the per-recipient tracked
         # solution-page link as the secondary CTA. No audit link on this variant.
         if not _has_consult_link(body):
-            body = f"{body}\n\n-- {name}\n{title}, Possible Minds\nBook a consult: {consult_url}".strip()
+            body = f"{body}\n\n" + "\n".join(signature_lines + [f"Book a consult: {consult_url}"]).strip()
         if solution_url and not _has_solution_link(body):
             body = f"{body}\n\n{SOLUTION_CTA_FOOTER} {solution_url}".strip()
         return body
@@ -452,13 +484,13 @@ def _ensure_signature(
         # appears in the signature, same as every other variant.
         if not has_audit:
             body = f"{body}\n\n{_audit_cta_line(audit_url, primary=True)}".strip()
-        sign_off = f"-- {name}\n{title}, Possible Minds"
+        sign_off = "\n".join(signature_lines)
         if not _has_consult_link(body):
             sign_off = f"{sign_off}\nBook a consult: {consult_url}"
         return f"{body}\n\n{sign_off}".strip()
 
     if not _has_consult_link(body):
-        body = f"{body}\n\n-- {name}\n{title}, Possible Minds\nBook a consult: {consult_url}".strip()
+        body = f"{body}\n\n" + "\n".join(signature_lines + [f"Book a consult: {consult_url}"]).strip()
     if not has_audit:
         body = f"{body}\n\n{_audit_cta_line(audit_url, primary=False)}".strip()
     return body
