@@ -30,13 +30,18 @@ from app.services.lead_gen_cybernetic import (
     record_observation,
     set_daily_send_budget,
 )
-from app.services.lead_gen_email_agent import create_lead_gen_email_agent_slice, recompose_item_draft
+from app.services.lead_gen_email_agent import (
+    create_founder_profile_email_batch,
+    create_lead_gen_email_agent_slice,
+    recompose_item_draft,
+)
 from app.services.lead_gen_daily import (
     daily_channel_plan,
     get_daily_run_enabled,
     get_daily_run_throughput,
     list_daily_runs,
     run_daily_pipeline,
+    schedule_drafted_batch_items,
     set_daily_run_enabled,
     top_up_daily_run,
 )
@@ -108,6 +113,15 @@ class LeadGenEmailAgentSliceRequest(BaseModel):
     batch_id: Optional[str] = Field(default=None, max_length=64)
 
 
+class FounderProfileBatchRequest(BaseModel):
+    limit: int = Field(default=40, ge=1, le=40)
+    template_key: str = DEFAULT_TEMPLATE_KEY
+    created_by: str = Field("operator", max_length=128)
+    composer_variant_key: Optional[str] = Field("intake-demo", max_length=120)
+    name: Optional[str] = Field(default=None, max_length=255)
+    approve_actions: bool = False
+
+
 class RecomposeBatchItemDraftRequest(BaseModel):
     actor: str = Field("operator", max_length=128)
     composer_variant_key: Optional[str] = None
@@ -128,6 +142,15 @@ class DailyRunRequest(BaseModel):
 class DailyRunTopUpRequest(BaseModel):
     n: int = Field(..., ge=1, le=40)
     composer_variant_key: Optional[str] = Field(None, max_length=120)
+
+
+class ScheduleDraftedBatchRequest(BaseModel):
+    start: str = Field(default="09:00", max_length=5)
+    end: str = Field(default="12:00", max_length=5)
+    timezone: str = Field(default="America/Los_Angeles", max_length=80)
+    date: Optional[str] = Field(default=None, max_length=10)
+    actor: str = Field(default="operator", max_length=128)
+    approve: bool = True
 
 
 class DailyRunEnabledRequest(BaseModel):
@@ -210,6 +233,27 @@ async def create_email_agent_slice(req: LeadGenEmailAgentSliceRequest):
         raise HTTPException(
             status_code=400,
             detail=f"lead_gen_email_agent_slice_failed: {type(e).__name__}: {str(e)[:300]}",
+        )
+
+
+@router.post("/api/lead-gen/founder-profile-batch")
+async def create_founder_profile_batch(req: FounderProfileBatchRequest):
+    variant_key = _validate_composer_variant_key(req.composer_variant_key)
+    try:
+        return await create_founder_profile_email_batch(
+            limit=req.limit,
+            template_key=req.template_key,
+            created_by=req.created_by,
+            composer_variant_key=variant_key or "intake-demo",
+            name=req.name,
+            approve_actions=req.approve_actions,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"founder_profile_batch_failed: {type(e).__name__}: {str(e)[:300]}",
         )
 
 
@@ -323,6 +367,33 @@ async def approve_batch_send_actions(batch_id: str, req: ApproveBatchRequest):
         )
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.post("/api/lead-gen/batches/{batch_id}/schedule-drafts")
+async def schedule_batch_drafts(batch_id: str, req: ScheduleDraftedBatchRequest):
+    try:
+        target_date = None
+        if req.date:
+            try:
+                target_date = date.fromisoformat(req.date)
+            except ValueError as e:
+                raise HTTPException(status_code=400, detail="invalid_schedule_date") from e
+        return await schedule_drafted_batch_items(
+            batch_id=batch_id,
+            created_by=req.actor,
+            start=req.start,
+            end=req.end,
+            timezone_name=req.timezone,
+            approve=req.approve,
+            target_date=target_date,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"schedule_drafts_failed: {type(e).__name__}: {str(e)[:300]}",
+        )
 
 
 class BackfillConsultLinksRequest(BaseModel):

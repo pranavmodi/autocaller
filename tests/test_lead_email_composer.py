@@ -168,7 +168,7 @@ def test_intake_demo_variant_adds_consult_and_tracked_demo_no_audit():
             "Hi Alex,\n\n"
             "Pranav from Possible Minds. If BD&J refers clients to Precise Imaging, you've seen the automated status replies they send: "
             "we built that system, along with Precise's email triage, intake voice line, and website chat.\n\n"
-            "The expensive part of after-hours intake isn't the missed call. It's the signed case that slips to whichever firm answers first while your team is offline.\n\n"
+            "A serious caller after hours is not Miss Havisham, sitting patiently by the phone in bridal decay. They will call the next firm.\n\n"
             "The browser demo lets you judge it yourself: the caller experience, how it qualifies, and the staff-ready handoff waiting by morning."
         ),
         {"name": "Pranav", "title": "Founder"},

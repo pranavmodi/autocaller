@@ -59,9 +59,9 @@ That paragraph weakens the offer by sounding speculative and bolted on.
 1. Greet the contact naturally.
 2. Use the Precise Imaging proof opener, naming all three Precise systems:
    email triage, intake voice line, and website chat.
-3. Name the PI-firm business objective with the strongest line: the expensive
-   part of after-hours intake is the signed case that slips to whichever firm
-   answers first while the team is offline.
+3. Name the PI-firm business objective with a sharp, literary line:
+   "A serious caller after hours is not Miss Havisham, sitting patiently by the
+   phone in bridal decay. They will call the next firm."
 4. Say the browser demo lets them judge the caller experience, qualification,
    and staff-ready handoff in about two minutes.
 5. End cleanly before the appended tracked demo link. Do not add another CTA.
@@ -75,9 +75,8 @@ summary artifact in business terms.
 Avoid founder-centric construction language:
 
 - Bad: "I built a browser demo of an after-hours PI intake call."
-- Better: "The expensive part of after-hours intake isn't the missed call. It's
-  the signed case that slips to whichever firm answers first while your team is
-  offline."
+- Better: "A serious caller after hours is not Miss Havisham, sitting patiently
+  by the phone in bridal decay. They will call the next firm."
 - Better: "The browser demo lets you judge it yourself: the caller experience,
   how it qualifies, and the staff-ready handoff waiting by morning."
 
@@ -90,8 +89,8 @@ Pranav from Possible Minds. If BD&J refers clients to Precise Imaging, you've
 seen the automated status replies they send: we built that system, along with
 Precise's email triage, intake voice line, and website chat.
 
-The expensive part of after-hours intake isn't the missed call. It's the signed
-case that slips to whichever firm answers first while your team is offline.
+A serious caller after hours is not Miss Havisham, sitting patiently by the
+phone in bridal decay. They will call the next firm.
 
 The browser demo lets you judge it yourself: the caller experience, how it
 qualifies, and the staff-ready handoff waiting by morning.

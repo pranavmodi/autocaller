@@ -20,15 +20,76 @@ from sqlalchemy import select
 from app.db import AsyncSessionLocal
 from app.db.models import AgentActionRow, EmailSequenceRow, FirmContactRow, LeadGenBatchItemRow, LeadGenBatchRow, PatientRow
 from app.services.action_execution import check_action_policy, create_send_email_action, save_edited_lead_gen_draft
-from app.services.contact_selection import classify_email_quality
+from app.services.contact_selection import classify_email_quality, looks_like_non_law_firm
+from app.services.lead_gen_action_planner import plan_daily_lead_gen_actions
 from app.services.lead_email_composer import compose_lead_email
 from app.services.lead_gen_cybernetic import TARGET_METRIC, ensure_default_policy, get_batch
 from app.services.product_traces import safe_record_product_trace
 from app.services.sequence_recommendations import recommend_sequence_contacts
-from app.services.sequences.registry import DEFAULT_TEMPLATE_KEY
+from app.services.sequences.registry import DEFAULT_TEMPLATE_KEY, normalize_template_key
 
 logger = logging.getLogger(__name__)
-FIRST_TOUCH_EVIDENCE_EXEMPT_VARIANTS = {"ai-audit"}
+FIRST_TOUCH_EVIDENCE_EXEMPT_VARIANTS = {"ai-audit", "intake-demo"}
+FOUNDER_PROFILE_PERSONAS = {"founder_owner", "managing_partner"}
+FOUNDER_PROFILE_TITLE_TERMS = (
+    "founder",
+    "founding",
+    "owner",
+    "principal",
+    "shareholder",
+    "managing partner",
+    "managing attorney",
+    "managing lawyer",
+    "partner",
+    "president",
+    "ceo",
+)
+FOUNDER_PROFILE_LAW_MARKERS = (
+    "law",
+    "legal",
+    "attorney",
+    "attorneys",
+    "lawyer",
+    "lawyers",
+    "injury",
+    "accident",
+    "trial",
+    "firm",
+    "llp",
+    "apc",
+    " pc",
+    "pllc",
+)
+FOUNDER_PROFILE_FIRM_MARKERS = (
+    "law",
+    "legal",
+    "attorney",
+    "attorneys",
+    "lawyer",
+    "lawyers",
+    "injury",
+    "accident",
+    "trial",
+    "firm",
+    "llp",
+    "apc",
+    " pc",
+    "pllc",
+)
+FOUNDER_PROFILE_EXCLUDED_FIRM_TERMS = (
+    "legal support",
+    "legal service",
+    "imaging",
+    "surgical",
+    "ortho",
+    "medical center",
+    "insurance",
+)
+FOUNDER_PROFILE_TITLE_LAW_ROLE_TERMS = (
+    "attorney",
+    "lawyer",
+    "trial counsel",
+)
 
 
 def _pif_patient_ids(pif_id: str) -> list[str]:
@@ -37,6 +98,28 @@ def _pif_patient_ids(pif_id: str) -> list[str]:
 
 def _new_id() -> str:
     return uuid.uuid4().hex
+
+
+def _is_founder_profile_candidate(rec: dict[str, Any]) -> bool:
+    firm_name = str(rec.get("firm_name") or "").strip()
+    title = str(rec.get("contact_title") or "").strip()
+    if looks_like_non_law_firm(firm_name, title):
+        return False
+    firm_l = firm_name.lower()
+    if any(term in firm_l for term in FOUNDER_PROFILE_EXCLUDED_FIRM_TERMS):
+        return False
+    title_l = title.lower()
+    firm_has_marker = any(marker in firm_l for marker in FOUNDER_PROFILE_FIRM_MARKERS)
+    title_has_law_role = any(term in title_l for term in FOUNDER_PROFILE_TITLE_LAW_ROLE_TERMS)
+    if not firm_has_marker and not title_has_law_role:
+        return False
+    combined = f"{firm_name} {title}".lower()
+    if not any(marker in combined for marker in FOUNDER_PROFILE_LAW_MARKERS):
+        return False
+    persona = str(rec.get("persona") or "").strip()
+    if persona in FOUNDER_PROFILE_PERSONAS:
+        return True
+    return any(term in title_l for term in FOUNDER_PROFILE_TITLE_TERMS)
 
 
 def _source_url(label: str, url: str | None) -> dict[str, str] | None:
@@ -247,6 +330,121 @@ async def create_lead_gen_email_agent_slice(
         policy_check_first_action=policy_check_first_action,
         template_key=template_key,
         only_undrafted_pending=False,
+        limit=safe_limit,
+    )
+
+
+async def create_founder_profile_email_batch(
+    *,
+    limit: int = 40,
+    template_key: str = DEFAULT_TEMPLATE_KEY,
+    created_by: str = "operator",
+    composer_variant_key: str | None = "intake-demo",
+    name: str | None = None,
+    approve_actions: bool = False,
+) -> dict[str, Any]:
+    """Create a no-send lead-gen batch from fresh founder-level profiles.
+
+    This is the product path for narrow GTM motions that need founder/owner
+    profiles from today's lead-gen action universe. It creates normal lead-gen
+    batch/items, then uses the same composer/action pipeline as email-agent
+    slices. No email is sent.
+    """
+    safe_limit = max(1, min(int(limit), 40))
+    template_key = normalize_template_key(template_key)
+    variant_key = (composer_variant_key or "").strip() or "intake-demo"
+    policy = await ensure_default_policy()
+    rec_data = await plan_daily_lead_gen_actions(
+        template_key=template_key,
+        limit=200,
+    )
+    selected = [
+        rec for rec in (rec_data.get("recommended") or [])
+        if _is_founder_profile_candidate(rec)
+    ][:safe_limit]
+    if len(selected) < safe_limit:
+        raise ValueError(f"insufficient_founder_profiles:{len(selected)}")
+
+    batch_id = _new_id()
+    batch_name = name or f"Founder profile intake-demo batch - {safe_limit}"
+    async with AsyncSessionLocal() as session:
+        batch_row = LeadGenBatchRow(
+            id=batch_id,
+            name=batch_name,
+            target_metric=TARGET_METRIC,
+            template_key=template_key,
+            policy_version=policy.version,
+            status="recommended",
+            counts_json={
+                **(rec_data.get("counts") or {}),
+                "founder_profile_batch": True,
+                "requested": safe_limit,
+                "selected": len(selected),
+                "composer_variant_override": variant_key,
+                "eligible_personas": sorted(FOUNDER_PROFILE_PERSONAS),
+                "eligible_title_terms": list(FOUNDER_PROFILE_TITLE_TERMS),
+            },
+            created_by=created_by,
+        )
+        session.add(batch_row)
+        await session.flush()
+        for rec in selected:
+            selection_features = dict(rec.get("selection_features") or {})
+            selection_features["founder_profile_batch"] = True
+            action_type = rec.get("action_type") or "first_touch"
+            sequence_id = rec.get("sequence_id")
+            step_num = None
+            if action_type == "follow_up" and sequence_id:
+                sequence = await session.get(EmailSequenceRow, sequence_id)
+                if sequence:
+                    step_num = int(sequence.current_step or 0) + 1
+            reason_json = {
+                "reason": rec.get("reason") or "",
+                "contact_source": rec.get("contact_source") or "",
+                "policy_version": policy.version,
+                "action_type": action_type,
+                "priority_bucket": "founder_profile_intake_demo",
+                "source_type": "founder_profile_batch",
+                "source_id": rec.get("contact_id"),
+                "signals": rec.get("selection_signals") or rec.get("signals") or [],
+                "next_operator_action": "review_edit_approve_send",
+                "sequence_id": sequence_id,
+                "step_num": step_num,
+                "notification_id": rec.get("notification_id"),
+                "selection_policy_version": (
+                    rec.get("selection_policy_version") or rec.get("policy_version") or policy.version
+                ),
+                "score_breakdown": rec.get("score_breakdown") or {},
+                "selection_features": selection_features,
+                "suppressions": rec.get("suppressions") or [],
+                "composer_variant_override": variant_key,
+            }
+            session.add(LeadGenBatchItemRow(
+                id=_new_id(),
+                batch_id=batch_id,
+                contact_id=rec["contact_id"],
+                pif_id=rec["pif_id"],
+                firm_name=rec["firm_name"],
+                contact_name=rec.get("contact_name") or "",
+                contact_email=rec["contact_email"],
+                contact_title=rec.get("contact_title") or "",
+                persona=rec.get("persona") or "",
+                template_key=template_key,
+                score=int(rec.get("score") or 0),
+                reason_json=reason_json,
+                approval_status="pending",
+                sequence_id=sequence_id,
+            ))
+        await session.commit()
+
+    return await _compose_batch_items(
+        batch_id=batch_id,
+        created_by=created_by,
+        composer_variant_key=variant_key,
+        approve_actions=approve_actions,
+        policy_check_first_action=False,
+        template_key=template_key,
+        only_undrafted_pending=True,
         limit=safe_limit,
     )
 

@@ -5035,6 +5035,50 @@ def lead_gen_email_agent_slice(
         console.print(f"first_policy allowed={policy.get('allowed')} reason={policy.get('reason')}")
 
 
+@lead_gen_app.command("founder-profile-batch")
+def lead_gen_founder_profile_batch(
+    limit: int = typer.Option(40, "--limit", "-n", min=1, max=40, help="Founder/managing-partner profiles to draft."),
+    variant: str = typer.Option("intake-demo", "--variant", help="Composer variant to pin for every draft."),
+    name: str = typer.Option("", "--name", help="Operator-visible batch name."),
+    created_by: str = typer.Option("operator", "--created-by"),
+    approve_actions: bool = typer.Option(
+        False,
+        "--approve-actions/--approval-ready",
+        help="Create exact approved actions. Default leaves drafts waiting for approval.",
+    ),
+    json_output: bool = typer.Option(False, "--json", help="Print raw JSON."),
+):
+    """Create a no-send lead-gen batch from founder-level profiles and compose drafts."""
+    data = _post(
+        "/api/lead-gen/founder-profile-batch",
+        json_body={
+            "limit": limit,
+            "composer_variant_key": variant or "intake-demo",
+            "name": name or None,
+            "created_by": created_by,
+            "approve_actions": approve_actions,
+        },
+        timeout=900.0,
+    )
+    if json_output:
+        console.print_json(data=data)
+        return
+    batch = data.get("batch") or {}
+    drafts = data.get("drafts") or []
+    held = data.get("held") or []
+    console.print(
+        f"[green]Created founder profile lead-gen batch[/green] {batch.get('id')} "
+        f"({len(drafts)} draft(s), held={len(held)}, variant={variant}, no_email_sent={data.get('no_email_sent')})"
+    )
+    for draft in drafts:
+        console.print(
+            f"- {draft.get('contact_name') or draft.get('firm_name')} "
+            f"<{draft.get('contact_email')}> {draft.get('firm_name')} "
+            f"action={draft.get('action_id')} status={draft.get('action_status')} "
+            f"subject={draft.get('subject')}"
+        )
+
+
 def _print_daily_run(data: dict) -> None:
     override = (
         data.get("composer_variant_override")
@@ -5128,6 +5172,46 @@ def lead_gen_top_up(
         f"held={data.get('held')} scheduled={data.get('scheduled')} "
         f"approved={data.get('approved')}"
         + (f" variant={data.get('composer_variant_override')}" if data.get("composer_variant_override") else "")
+    )
+
+
+@lead_gen_app.command("schedule-drafts")
+def lead_gen_schedule_drafts(
+    batch_id: str = typer.Argument(..., help="lead_gen_batches.id"),
+    start: str = typer.Option("09:00", "--start", help="Send-window start in local time, e.g. 09:00."),
+    end: str = typer.Option("12:00", "--end", help="Send-window end in local time, e.g. 12:00."),
+    date_: str = typer.Option("", "--date", help="Optional send date YYYY-MM-DD in the window timezone."),
+    timezone_name: str = typer.Option("America/Los_Angeles", "--timezone", help="IANA timezone for the send window."),
+    actor: str = typer.Option("operator", "--actor", help="Actor recorded on schedule/approval events."),
+    approve: bool = typer.Option(True, "--approve/--no-approve", help="Approve scheduled sends immediately."),
+    json_output: bool = typer.Option(False, "--json", help="Print raw JSON."),
+):
+    """Schedule every drafted lead-gen email in a batch for daemon sending."""
+    data = _post(
+        f"/api/lead-gen/batches/{batch_id}/schedule-drafts",
+        json_body={
+            "start": start,
+            "end": end,
+            "date": date_ or None,
+            "timezone": timezone_name,
+            "actor": actor,
+            "approve": approve,
+        },
+        timeout=300.0,
+    )
+    if json_output:
+        console.print_json(data=data)
+        return
+    channels = {}
+    for entry in (data.get("channel_plan") or {}).values():
+        channel = str(entry.get("channel") or "unknown")
+        channels[channel] = channels.get(channel, 0) + 1
+    console.print(
+        f"[bold]lead-gen schedule-drafts[/bold] batch={data.get('batch_id') or batch_id} "
+        f"drafted={data.get('drafted')} scheduled={data.get('scheduled')} "
+        f"approved={data.get('auto_approved')} created={data.get('created')} "
+        f"updated={data.get('updated')} skipped={data.get('skipped')} "
+        f"channels={json.dumps(channels, sort_keys=True)}"
     )
 
 

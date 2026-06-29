@@ -996,6 +996,7 @@ def spread_schedule_times(
     now: datetime | None = None,
     window: dict[str, str] | None = None,
     weekdays: set[int] | None = None,
+    target_date: date | None = None,
 ) -> list[datetime]:
     if not item_ids:
         return []
@@ -1005,12 +1006,13 @@ def spread_schedule_times(
     local_now = (now or _utcnow()).astimezone(tz)
     start_t = _parse_hhmm(window.get("start") or "09:00")
     end_t = _parse_hhmm(window.get("end") or "11:30")
-    target_date = local_now.date()
-    end_today = datetime.combine(target_date, end_t, tzinfo=tz)
-    if target_date.weekday() not in weekdays or local_now >= end_today:
-        target_date = _next_weekday(target_date + timedelta(days=1), weekdays=weekdays)
-    else:
-        target_date = _next_weekday(target_date, weekdays=weekdays)
+    if target_date is None:
+        target_date = local_now.date()
+        end_today = datetime.combine(target_date, end_t, tzinfo=tz)
+        if target_date.weekday() not in weekdays or local_now >= end_today:
+            target_date = _next_weekday(target_date + timedelta(days=1), weekdays=weekdays)
+        else:
+            target_date = _next_weekday(target_date, weekdays=weekdays)
     start_dt = datetime.combine(target_date, start_t, tzinfo=tz)
     end_dt = datetime.combine(target_date, end_t, tzinfo=tz)
     total_seconds = max(0, int((end_dt - start_dt).total_seconds()))
@@ -1044,6 +1046,8 @@ async def _schedule_drafted_items(
     created_by: str,
     weights: dict[str, Any],
     now: datetime | None = None,
+    approved_by: str | None = None,
+    target_date: date | None = None,
 ) -> dict[str, Any]:
     batch = await get_batch(batch_id, include_observations=False)
     drafted = [
@@ -1056,12 +1060,13 @@ async def _schedule_drafted_items(
     # only removes the human approval step; every send still passes the policy /
     # PHI egress guard at execution time and is spread across the send window.
     auto_approve = auto_approve_send_enabled()
-    approver = "auto-approve" if auto_approve else None
+    approver = approved_by if approved_by is not None else ("auto-approve" if auto_approve else None)
     scheduled_times = spread_schedule_times(
         item_ids=[item["id"] for item in drafted],
         now=now,
         window=_send_window(weights),
         weekdays=_weekdays(weights),
+        target_date=target_date,
     )
     created = updated = skipped = 0
     action_ids: list[str] = []
@@ -1165,6 +1170,45 @@ async def _schedule_drafted_items(
         "subjects": [s for s in subjects if s][:3],
         "items": scheduled,
     }
+
+
+async def schedule_drafted_batch_items(
+    *,
+    batch_id: str,
+    created_by: str = "operator",
+    start: str = "09:00",
+    end: str = "12:00",
+    timezone_name: str = "America/Los_Angeles",
+    approve: bool = True,
+    now: datetime | None = None,
+    target_date: date | None = None,
+) -> dict[str, Any]:
+    """Schedule every drafted item in a batch inside an explicit send window."""
+    policy = await _active_policy()
+    weights = _policy_weights(policy)
+    weights["daily_send_window"] = {
+        "start": start,
+        "end": end,
+        "timezone": timezone_name,
+    }
+    result = await _schedule_drafted_items(
+        batch_id=batch_id,
+        created_by=created_by,
+        weights=weights,
+        now=now,
+        approved_by=(created_by or "operator") if approve else None,
+        target_date=target_date,
+    )
+    plan = await daily_channel_plan(run_date=target_date)
+    batch = await get_batch(batch_id, include_observations=False)
+    result["batch_id"] = batch_id
+    result["drafted"] = sum(1 for item in batch.get("items") or [] if (item.get("reason") or {}).get("agent_draft"))
+    result["channel_plan"] = {
+        item["id"]: plan[item["id"]]
+        for item in batch.get("items") or []
+        if item.get("id") in plan
+    }
+    return result
 
 
 def build_notify_message(*, batch_id: str | None, item_count: int, draft_count: int, persona_mix: dict[str, Any], subjects: list[str]) -> str:
