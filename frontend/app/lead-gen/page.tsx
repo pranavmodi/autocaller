@@ -13,10 +13,12 @@ import {
   ClipboardCheck,
   Clock,
   Eye,
+  ExternalLink,
   Loader2,
   MailPlus,
   Play,
   RefreshCw,
+  Search,
   Send,
   ShieldCheck,
   Sparkles,
@@ -1913,7 +1915,10 @@ function DailyActionPlan({
         <span className="text-xs text-neutral-400">{items.length} actions</span>
       </div>
       <div className="divide-y divide-neutral-100">
-        {items.map((item) => (
+        {items.map((item) => {
+          const linkedInUrl = founderLinkedInUrl(item);
+          const searchUrl = founderLinkedInSearchUrl(item);
+          return (
           <article
             key={item.id}
             className={cn(
@@ -1941,6 +1946,29 @@ function DailyActionPlan({
               <div className="text-xs text-neutral-500">{item.contact_title || "No title"}</div>
               <div className="mt-1 break-all text-xs text-neutral-500">
                 {item.contact_email}
+              </div>
+              <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                {linkedInUrl ? (
+                  <a
+                    href={linkedInUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 rounded-md border border-blue-200 bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100"
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" />
+                    LinkedIn
+                  </a>
+                ) : (
+                  <a
+                    href={searchUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 rounded-md border border-neutral-200 px-2 py-1 text-xs font-medium text-neutral-600 hover:bg-neutral-50"
+                  >
+                    <Search className="h-3.5 w-3.5" />
+                    Find LinkedIn
+                  </a>
+                )}
               </div>
               {isEmailSent(item) ? (
                 <div className="mt-2 flex flex-wrap items-center gap-1.5">
@@ -2035,7 +2063,8 @@ function DailyActionPlan({
               </button>
             </div>
           </article>
-        ))}
+          );
+        })}
       </div>
     </section>
   );
@@ -2214,6 +2243,55 @@ function objectValue(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : null;
+}
+
+function stringValue(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function founderLinkedInUrl(item: LeadGenBatchItem): string {
+  const direct = stringValue(item.reason?.contact_linkedin_url);
+  if (isLinkedInUrl(direct)) return direct;
+
+  const draft = objectValue(item.reason?.agent_draft);
+  const draftResearch = objectValue(draft?.research);
+  const reasonResearch = objectValue(item.reason?.research_evidence);
+  const researchSources = [
+    ...(Array.isArray(draftResearch?.source_urls) ? draftResearch.source_urls : []),
+    ...(Array.isArray(reasonResearch?.source_urls) ? reasonResearch.source_urls : []),
+  ];
+  for (const source of researchSources) {
+    const entry = objectValue(source);
+    const url = stringValue(entry?.url);
+    const label = stringValue(entry?.label).toLowerCase();
+    if (isLinkedInUrl(url) || (label.includes("linkedin") && url)) return url;
+  }
+
+  const candidateKeys = ["linkedin_url", "linkedin", "contact_linkedin"];
+  for (const key of candidateKeys) {
+    const value = stringValue(item.reason?.[key]);
+    if (isLinkedInUrl(value)) return value;
+  }
+  return "";
+}
+
+function isLinkedInUrl(value: string) {
+  if (!value) return false;
+  try {
+    return new URL(value).hostname.toLowerCase().includes("linkedin.");
+  } catch {
+    return value.toLowerCase().includes("linkedin.com/");
+  }
+}
+
+function founderLinkedInSearchUrl(item: LeadGenBatchItem): string {
+  const parts = [
+    item.contact_name,
+    item.contact_title,
+    item.firm_name,
+    "LinkedIn",
+  ].filter(Boolean);
+  return `https://www.google.com/search?q=${encodeURIComponent(parts.join(" "))}`;
 }
 
 function storedAgentDraftStep(item: LeadGenBatchItem): RenderedSequenceStep | null {
