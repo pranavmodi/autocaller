@@ -18,6 +18,12 @@ The business problem is after-hours intake leakage: valuable PI callers often
 reach out outside office hours, while they are still anxious, comparison
 shopping, and easy to lose to the firm that responds first.
 
+There is a second-order local marketing risk: when a searcher calls a firm and
+does not get their need met, they may call another GBP/local result. Do not
+overstate this as a guaranteed ranking factor, but it is fair to frame missed or
+poorly handled calls as both a case-intake problem and a local-demand/brand
+signal problem.
+
 The offer is a quick way for the founder to judge whether an AI intake assistant
 could protect that revenue window: answer professionally, qualify the matter,
 capture enough facts, and hand staff a usable summary the next morning.
@@ -27,6 +33,9 @@ whether this would help us avoid losing signed cases after hours."
 
 Do not frame the email as "I built a tool, try it." Frame it as "this is the
 leak in your acquisition system; here is a two-minute way to judge the fix."
+When useful, connect the leak to searcher goal completion in plain business
+language: if the caller has to keep calling competitors, the firm may lose the
+case, the brand moment, and the local intent signal.
 
 ## Body Shape
 
@@ -34,9 +43,11 @@ leak in your acquisition system; here is a two-minute way to judge the fix."
 2. Introduce Pranav from Possible Minds in one sentence.
 3. Name the PI-firm business objective: protect after-hours lead conversion,
    signed-case opportunity, speed-to-lead, or staff-ready intake handoff.
-4. Say the browser demo lets them judge the caller experience and handoff in
+4. Optionally connect phone-answering quality to local search/brand outcomes:
+   callers who do not get helped may keep calling competitors.
+5. Say the browser demo lets them judge the caller experience and handoff in
    about two minutes.
-5. Use one plain CTA sentence that points to trying the demo.
+6. Use one plain CTA sentence that points to trying the demo.
 
 Keep the body roughly 55-100 words. Plaintext only.
 
@@ -49,6 +60,8 @@ Avoid founder-centric construction language:
 - Bad: "I built a browser demo of an after-hours PI intake call."
 - Better: "The expensive gap is what happens after the office closes: whether a
   good case gets qualified and handed to staff, or keeps calling around."
+- Better: "If the caller has to keep calling other firms, you may lose the case
+  and the local intent signal."
 - Better: "The demo is a two-minute way to judge that experience from the
   caller side."
 
@@ -61,6 +74,8 @@ Pranav from Possible Minds.
 
 After-hours intake is one of those quiet leaks: a good case calls while your
 team is offline, and by morning they may already be talking to another firm.
+That is a signed-case problem, a brand problem, and possibly a local visibility
+signal too.
 
 The demo is a two-minute way to judge the caller experience and the summary your
 staff would receive afterward. No setup or phone call needed.
@@ -107,6 +122,9 @@ support a specific claim, leave it out.
 - Do not promise signed cases, ranking gains, response-time improvements, or
   legal/compliance outcomes. You may discuss risk, leakage, conversion, and
   staff handoff quality as business objectives.
+- Do not claim "Google tracks every phone call" or make hard ranking promises.
+  Acceptable: "possibly a local visibility signal", "local intent signal", or
+  "searchers who do not get helped may keep calling competitors."
 - Do not make the email about Possible Minds building a demo. Make it about the
   firm's client-acquisition system and the founder's ability to judge the
   experience quickly.
