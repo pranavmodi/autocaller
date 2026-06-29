@@ -49,7 +49,38 @@ def _public_base_url() -> str:
     return value
 
 
-def _link_public_base_url() -> str:
+def _link_public_base_url(kind: str = "audit") -> str:
+    """Return the public short-link host for a destination kind.
+
+    The resolver can remain centralized in Possible OS while the visible URL in
+    outbound email matches the product surface the recipient is clicking into.
+    """
+    clean_kind = str(kind or "audit").strip().lower()
+    env_by_kind = {
+        "audit": ("AUDIT_LINK_BASE_URL", "AIAUDIT_LINK_BASE_URL"),
+        "consult": ("CONSULT_LINK_BASE_URL",),
+        "solution": ("SOLUTION_LINK_BASE_URL",),
+        "intake": ("INTAKE_LINK_BASE_URL",),
+    }
+    for key in env_by_kind.get(clean_kind, ()):
+        value = os.getenv(key, "").strip().rstrip("/")
+        if value:
+            return value
+    if clean_kind == "consult":
+        value = os.getenv("CONSULT_URL", "").strip().rstrip("/")
+        if value:
+            return value.removesuffix("/consult")
+        return "https://getpossibleminds.com"
+    if clean_kind == "intake":
+        value = os.getenv("INTAKE_DEMO_PUBLIC_URL", "").strip().rstrip("/")
+        if value:
+            return value
+        return "https://intake.getpossibleminds.com"
+    if clean_kind == "solution":
+        value = os.getenv("OUTBOUND_VOICE_SOLUTION_URL", "").strip().rstrip("/")
+        if value:
+            return value.removesuffix("/solutions/outbound-voice-ai")
+        return "https://getpossibleminds.com"
     return (
         os.getenv("AIAUDIT_LINK_BASE_URL", "").strip().rstrip("/")
         or _public_base_url()
@@ -163,7 +194,7 @@ async def build_short_audit_link(
             ))
             try:
                 await session.commit()
-                return f"{_link_public_base_url()}/a/{code}"
+                return f"{_link_public_base_url('audit')}/a/{code}"
             except IntegrityError:
                 await session.rollback()
     raise RuntimeError("audit_short_code_collision")
@@ -202,7 +233,7 @@ async def build_short_consult_link(
             ))
             try:
                 await session.commit()
-                return f"{_link_public_base_url()}/c/{code}"
+                return f"{_link_public_base_url('consult')}/c/{code}"
             except IntegrityError:
                 await session.rollback()
     raise RuntimeError("consult_short_code_collision")
@@ -241,7 +272,7 @@ async def build_short_solution_link(
             ))
             try:
                 await session.commit()
-                return f"{_link_public_base_url()}/s/{code}"
+                return f"{_link_public_base_url('solution')}/s/{code}"
             except IntegrityError:
                 await session.rollback()
     raise RuntimeError("solution_short_code_collision")
@@ -280,7 +311,7 @@ async def build_short_intake_demo_link(
             ))
             try:
                 await session.commit()
-                return f"{_link_public_base_url()}/i/{code}"
+                return f"{_link_public_base_url('intake')}/i/{code}"
             except IntegrityError:
                 await session.rollback()
     raise RuntimeError("intake_demo_short_code_collision")
