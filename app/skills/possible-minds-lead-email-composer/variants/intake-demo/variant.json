@@ -1,7 +1,7 @@
 {
   "key": "intake-demo",
   "label": "Browser intake demo",
-  "description": "Forced-only first-touch variant for PI founders. Offers the browser after-hours intake demo as the primary artifact; the app appends a per-recipient tracked /i/ link.",
+  "description": "Forced-only variant for PI founders. Leads with after-hours intake leakage and signed-case economics; uses the browser demo as proof and appends a per-recipient tracked /i/ link.",
   "allocation_weight": 0,
   "active": true
 }
