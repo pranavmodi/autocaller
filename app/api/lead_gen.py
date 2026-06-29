@@ -1,14 +1,15 @@
 """Cybernetic lead-generation loop endpoints."""
 from __future__ import annotations
 
-from datetime import date
-from typing import Optional
+from datetime import date, datetime, timedelta, timezone
+from typing import Any, Optional
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
+from sqlalchemy import desc, func, select
 
 from app.db import AsyncSessionLocal
-from app.db.models import FirmContactRow, LeadGenBatchItemRow
+from app.db.models import FirmContactRow, LeadGenBatchItemRow, LeadGenObservationRow
 from app.services.action_execution import (
     approve_lead_gen_batch_send_actions,
     create_send_email_action,
@@ -378,6 +379,10 @@ class PageEventRequest(BaseModel):
     event: str = Field(default="session_ready", max_length=32)
     page: str = Field(default="", max_length=64)
     link_code: Optional[str] = Field(default=None, max_length=64)
+    click_id: Optional[str] = Field(default=None, max_length=96)
+    source: Optional[str] = Field(default=None, max_length=64)
+    url: Optional[str] = Field(default=None, max_length=2048)
+    referrer: Optional[str] = Field(default=None, max_length=1024)
     session_id: Optional[str] = Field(default=None, max_length=64)
     time_on_page_ms: Optional[int] = Field(default=None, ge=0, le=86_400_000)
 
@@ -407,12 +412,170 @@ async def page_event(req: PageEventRequest):
             "time_on_page_ms": req.time_on_page_ms,
             "channel": "page_beacon",
             "link_code": req.link_code,
+            "click_id": req.click_id,
+            "source": req.source,
+            "url": req.url,
+            "referrer": req.referrer,
             "pif_id": pif_id,
         },
         contact_id=contact_id,
         batch_item_id=batch_item_id,
     )
     return {"ok": True, "attributed": bool(contact_id)}
+
+
+def _page_event_time_ms(raw_event: dict[str, Any] | None) -> int | None:
+    if not raw_event:
+        return None
+    value = raw_event.get("time_on_page_ms")
+    if value is None:
+        return None
+    try:
+        return max(0, int(value))
+    except (TypeError, ValueError):
+        return None
+
+
+@router.get("/api/lead-gen/engagement-analytics")
+async def engagement_analytics(
+    since_days: int = Query(30, ge=0, le=3650),
+    limit: int = Query(100, ge=1, le=500),
+):
+    """Detailed human-session analytics for the Possible Minds website.
+
+    Page events come from the marketing-site ClickBeacon and are attributed via
+    the persisted `lc` code from tracked outreach/intake links.
+    """
+    stmt = (
+        select(LeadGenObservationRow, FirmContactRow, LeadGenBatchItemRow)
+        .outerjoin(FirmContactRow, FirmContactRow.id == LeadGenObservationRow.contact_id)
+        .outerjoin(LeadGenBatchItemRow, LeadGenBatchItemRow.id == LeadGenObservationRow.batch_item_id)
+        .where(LeadGenObservationRow.event_type == "page_session")
+        .order_by(desc(LeadGenObservationRow.created_at))
+        .limit(limit * 10)
+    )
+    if since_days > 0:
+        cutoff = datetime.now(timezone.utc) - timedelta(days=since_days)
+        stmt = stmt.where(LeadGenObservationRow.created_at >= cutoff)
+
+    page_expr = func.coalesce(
+        LeadGenObservationRow.raw_event_json["page"].astext,
+        "unknown",
+    ).label("page")
+    by_page_stmt = (
+        select(
+            page_expr,
+            func.count(LeadGenObservationRow.id).label("events"),
+            func.count(func.distinct(LeadGenObservationRow.raw_event_json["session_id"].astext)).label("sessions"),
+        )
+        .where(LeadGenObservationRow.event_type == "page_session")
+        .group_by(page_expr)
+        .order_by(desc("events"))
+        .limit(limit)
+    )
+    if since_days > 0:
+        by_page_stmt = by_page_stmt.where(LeadGenObservationRow.created_at >= cutoff)
+
+    async with AsyncSessionLocal() as session:
+        rows = (await session.execute(stmt)).all()
+        by_page_rows = (await session.execute(by_page_stmt)).all()
+
+    journeys: dict[str, dict[str, Any]] = {}
+    total_events = 0
+    total_time_ms = 0
+    contacts: set[str] = set()
+    firms: set[str] = set()
+
+    for obs, contact, item in rows:
+        raw_event = obs.raw_event_json or {}
+        session_id = str(raw_event.get("session_id") or obs.id)
+        page = str(raw_event.get("page") or "unknown")
+        time_ms = _page_event_time_ms(raw_event)
+        total_events += 1
+        if time_ms:
+            total_time_ms += time_ms
+        if obs.contact_id:
+            contacts.add(obs.contact_id)
+        if obs.pif_id:
+            firms.add(obs.pif_id)
+
+        firm_name = (
+            (item.firm_name if item else None)
+            or str(raw_event.get("firm_name") or "")
+            or "Unknown firm"
+        )
+        contact_name = (
+            (contact.full_name if contact else None)
+            or (item.contact_name if item else None)
+            or ""
+        )
+        contact_email = (
+            (contact.email if contact else None)
+            or (item.contact_email if item else None)
+            or ""
+        )
+
+        journey = journeys.setdefault(session_id, {
+            "session_id": session_id,
+            "contact_id": obs.contact_id,
+            "contact_name": contact_name,
+            "contact_email": contact_email,
+            "firm_name": firm_name,
+            "pif_id": obs.pif_id,
+            "link_code": raw_event.get("link_code"),
+            "click_id": raw_event.get("click_id"),
+            "source": raw_event.get("source"),
+            "first_seen_at": obs.created_at.isoformat() if obs.created_at else None,
+            "last_seen_at": obs.created_at.isoformat() if obs.created_at else None,
+            "total_time_on_page_ms": 0,
+            "pages": [],
+        })
+
+        if obs.created_at:
+            iso = obs.created_at.isoformat()
+            journey["first_seen_at"] = min(journey["first_seen_at"] or iso, iso)
+            journey["last_seen_at"] = max(journey["last_seen_at"] or iso, iso)
+        if time_ms:
+            journey["total_time_on_page_ms"] += time_ms
+        journey["pages"].append({
+            "page": page,
+            "event": raw_event.get("event"),
+            "url": raw_event.get("url"),
+            "referrer": raw_event.get("referrer"),
+            "time_on_page_ms": time_ms,
+            "created_at": obs.created_at.isoformat() if obs.created_at else None,
+        })
+
+    session_rows = sorted(
+        journeys.values(),
+        key=lambda row: row.get("last_seen_at") or "",
+        reverse=True,
+    )[:limit]
+    for journey in session_rows:
+        journey["pages"] = sorted(
+            journey["pages"],
+            key=lambda row: row.get("created_at") or "",
+        )
+
+    return {
+        "since_days": since_days,
+        "summary": {
+            "event_count": total_events,
+            "distinct_sessions": len(journeys),
+            "distinct_contacts": len(contacts),
+            "distinct_firms": len(firms),
+            "total_time_on_page_ms": total_time_ms,
+        },
+        "pages": [
+            {
+                "page": row.page,
+                "events": int(row.events or 0),
+                "sessions": int(row.sessions or 0),
+            }
+            for row in by_page_rows
+        ],
+        "sessions": session_rows,
+    }
 
 
 @router.post("/api/lead-gen/backfill-consult-links")
