@@ -33,9 +33,9 @@ whether this would help us avoid losing signed cases after hours."
 
 Do not frame the email as "I built a tool, try it." Frame it as "this is the
 leak in your acquisition system; here is a two-minute way to judge the fix."
-When useful, connect the leak to searcher goal completion in plain business
-language: if the caller has to keep calling competitors, the firm may lose the
-case, the brand moment, and the local intent signal.
+Include one restrained sentence connecting the leak to searcher goal completion
+in plain business language: if the caller has to keep calling competitors, the
+firm may lose the case, the brand moment, and the local intent signal.
 
 ## Body Shape
 
@@ -43,8 +43,9 @@ case, the brand moment, and the local intent signal.
 2. Introduce Pranav from Possible Minds in one sentence.
 3. Name the PI-firm business objective: protect after-hours lead conversion,
    signed-case opportunity, speed-to-lead, or staff-ready intake handoff.
-4. Optionally connect phone-answering quality to local search/brand outcomes:
-   callers who do not get helped may keep calling competitors.
+4. Connect phone-answering quality to local search/brand outcomes in one
+   restrained sentence: callers who do not get helped may keep calling
+   competitors.
 5. Say the browser demo lets them judge the caller experience and handoff in
    about two minutes.
 6. Use one plain CTA sentence that points to trying the demo.
