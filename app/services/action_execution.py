@@ -17,6 +17,7 @@ from app.db.models import (
     EmailLogRow,
     FirmContactRow,
     LeadGenBatchItemRow,
+    PifFirmRow,
 )
 from app.services.contact_selection import has_usable_email
 from app.services.email_notification_service import _send_email
@@ -117,6 +118,61 @@ def _lead_gen_followup_metadata_from_item(
             "template_key": template_key,
         }
     return None
+
+
+def _sample_marker(value: Any) -> bool:
+    if isinstance(value, str):
+        return value.strip().lower() in {
+            "sample",
+            "manual_sample",
+            "manual_sample_resend",
+            "user_requested_sample",
+            "user_requested_resend_after_tracking_domain_fix",
+        }
+    return bool(value is True)
+
+
+def _is_sample_lead_gen_context(
+    *,
+    contact: FirmContactRow | None = None,
+    batch_item: LeadGenBatchItemRow | None = None,
+    pif_firm: PifFirmRow | None = None,
+) -> bool:
+    """True for operator-created sample firms/contacts used for GTM demos.
+
+    Sample sends should still pass transport, approval, recipient, consult-link,
+    and PHI checks, but they are allowed to repeat so we can test email variants
+    and tracking links without constructing artificial sequence state.
+    """
+    if contact:
+        if _sample_marker(getattr(contact, "source", "")):
+            return True
+        tech_signals = getattr(contact, "tech_signals", None)
+        if isinstance(tech_signals, dict) and "sample" in str(tech_signals.get("created_for") or "").lower():
+            return True
+
+    if batch_item:
+        reason = dict(getattr(batch_item, "reason_json", None) or {})
+        if any(
+            _sample_marker(reason.get(key))
+            for key in ("basis", "source_type", "priority_bucket")
+        ):
+            return True
+        features = reason.get("selection_features")
+        if isinstance(features, dict) and features.get("sample_firm") is True:
+            return True
+
+    if pif_firm:
+        if _sample_marker(getattr(pif_firm, "research_status", "")):
+            return True
+        if _sample_marker(getattr(pif_firm, "staff_research_status", "")):
+            return True
+        for attr in ("research_data", "raw_json"):
+            value = getattr(pif_firm, attr, None)
+            if isinstance(value, dict) and _sample_marker(value.get("source")):
+                return True
+
+    return False
 
 
 async def _lead_gen_followup_metadata(payload: dict[str, Any]) -> dict[str, Any] | None:
@@ -1512,12 +1568,26 @@ async def _check_send_email_policy_in_session(session, action: AgentActionRow) -
     if mode == "lead_gen":
         contact_id = str(payload.get("contact_id") or "").strip()
         batch_item_id = str(payload.get("batch_item_id") or "").strip()
+        pif_firm = None
         if contact_id:
             contact = await session.get(FirmContactRow, contact_id)
         if batch_item_id:
             batch_item = await session.get(LeadGenBatchItemRow, batch_item_id)
             if batch_item and not contact:
                 contact = await session.get(FirmContactRow, batch_item.contact_id)
+        pif_id = (
+            str(getattr(batch_item, "pif_id", "") or "").strip()
+            or str(getattr(contact, "pif_id", "") or "").strip()
+        )
+        if pif_id:
+            pif_firm = await session.get(PifFirmRow, pif_id)
+        sample_firm_bypass = _is_sample_lead_gen_context(
+            contact=contact,
+            batch_item=batch_item,
+            pif_firm=pif_firm,
+        )
+        if sample_firm_bypass:
+            add("sample_firm_repeat_send_bypass", True, "duplicate-send gates only")
         add("lead_gen_contact_exists", contact is not None, contact_id)
         add("lead_gen_contact_email_usable", bool(contact and has_usable_email(contact.email)), getattr(contact, "email", "") if contact else "")
         add(
@@ -1527,7 +1597,11 @@ async def _check_send_email_policy_in_session(session, action: AgentActionRow) -
         )
         add("batch_item_exists", bool(batch_item_id and batch_item), batch_item_id)
         if batch_item:
-            add("batch_item_not_already_started", batch_item.approval_status != "started", batch_item.approval_status)
+            add(
+                "batch_item_not_already_started",
+                sample_firm_bypass or batch_item.approval_status != "started",
+                "sample_firm_bypass" if sample_firm_bypass and batch_item.approval_status == "started" else batch_item.approval_status,
+            )
             suppressions = (batch_item.reason_json or {}).get("suppressions") or []
             add("not_suppressed_by_selection", len(suppressions) == 0, ", ".join(str(x) for x in suppressions))
         followup_meta = _lead_gen_followup_metadata_from_item(payload, batch_item)
@@ -1555,7 +1629,7 @@ async def _check_send_email_policy_in_session(session, action: AgentActionRow) -
         except Exception as exc:
             add("daily_budget_available", False, f"{type(exc).__name__}: {str(exc)[:120]}")
         existing_item_success = None
-        if batch_item_id:
+        if batch_item_id and not sample_firm_bypass:
             existing_item_success = (await session.execute(
                 select(AgentActionRow).where(
                     AgentActionRow.id != action.id,
@@ -1565,35 +1639,47 @@ async def _check_send_email_policy_in_session(session, action: AgentActionRow) -
                     AgentActionRow.status == "succeeded",
                 ).limit(1)
             )).scalar_one_or_none()
-        add("no_prior_successful_lead_gen_action_for_item", existing_item_success is None, existing_item_success.id if existing_item_success else "")
+        add(
+            "no_prior_successful_lead_gen_action_for_item",
+            sample_firm_bypass or existing_item_success is None,
+            "sample_firm_bypass" if sample_firm_bypass else (existing_item_success.id if existing_item_success else ""),
+        )
         if followup_meta:
-            existing_step_success = (await session.execute(
-                select(AgentActionRow).where(
-                    AgentActionRow.id != action.id,
-                    AgentActionRow.action_type == SEND_EMAIL,
-                    AgentActionRow.entity_type == "lead_gen_email",
-                    AgentActionRow.status == "succeeded",
-                    AgentActionRow.input_json["sequence_id"].as_string() == followup_meta["sequence_id"],
-                    AgentActionRow.input_json["sequence_step_num"].as_string() == str(followup_meta["step_num"]),
-                ).limit(1)
-            )).scalar_one_or_none()
+            existing_step_success = None
+            if not sample_firm_bypass:
+                existing_step_success = (await session.execute(
+                    select(AgentActionRow).where(
+                        AgentActionRow.id != action.id,
+                        AgentActionRow.action_type == SEND_EMAIL,
+                        AgentActionRow.entity_type == "lead_gen_email",
+                        AgentActionRow.status == "succeeded",
+                        AgentActionRow.input_json["sequence_id"].as_string() == followup_meta["sequence_id"],
+                        AgentActionRow.input_json["sequence_step_num"].as_string() == str(followup_meta["step_num"]),
+                    ).limit(1)
+                )).scalar_one_or_none()
             add(
                 "no_prior_successful_lead_gen_sequence_step",
-                existing_step_success is None,
-                existing_step_success.id if existing_step_success else "",
+                sample_firm_bypass or existing_step_success is None,
+                "sample_firm_bypass" if sample_firm_bypass else (existing_step_success.id if existing_step_success else ""),
             )
             add("no_prior_successful_lead_gen_action_for_recipient", True, "follow_up_sequence_step")
         else:
-            existing_recipient_success = (await session.execute(
-                select(AgentActionRow).where(
-                    AgentActionRow.id != action.id,
-                    AgentActionRow.action_type == SEND_EMAIL,
-                    AgentActionRow.entity_type == "lead_gen_email",
-                    AgentActionRow.status == "succeeded",
-                    AgentActionRow.input_json["to"].as_string() == recipient,
-                ).limit(1)
-            )).scalar_one_or_none()
-            add("no_prior_successful_lead_gen_action_for_recipient", existing_recipient_success is None, existing_recipient_success.id if existing_recipient_success else "")
+            existing_recipient_success = None
+            if not sample_firm_bypass:
+                existing_recipient_success = (await session.execute(
+                    select(AgentActionRow).where(
+                        AgentActionRow.id != action.id,
+                        AgentActionRow.action_type == SEND_EMAIL,
+                        AgentActionRow.entity_type == "lead_gen_email",
+                        AgentActionRow.status == "succeeded",
+                        AgentActionRow.input_json["to"].as_string() == recipient,
+                    ).limit(1)
+                )).scalar_one_or_none()
+            add(
+                "no_prior_successful_lead_gen_action_for_recipient",
+                sample_firm_bypass or existing_recipient_success is None,
+                "sample_firm_bypass" if sample_firm_bypass else (existing_recipient_success.id if existing_recipient_success else ""),
+            )
 
     allowed = all(check["passed"] for check in checks)
     failed = [check for check in checks if not check["passed"]]

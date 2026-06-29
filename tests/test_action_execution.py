@@ -6,6 +6,7 @@ import pytest
 from app.db.models import AgentActionRow, LeadGenBatchItemRow
 from app.services.action_execution import (
     SEND_EMAIL,
+    _is_sample_lead_gen_context,
     _sync_lead_gen_scheduled_draft_fields,
     _terminal_policy_block_reason,
     cancel_action,
@@ -35,6 +36,41 @@ def test_terminal_policy_block_reason_ignores_retryable_failures():
     }
 
     assert _terminal_policy_block_reason(policy) == ""
+
+
+def test_sample_lead_gen_context_detects_manual_sample_contact():
+    contact = SimpleNamespace(source="manual_sample", tech_signals=None)
+
+    assert _is_sample_lead_gen_context(contact=contact) is True
+
+
+def test_sample_lead_gen_context_detects_sample_batch_item():
+    item = SimpleNamespace(
+        reason_json={
+            "source_type": "manual_sample_resend",
+            "selection_features": {"sample_firm": True},
+        }
+    )
+
+    assert _is_sample_lead_gen_context(batch_item=item) is True
+
+
+def test_sample_lead_gen_context_rejects_normal_lead():
+    contact = SimpleNamespace(source="front_sync", tech_signals={})
+    item = SimpleNamespace(
+        reason_json={
+            "source_type": "lead_gen_daily",
+            "selection_features": {"sample_firm": False},
+        }
+    )
+    firm = SimpleNamespace(
+        research_status="complete",
+        staff_research_status="complete",
+        research_data={"source": "pif_directory"},
+        raw_json={"source": "emailtag"},
+    )
+
+    assert _is_sample_lead_gen_context(contact=contact, batch_item=item, pif_firm=firm) is False
 
 
 def _action(**overrides):
