@@ -1,6 +1,6 @@
 ---
 name: possible-minds-lead-email-composer-intake-demo
-description: Compose a minimal first-touch Possible Minds lead-gen email for PI firm founders. Lead with after-hours intake leakage and signed-case economics; use the browser demo as proof. Signature and tracked demo link are appended by code.
+description: Compose a minimal first-touch Possible Minds lead-gen email for PI firm founders. Open with Precise Imaging proof, then lead with after-hours intake leakage and signed-case economics; use the browser demo as proof. Signature and tracked demo link are appended by code.
 ---
 
 # Possible Minds Lead Email Composer - Browser Intake Demo Variant
@@ -14,15 +14,30 @@ intake-demo link. Do not include any URL yourself.
 
 ## Core Offer
 
+First establish credibility with the Precise Imaging proof used in other
+first-touch variants. The opener should be one tight line after the greeting:
+
+```text
+Pranav from Possible Minds. If {firm_name} refers clients to Precise Imaging,
+you've seen the automated status replies they send: we built that system, along
+with Precise's email triage, intake voice line, and website chat.
+```
+
+If the payload explicitly confirms prior Precise exchange, use the direct form:
+
+```text
+Pranav from Possible Minds. You've seen the automated status replies from
+Precise Imaging: we built that system, along with Precise's email triage,
+intake voice line, and website chat.
+```
+
+Do not add the 600-email/day scale proof in this variant unless it can fit
+without weakening the after-hours intake hook. The email's center of gravity is
+still the browser intake demo.
+
 The business problem is after-hours intake leakage: valuable PI callers often
 reach out outside office hours, while they are still anxious, comparison
-shopping, and easy to lose to the firm that responds first.
-
-There is a second-order local marketing risk: when a searcher calls a firm and
-does not get their need met, they may call another GBP/local result. Do not
-overstate this as a guaranteed ranking factor, but it is fair to frame missed or
-poorly handled calls as both a case-intake problem and a local-demand/brand
-signal problem.
+shopping, and easy to lose to whichever firm responds first.
 
 The offer is a quick way for the founder to judge whether an AI intake assistant
 could protect that revenue window: answer professionally, qualify the matter,
@@ -32,25 +47,26 @@ The browser demo is proof, not the pitch. The reader should feel: "I can test
 whether this would help us avoid losing signed cases after hours."
 
 Do not frame the email as "I built a tool, try it." Frame it as "this is the
-leak in your acquisition system; here is a two-minute way to judge the fix."
-Include one restrained sentence connecting the leak to searcher goal completion
-in plain business language: if the caller has to keep calling competitors, the
-firm may lose the case, the brand moment, and the local intent signal.
+expensive leak in your acquisition system; here is a two-minute way to judge the
+fix."
+
+Cut the local-search angle entirely. Do not mention local visibility, local
+intent signals, Google Business Profile, rankings, or searcher goal completion.
+That paragraph weakens the offer by sounding speculative and bolted on.
 
 ## Body Shape
 
 1. Greet the contact naturally.
-2. Introduce Pranav from Possible Minds in one sentence.
-3. Name the PI-firm business objective: protect after-hours lead conversion,
-   signed-case opportunity, speed-to-lead, or staff-ready intake handoff.
-4. Connect phone-answering quality to local search/brand outcomes in one
-   restrained sentence: callers who do not get helped may keep calling
-   competitors.
-5. Say the browser demo lets them judge the caller experience and handoff in
-   about two minutes.
-6. Use one plain CTA sentence that points to trying the demo.
+2. Use the Precise Imaging proof opener, naming all three Precise systems:
+   email triage, intake voice line, and website chat.
+3. Name the PI-firm business objective with the strongest line: the expensive
+   part of after-hours intake is the signed case that slips to whichever firm
+   answers first while the team is offline.
+4. Say the browser demo lets them judge the caller experience, qualification,
+   and staff-ready handoff in about two minutes.
+5. End cleanly before the appended tracked demo link. Do not add another CTA.
 
-Keep the body roughly 55-100 words. Plaintext only.
+Keep the body roughly 80-130 words. Plaintext only.
 
 Do not mention Telnyx, OpenAI, LLMs, admin pages, APIs, transcripts as a
 technical feature, or internal implementation details. You may mention the
@@ -59,30 +75,30 @@ summary artifact in business terms.
 Avoid founder-centric construction language:
 
 - Bad: "I built a browser demo of an after-hours PI intake call."
-- Better: "The expensive gap is what happens after the office closes: whether a
-  good case gets qualified and handed to staff, or keeps calling around."
-- Better: "If the caller has to keep calling other firms, you may lose the case
-  and the local intent signal."
-- Better: "The demo is a two-minute way to judge that experience from the
-  caller side."
+- Better: "The expensive part of after-hours intake isn't the missed call. It's
+  the signed case that slips to whichever firm answers first while your team is
+  offline."
+- Better: "The browser demo lets you judge it yourself: the caller experience,
+  how it qualifies, and the staff-ready handoff waiting by morning."
 
 ## Good Copy Shape
 
 ```text
 Hi Alex,
 
-Pranav from Possible Minds.
+Pranav from Possible Minds. If BD&J refers clients to Precise Imaging, you've
+seen the automated status replies they send: we built that system, along with
+Precise's email triage, intake voice line, and website chat.
 
-After-hours intake is one of those quiet leaks: a good case calls while your
-team is offline, and by morning they may already be talking to another firm.
-That is a signed-case problem, a brand problem, and possibly a local visibility
-signal too.
+The expensive part of after-hours intake isn't the missed call. It's the signed
+case that slips to whichever firm answers first while your team is offline.
 
-The demo is a two-minute way to judge the caller experience and the summary your
-staff would receive afterward. No setup or phone call needed.
+The browser demo lets you judge it yourself: the caller experience, how it
+qualifies, and the staff-ready handoff waiting by morning.
 ```
 
-The application will append the sign-off and tracked demo link.
+The application will append the tracked demo link above the sign-off, then the
+sign-off and consult link.
 
 ## Output Contract
 
@@ -123,9 +139,8 @@ support a specific claim, leave it out.
 - Do not promise signed cases, ranking gains, response-time improvements, or
   legal/compliance outcomes. You may discuss risk, leakage, conversion, and
   staff handoff quality as business objectives.
-- Do not claim "Google tracks every phone call" or make hard ranking promises.
-  Acceptable: "possibly a local visibility signal", "local intent signal", or
-  "searchers who do not get helped may keep calling competitors."
+- Do not claim "Google tracks every phone call" or make ranking/visibility
+  arguments in this variant. No local-search paragraph.
 - Do not make the email about Possible Minds building a demo. Make it about the
   firm's client-acquisition system and the founder's ability to judge the
   experience quickly.

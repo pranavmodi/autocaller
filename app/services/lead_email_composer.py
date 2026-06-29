@@ -46,7 +46,7 @@ INTAKE_DEMO_URL = "https://intake.getpossibleminds.com"
 # outbound voice-AI solution page (with early-access capture), per-recipient
 # tracked. Kept as a soft P.S. so the primary reply CTA still leads.
 SOLUTION_CTA_FOOTER = "P.S. Here's what we're building for PI firms to fix this, and how to get early access:"
-INTAKE_DEMO_CTA_FOOTER = "Try the browser demo:"
+INTAKE_DEMO_CTA_FOOTER = "Try it:"
 AI_AUDIT_PATH = "/aiaudit/go?t="
 # Two context-specific link intros. The old single line ("Is your firm ready to
 # leverage AI? What's blocking your transformation? Find out in 10 minutes:") was

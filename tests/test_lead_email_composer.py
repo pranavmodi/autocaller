@@ -164,7 +164,13 @@ def test_intake_demo_variant_adds_consult_and_tracked_demo_no_audit():
     consult = "https://possible.example/c/ConCode1"
 
     body = _ensure_signature(
-        "Hi Alex,\n\nI built a browser demo of an after-hours PI intake call.",
+        (
+            "Hi Alex,\n\n"
+            "Pranav from Possible Minds. If BD&J refers clients to Precise Imaging, you've seen the automated status replies they send: "
+            "we built that system, along with Precise's email triage, intake voice line, and website chat.\n\n"
+            "The expensive part of after-hours intake isn't the missed call. It's the signed case that slips to whichever firm answers first while your team is offline.\n\n"
+            "The browser demo lets you judge it yourself: the caller experience, how it qualifies, and the staff-ready handoff waiting by morning."
+        ),
         {"name": "Pranav", "title": "Founder"},
         contact=contact,  # type: ignore[arg-type]
         variant_key="intake-demo",
