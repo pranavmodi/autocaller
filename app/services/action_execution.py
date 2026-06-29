@@ -1132,6 +1132,110 @@ async def save_edited_lead_gen_draft(
     }
 
 
+async def rotate_lead_gen_batch_subjects(
+    *,
+    batch_id: str,
+    subjects: list[str],
+    actor: str = "operator",
+) -> dict[str, Any]:
+    """Rotate subject lines across the live scheduled sends for a batch.
+
+    This intentionally does not recompose email bodies. It edits the already
+    scheduled action payloads, refreshes the hash-bound approval block, and
+    syncs the batch item draft metadata to the live scheduled action.
+    """
+    await ensure_agent_tables()
+    clean_subjects = [_sanitize_email_copy(subject) for subject in subjects if _sanitize_email_copy(subject)]
+    if not clean_subjects:
+        raise ValueError("subjects_required")
+    async with AsyncSessionLocal() as session:
+        items = (await session.execute(
+            select(LeadGenBatchItemRow).where(LeadGenBatchItemRow.batch_id == batch_id)
+        )).scalars().all()
+        if not items:
+            raise ValueError("batch_not_found")
+        items_by_id = {item.id: item for item in items}
+        actions = (await session.execute(
+            select(AgentActionRow)
+            .where(AgentActionRow.action_type.in_([SEND_EMAIL, SEND_APPROVED_LEAD_GEN_DRAFT]))
+            .where(AgentActionRow.status == "approved")
+            .where(AgentActionRow.scheduled_for.isnot(None))
+            .order_by(AgentActionRow.scheduled_for.asc(), AgentActionRow.id.asc())
+        )).scalars().all()
+        live: list[tuple[LeadGenBatchItemRow, AgentActionRow]] = []
+        seen_items: set[str] = set()
+        for action in actions:
+            payload = action.input_json if isinstance(action.input_json, dict) else {}
+            item_id = str(payload.get("batch_item_id") or action.entity_id or "").strip()
+            item = items_by_id.get(item_id)
+            if not item or item_id in seen_items:
+                continue
+            seen_items.add(item_id)
+            live.append((item, action))
+        if not live:
+            raise ValueError("no_live_scheduled_actions")
+        updated: list[dict[str, Any]] = []
+        for idx, (item, action) in enumerate(live):
+            subject = clean_subjects[idx % len(clean_subjects)]
+            old_subject, body = _action_subject_body(action)
+            if not body:
+                raise ValueError(f"draft_body_empty:{item.id}")
+            hashes = _update_action_draft_payload(
+                action,
+                subject=subject,
+                body=body,
+                actor=actor or "operator",
+            )
+            _sync_lead_gen_scheduled_draft_fields(
+                item,
+                action=action,
+                subject=subject,
+                body=body,
+                actor=actor or "operator",
+            )
+            await _record_action_event(
+                session,
+                action_id=action.id,
+                event_type="action_draft_edited",
+                actor=actor or "operator",
+                message="Scheduled lead-gen draft subject rotated without recomposition.",
+                input_json={
+                    "batch_id": batch_id,
+                    "batch_item_id": item.id,
+                    "old_subject": old_subject,
+                    "old_subject_sha256": hashes["old_subject_sha256"],
+                    "body_sha256": hashes["body_sha256"],
+                },
+                output_json={
+                    "subject": subject,
+                    "subject_sha256": hashes["subject_sha256"],
+                    "scheduled_for": action.scheduled_for.isoformat() if action.scheduled_for else None,
+                    "scheduled_for_pt": format_pt(action.scheduled_for) if action.scheduled_for else None,
+                    "scheduled_for_utc": format_utc(action.scheduled_for) if action.scheduled_for else None,
+                },
+            )
+            updated.append({
+                "batch_item_id": item.id,
+                "firm_name": item.firm_name,
+                "action_id": action.id,
+                "subject": subject,
+                "old_subject": old_subject,
+                "scheduled_for_pt": format_pt(action.scheduled_for) if action.scheduled_for else None,
+                "scheduled_for_utc": format_utc(action.scheduled_for) if action.scheduled_for else None,
+            })
+        await session.commit()
+    counts: dict[str, int] = {}
+    for row in updated:
+        counts[row["subject"]] = counts.get(row["subject"], 0) + 1
+    return {
+        "batch_id": batch_id,
+        "updated_count": len(updated),
+        "subject_counts": counts,
+        "items": updated,
+        "no_composer_used": True,
+    }
+
+
 async def create_send_approved_lead_gen_draft_action(
     *,
     batch_item_id: str,

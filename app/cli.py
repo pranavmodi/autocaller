@@ -5215,6 +5215,37 @@ def lead_gen_schedule_drafts(
     )
 
 
+@lead_gen_app.command("rotate-subjects")
+def lead_gen_rotate_subjects(
+    batch_id: str = typer.Argument(..., help="lead_gen_batches.id"),
+    subject: list[str] = typer.Option(
+        [],
+        "--subject",
+        help="Subject line to rotate. Pass multiple times; default uses the intake-demo top picks.",
+    ),
+    actor: str = typer.Option("operator", "--actor", help="Actor recorded on action events/traces."),
+    json_output: bool = typer.Option(False, "--json", help="Print raw JSON."),
+):
+    """Rotate subject lines across a batch's live scheduled sends without recomposing bodies."""
+    data = _post(
+        f"/api/lead-gen/batches/{batch_id}/rotate-subjects",
+        json_body={
+            "subjects": subject,
+            "actor": actor,
+        },
+        timeout=120.0,
+    )
+    if json_output:
+        console.print_json(data=data)
+        return
+    console.print(
+        f"[bold]lead-gen rotate-subjects[/bold] batch={data.get('batch_id') or batch_id} "
+        f"updated={data.get('updated_count')} no_composer_used={data.get('no_composer_used')}"
+    )
+    for subj, count in sorted((data.get("subject_counts") or {}).items()):
+        console.print(f"- {subj}: {count}")
+
+
 @lead_gen_app.command("backfill-consult-links")
 def lead_gen_backfill_consult_links(
     scope: str = typer.Option("today", "--scope", help="'today' (live daily batch) or 'all' (every unsent lead-gen send)."),

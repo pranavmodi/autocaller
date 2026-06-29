@@ -16,6 +16,7 @@ from app.services.action_execution import (
     execute_action,
     find_live_scheduled_action_for_item,
     load_lead_gen_draft_for_edit,
+    rotate_lead_gen_batch_subjects,
     save_edited_lead_gen_draft,
 )
 from app.services.lead_gen_cybernetic import (
@@ -151,6 +152,11 @@ class ScheduleDraftedBatchRequest(BaseModel):
     date: Optional[str] = Field(default=None, max_length=10)
     actor: str = Field(default="operator", max_length=128)
     approve: bool = True
+
+
+class RotateBatchSubjectsRequest(BaseModel):
+    subjects: list[str] = Field(default_factory=list)
+    actor: str = Field(default="operator", max_length=128)
 
 
 class DailyRunEnabledRequest(BaseModel):
@@ -393,6 +399,33 @@ async def schedule_batch_drafts(batch_id: str, req: ScheduleDraftedBatchRequest)
         raise HTTPException(
             status_code=400,
             detail=f"schedule_drafts_failed: {type(e).__name__}: {str(e)[:300]}",
+        )
+
+
+@router.post("/api/lead-gen/batches/{batch_id}/rotate-subjects")
+async def rotate_batch_subjects(batch_id: str, req: RotateBatchSubjectsRequest):
+    subjects = req.subjects or [
+        "after-hours cases slipping away",
+        "the caller who does not wait",
+        "not Miss Havisham",
+        "missed signed cases after hours",
+        "2-minute intake demo",
+    ]
+    try:
+        return await rotate_lead_gen_batch_subjects(
+            batch_id=batch_id,
+            subjects=subjects,
+            actor=req.actor,
+        )
+    except ValueError as e:
+        detail = str(e)
+        if detail == "batch_not_found":
+            raise HTTPException(status_code=404, detail=detail)
+        raise HTTPException(status_code=400, detail=detail)
+    except Exception as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"rotate_subjects_failed: {type(e).__name__}: {str(e)[:300]}",
         )
 
 
