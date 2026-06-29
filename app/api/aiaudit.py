@@ -135,6 +135,30 @@ def _solution_public_url() -> str:
     ).rstrip("/")
 
 
+def _intake_demo_public_url() -> str:
+    return os.getenv(
+        "INTAKE_DEMO_PUBLIC_URL",
+        "https://intake.getpossibleminds.com",
+    ).rstrip("/")
+
+
+async def _firm_name_for_payload(payload: dict[str, Any]) -> str:
+    batch_item_id = _clean(payload.get("batch_item_id"), 64) or None
+    pif_id = _clean(payload.get("pif_id"), 64) or None
+    firm = ""
+    async with AsyncSessionLocal() as session:
+        item = await session.get(LeadGenBatchItemRow, batch_item_id) if batch_item_id else None
+        if item:
+            firm = _clean(item.firm_name)
+            pif_id = pif_id or item.pif_id
+        if not firm and pif_id:
+            firm = _clean(await resolve_firm_name(pif_id))
+        pif_firm = await session.get(PifFirmRow, pif_id) if pif_id else None
+        if not firm and pif_firm:
+            firm = _clean(pif_firm.firm_name)
+    return firm
+
+
 async def _record_link_click(
     request: Request,
     payload: dict[str, Any],
@@ -249,6 +273,33 @@ async def _solution_redirect_for_payload(
     return RedirectResponse(url=url, status_code=302)
 
 
+async def _intake_redirect_for_payload(
+    request: Request,
+    payload: dict[str, Any] | None,
+) -> RedirectResponse:
+    """Intake-demo redirect: record the click, then send to the browser-call
+    demo with firm attribution so the page and assistant can personalize."""
+    dest = _intake_demo_public_url()
+    if not payload:
+        return RedirectResponse(url=dest, status_code=302)
+    click_id = await _record_link_click(request, payload, channel="intake_demo")
+    code = _clean(payload.get("link_code"), 64)
+    params = {}
+    try:
+        firm = await _firm_name_for_payload(payload)
+    except Exception:
+        firm = ""
+    if firm:
+        params["firm"] = firm
+    if code:
+        params["lc"] = code
+    if click_id:
+        params["c"] = click_id
+    sep = "&" if "?" in dest else "?"
+    url = f"{dest}{sep}{urlencode(params)}" if params else dest
+    return RedirectResponse(url=url, status_code=302)
+
+
 @router.get("/a/{code}")
 async def aiaudit_short_go(code: str, request: Request) -> RedirectResponse:
     return await _audit_redirect_for_payload(request, await resolve_short_audit_code(code))
@@ -272,6 +323,14 @@ async def solution_short_go(code: str, request: Request) -> RedirectResponse:
     return await _solution_redirect_for_payload(request, payload)
 
 
+@router.get("/i/{code}")
+async def intake_demo_short_go(code: str, request: Request) -> RedirectResponse:
+    payload = await resolve_short_audit_code(code)
+    if payload and payload.get("kind") != "intake":
+        payload = None
+    return await _intake_redirect_for_payload(request, payload)
+
+
 @router.get("/aiaudit/go")
 async def aiaudit_go(request: Request) -> RedirectResponse:
     return await _audit_redirect_for_payload(request, verify_audit_token(request.query_params.get("t")))
@@ -282,6 +341,7 @@ def _app_name_expr():
         (AuditLinkClickRow.source.in_(["ai_audit_signature", "ai_audit_email"]), "AI Audit"),
         (AuditLinkClickRow.source.in_(["consult_email", "consult_signature"]), "Consult"),
         (AuditLinkClickRow.source.in_(["solution_email", "solution_signature"]), "Solution"),
+        (AuditLinkClickRow.source.in_(["intake_demo_email", "intake_demo_signature"]), "Intake Demo"),
         else_="Unknown",
     )
 
@@ -426,8 +486,26 @@ def _source_label(source: str) -> str:
     labels = {
         "ai_audit_signature": "Signature CTA",
         "ai_audit_email": "AI Audit email",
+        "consult_email": "Consult email",
+        "consult_signature": "Consult signature",
+        "solution_email": "Solution email",
+        "solution_signature": "Solution signature",
+        "intake_demo_email": "Intake demo email",
+        "intake_demo_signature": "Intake demo signature",
     }
     return labels.get(source or "", source or "Unknown")
+
+
+def _app_name_for_source(source: str) -> str:
+    if source in {"ai_audit_signature", "ai_audit_email"}:
+        return "AI Audit"
+    if source in {"consult_email", "consult_signature"}:
+        return "Consult"
+    if source in {"solution_email", "solution_signature"}:
+        return "Solution"
+    if source in {"intake_demo_email", "intake_demo_signature"}:
+        return "Intake Demo"
+    return "Unknown"
 
 
 @router.get("/api/aiaudit/click-analytics")
@@ -506,7 +584,7 @@ async def audit_click_analytics(
         clicks.append({
             "id": click.id,
             "clicked_at": click.clicked_at.isoformat() if click.clicked_at else None,
-            "app_name": "AI Audit",
+            "app_name": _app_name_for_source(click.source),
             "source": click.source,
             "source_label": _source_label(click.source),
             "firm_name": firm_name,

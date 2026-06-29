@@ -18,6 +18,7 @@ from app.services.aiaudit_links import (
     build_audit_link,
     build_short_audit_link,
     build_short_consult_link,
+    build_short_intake_demo_link,
     build_short_solution_link,
 )
 from app.services.ai_visibility_bridge import batch_item_visibility_report
@@ -40,10 +41,12 @@ DEFAULT_SKILL_PATH = (
 )
 CONSULT_URL = "https://getpossibleminds.com/consult"
 SOLUTION_URL = "https://getpossibleminds.com/solutions/outbound-voice-ai"
+INTAKE_DEMO_URL = "https://intake.getpossibleminds.com"
 # Secondary CTA footer for the missed-call-ranking variant: points at the
 # outbound voice-AI solution page (with early-access capture), per-recipient
 # tracked. Kept as a soft P.S. so the primary reply CTA still leads.
 SOLUTION_CTA_FOOTER = "P.S. Here's what we're building for PI firms to fix this, and how to get early access:"
+INTAKE_DEMO_CTA_FOOTER = "Try the browser demo:"
 AI_AUDIT_PATH = "/aiaudit/go?t="
 # Two context-specific link intros. The old single line ("Is your firm ready to
 # leverage AI? What's blocking your transformation? Find out in 10 minutes:") was
@@ -343,6 +346,13 @@ def _has_solution_link(body: str) -> bool:
     return SOLUTION_URL in text or "/solutions/outbound-voice-ai" in text or "/s/" in text
 
 
+def _has_intake_demo_link(body: str) -> bool:
+    """True if the body already carries the intake demo link, bare or tracked
+    (/i/{code})."""
+    text = body or ""
+    return INTAKE_DEMO_URL in text or "intake.getpossibleminds.com" in text or "/i/" in text
+
+
 def _ensure_consult_signature(
     body: str, sender: dict[str, str], *, consult_url: str | None = None
 ) -> str:
@@ -458,6 +468,7 @@ def _ensure_signature(
     is_audit_variant = (variant_key or "").strip() == "ai-audit"
     is_visibility_variant = (variant_key or "").strip() == "ai-visibility-report"
     is_solution_variant = (variant_key or "").strip() == "missed-call-ranking"
+    is_intake_demo_variant = (variant_key or "").strip() == "intake-demo"
 
     if is_visibility_variant:
         if not _has_consult_link(body):
@@ -472,6 +483,13 @@ def _ensure_signature(
             body = f"{body}\n\n" + "\n".join(signature_lines + [f"Book a consult: {consult_url}"]).strip()
         if solution_url and not _has_solution_link(body):
             body = f"{body}\n\n{SOLUTION_CTA_FOOTER} {solution_url}".strip()
+        return body
+
+    if is_intake_demo_variant:
+        if not _has_consult_link(body):
+            body = f"{body}\n\n" + "\n".join(signature_lines + [f"Book a consult: {consult_url}"]).strip()
+        if solution_url and not _has_intake_demo_link(body):
+            body = f"{body}\n\n{INTAKE_DEMO_CTA_FOOTER} {solution_url}".strip()
         return body
 
     audit_source = "ai_audit_email" if is_audit_variant else "ai_audit_signature"
@@ -1187,7 +1205,7 @@ async def compose_lead_email(
             )
             body = f"{body}\n\n{_visibility_report_cta_line(visibility_url)}".strip()
     audit_url = None
-    if variant_key not in ("ai-visibility-report", "missed-call-ranking"):
+    if variant_key not in ("ai-visibility-report", "missed-call-ranking", "intake-demo"):
         audit_source = "ai_audit_email" if variant_key == "ai-audit" else "ai_audit_signature"
         audit_url = await build_short_audit_link(contact, batch_item_id=batch_item_id, source=audit_source)
     # Per-recipient tracked consult link so consult-page clicks attribute back to
@@ -1210,6 +1228,14 @@ async def compose_lead_email(
         except Exception:
             logger.exception("solution short-link build failed; using bare solution URL")
             solution_url = SOLUTION_URL
+    if variant_key == "intake-demo":
+        try:
+            solution_url = await build_short_intake_demo_link(
+                contact, batch_item_id=batch_item_id, source="intake_demo_email"
+            )
+        except Exception:
+            logger.exception("intake demo short-link build failed; using bare intake URL")
+            solution_url = INTAKE_DEMO_URL
     body = _ensure_signature(
         body,
         payload["sender"],

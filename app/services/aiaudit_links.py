@@ -21,6 +21,9 @@ VALID_CONSULT_SOURCES = {"consult_email", "consult_signature"}
 # Solution/product short links (kind="solution") redirect to a product solution
 # page (e.g. the outbound voice-AI page) with the same per-recipient attribution.
 VALID_SOLUTION_SOURCES = {"solution_email", "solution_signature"}
+# Intake demo short links (kind="intake") redirect to the browser-call demo and
+# preserve per-recipient attribution.
+VALID_INTAKE_SOURCES = {"intake_demo_email", "intake_demo_signature"}
 
 
 def _secret() -> bytes:
@@ -242,6 +245,45 @@ async def build_short_solution_link(
             except IntegrityError:
                 await session.rollback()
     raise RuntimeError("solution_short_code_collision")
+
+
+async def build_short_intake_demo_link(
+    contact: Any,
+    *,
+    batch_item_id: str | None = None,
+    source: str = "intake_demo_email",
+) -> str:
+    """Per-recipient tracked intake-demo link (kind="intake") -> /i/{code}.
+
+    Reuses audit_links/audit_link_clicks so the intake GTM motion shows up in
+    the same click analytics surface as audit, consult, and solution links.
+    """
+    clean_source = str(source or "").strip()
+    if clean_source not in VALID_INTAKE_SOURCES:
+        raise ValueError(f"invalid intake demo link source: {source}")
+    contact_id = str(getattr(contact, "id", "") or "").strip()
+    if not contact_id:
+        raise ValueError("contact_id_required")
+    pif_id = str(getattr(contact, "pif_id", "") or "").strip() or None
+    clean_batch_item_id = str(batch_item_id or "").strip() or None
+
+    async with AsyncSessionLocal() as session:
+        for _ in range(8):
+            code = _new_short_code()
+            session.add(AuditLinkRow(
+                code=code,
+                contact_id=contact_id,
+                batch_item_id=clean_batch_item_id,
+                pif_id=pif_id,
+                source=clean_source,
+                kind="intake",
+            ))
+            try:
+                await session.commit()
+                return f"{_link_public_base_url()}/i/{code}"
+            except IntegrityError:
+                await session.rollback()
+    raise RuntimeError("intake_demo_short_code_collision")
 
 
 async def resolve_short_audit_code(code: str | None) -> dict[str, Any] | None:

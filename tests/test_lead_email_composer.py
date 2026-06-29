@@ -4,12 +4,15 @@ import pytest
 
 from app.services.lead_email_composer import (
     CONSULT_URL,
+    INTAKE_DEMO_CTA_FOOTER,
+    INTAKE_DEMO_URL,
     SOLUTION_CTA_FOOTER,
     _blog_posts,
     _conversation_state,
     _ensure_consult_signature,
     _ensure_signature,
     _has_consult_link,
+    _has_intake_demo_link,
     _has_solution_link,
     _has_visibility_report_link,
     _sanitize_body_salutation,
@@ -128,6 +131,12 @@ def test_has_solution_link_detects_bare_and_tracked():
     assert _has_solution_link("nothing here") is False
 
 
+def test_has_intake_demo_link_detects_bare_and_tracked():
+    assert _has_intake_demo_link(f"try {INTAKE_DEMO_URL}") is True
+    assert _has_intake_demo_link("https://possible.example/i/Ab-3_xK9") is True
+    assert _has_intake_demo_link("nothing here") is False
+
+
 def test_missed_call_ranking_variant_adds_consult_and_solution_no_audit():
     contact = ContactStub(pif_id="pif-mc")
     solution = "https://possible.example/s/SolCode1"
@@ -146,6 +155,26 @@ def test_missed_call_ranking_variant_adds_consult_and_solution_no_audit():
     assert f"{SOLUTION_CTA_FOOTER} {solution}" in body
     assert CONSULT_URL not in body
     # No audit link on this variant.
+    assert "/a/" not in body and "/aiaudit/go" not in body
+
+
+def test_intake_demo_variant_adds_consult_and_tracked_demo_no_audit():
+    contact = ContactStub(pif_id="pif-intake")
+    demo = "https://possible.example/i/DemoCode1"
+    consult = "https://possible.example/c/ConCode1"
+
+    body = _ensure_signature(
+        "Hi Alex,\n\nI built a browser demo of an after-hours PI intake call.",
+        {"name": "Pranav", "title": "Founder"},
+        contact=contact,  # type: ignore[arg-type]
+        variant_key="intake-demo",
+        consult_url=consult,
+        solution_url=demo,
+    )
+
+    assert f"Book a consult: {consult}" in body
+    assert f"{INTAKE_DEMO_CTA_FOOTER} {demo}" in body
+    assert CONSULT_URL not in body
     assert "/a/" not in body and "/aiaudit/go" not in body
 
 
