@@ -174,6 +174,8 @@ def test_intake_demo_variant_adds_consult_and_tracked_demo_no_audit():
 
     assert f"Book a consult: {consult}" in body
     assert f"{INTAKE_DEMO_CTA_FOOTER} {demo}" in body
+    assert body.index(f"{INTAKE_DEMO_CTA_FOOTER} {demo}") < body.index("-- Pranav")
+    assert body.index(f"Book a consult: {consult}") > body.index("-- Pranav")
     assert CONSULT_URL not in body
     assert "/a/" not in body and "/aiaudit/go" not in body
 

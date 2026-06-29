@@ -486,11 +486,12 @@ def _ensure_signature(
         return body
 
     if is_intake_demo_variant:
-        if not _has_consult_link(body):
-            body = f"{body}\n\n" + "\n".join(signature_lines + [f"Book a consult: {consult_url}"]).strip()
         if solution_url and not _has_intake_demo_link(body):
             body = f"{body}\n\n{INTAKE_DEMO_CTA_FOOTER} {solution_url}".strip()
-        return body
+        sign_off = "\n".join(signature_lines)
+        if not _has_consult_link(body):
+            sign_off = f"{sign_off}\nBook a consult: {consult_url}"
+        return f"{body}\n\n{sign_off}".strip()
 
     audit_source = "ai_audit_email" if is_audit_variant else "ai_audit_signature"
     audit_url = audit_url or build_audit_link(contact, source=audit_source)
