@@ -194,6 +194,8 @@ _AUTH_EXEMPT_PREFIXES = (
     "/api/lead-gen/product-interest",
     # Human-session beacon from tracked landing pages (consult, solution, ...).
     "/api/lead-gen/page-event",
+    # Engagement dashboard readout for the Possible Minds admin page.
+    "/api/lead-gen/engagement-analytics",
     # Outreach open-pixel + click-redirect — fetched by recipients' email
     # clients, no session cookie possible.
     "/t/o/",
