@@ -485,6 +485,21 @@ class PageEventRequest(BaseModel):
     link_code: Optional[str] = Field(default=None, max_length=64)
     click_id: Optional[str] = Field(default=None, max_length=96)
     source: Optional[str] = Field(default=None, max_length=64)
+    firm_name: Optional[str] = Field(default=None, max_length=300)
+    pif_id: Optional[str] = Field(default=None, max_length=64)
+    contact_id: Optional[str] = Field(default=None, max_length=64)
+    contact_name: Optional[str] = Field(default=None, max_length=200)
+    contact_email: Optional[str] = Field(default=None, max_length=320)
+    utm_source: Optional[str] = Field(default=None, max_length=128)
+    utm_medium: Optional[str] = Field(default=None, max_length=128)
+    utm_campaign: Optional[str] = Field(default=None, max_length=256)
+    utm_term: Optional[str] = Field(default=None, max_length=256)
+    utm_content: Optional[str] = Field(default=None, max_length=512)
+    engagement_type: Optional[str] = Field(default=None, max_length=64)
+    click_text: Optional[str] = Field(default=None, max_length=240)
+    click_href: Optional[str] = Field(default=None, max_length=2048)
+    click_tag: Optional[str] = Field(default=None, max_length=64)
+    click_id_attr: Optional[str] = Field(default=None, max_length=128)
     url: Optional[str] = Field(default=None, max_length=2048)
     referrer: Optional[str] = Field(default=None, max_length=1024)
     session_id: Optional[str] = Field(default=None, max_length=64)
@@ -499,7 +514,11 @@ async def page_event(req: PageEventRequest):
     signal the redirect click cannot give. Attributed to a contact via the `/s/`
     or `/c/` link code (`lc`). Recorded as a `page_session` lead-gen observation.
     Public (auth-exempt), like the early-access form."""
-    contact_id = batch_item_id = pif_id = None
+    def clean(value: Optional[str]) -> Optional[str]:
+        return (value or "").strip() or None
+
+    contact_id = batch_item_id = None
+    pif_id = clean(req.pif_id)
     if req.link_code:
         from app.services.aiaudit_links import resolve_short_audit_code
         resolved = await resolve_short_audit_code(req.link_code)
@@ -507,19 +526,34 @@ async def page_event(req: PageEventRequest):
             contact_id = resolved.get("contact_id")
             batch_item_id = resolved.get("batch_item_id")
             pif_id = resolved.get("pif_id")
+    source = clean(req.source) or clean(req.utm_source)
     await record_observation(
         event_type="page_session",
         raw_event={
-            "event": (req.event or "session_ready").strip(),
-            "page": (req.page or "").strip() or None,
-            "session_id": (req.session_id or "").strip() or None,
+            "event": clean(req.event) or "session_ready",
+            "page": clean(req.page),
+            "session_id": clean(req.session_id),
             "time_on_page_ms": req.time_on_page_ms,
             "channel": "page_beacon",
-            "link_code": req.link_code,
-            "click_id": req.click_id,
-            "source": req.source,
-            "url": req.url,
-            "referrer": req.referrer,
+            "link_code": clean(req.link_code),
+            "click_id": clean(req.click_id),
+            "source": source,
+            "firm_name": clean(req.firm_name),
+            "contact_id": clean(req.contact_id),
+            "contact_name": clean(req.contact_name),
+            "contact_email": clean(req.contact_email),
+            "utm_source": clean(req.utm_source),
+            "utm_medium": clean(req.utm_medium),
+            "utm_campaign": clean(req.utm_campaign),
+            "utm_term": clean(req.utm_term),
+            "utm_content": clean(req.utm_content),
+            "engagement_type": clean(req.engagement_type),
+            "click_text": clean(req.click_text),
+            "click_href": clean(req.click_href),
+            "click_tag": clean(req.click_tag),
+            "click_id_attr": clean(req.click_id_attr),
+            "url": clean(req.url),
+            "referrer": clean(req.referrer),
             "pif_id": pif_id,
         },
         contact_id=contact_id,
@@ -611,11 +645,13 @@ async def engagement_analytics(
         contact_name = (
             (contact.full_name if contact else None)
             or (item.contact_name if item else None)
+            or str(raw_event.get("contact_name") or "")
             or ""
         )
         contact_email = (
             (contact.email if contact else None)
             or (item.contact_email if item else None)
+            or str(raw_event.get("contact_email") or "")
             or ""
         )
 
@@ -625,10 +661,10 @@ async def engagement_analytics(
             "contact_name": contact_name,
             "contact_email": contact_email,
             "firm_name": firm_name,
-            "pif_id": obs.pif_id,
+            "pif_id": obs.pif_id or raw_event.get("pif_id"),
             "link_code": raw_event.get("link_code"),
             "click_id": raw_event.get("click_id"),
-            "source": raw_event.get("source"),
+            "source": raw_event.get("source") or raw_event.get("utm_source"),
             "first_seen_at": obs.created_at.isoformat() if obs.created_at else None,
             "last_seen_at": obs.created_at.isoformat() if obs.created_at else None,
             "total_time_on_page_ms": 0,
@@ -646,6 +682,11 @@ async def engagement_analytics(
             "event": raw_event.get("event"),
             "url": raw_event.get("url"),
             "referrer": raw_event.get("referrer"),
+            "engagement_type": raw_event.get("engagement_type"),
+            "click_text": raw_event.get("click_text"),
+            "click_href": raw_event.get("click_href"),
+            "click_tag": raw_event.get("click_tag"),
+            "utm_campaign": raw_event.get("utm_campaign"),
             "time_on_page_ms": time_ms,
             "created_at": obs.created_at.isoformat() if obs.created_at else None,
         })
