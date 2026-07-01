@@ -1,0 +1,7 @@
+{
+  "active": true,
+  "allocation_weight": 0,
+  "description": "Routes non-decision-maker and gatekeeper contacts to the right workflow owner, asking for a direct email and phone number instead of pitching a demo.",
+  "key": "gatekeeper-routing",
+  "label": "Gatekeeper Routing"
+}

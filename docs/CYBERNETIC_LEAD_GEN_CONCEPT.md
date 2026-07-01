@@ -277,6 +277,12 @@ The composer output should include:
 The email should not feel like a fixed sequence. It should be a single
 appropriate next action in an ongoing market conversation.
 
+For non-leadership recipients, the "next action" is usually not a workflow
+pitch. When the system knows the founder or managing partner it wants, the
+email should switch to a short gatekeeper-style referral ask: use the Precise
+connection opener, name the founder/managing partner, keep the body brief, and
+ask for the best email address for that person.
+
 ## Feedback Sources
 
 The system should learn from every place reality pushes back.

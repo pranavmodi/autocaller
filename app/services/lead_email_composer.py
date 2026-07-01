@@ -23,6 +23,7 @@ from app.services.aiaudit_links import (
 )
 from app.services.ai_visibility_bridge import batch_item_visibility_report
 from app.services.llm_gateway import LLMGatewayError, call_skill_json
+from app.services.persona_mapper import classify_contact_fields
 from app.services.visibility_links import build_short_visibility_link
 
 logger = logging.getLogger(__name__)
@@ -80,6 +81,21 @@ ORG_NAME_WORDS = {
     "spine",
 }
 GENERIC_CONTACT_NAMES = {"admin", "contact", "hello", "info", "intake", "office", "team"}
+LEADERSHIP_PERSONAS = {"founder_owner", "managing_partner", "coo_ops"}
+NON_LEADERSHIP_REFERRAL_PERSONAS = {
+    "attorney",
+    "case_manager",
+    "intake",
+    "lien_settlement",
+    "marketing",
+    "paralegal",
+    "records",
+}
+LEADERSHIP_TARGET_PRIORITY = {
+    "founder_owner": 3,
+    "managing_partner": 2,
+    "coo_ops": 1,
+}
 
 
 @dataclass
@@ -255,6 +271,11 @@ async def fetch_competitive_context_for_email(
 def _excerpt(value: str | None, limit: int = 700) -> str:
     text = " ".join((value or "").split())
     return text[:limit]
+
+
+def _extract_first_name(value: str | None) -> str | None:
+    parts = [part for part in re.split(r"\s+", (value or "").strip()) if part]
+    return parts[0] if parts else None
 
 
 def _conversation_state(
@@ -446,6 +467,7 @@ def _ensure_signature(
     *,
     contact: FirmContactRow,
     variant_key: str | None,
+    suppress_audit_footer: bool = False,
     audit_url: str | None = None,
     consult_url: str | None = None,
     solution_url: str | None = None,
@@ -510,7 +532,7 @@ def _ensure_signature(
 
     if not _has_consult_link(body):
         body = f"{body}\n\n" + "\n".join(signature_lines + [f"Book a consult: {consult_url}"]).strip()
-    if not has_audit:
+    if not suppress_audit_footer and not has_audit:
         body = f"{body}\n\n{_audit_cta_line(audit_url, primary=False)}".strip()
     return body
 
@@ -689,6 +711,88 @@ def _has_usable_person_name(contact: FirmContactRow, firm_name: str) -> bool:
     if _looks_like_org_name(full_name):
         return False
     return True
+
+
+def _leadership_target_from_pif(
+    pif_row: PifFirmRow | None,
+    *,
+    current_contact_email: str | None,
+) -> dict[str, Any] | None:
+    if pif_row is None:
+        return None
+    current_email = (current_contact_email or "").strip().lower()
+    best: tuple[tuple[int, int], dict[str, Any]] | None = None
+    for person in (pif_row.leadership or []):
+        if not isinstance(person, dict):
+            continue
+        name = str(person.get("name") or "").strip()
+        title = str(person.get("title") or "").strip()
+        email = str(person.get("email") or "").strip().lower()
+        if not name:
+            continue
+        if current_email and email and email == current_email:
+            continue
+        match = classify_contact_fields(
+            research_title=title,
+            title=title,
+            email=email,
+            name=name,
+        )
+        persona = match.persona or ""
+        priority = LEADERSHIP_TARGET_PRIORITY.get(persona)
+        if priority is None:
+            continue
+        candidate = {
+            "name": name,
+            "first_name": _extract_first_name(name),
+            "title": title or None,
+            "email": email or None,
+            "persona": persona,
+            "persona_source": match.source,
+            "persona_confidence": match.confidence,
+        }
+        score = (priority, 1 if email else 0)
+        if best is None or score > best[0]:
+            best = (score, candidate)
+    return best[1] if best else None
+
+
+def _should_use_non_leadership_referral(
+    contact: FirmContactRow,
+    leadership_target: dict[str, Any] | None,
+) -> bool:
+    if not leadership_target:
+        return False
+    persona = (contact.persona or "").strip()
+    return persona in NON_LEADERSHIP_REFERRAL_PERSONAS
+
+
+def _non_leadership_referral_subject(leadership_target: dict[str, Any]) -> str:
+    first = str(leadership_target.get("first_name") or "").strip()
+    return f"best email for {first or 'the founder'}?"
+
+
+def _non_leadership_referral_body(
+    *,
+    contact: FirmContactRow,
+    firm_name: str,
+    sender_name: str,
+    leadership_target: dict[str, Any],
+) -> str:
+    greeting = "Hi,"
+    if _has_usable_person_name(contact, firm_name):
+        greeting = f"Hi {contact.first_name},"
+    leader_name = str(leadership_target.get("name") or leadership_target.get("first_name") or "the founder").strip()
+    leader_ref = str(leadership_target.get("first_name") or "them").strip()
+    opener = (
+        f"{sender_name} from Possible Minds. I was connected through Precise Imaging, "
+        f"they work closely with {firm_name}."
+    )
+    ask = (
+        f"I was trying to reach {leader_name} and wanted to see if you could point me "
+        f"to the best email for {leader_ref}."
+    )
+    return f"{greeting}\n\n{opener}\n{ask}".strip()
 
 
 def _sanitize_body_salutation(body: str, *, contact: FirmContactRow, firm_name: str) -> str:
@@ -963,6 +1067,10 @@ async def build_lead_email_context(
             "bio": signals["contact_bio"],
             "linkedin_url": contact.linkedin_url or signals["contact_linkedin"],
         },
+        "leadership_target": _leadership_target_from_pif(
+            pif_row,
+            current_contact_email=contact.email,
+        ),
         "history": {
             "previous_emails": [
                 {
@@ -1188,6 +1296,23 @@ async def compose_lead_email(
     _validate(parsed)
     body = _sanitize_email_copy(str(parsed.get("body") or ""))
     body = _sanitize_body_salutation(body, contact=contact, firm_name=firm_name)
+    leadership_target = payload.get("leadership_target") if isinstance(payload.get("leadership_target"), dict) else None
+    use_non_leadership_referral = _should_use_non_leadership_referral(contact, leadership_target)
+    if use_non_leadership_referral and leadership_target:
+        body = _non_leadership_referral_body(
+            contact=contact,
+            firm_name=firm_name,
+            sender_name=payload["sender"].get("name") or "Pranav",
+            leadership_target=leadership_target,
+        )
+        parsed["subject"] = _non_leadership_referral_subject(leadership_target)
+        parsed["angle"] = "right_owner_referral"
+        parsed["cta"] = "ask_for_founder_email"
+        parsed["reasoning"] = (
+            "Recipient is not leadership, so switch to a short gatekeeper-style "
+            "referral ask that names the founder/managing partner and asks for "
+            "their best email."
+        )
     variant_key = (composer_variant_key or "").strip()
     visibility_report = payload.get("ai_visibility_report") if isinstance(payload.get("ai_visibility_report"), dict) else None
     if (
@@ -1242,6 +1367,7 @@ async def compose_lead_email(
         payload["sender"],
         contact=contact,
         variant_key=composer_variant_key,
+        suppress_audit_footer=use_non_leadership_referral,
         audit_url=audit_url,
         consult_url=consult_url,
         solution_url=solution_url,

@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
   AlertTriangle,
   BrainCircuit,
+  CalendarDays,
   ChevronDown,
   CheckCircle2,
   ClipboardCheck,
@@ -86,6 +87,7 @@ export default function LeadGenPage() {
 
 function LeadGenPageContent() {
   const qc = useQueryClient();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const [batchId, setBatchId] = useState<string>("");
   const [dailyEmailBudget, setDailyEmailBudget] = useState(DEFAULT_DAILY_EMAIL_BUDGET);
@@ -101,8 +103,8 @@ function LeadGenPageContent() {
     queryFn: getLeadGenPolicy,
   });
   const batches = useQuery({
-    queryKey: ["lead-gen-batches", "recent"],
-    queryFn: () => listLeadGenBatches({ limit: 20 }),
+    queryKey: ["lead-gen-batches", "history"],
+    queryFn: () => listLeadGenBatches({ limit: 100 }),
     refetchInterval: 30_000,
   });
   const dailyRuns = useQuery({
@@ -219,6 +221,10 @@ function LeadGenPageContent() {
     (dailyRuns.data?.runs ?? []).find((run) => run.run_date === istDateKey(new Date())) ??
     (dailyRuns.data?.runs ?? [])[0] ??
     null;
+  const selectBatch = (nextBatchId: string) => {
+    setBatchId(nextBatchId);
+    router.replace(`/lead-gen?batch=${encodeURIComponent(nextBatchId)}`, { scroll: false });
+  };
 
   return (
     <div className="mx-auto min-w-0 max-w-[1500px] space-y-6">
@@ -263,6 +269,13 @@ function LeadGenPageContent() {
             error={runDaily.isError || toggleDaily.isError}
             lastRun={runDaily.data ?? null}
             throughput={throughput.data ?? null}
+          />
+          <BatchHistoryPanel
+            batches={batches.data?.batches ?? []}
+            selectedBatchId={batchId}
+            loading={batches.isLoading}
+            error={batches.isError}
+            onSelect={selectBatch}
           />
           <DailySendBudgetPanel
             dailyEmailBudget={dailyEmailBudget}
@@ -971,6 +984,99 @@ function reviewSaveStatusText(status: ReviewSaveStatus, detail?: string) {
 
 function sleep(ms: number) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+function BatchHistoryPanel({
+  batches,
+  selectedBatchId,
+  loading,
+  error,
+  onSelect,
+}: {
+  batches: LeadGenBatch[];
+  selectedBatchId: string;
+  loading: boolean;
+  error: boolean;
+  onSelect: (batchId: string) => void;
+}) {
+  const groups = useMemo(() => groupBatchesByDate(batches), [batches]);
+
+  return (
+    <section className="rounded-xl border border-neutral-200 bg-white">
+      <div className="flex items-center gap-2 border-b border-neutral-100 px-4 py-3">
+        <CalendarDays className="h-4 w-4 text-neutral-500" />
+        <div>
+          <div className="text-xs font-semibold uppercase tracking-wider text-neutral-500">
+            Batch history
+          </div>
+          <div className="mt-0.5 text-xs text-neutral-400">
+            Recent generated lists by date
+          </div>
+        </div>
+        {loading && <Loader2 className="ml-auto h-4 w-4 animate-spin text-neutral-400" />}
+      </div>
+      {error ? (
+        <div className="px-4 py-4 text-sm text-red-700">
+          Could not load batch history.
+        </div>
+      ) : groups.length === 0 ? (
+        <div className="px-4 py-4 text-sm text-neutral-500">
+          No generated batches yet.
+        </div>
+      ) : (
+        <div className="max-h-[520px] overflow-y-auto px-2 py-2">
+          {groups.map((group) => (
+            <div key={group.dateKey} className="py-1">
+              <div className="sticky top-0 z-10 bg-white/95 px-2 py-1 text-[11px] font-semibold uppercase tracking-wider text-neutral-400 backdrop-blur">
+                {group.label}
+              </div>
+              <div className="space-y-1">
+                {group.batches.map((batch) => {
+                  const selected = batch.id === selectedBatchId;
+                  return (
+                    <button
+                      key={batch.id}
+                      type="button"
+                      onClick={() => onSelect(batch.id)}
+                      className={cn(
+                        "w-full rounded-md px-2.5 py-2 text-left transition",
+                        selected
+                          ? "bg-neutral-900 text-white"
+                          : "text-neutral-700 hover:bg-neutral-50",
+                      )}
+                    >
+                      <div className="flex min-w-0 items-center gap-2">
+                        <div className="min-w-0 flex-1 truncate text-sm font-medium">
+                          {batch.name || "Untitled batch"}
+                        </div>
+                        <StatusPill
+                          status={batch.status}
+                          className={cn(
+                            "text-[10px]",
+                            selected && "bg-white/15 text-white",
+                          )}
+                        />
+                      </div>
+                      <div
+                        className={cn(
+                          "mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px]",
+                          selected ? "text-neutral-300" : "text-neutral-500",
+                        )}
+                      >
+                        <span>{batchItemCountLabel(batch)}</span>
+                        <span>{batchVariantLabel(batch)}</span>
+                        <span>{formatHistoryTime(batch.created_at)}</span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
 }
 
 function DailyRunPanel({
@@ -3121,6 +3227,93 @@ function istDateKey(value: Date | string | null | undefined) {
   }).formatToParts(date);
   const byType = Object.fromEntries(parts.map((part) => [part.type, part.value]));
   return `${byType.year}-${byType.month}-${byType.day}`;
+}
+
+function groupBatchesByDate(batches: LeadGenBatch[]) {
+  const map = new Map<string, LeadGenBatch[]>();
+  const sorted = [...batches].sort(
+    (a, b) => dateTimeMs(b.created_at) - dateTimeMs(a.created_at),
+  );
+  for (const batch of sorted) {
+    const dateKey = batchOperationalDateKey(batch);
+    const rows = map.get(dateKey) ?? [];
+    rows.push(batch);
+    map.set(dateKey, rows);
+  }
+  return Array.from(map.entries())
+    .sort(([a], [b]) => {
+      if (a === "unknown") return 1;
+      if (b === "unknown") return -1;
+      return b.localeCompare(a);
+    })
+    .map(([dateKey, rows]) => ({
+      dateKey,
+      label: batchHistoryDateLabel(dateKey),
+      batches: rows,
+    }));
+}
+
+function batchOperationalDateKey(batch: LeadGenBatch) {
+  const runDate = stringCountValue(batch.counts, "run_date");
+  if (/^\d{4}-\d{2}-\d{2}$/.test(runDate)) return runDate;
+  return istDateKey(batch.created_at) || "unknown";
+}
+
+function batchHistoryDateLabel(dateKey: string) {
+  if (dateKey === "unknown") return "Unknown date";
+  const today = istDateKey(new Date());
+  const yesterday = istDateKey(new Date(Date.now() - 24 * 60 * 60 * 1000));
+  if (dateKey === today) return "Today";
+  if (dateKey === yesterday) return "Yesterday";
+  const parsed = new Date(`${dateKey}T12:00:00Z`);
+  if (Number.isNaN(parsed.getTime())) return dateKey;
+  return parsed.toLocaleDateString("en-IN", {
+    timeZone: DISPLAY_TIME_ZONE,
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+function formatHistoryTime(value: string | null | undefined) {
+  if (!value) return "";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "";
+  return parsed.toLocaleTimeString("en-IN", {
+    timeZone: DISPLAY_TIME_ZONE,
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function batchItemCountLabel(batch: LeadGenBatch) {
+  const count =
+    numberCountValue(batch.counts, "selected") ??
+    numberCountValue(batch.counts, "returned") ??
+    numberCountValue(batch.counts, "recommended") ??
+    numberCountValue(batch.counts, "approved") ??
+    numberCountValue(batch.counts, "requested");
+  if (count === null) return "items -";
+  return `${count} item${count === 1 ? "" : "s"}`;
+}
+
+function batchVariantLabel(batch: LeadGenBatch) {
+  const variant =
+    stringCountValue(batch.counts, "composer_variant_override") ||
+    stringCountValue(batch.counts, "composer_variant");
+  if (variant) return variant;
+  return formatComposerKey(batch.template_key);
+}
+
+function stringCountValue(counts: Record<string, unknown> | undefined, key: string) {
+  const value = counts?.[key];
+  return typeof value === "string" ? value : "";
+}
+
+function numberCountValue(counts: Record<string, unknown> | undefined, key: string) {
+  const value = counts?.[key];
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  return null;
 }
 
 function selectBatchForDisplay(batches: LeadGenBatch[]) {

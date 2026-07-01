@@ -11,14 +11,18 @@ from app.services.lead_email_composer import (
     _conversation_state,
     _ensure_consult_signature,
     _ensure_signature,
+    _leadership_target_from_pif,
     _has_consult_link,
     _has_intake_demo_link,
     _has_solution_link,
     _has_visibility_report_link,
+    _non_leadership_referral_body,
+    _non_leadership_referral_subject,
     _sanitize_body_salutation,
     _sanitize_email_copy,
     _sanitize_subject,
     _sender_payload,
+    _should_use_non_leadership_referral,
     _visibility_report_outbound_ready,
     fetch_competitive_context_for_email,
 )
@@ -39,6 +43,11 @@ class ContactStub:
         self.full_name = full_name
         self.pif_id = pif_id
         self.email = email
+
+
+class PifStub:
+    def __init__(self, leadership):
+        self.leadership = leadership
 
 
 def test_ensure_consult_signature_appends_required_link(monkeypatch):
@@ -77,6 +86,22 @@ def test_ensure_signature_adds_consult_and_audit_links(monkeypatch):
     assert CONSULT_URL in body
     assert "https://possible.example/aiaudit/go?t=" in body
     assert "P.S. If you're weighing AI tools" in body
+
+
+def test_ensure_signature_can_suppress_audit_footer():
+    contact = ContactStub(pif_id="pif-1")
+
+    body = _ensure_signature(
+        "Hi Sarah,\n\nQuick note.",
+        {"name": "Pranav", "title": "Founder"},
+        contact=contact,  # type: ignore[arg-type]
+        variant_key="baseline",
+        consult_url="https://possible.example/c/Tracked01",
+        suppress_audit_footer=True,
+    )
+
+    assert "Book a consult: https://possible.example/c/Tracked01" in body
+    assert "P.S. If you're weighing AI tools" not in body
 
 
 def test_has_consult_link_detects_bare_and_tracked():
@@ -305,6 +330,51 @@ def test_sanitize_body_salutation_keeps_real_person_greeting():
     )
 
     assert sanitized.startswith("Hi Erica,\n\n")
+
+
+def test_leadership_target_prefers_founder_over_other_leadership():
+    target = _leadership_target_from_pif(
+        PifStub([
+            {"name": "Olivia Ops", "title": "Office Manager", "email": "ops@example.com"},
+            {"name": "Frank Founder", "title": "Founder", "email": "frank@example.com"},
+            {"name": "Manny Partner", "title": "Managing Partner", "email": "manny@example.com"},
+        ]),  # type: ignore[arg-type]
+        current_contact_email="staff@example.com",
+    )
+
+    assert target is not None
+    assert target["name"] == "Frank Founder"
+    assert target["first_name"] == "Frank"
+    assert target["persona"] == "founder_owner"
+
+
+def test_non_leadership_referral_copy_uses_precise_opener_and_founder_name():
+    contact = ContactStub(first_name="Erica", full_name="Erica Smith", email="erica@example.com")
+    leadership_target = {"name": "Frank Founder", "first_name": "Frank"}
+
+    body = _non_leadership_referral_body(
+        contact=contact,  # type: ignore[arg-type]
+        firm_name="Atlantic Injury Center",
+        sender_name="Pranav",
+        leadership_target=leadership_target,
+    )
+
+    assert body.startswith("Hi Erica,")
+    assert "I was connected through Precise Imaging, they work closely with Atlantic Injury Center." in body
+    assert "I was trying to reach Frank Founder" in body
+    assert "best email for Frank" in body
+    assert _non_leadership_referral_subject(leadership_target) == "best email for Frank?"
+
+
+def test_should_use_non_leadership_referral_only_for_non_buyers():
+    leadership_target = {"name": "Frank Founder", "first_name": "Frank"}
+    non_buyer = ContactStub(first_name="Erica", full_name="Erica Smith", email="erica@example.com")
+    non_buyer.persona = "records"
+    leader = ContactStub(first_name="Frank", full_name="Frank Founder", email="frank@example.com")
+    leader.persona = "founder_owner"
+
+    assert _should_use_non_leadership_referral(non_buyer, leadership_target) is True
+    assert _should_use_non_leadership_referral(leader, leadership_target) is False
 
 
 def test_conversation_state_replaces_sequence_payload():

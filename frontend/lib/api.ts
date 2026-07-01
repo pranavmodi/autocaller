@@ -1658,7 +1658,7 @@ export type LeadGenBatch = {
   template_key: string;
   policy_version: string;
   status: string;
-  counts: Record<string, number>;
+  counts: Record<string, unknown>;
   created_by: string | null;
   approved_by: string | null;
   approved_at: string | null;

@@ -140,8 +140,9 @@ def _http_error_detail(exc: httpx.HTTPError) -> str:
 
 
 def _get(path: str, **params) -> dict:
+    query_params = {key: value for key, value in params.items() if value is not None}
     try:
-        resp = httpx.get(f"{_api_base()}{path}", params=params or None, timeout=15.0)
+        resp = httpx.get(f"{_api_base()}{path}", params=query_params or None, timeout=15.0)
         resp.raise_for_status()
     except httpx.HTTPError as e:
         console.print(f"[red]API request failed: {_http_error_detail(e)}[/red]")
