@@ -55,6 +55,12 @@ TERMINAL_SEND_POLICY_REASONS = {
     "no_prior_successful_lead_gen_action_for_recipient",
     "no_prior_successful_test_action_for_recipient",
 }
+CONSULT_LINK_REQUIRED_VARIANTS = frozenset({
+    "ai-audit",
+    "ai-visibility-report",
+    "intake-demo",
+    "missed-call-ranking",
+})
 
 
 def _utcnow() -> datetime:
@@ -120,6 +126,36 @@ def _lead_gen_followup_metadata_from_item(
     return None
 
 
+def _lead_gen_composer_variant_from_item(
+    payload: dict[str, Any],
+    item: LeadGenBatchItemRow | None = None,
+) -> str:
+    variant = str(payload.get("composer_variant_key") or "").strip()
+    if variant or not item:
+        return variant
+
+    reason = dict(getattr(item, "reason_json", None) or {})
+    draft = reason.get("agent_draft") if isinstance(reason.get("agent_draft"), dict) else {}
+    for value in (
+        reason.get("selected_variant_key"),
+        reason.get("composer_variant_key"),
+        reason.get("last_sent_composer_variant_key"),
+        draft.get("composer_variant_key"),
+    ):
+        variant = str(value or "").strip()
+        if variant:
+            return variant
+    return ""
+
+
+def _lead_gen_requires_consult_link(
+    payload: dict[str, Any],
+    item: LeadGenBatchItemRow | None = None,
+) -> bool:
+    variant = _lead_gen_composer_variant_from_item(payload, item)
+    return variant in CONSULT_LINK_REQUIRED_VARIANTS
+
+
 def _sample_marker(value: Any) -> bool:
     if isinstance(value, str):
         return value.strip().lower() in {
@@ -140,9 +176,9 @@ def _is_sample_lead_gen_context(
 ) -> bool:
     """True for operator-created sample firms/contacts used for GTM demos.
 
-    Sample sends should still pass transport, approval, recipient, consult-link,
-    and PHI checks, but they are allowed to repeat so we can test email variants
-    and tracking links without constructing artificial sequence state.
+    Sample sends should still pass transport, approval, recipient, variant-specific
+    CTA, and PHI checks, but they are allowed to repeat so we can test email
+    variants and tracking links without constructing artificial sequence state.
     """
     if contact:
         if _sample_marker(getattr(contact, "source", "")):
@@ -899,8 +935,14 @@ async def reschedule_action(
         action.policy_result_json = {}
         action.updated_at = _utcnow()
         subject, body = _action_subject_body(action)
-        if action.entity_type == "lead_gen_batch_item" and action.entity_id:
-            item = await session.get(LeadGenBatchItemRow, action.entity_id)
+        batch_item_id = ""
+        if action.entity_type == "lead_gen_batch_item":
+            batch_item_id = str(action.entity_id or "").strip()
+        elif action.entity_type == "lead_gen_email":
+            payload = dict(action.input_json or {})
+            batch_item_id = str(payload.get("batch_item_id") or action.entity_id or "").strip()
+        if batch_item_id:
+            item = await session.get(LeadGenBatchItemRow, batch_item_id)
             if item:
                 _sync_lead_gen_scheduled_draft_fields(
                     item,
@@ -1709,9 +1751,13 @@ async def _check_send_email_policy_in_session(session, action: AgentActionRow) -
             suppressions = (batch_item.reason_json or {}).get("suppressions") or []
             add("not_suppressed_by_selection", len(suppressions) == 0, ", ".join(str(x) for x in suppressions))
         followup_meta = _lead_gen_followup_metadata_from_item(payload, batch_item)
-        # Accepts the bare consult URL OR a per-recipient tracked /c/ consult
-        # link (the tracking feature replaces the bare URL with /c/{code}).
-        add("consult_link_present", _has_consult_link(body), "")
+        variant_key = _lead_gen_composer_variant_from_item(payload, batch_item)
+        if _lead_gen_requires_consult_link(payload, batch_item):
+            # Accepts the bare consult URL OR a per-recipient tracked /c/ consult
+            # link (the tracking feature replaces the bare URL with /c/{code}).
+            add("consult_link_present", _has_consult_link(body), variant_key)
+        else:
+            add("consult_link_optional_for_variant", True, variant_key or "unspecified")
         guard_cache = dict(payload.get("phi_egress_guard_cache") or {})
         guard = await check_no_patient_data_in_outreach(subject=subject, body=body, cache=guard_cache)
         payload["phi_egress_guard_cache"] = guard_cache

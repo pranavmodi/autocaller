@@ -1,15 +1,23 @@
 """Cybernetic lead-generation loop endpoints."""
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from typing import Any, Optional
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import desc, func, select
 
 from app.db import AsyncSessionLocal
-from app.db.models import FirmContactRow, LeadGenBatchItemRow, LeadGenObservationRow
+from app.db.models import (
+    AgentActionRow,
+    EmailLogRow,
+    FirmContactRow,
+    LeadGenBatchItemRow,
+    LeadGenBatchRow,
+    LeadGenObservationRow,
+)
 from app.services.action_execution import (
     approve_lead_gen_batch_send_actions,
     create_send_email_action,
@@ -50,6 +58,7 @@ from app.services.sequences.registry import DEFAULT_TEMPLATE_KEY
 
 
 router = APIRouter(tags=["lead-gen"])
+PT = ZoneInfo("America/Los_Angeles")
 
 
 class CreateBatchRequest(BaseModel):
@@ -177,6 +186,94 @@ def _validate_composer_variant_key(raw_key: Optional[str]) -> Optional[str]:
                 detail=f"unknown or inactive composer variant '{variant_key}'. Active: {', '.join(valid)}",
             )
     return variant_key
+
+
+def _pt_day_bounds(target: date) -> tuple[datetime, datetime]:
+    start = datetime.combine(target, time.min, tzinfo=PT)
+    end = start + timedelta(days=1)
+    return start.astimezone(timezone.utc), end.astimezone(timezone.utc)
+
+
+def _format_pt(value: datetime | None) -> str | None:
+    if not value:
+        return None
+    return value.astimezone(PT).strftime("%Y-%m-%d %H:%M %Z")
+
+
+def _action_email_log_id(action: AgentActionRow) -> str | None:
+    result = action.execution_result_json or {}
+    value = result.get("email_log_id")
+    return str(value) if value is not None else None
+
+
+def _lead_gen_reason_string(item: LeadGenBatchItemRow, *keys: str) -> str | None:
+    reason = item.reason_json or {}
+    for key in keys:
+        value = reason.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return None
+
+
+def _lead_gen_send_plan_item(
+    action: AgentActionRow,
+    item: LeadGenBatchItemRow,
+    batch: LeadGenBatchRow,
+    contact: FirmContactRow | None,
+    *,
+    predicted: dict[str, Any] | None,
+    email_log: EmailLogRow | None,
+) -> dict[str, Any]:
+    payload = action.input_json or {}
+    sent_at = (
+        email_log.sent_at
+        if email_log and email_log.sent_at
+        else action.completed_at
+        if action.status == "succeeded"
+        else None
+    )
+    channel = None
+    if predicted:
+        channel = predicted.get("channel")
+    if not channel and email_log:
+        channel = f"sent:{email_log.transport}"
+    linkedin_url = (
+        (contact.linkedin_url if contact else None)
+        or _lead_gen_reason_string(
+            item,
+            "contact_linkedin_url",
+            "linkedin_url",
+            "linkedin",
+            "contact_linkedin",
+        )
+    )
+    action_type = payload.get("lead_gen_action_type") or _lead_gen_reason_string(item, "action_type")
+    return {
+        "action_id": action.id,
+        "action_status": action.status,
+        "batch_id": batch.id,
+        "batch_name": batch.name,
+        "batch_item_id": item.id,
+        "contact_id": item.contact_id,
+        "pif_id": item.pif_id,
+        "firm_name": item.firm_name,
+        "contact_name": item.contact_name,
+        "contact_email": item.contact_email,
+        "contact_title": item.contact_title,
+        "persona": item.persona,
+        "linkedin_url": linkedin_url,
+        "action_type": action_type or "first_touch",
+        "subject": payload.get("subject"),
+        "composer_variant_key": payload.get("composer_variant_key"),
+        "scheduled_for": action.scheduled_for.isoformat() if action.scheduled_for else None,
+        "scheduled_for_pt": _format_pt(action.scheduled_for),
+        "sent_at": sent_at.isoformat() if sent_at else None,
+        "sent_at_pt": _format_pt(sent_at),
+        "transport": (email_log.transport if email_log else None),
+        "channel": channel,
+        "message_id": email_log.message_id if email_log else None,
+        "email_log_status": email_log.status if email_log else None,
+    }
 
 
 @router.get("/api/lead-gen/policy/current")
@@ -309,6 +406,92 @@ async def get_daily_throughput(run_date: Optional[str] = Query(None)):
         except ValueError as e:
             raise HTTPException(status_code=400, detail="invalid_run_date") from e
     return await get_daily_run_throughput(run_date=parsed_date)
+
+
+@router.get("/api/lead-gen/send-plan")
+async def get_send_plan(send_date: Optional[str] = Query(None)):
+    """Emails sent or scheduled to send on a selected PT date, across batches."""
+    if send_date:
+        try:
+            target_date = date.fromisoformat(send_date)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail="invalid_send_date") from e
+    else:
+        target_date = datetime.now(timezone.utc).astimezone(PT).date()
+    start_utc, end_utc = _pt_day_bounds(target_date)
+    channel_plan = await daily_channel_plan(run_date=target_date)
+
+    async with AsyncSessionLocal() as session:
+        pending_rows = (await session.execute(
+            select(AgentActionRow, LeadGenBatchItemRow, LeadGenBatchRow, FirmContactRow)
+            .join(LeadGenBatchItemRow, AgentActionRow.entity_id == LeadGenBatchItemRow.id)
+            .join(LeadGenBatchRow, LeadGenBatchRow.id == LeadGenBatchItemRow.batch_id)
+            .outerjoin(FirmContactRow, FirmContactRow.id == LeadGenBatchItemRow.contact_id)
+            .where(AgentActionRow.action_type == "send_email")
+            .where(AgentActionRow.entity_type == "lead_gen_email")
+            .where(AgentActionRow.status == "approved")
+            .where(AgentActionRow.started_at.is_(None))
+            .where(AgentActionRow.completed_at.is_(None))
+            .where(AgentActionRow.scheduled_for >= start_utc)
+            .where(AgentActionRow.scheduled_for < end_utc)
+            .order_by(AgentActionRow.scheduled_for.asc(), AgentActionRow.id.asc())
+        )).all()
+        sent_rows = (await session.execute(
+            select(AgentActionRow, LeadGenBatchItemRow, LeadGenBatchRow, FirmContactRow)
+            .join(LeadGenBatchItemRow, AgentActionRow.entity_id == LeadGenBatchItemRow.id)
+            .join(LeadGenBatchRow, LeadGenBatchRow.id == LeadGenBatchItemRow.batch_id)
+            .outerjoin(FirmContactRow, FirmContactRow.id == LeadGenBatchItemRow.contact_id)
+            .where(AgentActionRow.action_type == "send_email")
+            .where(AgentActionRow.entity_type == "lead_gen_email")
+            .where(AgentActionRow.status == "succeeded")
+            .where(AgentActionRow.completed_at >= start_utc)
+            .where(AgentActionRow.completed_at < end_utc)
+            .order_by(AgentActionRow.completed_at.asc(), AgentActionRow.id.asc())
+        )).all()
+        email_log_ids = [
+            _action_email_log_id(action)
+            for action, _, _, _ in sent_rows
+            if _action_email_log_id(action)
+        ]
+        email_logs_by_id: dict[str, EmailLogRow] = {}
+        if email_log_ids:
+            logs = (await session.execute(
+                select(EmailLogRow).where(EmailLogRow.id.in_(email_log_ids))
+            )).scalars().all()
+            email_logs_by_id = {str(row.id): row for row in logs}
+
+    items: list[dict[str, Any]] = []
+    for action, item, batch, contact in sent_rows:
+        predicted = channel_plan.get(item.id)
+        log_id = _action_email_log_id(action)
+        items.append(_lead_gen_send_plan_item(
+            action,
+            item,
+            batch,
+            contact,
+            predicted=predicted,
+            email_log=email_logs_by_id.get(str(log_id)) if log_id else None,
+        ))
+    for action, item, batch, contact in pending_rows:
+        items.append(_lead_gen_send_plan_item(
+            action,
+            item,
+            batch,
+            contact,
+            predicted=channel_plan.get(item.id),
+            email_log=None,
+        ))
+    items.sort(key=lambda row: row.get("sent_at") or row.get("scheduled_for") or "")
+    return {
+        "date": target_date.isoformat(),
+        "timezone": "America/Los_Angeles",
+        "summary": {
+            "sent": len(sent_rows),
+            "scheduled": len(pending_rows),
+            "total": len(items),
+        },
+        "items": items,
+    }
 
 
 @router.get("/api/lead-gen/daily-run/enabled")

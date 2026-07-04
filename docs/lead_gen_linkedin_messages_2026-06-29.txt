@@ -1,0 +1,608 @@
+LinkedIn messages for PossibleOS lead-gen live send window
+Date: 2026-06-29
+Window: 2026-06-29 09:00-12:00 PDT / 16:00-19:00 UTC
+Variant: intake-demo
+Source: live send actions, including succeeded + approved scheduled sends
+Count: 40
+Note: LinkedIn links are Google search fallbacks because the live action payload does not include profile URLs and the contact enrichment DB timed out.
+========================================================================================
+
+1. Tracey - Aders & Herrera, APC
+Email/action recipient: tracey@aderslaw.com
+Send status: succeeded | scheduled_for: 2026-06-29T16:00:00+00:00
+LinkedIn search: https://www.google.com/search?q=Tracey+tracey+Aders+%26+Herrera%2C+APC+LinkedIn+personal+injury+lawyer
+Intake demo: https://intake.getpossibleminds.com/i/bwTZE50
+Book consult: https://getpossibleminds.com/c/U6PtHmbw
+Message:
+Hi Tracey - Pranav from Possible Minds. A serious PI caller after hours won't wait by the phone; they'll call the next firm.
+
+Sending you a two-minute browser demo for Aders & Herrera, APC: it shows the caller experience, how the assistant qualifies the matter, and the staff-ready handoff waiting by morning.
+
+Try it: https://intake.getpossibleminds.com/i/bwTZE50
+Book a consult: https://getpossibleminds.com/c/U6PtHmbw
+----------------------------------------------------------------------------------------
+
+2. Gilda - Argento Law, PC
+Email/action recipient: gilda@argentolawpc.com
+Send status: succeeded | scheduled_for: 2026-06-29T16:04:14+00:00
+LinkedIn search: https://www.google.com/search?q=Gilda+gilda+Argento+Law%2C+PC+LinkedIn+personal+injury+lawyer
+Intake demo: https://intake.getpossibleminds.com/i/ifrlHx3B
+Book consult: https://getpossibleminds.com/c/WoZpyF3j
+Message:
+Hi Gilda - Pranav from Possible Minds. A serious PI caller after hours won't wait by the phone; they'll call the next firm.
+
+Sending you a two-minute browser demo for Argento Law, PC: it shows the caller experience, how the assistant qualifies the matter, and the staff-ready handoff waiting by morning.
+
+Try it: https://intake.getpossibleminds.com/i/ifrlHx3B
+Book a consult: https://getpossibleminds.com/c/WoZpyF3j
+----------------------------------------------------------------------------------------
+
+3. Mike - Arias Sanguinetti Law Firm
+Email/action recipient: mike@aswtlawyers.com
+Send status: succeeded | scheduled_for: 2026-06-29T16:10:24+00:00
+LinkedIn search: https://www.google.com/search?q=Mike+mike+Arias+Sanguinetti+Law+Firm+LinkedIn+personal+injury+lawyer
+Intake demo: https://intake.getpossibleminds.com/i/3BuGVUTf
+Book consult: https://getpossibleminds.com/c/u3T8HI0L
+Message:
+Hi Mike - Pranav from Possible Minds. A serious PI caller after hours won't wait by the phone; they'll call the next firm.
+
+Sending you a two-minute browser demo for Arias Sanguinetti Law Firm: it shows the caller experience, how the assistant qualifies the matter, and the staff-ready handoff waiting by morning.
+
+Try it: https://intake.getpossibleminds.com/i/3BuGVUTf
+Book a consult: https://getpossibleminds.com/c/u3T8HI0L
+----------------------------------------------------------------------------------------
+
+4. Maryam - Avrek Law
+Email/action recipient: info@avreklaw.com
+Send status: succeeded | scheduled_for: 2026-06-29T16:12:05+00:00
+LinkedIn search: https://www.google.com/search?q=Maryam+info+Avrek+Law+LinkedIn+personal+injury+lawyer
+Intake demo: https://intake.getpossibleminds.com/i/Girnyyt
+Book consult: https://getpossibleminds.com/c/vWZi5nU6
+Message:
+Hi Maryam - Pranav from Possible Minds. A serious PI caller after hours won't wait by the phone; they'll call the next firm.
+
+Sending you a two-minute browser demo for Avrek Law: it shows the caller experience, how the assistant qualifies the matter, and the staff-ready handoff waiting by morning.
+
+Try it: https://intake.getpossibleminds.com/i/Girnyyt
+Book a consult: https://getpossibleminds.com/c/vWZi5nU6
+----------------------------------------------------------------------------------------
+
+5. Shawn - BDJ PC
+Email/action recipient: sm@bhattorneys.com
+Send status: succeeded | scheduled_for: 2026-06-29T16:19:50+00:00
+LinkedIn search: https://www.google.com/search?q=Shawn+sm+BDJ+PC+LinkedIn+personal+injury+lawyer
+Intake demo: https://intake.getpossibleminds.com/i/nP1Zsqxj
+Book consult: https://getpossibleminds.com/c/hzSRG9V5
+Message:
+Hi Shawn - Pranav from Possible Minds. A serious PI caller after hours won't wait by the phone; they'll call the next firm.
+
+Sending you a two-minute browser demo for BDJ PC: it shows the caller experience, how the assistant qualifies the matter, and the staff-ready handoff waiting by morning.
+
+Try it: https://intake.getpossibleminds.com/i/nP1Zsqxj
+Book a consult: https://getpossibleminds.com/c/hzSRG9V5
+----------------------------------------------------------------------------------------
+
+6. Eduard - Braun Law Firm
+Email/action recipient: eduard@ebraunlaw.com
+Send status: succeeded | scheduled_for: 2026-06-29T16:21:37+00:00
+LinkedIn search: https://www.google.com/search?q=Eduard+eduard+Braun+Law+Firm+LinkedIn+personal+injury+lawyer
+Intake demo: https://intake.getpossibleminds.com/i/TGzSWcQ
+Book consult: https://getpossibleminds.com/c/AnCYiQwT
+Message:
+Hi Eduard - Pranav from Possible Minds. A serious PI caller after hours won't wait by the phone; they'll call the next firm.
+
+Sending you a two-minute browser demo for Braun Law Firm: it shows the caller experience, how the assistant qualifies the matter, and the staff-ready handoff waiting by morning.
+
+Try it: https://intake.getpossibleminds.com/i/TGzSWcQ
+Book a consult: https://getpossibleminds.com/c/AnCYiQwT
+----------------------------------------------------------------------------------------
+
+7. Matthew - Coastline Law Firm, PC
+Email/action recipient: info@coastlinefirm.com
+Send status: succeeded | scheduled_for: 2026-06-29T16:25:52+00:00
+LinkedIn search: https://www.google.com/search?q=Matthew+info+Coastline+Law+Firm%2C+PC+LinkedIn+personal+injury+lawyer
+Intake demo: https://intake.getpossibleminds.com/i/Bb6K5fDr
+Book consult: https://getpossibleminds.com/c/BNtOTqfg
+Message:
+Hi Matthew - Pranav from Possible Minds. A serious PI caller after hours won't wait by the phone; they'll call the next firm.
+
+Sending you a two-minute browser demo for Coastline Law Firm, PC: it shows the caller experience, how the assistant qualifies the matter, and the staff-ready handoff waiting by morning.
+
+Try it: https://intake.getpossibleminds.com/i/Bb6K5fDr
+Book a consult: https://getpossibleminds.com/c/BNtOTqfg
+----------------------------------------------------------------------------------------
+
+8. there - Gilardi Law
+Email/action recipient: info@gilardilaw.com
+Send status: succeeded | scheduled_for: 2026-06-29T16:33:18+00:00
+LinkedIn search: https://www.google.com/search?q=info+Gilardi+Law+LinkedIn+personal+injury+lawyer
+Intake demo: https://intake.getpossibleminds.com/i/NguzcSb7
+Book consult: https://getpossibleminds.com/c/F3cgXUT6
+Message:
+Hi there - Pranav from Possible Minds. A serious PI caller after hours won't wait by the phone; they'll call the next firm.
+
+Sending you a two-minute browser demo for Gilardi Law: it shows the caller experience, how the assistant qualifies the matter, and the staff-ready handoff waiting by morning.
+
+Try it: https://intake.getpossibleminds.com/i/NguzcSb7
+Book a consult: https://getpossibleminds.com/c/F3cgXUT6
+----------------------------------------------------------------------------------------
+
+9. Sam - Heidari Law Group
+Email/action recipient: sam@heidarilawgroup.com
+Send status: succeeded | scheduled_for: 2026-06-29T16:35:17+00:00
+LinkedIn search: https://www.google.com/search?q=Sam+sam+Heidari+Law+Group+LinkedIn+personal+injury+lawyer
+Intake demo: https://intake.getpossibleminds.com/i/pL1gNOtp
+Book consult: https://getpossibleminds.com/c/R0616emC
+Message:
+Hi Sam - Pranav from Possible Minds. A serious PI caller after hours won't wait by the phone; they'll call the next firm.
+
+Sending you a two-minute browser demo for Heidari Law Group: it shows the caller experience, how the assistant qualifies the matter, and the staff-ready handoff waiting by morning.
+
+Try it: https://intake.getpossibleminds.com/i/pL1gNOtp
+Book a consult: https://getpossibleminds.com/c/R0616emC
+----------------------------------------------------------------------------------------
+
+10. Aaron - Injured Lemon PC
+Email/action recipient: aaron@injuredlemon.com
+Send status: succeeded | scheduled_for: 2026-06-29T16:43:17+00:00
+LinkedIn search: https://www.google.com/search?q=Aaron+aaron+Injured+Lemon+PC+LinkedIn+personal+injury+lawyer
+Intake demo: https://intake.getpossibleminds.com/i/-YwZd2Uo
+Book consult: https://getpossibleminds.com/c/ikDA50T8
+Message:
+Hi Aaron - Pranav from Possible Minds. A serious PI caller after hours won't wait by the phone; they'll call the next firm.
+
+Sending you a two-minute browser demo for Injured Lemon PC: it shows the caller experience, how the assistant qualifies the matter, and the staff-ready handoff waiting by morning.
+
+Try it: https://intake.getpossibleminds.com/i/-YwZd2Uo
+Book a consult: https://getpossibleminds.com/c/ikDA50T8
+----------------------------------------------------------------------------------------
+
+11. Christian - Ivy Crest Attorneys, APC
+Email/action recipient: christian.oronsaye@ivycrestlaw.com
+Send status: succeeded | scheduled_for: 2026-06-29T16:44:48+00:00
+LinkedIn search: https://www.google.com/search?q=Christian+christian+oronsaye+Ivy+Crest+Attorneys%2C+APC+LinkedIn+personal+injury+lawyer
+Intake demo: https://intake.getpossibleminds.com/i/8Q63aq9M
+Book consult: https://getpossibleminds.com/c/SnE-FaDs
+Message:
+Hi Christian - Pranav from Possible Minds. A serious PI caller after hours won't wait by the phone; they'll call the next firm.
+
+Sending you a two-minute browser demo for Ivy Crest Attorneys, APC: it shows the caller experience, how the assistant qualifies the matter, and the staff-ready handoff waiting by morning.
+
+Try it: https://intake.getpossibleminds.com/i/8Q63aq9M
+Book a consult: https://getpossibleminds.com/c/SnE-FaDs
+----------------------------------------------------------------------------------------
+
+12. Mark - Jaru Law
+Email/action recipient: mark@jarulaw.com
+Send status: succeeded | scheduled_for: 2026-06-29T16:51:26+00:00
+LinkedIn search: https://www.google.com/search?q=Mark+mark+Jaru+Law+LinkedIn+personal+injury+lawyer
+Intake demo: https://intake.getpossibleminds.com/i/VEyPeI1Q
+Book consult: https://getpossibleminds.com/c/ZPu1sHvY
+Message:
+Hi Mark - Pranav from Possible Minds. A serious PI caller after hours won't wait by the phone; they'll call the next firm.
+
+Sending you a two-minute browser demo for Jaru Law: it shows the caller experience, how the assistant qualifies the matter, and the staff-ready handoff waiting by morning.
+
+Try it: https://intake.getpossibleminds.com/i/VEyPeI1Q
+Book a consult: https://getpossibleminds.com/c/ZPu1sHvY
+----------------------------------------------------------------------------------------
+
+13. Oganes - KG Legal Group
+Email/action recipient: oganes@kglegalgroup.com
+Send status: approved | scheduled_for: 2026-06-29T16:57:17+00:00
+LinkedIn search: https://www.google.com/search?q=Oganes+oganes+KG+Legal+Group+LinkedIn+personal+injury+lawyer
+Intake demo: https://intake.getpossibleminds.com/i/9UEbpbZI
+Book consult: https://getpossibleminds.com/c/MciGF1K3
+Message:
+Hi Oganes - Pranav from Possible Minds. A serious PI caller after hours won't wait by the phone; they'll call the next firm.
+
+Sending you a two-minute browser demo for KG Legal Group: it shows the caller experience, how the assistant qualifies the matter, and the staff-ready handoff waiting by morning.
+
+Try it: https://intake.getpossibleminds.com/i/9UEbpbZI
+Book a consult: https://getpossibleminds.com/c/MciGF1K3
+----------------------------------------------------------------------------------------
+
+14. Hadi - LOS ANGELES CITY LAW
+Email/action recipient: hadi@lacitylaw.com
+Send status: approved | scheduled_for: 2026-06-29T17:01:17+00:00
+LinkedIn search: https://www.google.com/search?q=Hadi+hadi+LOS+ANGELES+CITY+LAW+LinkedIn+personal+injury+lawyer
+Intake demo: https://intake.getpossibleminds.com/i/WeWds6c5
+Book consult: https://getpossibleminds.com/c/020P2UWY
+Message:
+Hi Hadi - Pranav from Possible Minds. A serious PI caller after hours won't wait by the phone; they'll call the next firm.
+
+Sending you a two-minute browser demo for LOS ANGELES CITY LAW: it shows the caller experience, how the assistant qualifies the matter, and the staff-ready handoff waiting by morning.
+
+Try it: https://intake.getpossibleminds.com/i/WeWds6c5
+Book a consult: https://getpossibleminds.com/c/020P2UWY
+----------------------------------------------------------------------------------------
+
+15. Michael - Legal Needs
+Email/action recipient: michael@legalneeds.com
+Send status: approved | scheduled_for: 2026-06-29T17:06:07+00:00
+LinkedIn search: https://www.google.com/search?q=Michael+michael+Legal+Needs+LinkedIn+personal+injury+lawyer
+Intake demo: https://intake.getpossibleminds.com/i/569lTgJy
+Book consult: https://getpossibleminds.com/c/w0KIhSBV
+Message:
+Hi Michael - Pranav from Possible Minds. A serious PI caller after hours won't wait by the phone; they'll call the next firm.
+
+Sending you a two-minute browser demo for Legal Needs: it shows the caller experience, how the assistant qualifies the matter, and the staff-ready handoff waiting by morning.
+
+Try it: https://intake.getpossibleminds.com/i/569lTgJy
+Book a consult: https://getpossibleminds.com/c/w0KIhSBV
+----------------------------------------------------------------------------------------
+
+16. Moshe - Legal Needs, APC
+Email/action recipient: moshe@legalneeds.com
+Send status: approved | scheduled_for: 2026-06-29T17:07:36+00:00
+LinkedIn search: https://www.google.com/search?q=Moshe+moshe+Legal+Needs%2C+APC+LinkedIn+personal+injury+lawyer
+Intake demo: https://intake.getpossibleminds.com/i/U_UvFZm9
+Book consult: https://getpossibleminds.com/c/_H2wedf8
+Message:
+Hi Moshe - Pranav from Possible Minds. A serious PI caller after hours won't wait by the phone; they'll call the next firm.
+
+Sending you a two-minute browser demo for Legal Needs, APC: it shows the caller experience, how the assistant qualifies the matter, and the staff-ready handoff waiting by morning.
+
+Try it: https://intake.getpossibleminds.com/i/U_UvFZm9
+Book a consult: https://getpossibleminds.com/c/_H2wedf8
+----------------------------------------------------------------------------------------
+
+17. David - Makkabi Law Group, APC
+Email/action recipient: dmakkabi@makkabilaw.com
+Send status: approved | scheduled_for: 2026-06-29T17:15:18+00:00
+LinkedIn search: https://www.google.com/search?q=David+dmakkabi+Makkabi+Law+Group%2C+APC+LinkedIn+personal+injury+lawyer
+Intake demo: https://intake.getpossibleminds.com/i/2DeTazXY
+Book consult: https://getpossibleminds.com/c/xTGEN6E
+Message:
+Hi David - Pranav from Possible Minds. A serious PI caller after hours won't wait by the phone; they'll call the next firm.
+
+Sending you a two-minute browser demo for Makkabi Law Group, APC: it shows the caller experience, how the assistant qualifies the matter, and the staff-ready handoff waiting by morning.
+
+Try it: https://intake.getpossibleminds.com/i/2DeTazXY
+Book a consult: https://getpossibleminds.com/c/xTGEN6E
+----------------------------------------------------------------------------------------
+
+18. Alex - Megeredchian Law
+Email/action recipient: alex@megeredchianlaw.com
+Send status: approved | scheduled_for: 2026-06-29T17:19:08+00:00
+LinkedIn search: https://www.google.com/search?q=Alex+alex+Megeredchian+Law+LinkedIn+personal+injury+lawyer
+Intake demo: https://intake.getpossibleminds.com/i/TuZ0cIj6
+Book consult: https://getpossibleminds.com/c/2we1j75B
+Message:
+Hi Alex - Pranav from Possible Minds. A serious PI caller after hours won't wait by the phone; they'll call the next firm.
+
+Sending you a two-minute browser demo for Megeredchian Law: it shows the caller experience, how the assistant qualifies the matter, and the staff-ready handoff waiting by morning.
+
+Try it: https://intake.getpossibleminds.com/i/TuZ0cIj6
+Book a consult: https://getpossibleminds.com/c/2we1j75B
+----------------------------------------------------------------------------------------
+
+19. JT - Montgomery | Steele
+Email/action recipient: jt@montgomerysteele.com
+Send status: approved | scheduled_for: 2026-06-29T17:22:47+00:00
+LinkedIn search: https://www.google.com/search?q=JT+jt+Montgomery+%7C+Steele+LinkedIn+personal+injury+lawyer
+Intake demo: https://intake.getpossibleminds.com/i/t9jLyNNb
+Book consult: https://getpossibleminds.com/c/qcmwJnNp
+Message:
+Hi JT - Pranav from Possible Minds. A serious PI caller after hours won't wait by the phone; they'll call the next firm.
+
+Sending you a two-minute browser demo for Montgomery | Steele: it shows the caller experience, how the assistant qualifies the matter, and the staff-ready handoff waiting by morning.
+
+Try it: https://intake.getpossibleminds.com/i/t9jLyNNb
+Book a consult: https://getpossibleminds.com/c/qcmwJnNp
+----------------------------------------------------------------------------------------
+
+20. Michael - Morgan and Morgan
+Email/action recipient: michael.sigall@forthepeople.com
+Send status: approved | scheduled_for: 2026-06-29T17:27:55+00:00
+LinkedIn search: https://www.google.com/search?q=Michael+michael+sigall+Morgan+and+Morgan+LinkedIn+personal+injury+lawyer
+Intake demo: https://intake.getpossibleminds.com/i/YTuB3OSZ
+Book consult: https://getpossibleminds.com/c/Bn0mTmUe
+Message:
+Hi Michael - Pranav from Possible Minds. A serious PI caller after hours won't wait by the phone; they'll call the next firm.
+
+Sending you a two-minute browser demo for Morgan and Morgan: it shows the caller experience, how the assistant qualifies the matter, and the staff-ready handoff waiting by morning.
+
+Try it: https://intake.getpossibleminds.com/i/YTuB3OSZ
+Book a consult: https://getpossibleminds.com/c/Bn0mTmUe
+----------------------------------------------------------------------------------------
+
+21. Frank - Nunes Law, Inc.
+Email/action recipient: info@nuneslaw.com
+Send status: approved | scheduled_for: 2026-06-29T17:33:42+00:00
+LinkedIn search: https://www.google.com/search?q=Frank+info+Nunes+Law%2C+Inc.+LinkedIn+personal+injury+lawyer
+Intake demo: https://intake.getpossibleminds.com/i/x37cAK2H
+Book consult: https://getpossibleminds.com/c/4x-XZo0o
+Message:
+Hi Frank - Pranav from Possible Minds. A serious PI caller after hours won't wait by the phone; they'll call the next firm.
+
+Sending you a two-minute browser demo for Nunes Law, Inc.: it shows the caller experience, how the assistant qualifies the matter, and the staff-ready handoff waiting by morning.
+
+Try it: https://intake.getpossibleminds.com/i/x37cAK2H
+Book a consult: https://getpossibleminds.com/c/4x-XZo0o
+----------------------------------------------------------------------------------------
+
+22. Khail - PARRIS Law Firm
+Email/action recipient: kparris@parrislawyers.com
+Send status: approved | scheduled_for: 2026-06-29T17:38:30+00:00
+LinkedIn search: https://www.google.com/search?q=Khail+kparris+PARRIS+Law+Firm+LinkedIn+personal+injury+lawyer
+Intake demo: https://intake.getpossibleminds.com/i/JUDvHJh
+Book consult: https://getpossibleminds.com/c/J4EgJBXE
+Message:
+Hi Khail - Pranav from Possible Minds. A serious PI caller after hours won't wait by the phone; they'll call the next firm.
+
+Sending you a two-minute browser demo for PARRIS Law Firm: it shows the caller experience, how the assistant qualifies the matter, and the staff-ready handoff waiting by morning.
+
+Try it: https://intake.getpossibleminds.com/i/JUDvHJh
+Book a consult: https://getpossibleminds.com/c/J4EgJBXE
+----------------------------------------------------------------------------------------
+
+23. Heather - Protection Law Group, LLP
+Email/action recipient: heather@protectionlawgroup.com
+Send status: approved | scheduled_for: 2026-06-29T17:41:09+00:00
+LinkedIn search: https://www.google.com/search?q=Heather+heather+Protection+Law+Group%2C+LLP+LinkedIn+personal+injury+lawyer
+Intake demo: https://intake.getpossibleminds.com/i/7lfTm_z3
+Book consult: https://getpossibleminds.com/c/VY8Fn4_g
+Message:
+Hi Heather - Pranav from Possible Minds. A serious PI caller after hours won't wait by the phone; they'll call the next firm.
+
+Sending you a two-minute browser demo for Protection Law Group, LLP: it shows the caller experience, how the assistant qualifies the matter, and the staff-ready handoff waiting by morning.
+
+Try it: https://intake.getpossibleminds.com/i/7lfTm_z3
+Book a consult: https://getpossibleminds.com/c/VY8Fn4_g
+----------------------------------------------------------------------------------------
+
+24. Omid - Razi Law Group, a Professional Law Corporation
+Email/action recipient: rlg1@razilaw.com
+Send status: approved | scheduled_for: 2026-06-29T17:46:54+00:00
+LinkedIn search: https://www.google.com/search?q=Omid+rlg1+Razi+Law+Group%2C+a+Professional+Law+Corporation+LinkedIn+personal+injury+lawyer
+Intake demo: https://intake.getpossibleminds.com/i/OS1t9KWn
+Book consult: https://getpossibleminds.com/c/ox97p5fK
+Message:
+Hi Omid - Pranav from Possible Minds. A serious PI caller after hours won't wait by the phone; they'll call the next firm.
+
+Sending you a two-minute browser demo for Razi Law Group, a Professional Law Corporation: it shows the caller experience, how the assistant qualifies the matter, and the staff-ready handoff waiting by morning.
+
+Try it: https://intake.getpossibleminds.com/i/OS1t9KWn
+Book a consult: https://getpossibleminds.com/c/ox97p5fK
+----------------------------------------------------------------------------------------
+
+25. Sal - SAW Law Group
+Email/action recipient: sal@sawlawgroup.com
+Send status: approved | scheduled_for: 2026-06-29T17:49:35+00:00
+LinkedIn search: https://www.google.com/search?q=Sal+sal+SAW+Law+Group+LinkedIn+personal+injury+lawyer
+Intake demo: https://intake.getpossibleminds.com/i/HkgQzhUf
+Book consult: https://getpossibleminds.com/c/aTweSKeS
+Message:
+Hi Sal - Pranav from Possible Minds. A serious PI caller after hours won't wait by the phone; they'll call the next firm.
+
+Sending you a two-minute browser demo for SAW Law Group: it shows the caller experience, how the assistant qualifies the matter, and the staff-ready handoff waiting by morning.
+
+Try it: https://intake.getpossibleminds.com/i/HkgQzhUf
+Book a consult: https://getpossibleminds.com/c/aTweSKeS
+----------------------------------------------------------------------------------------
+
+26. Kian - SM LAW GROUP, APC
+Email/action recipient: kian@smlawca.com
+Send status: approved | scheduled_for: 2026-06-29T17:53:55+00:00
+LinkedIn search: https://www.google.com/search?q=Kian+kian+SM+LAW+GROUP%2C+APC+LinkedIn+personal+injury+lawyer
+Intake demo: https://intake.getpossibleminds.com/i/eRgIugdL
+Book consult: https://getpossibleminds.com/c/hXkXmR7
+Message:
+Hi Kian - Pranav from Possible Minds. A serious PI caller after hours won't wait by the phone; they'll call the next firm.
+
+Sending you a two-minute browser demo for SM LAW GROUP, APC: it shows the caller experience, how the assistant qualifies the matter, and the staff-ready handoff waiting by morning.
+
+Try it: https://intake.getpossibleminds.com/i/eRgIugdL
+Book a consult: https://getpossibleminds.com/c/hXkXmR7
+----------------------------------------------------------------------------------------
+
+27. William - Sayegh Law Firm
+Email/action recipient: wgs@sayeghlaw.com
+Send status: approved | scheduled_for: 2026-06-29T18:01:02+00:00
+LinkedIn search: https://www.google.com/search?q=William+wgs+Sayegh+Law+Firm+LinkedIn+personal+injury+lawyer
+Intake demo: https://intake.getpossibleminds.com/i/fSGNBTz5
+Book consult: https://getpossibleminds.com/c/W9S9SLpE
+Message:
+Hi William - Pranav from Possible Minds. A serious PI caller after hours won't wait by the phone; they'll call the next firm.
+
+Sending you a two-minute browser demo for Sayegh Law Firm: it shows the caller experience, how the assistant qualifies the matter, and the staff-ready handoff waiting by morning.
+
+Try it: https://intake.getpossibleminds.com/i/fSGNBTz5
+Book a consult: https://getpossibleminds.com/c/W9S9SLpE
+----------------------------------------------------------------------------------------
+
+28. Daniel - Scranton Law Firm
+Email/action recipient: h****d@scrantonlawfirm.com
+Send status: approved | scheduled_for: 2026-06-29T18:04:25+00:00
+LinkedIn search: https://www.google.com/search?q=Daniel+h%2A%2A%2A%2Ad+Scranton+Law+Firm+LinkedIn+personal+injury+lawyer
+Intake demo: https://intake.getpossibleminds.com/i/VgmpieL8
+Book consult: https://getpossibleminds.com/c/TC3B55jJ
+Message:
+Hi Daniel - Pranav from Possible Minds. A serious PI caller after hours won't wait by the phone; they'll call the next firm.
+
+Sending you a two-minute browser demo for Scranton Law Firm: it shows the caller experience, how the assistant qualifies the matter, and the staff-ready handoff waiting by morning.
+
+Try it: https://intake.getpossibleminds.com/i/VgmpieL8
+Book a consult: https://getpossibleminds.com/c/TC3B55jJ
+----------------------------------------------------------------------------------------
+
+29. Eric - The Levine Firm, APC
+Email/action recipient: eric@levinefirmlaw.com
+Send status: approved | scheduled_for: 2026-06-29T18:10:48+00:00
+LinkedIn search: https://www.google.com/search?q=Eric+eric+The+Levine+Firm%2C+APC+LinkedIn+personal+injury+lawyer
+Intake demo: https://intake.getpossibleminds.com/i/rZ6gEzhJ
+Book consult: https://getpossibleminds.com/c/tg6S3qNd
+Message:
+Hi Eric - Pranav from Possible Minds. A serious PI caller after hours won't wait by the phone; they'll call the next firm.
+
+Sending you a two-minute browser demo for The Levine Firm, APC: it shows the caller experience, how the assistant qualifies the matter, and the staff-ready handoff waiting by morning.
+
+Try it: https://intake.getpossibleminds.com/i/rZ6gEzhJ
+Book a consult: https://getpossibleminds.com/c/tg6S3qNd
+----------------------------------------------------------------------------------------
+
+30. Ramin - The Raiszadeh Law Firm
+Email/action recipient: ramin@rlfwins.com
+Send status: approved | scheduled_for: 2026-06-29T18:15:48+00:00
+LinkedIn search: https://www.google.com/search?q=Ramin+ramin+The+Raiszadeh+Law+Firm+LinkedIn+personal+injury+lawyer
+Intake demo: https://intake.getpossibleminds.com/i/XaCLs-Pc
+Book consult: https://getpossibleminds.com/c/oyzO-Bci
+Message:
+Hi Ramin - Pranav from Possible Minds. A serious PI caller after hours won't wait by the phone; they'll call the next firm.
+
+Sending you a two-minute browser demo for The Raiszadeh Law Firm: it shows the caller experience, how the assistant qualifies the matter, and the staff-ready handoff waiting by morning.
+
+Try it: https://intake.getpossibleminds.com/i/XaCLs-Pc
+Book a consult: https://getpossibleminds.com/c/oyzO-Bci
+----------------------------------------------------------------------------------------
+
+31. Robert - The Stoll Law Firm
+Email/action recipient: robert@stolllaw.com
+Send status: approved | scheduled_for: 2026-06-29T18:18:42+00:00
+LinkedIn search: https://www.google.com/search?q=Robert+robert+The+Stoll+Law+Firm+LinkedIn+personal+injury+lawyer
+Intake demo: https://intake.getpossibleminds.com/i/Ubax6afH
+Book consult: https://getpossibleminds.com/c/dWY7XkJc
+Message:
+Hi Robert - Pranav from Possible Minds. A serious PI caller after hours won't wait by the phone; they'll call the next firm.
+
+Sending you a two-minute browser demo for The Stoll Law Firm: it shows the caller experience, how the assistant qualifies the matter, and the staff-ready handoff waiting by morning.
+
+Try it: https://intake.getpossibleminds.com/i/Ubax6afH
+Book a consult: https://getpossibleminds.com/c/dWY7XkJc
+----------------------------------------------------------------------------------------
+
+32. Vardan - V/B & Associates
+Email/action recipient: vick@vbesqlaw.com
+Send status: approved | scheduled_for: 2026-06-29T18:25:01+00:00
+LinkedIn search: https://www.google.com/search?q=Vardan+vick+V%2FB+%26+Associates+LinkedIn+personal+injury+lawyer
+Intake demo: https://intake.getpossibleminds.com/i/PPeEWSB4
+Book consult: https://getpossibleminds.com/c/t2Us3l2P
+Message:
+Hi Vardan - Pranav from Possible Minds. A serious PI caller after hours won't wait by the phone; they'll call the next firm.
+
+Sending you a two-minute browser demo for V/B & Associates: it shows the caller experience, how the assistant qualifies the matter, and the staff-ready handoff waiting by morning.
+
+Try it: https://intake.getpossibleminds.com/i/PPeEWSB4
+Book a consult: https://getpossibleminds.com/c/t2Us3l2P
+----------------------------------------------------------------------------------------
+
+33. Hoan - WOW LAW GROUP APC
+Email/action recipient: legal@wowlaw-group.com
+Send status: approved | scheduled_for: 2026-06-29T18:26:55+00:00
+LinkedIn search: https://www.google.com/search?q=Hoan+legal+WOW+LAW+GROUP+APC+LinkedIn+personal+injury+lawyer
+Intake demo: https://intake.getpossibleminds.com/i/F1r9mutg
+Book consult: https://getpossibleminds.com/c/Ybpvj6Lv
+Message:
+Hi Hoan - Pranav from Possible Minds. A serious PI caller after hours won't wait by the phone; they'll call the next firm.
+
+Sending you a two-minute browser demo for WOW LAW GROUP APC: it shows the caller experience, how the assistant qualifies the matter, and the staff-ready handoff waiting by morning.
+
+Try it: https://intake.getpossibleminds.com/i/F1r9mutg
+Book a consult: https://getpossibleminds.com/c/Ybpvj6Lv
+----------------------------------------------------------------------------------------
+
+34. Farshad - E5QUIRE LAW Inc.
+Email/action recipient: far@e5quire.com
+Send status: approved | scheduled_for: 2026-06-29T18:34:06+00:00
+LinkedIn search: https://www.google.com/search?q=Farshad+far+E5QUIRE+LAW+Inc.+LinkedIn+personal+injury+lawyer
+Intake demo: https://intake.getpossibleminds.com/i/BrcEmja3
+Book consult: https://getpossibleminds.com/c/1zNmuwWB
+Message:
+Hi Farshad - Pranav from Possible Minds. A serious PI caller after hours won't wait by the phone; they'll call the next firm.
+
+Sending you a two-minute browser demo for E5QUIRE LAW Inc.: it shows the caller experience, how the assistant qualifies the matter, and the staff-ready handoff waiting by morning.
+
+Try it: https://intake.getpossibleminds.com/i/BrcEmja3
+Book a consult: https://getpossibleminds.com/c/1zNmuwWB
+----------------------------------------------------------------------------------------
+
+35. Justin - Farahi Law
+Email/action recipient: justin@farahilaw.com
+Send status: approved | scheduled_for: 2026-06-29T18:38:20+00:00
+LinkedIn search: https://www.google.com/search?q=Justin+justin+Farahi+Law+LinkedIn+personal+injury+lawyer
+Intake demo: https://intake.getpossibleminds.com/i/U1nHZ0i7
+Book consult: https://getpossibleminds.com/c/q2-1xzs1
+Message:
+Hi Justin - Pranav from Possible Minds. A serious PI caller after hours won't wait by the phone; they'll call the next firm.
+
+Sending you a two-minute browser demo for Farahi Law: it shows the caller experience, how the assistant qualifies the matter, and the staff-ready handoff waiting by morning.
+
+Try it: https://intake.getpossibleminds.com/i/U1nHZ0i7
+Book a consult: https://getpossibleminds.com/c/q2-1xzs1
+----------------------------------------------------------------------------------------
+
+36. Joshua - Harris Law Firm
+Email/action recipient: josh@richardharrislaw.com
+Send status: approved | scheduled_for: 2026-06-29T18:42:38+00:00
+LinkedIn search: https://www.google.com/search?q=Joshua+josh+Harris+Law+Firm+LinkedIn+personal+injury+lawyer
+Intake demo: https://intake.getpossibleminds.com/i/BXLvH4lU
+Book consult: https://getpossibleminds.com/c/v9z0y6kk
+Message:
+Hi Joshua - Pranav from Possible Minds. A serious PI caller after hours won't wait by the phone; they'll call the next firm.
+
+Sending you a two-minute browser demo for Harris Law Firm: it shows the caller experience, how the assistant qualifies the matter, and the staff-ready handoff waiting by morning.
+
+Try it: https://intake.getpossibleminds.com/i/BXLvH4lU
+Book a consult: https://getpossibleminds.com/c/v9z0y6kk
+----------------------------------------------------------------------------------------
+
+37. Jose - RB Injury Lawyers
+Email/action recipient: jose@rbinjurylawyers.com
+Send status: approved | scheduled_for: 2026-06-29T18:44:10+00:00
+LinkedIn search: https://www.google.com/search?q=Jose+jose+RB+Injury+Lawyers+LinkedIn+personal+injury+lawyer
+Intake demo: https://intake.getpossibleminds.com/i/VA7VVbc6
+Book consult: https://getpossibleminds.com/c/epHV2qpy
+Message:
+Hi Jose - Pranav from Possible Minds. A serious PI caller after hours won't wait by the phone; they'll call the next firm.
+
+Sending you a two-minute browser demo for RB Injury Lawyers: it shows the caller experience, how the assistant qualifies the matter, and the staff-ready handoff waiting by morning.
+
+Try it: https://intake.getpossibleminds.com/i/VA7VVbc6
+Book a consult: https://getpossibleminds.com/c/epHV2qpy
+----------------------------------------------------------------------------------------
+
+38. Gabriel - Sepulveda Law Group
+Email/action recipient: gabriel@sepulvedalawgroup.com
+Send status: approved | scheduled_for: 2026-06-29T18:50:40+00:00
+LinkedIn search: https://www.google.com/search?q=Gabriel+gabriel+Sepulveda+Law+Group+LinkedIn+personal+injury+lawyer
+Intake demo: https://intake.getpossibleminds.com/i/gnPvkf3o
+Book consult: https://getpossibleminds.com/c/jPssDrdm
+Message:
+Hi Gabriel - Pranav from Possible Minds. A serious PI caller after hours won't wait by the phone; they'll call the next firm.
+
+Sending you a two-minute browser demo for Sepulveda Law Group: it shows the caller experience, how the assistant qualifies the matter, and the staff-ready handoff waiting by morning.
+
+Try it: https://intake.getpossibleminds.com/i/gnPvkf3o
+Book a consult: https://getpossibleminds.com/c/jPssDrdm
+----------------------------------------------------------------------------------------
+
+39. Mathew - The Rezvani Law Firm, APC
+Email/action recipient: matt@rezvanilawfirm.com
+Send status: approved | scheduled_for: 2026-06-29T18:56:30+00:00
+LinkedIn search: https://www.google.com/search?q=Mathew+matt+The+Rezvani+Law+Firm%2C+APC+LinkedIn+personal+injury+lawyer
+Intake demo: https://intake.getpossibleminds.com/i/8TSxYYqt
+Book consult: https://getpossibleminds.com/c/9spIghNA
+Message:
+Hi Mathew - Pranav from Possible Minds. A serious PI caller after hours won't wait by the phone; they'll call the next firm.
+
+Sending you a two-minute browser demo for The Rezvani Law Firm, APC: it shows the caller experience, how the assistant qualifies the matter, and the staff-ready handoff waiting by morning.
+
+Try it: https://intake.getpossibleminds.com/i/8TSxYYqt
+Book a consult: https://getpossibleminds.com/c/9spIghNA
+----------------------------------------------------------------------------------------
+
+40. Joshua - Wise Personal Injury & Accident Law, APC
+Email/action recipient: josh@wiseinjuryfirm.com
+Send status: approved | scheduled_for: 2026-06-29T19:00:00+00:00
+LinkedIn search: https://www.google.com/search?q=Joshua+josh+Wise+Personal+Injury+%26+Accident+Law%2C+APC+LinkedIn+personal+injury+lawyer
+Intake demo: https://intake.getpossibleminds.com/i/YgofzS7o
+Book consult: https://getpossibleminds.com/c/Z6BKM9fk
+Message:
+Hi Joshua - Pranav from Possible Minds. A serious PI caller after hours won't wait by the phone; they'll call the next firm.
+
+Sending you a two-minute browser demo for Wise Personal Injury & Accident Law, APC: it shows the caller experience, how the assistant qualifies the matter, and the staff-ready handoff waiting by morning.
+
+Try it: https://intake.getpossibleminds.com/i/YgofzS7o
+Book a consult: https://getpossibleminds.com/c/Z6BKM9fk
+----------------------------------------------------------------------------------------

@@ -1794,6 +1794,44 @@ export type LeadGenThroughput = {
   held_firms: LeadGenThroughputHeldFirm[];
 };
 
+export type LeadGenSendPlanItem = {
+  action_id: string;
+  action_status: string;
+  batch_id: string;
+  batch_name: string;
+  batch_item_id: string;
+  contact_id: string;
+  pif_id: string;
+  firm_name: string;
+  contact_name: string;
+  contact_email: string;
+  contact_title: string;
+  persona: string;
+  linkedin_url: string | null;
+  action_type: string;
+  subject: string | null;
+  composer_variant_key: string | null;
+  scheduled_for: string | null;
+  scheduled_for_pt: string | null;
+  sent_at: string | null;
+  sent_at_pt: string | null;
+  transport: string | null;
+  channel: string | null;
+  message_id: string | null;
+  email_log_status: string | null;
+};
+
+export type LeadGenSendPlan = {
+  date: string;
+  timezone: string;
+  summary: {
+    sent: number;
+    scheduled: number;
+    total: number;
+  };
+  items: LeadGenSendPlanItem[];
+};
+
 export const getLeadGenPolicy = () =>
   get<LeadGenPolicy>("/api/lead-gen/policy/current");
 
@@ -1848,6 +1886,11 @@ export const listLeadGenDailyRuns = (limit = 5) =>
 export const getLeadGenThroughput = (runDate?: string) => {
   const qs = runDate ? `?run_date=${encodeURIComponent(runDate)}` : "";
   return get<LeadGenThroughput>(`/api/lead-gen/daily-run/throughput${qs}`);
+};
+
+export const getLeadGenSendPlan = (sendDate?: string) => {
+  const qs = sendDate ? `?send_date=${encodeURIComponent(sendDate)}` : "";
+  return get<LeadGenSendPlan>(`/api/lead-gen/send-plan${qs}`);
 };
 
 export const getLeadGenDailyEnabled = () =>

@@ -14,7 +14,7 @@ import {
   pollResearchStatus,
   type PifFirm,
   type PifLeader,
-} from "@/lib/pifstats";
+} from "@/lib/emailtag";
 import {
   getFirmReviews,
   putFirmReviews,
@@ -239,7 +239,7 @@ export default function FirmDetailPage() {
               <Stat label="Peak days" value={beh.peak_contact_days.join(", ")} />
               <Stat
                 label="Primary pain"
-                value={painLabel(beh.primary_pain_point)}
+                value={painLabel(beh.primary_pain_point ?? "")}
                 accent="rose"
               />
             </div>
@@ -277,7 +277,7 @@ export default function FirmDetailPage() {
       </div>
 
       {/* Leadership */}
-      {firm.leadership?.length > 0 && (
+      {firm.leadership && firm.leadership.length > 0 && (
         <section className="rounded-xl border border-neutral-200 bg-white">
           <div className="border-b border-neutral-100 px-5 py-3">
             <h2 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-neutral-400">

@@ -36,6 +36,7 @@ import {
   getLeadGenBatch,
   getLeadGenDailyEnabled,
   getLeadGenPolicy,
+  getLeadGenSendPlan,
   getLeadGenThroughput,
   listLeadGenBatches,
   listLeadGenDailyRuns,
@@ -54,6 +55,8 @@ import {
   type LeadGenBatchItem,
   type LeadGenDailyRun,
   type LeadGenObservation,
+  type LeadGenSendPlan,
+  type LeadGenSendPlanItem,
   type LeadGenThroughput,
   type LeadGenThroughputHeldFirm,
   type RenderedSequenceStep,
@@ -66,9 +69,12 @@ const DEFAULT_TEMPLATE = "possible_minds_dynamic";
 // The US-recipient send window (when firms are at their desks) is enforced in the
 // backend; here we only convert what the operator sees and the times they pick.
 const DISPLAY_TIME_ZONE = "Asia/Kolkata";
+const SEND_TIME_ZONE = "America/Los_Angeles";
 const DEFAULT_DAILY_EMAIL_BUDGET = 50;
 const ZOHO_DAILY_EMAIL_CAP = 20;
 type DraftGenerationStatus = "generating" | "completed" | "failed";
+type LeadGenWorkspaceView = "queue" | "batches";
+type QueuePreviewTarget = { batchId: string; batchItemId: string };
 
 export default function LeadGenPage() {
   return (
@@ -94,10 +100,17 @@ function LeadGenPageContent() {
   const [resendDailyEmailBudget, setResendDailyEmailBudget] = useState(
     DEFAULT_DAILY_EMAIL_BUDGET - ZOHO_DAILY_EMAIL_CAP,
   );
+  const [selectedSendDate, setSelectedSendDate] = useState(() => sendDateKey(new Date()));
+  const [queuePreviewTarget, setQueuePreviewTarget] = useState<QueuePreviewTarget | null>(null);
   const requestedBatchId = searchParams.get("batch") || "";
   const requestedItemId = searchParams.get("item") || "";
   const requestedContactId = searchParams.get("contact") || "";
   const requestedNotificationId = searchParams.get("notification") || "";
+  const hasBatchRequest = Boolean(
+    requestedBatchId || requestedItemId || requestedContactId || requestedNotificationId,
+  );
+  const requestedWorkspaceView: LeadGenWorkspaceView =
+    searchParams.get("view") === "batches" || hasBatchRequest ? "batches" : "queue";
   const policy = useQuery({
     queryKey: ["lead-gen-policy"],
     queryFn: getLeadGenPolicy,
@@ -125,6 +138,11 @@ function LeadGenPageContent() {
   const throughput = useQuery({
     queryKey: ["lead-gen-throughput"],
     queryFn: () => getLeadGenThroughput(),
+    refetchInterval: 15_000,
+  });
+  const sendPlan = useQuery({
+    queryKey: ["lead-gen-send-plan", selectedSendDate],
+    queryFn: () => getLeadGenSendPlan(selectedSendDate),
     refetchInterval: 15_000,
   });
 
@@ -162,6 +180,7 @@ function LeadGenPageContent() {
       setResendDailyEmailBudget(resendBudgetFromWeights(data.weights));
       qc.invalidateQueries({ queryKey: ["lead-gen-policy"] });
       qc.invalidateQueries({ queryKey: ["lead-gen-throughput"] });
+      qc.invalidateQueries({ queryKey: ["lead-gen-send-plan"] });
     },
   });
 
@@ -182,9 +201,11 @@ function LeadGenPageContent() {
     },
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ["lead-gen-batches"] });
+      qc.invalidateQueries({ queryKey: ["lead-gen-send-plan"] });
       qc.invalidateQueries({ queryKey: ["operator-notifications-pending"] });
       qc.invalidateQueries({ queryKey: ["all-sequences"] });
       setBatchId(data.batch.id);
+      router.replace(`/lead-gen?view=batches&batch=${encodeURIComponent(data.batch.id)}`, { scroll: false });
     },
   });
   const createAgentSlice = useMutation({
@@ -197,7 +218,9 @@ function LeadGenPageContent() {
     }),
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ["lead-gen-batches"] });
+      qc.invalidateQueries({ queryKey: ["lead-gen-send-plan"] });
       setBatchId(data.batch.id);
+      router.replace(`/lead-gen?view=batches&batch=${encodeURIComponent(data.batch.id)}`, { scroll: false });
     },
   });
   const runDaily = useMutation({
@@ -207,7 +230,11 @@ function LeadGenPageContent() {
       qc.invalidateQueries({ queryKey: ["lead-gen-daily-runs"] });
       qc.invalidateQueries({ queryKey: ["lead-gen-throughput"] });
       qc.invalidateQueries({ queryKey: ["lead-gen-batches"] });
-      if (data.batch_id) setBatchId(data.batch_id);
+      qc.invalidateQueries({ queryKey: ["lead-gen-send-plan"] });
+      if (data.batch_id) {
+        setBatchId(data.batch_id);
+        router.replace(`/lead-gen?view=batches&batch=${encodeURIComponent(data.batch_id)}`, { scroll: false });
+      }
     },
   });
   const toggleDaily = useMutation({
@@ -223,7 +250,14 @@ function LeadGenPageContent() {
     null;
   const selectBatch = (nextBatchId: string) => {
     setBatchId(nextBatchId);
-    router.replace(`/lead-gen?batch=${encodeURIComponent(nextBatchId)}`, { scroll: false });
+    router.replace(`/lead-gen?view=batches&batch=${encodeURIComponent(nextBatchId)}`, { scroll: false });
+  };
+  const openQueue = () => router.replace("/lead-gen", { scroll: false });
+  const openBatches = () => {
+    router.replace(
+      batchId ? `/lead-gen?view=batches&batch=${encodeURIComponent(batchId)}` : "/lead-gen?view=batches",
+      { scroll: false },
+    );
   };
 
   return (
@@ -254,74 +288,83 @@ function LeadGenPageContent() {
           rerunning={runDaily.isPending}
         />
       )}
-      <LeadGenProcessExplanation />
+      <LeadGenWorkspaceTabs
+        activeView={requestedWorkspaceView}
+        onOpenQueue={openQueue}
+        onOpenBatches={openBatches}
+      />
 
-      <div className="grid gap-4 lg:grid-cols-12">
-        <aside className="col-span-12 space-y-3 lg:col-span-4 xl:col-span-3">
-          <DailyRunPanel
-            run={todayDailyRun}
-            enabled={Boolean(dailyEnabled.data?.enabled)}
-            loading={dailyRuns.isLoading || dailyEnabled.isLoading}
-            onToggle={(enabled) => toggleDaily.mutate(enabled)}
-            toggling={toggleDaily.isPending}
-            onRun={(dryRun, force = false, composerVariantKey) => runDaily.mutate({ dryRun, force, composerVariantKey })}
-            running={runDaily.isPending}
-            error={runDaily.isError || toggleDaily.isError}
-            lastRun={runDaily.data ?? null}
-            throughput={throughput.data ?? null}
+      {requestedWorkspaceView === "queue" ? (
+        <>
+          <SelectedDateSendPlanPanel
+            selectedDate={selectedSendDate}
+            onDateChange={setSelectedSendDate}
+            plan={sendPlan.data ?? null}
+            loading={sendPlan.isLoading}
+            error={sendPlan.isError}
+            onOpenDraft={(item) =>
+              setQueuePreviewTarget({
+                batchId: item.batch_id,
+                batchItemId: item.batch_item_id,
+              })
+            }
           />
-          <BatchHistoryPanel
-            batches={batches.data?.batches ?? []}
-            selectedBatchId={batchId}
-            loading={batches.isLoading}
-            error={batches.isError}
-            onSelect={selectBatch}
-          />
-          <DailySendBudgetPanel
-            dailyEmailBudget={dailyEmailBudget}
-            resendDailyEmailBudget={resendDailyEmailBudget}
-            onResendDailyEmailBudgetChange={(value) => {
-              const resendBudget = clampResendDailyEmailBudget(value);
-              setResendDailyEmailBudget(resendBudget);
-              setDailyEmailBudget(clampDailyEmailBudget(ZOHO_DAILY_EMAIL_CAP + resendBudget));
-            }}
-            onSave={() => saveBudget.mutate()}
-            isSaving={saveBudget.isPending}
-            saveError={saveBudget.isError}
-            onGenerate={() => createToday.mutate()}
-            isGenerating={createToday.isPending}
-            generateError={createToday.isError}
-          />
-          <section className="rounded-xl border border-neutral-200 bg-white p-4">
-            <div className="text-xs font-semibold uppercase tracking-wider text-neutral-400">
-              Manual agent slice
-            </div>
-            <p className="mt-2 text-sm leading-6 text-neutral-600">
-              Creates a small draft batch for up to 3 eligible contacts and
-              leaves send actions waiting for review. Daily autonomous send
-              runs through the daily pipeline.
-            </p>
-            <button
-              type="button"
-              onClick={() => createAgentSlice.mutate()}
-              disabled={createAgentSlice.isPending}
-              className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-md border border-neutral-200 px-3 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50 disabled:opacity-50"
-            >
-              {createAgentSlice.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Sparkles className="h-4 w-4" />
-              )}
-              Create 3 draft actions
-            </button>
-            {createAgentSlice.isError && (
-              <div className="mt-2 text-xs text-red-600">
-                Could not create the agent slice.
-              </div>
-            )}
-          </section>
-        </aside>
-        <main className="col-span-12 lg:col-span-8 xl:col-span-9">
+          {queuePreviewTarget && (
+            <QueueDraftModal
+              target={queuePreviewTarget}
+              onClose={() => {
+                setQueuePreviewTarget(null);
+                qc.invalidateQueries({ queryKey: ["lead-gen-send-plan"] });
+              }}
+            />
+          )}
+        </>
+      ) : (
+        <>
+          <RunsAndDraftsHeader />
+          <div className="grid gap-4 lg:grid-cols-12">
+            <aside className="col-span-12 space-y-3 lg:col-span-4 xl:col-span-3">
+              <BatchHistoryPanel
+                batches={batches.data?.batches ?? []}
+                selectedBatchId={batchId}
+                loading={batches.isLoading}
+                error={batches.isError}
+                onSelect={selectBatch}
+              />
+              <DailyRunPanel
+                run={todayDailyRun}
+                enabled={Boolean(dailyEnabled.data?.enabled)}
+                loading={dailyRuns.isLoading || dailyEnabled.isLoading}
+                onToggle={(enabled) => toggleDaily.mutate(enabled)}
+                toggling={toggleDaily.isPending}
+                onRun={(dryRun, force = false, composerVariantKey) => runDaily.mutate({ dryRun, force, composerVariantKey })}
+                running={runDaily.isPending}
+                error={runDaily.isError || toggleDaily.isError}
+                lastRun={runDaily.data ?? null}
+                throughput={throughput.data ?? null}
+              />
+              <DailySendBudgetPanel
+                dailyEmailBudget={dailyEmailBudget}
+                resendDailyEmailBudget={resendDailyEmailBudget}
+                onResendDailyEmailBudgetChange={(value) => {
+                  const resendBudget = clampResendDailyEmailBudget(value);
+                  setResendDailyEmailBudget(resendBudget);
+                  setDailyEmailBudget(clampDailyEmailBudget(ZOHO_DAILY_EMAIL_CAP + resendBudget));
+                }}
+                onSave={() => saveBudget.mutate()}
+                isSaving={saveBudget.isPending}
+                saveError={saveBudget.isError}
+                onGenerate={() => createToday.mutate()}
+                isGenerating={createToday.isPending}
+                generateError={createToday.isError}
+              />
+              <ManualAgentSlicePanel
+                onCreate={() => createAgentSlice.mutate()}
+                creating={createAgentSlice.isPending}
+                error={createAgentSlice.isError}
+              />
+            </aside>
+            <main className="col-span-12 space-y-4 lg:col-span-8 xl:col-span-9">
           {batchId ? (
             <BatchDetail
               batchId={batchId}
@@ -345,9 +388,91 @@ function LeadGenPageContent() {
               then generate today's actions.
             </div>
           )}
-        </main>
-      </div>
+            </main>
+          </div>
+          <LeadGenProcessExplanation />
+        </>
+      )}
     </div>
+  );
+}
+
+function LeadGenWorkspaceTabs({
+  activeView,
+  onOpenQueue,
+  onOpenBatches,
+}: {
+  activeView: LeadGenWorkspaceView;
+  onOpenQueue: () => void;
+  onOpenBatches: () => void;
+}) {
+  const tabs: Array<{
+    key: LeadGenWorkspaceView;
+    label: string;
+    description: string;
+    onClick: () => void;
+  }> = [
+    {
+      key: "queue",
+      label: "Send Queue",
+      description: "Review what is scheduled or sent by PT date.",
+      onClick: onOpenQueue,
+    },
+    {
+      key: "batches",
+      label: "Runs & Drafts",
+      description: "Inspect generated runs, drafts, composer variants, and controls.",
+      onClick: onOpenBatches,
+    },
+  ];
+  return (
+    <section className="rounded-xl border border-neutral-200 bg-white p-1">
+      <div className="grid gap-1 sm:grid-cols-2">
+        {tabs.map((tab) => {
+          const active = tab.key === activeView;
+          return (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={tab.onClick}
+              className={cn(
+                "rounded-lg px-4 py-3 text-left transition",
+                active
+                  ? "bg-neutral-900 text-white shadow-sm"
+                  : "text-neutral-700 hover:bg-neutral-50",
+              )}
+            >
+              <div className="text-sm font-semibold">{tab.label}</div>
+              <div className={cn("mt-1 text-xs", active ? "text-neutral-300" : "text-neutral-500")}>
+                {tab.description}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function RunsAndDraftsHeader() {
+  return (
+    <section className="rounded-xl border border-neutral-200 bg-white px-5 py-4">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h2 className="text-base font-semibold text-neutral-900">Runs &amp; Drafts</h2>
+          <p className="mt-1 max-w-2xl text-sm leading-6 text-neutral-500">
+            Review generated runs, inspect drafts, change composer variants, and open the trace when something needs debugging.
+          </p>
+        </div>
+        <Link
+          href="/lead-gen"
+          className="inline-flex items-center gap-1 rounded-md border border-neutral-200 px-3 py-2 text-sm font-medium text-neutral-600 hover:bg-neutral-50"
+        >
+          <CalendarDays className="h-4 w-4" />
+          Send Queue
+        </Link>
+      </div>
+    </section>
   );
 }
 
@@ -1007,10 +1132,10 @@ function BatchHistoryPanel({
         <CalendarDays className="h-4 w-4 text-neutral-500" />
         <div>
           <div className="text-xs font-semibold uppercase tracking-wider text-neutral-500">
-            Batch history
+            Run history
           </div>
           <div className="mt-0.5 text-xs text-neutral-400">
-            Recent generated lists by date
+            Generated runs by date
           </div>
         </div>
         {loading && <Loader2 className="ml-auto h-4 w-4 animate-spin text-neutral-400" />}
@@ -1125,7 +1250,7 @@ function DailyRunPanel({
       <div className="flex items-center gap-2 border-b border-neutral-100 px-4 py-2.5">
         <Clock className="h-4 w-4 text-neutral-500" />
         <h2 className="text-xs font-semibold uppercase tracking-wider text-neutral-400">
-          Daily run
+          Run controls
         </h2>
         {loading && <Loader2 className="ml-auto h-3.5 w-3.5 animate-spin text-neutral-400" />}
       </div>
@@ -1160,7 +1285,7 @@ function DailyRunPanel({
         </div>
         {run?.batch_id && (
           <Link
-            href={`/lead-gen?batch=${encodeURIComponent(run.batch_id)}`}
+            href={`/lead-gen?view=batches&batch=${encodeURIComponent(run.batch_id)}`}
             className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-neutral-200 px-3 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50"
           >
             <Eye className="h-4 w-4" />
@@ -1437,6 +1562,45 @@ function DailySendBudgetPanel({
   );
 }
 
+function ManualAgentSlicePanel({
+  onCreate,
+  creating,
+  error,
+}: {
+  onCreate: () => void;
+  creating: boolean;
+  error: boolean;
+}) {
+  return (
+    <section className="rounded-xl border border-neutral-200 bg-white p-4">
+      <div className="text-xs font-semibold uppercase tracking-wider text-neutral-400">
+        Test slice
+      </div>
+      <p className="mt-2 text-sm leading-6 text-neutral-600">
+        Create three draft actions for a quick composer and workflow check.
+      </p>
+      <button
+        type="button"
+        onClick={onCreate}
+        disabled={creating}
+        className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-md border border-neutral-200 px-3 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50 disabled:opacity-50"
+      >
+        {creating ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : (
+          <Sparkles className="h-4 w-4" />
+        )}
+        Create 3 drafts
+      </button>
+      {error && (
+        <div className="mt-2 text-xs text-red-600">
+          Could not create the test slice.
+        </div>
+      )}
+    </section>
+  );
+}
+
 function BatchDetail({
   batchId,
   dailyEmailBudget,
@@ -1688,10 +1852,28 @@ function BatchDetail({
     <div className="space-y-4">
       <section className="rounded-xl border border-neutral-200 bg-white">
         <div className="flex flex-wrap items-center gap-3 border-b border-neutral-100 px-4 py-3">
-          <div>
-            <h2 className="text-base font-semibold text-neutral-900">{data.batch.name}</h2>
-            <div className="mt-1 text-xs text-neutral-500">
-              {data.batch.id} - Composer: {formatComposerKey(data.batch.template_key)} - Policy: {data.batch.policy_version}
+          <div className="min-w-0">
+            <div className="text-xs font-semibold uppercase tracking-wider text-neutral-400">
+              Selected run
+            </div>
+            <h2 className="mt-1 truncate text-base font-semibold text-neutral-900">{data.batch.name}</h2>
+            <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-neutral-500">
+              <span>{formatComposerKey(data.batch.template_key)}</span>
+              <span className="text-neutral-300">·</span>
+              <span>{formatIstDate(data.batch.created_at)}</span>
+              <details className="relative">
+                <summary className="cursor-pointer font-medium text-neutral-500 hover:text-neutral-800">
+                  Details
+                </summary>
+                <div className="absolute left-0 z-20 mt-2 w-80 rounded-lg border border-neutral-200 bg-white p-3 text-xs shadow-lg">
+                  <div className="font-medium text-neutral-800">Run metadata</div>
+                  <div className="mt-2 space-y-1 text-neutral-500">
+                    <div className="break-all">Batch ID: {data.batch.id}</div>
+                    <div>Policy: {data.batch.policy_version}</div>
+                    <div>Status: {data.batch.status}</div>
+                  </div>
+                </div>
+              </details>
             </div>
           </div>
           <StatusPill status={data.batch.status} className="ml-auto" />
@@ -1985,6 +2167,313 @@ function RollupTable({ title, rows }: { title: string; rows: RollupRow[] }) {
   );
 }
 
+function SelectedDateSendPlanPanel({
+  selectedDate,
+  onDateChange,
+  plan,
+  loading,
+  error,
+  onOpenDraft,
+}: {
+  selectedDate: string;
+  onDateChange: (value: string) => void;
+  plan: LeadGenSendPlan | null;
+  loading: boolean;
+  error: boolean;
+  onOpenDraft: (item: LeadGenSendPlanItem) => void;
+}) {
+  const items = plan?.items ?? [];
+  const sent = plan?.summary.sent ?? 0;
+  const scheduled = plan?.summary.scheduled ?? 0;
+  const channelRows = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const item of items) {
+      const key = item.channel || item.transport || "unassigned";
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    return Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
+  }, [items]);
+  const selectedIsToday = selectedDate === sendDateKey(new Date());
+  return (
+    <section className="overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-sm">
+      <div className="flex flex-wrap items-center gap-3 border-b border-neutral-100 px-5 py-4">
+        <div className="min-w-0">
+          <h2 className="text-base font-semibold text-neutral-900">
+            Send Queue
+          </h2>
+          <p className="mt-1 text-xs text-neutral-500">
+            Sent and scheduled emails for the selected Pacific date.
+          </p>
+        </div>
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          <label className="flex items-center gap-2 text-xs font-medium text-neutral-500">
+            <CalendarDays className="h-3.5 w-3.5" />
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={(event) => onDateChange(event.target.value || sendDateKey(new Date()))}
+              className="rounded-md border border-neutral-200 bg-white px-2 py-1.5 text-sm font-medium text-neutral-800 shadow-sm"
+            />
+          </label>
+          {!selectedIsToday && (
+            <button
+              type="button"
+              onClick={() => onDateChange(sendDateKey(new Date()))}
+              className="rounded-md border border-neutral-200 px-2.5 py-1.5 text-xs font-medium text-neutral-600 hover:bg-neutral-50"
+            >
+              Today
+            </button>
+          )}
+        </div>
+      </div>
+      <div className="flex flex-wrap items-center gap-2 border-b border-neutral-100 bg-neutral-50/70 px-5 py-3 text-sm">
+        <span className="inline-flex items-center rounded-full bg-white px-2.5 py-1 text-neutral-900 ring-1 ring-neutral-200">
+          <span className="font-semibold">{scheduled}</span> scheduled
+        </span>
+        <span className="inline-flex items-center rounded-full bg-white px-2.5 py-1 text-neutral-900 ring-1 ring-neutral-200">
+          <span className="font-semibold">{sent}</span> sent
+        </span>
+        <span className="inline-flex items-center rounded-full bg-white px-2.5 py-1 text-neutral-500 ring-1 ring-neutral-200">
+          {plan?.timezone || SEND_TIME_ZONE}
+        </span>
+        {channelRows.map(([channel, count]) => (
+          <span
+            key={channel}
+            className="inline-flex items-center rounded-full bg-white px-2.5 py-1 text-neutral-500 ring-1 ring-neutral-200"
+          >
+            {channel}: <span className="ml-1 font-semibold text-neutral-800">{count}</span>
+          </span>
+        ))}
+        {loading && (
+          <span className="inline-flex items-center gap-1 text-xs text-neutral-400">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            Loading
+          </span>
+        )}
+        {error && (
+          <span className="text-xs font-medium text-red-600">
+            Could not load send plan.
+          </span>
+        )}
+      </div>
+      {!loading && !error && items.length === 0 && (
+        <div className="px-4 py-6 text-sm text-neutral-500">
+          No emails sent or scheduled for this date.
+        </div>
+      )}
+      {items.length > 0 && (
+        <div>
+          <div className="hidden grid-cols-[88px_minmax(0,1.05fr)_minmax(0,1.1fr)_minmax(0,1.35fr)_180px_230px] gap-3 border-b border-neutral-100 px-5 py-2 text-[11px] font-semibold uppercase tracking-wider text-neutral-400 xl:grid">
+            <div>Time</div>
+            <div>Firm</div>
+            <div>Contact</div>
+            <div>Draft</div>
+            <div>Status</div>
+            <div className="text-right">Actions</div>
+          </div>
+          <div className="divide-y divide-neutral-100">
+          {items.map((item) => (
+            <SelectedDateSendPlanRow key={item.action_id} item={item} onOpenDraft={onOpenDraft} />
+          ))}
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function SelectedDateSendPlanRow({
+  item,
+  onOpenDraft,
+}: {
+  item: LeadGenSendPlanItem;
+  onOpenDraft: (item: LeadGenSendPlanItem) => void;
+}) {
+  const sent = item.action_status === "succeeded";
+  const timeLabel = sent
+    ? item.sent_at_pt || item.scheduled_for_pt || "-"
+    : item.scheduled_for_pt || "-";
+  const linkedInUrl = sendPlanLinkedInUrl(item);
+  const searchUrl = sendPlanLinkedInSearchUrl(item);
+  const batchHref = sendPlanBatchHref(item);
+  return (
+    <article className="grid min-w-0 gap-3 px-5 py-4 text-sm xl:grid-cols-[88px_minmax(0,1.05fr)_minmax(0,1.1fr)_minmax(0,1.35fr)_180px_230px]">
+      <div className="text-xs font-medium text-neutral-600 xl:pt-0.5">
+        {shortPtTime(timeLabel)}
+      </div>
+      <div className="min-w-0">
+        <div className="truncate font-medium text-neutral-900">{item.firm_name}</div>
+        <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-neutral-500">
+          <Link
+            href={batchHref}
+            className="font-medium text-neutral-600 hover:text-neutral-900"
+          >
+            {cleanBatchName(item.batch_name)}
+          </Link>
+          <span className="text-neutral-300">·</span>
+          <span>{sendPlanActionLabel(item)}</span>
+        </div>
+      </div>
+      <div className="min-w-0">
+        <div className="truncate font-medium text-neutral-800">
+          {item.contact_name || "Unknown"}
+        </div>
+        <div className="truncate text-xs text-neutral-500">{item.contact_title || item.persona || "-"}</div>
+        <div className="mt-1 truncate text-xs text-neutral-500">{item.contact_email}</div>
+      </div>
+      <div className="min-w-0">
+        <div className="line-clamp-2 text-xs font-medium text-neutral-800">
+          {item.subject || "-"}
+        </div>
+        <div className="mt-1 text-[11px] text-neutral-400">
+          {item.composer_variant_key || "baseline"} · {item.channel || "-"}
+        </div>
+      </div>
+      <div className="flex flex-col items-start gap-1">
+        <span
+          className={cn(
+            "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium",
+            sent ? "bg-sky-100 text-sky-800" : "bg-violet-100 text-violet-800",
+          )}
+        >
+          {sent ? <CheckCircle2 className="h-3 w-3" /> : <Clock className="h-3 w-3" />}
+          {sent ? "Sent" : "Scheduled"}
+        </span>
+        <span className="text-xs text-neutral-500">{timeLabel}</span>
+      </div>
+      <div className="flex flex-wrap items-center gap-1.5 xl:justify-end">
+        <button
+          type="button"
+          onClick={() => onOpenDraft(item)}
+          className="inline-flex items-center gap-1 rounded-md border border-neutral-900 bg-neutral-900 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-neutral-800"
+        >
+          <MailPlus className="h-3.5 w-3.5" />
+          {sent ? "Open record" : "View draft"}
+        </button>
+        <button
+          type="button"
+          onClick={() => onOpenDraft(item)}
+          className="inline-flex items-center gap-1 rounded-md border border-neutral-200 px-2.5 py-1.5 text-xs font-medium text-neutral-600 hover:bg-neutral-50"
+        >
+          <Sparkles className="h-3.5 w-3.5" />
+          Compose
+        </button>
+        {linkedInUrl ? (
+          <a
+            href={linkedInUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1 rounded-md border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100"
+          >
+            <ExternalLink className="h-3.5 w-3.5" />
+            LinkedIn
+          </a>
+        ) : (
+          <a
+            href={searchUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1 rounded-md border border-neutral-200 px-2.5 py-1.5 text-xs font-medium text-neutral-600 hover:bg-neutral-50"
+          >
+            <Search className="h-3.5 w-3.5" />
+            Find LinkedIn
+          </a>
+        )}
+      </div>
+    </article>
+  );
+}
+
+function QueueDraftModal({
+  target,
+  onClose,
+}: {
+  target: QueuePreviewTarget;
+  onClose: () => void;
+}) {
+  const q = useQuery({
+    queryKey: ["lead-gen-batch", target.batchId],
+    queryFn: () => getLeadGenBatch(target.batchId, true),
+    refetchInterval: 30_000,
+  });
+  const item = q.data?.items.find((candidate) => candidate.id === target.batchItemId) ?? null;
+
+  if (q.isLoading) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4">
+        <div className="flex w-full max-w-sm items-center gap-2 rounded-xl bg-white px-5 py-4 text-sm text-neutral-500 shadow-xl">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Loading draft...
+        </div>
+      </div>
+    );
+  }
+
+  if (q.isError || !item) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4">
+        <div className="w-full max-w-sm rounded-xl bg-white p-5 shadow-xl">
+          <h3 className="text-sm font-semibold text-neutral-900">Draft unavailable</h3>
+          <p className="mt-2 text-sm text-neutral-600">
+            The queue row could not load its draft. The run may have changed.
+          </p>
+          <div className="mt-4 flex justify-end">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-md border border-neutral-200 px-3 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return <PreviewModal item={item} composerVariantKey="" onClose={onClose} />;
+}
+
+function sendPlanBatchHref(item: LeadGenSendPlanItem) {
+  return `/lead-gen?view=batches&batch=${encodeURIComponent(item.batch_id)}`;
+}
+
+function sendPlanLinkedInUrl(item: LeadGenSendPlanItem) {
+  const value = item.linkedin_url || "";
+  return isLinkedInUrl(value) ? value : "";
+}
+
+function sendPlanLinkedInSearchUrl(item: LeadGenSendPlanItem) {
+  const parts = [
+    item.contact_name,
+    item.contact_title,
+    item.firm_name,
+    "LinkedIn",
+  ].filter(Boolean);
+  return `https://www.google.com/search?q=${encodeURIComponent(parts.join(" "))}`;
+}
+
+function sendPlanActionLabel(item: LeadGenSendPlanItem) {
+  const labels: Record<string, string> = {
+    reply_to_inbound: "Reply",
+    approve_existing_draft: "Approve draft",
+    follow_up: "Follow-up",
+    first_touch: "First touch",
+  };
+  const action = item.action_type || "first_touch";
+  return labels[action] ?? action.replaceAll("_", " ");
+}
+
+function cleanBatchName(value: string) {
+  if (!value) return "Batch";
+  return value.replace(/^Daily run\s+/i, "Run ");
+}
+
+function shortPtTime(value: string) {
+  const match = value.match(/\b(\d{1,2}:\d{2})\s+(PDT|PST)\b/);
+  return match ? `${match[1]} ${match[2]}` : value;
+}
+
 function CompletedRunRollup({ items }: { items: LeadGenBatchItem[] }) {
   const byVariant = rollupBy(items, (item) =>
     String(reasonValue(item, "last_sent_composer_variant_key") || "baseline"),
@@ -2014,11 +2503,14 @@ function DailyActionPlan({
   const sentItemIds = useMemo(() => new Set(sentItems.map((item) => item.id)), [sentItems]);
   return (
     <section className="overflow-hidden rounded-xl border border-neutral-200 bg-white">
-      <div className="flex items-center justify-between border-b border-neutral-100 px-4 py-2.5">
-        <h2 className="text-xs font-semibold uppercase tracking-wider text-neutral-400">
-          Today's action plan
-        </h2>
-        <span className="text-xs text-neutral-400">{items.length} actions</span>
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-100 px-4 py-3">
+        <div>
+          <h2 className="text-sm font-semibold text-neutral-900">Drafts</h2>
+          <p className="mt-0.5 text-xs text-neutral-500">
+            Contacts and emails generated for this run.
+          </p>
+        </div>
+        <span className="text-xs text-neutral-400">{items.length} draft{items.length === 1 ? "" : "s"}</span>
       </div>
       <div className="divide-y divide-neutral-100">
         {items.map((item) => {
@@ -2038,11 +2530,12 @@ function DailyActionPlan({
           >
             <div className="min-w-0">
               <div className="font-medium text-neutral-900">{item.firm_name}</div>
-              <div className="mt-1 break-all text-xs text-neutral-400">{item.pif_id}</div>
-              <div className="mt-2 text-xs leading-relaxed text-neutral-600">
-                {reasonText(item)}
+              <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-neutral-500">
+                <span>{actionLabel(item)}</span>
+                <span className="text-neutral-300">·</span>
+                <span>{item.persona || "Unknown persona"}</span>
               </div>
-              <ScoreBreakdown item={item} />
+              <SelectionDetails item={item} />
             </div>
 
             <div className="min-w-0">
@@ -2131,10 +2624,7 @@ function DailyActionPlan({
               )}
             </div>
 
-            <div className="grid min-w-0 grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-2">
-              <MiniField label="Action" value={actionLabel(item)} />
-              <MiniField label="Persona" value={item.persona || "-"} />
-              <MiniField label="Score" value={String(item.score)} mono />
+            <div className="grid min-w-0 grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-2">
               <div>
                 <div className="text-[11px] font-medium uppercase tracking-wider text-neutral-400">
                   State
@@ -2173,6 +2663,24 @@ function DailyActionPlan({
         })}
       </div>
     </section>
+  );
+}
+
+function SelectionDetails({ item }: { item: LeadGenBatchItem }) {
+  return (
+    <details className="mt-2 text-xs">
+      <summary className="cursor-pointer font-medium text-neutral-500 hover:text-neutral-800">
+        Selection details
+      </summary>
+      <div className="mt-2 rounded-md border border-neutral-200 bg-neutral-50 p-2 text-neutral-600">
+        <div className="leading-relaxed">{reasonText(item)}</div>
+        <div className="mt-2 grid gap-2 sm:grid-cols-2">
+          <MiniField label="Score" value={String(item.score)} mono />
+          <MiniField label="Firm ID" value={item.pif_id || "-"} mono />
+        </div>
+        <ScoreBreakdown item={item} />
+      </div>
+    </details>
   );
 }
 
@@ -2454,7 +2962,7 @@ function AllDraftsModal({
               All drafted emails ({drafted.length})
             </h3>
             <p className="mt-1 text-xs text-neutral-500">
-              Read-only review of today&apos;s batch. Click Open on any one to edit or send it.
+              Read-only review of this selected batch. Click Open on any one to edit or send it.
             </p>
           </div>
           <button
@@ -2616,6 +3124,7 @@ function PreviewModal({
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["lead-gen-batch", item.batch_id] });
       qc.invalidateQueries({ queryKey: ["lead-gen-batches"] });
+      qc.invalidateQueries({ queryKey: ["lead-gen-send-plan"] });
       qc.invalidateQueries({ queryKey: ["all-sequences"] });
       onClose();
     },
@@ -2638,6 +3147,7 @@ function PreviewModal({
       setSelectedVariantKey(null);
       qc.invalidateQueries({ queryKey: ["lead-gen-batch", item.batch_id] });
       qc.invalidateQueries({ queryKey: ["lead-gen-batches"] });
+      qc.invalidateQueries({ queryKey: ["lead-gen-send-plan"] });
       qc.invalidateQueries({ queryKey: ["lead-gen-throughput"] });
     },
   });
@@ -2678,6 +3188,7 @@ function PreviewModal({
       setDraftTouched(false);
       qc.invalidateQueries({ queryKey: ["lead-gen-batch", item.batch_id] });
       qc.invalidateQueries({ queryKey: ["lead-gen-batches"] });
+      qc.invalidateQueries({ queryKey: ["lead-gen-send-plan"] });
     },
   });
 
@@ -3221,6 +3732,20 @@ function istDateKey(value: Date | string | null | undefined) {
   if (Number.isNaN(date.getTime())) return "";
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: DISPLAY_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const byType = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${byType.year}-${byType.month}-${byType.day}`;
+}
+
+function sendDateKey(value: Date | string | null | undefined) {
+  if (!value) return "";
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: SEND_TIME_ZONE,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",

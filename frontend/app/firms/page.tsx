@@ -8,7 +8,7 @@ import {
   searchPifPeople,
   type PifFirm,
   type PifPersonResult,
-} from "@/lib/pifstats";
+} from "@/lib/emailtag";
 import {
   syncFirms,
   getReviewsSummary,
@@ -578,7 +578,7 @@ function FirmRow({ firm }: { firm: PifFirm }) {
         </div>
         <div className="text-[11px] text-neutral-500 truncate">
           {firm.website ?? ""}
-          {firm.leadership?.length > 0 &&
+          {firm.leadership && firm.leadership.length > 0 &&
             ` · ${firm.leadership.length} leaders`}
           {firm.contacts?.length > 0 &&
             ` · ${firm.contacts.length} contacts`}

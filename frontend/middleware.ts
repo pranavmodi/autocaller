@@ -23,6 +23,7 @@ export function middleware(req: NextRequest) {
     pathname.startsWith("/_next/") ||
     pathname.startsWith("/api/") ||
     pathname.startsWith("/audio/") ||
+    pathname.startsWith("/emailtag/") ||
     pathname === "/favicon.ico" ||
     pathname === "/robots.txt"
   ) {
@@ -51,5 +52,5 @@ export function middleware(req: NextRequest) {
 export const config = {
   // Gate everything except static + the Next.js internals. API paths are
   // handled by the backend's own auth middleware.
-  matcher: ["/((?!api|_next/static|_next/image|favicon.ico|robots.txt).*)"],
+  matcher: ["/((?!api|emailtag|_next/static|_next/image|favicon.ico|robots.txt).*)"],
 };

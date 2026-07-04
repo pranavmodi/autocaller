@@ -119,3 +119,37 @@ A reasonable heuristic: if someone three months from now had only the CLI and `d
   1. `curl -s http://127.0.0.1:8099/api/calls/active` — if `active: true`, **wait**.
   2. `sudo -u postgres psql -d autocaller -c "SELECT call_id, firm_name, started_at FROM call_logs WHERE ended_at IS NULL AND started_at > now() - interval '10 minutes';"` — active marker may be stale; recent `ended_at=NULL` rows are authoritative.
   If an operator is listening via `/ws/listen/{call_id}`, the restart also cuts their audio. New code can wait — queue the restart for after the call completes.
+
+## Delegating implementation to Codex
+
+Bounded implementation work may be delegated to **Codex** (`codex exec`). The
+division of labor and full loop are in `docs/product/tasks/DELEGATION.md` — read it
+before delegating. The essentials:
+
+- **Roles.** *Claude = orchestrator*: plans, splits work into packets, checkpoints
+  git, launches Codex, reviews the diff against packet scope, does live
+  verification, restarts services, commits, updates the decision log + todos.
+  *Codex = implementer*: builds **one bounded packet at a time**, runs the packet's
+  validation commands, and reports. Codex **never** commits/pushes, restarts
+  services, writes to `/etc`, installs systemd units, or runs expensive backfills —
+  those are the orchestrator's job.
+- **A packet** is a self-contained markdown file under `docs/product/tasks/`
+  (e.g. `PACKET_*.md`) with: **Workdir + Source**, **Scope** (exactly what to build,
+  what NOT to), **Repo conventions**, **hard Guardrails** (additive-only, no
+  commit/push, no restarts, list any WIP/legacy files that must stay untouched), and
+  **Validation** (the exact commands Codex must run and report). Keep it bounded and
+  additive.
+- **Launch** with the runner (pipes the packet to `codex exec -s workspace-write`,
+  network enabled in-sandbox, `-C <workdir>`, teed to `docs/product/tasks/logs/`):
+  ```bash
+  docs/product/tasks/run_packet.sh docs/product/tasks/PACKET_X.md <workdir>
+  ```
+  `<workdir>` may be another repo (e.g. `/home/pranav/emailtag`) — packets are
+  cross-repo.
+- **Orchestrator loop per packet:** pre-flight git checkpoint (protect unrelated
+  WIP — do NOT checkpoint-commit someone else's in-flight work; snapshot/stash and
+  review instead) → launch → review `git diff` vs scope (revert out-of-scope hunks)
+  → verify live (build/tsc/tests + service check; for autocaller check
+  `/api/calls/active` before any restart) → finalize (descriptive commit
+  Co-Authored-By Claude, decision-log entry, todos) → on failure
+  `codex exec resume --last` with the failure output rather than a fresh session.

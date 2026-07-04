@@ -6,6 +6,8 @@ import pytest
 from app.db.models import AgentActionRow, LeadGenBatchItemRow
 from app.services.action_execution import (
     SEND_EMAIL,
+    _lead_gen_composer_variant_from_item,
+    _lead_gen_requires_consult_link,
     _is_sample_lead_gen_context,
     _sync_lead_gen_scheduled_draft_fields,
     _terminal_policy_block_reason,
@@ -71,6 +73,23 @@ def test_sample_lead_gen_context_rejects_normal_lead():
     )
 
     assert _is_sample_lead_gen_context(contact=contact, batch_item=item, pif_firm=firm) is False
+
+
+def test_lead_gen_consult_link_is_variant_specific():
+    assert _lead_gen_requires_consult_link({"composer_variant_key": "intake-demo"}) is True
+    assert _lead_gen_requires_consult_link({"composer_variant_key": "ai-tutoring-brief"}) is False
+    assert _lead_gen_requires_consult_link({"composer_variant_key": "reply-first-precise-proof"}) is False
+
+
+def test_lead_gen_consult_link_variant_falls_back_to_batch_item_reason():
+    item = SimpleNamespace(
+        reason_json={
+            "agent_draft": {"composer_variant_key": "ai-tutoring-brief"},
+        }
+    )
+
+    assert _lead_gen_composer_variant_from_item({}, item) == "ai-tutoring-brief"
+    assert _lead_gen_requires_consult_link({}, item) is False
 
 
 def _action(**overrides):
