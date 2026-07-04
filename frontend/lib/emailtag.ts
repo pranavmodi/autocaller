@@ -510,6 +510,13 @@ export function analyzeBehavior(pifId: string): Promise<BehaviorAnalysisResponse
   );
 }
 
+export function scoreFirm(pifId: string): Promise<PifInfoResponse> {
+  return emailtagFetch<PifInfoResponse>(
+    `/pif-info/${encodeURIComponent(pifId)}/score`,
+    { method: "POST" },
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Legacy /firms compatibility shims (replacing the removed lib/pifstats.ts).
 // The existing /firms pages were built against the old pifstats client, which
@@ -558,12 +565,7 @@ export const triggerBehaviorAnalysis = analyzeBehavior;
 export const pollResearchStatus = getResearchStatus;
 
 /** @deprecated legacy /firms alias — ICP score trigger (POST /pif-info/{id}/score). */
-export function triggerIcpScore(pifId: string): Promise<PifInfoResponse> {
-  return emailtagFetch<PifInfoResponse>(
-    `/pif-info/${encodeURIComponent(pifId)}/score`,
-    { method: "POST" },
-  );
-}
+export const triggerIcpScore = scoreFirm;
 
 /** @deprecated legacy /firms alias — free-text people search. */
 export async function searchPifPeople(

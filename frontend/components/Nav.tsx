@@ -68,7 +68,6 @@ const items = [
   { href: "/outreach", label: "Outreach", icon: Send },
   { href: "/calllists", label: "Call lists", icon: ListChecks },
   { href: "/consults", label: "Consults", icon: CalendarCheck },
-  { href: "/firms", label: "Firms", icon: Building2 },
   { href: "/emailtag-firms", label: "EmailTag Firms", icon: Building2 },
   { href: "/system", label: "Health", icon: Stethoscope },
 ];

@@ -409,7 +409,7 @@ export default function NowPage() {
                   <div className="min-w-0 flex-1">
                     <div className="text-sm font-medium text-neutral-900 truncate">
                       <Link
-                        href={`/firms/${row.pif_id}`}
+                        href={`/emailtag-firms?firm=${encodeURIComponent(row.pif_id)}`}
                         className="hover:text-blue-600 hover:underline"
                         title="Open firm detail page"
                       >

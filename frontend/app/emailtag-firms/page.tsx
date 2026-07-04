@@ -1,11 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import type React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Activity,
   AlertCircle,
+  AlertTriangle,
   BarChart3,
   ChevronDown,
   ChevronLeft,
@@ -21,15 +24,27 @@ import {
   LogIn,
   LogOut,
   Mail,
+  PhoneCall,
   Play,
   RefreshCw,
   Search,
   SlidersHorizontal,
   Sparkles,
+  Star,
+  Trash2,
   Users,
 } from "lucide-react";
+import { CommsTable } from "@/components/CommsTable";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
+import {
+  deleteFirm,
+  getFirmCalls,
+  getFirmReviews,
+  listFirmCommunications,
+  putFirmReviews,
+  type DeleteFirmResult,
+} from "@/lib/api";
 import {
   ENTITY_TYPE_LABELS,
   EmailtagAuthError,
@@ -44,6 +59,7 @@ import {
   listPifPeople,
   loginEmailtag,
   logoutEmailtag,
+  scoreFirm,
   startFullEnrichment,
   startResearch,
   startStaffResearch,
@@ -88,6 +104,21 @@ interface BatchResearchRun {
   requested: number;
   rows: BatchResearchRow[];
 }
+
+type ExtractedQuote = {
+  quote: string;
+  reviewer_name: string | null;
+  review_date: string | null;
+  star_rating: number | null;
+  confidence: number;
+};
+
+type ExtractedReviews = {
+  extractor_version?: string;
+  extracted_at?: string;
+  pain_points?: Record<string, ExtractedQuote[]>;
+  absent_pain_points?: Record<string, string>;
+};
 
 interface FiltersState {
   search: string;
@@ -173,6 +204,75 @@ function frontConversationUrl(conversationId: string) {
   return `https://app.frontapp.com/open/${encodeURIComponent(conversationId)}`;
 }
 
+function emailtagFirmHref(pifId: string) {
+  return `/emailtag-firms?firm=${encodeURIComponent(pifId)}`;
+}
+
+function painLabel(pain: string) {
+  return pain
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function parseExtractedReviews(blob: string | null | undefined): ExtractedReviews | null {
+  if (!blob) return null;
+  const match = blob.match(/<!--\s*EXTRACTED v\d+\s*([\s\S]*?)\s*-->/);
+  if (!match) return null;
+  try {
+    const parsed = JSON.parse(match[1]);
+    return parsed && typeof parsed === "object" ? (parsed as ExtractedReviews) : null;
+  } catch {
+    return null;
+  }
+}
+
+const STATE_NAMES: Record<string, string> = {
+  AL: "Alabama", AK: "Alaska", AZ: "Arizona", AR: "Arkansas",
+  CA: "California", CO: "Colorado", CT: "Connecticut", DE: "Delaware",
+  FL: "Florida", GA: "Georgia", HI: "Hawaii", ID: "Idaho",
+  IL: "Illinois", IN: "Indiana", IA: "Iowa", KS: "Kansas",
+  KY: "Kentucky", LA: "Louisiana", ME: "Maine", MD: "Maryland",
+  MA: "Massachusetts", MI: "Michigan", MN: "Minnesota", MS: "Mississippi",
+  MO: "Missouri", MT: "Montana", NE: "Nebraska", NV: "Nevada",
+  NH: "New Hampshire", NJ: "New Jersey", NM: "New Mexico", NY: "New York",
+  NC: "North Carolina", ND: "North Dakota", OH: "Ohio", OK: "Oklahoma",
+  OR: "Oregon", PA: "Pennsylvania", RI: "Rhode Island", SC: "South Carolina",
+  SD: "South Dakota", TN: "Tennessee", TX: "Texas", UT: "Utah",
+  VT: "Vermont", VA: "Virginia", WA: "Washington", WV: "West Virginia",
+  WI: "Wisconsin", WY: "Wyoming", DC: "District of Columbia",
+};
+
+function extractState(address: string | null | undefined): string {
+  if (!address) return "";
+  const match = address.match(/\b([A-Z]{2})\b\s*\d{5}(?:-\d{4})?\b/);
+  const abbreviation = (match?.[1] ?? "").toUpperCase();
+  return STATE_NAMES[abbreviation] ?? "";
+}
+
+function outcomeColor(outcome: string): string {
+  switch (outcome) {
+    case "demo_scheduled":
+      return "bg-emerald-100 text-emerald-800";
+    case "callback_requested":
+      return "bg-sky-100 text-sky-800";
+    case "voicemail":
+      return "bg-violet-100 text-violet-800";
+    case "gatekeeper_only":
+      return "bg-amber-100 text-amber-800";
+    case "not_interested":
+      return "bg-rose-100 text-rose-800";
+    case "wrong_number":
+      return "bg-neutral-200 text-neutral-700";
+    case "completed":
+      return "bg-neutral-100 text-neutral-700";
+    case "failed":
+    case "disconnected":
+      return "bg-neutral-100 text-neutral-500";
+    default:
+      return "bg-neutral-100 text-neutral-600";
+  }
+}
+
 function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
@@ -238,7 +338,27 @@ function filtersToParams(filters: FiltersState, page: number): PifInfoListParams
 }
 
 export default function EmailtagFirmsPage() {
+  return (
+    <Suspense fallback={<EmailtagFirmsFallback />}>
+      <EmailtagFirmsContent />
+    </Suspense>
+  );
+}
+
+function EmailtagFirmsFallback() {
+  return (
+    <div className="flex min-h-[50vh] items-center justify-center text-sm text-neutral-500">
+      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+      Loading EmailTag firms...
+    </div>
+  );
+}
+
+function EmailtagFirmsContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const queryClient = useQueryClient();
+  const selectedFirmId = searchParams.get("firm") ?? "";
   const [authenticated, setAuthenticated] = useState<boolean | null>(null);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -283,6 +403,22 @@ export default function EmailtagFirmsPage() {
   });
 
   const listParams = useMemo(() => filtersToParams(filters, page), [filters, page]);
+
+  useEffect(() => {
+    if (selectedFirmId) setExpandedId(selectedFirmId);
+  }, [selectedFirmId]);
+
+  const setSelectedFirm = (pifId: string | null) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (pifId) {
+      params.set("firm", pifId);
+    } else {
+      params.delete("firm");
+    }
+    const query = params.toString();
+    router.push(query ? `/emailtag-firms?${query}` : "/emailtag-firms");
+    setExpandedId(pifId);
+  };
 
   const firmsQuery = useQuery({
     queryKey: ["emailtag", "firms", listParams],
@@ -497,6 +633,7 @@ export default function EmailtagFirmsPage() {
 
   const data = firmsQuery.data;
   const firms = data?.items ?? [];
+  const selectedFirmOnPage = Boolean(selectedFirmId && firms.some((firm) => firm.id === selectedFirmId));
   const totalPages = data?.total_pages ?? 1;
   const pageSummary = {
     missingWebsite: firms.filter((firm) => !(firm.canonical_website ?? firm.website)).length,
@@ -584,6 +721,14 @@ export default function EmailtagFirmsPage() {
         loading={peopleQuery.isLoading}
       />
 
+      {selectedFirmId && !selectedFirmOnPage && (
+        <SelectedFirmPanel
+          pifId={selectedFirmId}
+          onClear={() => setSelectedFirm(null)}
+          onAuthError={() => setAuthenticated(false)}
+        />
+      )}
+
       <div className="overflow-hidden rounded-xl border border-neutral-200 bg-white">
         {firmsQuery.isLoading && (
           <div className="px-5 py-8 text-center text-xs text-neutral-400">Loading EmailTag firms...</div>
@@ -618,8 +763,11 @@ export default function EmailtagFirmsPage() {
                   <FirmTableRows
                     key={firm.id}
                     firm={firm}
-                    expanded={expandedId === firm.id}
-                    onToggle={() => setExpandedId((current) => (current === firm.id ? null : firm.id))}
+                    expanded={expandedId === firm.id || selectedFirmId === firm.id}
+                    onToggle={() => {
+                      const open = expandedId === firm.id || selectedFirmId === firm.id;
+                      setSelectedFirm(open ? null : firm.id);
+                    }}
                     onAuthError={() => setAuthenticated(false)}
                   />
                 ))}
@@ -1134,6 +1282,60 @@ function BatchStatusList({
   );
 }
 
+function SelectedFirmPanel({
+  pifId,
+  onClear,
+  onAuthError,
+}: {
+  pifId: string;
+  onClear: () => void;
+  onAuthError: () => void;
+}) {
+  const firmQuery = useQuery({
+    queryKey: ["emailtag", "selected-firm", pifId],
+    queryFn: () => getFirm(pifId),
+    enabled: Boolean(pifId),
+  });
+
+  useEffect(() => {
+    if (isAuthError(firmQuery.error)) onAuthError();
+  }, [firmQuery.error, onAuthError]);
+
+  return (
+    <section className="rounded-xl border border-neutral-200 bg-white">
+      <div className="flex flex-col gap-2 border-b border-neutral-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Selected firm</div>
+          <div className="mt-0.5 font-mono text-xs text-neutral-500">{pifId}</div>
+        </div>
+        <button
+          type="button"
+          onClick={onClear}
+          className="inline-flex items-center justify-center rounded-md border border-neutral-200 px-3 py-1.5 text-xs font-medium text-neutral-600 hover:bg-neutral-50"
+        >
+          Back to list
+        </button>
+      </div>
+      {firmQuery.isLoading && (
+        <div className="flex items-center gap-2 px-4 py-6 text-sm text-neutral-500">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Loading firm detail...
+        </div>
+      )}
+      {firmQuery.isError && !isAuthError(firmQuery.error) && (
+        <div className="px-4 py-6 text-sm text-rose-600">
+          {firmQuery.error instanceof Error ? firmQuery.error.message : "Could not load firm."}
+        </div>
+      )}
+      {firmQuery.data && (
+        <div className="p-4">
+          <FirmDetail initialFirm={firmQuery.data} onAuthError={onAuthError} />
+        </div>
+      )}
+    </section>
+  );
+}
+
 function FirmDetail({ initialFirm, onAuthError }: { initialFirm: PifInfoResponse; onAuthError: () => void }) {
   const queryClient = useQueryClient();
   const [researchTaskId, setResearchTaskId] = useState<string | null>(null);
@@ -1209,6 +1411,17 @@ function FirmDetail({ initialFirm, onAuthError }: { initialFirm: PifInfoResponse
 
   const behavior = useMutation({
     mutationFn: () => analyzeBehavior(firm.id),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["emailtag", "firm", firm.id] });
+      void queryClient.invalidateQueries({ queryKey: ["emailtag", "firms"] });
+    },
+    onError: (error) => {
+      if (isAuthError(error)) onAuthError();
+    },
+  });
+
+  const score = useMutation({
+    mutationFn: () => scoreFirm(firm.id),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["emailtag", "firm", firm.id] });
       void queryClient.invalidateQueries({ queryKey: ["emailtag", "firms"] });
@@ -1348,13 +1561,438 @@ function FirmDetail({ initialFirm, onAuthError }: { initialFirm: PifInfoResponse
         <ActionButton onClick={() => behavior.mutate()} pending={behavior.isPending} icon={<Sparkles className="h-3.5 w-3.5" />}>
           Analyze behavior
         </ActionButton>
+        <ActionButton onClick={() => score.mutate()} pending={score.isPending} icon={<BarChart3 className="h-3.5 w-3.5" />}>
+          Score ICP
+        </ActionButton>
       </div>
+
+      <FirmReviewsPanel
+        pifId={firm.id}
+        firmName={firm.firm_name}
+        address={firm.addresses?.[0] ?? null}
+      />
+
+      <FirmCommunicationsPanel pifId={firm.id} />
+      <FirmCallsPanel pifId={firm.id} />
 
       <div className="grid gap-4 xl:grid-cols-2">
         <JsonViewer title="Research data" value={firm.research_data} />
         <JsonViewer title="Behavioral data" value={firm.behavioral_data} />
       </div>
+
+      <FirmDangerZone pifId={firm.id} firmName={firm.firm_name} />
     </div>
+  );
+}
+
+function FirmReviewsPanel({
+  pifId,
+  firmName,
+  address,
+}: {
+  pifId: string;
+  firmName: string;
+  address: string | null;
+}) {
+  const { data, isLoading } = useQuery({
+    queryKey: ["firm-reviews", pifId],
+    queryFn: () => getFirmReviews(pifId),
+  });
+
+  const state = extractState(address);
+  const firmType = "personal injury law firm";
+  const googleQuery = [firmName, firmType, state, "reviews"].filter(Boolean).join(" ");
+  const yelpQuery = ["site:yelp.com", firmName, firmType, state].filter(Boolean).join(" ");
+
+  return (
+    <section className="rounded-md border border-neutral-200 p-3">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="flex items-center gap-2 text-sm font-semibold text-neutral-900">
+          <Star className="h-4 w-4 text-neutral-400" />
+          Reviews
+        </h2>
+        <span className="text-[11px] text-neutral-400">
+          {isLoading
+            ? "loading..."
+            : data?.updated_at
+              ? `saved ${new Date(data.updated_at).toLocaleString(undefined, {
+                  month: "short",
+                  day: "numeric",
+                  hour: "numeric",
+                  minute: "2-digit",
+                })}`
+              : "not saved"}
+        </span>
+      </div>
+
+      <ExtractedQuotesSection google={data?.google ?? ""} yelp={data?.yelp ?? ""} />
+
+      <div className="mt-3 grid gap-3 lg:grid-cols-2">
+        <ReviewSourcePane
+          pifId={pifId}
+          source="google"
+          label="Google Reviews"
+          searchQuery={googleQuery}
+          serverValue={data?.google ?? ""}
+          isLoading={isLoading}
+          placeholder={"Google - 4.8 stars (312 reviews)\n\nJane D. - Aug 2024\n\"They were great on my auto-accident case...\""}
+        />
+        <ReviewSourcePane
+          pifId={pifId}
+          source="yelp"
+          label="Yelp Reviews"
+          searchQuery={yelpQuery}
+          serverValue={data?.yelp ?? ""}
+          isLoading={isLoading}
+          placeholder={"Yelp - 4.5 stars (87 reviews)\n\nMark T. - 2/2025\n\"Responsive and honest. Explained every step...\""}
+        />
+      </div>
+    </section>
+  );
+}
+
+function ExtractedQuotesSection({ google, yelp }: { google: string; yelp: string }) {
+  const sources: { key: "google" | "yelp"; label: string; data: ExtractedReviews | null }[] = [
+    { key: "google", label: "Google", data: parseExtractedReviews(google) },
+    { key: "yelp", label: "Yelp", data: parseExtractedReviews(yelp) },
+  ];
+  if (!sources.some((source) => source.data !== null)) return null;
+
+  return (
+    <div className="mt-3 space-y-3">
+      {sources.map(({ key, label, data }) =>
+        data ? <ExtractedQuotesForSource key={key} label={label} data={data} /> : null,
+      )}
+    </div>
+  );
+}
+
+function ExtractedQuotesForSource({ label, data }: { label: string; data: ExtractedReviews }) {
+  const present = Object.entries(data.pain_points ?? {}).filter(([, quotes]) => Array.isArray(quotes) && quotes.length > 0);
+  const absent = Object.entries(data.absent_pain_points ?? {});
+
+  if (present.length === 0 && absent.length === 0) return null;
+
+  return (
+    <div className="rounded-md border border-neutral-200 bg-neutral-50 p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] uppercase tracking-wide text-neutral-500">
+        <span className="font-semibold">{label} pain-point quotes</span>
+        {data.extracted_at && (
+          <span className="text-neutral-400">
+            {data.extractor_version ?? "extracted"} · {new Date(data.extracted_at).toLocaleString()}
+          </span>
+        )}
+      </div>
+      {present.map(([key, quotes]) => (
+        <div key={key} className="mt-3">
+          <div className="text-xs font-semibold text-neutral-700">
+            {painLabel(key)} <span className="font-normal text-neutral-400">· {quotes.length}</span>
+          </div>
+          <ul className="mt-1 space-y-2">
+            {quotes.map((quote, index) => (
+              <li key={index} className="rounded border border-neutral-200 bg-white p-2 text-[13px] text-neutral-800">
+                <p className="italic text-neutral-700">&ldquo;{quote.quote}&rdquo;</p>
+                <div className="mt-1 flex flex-wrap items-center gap-x-2 text-[11px] text-neutral-500">
+                  {quote.reviewer_name && <span>{quote.reviewer_name}</span>}
+                  {quote.review_date && <span>· {quote.review_date}</span>}
+                  {typeof quote.star_rating === "number" && (
+                    <span>· {quote.star_rating}/5</span>
+                  )}
+                  <span className="ml-auto text-neutral-400">confidence {quote.confidence.toFixed(2)}</span>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+      {absent.map(([key, rationale]) => (
+        <div key={key} className="mt-3 rounded border border-dashed border-neutral-300 bg-white p-2 text-[12px] text-neutral-500">
+          <span className="font-semibold text-neutral-600">{painLabel(key)} not evident</span> - {rationale}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ReviewSourcePane({
+  pifId,
+  source,
+  label,
+  searchQuery,
+  serverValue,
+  isLoading,
+  placeholder,
+}: {
+  pifId: string;
+  source: "google" | "yelp";
+  label: string;
+  searchQuery: string;
+  serverValue: string;
+  isLoading: boolean;
+  placeholder: string;
+}) {
+  const queryClient = useQueryClient();
+  const [draft, setDraft] = useState("");
+  const [synced, setSynced] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isLoading) return;
+    if (synced === null) {
+      setDraft(serverValue);
+      setSynced(serverValue);
+      return;
+    }
+    if (serverValue !== synced && draft === synced) {
+      setDraft(serverValue);
+      setSynced(serverValue);
+    }
+  }, [serverValue, isLoading, synced, draft]);
+
+  const dirty = synced !== null && draft !== synced;
+
+  const save = async () => {
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const response = await putFirmReviews(pifId, source === "google" ? { google: draft } : { yelp: draft });
+      const next = source === "google" ? response.google : response.yelp;
+      setDraft(next);
+      setSynced(next);
+      queryClient.setQueryData(["firm-reviews", pifId], response);
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "save failed");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="rounded-md border border-neutral-200 bg-neutral-50 p-3">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-neutral-600">{label}</div>
+          <div className="mt-0.5 truncate font-mono text-[10px] text-neutral-400" title={searchQuery}>
+            q: {searchQuery}
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => window.open(`https://www.google.com/search?q=${encodeURIComponent(searchQuery)}`, "_blank", "noopener,noreferrer")}
+          className="inline-flex shrink-0 items-center gap-1 rounded border border-neutral-300 bg-white px-2 py-1 text-[10px] font-medium text-neutral-700 hover:bg-neutral-100"
+        >
+          <Search className="h-3 w-3" />
+          Search
+        </button>
+      </div>
+      <textarea
+        value={draft}
+        onChange={(event) => setDraft(event.target.value)}
+        placeholder={placeholder}
+        rows={8}
+        disabled={isLoading}
+        className="mt-2 w-full resize-y rounded-md border border-neutral-300 bg-white px-3 py-2 font-mono text-xs text-neutral-800 focus:border-neutral-400 focus:outline-none"
+      />
+      <div className="mt-2 flex items-center justify-between">
+        <span className="text-[10px] text-neutral-400">
+          {draft.length.toLocaleString()} chars
+          {dirty && <span className="ml-2 text-amber-600">unsaved</span>}
+        </span>
+        <div className="flex items-center gap-2">
+          {saveError && <span className="text-[10px] text-rose-600">{saveError}</span>}
+          <button
+            type="button"
+            onClick={save}
+            disabled={saving || !dirty}
+            className={cn(
+              "rounded-md px-2.5 py-1 text-[11px] font-medium transition",
+              dirty && !saving ? "bg-neutral-900 text-white hover:bg-neutral-700" : "bg-neutral-100 text-neutral-400",
+            )}
+          >
+            {saving ? "Saving..." : "Save"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FirmCommunicationsPanel({ pifId }: { pifId: string }) {
+  const comms = useQuery({
+    queryKey: ["firm-comms", pifId],
+    queryFn: () => listFirmCommunications(pifId, { limit: 100 }),
+    refetchInterval: 30_000,
+  });
+  const items = comms.data?.items ?? [];
+
+  return (
+    <section className="rounded-md border border-neutral-200 p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="flex items-center gap-2 text-sm font-semibold text-neutral-900">
+          <PhoneCall className="h-4 w-4 text-neutral-400" />
+          Communications ({comms.data?.total ?? 0})
+        </h2>
+        <span className="text-[11px] text-neutral-400">calls · voicemail · sms · email</span>
+      </div>
+      {comms.isLoading && <div className="mt-3 text-xs text-neutral-400">loading...</div>}
+      {!comms.isLoading && items.length === 0 && (
+        <div className="mt-3 text-xs text-neutral-400">No outbound communications to this firm yet.</div>
+      )}
+      {items.length > 0 && (
+        <div className="mt-3">
+          <CommsTable items={items} hideFirm />
+        </div>
+      )}
+    </section>
+  );
+}
+
+function FirmCallsPanel({ pifId }: { pifId: string }) {
+  const calls = useQuery({
+    queryKey: ["firm-calls", pifId],
+    queryFn: () => getFirmCalls(pifId, 100),
+    refetchInterval: 30_000,
+  });
+
+  return (
+    <section className="rounded-md border border-neutral-200 p-3">
+      <h2 className="flex items-center gap-2 text-sm font-semibold text-neutral-900">
+        <PhoneCall className="h-4 w-4 text-neutral-400" />
+        Calls ({calls.data?.total ?? 0})
+      </h2>
+      {calls.isLoading && <div className="mt-3 text-xs text-neutral-400">loading...</div>}
+      {!calls.isLoading && (calls.data?.items?.length ?? 0) === 0 && (
+        <div className="mt-3 text-xs text-neutral-400">No calls yet to this firm.</div>
+      )}
+      {(calls.data?.items?.length ?? 0) > 0 && (
+        <div className="mobile-table-card mt-3 md:overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead className="text-[10px] uppercase tracking-wide text-neutral-400">
+              <tr className="text-left">
+                <th className="px-2 py-1.5 font-medium">When</th>
+                <th className="px-2 py-1.5 font-medium">Contact</th>
+                <th className="px-2 py-1.5 font-medium">Phone</th>
+                <th className="px-2 py-1.5 font-medium">Outcome</th>
+                <th className="px-2 py-1.5 font-medium">Disposition</th>
+                <th className="px-2 py-1.5 text-right font-medium">Dur</th>
+                <th className="px-2 py-1.5 font-medium">Judge</th>
+                <th className="px-2 py-1.5 font-medium">VM</th>
+                <th className="px-2 py-1.5 font-medium">IVR</th>
+                <th className="px-2 py-1.5 font-medium">Voice</th>
+                <th className="px-2 py-1.5 font-medium">Prompt</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-neutral-100">
+              {calls.data?.items?.map((call) => (
+                <tr key={call.call_id} className="text-neutral-700 hover:bg-neutral-50">
+                  <td data-label="When" className="whitespace-nowrap px-2 py-1.5">
+                    <Link href={`/calls/${call.call_id}`} className="text-blue-600 hover:underline" title={call.started_at ?? ""}>
+                      {call.started_at
+                        ? new Date(call.started_at).toLocaleString(undefined, {
+                            month: "short",
+                            day: "numeric",
+                            hour: "numeric",
+                            minute: "2-digit",
+                          })
+                        : "—"}
+                    </Link>
+                  </td>
+                  <td data-label="Contact" className="max-w-[14rem] truncate px-2 py-1.5">{call.patient_name || "—"}</td>
+                  <td data-label="Phone" className="px-2 py-1.5 font-mono text-[11px] text-neutral-500">{call.phone || "—"}</td>
+                  <td data-label="Outcome" className="px-2 py-1.5">
+                    <span className={cn("rounded px-1.5 py-0.5 text-[10px] font-medium", outcomeColor(call.outcome))}>
+                      {call.outcome}
+                    </span>
+                  </td>
+                  <td data-label="Disposition" className="px-2 py-1.5 text-[11px] text-neutral-600">
+                    {call.call_disposition}
+                    {call.ended_by && <span className="ml-1 text-[10px] text-neutral-400">({call.ended_by})</span>}
+                  </td>
+                  <td data-label="Duration" className="px-2 py-1.5 text-right tabular-nums">{call.duration_seconds}s</td>
+                  <td data-label="Judge" className="px-2 py-1.5">{call.judge_score != null ? call.judge_score : "—"}</td>
+                  <td data-label="VM" className="px-2 py-1.5">{call.voicemail_left ? "yes" : ""}</td>
+                  <td data-label="IVR" className="px-2 py-1.5 text-[10px] text-neutral-500">{call.ivr_detected ? call.ivr_outcome ?? "yes" : ""}</td>
+                  <td data-label="Voice" className="px-2 py-1.5 text-[10px] text-neutral-500">{call.voice_provider ?? "—"}</td>
+                  <td data-label="Prompt" className="px-2 py-1.5 text-[10px] text-neutral-500">{call.prompt_version ?? "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function FirmDangerZone({ pifId, firmName }: { pifId: string; firmName: string }) {
+  const router = useRouter();
+  const [confirming, setConfirming] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function onDelete() {
+    setSubmitting(true);
+    setError(null);
+    try {
+      const result: DeleteFirmResult = await deleteFirm(pifId);
+      const total =
+        result.patients +
+        result.cadence_entries +
+        result.firm_reviews +
+        result.firm_contacts +
+        result.patient_call_state;
+      console.log(`[delete-firm] ${pifId} removed ${total} local rows`, result);
+      router.replace("/emailtag-firms");
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : "delete failed");
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <section className="rounded-md border border-rose-200 bg-rose-50 p-3">
+      <h2 className="flex items-center gap-2 text-sm font-semibold text-rose-800">
+        <AlertTriangle className="h-4 w-4" />
+        Local cleanup
+      </h2>
+      <p className="mt-2 text-xs text-rose-900/80">
+        Hard-deletes this firm&apos;s local Possible OS data: lead row, cadence entry,
+        operator-pasted reviews, contacts, email sequences, and call-state. Historical
+        outbound logs are preserved, and the firm remains in EmailTag/PIFStats.
+      </p>
+      {!confirming ? (
+        <button
+          type="button"
+          onClick={() => setConfirming(true)}
+          className="mt-3 inline-flex items-center gap-2 rounded-md border border-rose-300 bg-white px-3 py-1.5 text-xs font-medium text-rose-700 hover:bg-rose-100"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+          Delete local firm data
+        </button>
+      ) : (
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <span className="text-xs font-medium text-rose-900">Delete local data for &ldquo;{firmName}&rdquo;?</span>
+          <button
+            type="button"
+            onClick={onDelete}
+            disabled={submitting}
+            className="rounded-md bg-rose-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-rose-700 disabled:opacity-50"
+          >
+            {submitting ? "Deleting..." : "Yes, delete"}
+          </button>
+          <button
+            type="button"
+            onClick={() => setConfirming(false)}
+            disabled={submitting}
+            className="rounded-md border border-neutral-300 bg-white px-3 py-1.5 text-xs font-medium text-neutral-700 hover:bg-neutral-50 disabled:opacity-50"
+          >
+            Cancel
+          </button>
+        </div>
+      )}
+      {error && <div className="mt-2 text-xs text-rose-700">Error: {error}</div>}
+    </section>
   );
 }
 

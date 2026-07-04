@@ -209,7 +209,7 @@ function QueueRow({ index, row }: { index: number; row: CadencePriorityRow }) {
       </td>
       <td data-label="Firm" className="px-3 py-2">
         <Link
-          href={`/firms/${row.pif_id}`}
+          href={`/emailtag-firms?firm=${encodeURIComponent(row.pif_id)}`}
           className="font-medium text-neutral-900 hover:text-blue-600 hover:underline"
           title="Open firm detail page"
         >
@@ -281,7 +281,7 @@ function QueueRow({ index, row }: { index: number; row: CadencePriorityRow }) {
       </td>
       <td data-label="Actions" className="px-3 py-2 text-right text-xs">
         <Link
-          href={`/firms/${row.pif_id}`}
+          href={`/emailtag-firms?firm=${encodeURIComponent(row.pif_id)}`}
           className="text-blue-600 hover:underline"
         >
           firm →
