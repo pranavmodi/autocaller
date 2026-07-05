@@ -341,8 +341,18 @@ async def _upsert_profile(session, profile: dict[str, Any], *, now: datetime) ->
     return status, aliases
 
 
-async def sync_firm_intel(*, full: bool = False, limit: int | None = None) -> dict[str, Any]:
-    """Sync EmailTag firm-intel v2 profiles into the local mirror."""
+async def sync_firm_intel(
+    *, full: bool = False, limit: int | None = None, restart: bool = False
+) -> dict[str, Any]:
+    """Sync EmailTag firm-intel v2 profiles into the local mirror.
+
+    Full crawls are resumable: an interrupted run saves its cursor (and the
+    max watermark seen so far) in the state row, and the next full run picks
+    up from there instead of re-crawling from page 0 — the upstream feed
+    tolerates only a bounded number of requests per session, so restarting
+    from scratch can starve the tail forever. `restart=True` discards a saved
+    resume point.
+    """
     await ensure_firm_intel_tables()
     now = _utcnow()
     limit_value = None if limit is None else max(0, int(limit))
@@ -358,7 +368,27 @@ async def sync_firm_intel(*, full: bool = False, limit: int | None = None) -> di
             session.add(state)
         updated_since = None if full else state.last_updated_since
 
+        resumed_from: str | None = None
         cursor: str | None = None
+        if full and limit_value is None and not restart:
+            last = state.last_result if isinstance(state.last_result, dict) else {}
+            resumed_from = str(last.get("resume_cursor") or "").strip() or None
+            if resumed_from:
+                cursor = resumed_from
+                max_watermark = _parse_dt(last.get("resume_watermark"))
+                logger.info("firm_intel sync resuming full crawl from cursor %s", resumed_from)
+
+        async def _save_resume_point() -> None:
+            """Persist crawl position so the next full run continues here."""
+            if not (full and limit_value is None):
+                return
+            saved = dict(state.last_result) if isinstance(state.last_result, dict) else {}
+            saved["resume_cursor"] = cursor
+            saved["resume_watermark"] = _dt_iso(max_watermark)
+            state.last_result = saved
+            state.last_synced_at = now
+            await session.commit()
+
         async with httpx.AsyncClient(
             base_url=FIRM_INTEL_BASE_URL,
             timeout=60.0,
@@ -376,8 +406,12 @@ async def sync_firm_intel(*, full: bool = False, limit: int | None = None) -> di
                 if cursor:
                     params["cursor"] = cursor
 
-                resp = await _get_with_retry(client, "/firms", params)
-                resp.raise_for_status()
+                try:
+                    resp = await _get_with_retry(client, "/firms", params)
+                    resp.raise_for_status()
+                except Exception:
+                    await _save_resume_point()
+                    raise
                 data = resp.json()
                 items = [item for item in _as_list(data.get("items")) if isinstance(item, dict)]
                 total_reported = int(data.get("total") or total_reported or 0)
@@ -423,6 +457,7 @@ async def sync_firm_intel(*, full: bool = False, limit: int | None = None) -> di
             "synced_at": now.isoformat(),
             "full": bool(full),
             "limit": limit_value,
+            "resumed_from": resumed_from,
             "previous_watermark": _dt_iso(updated_since),
             "candidate_watermark": _dt_iso(max_watermark),
             "watermark": _dt_iso(max_watermark if watermark_advanced else updated_since),
@@ -432,6 +467,13 @@ async def sync_firm_intel(*, full: bool = False, limit: int | None = None) -> di
         if watermark_advanced:
             state.last_updated_since = max_watermark
         state.last_synced_at = now
+        # A completed full crawl clears any resume point (result carries none);
+        # limited/delta runs must not wipe a resume point saved by a failed
+        # full crawl.
+        previous = state.last_result if isinstance(state.last_result, dict) else {}
+        if (not full or limit_value is not None) and previous.get("resume_cursor"):
+            result["resume_cursor"] = previous["resume_cursor"]
+            result["resume_watermark"] = previous.get("resume_watermark")
         state.last_result = result
         await session.commit()
 

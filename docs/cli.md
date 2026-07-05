@@ -105,7 +105,7 @@ Every command accepts `--help`. Exit code is `0` on success, `1` on any error
 
 | command | purpose |
 |---|---|
-| `pif sync [--full] [--limit N]` | Pull EmailTag firm-intel v2 profiles into Postgres (`pif_directory_firms`) and aliases into `firm_intel_aliases`. Delta sync uses `firm_intel_sync_state.last_updated_since`; `--full` ignores the watermark; `--limit` is for smoke runs such as `pif sync --limit 20`. |
+| `pif sync [--full] [--limit N] [--restart]` | Pull EmailTag firm-intel v2 profiles into Postgres (`pif_directory_firms`) and aliases into `firm_intel_aliases`. Delta sync uses `firm_intel_sync_state.last_updated_since`; `--full` ignores the watermark; `--limit` is for smoke runs such as `pif sync --limit 20`. Interrupted full crawls save a resume point and continue from it on the next run (the upstream feed tolerates a bounded number of requests per session); `--restart` discards the saved point. |
 | `pif status` | Show native firm-intel mirror state: total firms, profile-source counts, alias count, watermark, last sync summary, and EmailTag v2 `/health` passthrough. |
 | `pif resolve <domain\|email\|url\|legacy_pif_id>` | Resolve locally through `firm_intel_aliases` and mirrored websites; if no local hit, fall back to EmailTag v2 `/firms/resolve`. Prints `firm_id`, `firm_name`, and source. |
 | `pif show <firm_id\|domain>` | Print the mirrored v2 profile summary for a firm: name, website, metro, ICP tier, warm score, decision-makers with emails, and vendor stack. Local-only; no upstream HTTP. |

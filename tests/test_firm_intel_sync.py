@@ -342,3 +342,63 @@ def test_watermark_not_advanced_when_later_page_raises(monkeypatch):
         asyncio.run(svc.sync_firm_intel())
 
     assert store.states[1].last_updated_since == old_watermark
+
+
+def test_failed_full_crawl_saves_resume_point_and_next_run_resumes(monkeypatch):
+    store, _calls = install_fakes(monkeypatch, [
+        {"items": [profile("firm-1", refined_at="2026-07-01T12:00:00Z")], "next_cursor": "cursor-2", "total": 2},
+        RuntimeError("boom"),
+    ])
+
+    with pytest.raises(RuntimeError):
+        asyncio.run(svc.sync_firm_intel(full=True))
+
+    saved = store.states[1].last_result
+    assert saved["resume_cursor"] == "cursor-2"
+    assert saved["resume_watermark"] is not None
+
+    # Second full run resumes from the saved cursor and completes.
+    store2, calls2 = install_fakes(monkeypatch, [
+        {"items": [profile("firm-2", refined_at="2026-07-02T12:00:00Z")], "next_cursor": None, "total": 2},
+    ])
+    store2.states[1] = store.states[1]
+
+    result = asyncio.run(svc.sync_firm_intel(full=True))
+
+    assert calls2[0]["params"].get("cursor") == "cursor-2"
+    assert result["resumed_from"] == "cursor-2"
+    assert result["watermark_advanced"] is True
+    # Watermark covers both partial runs (max of resumed + newly seen).
+    assert store2.states[1].last_updated_since == datetime(2026, 7, 2, 12, tzinfo=timezone.utc)
+    # Completed full crawl clears the resume point.
+    assert "resume_cursor" not in store2.states[1].last_result
+
+
+def test_limited_run_preserves_saved_resume_point(monkeypatch):
+    store, _calls = install_fakes(monkeypatch, [
+        {"items": [profile("firm-1")], "next_cursor": "cursor-2", "total": 2},
+        RuntimeError("boom"),
+    ])
+    with pytest.raises(RuntimeError):
+        asyncio.run(svc.sync_firm_intel(full=True))
+    assert store.states[1].last_result["resume_cursor"] == "cursor-2"
+
+    store2, calls2 = install_fakes(monkeypatch, [
+        {"items": [profile("firm-3")], "next_cursor": "cursor-x", "total": 2},
+    ])
+    store2.states[1] = store.states[1]
+
+    result = asyncio.run(svc.sync_firm_intel(limit=1))
+
+    # Limited run starts from page 0 (no resume) but must not wipe the point.
+    assert calls2[0]["params"].get("cursor") is None
+    assert store2.states[1].last_result["resume_cursor"] == "cursor-2"
+
+    # restart=True discards the resume point.
+    store3, calls3 = install_fakes(monkeypatch, [
+        {"items": [profile("firm-4")], "next_cursor": None, "total": 1},
+    ])
+    store3.states[1] = store2.states[1]
+    asyncio.run(svc.sync_firm_intel(full=True, restart=True))
+    assert calls3[0]["params"].get("cursor") is None
+    assert "resume_cursor" not in store3.states[1].last_result

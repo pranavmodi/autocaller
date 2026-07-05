@@ -6398,15 +6398,18 @@ def pif_status():
 def pif_sync(
     full: bool = typer.Option(False, "--full", help="Ignore the saved v2 watermark and crawl all firms."),
     limit: int | None = typer.Option(None, "--limit", min=1, help="Cap firms processed for smoke runs."),
+    restart: bool = typer.Option(False, "--restart", help="Discard a saved resume point; full crawls start from page 0."),
 ):
     """Pull EmailTag firm-intel v2 profiles into possibleos.
 
-    Safe to run regardless of the PIF_DIRECTORY_NATIVE flag — the flag only
-    governs whether lead-gen *matching* reads from this table, so you can warm
-    it before cutover."""
+    Interrupted full crawls resume from where they stopped (the upstream feed
+    tolerates only a bounded number of requests per session). Safe to run
+    regardless of the PIF_DIRECTORY_NATIVE flag — the flag only governs
+    whether lead-gen *matching* reads from this table, so you can warm it
+    before cutover."""
     from app.services.firm_intel_sync import sync_firm_intel
 
-    console.print_json(data=asyncio.run(sync_firm_intel(full=full, limit=limit)))
+    console.print_json(data=asyncio.run(sync_firm_intel(full=full, limit=limit, restart=restart)))
 
 
 @pif_app.command("resolve")
