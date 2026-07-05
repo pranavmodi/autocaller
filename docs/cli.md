@@ -105,8 +105,10 @@ Every command accepts `--help`. Exit code is `0` on success, `1` on any error
 
 | command | purpose |
 |---|---|
-| `pif sync` | Pull the full PI-firm directory from emailtag's pif-info API into Postgres (`pif_directory_firms`), capturing all extracted data (titled contacts, leadership, behavioral profiles, ICP scores). ~3,500 firms. Safe regardless of the `PIF_DIRECTORY_NATIVE` flag — the flag only governs whether matching *reads* from it, so you can warm the table before cutover. |
-| `pif status` | Show native-directory state: firm count, ICP-tier breakdown, last sync time, source-update freshness, and whether `PIF_DIRECTORY_NATIVE` is enabled. |
+| `pif sync [--full] [--limit N]` | Pull EmailTag firm-intel v2 profiles into Postgres (`pif_directory_firms`) and aliases into `firm_intel_aliases`. Delta sync uses `firm_intel_sync_state.last_updated_since`; `--full` ignores the watermark; `--limit` is for smoke runs such as `pif sync --limit 20`. |
+| `pif status` | Show native firm-intel mirror state: total firms, profile-source counts, alias count, watermark, last sync summary, and EmailTag v2 `/health` passthrough. |
+| `pif resolve <domain\|email\|url\|legacy_pif_id>` | Resolve locally through `firm_intel_aliases` and mirrored websites; if no local hit, fall back to EmailTag v2 `/firms/resolve`. Prints `firm_id`, `firm_name`, and source. |
+| `pif show <firm_id\|domain>` | Print the mirrored v2 profile summary for a firm: name, website, metro, ICP tier, warm score, decision-makers with emails, and vendor stack. Local-only; no upstream HTTP. |
 | `pif ingest-contacts` | Populate `firm_contacts` from the synced directory's titled `contacts[]` + `leadership[]` (then map personas). Local-only, no API calls. This is the lead-supply unlock: emailtag's named, titled contacts give personas + firm names for free, lifting daily eligible leads (verified: selection 11 → full 20, decision-maker-weighted). Runs automatically after each `pif sync` when `PIF_DIRECTORY_NATIVE=1`. |
 | `decisions add "<title>" --area <area> [--why … --decision … --status … --refs …]` | Append a formatted, auto-id'd entry to today's (UTC) decision log `docs/decisions/<date>.md` (creates it if new; append-only; no daemon needed). Areas: lead-gen, deliverability, data-arch, website, infra, process, product. Mandated by the Decision-log rule in `CLAUDE.md`; format in `docs/decisions/README.md`. |
 | `decisions today` / `decisions areas` | Print today's decision-log file / list the area taxonomy. |
@@ -641,6 +643,21 @@ Review the named contacts before creating a lead-gen batch. `front warm-batch`
 does not call Front and does not send email; it writes a normal recommended
 lead-gen batch with pending items, `reason_json.basis = "front-warm"`, and a
 link back to `/lead-gen?batch=<id>`.
+
+### Recipe: "resync the firm mirror from the v2 contract"
+Use this when EmailTag firm-intel has changed or before relying on local firm
+resolution for lead-gen selection. The smoke sync caps the run and does not
+restart any service.
+
+```bash
+bin/possibleos pif status
+bin/possibleos pif sync --limit 20
+bin/possibleos pif resolve smithlaw.com
+bin/possibleos pif show smithlaw.com
+```
+
+Use `pif sync --full` only when the operator explicitly wants to ignore the
+saved firm-intel watermark and recrawl every profile from EmailTag v2.
 
 ### Recipe: "research the warm list before a batch"
 Use this when the warm list has matched PIF IDs but weak contact titles or

@@ -1557,6 +1557,11 @@ class PifFirmRow(Base):
     id: Mapped[str] = mapped_column(String(64), primary_key=True)  # emailtag uuid
     firm_name: Mapped[str | None] = mapped_column(String(512), nullable=True)
     website: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    canonical_website: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    metro: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    warm_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    vendor_stack: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    profile_source: Mapped[str | None] = mapped_column(String(8), nullable=True)
     entity_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
     fax: Mapped[str | None] = mapped_column(String(64), nullable=True)
     icp_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -1593,5 +1598,36 @@ class PifFirmRow(Base):
     __table_args__ = (
         Index("ix_pif_directory_firms_icp_score", "icp_score"),
         Index("ix_pif_directory_firms_website", "website"),
+        Index("ix_pif_directory_firms_canonical_website", "canonical_website"),
         Index("ix_pif_directory_firms_source_updated_at", "source_updated_at"),
+    )
+
+
+class FirmAliasRow(Base):
+    """Local alias index for resolving firm-intel domains, emails, and legacy IDs."""
+    __tablename__ = "firm_intel_aliases"
+
+    alias_type: Mapped[str] = mapped_column(String(32), primary_key=True)
+    alias_value: Mapped[str] = mapped_column(String(512), primary_key=True)
+    firm_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    synced_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("alias_type", "alias_value", name="uq_firm_intel_alias_type_value"),
+        Index("ix_firm_intel_alias_value", "alias_value"),
+        Index("ix_firm_intel_alias_firm_id", "firm_id"),
+    )
+
+
+class FirmIntelSyncStateRow(Base):
+    """Singleton state row for the v2 firm-intel mirror watermark."""
+    __tablename__ = "firm_intel_sync_state"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    last_updated_since: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    last_synced_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    last_result: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+
+    __table_args__ = (
+        CheckConstraint("id = 1", name="singleton_firm_intel_sync_state"),
     )

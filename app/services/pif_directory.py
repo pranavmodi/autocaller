@@ -79,8 +79,9 @@ async def ensure_pif_tables() -> None:
     global _tables_checked
     if _tables_checked:
         return
-    async with async_engine.begin() as conn:
-        await conn.run_sync(PifFirmRow.__table__.create, checkfirst=True)
+    from app.services.firm_intel_sync import ensure_firm_intel_tables
+
+    await ensure_firm_intel_tables()
     _tables_checked = True
 
 
@@ -123,12 +124,16 @@ def _apply_record(row: PifFirmRow, item: dict[str, Any], *, now: datetime) -> No
 
 
 async def sync_pif_directory(*, page_size: int = 100, max_pages: int = 500) -> dict[str, Any]:
-    page_size = max(1, min(int(page_size), 100))  # API caps page_size at 100
-    """Paginate the pif-info API and upsert every firm into pif_directory_firms.
+    """Deprecated v1 pif-info sync.
+
+    As of 2026-07-05 deployed EmailTag requires cookie auth on v1 routes, so
+    header-token clients should use app.services.firm_intel_sync.sync_firm_intel.
 
     Returns a summary. Safe to call when the flag is off (it still syncs — the
     flag only governs whether matching *reads* from this table — so an operator
     can warm the table before cutover)."""
+    logger.warning("sync_pif_directory is deprecated: emailtag v1 pif-info requires cookie auth; use firm-intel v2")
+    page_size = max(1, min(int(page_size), 100))  # API caps page_size at 100
     await ensure_pif_tables()
     now = _utcnow()
     fetched = created = updated = pages = 0
@@ -233,7 +238,9 @@ async def pif_directory_sync_loop(*, interval_seconds: int = 86400) -> None:
     while True:
         try:
             if pif_native_enabled():
-                await sync_pif_directory()
+                from app.services.firm_intel_sync import sync_firm_intel
+
+                await sync_firm_intel()
                 # Roadmap step 1: fold the directory's titled contacts +
                 # leadership into firm_contacts so daily selection has named,
                 # persona-mapped decision-makers. Local-only.

@@ -142,6 +142,17 @@ Front or send email, and it creates pending lead-gen batch items with
 feature but is created inactive; do not activate it without
 operator/orchestrator review.
 
+The native PIF firm mirror reads EmailTag's v2 firm-intel contract, not the
+deprecated v1 pif-info API. Use `bin/possibleos pif sync [--full] [--limit N]`
+to populate `pif_directory_firms`, `firm_intel_aliases`, and the
+`firm_intel_sync_state` watermark. `pif sync --limit 20` is the smoke run;
+`--full` ignores the saved watermark. Check mirror and remote coverage with
+`pif status`, resolve domains/emails/legacy PIF IDs with `pif resolve <value>`
+(local first, v2 `/firms/resolve` fallback), and inspect a mirrored profile
+with `pif show <firm_id|domain>`. The daemon's native PIF loop runs this v2
+sync and then ingests directory contacts; do not use the old v1 sync path for
+operations because deployed v1 routes require cookie auth.
+
 PIF Stats firm research is operator-triggered only because it spends production
 Precise web/LLM budget. Use `bin/possibleos research status --tasks` for
 coverage/open tasks, `research firm <domain-or-pif> [--staff/--no-staff]

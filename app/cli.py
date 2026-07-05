@@ -44,7 +44,7 @@ ivr_app = typer.Typer(help="Phone-tree (IVR) navigation — press digits to reac
 carrier_app = typer.Typer(help="Inspect the active telephony carrier account (Twilio)", no_args_is_help=True)
 prompts_app = typer.Typer(help="Prompt-style selector (current | minimal). Parallel prompt versions.", no_args_is_help=True)
 email_app = typer.Typer(help="Outbound email — config check + manual sends (test, one-pager, VM follow-up, consult).", no_args_is_help=True)
-pif_app = typer.Typer(help="Native PI-firm directory — pull emailtag's pif-info into possibleos (replaces mission.db).", no_args_is_help=True)
+pif_app = typer.Typer(help="Native PI-firm directory — pull EmailTag firm-intel v2 into possibleos.", no_args_is_help=True)
 reviews_app = typer.Typer(help="Yelp-review extraction — turn pasted raw reviews into citable pain-point quotes.", no_args_is_help=True)
 decisions_app = typer.Typer(help="Append/read the repo decision log (docs/decisions/<UTC-date>.md). Format: docs/decisions/README.md.", no_args_is_help=True)
 comms_app = typer.Typer(help="Outbound communications dashboard — calls, voicemails, SMS, emails (read-only).", no_args_is_help=True)
@@ -6388,18 +6388,87 @@ def composer_ab_report_cmd(
 
 @pif_app.command("status")
 def pif_status():
-    """Show the native PI-firm directory status (firm count, ICP tiers, last sync)."""
-    console.print_json(data=_get("/api/pif/status"))
+    """Show the native PI-firm directory status (watermark, aliases, remote health)."""
+    from app.services.firm_intel_sync import firm_intel_status
+
+    console.print_json(data=asyncio.run(firm_intel_status()))
 
 
 @pif_app.command("sync")
-def pif_sync():
-    """Pull the full PI-firm directory from emailtag's pif-info API into possibleos.
+def pif_sync(
+    full: bool = typer.Option(False, "--full", help="Ignore the saved v2 watermark and crawl all firms."),
+    limit: int | None = typer.Option(None, "--limit", min=1, help="Cap firms processed for smoke runs."),
+):
+    """Pull EmailTag firm-intel v2 profiles into possibleos.
 
     Safe to run regardless of the PIF_DIRECTORY_NATIVE flag — the flag only
     governs whether lead-gen *matching* reads from this table, so you can warm
     it before cutover."""
-    console.print_json(data=_post("/api/pif/sync", json_body=None, timeout=600.0))
+    from app.services.firm_intel_sync import sync_firm_intel
+
+    console.print_json(data=asyncio.run(sync_firm_intel(full=full, limit=limit)))
+
+
+@pif_app.command("resolve")
+def pif_resolve(value: str = typer.Argument(..., help="Domain, email, URL, or legacy PIF ID.")):
+    """Resolve a firm through local aliases, then fall back to EmailTag v2."""
+    from app.services.firm_intel_sync import (
+        get_local_firm_summary,
+        resolve_firm_local,
+        resolve_firm_remote,
+    )
+
+    async def _run() -> dict[str, Any]:
+        local_id = await resolve_firm_local(value)
+        if local_id:
+            summary = await get_local_firm_summary(local_id)
+            return {
+                "firm_id": local_id,
+                "firm_name": (summary or {}).get("firm_name"),
+                "source": "local",
+            }
+        remote = await resolve_firm_remote(value)
+        if not remote:
+            return {"firm_id": None, "firm_name": None, "source": "not_found"}
+        return {
+            "firm_id": remote.get("firm_id"),
+            "firm_name": remote.get("firm_name"),
+            "source": "remote",
+        }
+
+    result = asyncio.run(_run())
+    console.print_json(data=result)
+
+
+@pif_app.command("show")
+def pif_show(value: str = typer.Argument(..., help="Mirrored firm ID, domain, email, URL, or legacy PIF ID.")):
+    """Show a mirrored firm-intel profile summary from local Postgres."""
+    from app.services.firm_intel_sync import get_local_firm_summary
+
+    summary = asyncio.run(get_local_firm_summary(value))
+    if not summary:
+        raise typer.Exit(1)
+
+    table = Table(title=f"PIF firm {summary['firm_id']}")
+    table.add_column("field")
+    table.add_column("value")
+    for field in ("firm_name", "website", "metro", "icp_tier", "warm_score", "profile_source"):
+        value_text = "" if summary.get(field) is None else str(summary.get(field))
+        table.add_row(field, value_text)
+    console.print(table)
+
+    dm_table = Table(title="Decision makers")
+    dm_table.add_column("name")
+    dm_table.add_column("title")
+    dm_table.add_column("email")
+    for person in summary.get("decision_makers") or []:
+        dm_table.add_row(
+            str(person.get("name") or ""),
+            str(person.get("title") or ""),
+            str(person.get("email") or ""),
+        )
+    console.print(dm_table)
+    console.print_json(data={"vendor_stack": summary.get("vendor_stack") or {}})
 
 
 @pif_app.command("ingest-contacts")
