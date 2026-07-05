@@ -61,6 +61,16 @@ def _page_size() -> int:
         return 25
 
 
+def _page_pause() -> float:
+    """Pause between delta-feed pages. The endpoint 502s under sustained
+    back-to-back crawling (~27 pages) but recovers with breathing room —
+    verified 2026-07-05: offsets that 502'd sequentially all 200 with pauses."""
+    try:
+        return max(0.0, float(os.getenv("FIRM_INTEL_PAGE_PAUSE", "2.0")))
+    except ValueError:
+        return 2.0
+
+
 async def _get_with_retry(
     client: httpx.AsyncClient,
     path: str,
@@ -70,7 +80,7 @@ async def _get_with_retry(
 ) -> httpx.Response:
     """GET with backoff on 5xx/transport errors — the v2 endpoint 502s
     transiently when profile pages are slow under load."""
-    delay = 2.0
+    delay = 10.0
     for attempt in range(1, attempts + 1):
         try:
             resp = await client.get(path, params=params)
@@ -399,6 +409,7 @@ async def sync_firm_intel(*, full: bool = False, limit: int | None = None) -> di
                     break
                 if not cursor:
                     break
+                await asyncio.sleep(_page_pause())
 
         watermark_advanced = max_watermark is not None and not stopped_by_limit_with_more
         result = {
