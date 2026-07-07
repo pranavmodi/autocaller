@@ -5084,6 +5084,30 @@ def lead_gen_add_contacts(
         )
 
 
+@lead_gen_app.command("move-items")
+def lead_gen_move_items(
+    target_batch_id: str = typer.Argument(..., help="Target lead_gen_batches.id to consolidate into."),
+    source: list[str] = typer.Option(..., "--from", help="Source batch id to drain (repeatable)."),
+    json_output: bool = typer.Option(False, "--json", help="Print raw JSON."),
+):
+    """Re-parent all items from source batches into the target batch.
+
+    Item ids are unchanged, so any scheduled send actions stay valid — only
+    the grouping moves. Use to consolidate several curated batches into one."""
+    data = _post(
+        f"/api/lead-gen/batches/{target_batch_id}/move-items",
+        json_body={"source_batch_ids": list(source), "actor": "operator"},
+        timeout=60.0,
+    )
+    if json_output:
+        console.print_json(data=data)
+        return
+    console.print(
+        f"[green]Moved[/green] {data.get('moved')} items into {data.get('target_batch_id')} "
+        f"(now {data.get('returned')} items); drained {len(data.get('drained_batches') or [])} batch(es)."
+    )
+
+
 @lead_gen_app.command("recount")
 def lead_gen_recount(
     batch_id: str = typer.Argument(..., help="lead_gen_batches.id"),

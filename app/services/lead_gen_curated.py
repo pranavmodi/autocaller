@@ -5,7 +5,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 
 from app.db import AsyncSessionLocal
 from app.db.models import (
@@ -223,6 +223,42 @@ async def add_contacts_to_batch(
         "added": len(item_ids),
         "skipped": skipped,
         "item_ids": item_ids,
+        "counts": counts,
+    }
+
+
+async def move_items_to_batch(
+    target_batch_id: str, source_batch_ids: list[str], actor: str = "operator"
+) -> dict[str, Any]:
+    """Re-parent all items from source batches into the target batch.
+
+    Consolidation primitive: an item's id does not change, so any scheduled
+    send actions referencing it stay valid — only the item's batch_id moves.
+    Recounts the target and each drained source afterward."""
+    async with AsyncSessionLocal() as session:
+        target = await _load_batch_or_raise(session, target_batch_id)
+        moved = 0
+        drained: list[str] = []
+        for sid in source_batch_ids:
+            if sid == target_batch_id:
+                continue
+            source = await _load_batch_or_raise(session, sid)
+            result = await session.execute(
+                update(LeadGenBatchItemRow)
+                .where(LeadGenBatchItemRow.batch_id == sid)
+                .values(batch_id=target_batch_id, updated_at=_utcnow())
+            )
+            moved += int(result.rowcount or 0)
+            _repair_counts(source, await _live_item_count(session, sid))
+            drained.append(sid)
+        target_count = await _live_item_count(session, target_batch_id)
+        counts = _repair_counts(target, target_count)
+        await session.commit()
+    return {
+        "target_batch_id": target_batch_id,
+        "moved": moved,
+        "drained_batches": drained,
+        "returned": target_count,
         "counts": counts,
     }
 

@@ -42,6 +42,7 @@ from app.services.lead_gen_cybernetic import (
 from app.services.lead_gen_curated import (
     add_contacts_to_batch,
     create_curated_batch,
+    move_items_to_batch,
     recount_batch,
 )
 from app.services.lead_gen_email_agent import (
@@ -77,6 +78,11 @@ class CreateBatchRequest(BaseModel):
 
 class AddContactsToBatchRequest(BaseModel):
     contacts: list[str] = Field(default_factory=list)
+    actor: str = Field(default="operator", max_length=128)
+
+
+class MoveItemsToBatchRequest(BaseModel):
+    source_batch_ids: list[str] = Field(default_factory=list)
     actor: str = Field(default="operator", max_length=128)
 
 
@@ -556,6 +562,23 @@ async def add_contacts_to_one_batch(batch_id: str, req: AddContactsToBatchReques
         return await add_contacts_to_batch(
             batch_id=batch_id,
             contact_refs=req.contacts,
+            actor=req.actor,
+        )
+    except ValueError as e:
+        detail = str(e)
+        if detail == "batch_not_found":
+            raise HTTPException(status_code=404, detail=detail)
+        raise HTTPException(status_code=400, detail=detail)
+
+
+@router.post("/api/lead-gen/batches/{batch_id}/move-items")
+async def move_items_into_batch(batch_id: str, req: MoveItemsToBatchRequest):
+    if not req.source_batch_ids:
+        raise HTTPException(status_code=400, detail="source_batch_ids_required")
+    try:
+        return await move_items_to_batch(
+            target_batch_id=batch_id,
+            source_batch_ids=req.source_batch_ids,
             actor=req.actor,
         )
     except ValueError as e:

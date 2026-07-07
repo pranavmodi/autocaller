@@ -109,7 +109,10 @@ or `--from <path>` (one id/email per line or a JSON array). `add-contacts` is
 idempotent and updates the batch `counts_json.returned/requested` from the live
 item count so `/lead-gen` renders items. Use
 `bin/possibleos lead-gen recount <batch_id>` to repair older curated batches
-whose counts metadata is empty.
+whose counts metadata is empty. Consolidate several curated batches into one
+with `bin/possibleos lead-gen move-items <target_batch_id> --from <src> [--from
+<src2> ...]` — it re-parents items (ids unchanged, so scheduled sends stay
+valid) and recounts both batches.
 
 For the current master-agent lead-generation slice, use
 `bin/possibleos lead-gen email-agent-slice --limit 3 --approval-ready`. To compose for a hand-curated batch instead of auto-selection: `lead-gen email-agent-slice --batch <batch_id> --limit 10`.
