@@ -463,23 +463,34 @@ async def store_inbound_email(
             return _inbound_row_to_dict(existing, existing=True)
 
         contact, item, seq = await _match_reply(session, parsed)
+
+        def _nul_free(value):
+            # Postgres rejects NUL (0x00) in UTF8 text; some NDRs carry them.
+            if isinstance(value, str):
+                return value.replace("\x00", "")
+            if isinstance(value, list):
+                return [_nul_free(v) for v in value]
+            if isinstance(value, dict):
+                return {k: _nul_free(v) for k, v in value.items()}
+            return value
+
         row = InboundEmailRow(
             id=uuid.uuid4().hex,
             provider=PROVIDER,
             account_email=parsed.account_email,
             mailbox=parsed.mailbox,
             uid=parsed.uid,
-            message_id=parsed.message_id,
-            in_reply_to=parsed.in_reply_to,
-            references_text=parsed.references_text,
-            from_email=parsed.from_email,
-            from_name=parsed.from_name,
-            to_json=parsed.to,
-            cc_json=parsed.cc,
-            subject=parsed.subject,
-            text_excerpt=parsed.text_excerpt,
-            body_text=parsed.body_text,
-            raw_headers_json=parsed.raw_headers,
+            message_id=_nul_free(parsed.message_id),
+            in_reply_to=_nul_free(parsed.in_reply_to),
+            references_text=_nul_free(parsed.references_text),
+            from_email=_nul_free(parsed.from_email),
+            from_name=_nul_free(parsed.from_name),
+            to_json=_nul_free(parsed.to),
+            cc_json=_nul_free(parsed.cc),
+            subject=_nul_free(parsed.subject),
+            text_excerpt=_nul_free(parsed.text_excerpt),
+            body_text=_nul_free(parsed.body_text),
+            raw_headers_json=_nul_free(parsed.raw_headers),
             matched_contact_id=contact.id if contact else None,
             matched_pif_id=(item.pif_id if item else (contact.pif_id if contact else None)),
             matched_batch_item_id=item.id if item else None,
