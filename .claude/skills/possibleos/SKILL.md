@@ -102,6 +102,15 @@ transport, linked `email_logs.id`, email log status, and timestamp. Heartbeat
 recent-action summaries expose the same evidence so the master agent can see
 what actually happened.
 
+For explicit operator-curated outreach lists, create a first-class batch instead
+of writing raw SQL: `bin/possibleos lead-gen create-batch --name "Curated owner outreach"`,
+then `bin/possibleos lead-gen add-contacts <batch_id> --contact <firm_contacts.id-or-email>`
+or `--from <path>` (one id/email per line or a JSON array). `add-contacts` is
+idempotent and updates the batch `counts_json.returned/requested` from the live
+item count so `/lead-gen` renders items. Use
+`bin/possibleos lead-gen recount <batch_id>` to repair older curated batches
+whose counts metadata is empty.
+
 For the current master-agent lead-generation slice, use
 `bin/possibleos lead-gen email-agent-slice --limit 3 --approval-ready`. To compose for a hand-curated batch instead of auto-selection: `lead-gen email-agent-slice --batch <batch_id> --limit 10`.
 It selects eligible contacts from `firm_contacts`, collects
@@ -503,6 +512,7 @@ Common causes: Geo permissions not enabled, AMD mis-classifying carrier voicemai
 | `Possible OS sequences start <contact_id>` | Start the configured sequence (one contact at a time, by design). Idempotent — second start returns 409. Sends are gated by `ALLOW_SEQUENCE_SEND=true`. UI: `/sequences` page has the same flow with a forced "I've reviewed all drafts" checkbox before the Start button enables. |
 | `Possible OS sequences list [--status active\|paused\|completed]` | List sequence rows + step state. |
 | `Possible OS lead-gen policy\|recommend\|batches\|show\|approve\|observe\|observations\|propose` | Cybernetic lead-generation loop for Precise Imaging. Recommends bounded batches, requires approval, and creates lightweight operator action-center approvals immediately when selected email sequences are queued; drafts compose lazily when an action is opened. Automatic observations capture sends, failures, replies, clicks, bookings, call dispositions, cancellations, and reschedules. Use `lead-gen observations summary --since 7d` for the weekly learning KPI. UI: `/lead-gen`. Concept doc: `docs/CYBERNETIC_LEAD_GEN_CONCEPT.md`. |
+| `Possible OS lead-gen create-batch\|add-contacts\|recount` | Operator-curated lead-gen batches from explicit `firm_contacts` ids/emails. `create-batch` initializes `counts_json` with `basis=operator-curated`; `add-contacts` resolves contacts, creates pending items idempotently, and repairs counts; `recount` fixes older batches whose UI showed missing item counts. |
 | `Possible OS lead-gen daily-run\|top-up\|daily-status\|throughput\|daily-enable\|daily-disable` | Daily lead-selection and drafting pipeline. `daily-run --dry-run` is no-write/no-action validation. A real run creates a checkpointed daily batch, drafts emails, and schedules send actions. `top-up --count N --variant ai-audit` adds fresh first-touch sends to today's run via a sidecar batch without recomposing the existing batch, excluding contacts already batched that run date. `throughput` shows selected, with evidence, composed, sending today, held, shortfall, and blocker. The daemon loop defaults off and is controlled by persisted `daily_run_enabled`. |
 | `Possible OS lead-gen backfill-consult-links [--scope today\|all] [--dry-run]` | Swap the bare `getpossibleminds.com/consult` link for a per-recipient tracked `/c/{code}` short link in **unsent** lead-gen sends, re-hashing + re-approving each at its existing slot (keeps `scheduled_for`; idempotent). `--scope today`=live daily batch, `--scope all`=every unsent approved/waiting send. New composes already emit the tracked link, so this is only for emails composed before the feature. |
 | `Possible OS aiaudit link --contact <contact_id>` / `aiaudit clicks --since 7d` | AI Audit freeware attribution. `link` prints a contact-attributed signed redirect URL; `clicks` lists `audit_link_clicks` and AI Audit `link_clicked` observations. Public redirect: `/aiaudit/go?t=<signed-token>`. **Consult link** now has the same per-recipient tracking: the consult CTA renders as `/c/{code}` (reuses `audit_links`, `kind=consult`, `source=consult_email`), logs a `link_clicked` observation with `channel=consult`, then 302s to `getpossibleminds.com/consult`. **Solution link** works identically: `/s/{code}` (`kind=solution`, `source=solution_email`, `channel=solution`) 302s to the outbound voice-AI solution page and appends `?lc=<code>` so the page's early-access form can attribute the signup. nginx on `aiaudit.getpossibleminds.com` proxies `/a/`, `/c/`, and `/s/` to possibleos. |

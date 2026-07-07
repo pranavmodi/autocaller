@@ -39,6 +39,11 @@ from app.services.lead_gen_cybernetic import (
     record_observation,
     set_daily_send_budget,
 )
+from app.services.lead_gen_curated import (
+    add_contacts_to_batch,
+    create_curated_batch,
+    recount_batch,
+)
 from app.services.lead_gen_email_agent import (
     create_founder_profile_email_batch,
     create_lead_gen_email_agent_slice,
@@ -64,8 +69,15 @@ PT = ZoneInfo("America/Los_Angeles")
 class CreateBatchRequest(BaseModel):
     name: Optional[str] = None
     template_key: str = DEFAULT_TEMPLATE_KEY
+    target_metric: str = "meetings_booked"
     limit: int = Field(default=50, ge=1, le=200)
     created_by: str = "operator"
+    curated: bool = False
+
+
+class AddContactsToBatchRequest(BaseModel):
+    contacts: list[str] = Field(default_factory=list)
+    actor: str = Field(default="operator", max_length=128)
 
 
 class ApproveBatchRequest(BaseModel):
@@ -308,6 +320,14 @@ async def update_daily_send_budget(req: DailySendBudgetRequest):
 @router.post("/api/lead-gen/batches")
 async def create_batch(req: CreateBatchRequest):
     try:
+        if req.curated:
+            batch = await create_curated_batch(
+                name=req.name or "Curated operator batch",
+                template_key=req.template_key,
+                target_metric=req.target_metric,
+                created_by=req.created_by,
+            )
+            return {"batch": batch, "items": [], "observations": []}
         return await create_recommendation_batch(
             name=req.name,
             template_key=req.template_key,
@@ -526,6 +546,34 @@ async def get_one_batch(
         return batch
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.post("/api/lead-gen/batches/{batch_id}/add-contacts")
+async def add_contacts_to_one_batch(batch_id: str, req: AddContactsToBatchRequest):
+    if not req.contacts:
+        raise HTTPException(status_code=400, detail="contacts_required")
+    try:
+        return await add_contacts_to_batch(
+            batch_id=batch_id,
+            contact_refs=req.contacts,
+            actor=req.actor,
+        )
+    except ValueError as e:
+        detail = str(e)
+        if detail == "batch_not_found":
+            raise HTTPException(status_code=404, detail=detail)
+        raise HTTPException(status_code=400, detail=detail)
+
+
+@router.post("/api/lead-gen/batches/{batch_id}/recount")
+async def recount_one_batch(batch_id: str):
+    try:
+        return await recount_batch(batch_id)
+    except ValueError as e:
+        detail = str(e)
+        if detail == "batch_not_found":
+            raise HTTPException(status_code=404, detail=detail)
+        raise HTTPException(status_code=400, detail=detail)
 
 
 @router.post("/api/lead-gen/batches/{batch_id}/approve")

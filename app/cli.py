@@ -4974,6 +4974,133 @@ def lead_gen_recommend(
     _print_lead_gen_items(items)
 
 
+@lead_gen_app.command("create-batch")
+def lead_gen_create_batch(
+    name: str = typer.Option(..., "--name", help="Operator-visible curated batch name."),
+    template_key: str = typer.Option(
+        "possible_minds_dynamic",
+        "--template-key",
+        "--template",
+        help="Strategy/composer template key.",
+    ),
+    target_metric: str = typer.Option("meetings_booked", "--target-metric", help="Batch target metric label."),
+    created_by: str = typer.Option("operator", "--created-by", help="Actor recorded on the batch."),
+    json_output: bool = typer.Option(False, "--json", help="Print raw JSON."),
+):
+    """Create an empty operator-curated lead-gen batch."""
+    data = _post(
+        "/api/lead-gen/batches",
+        json_body={
+            "name": name,
+            "template_key": template_key,
+            "target_metric": target_metric,
+            "created_by": created_by,
+            "curated": True,
+        },
+        timeout=60.0,
+    )
+    if json_output:
+        console.print_json(data=data)
+        return
+    batch = data.get("batch") or {}
+    counts = batch.get("counts") or {}
+    console.print(
+        f"[green]Created curated batch[/green] {batch.get('id')} "
+        f"(template={batch.get('template_key')}, status={batch.get('status')}, "
+        f"items={counts.get('returned', 0)})"
+    )
+
+
+def _read_lead_gen_contact_refs(path: str) -> list[str]:
+    raw = Path(path).read_text(encoding="utf-8").strip()
+    if not raw:
+        return []
+    if raw.startswith("["):
+        parsed = json.loads(raw)
+        if not isinstance(parsed, list):
+            raise ValueError("JSON contact file must be an array")
+        return [str(value).strip() for value in parsed if str(value or "").strip()]
+    return [
+        line.strip()
+        for line in raw.splitlines()
+        if line.strip()
+    ]
+
+
+@lead_gen_app.command("add-contacts")
+def lead_gen_add_contacts(
+    batch_id: str = typer.Argument(..., help="lead_gen_batches.id"),
+    contact: list[str] = typer.Option(
+        [],
+        "--contact",
+        help="firm_contacts.id or contact email. Pass multiple times.",
+    ),
+    from_path: str = typer.Option(
+        "",
+        "--from",
+        help="File of one id/email per line, or a JSON array.",
+    ),
+    actor: str = typer.Option("operator", "--actor", help="Actor recorded on item metadata."),
+    json_output: bool = typer.Option(False, "--json", help="Print raw JSON."),
+):
+    """Add explicit contact ids/emails to a curated lead-gen batch."""
+    contacts = [str(value).strip() for value in contact if str(value or "").strip()]
+    if from_path:
+        try:
+            contacts.extend(_read_lead_gen_contact_refs(from_path))
+        except Exception as exc:
+            console.print(f"[red]Failed to read --from: {exc}[/red]")
+            raise typer.Exit(code=1) from exc
+    if not contacts:
+        console.print("[red]Provide at least one --contact or --from file.[/red]")
+        raise typer.Exit(code=1)
+
+    data = _post(
+        f"/api/lead-gen/batches/{batch_id}/add-contacts",
+        json_body={"contacts": contacts, "actor": actor},
+        timeout=120.0,
+    )
+    if json_output:
+        console.print_json(data=data)
+        return
+    counts = data.get("counts") or {}
+    console.print(
+        f"[green]Added {data.get('added', 0)} contact(s)[/green] "
+        f"to batch {data.get('batch_id') or batch_id}; "
+        f"items={counts.get('returned', '-')}; skipped={len(data.get('skipped') or [])}"
+    )
+    rows = data.get("item_ids") or []
+    if rows:
+        table = Table(show_header=True, header_style="bold")
+        table.add_column("contact_email")
+        table.add_column("item_id", no_wrap=True)
+        for row in rows:
+            table.add_row(row.get("contact_email") or "", row.get("item_id") or "")
+        console.print(table)
+    for row in data.get("skipped") or []:
+        console.print(
+            f"[yellow]skipped[/yellow] {row.get('ref')} "
+            f"reason={row.get('reason')}"
+        )
+
+
+@lead_gen_app.command("recount")
+def lead_gen_recount(
+    batch_id: str = typer.Argument(..., help="lead_gen_batches.id"),
+    json_output: bool = typer.Option(False, "--json", help="Print raw JSON."),
+):
+    """Repair a lead-gen batch's counts from live batch items."""
+    data = _post(f"/api/lead-gen/batches/{batch_id}/recount", json_body={}, timeout=60.0)
+    if json_output:
+        console.print_json(data=data)
+        return
+    counts = data.get("counts") or {}
+    console.print(
+        f"[green]Recounted batch[/green] {data.get('batch_id') or batch_id}: "
+        f"returned={counts.get('returned')} requested={counts.get('requested')}"
+    )
+
+
 @lead_gen_app.command("email-agent-slice")
 def lead_gen_email_agent_slice(
     limit: int = typer.Option(3, "--limit", "-n", min=1, max=10, help="Number of decision-maker contacts to draft."),

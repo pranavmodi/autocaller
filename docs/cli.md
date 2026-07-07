@@ -179,6 +179,9 @@ Every command accepts `--help`. Exit code is `0` on success, `1` on any error
 | `ideas list [--json]` | List saved future product, marketing, GTM, and ops ideas. Reads rows stored in the DB-backed todo table under `area=ideas` and legacy `idea:*` areas. |
 | `ideas add "..." [--json]` | Save a simple future idea. Use `ideas add - < idea.txt` or pipe stdin for multiline text. |
 | `ideas edit <id> "..." [--json]` | Replace the text for a saved idea. Use `ideas edit <id> - < idea.txt` for multiline text. |
+| `lead-gen create-batch --name <name> [--template-key ...] [--target-metric ...] [--created-by ...] [--json]` | Create an empty operator-curated lead-gen batch through the daemon. Counts start as `basis=operator-curated, returned=0, requested=0` so the Lead Gen UI can render the batch before contacts are added. |
+| `lead-gen add-contacts <batch_id> (--contact <id\|email> ... \| --from <path>) [--json]` | Resolve explicit `firm_contacts` ids/emails into pending batch items. Idempotent per contact in the batch; updates `counts.returned`/`requested` from the live item count and prints the contact email -> batch item id table for follow-up send commands. |
+| `lead-gen recount <batch_id> [--json]` | Repair a batch's `counts_json.returned`/`requested` from the live `lead_gen_batch_items` count. Use for older curated batches that show missing item counts in `/lead-gen`. |
 | `lead-gen email-agent-slice [--limit=3 --composer-variant=... --approval-ready --batch=<batch_id> --json]` | Select eligible contacts, collect bounded internal evidence, compose drafts with the Possible Minds email composer skill, and create durable `send_email mode=lead_gen` actions for review or policy checks. With `--batch`, skip selection and compose for an existing batch's pending undrafted items (operator- or agent-curated lists, e.g. Front-warm shortlists). |
 | `lead-gen visibility-report [--batch-item=<id> \| --firm-name=... --domain=...] [--market=...] [--dry-run] [--force] [--json]` | Ensure an AI Search Visibility report exists through the `ai-visibility` CLI. Existing scanned reports are reused by domain/firm unless `--force` is passed. With `--batch-item`, caches a compact report package at `reason_json.ai_visibility_report` for the `ai-visibility-report` composer variant. |
 | `lead-gen daily-run [--dry-run] [--force] [--variant=<key>] [--json]` | Run the deterministic daily lead-selection pipeline now. It gates on system enabled, active policy budget, weekday, and deliverability health; refreshes stale Front-derived signals without Front API calls; queues bounded research; maps personas; creates a persona-mixed batch; composes drafts; and schedules `waiting_for_approval` lead-gen email actions in the PT morning window. `--dry-run` performs no writes, no external research calls, no actions, and no WhatsApp. `--variant=<key>` pins one composer skill variant on **every** email in the run — first-touch and follow-up — overriding the per-item default/A-B (must be an active variant; see `composer-ab variants`). Without it, first-touch uses `LEAD_GEN_FIRST_TOUCH_VARIANT` (default `review-evidence`), follow-ups use the per-contact A/B unless `LEAD_GEN_FOLLOW_UP_VARIANT` is set. |
@@ -787,6 +790,41 @@ Sender selection defaults to `SMTP_FROM_EMAIL`, then `SMTP_USERNAME`, then
 configured addresses, or an address listed in `EMAIL_ALLOWED_FROM_ADDRESSES`.
 Threaded lead-reply sends can use `THREAD_REPLY_FROM_EMAIL` to differ from the
 generic notification sender.
+
+### Recipe: "build and send a curated operator batch"
+Use this when the operator has a reviewed list of `firm_contacts` ids or emails
+and wants a normal Lead Gen batch without running auto-selection.
+
+```bash
+bin/possibleos lead-gen create-batch --name "Curated owner outreach" --json
+
+bin/possibleos lead-gen add-contacts <batch_id> \
+  --contact owner@example.com \
+  --contact <firm_contacts_id>
+
+# Optional: compose normal lead-gen drafts for every pending curated item.
+bin/possibleos lead-gen email-agent-slice --batch <batch_id> --limit 10
+
+# Send one exact approved draft now, or schedule it with --at / --no-execute.
+bin/possibleos actions send-approved-lead-gen-draft \
+  --item <batch_item_id> \
+  --subject "Quick question" \
+  --body "$(cat /tmp/approved-body.txt)" \
+  --approved-by operator
+
+# Or schedule every already-drafted item in the batch for the morning window.
+bin/possibleos lead-gen schedule-drafts <batch_id> --start 09:00 --end 12:00
+
+# Final operator approval/state checks.
+bin/possibleos lead-gen approve <batch_id> --approved-by operator
+bin/possibleos lead-gen show <batch_id>
+bin/possibleos actions list --scheduled
+```
+
+If an older curated batch shows missing items in `/lead-gen`, repair the display
+metadata with `bin/possibleos lead-gen recount <batch_id>`. `add-contacts` and
+`recount` both preserve existing `counts_json` metadata and set
+`returned`/`requested` from the live batch-item count.
 
 ### Recipe: "schedule a morning send window"
 Use this when the operator has approved exact lead-gen drafts but wants them to

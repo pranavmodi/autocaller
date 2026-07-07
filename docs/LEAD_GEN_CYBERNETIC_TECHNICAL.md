@@ -24,7 +24,7 @@ Important routes:
 | --- | --- | --- |
 | `GET` | `/api/lead-gen/policy/current` | active policy, weights, suppressions, daily send budget |
 | `PUT` | `/api/lead-gen/settings/daily-send-budget` | persist daily send budget on active policy |
-| `POST` | `/api/lead-gen/batches` | create a daily action plan batch |
+| `POST` | `/api/lead-gen/batches` | create a daily action plan batch; with `curated: true`, create an empty operator-curated batch with initialized counts metadata |
 | `POST` | `/api/lead-gen/email-agent/slice` | create a bounded email-agent slice with research evidence, composer drafts, and durable `send_email mode=lead_gen` actions |
 | `POST` | `/api/lead-gen/daily-run` | run or dry-run the checkpointed daily lead-selection and drafting pipeline |
 | `POST` | `/api/lead-gen/daily-run/top-up` | add fresh first-touch sends to today's run-date via a sidecar daily batch, excluding contacts already batched that run date |
@@ -34,6 +34,8 @@ Important routes:
 | `PUT` | `/api/lead-gen/daily-run/enabled` | enable or disable the default-off daily-run daemon loop |
 | `GET` | `/api/lead-gen/batches` | list batches |
 | `GET` | `/api/lead-gen/batches/{batch_id}` | get batch, items, optional observations, and each item's `predicted_transport` display hint |
+| `POST` | `/api/lead-gen/batches/{batch_id}/add-contacts` | add explicit `firm_contacts` ids/emails to a curated batch idempotently and repair `counts_json` from the live item count |
+| `POST` | `/api/lead-gen/batches/{batch_id}/recount` | repair `counts_json.returned`/`requested` from live `lead_gen_batch_items` |
 | `POST` | `/api/lead-gen/batches/{batch_id}/approve` | approve batch and optionally queue sequences |
 | `POST` | `/api/lead-gen/batch-items/{batch_item_id}/send-draft` | create and execute a durable `send_email mode=lead_gen` action for the exact edited draft |
 | `GET` | `/api/lead-gen/batch-items/{batch_item_id}/draft` | load the current editable draft, preferring the referenced action's subject/body when present |
@@ -79,6 +81,10 @@ Primary commands:
 ```bash
 bin/possibleos lead-gen policy
 bin/possibleos lead-gen recommend --template possible_minds_dynamic --limit 50
+bin/possibleos lead-gen create-batch --name "Curated owner outreach"
+bin/possibleos lead-gen add-contacts <batch_id> --contact <firm_contacts.id-or-email>
+bin/possibleos lead-gen add-contacts <batch_id> --from /tmp/contacts.json
+bin/possibleos lead-gen recount <batch_id>
 bin/possibleos lead-gen email-agent-slice --limit 3 --approval-ready
 bin/possibleos lead-gen email-agent-slice --limit 3 --approve-actions --policy-check-first-action --json
 bin/possibleos lead-gen daily-run --dry-run
