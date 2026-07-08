@@ -501,6 +501,8 @@ Common causes: Geo permissions not enabled, AMD mis-classifying carrier voicemai
 | `Possible OS listening prep <firm-or-name>` | Build a pre-call one-pager from local `patients`/`firm_contacts`, top matched listening insights, and one gateway call. Read-only. |
 | `Possible OS contacts backfill` | Populate `firm_contacts` from PIF Stats `leadership[]` + the patient DM. Idempotent. Run once before any `sequences start`. |
 | `Possible OS contacts list [--firm <pif_id>]` | List firm_contacts roster. |
+| `Possible OS contacts resolve-linkedin <contact_id> [--force] [--json]` | Resolve one contact's direct personal LinkedIn `/in/` URL with Responses web_search and write only a validated URL to `firm_contacts.linkedin_url`; skips existing values unless forced. |
+| `Possible OS contacts resolve-linkedin-batch <batch_id> [--force] [--all] [--limit N] [--json]` | Resolve missing LinkedIn profile URLs for a lead-gen batch, defaulting to decision-makers only. `--all` includes non-DM staff; live calls are capped at 25. |
 | `Possible OS front sync [--full] [--max-calls N]` | Read-only Precise Front sync for contacts, activity metadata, domain resolution, and warm-score refresh. Persists cursors and hard-caps API calls. |
 | `Possible OS front status` | Show Front sync health, cursors, watermarks, counts, funnel deltas, timing feed, and stale/error state. |
 | `Possible OS front contacts [--firm <pif_id> \| --domain <domain> --q <text>]` | List synced Front contacts with masked emails, matched pif_id, warm score, and tech signals. |

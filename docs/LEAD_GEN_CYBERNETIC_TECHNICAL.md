@@ -35,6 +35,7 @@ Important routes:
 | `GET` | `/api/lead-gen/batches` | list batches |
 | `GET` | `/api/lead-gen/batches/{batch_id}` | get batch, items, optional observations, and each item's `predicted_transport` display hint |
 | `POST` | `/api/lead-gen/batches/{batch_id}/add-contacts` | add explicit `firm_contacts` ids/emails to a curated batch idempotently and repair `counts_json` from the live item count |
+| `POST` | `/api/lead-gen/batches/{batch_id}/resolve-linkedin` | resolve missing direct personal LinkedIn `/in/` URLs for batch contacts, defaulting to decision-makers only and capped at 25 live web_search calls |
 | `POST` | `/api/lead-gen/batches/{batch_id}/recount` | repair `counts_json.returned`/`requested` from live `lead_gen_batch_items` |
 | `POST` | `/api/lead-gen/batches/{batch_id}/approve` | approve batch and optionally queue sequences |
 | `POST` | `/api/lead-gen/batch-items/{batch_item_id}/send-draft` | create and execute a durable `send_email mode=lead_gen` action for the exact edited draft |
@@ -84,6 +85,7 @@ bin/possibleos lead-gen recommend --template possible_minds_dynamic --limit 50
 bin/possibleos lead-gen create-batch --name "Curated owner outreach"
 bin/possibleos lead-gen add-contacts <batch_id> --contact <firm_contacts.id-or-email>
 bin/possibleos lead-gen add-contacts <batch_id> --from /tmp/contacts.json
+bin/possibleos contacts resolve-linkedin-batch <batch_id> --limit 25
 bin/possibleos lead-gen recount <batch_id>
 bin/possibleos lead-gen email-agent-slice --limit 3 --approval-ready
 bin/possibleos lead-gen email-agent-slice --limit 3 --approve-actions --policy-check-first-action --json

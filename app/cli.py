@@ -3000,6 +3000,77 @@ def contacts_list(
     console.print(f"[dim]{len(rows)} contact(s)[/dim]")
 
 
+@contacts_app.command("resolve-linkedin")
+def contacts_resolve_linkedin(
+    contact_id: str = typer.Argument(..., help="firm_contacts.id"),
+    force: bool = typer.Option(False, "--force", help="Overwrite an existing linkedin_url."),
+    json_output: bool = typer.Option(False, "--json", help="Print raw JSON."),
+):
+    """Resolve and persist one contact's personal LinkedIn profile URL."""
+    data = _post(
+        f"/api/contacts/{contact_id}/resolve-linkedin",
+        json_body={"force": force},
+        timeout=90.0,
+    )
+    if json_output:
+        console.print_json(data=data)
+        return
+    status = data.get("status") or "unknown"
+    url = data.get("linkedin_url") or ""
+    if status == "resolved":
+        console.print(f"[green]resolved[/green] {url}")
+    elif status == "skipped":
+        console.print(f"[yellow]skipped[/yellow] existing linkedin_url={url}")
+    elif status == "not_found":
+        console.print("[yellow]not_found[/yellow] no confident personal LinkedIn profile")
+    else:
+        console.print(f"[yellow]{status}[/yellow]")
+
+
+@contacts_app.command("resolve-linkedin-batch")
+def contacts_resolve_linkedin_batch(
+    batch_id: str = typer.Argument(..., help="lead_gen_batches.id"),
+    force: bool = typer.Option(False, "--force", help="Overwrite existing linkedin_url values."),
+    include_all: bool = typer.Option(False, "--all", help="Include non-DM staff; default resolves decision-makers only."),
+    limit: int = typer.Option(25, "--limit", "-n", min=1, max=25, help="Maximum live web_search calls."),
+    json_output: bool = typer.Option(False, "--json", help="Print raw JSON."),
+):
+    """Resolve personal LinkedIn URLs for contacts in a lead-gen batch."""
+    data = _post(
+        f"/api/lead-gen/batches/{batch_id}/resolve-linkedin",
+        json_body={
+            "force": force,
+            "only_decision_makers": not include_all,
+            "limit": limit,
+        },
+        timeout=max(120.0, float(limit) * 90.0),
+    )
+    if json_output:
+        console.print_json(data=data)
+        return
+    summary = data.get("summary") or {}
+    console.print(
+        f"[bold]LinkedIn batch[/bold] {data.get('batch_id') or batch_id} "
+        f"resolved={summary.get('resolved', 0)} not_found={summary.get('not_found', 0)} "
+        f"skipped={summary.get('skipped', 0)} errors={summary.get('errors', 0)}"
+    )
+    rows = data.get("results") or []
+    if not rows:
+        console.print("[dim]No eligible contacts.[/dim]")
+        return
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("contact")
+    table.add_column("status", no_wrap=True)
+    table.add_column("url")
+    for row in rows:
+        table.add_row(
+            row.get("contact_name") or row.get("contact_id") or "",
+            row.get("status") or "",
+            row.get("linkedin_url") or row.get("error") or "—",
+        )
+    console.print(table)
+
+
 # ---------------------------------------------------------------------------
 # research / personas — PIF Stats warm research orchestration
 # ---------------------------------------------------------------------------

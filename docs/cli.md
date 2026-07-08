@@ -148,6 +148,8 @@ Every command accepts `--help`. Exit code is `0` on success, `1` on any error
 | `comms show <channel-prefixed-id>` | Print one communication as JSON. ID format: `call:<call_id>` (covers voicemail too), `email:<id>`, `sms:<id>`. |
 | `contacts backfill [--limit=N]` | Pull leadership rosters from PIF Stats + possibleos patient DM rows into `firm_contacts`. Idempotent. Run once before using `sequences start`. |
 | `contacts list [--firm=<pif_id>] [--limit=N]` | List firm_contacts rows. Without `--firm`, walks across firms. |
+| `contacts resolve-linkedin <contact_id> [--force] [--json]` | Resolve one contact's personal LinkedIn `/in/` URL on demand with OpenAI Responses web_search, write it to `firm_contacts.linkedin_url` only when validated, and skip existing values unless forced. |
+| `contacts resolve-linkedin-batch <batch_id> [--force] [--all] [--limit N] [--json]` | Resolve missing LinkedIn URLs for contacts in a lead-gen batch, defaulting to decision-makers only. `--all` includes non-DM staff; `--limit` caps live web_search calls at 25. |
 | `front sync [--full] [--max-calls N] [--json]` | Budgeted read-only Precise Front sync: contacts, inbox activity metadata, offline firm resolution, and warm-score refresh. Hard-caps API calls and persists cursors/watermarks. |
 | `front status [--json]` | Show Front sync health, cursors, watermarks, table counts, funnel counts, day-over-day deltas, and timing feed data used by `/front`. |
 | `front contacts [--firm=<pif_id> \| --domain=<domain> --q=<text>] [--limit=N] [--json]` | List synced Front contacts with matched pif_id, masked email display, warm score, and tech signals. |
@@ -717,6 +719,26 @@ The run checkpoints `gates`, `signals`, `research`, `personas`, `select`,
 partial compose can be resumed by running the command again. The schedule stage
 spreads drafted items across the policy send window, defaulting to 09:00-11:30
 America/Los_Angeles, and leaves every action in `waiting_for_approval`.
+
+### Recipe: "resolve LinkedIn profiles for a wave's decision-makers before LinkedIn outreach"
+Use this after a lead-gen batch is curated or selected, before any LinkedIn
+outreach console consumes the contacts. The command resolves only missing
+direct personal profile URLs by default, and only writes validated
+`linkedin.com/in/` URLs.
+
+```bash
+bin/possibleos lead-gen show <batch_id>
+bin/possibleos contacts resolve-linkedin-batch <batch_id> --limit 25
+
+# Re-check one person, overwriting an existing stored URL only when intentional:
+bin/possibleos contacts resolve-linkedin <contact_id> --force
+
+# Include non-decision-maker staff if the outreach wave needs them:
+bin/possibleos contacts resolve-linkedin-batch <batch_id> --all --limit 25
+```
+
+No command sends LinkedIn outreach. The resolver only updates
+`firm_contacts.linkedin_url` for confidently identified personal profiles.
 
 ### Recipe: "who competes with firm X"
 Use this when a warm-list firm needs local PI competitor context. The rebuild

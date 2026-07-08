@@ -30,6 +30,7 @@ from app.services.firm_contacts_service import (
     list_firms_with_contacts,
 )
 from app.services.lead_email_composer import LeadEmailComposerError, compose_lead_email
+from app.services.linkedin_resolver import resolve_linkedin_for_contact
 from app.services.sequences.registry import (
     DEFAULT_TEMPLATE_KEY,
     list_templates,
@@ -65,6 +66,10 @@ class ContactListItem(BaseModel):
     phone: Optional[str]
     title: Optional[str]
     source: str
+
+
+class ResolveLinkedInRequest(BaseModel):
+    force: bool = False
 
 
 class RenderedStepDTO(BaseModel):
@@ -240,6 +245,17 @@ async def get_contact_detail(
         sequence=sequence_dto,
         sent_steps=sent_steps,
     )
+
+
+@router.post("/api/contacts/{contact_id}/resolve-linkedin")
+async def resolve_contact_linkedin_endpoint(contact_id: str, req: ResolveLinkedInRequest):
+    try:
+        return await resolve_linkedin_for_contact(contact_id, force=req.force)
+    except ValueError as e:
+        detail = str(e)
+        if detail == "contact_not_found":
+            raise HTTPException(status_code=404, detail=detail)
+        raise HTTPException(status_code=400, detail=detail)
 
 
 @router.get(

@@ -50,6 +50,7 @@ from app.services.lead_gen_email_agent import (
     create_lead_gen_email_agent_slice,
     recompose_item_draft,
 )
+from app.services.linkedin_resolver import resolve_linkedin_for_batch
 from app.services.lead_gen_daily import (
     daily_channel_plan,
     get_daily_run_enabled,
@@ -79,6 +80,12 @@ class CreateBatchRequest(BaseModel):
 class AddContactsToBatchRequest(BaseModel):
     contacts: list[str] = Field(default_factory=list)
     actor: str = Field(default="operator", max_length=128)
+
+
+class ResolveBatchLinkedInRequest(BaseModel):
+    force: bool = False
+    only_decision_makers: bool = True
+    limit: int = Field(default=25, ge=1, le=25)
 
 
 class MoveItemsToBatchRequest(BaseModel):
@@ -563,6 +570,22 @@ async def add_contacts_to_one_batch(batch_id: str, req: AddContactsToBatchReques
             batch_id=batch_id,
             contact_refs=req.contacts,
             actor=req.actor,
+        )
+    except ValueError as e:
+        detail = str(e)
+        if detail == "batch_not_found":
+            raise HTTPException(status_code=404, detail=detail)
+        raise HTTPException(status_code=400, detail=detail)
+
+
+@router.post("/api/lead-gen/batches/{batch_id}/resolve-linkedin")
+async def resolve_batch_linkedin_endpoint(batch_id: str, req: ResolveBatchLinkedInRequest):
+    try:
+        return await resolve_linkedin_for_batch(
+            batch_id,
+            force=req.force,
+            only_decision_makers=req.only_decision_makers,
+            limit=req.limit,
         )
     except ValueError as e:
         detail = str(e)
