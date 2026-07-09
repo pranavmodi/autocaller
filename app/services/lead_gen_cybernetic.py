@@ -880,7 +880,6 @@ async def get_batch(batch_id: str, *, include_observations: bool = False) -> dic
         )).scalar_one_or_none()
         if not batch:
             raise ValueError("batch_not_found")
-        await assert_batch_experiment_send_gate(session, batch)
         items = (await session.execute(
             select(LeadGenBatchItemRow)
             .where(LeadGenBatchItemRow.batch_id == batch_id)
@@ -932,6 +931,7 @@ async def approve_batch(
         )).scalar_one_or_none()
         if not batch:
             raise ValueError("batch_not_found")
+        await assert_batch_experiment_send_gate(session, batch)
         items = (await session.execute(
             select(LeadGenBatchItemRow)
             .where(LeadGenBatchItemRow.batch_id == batch_id)
