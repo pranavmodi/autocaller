@@ -1378,11 +1378,15 @@ class LeadGenBatchRow(Base):
     )
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="recommended")
     counts_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    experiment_status: Mapped[str] = mapped_column(String(32), nullable=False, default="none")
+    experiment_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     created_by: Mapped[str | None] = mapped_column(String(128), nullable=True)
     approved_by: Mapped[str | None] = mapped_column(String(128), nullable=True)
     approved_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
     started_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    experiment_updated_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    experiment_closed_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), default=_utcnow, onupdate=_utcnow,
@@ -1393,7 +1397,12 @@ class LeadGenBatchRow(Base):
             "status IN ('recommended', 'approved', 'sequencing', 'observing', 'completed', 'archived')",
             name="ck_lead_gen_batches_status",
         ),
+        CheckConstraint(
+            "experiment_status IN ('none', 'draft', 'ready', 'scheduled', 'measuring', 'awaiting_verdict', 'closed', 'superseded')",
+            name="ck_lead_gen_batches_experiment_status",
+        ),
         Index("ix_lead_gen_batches_status", "status"),
+        Index("ix_lead_gen_batches_experiment_status", "experiment_status"),
         Index("ix_lead_gen_batches_template", "template_key"),
         Index("ix_lead_gen_batches_created_at", "created_at"),
     )

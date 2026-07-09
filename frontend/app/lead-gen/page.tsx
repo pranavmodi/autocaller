@@ -27,6 +27,7 @@ import {
 import {
   approveLeadGenBatch,
   approveLeadGenBatchActions,
+  closeLeadGenBatchExperiment,
   resolveLeadGenBatchLinkedIn,
   classifyLeadGenObservation,
   createLeadGenBatch,
@@ -36,11 +37,13 @@ import {
   getComposerVariants,
   getLeadGenBatch,
   getLeadGenDailyEnabled,
+  getLeadGenExperimentRollup,
   getLeadGenPolicy,
   getLeadGenSendPlan,
   getLeadGenThroughput,
   listLeadGenBatches,
   listLeadGenDailyRuns,
+  listLeadGenExperiments,
   previewSequence,
   putFirmReviews,
   recomposeLeadGenBatchItemDraft,
@@ -50,11 +53,14 @@ import {
   selectBatchItemVariant,
   type BatchItemVariantDraft,
   setLeadGenDailyEnabled,
+  updateLeadGenBatchExperiment,
   updateLeadGenDailySendBudget,
   type LeadGenPolicy,
   type LeadGenBatch,
   type LeadGenBatchItem,
   type LeadGenDailyRun,
+  type LeadGenExperimentListItem,
+  type LeadGenExperimentRollup,
   type LeadGenObservation,
   type LeadGenSendPlan,
   type LeadGenSendPlanItem,
@@ -73,6 +79,30 @@ const DISPLAY_TIME_ZONE = "Asia/Kolkata";
 const SEND_TIME_ZONE = "America/Los_Angeles";
 const DEFAULT_DAILY_EMAIL_BUDGET = 50;
 const ZOHO_DAILY_EMAIL_CAP = 20;
+
+const EXPERIMENT_CARD_FIELDS = [
+  "wave_id",
+  "goal",
+  "primary_metric",
+  "hypothesis",
+  "changed_vs_previous",
+  "prediction",
+  "success_threshold",
+  "measurement_window_hours",
+  "minimum_n",
+  "confidence_note",
+  "invalidation_criteria",
+  "owner",
+] as const;
+
+const EXPERIMENT_CLOSE_FIELDS = [
+  "verdict",
+  "learning",
+  "why",
+  "next_hypothesis",
+  "next_recommended_wave",
+  "confidence_note",
+] as const;
 type DraftGenerationStatus = "generating" | "completed" | "failed";
 type LeadGenWorkspaceView = "queue" | "batches";
 type QueuePreviewTarget = { batchId: string; batchItemId: string };
@@ -119,6 +149,11 @@ function LeadGenPageContent() {
   const batches = useQuery({
     queryKey: ["lead-gen-batches", "history"],
     queryFn: () => listLeadGenBatches({ limit: 100 }),
+    refetchInterval: 30_000,
+  });
+  const experiments = useQuery({
+    queryKey: ["lead-gen-experiments"],
+    queryFn: () => listLeadGenExperiments({ limit: 25 }),
     refetchInterval: 30_000,
   });
   const dailyRuns = useQuery({
@@ -325,6 +360,12 @@ function LeadGenPageContent() {
           <RunsAndDraftsHeader />
           <div className="grid gap-4 lg:grid-cols-12">
             <aside className="col-span-12 space-y-3 lg:col-span-4 xl:col-span-3">
+              <ExperimentLogPanel
+                experiments={experiments.data?.experiments ?? []}
+                loading={experiments.isLoading}
+                error={experiments.isError}
+                onSelect={selectBatch}
+              />
               <BatchHistoryPanel
                 batches={batches.data?.batches ?? []}
                 selectedBatchId={batchId}
@@ -1112,6 +1153,70 @@ function sleep(ms: number) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
+function ExperimentLogPanel({
+  experiments,
+  loading,
+  error,
+  onSelect,
+}: {
+  experiments: LeadGenExperimentListItem[];
+  loading: boolean;
+  error: boolean;
+  onSelect: (batchId: string) => void;
+}) {
+  const awaiting = experiments.filter((row) => row.experiment.status === "awaiting_verdict").length;
+  const ready = experiments.filter((row) => row.experiment.status === "ready" || row.experiment.status === "scheduled").length;
+  return (
+    <section className="rounded-xl border border-neutral-200 bg-white">
+      <div className="flex items-center gap-2 border-b border-neutral-100 px-4 py-3">
+        <ClipboardCheck className="h-4 w-4 text-neutral-500" />
+        <div>
+          <div className="text-xs font-semibold uppercase tracking-wider text-neutral-500">
+            Experiment log
+          </div>
+          <div className="mt-0.5 text-xs text-neutral-400">
+            {awaiting} awaiting verdict · {ready} ready
+          </div>
+        </div>
+        {loading && <Loader2 className="ml-auto h-4 w-4 animate-spin text-neutral-400" />}
+      </div>
+      {error ? (
+        <div className="px-4 py-4 text-sm text-red-700">Could not load experiments.</div>
+      ) : experiments.length === 0 ? (
+        <div className="px-4 py-4 text-sm text-neutral-500">No wave batches yet.</div>
+      ) : (
+        <div className="max-h-72 space-y-1 overflow-y-auto px-2 py-2">
+          {experiments.map((row) => {
+            const missing = row.experiment.missing_fields.length;
+            const status = row.experiment.status;
+            const card = row.experiment.card || {};
+            return (
+              <button
+                key={row.batch_id}
+                type="button"
+                onClick={() => onSelect(row.batch_id)}
+                className="w-full rounded-md px-2.5 py-2 text-left text-neutral-700 transition hover:bg-neutral-50"
+              >
+                <div className="flex min-w-0 items-center gap-2">
+                  <div className="min-w-0 flex-1 truncate text-sm font-medium">
+                    {String(card.wave_id || row.batch_name || "Untitled wave")}
+                  </div>
+                  <StatusPill status={status} className="text-[10px]" />
+                </div>
+                <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-neutral-500">
+                  <span>{formatHistoryTime(row.created_at)}</span>
+                  {missing > 0 && <span>{missing} missing</span>}
+                  <span className="truncate">{row.batch_name}</span>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
 function BatchHistoryPanel({
   batches,
   selectedBatchId,
@@ -1602,6 +1707,202 @@ function ManualAgentSlicePanel({
   );
 }
 
+function ExperimentBatchPanel({
+  batch,
+  rollup,
+  loadingRollup,
+  savePending,
+  saveError,
+  onSave,
+  closePending,
+  closeError,
+  onClose,
+}: {
+  batch: LeadGenBatch;
+  rollup: LeadGenExperimentRollup | null;
+  loadingRollup: boolean;
+  savePending: boolean;
+  saveError: string | null;
+  onSave: (card: Record<string, unknown>) => void;
+  closePending: boolean;
+  closeError: string | null;
+  onClose: (payload: {
+    verdict: string;
+    learning: string;
+    why: string;
+    next_hypothesis: string;
+    next_recommended_wave: string;
+    confidence_note: string;
+    superseded?: boolean;
+  }) => void;
+}) {
+  const experiment = experimentSummaryForBatch(batch);
+  const isWaveNamed = /\bwave\b/i.test(batch.name || "");
+  const isExperiment = Boolean(experiment?.is_experiment || isWaveNamed);
+  const [card, setCard] = useState<Record<string, string>>(() => cardStateFromExperiment(batch));
+  const [closeFields, setCloseFields] = useState<Record<string, string>>({
+    verdict: "null",
+    learning: "",
+    why: "",
+    next_hypothesis: "",
+    next_recommended_wave: "",
+    confidence_note: "",
+  });
+  const [superseded, setSuperseded] = useState(false);
+
+  useEffect(() => {
+    setCard(cardStateFromExperiment(batch));
+  }, [batch.id, batch.experiment?.updated_at]);
+
+  if (!isExperiment && experiment.status === "none") {
+    return (
+      <section className="border-b border-neutral-100 bg-neutral-50/60 px-4 py-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-semibold text-neutral-900">Experiment card</div>
+            <div className="mt-0.5 text-xs text-neutral-500">No wave card on this batch.</div>
+          </div>
+          <button
+            type="button"
+            onClick={() => onSave(cardPayload(card))}
+            disabled={savePending}
+            className="inline-flex items-center gap-2 rounded-md border border-neutral-200 bg-white px-3 py-1.5 text-sm font-medium text-neutral-700 hover:bg-neutral-50 disabled:opacity-60"
+          >
+            {savePending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ClipboardCheck className="h-4 w-4" />}
+            Start card
+          </button>
+        </div>
+      </section>
+    );
+  }
+
+  const measurement = (rollup?.measurement ?? {}) as Record<string, number>;
+  const missing = experiment?.missing_fields ?? [];
+  const ready = Boolean(experiment?.is_ready);
+  return (
+    <section className="border-b border-neutral-100 bg-neutral-50/60 px-4 py-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="text-sm font-semibold text-neutral-900">Experiment card</h3>
+            <StatusPill status={experiment.status} className="text-[10px]" />
+            {!ready && (
+              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800">
+                {missing.length} missing
+              </span>
+            )}
+          </div>
+          <div className="mt-1 text-xs text-neutral-500">
+            Primary metric: {String(card.primary_metric || "human_reply")}
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => onSave(cardPayload(card))}
+          disabled={savePending}
+          className="inline-flex items-center gap-2 rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-60"
+        >
+          {savePending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+          Save
+        </button>
+      </div>
+      {saveError && <div className="mt-2 text-xs text-red-700">{saveError}</div>}
+      <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+        {EXPERIMENT_CARD_FIELDS.map((field) => (
+          <label key={field} className={cn(
+            "block text-xs font-medium text-neutral-600",
+            ["goal", "hypothesis", "prediction", "changed_vs_previous", "invalidation_criteria", "confidence_note"].includes(field) && "md:col-span-2 xl:col-span-3",
+          )}>
+            {experimentFieldLabel(field)}
+            {["goal", "hypothesis", "prediction", "changed_vs_previous", "invalidation_criteria", "confidence_note"].includes(field) ? (
+              <textarea
+                value={card[field] ?? ""}
+                onChange={(event) => setCard((prev) => ({ ...prev, [field]: event.target.value }))}
+                rows={2}
+                className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-2 py-1.5 text-sm text-neutral-900"
+              />
+            ) : (
+              <input
+                value={card[field] ?? ""}
+                onChange={(event) => setCard((prev) => ({ ...prev, [field]: event.target.value }))}
+                className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-2 py-1.5 text-sm text-neutral-900"
+              />
+            )}
+          </label>
+        ))}
+      </div>
+      <div className="mt-4 grid gap-2 sm:grid-cols-3 lg:grid-cols-6">
+        {[
+          ["Planned", measurement.planned],
+          ["Sent", measurement.sent],
+          ["Bounced", measurement.bounced],
+          ["Scanner clicks", measurement.scanner_clicks],
+          ["Human sessions", measurement.human_page_sessions],
+          ["Strong replies", measurement.strong_human_replies],
+        ].map(([label, value]) => (
+          <Metric key={label} label={String(label)} value={String(value ?? 0)} />
+        ))}
+      </div>
+      {loadingRollup && (
+        <div className="mt-2 flex items-center gap-2 text-xs text-neutral-500">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          Loading rollup
+        </div>
+      )}
+      <details className="mt-3 rounded-lg border border-neutral-200 bg-white p-3">
+        <summary className="cursor-pointer text-sm font-medium text-neutral-800">
+          Close verdict
+        </summary>
+        <div className="mt-3 grid gap-2 md:grid-cols-2">
+          <label className="block text-xs font-medium text-neutral-600">
+            Verdict
+            <select
+              value={closeFields.verdict}
+              onChange={(event) => setCloseFields((prev) => ({ ...prev, verdict: event.target.value }))}
+              className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-2 py-1.5 text-sm text-neutral-900"
+            >
+              <option value="win">win</option>
+              <option value="loss">loss</option>
+              <option value="null">null</option>
+              <option value="invalidated">invalidated</option>
+            </select>
+          </label>
+          <label className="flex items-end gap-2 text-xs font-medium text-neutral-600">
+            <input
+              type="checkbox"
+              checked={superseded}
+              onChange={(event) => setSuperseded(event.target.checked)}
+              className="mb-2 h-4 w-4 rounded border-neutral-300"
+            />
+            Superseded
+          </label>
+          {EXPERIMENT_CLOSE_FIELDS.filter((field) => field !== "verdict").map((field) => (
+            <label key={field} className="block text-xs font-medium text-neutral-600 md:col-span-2">
+              {experimentFieldLabel(field)}
+              <textarea
+                value={closeFields[field] ?? ""}
+                onChange={(event) => setCloseFields((prev) => ({ ...prev, [field]: event.target.value }))}
+                rows={2}
+                className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-2 py-1.5 text-sm text-neutral-900"
+              />
+            </label>
+          ))}
+        </div>
+        {closeError && <div className="mt-2 text-xs text-red-700">{closeError}</div>}
+        <button
+          type="button"
+          onClick={() => onClose(closePayload(closeFields, superseded))}
+          disabled={closePending}
+          className="mt-3 inline-flex items-center gap-2 rounded-md border border-neutral-200 bg-white px-3 py-1.5 text-sm font-medium text-neutral-700 hover:bg-neutral-50 disabled:opacity-60"
+        >
+          {closePending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ClipboardCheck className="h-4 w-4" />}
+          Close
+        </button>
+      </details>
+    </section>
+  );
+}
+
 function BatchDetail({
   batchId,
   dailyEmailBudget,
@@ -1632,6 +1933,12 @@ function BatchDetail({
   const q = useQuery({
     queryKey: ["lead-gen-batch", batchId],
     queryFn: () => getLeadGenBatch(batchId, true),
+    refetchInterval: 30_000,
+  });
+  const experimentRollup = useQuery({
+    queryKey: ["lead-gen-experiment-rollup", batchId],
+    queryFn: () => getLeadGenExperimentRollup(batchId),
+    enabled: Boolean(batchId),
     refetchInterval: 30_000,
   });
   const composerVariants = useQuery({
@@ -1683,6 +1990,33 @@ function BatchDetail({
     mutationFn: () => createLeadGenProposal(batchId, "operator"),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["lead-gen-batch", batchId] });
+    },
+  });
+  const saveExperiment = useMutation({
+    mutationFn: (card: Record<string, unknown>) =>
+      updateLeadGenBatchExperiment(batchId, card, "operator"),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["lead-gen-batch", batchId] });
+      qc.invalidateQueries({ queryKey: ["lead-gen-batches"] });
+      qc.invalidateQueries({ queryKey: ["lead-gen-experiments"] });
+      qc.invalidateQueries({ queryKey: ["lead-gen-experiment-rollup", batchId] });
+    },
+  });
+  const closeExperiment = useMutation({
+    mutationFn: (payload: {
+      verdict: string;
+      learning: string;
+      why: string;
+      next_hypothesis: string;
+      next_recommended_wave: string;
+      confidence_note: string;
+      superseded?: boolean;
+    }) => closeLeadGenBatchExperiment(batchId, { ...payload, actor: "operator" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["lead-gen-batch", batchId] });
+      qc.invalidateQueries({ queryKey: ["lead-gen-batches"] });
+      qc.invalidateQueries({ queryKey: ["lead-gen-experiments"] });
+      qc.invalidateQueries({ queryKey: ["lead-gen-experiment-rollup", batchId] });
     },
   });
 
@@ -1898,6 +2232,17 @@ function BatchDetail({
             action plan to create a fresh list for that budget.
           </div>
         )}
+        <ExperimentBatchPanel
+          batch={data.batch}
+          rollup={experimentRollup.data ?? null}
+          loadingRollup={experimentRollup.isLoading}
+          savePending={saveExperiment.isPending}
+          saveError={saveExperiment.isError ? errorMessage(saveExperiment.error) : null}
+          onSave={(card) => saveExperiment.mutate(card)}
+          closePending={closeExperiment.isPending}
+          closeError={closeExperiment.isError ? errorMessage(closeExperiment.error) : null}
+          onClose={(payload) => closeExperiment.mutate(payload)}
+        />
         {isCompletedRun ? (
           /* Completed run: read-only history summary + experiment rollup.
              Individual sent emails live in Comms, so we don't duplicate them. */
@@ -2894,6 +3239,86 @@ function ScoreBreakdown({ item }: { item: LeadGenBatchItem }) {
 function reasonValue(item: LeadGenBatchItem, key: string) {
   const value = item.reason?.[key];
   return typeof value === "string" ? value : "";
+}
+
+function cardStateFromExperiment(batch: LeadGenBatch): Record<string, string> {
+  const existing = batch.experiment?.card ?? {};
+  const defaults: Record<string, string> = {
+    wave_id: waveIdFromBatchName(batch.name),
+    goal: "",
+    primary_metric: "human_reply",
+    hypothesis: "",
+    changed_vs_previous: "",
+    prediction: "",
+    success_threshold: "",
+    measurement_window_hours: "72",
+    minimum_n: String(Number(batch.counts?.returned || batch.counts?.requested || 30) || 30),
+    confidence_note: "directional at this N",
+    invalidation_criteria: "",
+    owner: "operator",
+  };
+  for (const field of EXPERIMENT_CARD_FIELDS) {
+    const value = existing[field];
+    if (value !== undefined && value !== null && String(value).trim()) {
+      defaults[field] = String(value);
+    }
+  }
+  return defaults;
+}
+
+function experimentSummaryForBatch(batch: LeadGenBatch) {
+  return batch.experiment ?? {
+    status: batch.experiment_status ?? "none",
+    card: {},
+    is_experiment: /\bwave\b/i.test(batch.name || ""),
+    is_ready: false,
+    missing_fields: [...EXPERIMENT_CARD_FIELDS],
+    updated_at: null,
+    closed_at: null,
+  };
+}
+
+function cardPayload(card: Record<string, string>): Record<string, unknown> {
+  const payload: Record<string, unknown> = {};
+  for (const field of EXPERIMENT_CARD_FIELDS) {
+    if (field === "measurement_window_hours" || field === "minimum_n") {
+      const n = Number(card[field] || 0);
+      payload[field] = Number.isFinite(n) ? n : 0;
+    } else {
+      payload[field] = card[field] || "";
+    }
+  }
+  return payload;
+}
+
+function closePayload(fields: Record<string, string>, superseded: boolean) {
+  return {
+    verdict: fields.verdict || "null",
+    learning: fields.learning || "",
+    why: fields.why || "",
+    next_hypothesis: fields.next_hypothesis || "",
+    next_recommended_wave: fields.next_recommended_wave || "",
+    confidence_note: fields.confidence_note || "",
+    superseded,
+  };
+}
+
+function waveIdFromBatchName(name: string) {
+  const match = (name || "").match(/\bwave\s*[-_ ]?\s*(\d+)/i);
+  if (match?.[1]) return `wave-${match[1]}`;
+  return "";
+}
+
+function experimentFieldLabel(field: string) {
+  return field
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function errorMessage(error: unknown) {
+  if (!error) return "";
+  if (error instanceof Error) return error.message;
+  return String(error);
 }
 
 function selectionFeatures(item: LeadGenBatchItem) {

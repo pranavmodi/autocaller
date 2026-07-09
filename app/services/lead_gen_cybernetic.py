@@ -32,6 +32,12 @@ from app.services.contact_selection import contact_selection_weights
 from app.services.firm_contacts_service import fetch_pain_quote_for_firm
 from app.services.lead_gen_action_planner import QUEUEABLE_ACTIONS, plan_daily_lead_gen_actions
 from app.services.lead_email_composer import _sanitize_email_copy
+from app.services.lead_gen_experiments import (
+    assert_batch_experiment_send_gate,
+    experiment_card_summary,
+    mark_experiment_measuring_for_item,
+    mark_experiment_scheduled_for_item,
+)
 from app.services.lead_feedback_classifier import classify_feedback_event
 from app.services.email_notification_service import _send_email
 from app.services.lead_gen_transport import (
@@ -423,6 +429,7 @@ async def send_batch_item_draft(
         item = await session.get(LeadGenBatchItemRow, batch_item_id)
         if not item:
             raise ValueError("batch_item_not_found")
+        await mark_experiment_scheduled_for_item(session, batch_item_id)
         original_reason = dict(item.reason_json or {})
         contact = await session.get(FirmContactRow, item.contact_id)
         if not contact or not contact.email:
@@ -491,6 +498,7 @@ async def send_batch_item_draft(
             if brief_version:
                 reason["last_sent_brief_version"] = brief_version
             item_row.reason_json = reason
+            await mark_experiment_measuring_for_item(session, batch_item_id)
         if seq_row:
             seq_row.current_step = step_num
             seq_row.last_sent_at = sent_at
@@ -683,6 +691,8 @@ def _batch_to_dict(batch: LeadGenBatchRow) -> dict[str, Any]:
         "policy_version": batch.policy_version,
         "status": batch.status,
         "counts": batch.counts_json or {},
+        "experiment_status": batch.experiment_status,
+        "experiment": experiment_card_summary(batch),
         "created_by": batch.created_by,
         "approved_by": batch.approved_by,
         "approved_at": batch.approved_at.isoformat() if batch.approved_at else None,
@@ -870,6 +880,7 @@ async def get_batch(batch_id: str, *, include_observations: bool = False) -> dic
         )).scalar_one_or_none()
         if not batch:
             raise ValueError("batch_not_found")
+        await assert_batch_experiment_send_gate(session, batch)
         items = (await session.execute(
             select(LeadGenBatchItemRow)
             .where(LeadGenBatchItemRow.batch_id == batch_id)

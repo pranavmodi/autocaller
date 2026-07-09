@@ -1659,6 +1659,8 @@ export type LeadGenBatch = {
   policy_version: string;
   status: string;
   counts: Record<string, unknown>;
+  experiment_status?: string;
+  experiment?: LeadGenExperimentSummary;
   created_by: string | null;
   approved_by: string | null;
   approved_at: string | null;
@@ -1666,6 +1668,43 @@ export type LeadGenBatch = {
   completed_at: string | null;
   created_at: string | null;
   updated_at: string | null;
+};
+
+export type LeadGenExperimentSummary = {
+  status: string;
+  card: Record<string, unknown>;
+  is_experiment: boolean;
+  is_ready: boolean;
+  missing_fields: string[];
+  updated_at: string | null;
+  closed_at: string | null;
+};
+
+export type LeadGenExperimentListItem = {
+  batch_id: string;
+  batch_name: string;
+  batch_status: string;
+  created_at: string | null;
+  approved_at: string | null;
+  experiment: LeadGenExperimentSummary;
+};
+
+export type LeadGenExperimentRollup = {
+  batch_id: string;
+  experiment: LeadGenExperimentSummary;
+  measurement: Record<string, number>;
+  event_counts: Record<string, number>;
+  signal_quality: {
+    clicks: Record<string, number>;
+    observations: Record<string, number>;
+    replies: Record<string, number>;
+  };
+  groups: {
+    by_transport: Array<Record<string, string | number>>;
+    by_persona: Array<Record<string, string | number>>;
+    by_variant: Array<Record<string, string | number>>;
+  };
+  data_quality: Record<string, unknown>;
 };
 
 export type LeadGenBatchItem = {
@@ -1908,9 +1947,61 @@ export const listLeadGenBatches = (args: { status?: string; limit?: number } = {
   return get<{ batches: LeadGenBatch[] }>(`/api/lead-gen/batches${qs ? `?${qs}` : ""}`);
 };
 
+export const listLeadGenExperiments = (args: { status?: string; limit?: number } = {}) => {
+  const params = new URLSearchParams();
+  if (args.status && args.status !== "all") params.set("status", args.status);
+  if (args.limit) params.set("limit", String(args.limit));
+  const qs = params.toString();
+  return get<{ experiments: LeadGenExperimentListItem[] }>(
+    `/api/lead-gen/experiments${qs ? `?${qs}` : ""}`,
+  );
+};
+
 export const getLeadGenBatch = (batchId: string, includeObservations = true) =>
   get<LeadGenBatchDetail>(
     `/api/lead-gen/batches/${encodeURIComponent(batchId)}?include_observations=${includeObservations ? "true" : "false"}`,
+  );
+
+export const getLeadGenExperimentRollup = (batchId: string) =>
+  get<LeadGenExperimentRollup>(
+    `/api/lead-gen/batches/${encodeURIComponent(batchId)}/experiment-rollup`,
+  );
+
+export const updateLeadGenBatchExperiment = (
+  batchId: string,
+  card: Record<string, unknown>,
+  actor = "operator",
+) =>
+  put<{ batch_id: string; experiment: LeadGenExperimentSummary }>(
+    `/api/lead-gen/batches/${encodeURIComponent(batchId)}/experiment`,
+    { actor, card },
+  );
+
+export const closeLeadGenBatchExperiment = (
+  batchId: string,
+  args: {
+    verdict: string;
+    learning: string;
+    why: string;
+    next_hypothesis: string;
+    next_recommended_wave: string;
+    confidence_note: string;
+    superseded?: boolean;
+    actor?: string;
+  },
+) =>
+  post<{ batch_id: string; experiment: LeadGenExperimentSummary }>(
+    `/api/lead-gen/batches/${encodeURIComponent(batchId)}/experiment/close`,
+    {
+      actor: args.actor ?? "operator",
+      verdict: args.verdict,
+      learning: args.learning,
+      why: args.why,
+      next_hypothesis: args.next_hypothesis,
+      next_recommended_wave: args.next_recommended_wave,
+      confidence_note: args.confidence_note,
+      superseded: args.superseded ?? false,
+    },
   );
 
 export const approveLeadGenBatch = (

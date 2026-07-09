@@ -17,6 +17,7 @@ from app.db.models import (
     EmailLogRow,
     FirmContactRow,
     LeadGenBatchItemRow,
+    LeadGenBatchRow,
     PifFirmRow,
 )
 from app.services.contact_selection import has_usable_email
@@ -27,6 +28,11 @@ from app.services.lead_gen_cybernetic import (
     ensure_default_policy,
     record_observation,
     send_batch_item_draft,
+)
+from app.services.lead_gen_experiments import (
+    assert_batch_experiment_send_gate,
+    mark_experiment_measuring_for_item,
+    mark_experiment_scheduled_for_item,
 )
 from app.services.lead_gen_transport import (
     choose_lead_gen_transport,
@@ -585,6 +591,10 @@ async def approve_lead_gen_batch_send_actions(
     approved: list[str] = []
     skipped: list[dict[str, str]] = []
     async with AsyncSessionLocal() as session:
+        batch = await session.get(LeadGenBatchRow, batch_id)
+        if not batch:
+            raise ValueError("batch_not_found")
+        await assert_batch_experiment_send_gate(session, batch)
         items = (
             await session.execute(
                 select(LeadGenBatchItemRow).where(LeadGenBatchItemRow.batch_id == batch_id)
@@ -614,6 +624,7 @@ async def approve_lead_gen_batch_send_actions(
             if action.status not in {"waiting_for_approval", "approved"}:
                 skipped.append({"action_id": action.id, "reason": f"status:{action.status}"})
                 continue
+            await mark_experiment_scheduled_for_item(session, item_id)
             subject, body = _action_subject_body(action)
             recipient = str(payload.get("to") or "").strip().lower()
             if not has_usable_email(recipient):
@@ -1324,6 +1335,7 @@ async def create_send_approved_lead_gen_draft_action(
         },
     }
     async with AsyncSessionLocal() as session:
+        await mark_experiment_scheduled_for_item(session, batch_item_id)
         action = AgentActionRow(
             id=action_id,
             action_type=SEND_APPROVED_LEAD_GEN_DRAFT,
@@ -1479,6 +1491,8 @@ async def create_send_email_action(
     entity_type = "test_email" if email_mode == "test" else "lead_gen_email"
     entity_id = recipient if email_mode == "test" else (batch_item_id or contact_id or recipient)
     async with AsyncSessionLocal() as session:
+        if email_mode == "lead_gen" and batch_item_id:
+            await mark_experiment_scheduled_for_item(session, batch_item_id)
         action = AgentActionRow(
             id=action_id,
             action_type=SEND_EMAIL,
@@ -2208,6 +2222,7 @@ async def _execute_send_email(payload: dict[str, Any]) -> dict[str, Any]:
                     if payload.get(key):
                         reason[f"last_sent_{key}"] = payload.get(key)
                 item.reason_json = reason
+                await mark_experiment_measuring_for_item(session, batch_item_id)
                 await session.commit()
     sent_at = email_log_data.get("sent_at") or _utcnow().isoformat()
     return {

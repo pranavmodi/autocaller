@@ -21,7 +21,7 @@ from email.parser import BytesParser
 from email.utils import getaddresses, parsedate_to_datetime
 from typing import Any
 
-from sqlalchemy import desc, func, select
+from sqlalchemy import desc, func, or_, select
 
 from app.db import AsyncSessionLocal
 from app.db.models import (
@@ -69,6 +69,16 @@ class ParsedInboundEmail:
     text_excerpt: str
     raw_headers: dict[str, str]
     received_at: datetime | None
+
+
+@dataclass(frozen=True)
+class ReplyMatch:
+    contact: FirmContactRow | None
+    item: LeadGenBatchItemRow | None
+    sequence: EmailSequenceRow | None
+    attribution_strength: str
+    attribution_method: str
+    matched_message_id: str | None = None
 
 
 def inbound_email_config() -> InboundEmailConfig:
@@ -462,7 +472,8 @@ async def store_inbound_email(
         if existing:
             return _inbound_row_to_dict(existing, existing=True)
 
-        contact, item, seq = await _match_reply(session, parsed)
+        match = await _match_reply(session, parsed)
+        contact, item, seq = match.contact, match.item, match.sequence
 
         def _nul_free(value):
             # Postgres rejects NUL (0x00) in UTF8 text; some NDRs carry them.
@@ -495,7 +506,7 @@ async def store_inbound_email(
             matched_pif_id=(item.pif_id if item else (contact.pif_id if contact else None)),
             matched_batch_item_id=item.id if item else None,
             matched_sequence_id=seq.id if seq else None,
-            classification_status="matched" if item else "unmatched",
+            classification_status=f"matched:{match.attribution_strength}" if item else "unmatched",
             received_at=parsed.received_at,
         )
         session.add(row)
@@ -516,6 +527,9 @@ async def store_inbound_email(
                     "message_id": parsed.message_id,
                     "in_reply_to": parsed.in_reply_to,
                     "references": parsed.references_text,
+                    "attribution_strength": match.attribution_strength,
+                    "attribution_method": match.attribution_method,
+                    "matched_message_id": match.matched_message_id,
                     "from_email": parsed.from_email,
                     "from_name": parsed.from_name,
                     "subject": parsed.subject,
@@ -660,10 +674,29 @@ def _action_label(next_action: str | None) -> str:
 async def _match_reply(
     session,
     parsed: ParsedInboundEmail,
-) -> tuple[FirmContactRow | None, LeadGenBatchItemRow | None, EmailSequenceRow | None]:
+) -> ReplyMatch:
     sender = parsed.from_email.strip().lower()
     if not sender:
-        return None, None, None
+        return ReplyMatch(None, None, None, "none", "missing_sender")
+
+    for message_id in _reply_reference_message_ids(parsed):
+        item = (await session.execute(
+            select(LeadGenBatchItemRow)
+            .where(
+                or_(
+                    LeadGenBatchItemRow.reason_json["last_sent_message_id"].as_string() == message_id,
+                    LeadGenBatchItemRow.reason_json["last_sent_message_id"].as_string() == _strip_angle_message_id(message_id),
+                    LeadGenBatchItemRow.reason_json["last_sent_message_id"].as_string() == f"<{_strip_angle_message_id(message_id)}>",
+                )
+            )
+            .order_by(desc(LeadGenBatchItemRow.updated_at))
+            .limit(1)
+        )).scalar_one_or_none()
+        if item:
+            contact = await session.get(FirmContactRow, item.contact_id)
+            seq = await session.get(EmailSequenceRow, item.sequence_id) if item.sequence_id else None
+            return ReplyMatch(contact, item, seq, "strong", "message_id_thread", message_id)
+
     contacts = list((await session.execute(
         select(FirmContactRow)
         .where(func.lower(FirmContactRow.email) == sender)
@@ -677,8 +710,40 @@ async def _match_reply(
         )).scalars().first()
         if item:
             seq = await session.get(EmailSequenceRow, item.sequence_id) if item.sequence_id else None
-            return contact, item, seq
-    return (contacts[0], None, None) if contacts else (None, None, None)
+            strength = "medium" if item.sequence_id else "weak"
+            method = "contact_active_sequence" if item.sequence_id else "contact_latest_batch_item"
+            return ReplyMatch(contact, item, seq, strength, method)
+    return ReplyMatch(contacts[0], None, None, "none", "contact_only") if contacts else ReplyMatch(None, None, None, "none", "unmatched")
+
+
+def _strip_angle_message_id(value: str | None) -> str:
+    clean = (value or "").strip()
+    if clean.startswith("<") and clean.endswith(">"):
+        return clean[1:-1].strip()
+    return clean
+
+
+def _reply_reference_message_ids(parsed: ParsedInboundEmail) -> list[str]:
+    values: list[str] = []
+    for raw in (parsed.in_reply_to, parsed.references_text):
+        text = (raw or "").strip()
+        if not text:
+            continue
+        values.extend(re.findall(r"<[^>]+>", text))
+        values.extend(part for part in re.split(r"\s+", text) if "@" in part)
+    out: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        clean = value.strip()
+        variants = [clean, _strip_angle_message_id(clean)]
+        stripped = _strip_angle_message_id(clean)
+        if stripped:
+            variants.append(f"<{stripped}>")
+        for variant in variants:
+            if variant and variant not in seen:
+                out.append(variant)
+                seen.add(variant)
+    return out
 
 
 async def _classify_reply(

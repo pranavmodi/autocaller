@@ -16,6 +16,7 @@ from app.db.models import (
     PifFirmRow,
 )
 from app.services.lead_gen_cybernetic import ensure_default_policy
+from app.services.lead_gen_experiments import experiment_card_summary
 from app.services.sequences.registry import DEFAULT_TEMPLATE_KEY, normalize_template_key
 
 
@@ -36,6 +37,8 @@ def _batch_to_dict(batch: LeadGenBatchRow) -> dict[str, Any]:
         "policy_version": batch.policy_version,
         "status": batch.status,
         "counts": batch.counts_json or {},
+        "experiment_status": batch.experiment_status,
+        "experiment": experiment_card_summary(batch),
         "created_by": batch.created_by,
         "approved_by": batch.approved_by,
         "approved_at": batch.approved_at.isoformat() if batch.approved_at else None,

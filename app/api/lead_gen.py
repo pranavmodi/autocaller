@@ -65,6 +65,12 @@ from app.services.lead_gen_daily import (
     set_daily_run_enabled,
     top_up_daily_run,
 )
+from app.services.lead_gen_experiments import (
+    close_batch_experiment,
+    experiment_rollup,
+    list_experiment_batches,
+    set_batch_experiment,
+)
 from app.services.sequences.registry import DEFAULT_TEMPLATE_KEY
 
 
@@ -137,6 +143,22 @@ class TransportSettingsRequest(BaseModel):
     zoho_cap: Optional[int] = Field(default=None, ge=0, le=200)
     resend_cap: Optional[int] = Field(default=None, ge=0, le=200)
     updated_by: str = "operator"
+
+
+class ExperimentCardRequest(BaseModel):
+    actor: str = "operator"
+    card: dict[str, Any] = Field(default_factory=dict)
+
+
+class ExperimentCloseRequest(BaseModel):
+    actor: str = "operator"
+    verdict: str
+    learning: str
+    why: str
+    next_hypothesis: str
+    next_recommended_wave: str
+    confidence_note: str
+    superseded: bool = False
 
 
 class SendBatchItemDraftRequest(BaseModel):
@@ -452,6 +474,59 @@ async def get_batches(
     return {"batches": await list_batches(limit=limit, status=status)}
 
 
+@router.get("/api/lead-gen/experiments")
+async def get_experiments(
+    limit: int = Query(50, ge=1, le=200),
+    status: Optional[str] = Query(None),
+):
+    return await list_experiment_batches(limit=limit, status=status)
+
+
+@router.get("/api/lead-gen/batches/{batch_id}/experiment-rollup")
+async def get_batch_experiment_rollup(batch_id: str):
+    try:
+        return await experiment_rollup(batch_id)
+    except ValueError as e:
+        detail = str(e)
+        if detail == "batch_not_found":
+            raise HTTPException(status_code=404, detail=detail)
+        raise HTTPException(status_code=400, detail=detail)
+
+
+@router.put("/api/lead-gen/batches/{batch_id}/experiment")
+async def put_batch_experiment(batch_id: str, req: ExperimentCardRequest):
+    try:
+        return await set_batch_experiment(batch_id, req.card, actor=req.actor)
+    except ValueError as e:
+        detail = str(e)
+        if detail == "batch_not_found":
+            raise HTTPException(status_code=404, detail=detail)
+        raise HTTPException(status_code=400, detail=detail)
+
+
+@router.post("/api/lead-gen/batches/{batch_id}/experiment/close")
+async def close_experiment(batch_id: str, req: ExperimentCloseRequest):
+    try:
+        return await close_batch_experiment(
+            batch_id,
+            {
+                "verdict": req.verdict,
+                "learning": req.learning,
+                "why": req.why,
+                "next_hypothesis": req.next_hypothesis,
+                "next_recommended_wave": req.next_recommended_wave,
+                "confidence_note": req.confidence_note,
+            },
+            actor=req.actor,
+            superseded=req.superseded,
+        )
+    except ValueError as e:
+        detail = str(e)
+        if detail == "batch_not_found":
+            raise HTTPException(status_code=404, detail=detail)
+        raise HTTPException(status_code=400, detail=detail)
+
+
 @router.post("/api/lead-gen/daily-run")
 async def run_daily_lead_gen(req: DailyRunRequest):
     variant_key = _validate_composer_variant_key(req.composer_variant_key)
@@ -685,9 +760,10 @@ async def approve_one_batch(batch_id: str, req: ApproveBatchRequest):
             scheduled_timezone=req.scheduled_timezone,
         )
     except ValueError as e:
-        if str(e) in {"invalid_scheduled_start_at", "invalid_scheduled_timezone"}:
-            raise HTTPException(status_code=400, detail=str(e))
-        raise HTTPException(status_code=404, detail=str(e))
+        detail = str(e)
+        if detail == "batch_not_found":
+            raise HTTPException(status_code=404, detail=detail)
+        raise HTTPException(status_code=400, detail=detail)
 
 
 @router.post("/api/lead-gen/batches/{batch_id}/approve-actions")
