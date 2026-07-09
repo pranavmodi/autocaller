@@ -29,7 +29,7 @@ from app.services.sequence_recommendations import recommend_sequence_contacts
 from app.services.sequences.registry import DEFAULT_TEMPLATE_KEY, normalize_template_key
 
 logger = logging.getLogger(__name__)
-FIRST_TOUCH_EVIDENCE_EXEMPT_VARIANTS = {"ai-audit", "intake-demo"}
+FIRST_TOUCH_EVIDENCE_EXEMPT_VARIANTS = {"ai-audit", "ai-visibility-report", "intake-demo"}
 FOUNDER_PROFILE_PERSONAS = {"founder_owner", "managing_partner"}
 FOUNDER_PROFILE_TITLE_TERMS = (
     "founder",
