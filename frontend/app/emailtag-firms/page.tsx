@@ -84,6 +84,7 @@ type WebsitePresence = NonNullable<PifInfoListParams["website_presence"]>;
 type StatusPresence = NonNullable<PifInfoListParams["research_presence"]>;
 type SimplePresence = NonNullable<PifInfoListParams["behavior_presence"]>;
 type PeopleSource = NonNullable<PifPeopleListParams["source"]>;
+type FirstContactPeriod = "any" | "last_1_month" | "last_6_months" | "custom";
 type WorkflowStepState = "completed" | "running" | "failed" | "waiting" | "skipped";
 
 interface WorkflowStepInfo {
@@ -133,6 +134,9 @@ interface FiltersState {
   behavior_presence: SimplePresence;
   icp_presence: SimplePresence;
   vendor_presence: SimplePresence;
+  first_contact_period: FirstContactPeriod;
+  first_contacted_from: string;
+  first_contacted_to: string;
   active_only: boolean;
 }
 
@@ -149,6 +153,9 @@ const DEFAULT_FILTERS: FiltersState = {
   behavior_presence: "any",
   icp_presence: "any",
   vendor_presence: "any",
+  first_contact_period: "any",
+  first_contacted_from: "",
+  first_contacted_to: "",
   active_only: true,
 };
 
@@ -315,8 +322,42 @@ function updateBatchResearchRow(
   };
 }
 
+function dateInputValue(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function subtractMonths(date: Date, months: number) {
+  const day = date.getDate();
+  const result = new Date(date);
+  result.setDate(1);
+  result.setMonth(result.getMonth() - months);
+  const lastDayOfMonth = new Date(result.getFullYear(), result.getMonth() + 1, 0).getDate();
+  result.setDate(Math.min(day, lastDayOfMonth));
+  return result;
+}
+
+function firstContactRange(filters: FiltersState) {
+  if (filters.first_contact_period === "last_1_month") {
+    return { from: dateInputValue(subtractMonths(new Date(), 1)), to: undefined };
+  }
+  if (filters.first_contact_period === "last_6_months") {
+    return { from: dateInputValue(subtractMonths(new Date(), 6)), to: undefined };
+  }
+  if (filters.first_contact_period === "custom") {
+    return {
+      from: filters.first_contacted_from.trim() || undefined,
+      to: filters.first_contacted_to.trim() || undefined,
+    };
+  }
+  return { from: undefined, to: undefined };
+}
+
 function filtersToParams(filters: FiltersState, page: number): PifInfoListParams {
   const recently = Number(filters.recently_researched);
+  const firstContact = firstContactRange(filters);
   return {
     search: filters.search.trim() || undefined,
     page,
@@ -333,6 +374,8 @@ function filtersToParams(filters: FiltersState, page: number): PifInfoListParams
     behavior_presence: filters.behavior_presence,
     icp_presence: filters.icp_presence,
     vendor_presence: filters.vendor_presence,
+    first_contacted_from: firstContact.from,
+    first_contacted_to: firstContact.to,
     active_only: filters.active_only,
   };
 }
@@ -747,15 +790,16 @@ function EmailtagFirmsContent() {
               <thead className="bg-neutral-50 text-left text-[11px] uppercase text-neutral-500">
                 <tr>
                   <th className="w-[3%] px-2 py-2" />
-                  <th className="w-[16%] px-2 py-2 font-medium">Firm</th>
-                  <th className="hidden w-[9%] px-2 py-2 font-medium 2xl:table-cell">Entity</th>
-                  <th className="w-[16%] px-2 py-2 font-medium">Website</th>
+                  <th className="w-[15%] px-2 py-2 font-medium">Firm</th>
+                  <th className="hidden w-[8%] px-2 py-2 font-medium 2xl:table-cell">Entity</th>
+                  <th className="w-[15%] px-2 py-2 font-medium">Website</th>
                   <th className="w-[8%] px-2 py-2 font-medium">Staff</th>
                   <th className="w-[7%] px-2 py-2 font-medium">ICP</th>
-                  <th className="w-[9%] px-2 py-2 font-medium">Research</th>
-                  <th className="hidden w-[13%] px-2 py-2 font-medium xl:table-cell">Signals</th>
-                  <th className="w-[9%] px-2 py-2 font-medium">Updated</th>
-                  <th className="w-[10%] px-2 py-2 font-medium">Actions</th>
+                  <th className="w-[8%] px-2 py-2 font-medium">Research</th>
+                  <th className="w-[10%] px-2 py-2 font-medium">First contact</th>
+                  <th className="hidden w-[11%] px-2 py-2 font-medium xl:table-cell">Signals</th>
+                  <th className="w-[8%] px-2 py-2 font-medium">Updated</th>
+                  <th className="w-[9%] px-2 py-2 font-medium">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-neutral-100">
@@ -847,6 +891,7 @@ function FilterBar({
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
         <SelectField label="Order" value={filters.sort_by} onChange={(value) => updateFilter("sort_by", value as SortBy)}>
           <option value="updated_at">Most recently updated</option>
+          <option value="first_contacted_precise_at">First contacted</option>
           <option value="firm_name">Firm name</option>
           <option value="conversation_count">Conversations</option>
         </SelectField>
@@ -878,6 +923,28 @@ function FilterBar({
         <SelectField label="Vendors" value={filters.vendor_presence} onChange={(value) => updateFilter("vendor_presence", value as SimplePresence)}>
           {PRESENCE.map((value) => <option key={value} value={value}>{formatLabel(value)}</option>)}
         </SelectField>
+        <SelectField label="First contact period" value={filters.first_contact_period} onChange={(value) => updateFilter("first_contact_period", value as FirstContactPeriod)}>
+          <option value="any">Any period</option>
+          <option value="last_1_month">Last 1 month</option>
+          <option value="last_6_months">Last 6 months</option>
+          <option value="custom">Custom</option>
+        </SelectField>
+        {filters.first_contact_period === "custom" && (
+          <>
+            <InputField
+              label="First contact from"
+              value={filters.first_contacted_from}
+              onChange={(value) => updateFilter("first_contacted_from", value)}
+              type="date"
+            />
+            <InputField
+              label="First contact to"
+              value={filters.first_contacted_to}
+              onChange={(value) => updateFilter("first_contacted_to", value)}
+              type="date"
+            />
+          </>
+        )}
       </div>
     </div>
   );
@@ -914,17 +981,20 @@ function InputField({
   onChange,
   placeholder,
   inputMode,
+  type = "text",
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
   inputMode?: "numeric";
+  type?: React.HTMLInputTypeAttribute;
 }) {
   return (
     <label className="block text-[11px] font-medium uppercase tracking-wide text-neutral-400">
       {label}
       <input
+        type={type}
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
@@ -1103,6 +1173,9 @@ function FirmTableRows({
             {firm.research_status ?? "unknown"}
           </span>
         </td>
+        <td data-label="First contact" className="px-2 py-3 text-xs text-neutral-500">
+          {firm.first_contacted_precise_at ? formatDateTime(firm.first_contacted_precise_at) : "—"}
+        </td>
         <td data-label="Signals" className="hidden px-2 py-3 xl:table-cell">
           <div className="flex flex-wrap gap-1.5">
             <SignalPill icon={<Mail className="h-3 w-3" />} value={firm.emails?.length ?? 0} label="emails" />
@@ -1128,7 +1201,7 @@ function FirmTableRows({
       </tr>
       {expanded && (
         <tr>
-          <td colSpan={10} className="bg-neutral-50 px-4 py-4">
+          <td colSpan={11} className="bg-neutral-50 px-4 py-4">
             <FirmDetail initialFirm={firm} onAuthError={onAuthError} />
           </td>
         </tr>
@@ -1471,9 +1544,10 @@ function FirmDetail({ initialFirm, onAuthError }: { initialFirm: PifInfoResponse
         </div>
       </InfoBlock>
 
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
         <Metric label="Research" value={firm.research_status ?? "unknown"} detail={formatDateTime(firm.last_researched_at)} />
         <Metric label="Staff" value={firm.staff_research_status ?? "unknown"} detail={`${firm.staff?.length ?? 0} staff`} />
+        <Metric label="First contacted" value={firm.first_contacted_precise_at ? formatDateTime(firm.first_contacted_precise_at) : "—"} detail="linked external email" />
         <Metric label="ICP" value={firm.icp_tier ? `Tier ${firm.icp_tier}` : "—"} detail={firm.icp_score == null ? "No score" : `${firm.icp_score}/100`} />
         <Metric label="Website confidence" value={firm.website_confidence == null ? "—" : `${Math.round(firm.website_confidence * 100)}%`} detail={firm.website_source ?? "No source"} />
       </div>
@@ -1485,6 +1559,7 @@ function FirmDetail({ initialFirm, onAuthError }: { initialFirm: PifInfoResponse
           <KeyValue label="Status" value={firm.website_status ?? "Missing"} />
           <KeyValue label="Source" value={firm.website_source ?? "Unknown"} />
           <KeyValue label="Confidence" value={firm.website_confidence == null ? "Unknown" : `${Math.round(firm.website_confidence * 100)}%`} />
+          <KeyValue label="First contacted" value={formatDateTime(firm.first_contacted_precise_at)} />
           <KeyValue label="Updated" value={formatDateTime(firm.updated_at)} />
         </div>
       </InfoBlock>

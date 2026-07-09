@@ -27,6 +27,7 @@ import {
 import {
   approveLeadGenBatch,
   approveLeadGenBatchActions,
+  resolveLeadGenBatchLinkedIn,
   classifyLeadGenObservation,
   createLeadGenBatch,
   createLeadGenEmailAgentSlice,
@@ -1655,6 +1656,18 @@ function BatchDetail({
     },
   });
 
+  const resolveLinkedIn = useMutation({
+    mutationFn: () => resolveLeadGenBatchLinkedIn(batchId, { limit: 25 }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["lead-gen-batch", batchId] });
+    },
+  });
+  const linkedInSummary = resolveLinkedIn.data?.summary
+    ? `Resolved ${resolveLinkedIn.data.summary.resolved} · not found ${resolveLinkedIn.data.summary.not_found} · already had ${resolveLinkedIn.data.summary.skipped} (of ${resolveLinkedIn.data.summary.eligible} eligible)`
+    : resolveLinkedIn.isError
+      ? "Resolver failed — check the backend logs."
+      : null;
+
   // Primary "Approve & send": approves the reviewed send_email actions so the
   // scheduler sends the exact drafts on screen at their slots — NOT the legacy
   // sequence flow (which `approve` above drives, kept under Advanced).
@@ -1906,7 +1919,12 @@ function BatchDetail({
                 </Link>
               </span>
             </div>
-            <CompletedRunRollup items={data.items} />
+            <CompletedRunRollup
+              items={data.items}
+              onResolveLinkedIn={() => resolveLinkedIn.mutate()}
+              resolvingLinkedIn={resolveLinkedIn.isPending}
+              linkedInSummary={linkedInSummary}
+            />
           </>
         ) : (
           <>
@@ -2474,15 +2492,145 @@ function shortPtTime(value: string) {
   return match ? `${match[1]} ${match[2]}` : value;
 }
 
-function CompletedRunRollup({ items }: { items: LeadGenBatchItem[] }) {
+function CompletedRunRollup({
+  items,
+  onResolveLinkedIn,
+  resolvingLinkedIn,
+  linkedInSummary,
+}: {
+  items: LeadGenBatchItem[];
+  onResolveLinkedIn?: () => void;
+  resolvingLinkedIn?: boolean;
+  linkedInSummary?: string | null;
+}) {
+  const resolvedCount = items.filter((item) =>
+    isLinkedInUrl(founderLinkedInUrl(item)),
+  ).length;
   const byVariant = rollupBy(items, (item) =>
     String(reasonValue(item, "last_sent_composer_variant_key") || "baseline"),
   );
   const byPersona = rollupBy(items, (item) => item.persona || "unknown");
   return (
-    <div className="grid gap-5 border-t border-neutral-100 px-4 py-3 sm:grid-cols-2">
-      <RollupTable title="By A/B variant" rows={byVariant} />
-      <RollupTable title="By persona" rows={byPersona} />
+    <div className="border-t border-neutral-100">
+      <div className="grid gap-5 px-4 py-3 sm:grid-cols-2">
+        <RollupTable title="By A/B variant" rows={byVariant} />
+        <RollupTable title="By persona" rows={byPersona} />
+      </div>
+      <div className="border-t border-neutral-100 px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
+            Contacts &amp; LinkedIn
+            <span className="ml-2 font-normal normal-case text-neutral-400">
+              {resolvedCount}/{items.length} with a profile link
+            </span>
+          </h3>
+          {onResolveLinkedIn && (
+            <button
+              type="button"
+              onClick={onResolveLinkedIn}
+              disabled={resolvingLinkedIn}
+              className="inline-flex items-center gap-1 rounded-md border border-neutral-300 px-2.5 py-1 text-xs font-medium text-neutral-700 hover:bg-neutral-50 disabled:opacity-50"
+            >
+              {resolvingLinkedIn ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Search className="h-3.5 w-3.5" />
+              )}
+              {resolvingLinkedIn ? "Resolving…" : "Resolve LinkedIn URLs"}
+            </button>
+          )}
+        </div>
+        {linkedInSummary && (
+          <p className="mt-1.5 text-xs text-neutral-500">{linkedInSummary}</p>
+        )}
+        <div className="mt-2 divide-y divide-neutral-100">
+          {items.map((item) => {
+            const linkedInUrl = founderLinkedInUrl(item);
+            const searchUrl = founderLinkedInSearchUrl(item);
+            const shortMsg = linkedInShortMessage(item);
+            const longMsg = linkedInLongMessage(item);
+            const reportLink = reportLinkForItem(item, "linkedin");
+            return (
+              <div key={item.id} className="py-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium text-neutral-800">
+                      {item.contact_name || "Unknown"}
+                      <span className="ml-2 text-xs font-normal text-neutral-500">
+                        {item.contact_title || "No title"}
+                      </span>
+                    </div>
+                    <div className="text-xs text-neutral-500">
+                      {item.firm_name} · {item.contact_email}
+                    </div>
+                  </div>
+                  {linkedInUrl ? (
+                    <a
+                      href={linkedInUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1 rounded-md border border-blue-200 bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100"
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" />
+                      LinkedIn
+                    </a>
+                  ) : (
+                    <a
+                      href={searchUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1 rounded-md border border-neutral-200 px-2 py-1 text-xs font-medium text-neutral-600 hover:bg-neutral-50"
+                    >
+                      <Search className="h-3.5 w-3.5" />
+                      Find LinkedIn
+                    </a>
+                  )}
+                </div>
+                <details className="mt-1.5">
+                  <summary className="cursor-pointer text-xs font-medium text-neutral-500 hover:text-neutral-800">
+                    LinkedIn message (short + long)
+                  </summary>
+                  <div className="mt-2 space-y-3 rounded-md border border-neutral-200 bg-neutral-50 p-3">
+                    <div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-semibold text-neutral-600">
+                          Short (connect note / quick DM)
+                        </span>
+                        <CopyButton text={shortMsg} label="Copy" />
+                      </div>
+                      <p className="mt-1 whitespace-pre-wrap text-xs leading-relaxed text-neutral-700">
+                        {shortMsg}
+                      </p>
+                    </div>
+                    <div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-semibold text-neutral-600">
+                          Long (message / InMail)
+                        </span>
+                        <CopyButton text={longMsg} label="Copy" />
+                      </div>
+                      <p className="mt-1 whitespace-pre-wrap text-xs leading-relaxed text-neutral-700">
+                        {longMsg}
+                      </p>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 border-t border-neutral-200 pt-2">
+                      <a
+                        href={reportLink}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="truncate text-xs text-blue-700 hover:underline"
+                      >
+                        {reportLink}
+                      </a>
+                      <CopyButton text={reportLink} label="Copy link" />
+                    </div>
+                  </div>
+                </details>
+              </div>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }
@@ -2864,6 +3012,9 @@ function stringValue(value: unknown): string {
 }
 
 function founderLinkedInUrl(item: LeadGenBatchItem): string {
+  const resolved = stringValue(item.linkedin_url);
+  if (isLinkedInUrl(resolved)) return resolved;
+
   const direct = stringValue(item.reason?.contact_linkedin_url);
   if (isLinkedInUrl(direct)) return direct;
 
@@ -2906,6 +3057,97 @@ function founderLinkedInSearchUrl(item: LeadGenBatchItem): string {
     "LinkedIn",
   ].filter(Boolean);
   return `https://www.google.com/search?q=${encodeURIComponent(parts.join(" "))}`;
+}
+
+function contactFirstName(item: LeadGenBatchItem): string {
+  const name = stringValue(item.contact_name).trim();
+  if (!name) return "there";
+  return name.split(/\s+/)[0].replace(/[.,]$/, "");
+}
+
+// Pull the per-recipient LexVisibility report link out of the email we already
+// sent this contact (it lives in the sent draft body). For the LinkedIn channel
+// we append "-li" to the ?ref= value so clicks show up as a distinct row in the
+// /admin engagement view, separate from the email clicks.
+function reportLinkForItem(
+  item: LeadGenBatchItem,
+  channel: "email" | "linkedin",
+): string {
+  const draft = objectValue(item.reason?.agent_draft);
+  const body = stringValue(draft?.body);
+  const match = body.match(/https?:\/\/[^\s"'<>)]+\/r\/[^\s"'<>)]+/);
+  const fallback = "https://visible.getpossibleminds.com";
+  if (!match) return fallback;
+  const raw = match[0].replace(/[.,;]+$/, "");
+  try {
+    const url = new URL(raw);
+    if (channel === "linkedin") {
+      const ref = url.searchParams.get("ref");
+      if (ref && !ref.endsWith("-li")) url.searchParams.set("ref", `${ref}-li`);
+      else if (!ref) url.searchParams.set("ref", "li");
+    }
+    return url.toString();
+  } catch {
+    return raw;
+  }
+}
+
+function linkedInShortMessage(item: LeadGenBatchItem): string {
+  const first = contactFirstName(item);
+  const firm = stringValue(item.firm_name) || "your firm";
+  const link = reportLinkForItem(item, "linkedin");
+  return (
+    `Hi ${first}, I'm Pranav, founder of Possible Minds. Quick one: when people ` +
+    `ask ChatGPT to recommend an injury firm in your area, it names your ` +
+    `competitors, not ${firm}. I put the specifics here: ${link} — no pitch, ` +
+    `just thought you'd want to see it.`
+  );
+}
+
+function linkedInLongMessage(item: LeadGenBatchItem): string {
+  const first = contactFirstName(item);
+  const firm = stringValue(item.firm_name) || "your firm";
+  const link = reportLinkForItem(item, "linkedin");
+  return (
+    `Hi ${first},\n\n` +
+    `I'm Pranav, founder of Possible Minds. I emailed you earlier this week, but ` +
+    `LinkedIn might be easier.\n\n` +
+    `We ran a test: when someone asks ChatGPT to recommend a personal injury firm ` +
+    `in your area, it recommends other firms and not ${firm}. I wrote up the ` +
+    `specifics, and what those missed searches add up to, in a short report:\n\n` +
+    `${link}\n\n` +
+    `More clients are starting with AI before they ever Google a lawyer, so where ` +
+    `you show up there is starting to matter. No pitch, just thought it was worth ` +
+    `your two minutes. Open to a quick call if it's useful.\n\n` +
+    `Pranav Modi\n` +
+    `Founder, Possible Minds`
+  );
+}
+
+function CopyButton({ text, label }: { text: string; label: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      type="button"
+      onClick={async () => {
+        try {
+          await navigator.clipboard.writeText(text);
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1500);
+        } catch {
+          /* clipboard unavailable */
+        }
+      }}
+      className="inline-flex shrink-0 items-center gap-1 rounded-md border border-neutral-200 px-2 py-1 text-xs font-medium text-neutral-600 hover:bg-neutral-50"
+    >
+      {copied ? (
+        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+      ) : (
+        <ClipboardCheck className="h-3.5 w-3.5" />
+      )}
+      {copied ? "Copied" : label}
+    </button>
+  );
 }
 
 function storedAgentDraftStep(item: LeadGenBatchItem): RenderedSequenceStep | null {

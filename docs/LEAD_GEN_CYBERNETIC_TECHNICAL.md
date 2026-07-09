@@ -23,7 +23,9 @@ Important routes:
 | Method | Path | Purpose |
 | --- | --- | --- |
 | `GET` | `/api/lead-gen/policy/current` | active policy, weights, suppressions, daily send budget |
-| `PUT` | `/api/lead-gen/settings/daily-send-budget` | persist daily send budget on active policy |
+| `PUT` | `/api/lead-gen/settings/daily-send-budget` | persist daily send budget on active policy (preserves an operator-set transport strategy / Zoho cap) |
+| `GET` | `/api/lead-gen/settings/transport` | read the transport send-order strategy + resolved per-provider daily caps |
+| `PUT` | `/api/lead-gen/settings/transport` | set `lead_gen_transport_strategy` (`zoho_first_then_resend` \| `resend_first_then_zoho`) and/or `provider_daily_caps` (`zoho_api`, `resend`) on the active policy; CLI: `lead-gen transport` |
 | `POST` | `/api/lead-gen/batches` | create a daily action plan batch; with `curated: true`, create an empty operator-curated batch with initialized counts metadata |
 | `POST` | `/api/lead-gen/email-agent/slice` | create a bounded email-agent slice with research evidence, composer drafts, and durable `send_email mode=lead_gen` actions |
 | `POST` | `/api/lead-gen/daily-run` | run or dry-run the checkpointed daily lead-selection and drafting pipeline |
@@ -401,6 +403,30 @@ Policy checks verify:
 Execution chooses the lead-gen transport from policy/provider caps, sends
 through `_send_email(..., transport=...)`, then writes send metadata back onto
 both the durable action result and `lead_gen_batch_items.reason_json`.
+
+The send order and caps are operator-configurable on the active policy via
+`set_lead_gen_transport(strategy, zoho_cap, resend_cap)` (REST
+`PUT /api/lead-gen/settings/transport`, CLI `lead-gen transport`). Strategy
+`zoho_first_then_resend` (default) fills Zoho up to its cap before spilling to
+Resend; `resend_first_then_zoho` reverses that. Setting `zoho_cap = 0` forces
+the Resend-only path.
+
+**Per-send transport override.** A `transport` value on the send action payload
+(`resend` | `zoho_api` | `smtp`) is *authoritative* — `_execute_send_email` and
+`send_batch_item_draft` use it directly and skip the policy strategy/cap
+selection entirely. The automatic strategy only applies when no explicit
+transport is set (e.g. the daily-run and agent-slice paths). All CLI email-send
+commands (`actions send-email`, `actions send-test-email`,
+`actions send-approved-lead-gen-draft`) **require** `--transport` so an
+operator send is never routed to an opaque, auto-selected provider; the request
+models (`EmailActionRequest`, `TestEmailActionRequest`, `LeadGenDraftActionRequest`)
+carry it and `create_send_email_action` /
+`create_send_approved_lead_gen_draft_action` persist it in the action
+`input_json`. This is a deliverability control: Resend sends from
+`getpossibleminds.com` (aligned with the report link domain) and lands in the
+inbox, whereas the Zoho path sends from `possiblemindshq.com` over a shared
+Zoho India IP and is prone to junk-foldering. The strategy and an explicit
+`zoho_api` cap are preserved across UI daily-budget saves.
 
 The durable action result includes:
 

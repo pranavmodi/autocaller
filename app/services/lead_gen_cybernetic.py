@@ -333,13 +333,63 @@ async def set_daily_send_budget(
         weights = dict(row.weights_json or {})
         weights["daily_send_budget"] = safe_budget
         caps = dict(weights.get("provider_daily_caps") or {})
-        caps["zoho_api"] = DEFAULT_ZOHO_DAILY_CAP
+        # Preserve an operator-set Zoho cap / transport strategy (see
+        # set_lead_gen_transport). Only fall back to the defaults when nothing
+        # has been explicitly configured, so saving the daily budget in the UI
+        # doesn't silently revert a deliberate Resend-first deliverability choice.
+        caps.setdefault("zoho_api", DEFAULT_ZOHO_DAILY_CAP)
         if safe_resend_budget is not None:
             caps["resend"] = safe_resend_budget
         weights["provider_daily_caps"] = caps
-        weights["lead_gen_transport_strategy"] = DEFAULT_LEAD_GEN_TRANSPORT_STRATEGY
+        weights.setdefault("lead_gen_transport_strategy", DEFAULT_LEAD_GEN_TRANSPORT_STRATEGY)
         weights["daily_send_budget_updated_by"] = updated_by
         weights["daily_send_budget_updated_at"] = _utcnow().isoformat()
+        row.weights_json = weights
+        await session.commit()
+        await session.refresh(row)
+        return row
+
+
+VALID_TRANSPORT_STRATEGIES = {
+    "zoho_first_then_resend",
+    "resend_first_then_zoho",
+}
+
+
+async def set_lead_gen_transport(
+    *,
+    strategy: str | None = None,
+    zoho_cap: int | None = None,
+    resend_cap: int | None = None,
+    updated_by: str = "operator",
+) -> LeadGenPolicyVersionRow:
+    """Set the lead-gen email transport strategy and/or per-provider daily caps.
+
+    Deliverability lever: choose whether sends fill Zoho first
+    (``zoho_first_then_resend``, the default) or Resend first
+    (``resend_first_then_zoho``), and cap each provider. Setting ``zoho_cap`` to
+    0 forces the Resend-only path. Any argument left as ``None`` is unchanged.
+    """
+    if strategy is not None and strategy not in VALID_TRANSPORT_STRATEGIES:
+        raise ValueError(f"invalid_transport_strategy: {strategy}")
+    policy = await ensure_default_policy()
+    async with AsyncSessionLocal() as session:
+        row = (await session.execute(
+            select(LeadGenPolicyVersionRow).where(
+                LeadGenPolicyVersionRow.version == policy.version
+            )
+        )).scalar_one()
+        weights = dict(row.weights_json or {})
+        if strategy is not None:
+            weights["lead_gen_transport_strategy"] = strategy
+        caps = dict(weights.get("provider_daily_caps") or {})
+        if zoho_cap is not None:
+            caps["zoho_api"] = max(0, min(200, int(zoho_cap)))
+        if resend_cap is not None:
+            caps["resend"] = max(0, min(200, int(resend_cap)))
+        weights["provider_daily_caps"] = caps
+        weights["lead_gen_transport_updated_by"] = updated_by
+        weights["lead_gen_transport_updated_at"] = _utcnow().isoformat()
         row.weights_json = weights
         await session.commit()
         await session.refresh(row)
@@ -357,6 +407,7 @@ async def send_batch_item_draft(
     skill_path: str | None = None,
     skill_sha256: str | None = None,
     brief_version: int | None = None,
+    transport: str | None = None,
 ) -> dict[str, Any]:
     draft_subject = _sanitize_email_copy(subject)
     draft_body = _sanitize_email_copy(body)
@@ -364,6 +415,9 @@ async def send_batch_item_draft(
         raise ValueError("draft_subject_empty")
     if not draft_body:
         raise ValueError("draft_body_empty")
+    transport_override = (transport or "").strip().lower() or None
+    if transport_override and transport_override not in {"resend", "zoho_api", "smtp"}:
+        raise ValueError("transport_must_be_resend_zoho_api_or_smtp")
 
     async with AsyncSessionLocal() as session:
         item = await session.get(LeadGenBatchItemRow, batch_item_id)
@@ -394,11 +448,14 @@ async def send_batch_item_draft(
     if step_num > seq.steps_total:
         raise ValueError("sequence_completed")
 
-    policy = await ensure_default_policy()
-    transport = await choose_lead_gen_transport(
-        policy.weights_json or {},
-        total_daily_budget=daily_send_budget_from_policy(policy),
-    )
+    # An explicit transport is authoritative; only auto-select when none given.
+    transport = transport_override
+    if transport is None:
+        policy = await ensure_default_policy()
+        transport = await choose_lead_gen_transport(
+            policy.weights_json or {},
+            total_daily_budget=daily_send_budget_from_policy(policy),
+        )
     msg_id = _send_email(
         draft_subject,
         draft_body,
@@ -636,7 +693,7 @@ def _batch_to_dict(batch: LeadGenBatchRow) -> dict[str, Any]:
     }
 
 
-def _item_to_dict(item: LeadGenBatchItemRow) -> dict[str, Any]:
+def _item_to_dict(item: LeadGenBatchItemRow, linkedin_url: str | None = None) -> dict[str, Any]:
     return {
         "id": item.id,
         "batch_id": item.batch_id,
@@ -646,6 +703,7 @@ def _item_to_dict(item: LeadGenBatchItemRow) -> dict[str, Any]:
         "contact_name": item.contact_name,
         "contact_email": item.contact_email,
         "contact_title": item.contact_title,
+        "linkedin_url": linkedin_url,
         "persona": item.persona,
         "template_key": item.template_key,
         "score": item.score,
@@ -817,6 +875,18 @@ async def get_batch(batch_id: str, *, include_observations: bool = False) -> dic
             .where(LeadGenBatchItemRow.batch_id == batch_id)
             .order_by(desc(LeadGenBatchItemRow.score), LeadGenBatchItemRow.firm_name.asc())
         )).scalars().all()
+        # Join firm_contacts to surface the resolved LinkedIn URL per item so the
+        # batch-detail ("open batch") view can render a clickable link.
+        contact_ids = [item.contact_id for item in items if item.contact_id]
+        linkedin_by_contact: dict[str, str] = {}
+        if contact_ids:
+            rows = (await session.execute(
+                select(FirmContactRow.id, FirmContactRow.linkedin_url)
+                .where(FirmContactRow.id.in_(contact_ids))
+            )).all()
+            linkedin_by_contact = {
+                cid: url for cid, url in rows if url
+            }
         observations: list[LeadGenObservationRow] = []
         if include_observations:
             observations = (await session.execute(
@@ -826,7 +896,10 @@ async def get_batch(batch_id: str, *, include_observations: bool = False) -> dic
             )).scalars().all()
     return {
         "batch": _batch_to_dict(batch),
-        "items": [_item_to_dict(item) for item in items],
+        "items": [
+            _item_to_dict(item, linkedin_by_contact.get(item.contact_id))
+            for item in items
+        ],
         "observations": [_observation_to_dict(obs) for obs in observations],
     }
 

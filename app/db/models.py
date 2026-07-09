@@ -1545,8 +1545,9 @@ class PifFirmRow(Base):
     Pulled directly from the emailtag pif-info API into possibleos Postgres so
     the lead-gen matching universe no longer depends on mission.db (whose
     Mission Control sync stopped running in March 2026). Captures every
-    extracted field; `raw_json` holds the untouched API record so no future
-    field is ever lost. Population is gated by PIF_DIRECTORY_NATIVE.
+    extracted field; `raw_json` holds the curated firm-intel profile and
+    `source_json` holds the complete EmailTag pif_info source record so no
+    future field is ever lost. Population is gated by PIF_DIRECTORY_NATIVE.
 
     Note: `extraction_notes` (and conversation context) can contain patient
     names (PHI). This data is for internal selection/targeting only and must
@@ -1582,11 +1583,13 @@ class PifFirmRow(Base):
     score_breakdown: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     conversation_ids: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
     extraction_notes: Mapped[str | None] = mapped_column(Text, nullable=True)  # PHI-bearing; internal only
-    raw_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)  # full untouched record
+    raw_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)  # curated firm-intel profile
+    source_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)  # full EmailTag pif_info row
 
     # Source timestamps (from emailtag).
     source_created_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
     source_updated_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    first_contacted_precise_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
     last_researched_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
     icp_scored_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
 
@@ -1600,6 +1603,7 @@ class PifFirmRow(Base):
         Index("ix_pif_directory_firms_website", "website"),
         Index("ix_pif_directory_firms_canonical_website", "canonical_website"),
         Index("ix_pif_directory_firms_source_updated_at", "source_updated_at"),
+        Index("ix_pif_directory_firms_first_contacted_precise_at", "first_contacted_precise_at"),
     )
 
 

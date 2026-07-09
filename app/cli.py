@@ -4179,17 +4179,44 @@ def actions_execute_approved_lead_gen(
     )
 
 
+_VALID_CLI_TRANSPORTS = {"resend", "zoho_api"}
+
+
+def _validate_transport(value: str) -> str:
+    """Require an explicit, valid email transport — CLI sends are never opaque.
+
+    Resend sends from getpossibleminds.com and lands in the inbox; zoho_api uses
+    the shared Zoho India IP and is junk-prone. Default to resend for now.
+    """
+    norm = (value or "").strip().lower()
+    aliases = {"zoho": "zoho_api", "zoho-api": "zoho_api"}
+    norm = aliases.get(norm, norm)
+    if norm not in _VALID_CLI_TRANSPORTS:
+        console.print(
+            f"[red]--transport must be one of {sorted(_VALID_CLI_TRANSPORTS)} "
+            f"(got {value!r}). Use 'resend' for now.[/red]"
+        )
+        raise typer.Exit(code=1)
+    return norm
+
+
 @actions_app.command("send-approved-lead-gen-draft")
 def actions_send_approved_lead_gen_draft(
     batch_item_id: str = typer.Option(..., "--item", help="Lead-gen batch item id."),
     subject: str = typer.Option(..., "--subject", help="Approved subject."),
     body: str = typer.Option(..., "--body", help="Approved body."),
+    transport: str = typer.Option(
+        ...,
+        "--transport",
+        help="Required send provider: 'resend' (inbox) or 'zoho_api' (junk-prone). Never auto-selected.",
+    ),
     approved_by: str = typer.Option("operator", "--approved-by"),
     at: str = typer.Option("", "--at", help='Schedule send time: ISO-8601 with offset, or "HH:MM PT|PDT|PST" today.'),
     execute_now: bool = typer.Option(True, "--execute/--no-execute", help="Execute immediately after creating the action."),
     json_output: bool = typer.Option(False, "--json"),
 ):
     """Create, policy-check, and optionally execute an approved lead-gen email draft."""
+    transport = _validate_transport(transport)
     scheduled_for = None
     if at:
         from app.services.scheduled_time import format_pt, format_utc, parse_scheduled_time
@@ -4208,6 +4235,7 @@ def actions_send_approved_lead_gen_draft(
             "requested_by": approved_by,
             "approved_by": approved_by,
             "scheduled_for": scheduled_for.isoformat() if scheduled_for else None,
+            "transport": transport,
         },
         timeout=120.0,
     )
@@ -4220,12 +4248,14 @@ def actions_send_approved_lead_gen_draft(
         policy = data.get("policy") or {}
         console.print(
             f"action={action.get('id')} status={action.get('status')} policy={policy.get('reason')} "
+            f"transport={transport} "
             f"scheduled_pt={format_pt(action.get('scheduled_for'))} "
             f"scheduled_utc={format_utc(action.get('scheduled_for'))}"
         )
         return
     console.print(
         f"action={action.get('id')} status={action.get('status')} "
+        f"transport={result.get('transport') or result.get('sent_transport') or transport} "
         f"sent_to={result.get('sent_to', '—')} message_id={result.get('sent_message_id', '—')}"
     )
 
@@ -4239,12 +4269,18 @@ def actions_send_test_email(
         "--body",
         help="Approved body.",
     ),
+    transport: str = typer.Option(
+        ...,
+        "--transport",
+        help="Required send provider: 'resend' (inbox) or 'zoho_api' (junk-prone). Never auto-selected.",
+    ),
     approved_by: str = typer.Option("operator", "--approved-by"),
     from_addr: str = typer.Option("", "--from", help="Optional configured From override."),
     execute_now: bool = typer.Option(True, "--execute/--no-execute", help="Execute immediately after creating the action."),
     json_output: bool = typer.Option(False, "--json"),
 ):
     """Create, policy-check, and optionally execute a controlled test email action."""
+    transport = _validate_transport(transport)
     data = _post(
         f"/api/actions/email/send?execute_now={'true' if execute_now else 'false'}",
         json_body={
@@ -4255,6 +4291,7 @@ def actions_send_test_email(
             "requested_by": approved_by,
             "approved_by": approved_by,
             "from_addr": from_addr or None,
+            "transport": transport,
         },
         timeout=120.0,
     )
@@ -4265,6 +4302,7 @@ def actions_send_test_email(
     result = data.get("result") or {}
     console.print(
         f"action={action.get('id')} status={action.get('status')} "
+        f"transport={result.get('transport') or result.get('sent_transport') or transport} "
         f"sent_to={result.get('sent_to', '—')} message_id={result.get('sent_message_id', '—')}"
     )
 
@@ -4275,6 +4313,11 @@ def actions_send_email(
     subject: str = typer.Option(..., "--subject", help="Approved subject."),
     body: str = typer.Option(..., "--body", help="Approved body."),
     mode: str = typer.Option("test", "--mode", help="Email mode: test or lead_gen."),
+    transport: str = typer.Option(
+        ...,
+        "--transport",
+        help="Required send provider: 'resend' (inbox) or 'zoho_api' (junk-prone). Never auto-selected.",
+    ),
     approved_by: str = typer.Option("operator", "--approved-by"),
     from_addr: str = typer.Option("", "--from", help="Optional configured From override."),
     contact_id: str = typer.Option("", "--contact", help="Lead-gen contact id for --mode=lead_gen."),
@@ -4286,6 +4329,7 @@ def actions_send_email(
     json_output: bool = typer.Option(False, "--json"),
 ):
     """Create, policy-check, and optionally execute a durable email action."""
+    transport = _validate_transport(transport)
     scheduled_for = None
     if at:
         from app.services.scheduled_time import format_pt, format_utc, parse_scheduled_time
@@ -4310,6 +4354,7 @@ def actions_send_email(
             "pif_id": pif_id or None,
             "firm_name": firm_name or None,
             "scheduled_for": scheduled_for.isoformat() if scheduled_for else None,
+            "transport": transport,
         },
         timeout=120.0,
     )
@@ -4322,13 +4367,15 @@ def actions_send_email(
         policy = data.get("policy") or {}
         console.print(
             f"action={action.get('id')} status={action.get('status')} mode={mode} "
+            f"transport={transport} "
             f"policy={policy.get('reason')} scheduled_pt={format_pt(action.get('scheduled_for'))} "
             f"scheduled_utc={format_utc(action.get('scheduled_for'))}"
         )
         return
     console.print(
         f"action={action.get('id')} status={action.get('status')} "
-        f"mode={mode} sent_to={result.get('sent_to', '—')} "
+        f"mode={mode} transport={result.get('transport') or transport} "
+        f"sent_to={result.get('sent_to', '—')} "
         f"message_id={result.get('sent_message_id', '—')}"
     )
 
@@ -5004,6 +5051,64 @@ def agents_reports(
 def lead_gen_policy():
     """Show the active lead-generation policy version."""
     console.print_json(data=_get("/api/lead-gen/policy/current"))
+
+
+@lead_gen_app.command("transport")
+def lead_gen_transport_cmd(
+    strategy: Optional[str] = typer.Option(
+        None,
+        "--strategy",
+        "-s",
+        help=(
+            "Send order: 'resend-first' (resend_first_then_zoho) or "
+            "'zoho-first' (zoho_first_then_resend)."
+        ),
+    ),
+    zoho_cap: Optional[int] = typer.Option(
+        None, "--zoho-cap", min=0, max=200,
+        help="Daily Zoho cap. Set 0 to disable Zoho (Resend-only).",
+    ),
+    resend_cap: Optional[int] = typer.Option(
+        None, "--resend-cap", min=0, max=200, help="Daily Resend cap.",
+    ),
+    updated_by: str = typer.Option("operator", "--updated-by"),
+    json_output: bool = typer.Option(False, "--json", help="Print raw JSON."),
+):
+    """Show or set the lead-gen email transport strategy and per-provider caps.
+
+    Deliverability lever. With no options it prints the current config. Resend
+    sends from getpossibleminds.com (lands in the inbox); the shared Zoho India
+    IP tends to land in junk — so `transport --strategy resend-first` or
+    `transport --zoho-cap 0` routes cold sends through Resend.
+    """
+    aliases = {
+        "resend-first": "resend_first_then_zoho",
+        "resend": "resend_first_then_zoho",
+        "zoho-first": "zoho_first_then_resend",
+        "zoho": "zoho_first_then_resend",
+    }
+    if strategy is not None:
+        strategy = aliases.get(strategy, strategy)
+
+    if strategy is None and zoho_cap is None and resend_cap is None:
+        console.print_json(data=_get("/api/lead-gen/settings/transport"))
+        return
+
+    body: dict = {"updated_by": updated_by}
+    if strategy is not None:
+        body["strategy"] = strategy
+    if zoho_cap is not None:
+        body["zoho_cap"] = zoho_cap
+    if resend_cap is not None:
+        body["resend_cap"] = resend_cap
+    data = _put("/api/lead-gen/settings/transport", body)
+    if json_output:
+        console.print_json(data=data)
+        return
+    console.print(
+        f"[green]Transport updated[/green] strategy={data.get('strategy')} "
+        f"caps={data.get('provider_daily_caps')}"
+    )
 
 
 @lead_gen_app.command("recommend")

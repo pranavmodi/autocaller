@@ -39,6 +39,7 @@ class LeadGenDraftActionRequest(BaseModel):
     skill_sha256: str | None = None
     brief_version: int | None = None
     scheduled_for: datetime | None = None
+    transport: str | None = None
 
 
 class TestEmailActionRequest(BaseModel):
@@ -48,6 +49,7 @@ class TestEmailActionRequest(BaseModel):
     requested_by: str = Field("operator", max_length=128)
     approved_by: str = Field("operator", max_length=128)
     from_addr: str | None = None
+    transport: str | None = None
 
 
 class EmailActionRequest(TestEmailActionRequest):

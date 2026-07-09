@@ -66,13 +66,18 @@ action is `waiting_for_approval` or `approved`; `actions reschedule` only works
 for approved scheduled actions and prints old -> new in PT and UTC. The first
 high-risk supported action is `send_approved_lead_gen_draft`, exposed as
 `bin/possibleos actions send-approved-lead-gen-draft --item=<batch_item_id>
---subject=... --body=...`; it creates an exact approved draft action, checks
-policy, and sends through the existing Zoho-backed lead-gen path. Regular
+--subject=... --body=... --transport=resend`; it creates an exact approved draft
+action, checks policy, and sends through the chosen transport. **Every CLI email
+send requires an explicit `--transport` (`resend` or `zoho_api`) — the provider
+is never auto-selected, and it is echoed in the output + stored on the action.**
+Use `resend` (from getpossibleminds.com, lands in the inbox) for now; `zoho_api`
+uses the shared Zoho India IP and is junk-prone. An explicit `--transport` is
+authoritative and bypasses the policy transport strategy. Regular
 durable email actions use `bin/possibleos actions send-email --mode=test
---to=<email> --subject=... --body=...`; `actions send-test-email` is a
-convenience alias. Lead-gen email actions use
+--to=<email> --subject=... --body=... --transport=resend`; `actions
+send-test-email` is a convenience alias. Lead-gen email actions use
 `bin/possibleos actions send-email --mode=lead_gen --contact=<contact_id>
---item=<batch_item_id> --to=<email> --subject=... --body=... --no-execute`.
+--item=<batch_item_id> --to=<email> --subject=... --body=... --transport=resend --no-execute`.
 Both `actions send-approved-lead-gen-draft` and `actions send-email` accept
 `--at "09:30 PT"` or an ISO-8601 time with offset. With `--at`, the CLI stores
 `scheduled_for`, runs the normal policy check, prints PT and UTC, and does not
@@ -503,6 +508,7 @@ Common causes: Geo permissions not enabled, AMD mis-classifying carrier voicemai
 | `Possible OS contacts list [--firm <pif_id>]` | List firm_contacts roster. |
 | `Possible OS contacts resolve-linkedin <contact_id> [--force] [--json]` | Resolve one contact's direct personal LinkedIn `/in/` URL with Responses web_search and write only a validated URL to `firm_contacts.linkedin_url`; skips existing values unless forced. |
 | `Possible OS contacts resolve-linkedin-batch <batch_id> [--force] [--all] [--limit N] [--json]` | Resolve missing LinkedIn profile URLs for a lead-gen batch, defaulting to decision-makers only. `--all` includes non-DM staff; live calls are capped at 25. |
+| `Possible OS lead-gen transport [--strategy resend-first\|zoho-first] [--zoho-cap N] [--resend-cap N] [--json]` | Deliverability lever. Show (no options) or set the email transport send order + per-provider daily caps on the active policy. Resend sends from `getpossibleminds.com` (inbox); the shared Zoho India IP (`possiblemindshq.com`) tends to land in junk. `--strategy resend-first` or `--zoho-cap 0` (Resend-only) routes cold sends through Resend. Persists in `weights_json`; survives UI daily-budget saves. Mind Resend's account send limit. |
 | `Possible OS front sync [--full] [--max-calls N]` | Read-only Precise Front sync for contacts, activity metadata, domain resolution, and warm-score refresh. Persists cursors and hard-caps API calls. |
 | `Possible OS front status` | Show Front sync health, cursors, watermarks, counts, funnel deltas, timing feed, and stale/error state. |
 | `Possible OS front contacts [--firm <pif_id> \| --domain <domain> --q <text>]` | List synced Front contacts with masked emails, matched pif_id, warm score, and tech signals. |
@@ -527,9 +533,9 @@ Common causes: Geo permissions not enabled, AMD mis-classifying carrier voicemai
 | `Possible OS actions list\|show\|policy-check\|execute` | Durable Possible OS action execution queue. Supported high-risk actions must be policy-checked and use narrow executors. |
 | `Possible OS actions list [--scheduled]` | List durable action records. `--scheduled` shows future approved scheduled sends ordered by send time. |
 | `Possible OS actions scheduler-status` | Show daemon scheduled-action loop status, last tick, pending scheduled count, and due count. |
-| `Possible OS actions send-approved-lead-gen-draft --item=... --subject=... --body=... [--at "09:30 PT" --no-execute]` | Create and optionally execute an exact approved lead-gen email draft action. With `--at`, schedule it instead of sending now. Do not use arbitrary shell email sends for master-agent execution. |
-| `Possible OS actions send-email --mode=test --to=... --subject=... --body=... [--at "2026-06-11T09:30:00-07:00" --no-execute]` | Create and optionally execute a regular durable email action. With `--at`, create an approved scheduled action and do not send immediately. |
-| `Possible OS actions send-test-email --to=... [--subject ... --body ... --no-execute]` | Convenience alias for `send-email --mode=test`. Use this to validate the durable execution path. |
+| `Possible OS actions send-approved-lead-gen-draft --item=... --subject=... --body=... --transport=resend\|zoho_api [--at "09:30 PT" --no-execute]` | Create and optionally execute an exact approved lead-gen email draft action. **`--transport` is required** (never auto-selected; echoed + stored). With `--at`, schedule instead of send. Do not use arbitrary shell email sends. |
+| `Possible OS actions send-email --mode=test\|lead_gen --to=... --subject=... --body=... --transport=resend\|zoho_api [--contact=... --item=... --at "..." --no-execute]` | Create and optionally execute a durable email action. **`--transport` is required and authoritative** (bypasses the policy transport strategy). With `--at`, create an approved scheduled action and do not send immediately. |
+| `Possible OS actions send-test-email --to=... --transport=resend\|zoho_api [--subject ... --body ... --no-execute]` | Convenience alias for `send-email --mode=test`. **`--transport` is required.** Use this to validate the durable execution path. |
 | `Possible OS todos list\|add\|update\|delete` | DB-backed editable project backlog. Use this or the `/todos` UI for new active backlog items; do not add new todo markdown files. |
 | `Possible OS ideas list\|add\|edit` | Simple future product, marketing, and GTM idea capture. Backed by the todos API/table with `area=ideas`; use `add -` or `edit <id> -` for multiline stdin. UI: `/ideas`. |
 | `Possible OS outreach campaigns create --post-slug=...` | Spin up a new LLM-composed blog-post outreach campaign. Snapshot of post metadata + excerpts is frozen on the row so every recipient sees the same context. |

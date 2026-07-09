@@ -1677,6 +1677,7 @@ export type LeadGenBatchItem = {
   contact_name: string;
   contact_email: string;
   contact_title: string;
+  linkedin_url: string | null;
   persona: string;
   template_key: string;
   score: number;
@@ -1930,6 +1931,42 @@ export const approveLeadGenBatch = (
       stagger_minutes: args.stagger_minutes ?? 60,
       scheduled_start_at: args.scheduled_start_at,
       scheduled_timezone: args.scheduled_timezone ?? "Asia/Kolkata",
+    },
+  );
+
+export type ResolveBatchLinkedInResult = {
+  batch_id: string;
+  only_decision_makers: boolean;
+  force: boolean;
+  limit: number;
+  results: {
+    contact_id: string;
+    contact_name: string;
+    contact_title: string;
+    status: string;
+    linkedin_url?: string | null;
+  }[];
+  summary: {
+    resolved: number;
+    not_found: number;
+    skipped: number;
+    errors: number;
+    attempted: number;
+    limited_to: number;
+    eligible: number;
+  };
+};
+
+export const resolveLeadGenBatchLinkedIn = (
+  batchId: string,
+  args: { force?: boolean; only_decision_makers?: boolean; limit?: number } = {},
+) =>
+  post<ResolveBatchLinkedInResult>(
+    `/api/lead-gen/batches/${encodeURIComponent(batchId)}/resolve-linkedin`,
+    {
+      force: args.force ?? false,
+      only_decision_makers: args.only_decision_makers ?? false,
+      limit: args.limit ?? 25,
     },
   );
 

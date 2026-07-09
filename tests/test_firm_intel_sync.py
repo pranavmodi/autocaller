@@ -195,6 +195,18 @@ def profile(
             "research_status": "done",
             "last_researched_at": "2026-06-30T00:00:00Z",
         },
+        "source_record": {
+            "id": firm_id,
+            "firm_name": f"Firm {firm_id}",
+            "entity_type": "pi_law_firm",
+            "fax": "310-999-0000",
+            "staff_research_status": "completed",
+            "first_contacted_precise_at": "2026-01-22T17:17:14.831612Z",
+            "created_at": "2026-01-20T00:00:00Z",
+            "icp_scored_at": "2026-06-29T00:00:00Z",
+            "merge_status": "active",
+            "conversation_ids": ["cnv_123"],
+        },
         "provenance": {"refined_at": refined_at, "source": "emailtag"},
     }
 
@@ -290,6 +302,11 @@ def test_mapping_profile_to_pif_row_fields(monkeypatch):
     assert row.behavioral_data["total_email_count"] == 12
     assert row.research_data["city"] == "Los Angeles"
     assert row.raw_json is fixture
+    assert row.source_json is fixture["source_record"]
+    assert row.first_contacted_precise_at == datetime(2026, 1, 22, 17, 17, 14, 831612, tzinfo=timezone.utc)
+    assert row.source_json["merge_status"] == "active"
+    assert row.entity_type == "pi_law_firm"
+    assert row.fax == "310-999-0000"
     assert row.source_updated_at == datetime(2026, 7, 1, 12, 0, tzinfo=timezone.utc)
     assert row.metro == "los-angeles"
     assert row.warm_score == 42.5

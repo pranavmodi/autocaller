@@ -1291,6 +1291,7 @@ async def create_send_approved_lead_gen_draft_action(
     skill_sha256: str | None = None,
     brief_version: int | None = None,
     scheduled_for: datetime | None = None,
+    transport: str | None = None,
 ) -> dict[str, Any]:
     await ensure_agent_tables()
     draft_subject = _sanitize_email_copy(subject)
@@ -1299,6 +1300,9 @@ async def create_send_approved_lead_gen_draft_action(
         raise ValueError("draft_subject_empty")
     if not draft_body:
         raise ValueError("draft_body_empty")
+    transport_override = (transport or "").strip().lower() or None
+    if transport_override and transport_override not in {"resend", "zoho_api", "smtp"}:
+        raise ValueError("transport_must_be_resend_zoho_api_or_smtp")
     action_id = _new_id("action")
     input_json = {
         "batch_item_id": batch_item_id,
@@ -1311,6 +1315,7 @@ async def create_send_approved_lead_gen_draft_action(
         "skill_path": skill_path,
         "skill_sha256": skill_sha256,
         "brief_version": brief_version,
+        "transport": transport_override,
         "approval": {
             "approved_by": approved_by or "operator",
             "approved_at": _utcnow().isoformat(),
@@ -1414,9 +1419,13 @@ async def create_send_email_action(
     sequence_id: str | None = None,
     sequence_step_num: int | None = None,
     scheduled_for: datetime | None = None,
+    transport: str | None = None,
 ) -> dict[str, Any]:
     await ensure_agent_tables()
     email_mode = (mode or "test").strip().lower()
+    transport_override = (transport or "").strip().lower() or None
+    if transport_override and transport_override not in {"resend", "zoho_api", "smtp"}:
+        raise ValueError("transport_must_be_resend_zoho_api_or_smtp")
     recipient = to.strip().lower()
     draft_subject = _sanitize_email_copy(subject)
     draft_body = _sanitize_email_copy(body)
@@ -1458,6 +1467,7 @@ async def create_send_email_action(
         "body_sha256": _sha256(draft_body),
         "test_email": email_mode == "test",
         "approval": approval_json,
+        "transport": transport_override,
     }
     if email_mode == "lead_gen":
         if lead_gen_action_type:
@@ -1949,6 +1959,7 @@ async def execute_action(action_id: str, *, actor: str = "operator") -> dict[str
                 skill_path=payload.get("skill_path"),
                 skill_sha256=payload.get("skill_sha256"),
                 brief_version=payload.get("brief_version"),
+                transport=payload.get("transport"),
             )
     except Exception as exc:
         failed_action = None
@@ -2125,8 +2136,12 @@ async def _execute_send_email(payload: dict[str, Any]) -> dict[str, Any]:
             if contact:
                 recipient_name = contact.full_name or recipient_name
                 pif_id = contact.pif_id or pif_id
-    transport = None
-    if mode == "lead_gen":
+    # An explicit transport on the action payload is authoritative — the
+    # operator (or CLI) chose it deliberately, so never silently auto-select.
+    transport = str(payload.get("transport") or "").strip().lower() or None
+    if transport and transport not in {"resend", "zoho_api", "smtp"}:
+        raise RuntimeError(f"invalid_transport_override: {transport}")
+    if transport is None and mode == "lead_gen":
         policy = await ensure_default_policy()
         transport = await choose_lead_gen_transport(
             policy.weights_json or {},
@@ -2226,6 +2241,8 @@ async def create_and_execute_send_approved_lead_gen_draft(
     skill_path: str | None = None,
     skill_sha256: str | None = None,
     brief_version: int | None = None,
+    scheduled_for: datetime | None = None,
+    transport: str | None = None,
 ) -> dict[str, Any]:
     action = await create_send_approved_lead_gen_draft_action(
         batch_item_id=batch_item_id,
@@ -2238,6 +2255,8 @@ async def create_and_execute_send_approved_lead_gen_draft(
         skill_path=skill_path,
         skill_sha256=skill_sha256,
         brief_version=brief_version,
+        scheduled_for=scheduled_for,
+        transport=transport,
     )
     return await execute_action(action["id"], actor=approved_by or requested_by or "operator")
 

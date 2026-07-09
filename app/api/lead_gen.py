@@ -2,10 +2,12 @@
 from __future__ import annotations
 
 from datetime import date, datetime, time, timedelta, timezone
+import ipaddress
 from typing import Any, Optional
+from urllib.parse import unquote
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import desc, func, select
 
@@ -36,8 +38,10 @@ from app.services.lead_gen_cybernetic import (
     ensure_default_policy,
     get_batch,
     list_batches,
+    provider_daily_caps_from_policy,
     record_observation,
     set_daily_send_budget,
+    set_lead_gen_transport,
 )
 from app.services.lead_gen_curated import (
     add_contacts_to_batch,
@@ -66,6 +70,11 @@ from app.services.sequences.registry import DEFAULT_TEMPLATE_KEY
 
 router = APIRouter(tags=["lead-gen"])
 PT = ZoneInfo("America/Los_Angeles")
+
+COUNTRY_NAMES = {
+    "IN": "India",
+    "US": "United States",
+}
 
 
 class CreateBatchRequest(BaseModel):
@@ -117,6 +126,16 @@ class ProposalRequest(BaseModel):
 class DailySendBudgetRequest(BaseModel):
     budget: int = Field(default=50, ge=1, le=200)
     resend_daily_budget: Optional[int] = Field(default=None, ge=0, le=200)
+    updated_by: str = "operator"
+
+
+class TransportSettingsRequest(BaseModel):
+    strategy: Optional[str] = Field(
+        default=None,
+        description="zoho_first_then_resend | resend_first_then_zoho",
+    )
+    zoho_cap: Optional[int] = Field(default=None, ge=0, le=200)
+    resend_cap: Optional[int] = Field(default=None, ge=0, le=200)
     updated_by: str = "operator"
 
 
@@ -328,6 +347,38 @@ async def update_daily_send_budget(req: DailySendBudgetRequest):
         "policy_version": row.version,
         "weights": row.weights_json,
     }
+
+
+def _transport_settings_payload(row) -> dict:
+    weights = row.weights_json or {}
+    return {
+        "policy_version": row.version,
+        "strategy": weights.get("lead_gen_transport_strategy"),
+        "provider_daily_caps": provider_daily_caps_from_policy(row),
+        "daily_send_budget": daily_send_budget_from_policy(row),
+        "updated_by": weights.get("lead_gen_transport_updated_by"),
+        "updated_at": weights.get("lead_gen_transport_updated_at"),
+    }
+
+
+@router.get("/api/lead-gen/settings/transport")
+async def get_transport_settings():
+    row = await ensure_default_policy()
+    return _transport_settings_payload(row)
+
+
+@router.put("/api/lead-gen/settings/transport")
+async def update_transport_settings(req: TransportSettingsRequest):
+    try:
+        row = await set_lead_gen_transport(
+            strategy=req.strategy,
+            zoho_cap=req.zoho_cap,
+            resend_cap=req.resend_cap,
+            updated_by=req.updated_by,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return _transport_settings_payload(row)
 
 
 @router.post("/api/lead-gen/batches")
@@ -781,10 +832,102 @@ class PageEventRequest(BaseModel):
     referrer: Optional[str] = Field(default=None, max_length=1024)
     session_id: Optional[str] = Field(default=None, max_length=64)
     time_on_page_ms: Optional[int] = Field(default=None, ge=0, le=86_400_000)
+    ip_address: Optional[str] = Field(default=None, max_length=128)
+    country_code: Optional[str] = Field(default=None, max_length=8)
+    country_name: Optional[str] = Field(default=None, max_length=128)
+    region: Optional[str] = Field(default=None, max_length=128)
+    city: Optional[str] = Field(default=None, max_length=128)
+    user_agent: Optional[str] = Field(default=None, max_length=512)
+
+
+def _first_clean_header(request: Request, names: list[str]) -> str | None:
+    for name in names:
+        value = (request.headers.get(name) or "").strip()
+        if value:
+            return value
+    return None
+
+
+def _first_forwarded_ip(value: str | None) -> str | None:
+    if not value:
+        return None
+    for candidate in value.split(","):
+        clean = candidate.strip()
+        if clean:
+            return clean
+    return None
+
+
+def _request_ip(request: Request, body_ip: str | None = None) -> str | None:
+    candidate = (
+        body_ip
+        or _first_forwarded_ip(request.headers.get("x-forwarded-for"))
+        or (request.headers.get("x-real-ip") or "").strip()
+        or (request.client.host if request.client else None)
+    )
+    if not candidate:
+        return None
+    try:
+        parsed = ipaddress.ip_address(candidate)
+    except ValueError:
+        return candidate[:128]
+    return str(parsed)
+
+
+def _country_code(request: Request, body_country: str | None = None) -> str | None:
+    value = (
+        body_country
+        or _first_clean_header(request, [
+            "x-vercel-ip-country",
+            "cf-ipcountry",
+            "cloudfront-viewer-country",
+            "x-country-code",
+        ])
+    )
+    if not value:
+        return None
+    code = value.strip().upper()
+    if code in {"XX", "T1"}:
+        return None
+    return code[:8]
+
+
+def _country_name(country_code: str | None, explicit: str | None = None) -> str | None:
+    if explicit:
+        return explicit[:128]
+    if not country_code:
+        return None
+    return COUNTRY_NAMES.get(country_code, country_code)
+
+
+def _masked_ip(ip_address: str | None) -> str | None:
+    if not ip_address:
+        return None
+    try:
+        parsed = ipaddress.ip_address(ip_address)
+    except ValueError:
+        return ip_address[:32]
+    if parsed.version == 4:
+        parts = str(parsed).split(".")
+        return ".".join([*parts[:3], "x"])
+    hextets = parsed.exploded.split(":")
+    return ":".join([*hextets[:4], "xxxx", "xxxx", "xxxx", "xxxx"])
+
+
+def _geo_value(value: Any) -> str | None:
+    if value is None:
+        return None
+    clean = str(value).strip()
+    if not clean:
+        return None
+    try:
+        return unquote(clean)
+    except Exception:
+        return clean
 
 
 @router.post("/api/lead-gen/page-event")
-async def page_event(req: PageEventRequest):
+async def page_event(req: PageEventRequest, request: Request):
     """Bot-resistant human-session beacon from a tracked landing page (consult,
     solution, ...). A `session_ready` event only fires when a real browser runs
     JS, which email-security scanners do not, so this is the human-confirmation
@@ -804,6 +947,12 @@ async def page_event(req: PageEventRequest):
             batch_item_id = resolved.get("batch_item_id")
             pif_id = resolved.get("pif_id")
     source = clean(req.source) or clean(req.utm_source)
+    ip_address = _request_ip(request, clean(req.ip_address))
+    country_code = _country_code(request, clean(req.country_code))
+    country_name = _country_name(country_code, clean(req.country_name))
+    region = _geo_value(clean(req.region) or _first_clean_header(request, ["x-vercel-ip-country-region", "x-region"]))
+    city = _geo_value(clean(req.city) or _first_clean_header(request, ["x-vercel-ip-city", "x-city"]))
+    user_agent = clean(req.user_agent) or clean(request.headers.get("user-agent"))
     await record_observation(
         event_type="page_session",
         raw_event={
@@ -832,6 +981,13 @@ async def page_event(req: PageEventRequest):
             "url": clean(req.url),
             "referrer": clean(req.referrer),
             "pif_id": pif_id,
+            "ip_address": ip_address,
+            "ip_address_display": _masked_ip(ip_address),
+            "country_code": country_code,
+            "country_name": country_name,
+            "region": region,
+            "city": city,
+            "user_agent": user_agent,
         },
         contact_id=contact_id,
         batch_item_id=batch_item_id,
@@ -851,49 +1007,105 @@ def _page_event_time_ms(raw_event: dict[str, Any] | None) -> int | None:
         return None
 
 
+def _normalized_country_filter(value: str | None) -> str:
+    country = (value or "all").strip().upper()
+    if country in {"ALL", ""}:
+        return "all"
+    if country in {"IN", "INDIA"}:
+        return "IN"
+    if country in {"US", "USA", "UNITED_STATES", "UNITED STATES"}:
+        return "US"
+    if country in {"UNKNOWN", "UNSET", "NONE"}:
+        return "unknown"
+    if country == "OTHER":
+        return "other"
+    return country[:8]
+
+
+def _page_event_conditions(since_days: int, country: str):
+    page_value = func.coalesce(
+        LeadGenObservationRow.raw_event_json["page"].astext,
+        "unknown",
+    )
+    country_value = func.upper(func.coalesce(
+        LeadGenObservationRow.raw_event_json["country_code"].astext,
+        "",
+    ))
+    conditions = [
+        LeadGenObservationRow.event_type == "page_session",
+        page_value.notlike("admin%"),
+    ]
+    if since_days > 0:
+        cutoff = datetime.now(timezone.utc) - timedelta(days=since_days)
+        conditions.append(LeadGenObservationRow.created_at >= cutoff)
+    if country == "unknown":
+        conditions.append(country_value == "")
+    elif country == "other":
+        conditions.append(country_value.notin_(["", "US", "IN"]))
+    elif country != "all":
+        conditions.append(country_value == country)
+    return conditions
+
+
 @router.get("/api/lead-gen/engagement-analytics")
 async def engagement_analytics(
     since_days: int = Query(30, ge=0, le=3650),
     limit: int = Query(100, ge=1, le=500),
+    country: str = Query("all", max_length=32),
 ):
     """Detailed human-session analytics for the Possible Minds website.
 
     Page events come from the marketing-site ClickBeacon and are attributed via
     the persisted `lc` code from tracked outreach/intake links.
     """
+    country_filter = _normalized_country_filter(country)
+    conditions = _page_event_conditions(since_days, country_filter)
     stmt = (
         select(LeadGenObservationRow, FirmContactRow, LeadGenBatchItemRow)
         .outerjoin(FirmContactRow, FirmContactRow.id == LeadGenObservationRow.contact_id)
         .outerjoin(LeadGenBatchItemRow, LeadGenBatchItemRow.id == LeadGenObservationRow.batch_item_id)
-        .where(LeadGenObservationRow.event_type == "page_session")
+        .where(*conditions)
         .order_by(desc(LeadGenObservationRow.created_at))
         .limit(limit * 10)
     )
-    if since_days > 0:
-        cutoff = datetime.now(timezone.utc) - timedelta(days=since_days)
-        stmt = stmt.where(LeadGenObservationRow.created_at >= cutoff)
 
     page_expr = func.coalesce(
         LeadGenObservationRow.raw_event_json["page"].astext,
         "unknown",
     ).label("page")
+    country_expr = func.coalesce(
+        func.nullif(func.upper(func.coalesce(
+            LeadGenObservationRow.raw_event_json["country_code"].astext,
+            "",
+        )), ""),
+        "unknown",
+    ).label("country_code")
     by_page_stmt = (
         select(
             page_expr,
             func.count(LeadGenObservationRow.id).label("events"),
             func.count(func.distinct(LeadGenObservationRow.raw_event_json["session_id"].astext)).label("sessions"),
         )
-        .where(LeadGenObservationRow.event_type == "page_session")
+        .where(*conditions)
         .group_by(page_expr)
         .order_by(desc("events"))
         .limit(limit)
     )
-    if since_days > 0:
-        by_page_stmt = by_page_stmt.where(LeadGenObservationRow.created_at >= cutoff)
+    by_country_stmt = (
+        select(
+            country_expr,
+            func.count(LeadGenObservationRow.id).label("events"),
+            func.count(func.distinct(LeadGenObservationRow.raw_event_json["session_id"].astext)).label("sessions"),
+        )
+        .where(*_page_event_conditions(since_days, "all"))
+        .group_by(country_expr)
+        .order_by(desc("events"))
+    )
 
     async with AsyncSessionLocal() as session:
         rows = (await session.execute(stmt)).all()
         by_page_rows = (await session.execute(by_page_stmt)).all()
+        by_country_rows = (await session.execute(by_country_stmt)).all()
 
     journeys: dict[str, dict[str, Any]] = {}
     total_events = 0
@@ -906,6 +1118,8 @@ async def engagement_analytics(
         session_id = str(raw_event.get("session_id") or obs.id)
         page = str(raw_event.get("page") or "unknown")
         time_ms = _page_event_time_ms(raw_event)
+        region = _geo_value(raw_event.get("region"))
+        city = _geo_value(raw_event.get("city"))
         total_events += 1
         if time_ms:
             total_time_ms += time_ms
@@ -942,11 +1156,23 @@ async def engagement_analytics(
             "link_code": raw_event.get("link_code"),
             "click_id": raw_event.get("click_id"),
             "source": raw_event.get("source") or raw_event.get("utm_source"),
+            "ip_address_display": raw_event.get("ip_address_display") or _masked_ip(raw_event.get("ip_address")),
+            "country_code": raw_event.get("country_code"),
+            "country_name": raw_event.get("country_name"),
+            "region": region,
+            "city": city,
             "first_seen_at": obs.created_at.isoformat() if obs.created_at else None,
             "last_seen_at": obs.created_at.isoformat() if obs.created_at else None,
             "total_time_on_page_ms": 0,
             "pages": [],
         })
+        for key in ("ip_address_display", "country_code", "country_name"):
+            if not journey.get(key) and raw_event.get(key):
+                journey[key] = raw_event.get(key)
+        if not journey.get("region") and region:
+            journey["region"] = region
+        if not journey.get("city") and city:
+            journey["city"] = city
 
         if obs.created_at:
             iso = obs.created_at.isoformat()
@@ -964,6 +1190,11 @@ async def engagement_analytics(
             "click_href": raw_event.get("click_href"),
             "click_tag": raw_event.get("click_tag"),
             "utm_campaign": raw_event.get("utm_campaign"),
+            "ip_address_display": raw_event.get("ip_address_display") or _masked_ip(raw_event.get("ip_address")),
+            "country_code": raw_event.get("country_code"),
+            "country_name": raw_event.get("country_name"),
+            "region": region,
+            "city": city,
             "time_on_page_ms": time_ms,
             "created_at": obs.created_at.isoformat() if obs.created_at else None,
         })
@@ -981,6 +1212,7 @@ async def engagement_analytics(
 
     return {
         "since_days": since_days,
+        "country": country_filter,
         "summary": {
             "event_count": total_events,
             "distinct_sessions": len(journeys),
@@ -995,6 +1227,15 @@ async def engagement_analytics(
                 "sessions": int(row.sessions or 0),
             }
             for row in by_page_rows
+        ],
+        "countries": [
+            {
+                "country_code": row.country_code,
+                "country_name": COUNTRY_NAMES.get(row.country_code, "Unknown" if row.country_code == "unknown" else row.country_code),
+                "events": int(row.events or 0),
+                "sessions": int(row.sessions or 0),
+            }
+            for row in by_country_rows
         ],
         "sessions": session_rows,
     }

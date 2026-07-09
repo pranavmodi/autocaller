@@ -185,6 +185,7 @@ Every command accepts `--help`. Exit code is `0` on success, `1` on any error
 | `lead-gen add-contacts <batch_id> (--contact <id\|email> ... \| --from <path>) [--json]` | Resolve explicit `firm_contacts` ids/emails into pending batch items. Idempotent per contact in the batch; updates `counts.returned`/`requested` from the live item count and prints the contact email -> batch item id table for follow-up send commands. |
 | `lead-gen recount <batch_id> [--json]` | Repair a batch's `counts_json.returned`/`requested` from the live `lead_gen_batch_items` count. Use for older curated batches that show missing item counts in `/lead-gen`. |
 | `lead-gen move-items <target_batch_id> --from <src> [--from <src2> ...] [--json]` | Re-parent every item from the source batch(es) into the target batch and recount both. Item ids are unchanged, so scheduled send actions stay valid — only the grouping moves. Use to consolidate several curated batches (one firm per batch) into a single wave batch. |
+| `lead-gen transport [--strategy resend-first\|zoho-first] [--zoho-cap N] [--resend-cap N] [--updated-by ...] [--json]` | Deliverability lever: show (no options) or set the email transport send order and per-provider daily caps on the active policy. Resend sends from `getpossibleminds.com` and lands in the inbox; the shared Zoho India IP (`possiblemindshq.com`) tends to land in junk. `--strategy resend-first` fills Resend before Zoho; `--zoho-cap 0` disables Zoho entirely (Resend-only). Persists in `weights_json`; a UI daily-budget save no longer clobbers it. |
 | `lead-gen email-agent-slice [--limit=3 --composer-variant=... --approval-ready --batch=<batch_id> --json]` | Select eligible contacts, collect bounded internal evidence, compose drafts with the Possible Minds email composer skill, and create durable `send_email mode=lead_gen` actions for review or policy checks. With `--batch`, skip selection and compose for an existing batch's pending undrafted items (operator- or agent-curated lists, e.g. Front-warm shortlists). |
 | `lead-gen visibility-report [--batch-item=<id> \| --firm-name=... --domain=...] [--market=...] [--dry-run] [--force] [--json]` | Ensure an AI Search Visibility report exists through the `ai-visibility` CLI. Existing scanned reports are reused by domain/firm unless `--force` is passed. With `--batch-item`, caches a compact report package at `reason_json.ai_visibility_report` for the `ai-visibility-report` composer variant. |
 | `lead-gen daily-run [--dry-run] [--force] [--variant=<key>] [--json]` | Run the deterministic daily lead-selection pipeline now. It gates on system enabled, active policy budget, weekday, and deliverability health; refreshes stale Front-derived signals without Front API calls; queues bounded research; maps personas; creates a persona-mixed batch; composes drafts; and schedules `waiting_for_approval` lead-gen email actions in the PT morning window. `--dry-run` performs no writes, no external research calls, no actions, and no WhatsApp. `--variant=<key>` pins one composer skill variant on **every** email in the run — first-touch and follow-up — overriding the per-item default/A-B (must be an active variant; see `composer-ab variants`). Without it, first-touch uses `LEAD_GEN_FIRST_TOUCH_VARIANT` (default `review-evidence`), follow-ups use the per-contact A/B unless `LEAD_GEN_FOLLOW_UP_VARIANT` is set. |
@@ -207,10 +208,10 @@ Every command accepts `--help`. Exit code is `0` on success, `1` on any error
 | `actions cancel <action_id> [--reason=... --actor=operator --json]` | Cancel an action that is still `waiting_for_approval` or `approved`, including scheduled sends. Refuses terminal/running actions and appends `action_cancelled` to the timeline. |
 | `actions reschedule <action_id> --at "10:30 PT" [--actor=operator --json]` | Move an approved scheduled action to a new future ISO/PT time. Prints old -> new in Pacific and UTC and appends `action_rescheduled`. |
 | `actions execute-approved-lead-gen [--limit=1 --actor=operator --json]` | Execute already-approved `send_email mode=lead_gen` actions through the durable policy gate. This is the narrow action the master agent may use when approved-send automation is enabled. Successful sends link the action result to the `email_logs` row, transport, message id, and log status. |
-| `actions send-approved-lead-gen-draft --item=<batch_item_id> --subject=... --body=... [--approved-by=operator] [--at "09:30 PT"] [--no-execute]` | Create and optionally execute the first high-risk action slice: an exact approved lead-gen email draft sent through the existing Zoho-backed lead-gen path. With `--at`, stores `scheduled_for`, runs policy check, does not execute, and prints PT plus UTC. |
-| `actions send-email --mode=test --to=<email> --subject=... --body=... [--approved-by=operator --from=... --at "2026-06-11T09:30:00-07:00" --no-execute --json]` | Create, policy-check, and optionally execute a regular durable test email action. With `--at`, creates an approved scheduled action and never sends immediately. |
-| `actions send-email --mode=lead_gen --to=<email> --subject=... --body=... --contact=<contact_id> --item=<batch_item_id> [--pif=<pif_id> --firm=... --approved-by=operator --at "09:30 PT" --no-execute --json]` | Create, policy-check, and optionally execute an exact approved lead-gen email action. Policy verifies recipient/contact match, approval hashes, consult link, no patient data in outreach, Zoho transport, no suppression, and no prior successful send for the same item/recipient. With `--at`, the daemon sends when due and expires stale actions more than 24h late. |
-| `actions send-test-email --to=<email> [--subject=... --body=... --approved-by=operator --from=... --no-execute --json]` | Convenience alias for `actions send-email --mode=test`. Use the regular email action family for master-agent execution-path tests instead of free-form email shell commands. |
+| `actions send-approved-lead-gen-draft --item=<batch_item_id> --subject=... --body=... --transport=resend\|zoho_api [--approved-by=operator] [--at "09:30 PT"] [--no-execute]` | Create and optionally execute the first high-risk action slice: an exact approved lead-gen email draft. **`--transport` is required** — CLI sends never auto-select a provider. Use `resend` (from getpossibleminds.com, inbox) for now; `zoho_api` uses the shared Zoho India IP and is junk-prone. The chosen transport is echoed in the output and stored on the action. With `--at`, stores `scheduled_for`, runs policy check, does not execute, and prints PT plus UTC. |
+| `actions send-email --mode=test --to=<email> --subject=... --body=... --transport=resend\|zoho_api [--approved-by=operator --from=... --at "2026-06-11T09:30:00-07:00" --no-execute --json]` | Create, policy-check, and optionally execute a regular durable test email action. **`--transport` is required.** With `--at`, creates an approved scheduled action and never sends immediately. |
+| `actions send-email --mode=lead_gen --to=<email> --subject=... --body=... --transport=resend\|zoho_api --contact=<contact_id> --item=<batch_item_id> [--pif=<pif_id> --firm=... --approved-by=operator --at "09:30 PT" --no-execute --json]` | Create, policy-check, and optionally execute an exact approved lead-gen email action. **`--transport` is required and authoritative** (bypasses the policy transport strategy). Policy verifies recipient/contact match, approval hashes, consult link, no patient data in outreach, no suppression, and no prior successful send for the same item/recipient. With `--at`, the daemon sends when due and expires stale actions more than 24h late. |
+| `actions send-test-email --to=<email> [--subject=... --body=...] --transport=resend\|zoho_api [--approved-by=operator --from=... --no-execute --json]` | Convenience alias for `actions send-email --mode=test`. **`--transport` is required.** Use the regular email action family for master-agent execution-path tests instead of free-form email shell commands. |
 | `lead-gen edit-draft <batch_item_id> [--at "10:30 PT"] [--editor/--no-editor] [--execute] [--json]` | Open the current `agent_draft` in `$EDITOR`, save it back to the queued action, and keep the batch item's UI draft fields approved/in sync. If a live scheduled action exists, edits update it instead of creating a duplicate; otherwise the command creates a new approved draft action. |
 | `listening brief [--version N]` | Print the Mission Control mindset brief markdown from `http://127.0.0.1:8001/api/listening`. |
 | `listening search "<q>" [--type T] [--who W] [--limit N]` | Search extracted listening insights by query, type, and buyer persona. |
@@ -282,6 +283,22 @@ center item generates the actual email draft and rationale, and the email sends
 only after the operator reviews/edits/clicks send. The daily send budget is
 persisted on the active lead-gen policy and can be saved from the Lead Gen UI
 before generating today's list.
+
+**Transport / deliverability.** Which provider sends a given email is decided by
+the transport strategy and per-provider daily caps on the active policy. Resend
+sends from `getpossibleminds.com` (aligned with the report links) and lands in
+the inbox; the Zoho path sends from `possiblemindshq.com` over a shared Zoho
+India IP and tends to land in junk. Inspect and steer it with:
+
+```bash
+bin/possibleos lead-gen transport                       # show current strategy + caps
+bin/possibleos lead-gen transport --strategy resend-first   # fill Resend before Zoho
+bin/possibleos lead-gen transport --zoho-cap 0              # Resend-only (disable Zoho)
+bin/possibleos lead-gen transport --strategy zoho-first --zoho-cap 20 --resend-cap 20  # restore default
+```
+
+Mind Resend's account send limit when raising `--resend-cap` or zeroing Zoho —
+`--zoho-cap 0` routes the entire daily budget through Resend.
 
 The smallest master-agent lead-gen slice is:
 
@@ -833,6 +850,7 @@ bin/possibleos actions send-approved-lead-gen-draft \
   --item <batch_item_id> \
   --subject "Quick question" \
   --body "$(cat /tmp/approved-body.txt)" \
+  --transport resend \
   --approved-by operator
 
 # Or schedule every already-drafted item in the batch for the morning window.
@@ -859,6 +877,7 @@ bin/possibleos actions send-email \
   --to contact@example.com \
   --subject "Quick question" \
   --body "$(cat /tmp/approved-body.txt)" \
+  --transport resend \
   --contact <contact_id> \
   --item <batch_item_id> \
   --at "09:30 PT"

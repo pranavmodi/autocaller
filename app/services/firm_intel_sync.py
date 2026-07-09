@@ -159,6 +159,10 @@ def _profile_watermark(profile: dict[str, Any]) -> datetime | None:
     return _source_updated_at(profile)
 
 
+def _source_record(profile: dict[str, Any]) -> dict[str, Any]:
+    return _as_dict(profile.get("source_record"))
+
+
 def _profile_website(profile: dict[str, Any]) -> str | None:
     aliases = _as_dict(profile.get("aliases"))
     canonical = normalize_domain(profile.get("canonical_website"))
@@ -193,6 +197,21 @@ def _research_data(profile: dict[str, Any]) -> dict[str, Any]:
     return research
 
 
+def _apply_source_record(row: PifFirmRow, source: dict[str, Any]) -> None:
+    if not source:
+        row.source_json = row.source_json or {}
+        return
+
+    row.source_json = source
+    row.entity_type = source.get("entity_type")
+    row.fax = source.get("fax")
+    row.staff_research_status = source.get("staff_research_status")
+    row.extraction_notes = source.get("extraction_notes")
+    row.source_created_at = _parse_dt(source.get("created_at"))
+    row.icp_scored_at = _parse_dt(source.get("icp_scored_at"))
+    row.first_contacted_precise_at = _parse_dt(source.get("first_contacted_precise_at"))
+
+
 def _apply_v2_profile(row: PifFirmRow, profile: dict[str, Any], *, now: datetime) -> None:
     aliases = _as_dict(profile.get("aliases"))
     identity = _as_dict(profile.get("identity"))
@@ -224,6 +243,8 @@ def _apply_v2_profile(row: PifFirmRow, profile: dict[str, Any], *, now: datetime
     row.profile_source = "v2"
     row.synced_at = now
     row.updated_at = now
+
+    _apply_source_record(row, _source_record(profile))
 
     # Preserve v1-only mirror fields unless v2 supplies an equivalent value.
     row.entity_type = row.entity_type
@@ -280,12 +301,17 @@ def _ensure_v2_columns(sync_conn) -> None:
         "warm_score": "ALTER TABLE pif_directory_firms ADD COLUMN IF NOT EXISTS warm_score DOUBLE PRECISION",
         "vendor_stack": "ALTER TABLE pif_directory_firms ADD COLUMN IF NOT EXISTS vendor_stack JSONB NOT NULL DEFAULT '{}'::jsonb",
         "profile_source": "ALTER TABLE pif_directory_firms ADD COLUMN IF NOT EXISTS profile_source VARCHAR(8)",
+        "source_json": "ALTER TABLE pif_directory_firms ADD COLUMN IF NOT EXISTS source_json JSONB NOT NULL DEFAULT '{}'::jsonb",
+        "first_contacted_precise_at": "ALTER TABLE pif_directory_firms ADD COLUMN IF NOT EXISTS first_contacted_precise_at TIMESTAMP WITH TIME ZONE",
     }
     for column, statement in ddl.items():
         if column not in existing:
             sync_conn.execute(text(statement))
     for index in PifFirmRow.__table__.indexes:
-        if index.name == "ix_pif_directory_firms_canonical_website":
+        if index.name in {
+            "ix_pif_directory_firms_canonical_website",
+            "ix_pif_directory_firms_first_contacted_precise_at",
+        }:
             index.create(bind=sync_conn, checkfirst=True)
 
 

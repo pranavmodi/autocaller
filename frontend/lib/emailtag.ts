@@ -127,6 +127,7 @@ export interface PifInfoResponse {
   fax: string | null;
   addresses: string[];
   contacts: PifContact[];
+  first_contacted_precise_at: string | null;
   conversation_ids: string[];
   extraction_notes: string | null;
   leadership: LeadershipMember[] | null;
@@ -208,7 +209,7 @@ export interface LogoutResponse {
   message?: string;
 }
 
-export type PifSortBy = "conversation_count" | "firm_name" | "updated_at";
+export type PifSortBy = "conversation_count" | "firm_name" | "updated_at" | "first_contacted_precise_at";
 export type PifTier = "A" | "B" | "C" | "D";
 export type PresenceFilter =
   | "any"
@@ -237,6 +238,8 @@ export interface PifInfoListParams {
   behavior_presence?: "any" | "has" | "missing";
   icp_presence?: "any" | "has" | "missing";
   vendor_presence?: "any" | "has" | "missing";
+  first_contacted_from?: string;
+  first_contacted_to?: string;
   active_only?: boolean;
 }
 
@@ -379,6 +382,8 @@ export function listPifInfo(params: PifInfoListParams = {}): Promise<PifInfoList
       behavior_presence: params.behavior_presence,
       icp_presence: params.icp_presence,
       vendor_presence: params.vendor_presence,
+      first_contacted_from: params.first_contacted_from,
+      first_contacted_to: params.first_contacted_to,
       active_only: params.active_only,
     }),
   );
