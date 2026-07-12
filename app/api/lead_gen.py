@@ -846,6 +846,10 @@ class ProductInterestRequest(BaseModel):
     product: str = Field(default="outbound-voice-ai", max_length=64)
     link_code: Optional[str] = Field(default=None, max_length=64)
     source: str = Field(default="solution_page_early_access", max_length=64)
+    # Optional ICP-qualification fields (workshop registration pages).
+    role: Optional[str] = Field(default=None, max_length=128)
+    case_management_system: Optional[str] = Field(default=None, max_length=128)
+    firm_size: Optional[str] = Field(default=None, max_length=64)
 
 
 @router.post("/api/lead-gen/product-interest")
@@ -876,6 +880,9 @@ async def product_interest(req: ProductInterestRequest):
             "source": req.source,
             "link_code": req.link_code,
             "pif_id": pif_id,
+            "role": (req.role or "").strip() or None,
+            "case_management_system": (req.case_management_system or "").strip() or None,
+            "firm_size": (req.firm_size or "").strip() or None,
         },
         contact_id=contact_id,
         batch_item_id=batch_item_id,
