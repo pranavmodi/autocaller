@@ -103,11 +103,6 @@ A reasonable heuristic: if someone three months from now had only the CLI and `d
   `openclaw`. Direct-OpenAI calls (`gpt-4o-mini` for the judge, lead-extractor,
   IVR navigator) do not use the gateway and are unaffected. When the
   master-agent WIP lands, point `MASTER_AGENT_*_MODEL` at `openclaw/proxy` too.
-- **Long response handling.** Any AI-agent response expected to exceed 50 lines
-  must replace `/home/pranav/possibleos/long-response.md` with the full answer
-  and keep the chat reply short, pointing to that file. Do not append to the
-  file for these long responses; replace it so the file always contains the
-  latest long answer.
 - **Keep safety rails explicit.** `ALLOW_TWILIO_CALLS`, `allow_live_calls`, `allowed_phones`, `mock_mode`, `system_enabled` — every new risk vector needs a gate of comparable clarity.
 - **Never auto-start the dispatcher on daemon boot.** Restarts must not trigger outbound calls. Explicit operator action only.
 - **Prompt change protocol.** Every prompt change must: (1) bump `PROMPT_VERSION` in `app/prompts/attorney_cold_call.py`, (2) `git commit` with a descriptive message, (3) `git push`, (4) restart the backend. No prompt change ships without all four steps. This ensures every live call's `prompt_version` traces to a committed, pushed revision.
