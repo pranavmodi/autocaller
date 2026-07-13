@@ -142,6 +142,14 @@ def _intake_demo_public_url() -> str:
     ).rstrip("/")
 
 
+def _workshop_public_url() -> str:
+    # The workshop landing page lives on the main marketing site.
+    return os.getenv(
+        "WORKSHOP_PAGE_URL",
+        "https://getpossibleminds.com/workshops/ai-for-filevine-case-managers",
+    ).rstrip("/")
+
+
 async def _firm_name_for_payload(payload: dict[str, Any]) -> str:
     batch_item_id = _clean(payload.get("batch_item_id"), 64) or None
     pif_id = _clean(payload.get("pif_id"), 64) or None
@@ -273,6 +281,47 @@ async def _solution_redirect_for_payload(
     return RedirectResponse(url=url, status_code=302)
 
 
+async def _workshop_redirect_for_payload(
+    request: Request,
+    payload: dict[str, Any] | None,
+) -> RedirectResponse:
+    """Workshop link redirect: record the click, then send to the workshop
+    landing page with per-recipient prefill params (contact_name,
+    contact_email, firm_name) plus the link code, so the registration form
+    is pre-filled and the signup attributes back to this recipient."""
+    dest = _workshop_public_url()
+    if not payload:
+        return RedirectResponse(url=dest, status_code=302)
+    click_id = await _record_link_click(request, payload, channel="workshop")
+    code = _clean(payload.get("link_code"), 64)
+    params = {}
+    contact_id = _clean(payload.get("contact_id"), 64)
+    if contact_id:
+        try:
+            async with AsyncSessionLocal() as session:
+                contact = await session.get(FirmContactRow, contact_id)
+            if contact:
+                if _clean(contact.full_name):
+                    params["contact_name"] = _clean(contact.full_name)
+                if _clean(contact.email):
+                    params["contact_email"] = _clean(contact.email)
+        except Exception:
+            pass
+    try:
+        firm = await _firm_name_for_payload(payload)
+    except Exception:
+        firm = ""
+    if firm:
+        params["firm_name"] = firm
+    if code:
+        params["lc"] = code
+    if click_id:
+        params["c"] = click_id
+    sep = "&" if "?" in dest else "?"
+    url = f"{dest}{sep}{urlencode(params)}" if params else dest
+    return RedirectResponse(url=url, status_code=302)
+
+
 async def _intake_redirect_for_payload(
     request: Request,
     payload: dict[str, Any] | None,
@@ -323,6 +372,14 @@ async def solution_short_go(code: str, request: Request) -> RedirectResponse:
     return await _solution_redirect_for_payload(request, payload)
 
 
+@router.get("/w/{code}")
+async def workshop_short_go(code: str, request: Request) -> RedirectResponse:
+    payload = await resolve_short_audit_code(code)
+    if payload and payload.get("kind") != "workshop":
+        payload = None
+    return await _workshop_redirect_for_payload(request, payload)
+
+
 @router.get("/i/{code}")
 async def intake_demo_short_go(code: str, request: Request) -> RedirectResponse:
     payload = await resolve_short_audit_code(code)
@@ -342,6 +399,7 @@ def _app_name_expr():
         (AuditLinkClickRow.source.in_(["consult_email", "consult_signature"]), "Consult"),
         (AuditLinkClickRow.source.in_(["solution_email", "solution_signature"]), "Solution"),
         (AuditLinkClickRow.source.in_(["intake_demo_email", "intake_demo_signature"]), "Intake Demo"),
+        (AuditLinkClickRow.source.in_(["workshop_email", "workshop_signature"]), "Workshop"),
         else_="Unknown",
     )
 

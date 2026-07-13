@@ -24,6 +24,10 @@ VALID_SOLUTION_SOURCES = {"solution_email", "solution_signature"}
 # Intake demo short links (kind="intake") redirect to the browser-call demo and
 # preserve per-recipient attribution.
 VALID_INTAKE_SOURCES = {"intake_demo_email", "intake_demo_signature"}
+# Workshop short links (kind="workshop") redirect to a workshop landing page on
+# the marketing site; the redirect appends per-recipient prefill params so the
+# registration form is one click for invitees.
+VALID_WORKSHOP_SOURCES = {"workshop_email", "workshop_signature"}
 
 
 def _secret() -> bytes:
@@ -61,6 +65,7 @@ def _link_public_base_url(kind: str = "audit") -> str:
         "consult": ("CONSULT_LINK_BASE_URL",),
         "solution": ("SOLUTION_LINK_BASE_URL",),
         "intake": ("INTAKE_LINK_BASE_URL",),
+        "workshop": ("WORKSHOP_LINK_BASE_URL",),
     }
     for key in env_by_kind.get(clean_kind, ()):
         value = os.getenv(key, "").strip().rstrip("/")
@@ -80,6 +85,10 @@ def _link_public_base_url(kind: str = "audit") -> str:
         value = os.getenv("OUTBOUND_VOICE_SOLUTION_URL", "").strip().rstrip("/")
         if value:
             return value.removesuffix("/solutions/outbound-voice-ai")
+        return "https://getpossibleminds.com"
+    if clean_kind == "workshop":
+        # Workshop pages live on the main marketing site (Next.js proxies
+        # /w/{code} to the resolver, mirroring /c/ and /s/).
         return "https://getpossibleminds.com"
     return (
         os.getenv("AIAUDIT_LINK_BASE_URL", "").strip().rstrip("/")
@@ -276,6 +285,45 @@ async def build_short_solution_link(
             except IntegrityError:
                 await session.rollback()
     raise RuntimeError("solution_short_code_collision")
+
+
+async def build_short_workshop_link(
+    contact: Any,
+    *,
+    batch_item_id: str | None = None,
+    source: str = "workshop_email",
+) -> str:
+    """Per-recipient tracked workshop link (kind="workshop") -> /w/{code}.
+
+    Same per-recipient attribution as audit/consult/solution links; the /w/
+    route redirects to the configured workshop landing page and appends
+    contact prefill params so the registration form is one click."""
+    clean_source = str(source or "").strip()
+    if clean_source not in VALID_WORKSHOP_SOURCES:
+        raise ValueError(f"invalid workshop link source: {source}")
+    contact_id = str(getattr(contact, "id", "") or "").strip()
+    if not contact_id:
+        raise ValueError("contact_id_required")
+    pif_id = str(getattr(contact, "pif_id", "") or "").strip() or None
+    clean_batch_item_id = str(batch_item_id or "").strip() or None
+
+    async with AsyncSessionLocal() as session:
+        for _ in range(8):
+            code = _new_short_code()
+            session.add(AuditLinkRow(
+                code=code,
+                contact_id=contact_id,
+                batch_item_id=clean_batch_item_id,
+                pif_id=pif_id,
+                source=clean_source,
+                kind="workshop",
+            ))
+            try:
+                await session.commit()
+                return f"{_link_public_base_url('workshop')}/w/{code}"
+            except IntegrityError:
+                await session.rollback()
+    raise RuntimeError("workshop_short_code_collision")
 
 
 async def build_short_intake_demo_link(
