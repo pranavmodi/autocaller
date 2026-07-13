@@ -497,6 +497,64 @@ def send_consult_confirmation(
 
 
 # ---------------------------------------------------------------------------
+# Workshop registration confirmation
+# ---------------------------------------------------------------------------
+
+WORKSHOP_PAGE_URL_FOR_EMAIL = os.getenv(
+    "WORKSHOP_PAGE_URL",
+    "https://getpossibleminds.com/workshops/ai-for-filevine-case-managers",
+)
+
+
+def send_workshop_registration_confirmation(
+    *,
+    to_email: str,
+    name: str | None = None,
+    firm_name: str | None = None,
+    product: str = "workshop-filevine-case-managers",
+) -> str:
+    """Confirm a workshop registration to the registrant. Plaintext, sent via
+    Resend so it matches the invite email's sender. Raises on transport
+    failure — caller catches and logs; the registration itself already
+    succeeded.
+    """
+    first = (name or "").strip().split(" ")[0] or "there"
+    subject = "You're registered — the case manager AI working session"
+    body_lines = [
+        f"Hi {first},",
+        "",
+        "You're registered for the free 60 minute AI working session for",
+        "personal injury case managers. What happens next:",
+        "",
+        "- We finalize cohorts of ten firms and email you the date options",
+        "  within a few days.",
+        "- Nothing to prepare or install. Sample files are provided, and no",
+        "  client data is ever used.",
+        "- You leave with the Case Manager Prompt Playbook, five reusable AI",
+        "  instructions with verification checklists, plus a one page summary",
+        "  written for your managing partner.",
+        "",
+        "Until then, instruction one, the records-to-timeline instruction, is",
+        "free on the session page:",
+        f"    {WORKSHOP_PAGE_URL_FOR_EMAIL}",
+        "",
+        "Questions, or a workflow you want the session to cover? Just reply",
+        "to this email.",
+        "",
+        "Pranav Modi",
+        "Founder, Possible Minds",
+    ]
+    return _send_email(
+        subject,
+        "\n".join(body_lines),
+        to=to_email,
+        message_type="workshop_registration_confirmation",
+        recipient_name=name,
+        transport="resend",
+    )
+
+
+# ---------------------------------------------------------------------------
 # Autocaller follow-up email
 # ---------------------------------------------------------------------------
 

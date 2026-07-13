@@ -1,6 +1,7 @@
 """Cybernetic lead-generation loop endpoints."""
 from __future__ import annotations
 
+import logging
 from datetime import date, datetime, time, timedelta, timezone
 import ipaddress
 from typing import Any, Optional
@@ -74,8 +75,12 @@ from app.services.lead_gen_experiments import (
 from app.services.sequences.registry import DEFAULT_TEMPLATE_KEY
 
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(tags=["lead-gen"])
 PT = ZoneInfo("America/Los_Angeles")
+LEAD_GEN_SEND_ACTION_TYPES = ("send_email", "send_approved_lead_gen_draft")
+LEAD_GEN_SEND_ENTITY_TYPES = ("lead_gen_email", "lead_gen_batch_item")
 
 COUNTRY_NAMES = {
     "IN": "India",
@@ -889,6 +894,48 @@ async def product_interest(req: ProductInterestRequest):
         contact_id=contact_id,
         batch_item_id=batch_item_id,
     )
+
+    # Operator alert + registrant confirmation. Both best-effort: the
+    # registration observation is already recorded, so a notification failure
+    # must never fail the signup.
+    try:
+        from app.services.operator_sms import notify_operator
+        parts = [
+            f"New signup: {req.product}",
+            f"{(req.name or '').strip() or email}",
+            f"Email: {email}",
+            f"Firm: {(req.firm or '').strip()}" if (req.firm or "").strip() else None,
+            f"Role: {(req.role or '').strip()}" if (req.role or "").strip() else None,
+            f"CMS: {(req.case_management_system or '').strip()}" if (req.case_management_system or "").strip() else None,
+            f"Size: {(req.firm_size or '').strip()}" if (req.firm_size or "").strip() else None,
+            "Attributed to invite" if contact_id else "Organic (no link code)",
+        ]
+        await notify_operator(
+            "\n".join(p for p in parts if p), tag="product-interest",
+        )
+    except Exception as exc:
+        logger.warning("[product-interest] operator alert failed: %s", type(exc).__name__)
+
+    if req.product.strip().lower().startswith("workshop"):
+        try:
+            import asyncio as _asyncio
+
+            from app.services.email_notification_service import (
+                send_workshop_registration_confirmation,
+            )
+            await _asyncio.to_thread(
+                send_workshop_registration_confirmation,
+                to_email=email,
+                name=(req.name or "").strip() or None,
+                firm_name=(req.firm or "").strip() or None,
+                product=req.product,
+            )
+            logger.info("[product-interest] confirmation email sent to %s", email)
+        except Exception as exc:
+            logger.warning(
+                "[product-interest] confirmation email skipped: %s", type(exc).__name__,
+            )
+
     return {"ok": True, "attributed": bool(contact_id)}
 
 
