@@ -1540,6 +1540,20 @@ async def create_send_email_action(
                 message="Action scheduled for daemon execution.",
                 input_json={"scheduled_for": scheduled_for.isoformat()},
             )
+        if email_mode == "lead_gen" and input_json["batch_item_id"]:
+            # Mirror the exact draft onto the batch item so the /lead-gen UI
+            # previews what this action will actually send (instead of falling
+            # back to an ephemeral composer render) — same sync every other
+            # lead-gen creation/edit path performs.
+            item = await session.get(LeadGenBatchItemRow, input_json["batch_item_id"])
+            if item is not None:
+                _sync_lead_gen_scheduled_draft_fields(
+                    item,
+                    action=action,
+                    subject=draft_subject,
+                    body=draft_body,
+                    actor=approved_actor or requested_by or "operator",
+                )
         await session.commit()
         await session.refresh(action)
         result = action_to_dict(action)
