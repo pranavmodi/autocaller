@@ -3000,6 +3000,126 @@ def contacts_list(
     console.print(f"[dim]{len(rows)} contact(s)[/dim]")
 
 
+@contacts_app.command("select")
+def contacts_select(
+    persona: str = typer.Option(..., "--persona", help="firm_contacts.persona to select (e.g. case_manager)."),
+    vendor: str = typer.Option("", "--vendor", help="Require the firm's vendor_stack.case_mgmt (e.g. filevine)."),
+    fresh: bool = typer.Option(
+        True, "--fresh/--no-fresh",
+        help="Exclude contacts with ANY prior touch (email_logs by address, lead_gen_batch_items, outreach_sends).",
+    ),
+    require_first_name: bool = typer.Option(
+        True, "--require-first-name/--allow-missing-first-name",
+        help="Skip contacts without a first name (personalized templates need it).",
+    ),
+    max_per_firm: int = typer.Option(1, "--max-per-firm", min=1, max=5, help="Cap contacts per firm."),
+    second_contact_min_team: int = typer.Option(
+        0, "--second-contact-min-team", min=0,
+        help="Take a 2nd+ contact only at firms with at least this many eligible contacts (0 = no restriction).",
+    ),
+    limit: int = typer.Option(0, "--limit", min=0, help="Total contacts to return (0 = all)."),
+    seed: int = typer.Option(0, "--seed", help="Deterministic firm shuffle; 0 keeps confidence order."),
+    ids_only: bool = typer.Option(False, "--ids", help="Print one contact_id per line (pipe into `lead-gen add-contacts --from`)."),
+    json_output: bool = typer.Option(False, "--json", help="Print raw JSON."),
+):
+    """Select a fresh outreach cohort by persona/vendor with a per-firm cap.
+
+    This is the selection step of a curated wave: pick who gets the email
+    before `lead-gen create-batch` + `lead-gen add-contacts`. Firms are kept
+    contiguous so a wave can assign whole firms to one A/B arm.
+    """
+    import random as _random
+
+    from sqlalchemy import text as _sql_text
+
+    async def _run_select():
+        from app.db import AsyncSessionLocal
+        conditions = ["fc.persona = :persona", "COALESCE(fc.email,'') <> ''"]
+        params: dict[str, Any] = {"persona": persona.strip()}
+        if require_first_name:
+            conditions.append("COALESCE(fc.first_name,'') <> ''")
+        if vendor.strip():
+            conditions.append("f.vendor_stack->>'case_mgmt' = :vendor")
+            params["vendor"] = vendor.strip().lower()
+        if fresh:
+            conditions.append(
+                "NOT EXISTS (SELECT 1 FROM email_logs el WHERE lower(el.recipient_email) = lower(fc.email))"
+            )
+            conditions.append(
+                "NOT EXISTS (SELECT 1 FROM lead_gen_batch_items bi WHERE bi.contact_id = fc.id)"
+            )
+            conditions.append(
+                "NOT EXISTS (SELECT 1 FROM outreach_sends os WHERE os.contact_id = fc.id)"
+            )
+        query = _sql_text(
+            "SELECT fc.id, fc.pif_id, f.firm_name, fc.first_name, fc.full_name, fc.email, "
+            "COALESCE(fc.persona_confidence, 0) AS conf, "
+            "count(*) OVER (PARTITION BY fc.pif_id) AS firm_eligible "
+            "FROM firm_contacts fc JOIN pif_directory_firms f ON f.id = fc.pif_id "
+            "WHERE " + " AND ".join(conditions) + " "
+            "ORDER BY fc.pif_id, conf DESC, fc.full_name"
+        )
+        async with AsyncSessionLocal() as session:
+            result = await session.execute(query, params)
+            return [dict(row._mapping) for row in result]
+
+    rows = _run(_run_select())
+
+    firms: dict[str, list[dict]] = {}
+    seen_emails: set[str] = set()
+    for row in rows:
+        email = str(row["email"]).strip().lower()
+        if email in seen_emails:
+            continue
+        seen_emails.add(email)
+        firms.setdefault(row["pif_id"], []).append(row)
+
+    firm_order = list(firms.keys())
+    if seed:
+        _random.Random(seed).shuffle(firm_order)
+
+    selected: list[dict] = []
+    for pif_id in firm_order:
+        contacts = firms[pif_id]
+        take = max_per_firm
+        if second_contact_min_team and len(contacts) < second_contact_min_team:
+            take = 1
+        for row in contacts[:take]:
+            if limit and len(selected) >= limit:
+                break
+            selected.append(row)
+        if limit and len(selected) >= limit:
+            break
+
+    if ids_only:
+        for row in selected:
+            print(row["id"])
+        return
+    payload = [
+        {
+            "contact_id": r["id"], "pif_id": r["pif_id"], "firm_name": r["firm_name"],
+            "first_name": r["first_name"], "full_name": r["full_name"], "email": r["email"],
+            "persona_confidence": float(r["conf"]),
+        }
+        for r in selected
+    ]
+    if json_output:
+        console.print_json(data={"count": len(payload), "firms": len({r['pif_id'] for r in payload}), "contacts": payload})
+        return
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("contact_id", no_wrap=True)
+    table.add_column("firm")
+    table.add_column("name")
+    table.add_column("email")
+    for r in payload:
+        table.add_row(r["contact_id"], r["firm_name"] or "—", r["full_name"] or "—", r["email"])
+    console.print(table)
+    console.print(
+        f"[dim]{len(payload)} contact(s) across {len({r['pif_id'] for r in payload})} firm(s); "
+        f"eligible pool {len(seen_emails)} contact(s) / {len(firms)} firm(s)[/dim]"
+    )
+
+
 @contacts_app.command("resolve-linkedin")
 def contacts_resolve_linkedin(
     contact_id: str = typer.Argument(..., help="firm_contacts.id"),
@@ -5071,10 +5191,14 @@ def lead_gen_transport_cmd(
     resend_cap: Optional[int] = typer.Option(
         None, "--resend-cap", min=0, max=200, help="Daily Resend cap.",
     ),
+    daily_budget: Optional[int] = typer.Option(
+        None, "--daily-budget", min=0, max=200,
+        help="Total daily send budget (weights_json.daily_send_budget) — the per-day rail the daily run and default caps derive from.",
+    ),
     updated_by: str = typer.Option("operator", "--updated-by"),
     json_output: bool = typer.Option(False, "--json", help="Print raw JSON."),
 ):
-    """Show or set the lead-gen email transport strategy and per-provider caps.
+    """Show or set the lead-gen email transport strategy, per-provider caps, and daily budget.
 
     Deliverability lever. With no options it prints the current config. Resend
     sends from getpossibleminds.com (lands in the inbox); the shared Zoho India
@@ -5090,7 +5214,7 @@ def lead_gen_transport_cmd(
     if strategy is not None:
         strategy = aliases.get(strategy, strategy)
 
-    if strategy is None and zoho_cap is None and resend_cap is None:
+    if strategy is None and zoho_cap is None and resend_cap is None and daily_budget is None:
         console.print_json(data=_get("/api/lead-gen/settings/transport"))
         return
 
@@ -5101,13 +5225,16 @@ def lead_gen_transport_cmd(
         body["zoho_cap"] = zoho_cap
     if resend_cap is not None:
         body["resend_cap"] = resend_cap
+    if daily_budget is not None:
+        body["daily_budget"] = daily_budget
     data = _put("/api/lead-gen/settings/transport", body)
     if json_output:
         console.print_json(data=data)
         return
     console.print(
         f"[green]Transport updated[/green] strategy={data.get('strategy')} "
-        f"caps={data.get('provider_daily_caps')}"
+        f"caps={data.get('provider_daily_caps')} "
+        f"daily_budget={data.get('daily_send_budget')}"
     )
 
 
@@ -5258,6 +5385,289 @@ def lead_gen_add_contacts(
             f"[yellow]skipped[/yellow] {row.get('ref')} "
             f"reason={row.get('reason')}"
         )
+
+
+@lead_gen_app.command("items")
+def lead_gen_items(
+    batch_id: str = typer.Argument(..., help="lead_gen_batches.id"),
+    json_output: bool = typer.Option(False, "--json", help="Print raw JSON."),
+):
+    """List a batch's items with the item_id <-> contact mapping.
+
+    This is the id map every per-item command needs (send-email --item,
+    workshop-links --item, edit-draft).
+    """
+    data = _get(f"/api/lead-gen/batches/{batch_id}")
+    items = data.get("items") or []
+    if json_output:
+        console.print_json(data={"batch_id": batch_id, "count": len(items), "items": items})
+        return
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("item_id", no_wrap=True)
+    table.add_column("contact_id", no_wrap=True)
+    table.add_column("email")
+    table.add_column("firm")
+    table.add_column("status", no_wrap=True)
+    for item in items:
+        table.add_row(
+            item.get("id") or "—",
+            item.get("contact_id") or "—",
+            item.get("contact_email") or item.get("email") or "—",
+            item.get("firm_name") or "—",
+            f"{item.get('status') or '—'}/{item.get('approval_status') or '—'}",
+        )
+    console.print(table)
+    console.print(f"[dim]{len(items)} item(s) in batch {batch_id}[/dim]")
+
+
+@lead_gen_app.command("workshop-links")
+def lead_gen_workshop_links(
+    batch_id: str = typer.Argument(..., help="lead_gen_batches.id"),
+    item: list[str] = typer.Option([], "--item", help="Limit to specific batch item id(s). Repeatable."),
+    reuse: bool = typer.Option(
+        True, "--reuse/--no-reuse",
+        help="Reuse an existing /w/ link for the item instead of minting a new code.",
+    ),
+    json_output: bool = typer.Option(False, "--json", help="Print raw JSON."),
+):
+    """Mint (or reuse) per-recipient tracked /w/ workshop links for a batch.
+
+    kind="workshop" rows in audit_links; the /w/ redirect lands on
+    WORKSHOP_PAGE_URL with contact prefill params. Substitute the printed link
+    for {link} in a wave template, or let `lead-gen schedule-wave` do both.
+    """
+    from sqlalchemy import select as _select
+
+    async def _run_links():
+        from app.db import AsyncSessionLocal
+        from app.db.models import AuditLinkRow, FirmContactRow, LeadGenBatchItemRow
+        from app.services.aiaudit_links import _link_public_base_url, build_short_workshop_link
+
+        wanted = {str(i).strip() for i in item if str(i or "").strip()} or None
+        out = []
+        async with AsyncSessionLocal() as session:
+            items = (await session.execute(
+                _select(LeadGenBatchItemRow).where(LeadGenBatchItemRow.batch_id == batch_id)
+            )).scalars().all()
+            for it in items:
+                if wanted and it.id not in wanted:
+                    continue
+                contact = await session.get(FirmContactRow, it.contact_id) if it.contact_id else None
+                if contact is None:
+                    out.append({"item_id": it.id, "contact_id": it.contact_id, "error": "contact_missing"})
+                    continue
+                link = None
+                reused = False
+                if reuse:
+                    existing = (await session.execute(
+                        _select(AuditLinkRow).where(
+                            AuditLinkRow.batch_item_id == it.id,
+                            AuditLinkRow.kind == "workshop",
+                        ).order_by(AuditLinkRow.created_at)
+                    )).scalars().first()
+                    if existing is not None:
+                        link = f"{_link_public_base_url('workshop')}/w/{existing.code}"
+                        reused = True
+                if link is None:
+                    link = await build_short_workshop_link(
+                        contact, batch_item_id=it.id, source="workshop_email",
+                    )
+                out.append({
+                    "item_id": it.id, "contact_id": it.contact_id,
+                    "email": contact.email, "link": link, "reused": reused,
+                })
+        return out
+
+    results = _run(_run_links())
+    if json_output:
+        console.print_json(data={"batch_id": batch_id, "count": len(results), "links": results})
+        return
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("item_id", no_wrap=True)
+    table.add_column("email")
+    table.add_column("link", no_wrap=True)
+    table.add_column("reused", no_wrap=True)
+    for row in results:
+        table.add_row(
+            row.get("item_id") or "—",
+            row.get("email") or row.get("error") or "—",
+            row.get("link") or "—",
+            "yes" if row.get("reused") else "new",
+        )
+    console.print(table)
+
+
+@lead_gen_app.command("schedule-wave")
+def lead_gen_schedule_wave(
+    batch_id: str = typer.Argument(..., help="lead_gen_batches.id"),
+    subject: str = typer.Option(..., "--subject", help="Subject for every send in the wave."),
+    body_file: str = typer.Option(
+        ..., "--body-file",
+        help="Plaintext template file. Placeholders: {first_name} {full_name} {firm} {link}.",
+    ),
+    transport: str = typer.Option(..., "--transport", help="'resend' or 'zoho_api'. Never auto-selected."),
+    start: str = typer.Option(..., "--start", help='First send: ISO-8601 with offset, or "HH:MM PT" today.'),
+    interval_seconds: int = typer.Option(90, "--interval-seconds", min=10, max=3600, help="Spacing between sends."),
+    link_kind: str = typer.Option(
+        "workshop", "--link",
+        help="'workshop' mints/reuses a tracked /w/ link per item for {link}; 'none' skips links.",
+    ),
+    approved_by: str = typer.Option("operator", "--approved-by"),
+    skip_scheduled: bool = typer.Option(
+        True, "--skip-scheduled/--include-scheduled",
+        help="Skip items that already have a live (approved/waiting, unfinished) send action.",
+    ),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Print the plan; create no links, no actions."),
+    json_output: bool = typer.Option(False, "--json", help="Print raw JSON."),
+):
+    """Compose from a template and schedule one approved send per batch item.
+
+    The CLI path for a curated wave: renders {first_name}/{full_name}/{firm}/
+    {link} per recipient, mints/reuses the tracked link, and creates approved
+    scheduled `send_email mode=lead_gen` actions spaced --interval-seconds
+    apart, starting at --start. The daemon scheduler executes them when due.
+    For an A/B wave run this once per arm with offset --start times (e.g. arm
+    A at 09:00:00 and arm B at 09:01:30, both with --interval-seconds 180).
+    """
+    from sqlalchemy import select as _select
+
+    from app.services.scheduled_time import format_pt, parse_scheduled_time
+
+    transport = _validate_transport(transport)
+    if link_kind not in {"workshop", "none"}:
+        console.print("[red]--link must be 'workshop' or 'none'.[/red]")
+        raise typer.Exit(code=1)
+    try:
+        start_at = parse_scheduled_time(start)
+    except ValueError as exc:
+        console.print(f"[red]Invalid --start: {exc}[/red]")
+        raise typer.Exit(code=1) from exc
+    try:
+        template = Path(body_file).read_text(encoding="utf-8")
+    except Exception as exc:
+        console.print(f"[red]Failed to read --body-file: {exc}[/red]")
+        raise typer.Exit(code=1) from exc
+    if link_kind == "none" and "{link}" in template:
+        console.print("[red]Template contains {link} but --link=none.[/red]")
+        raise typer.Exit(code=1)
+
+    async def _load_items():
+        from app.db import AsyncSessionLocal
+        from app.db.models import AgentActionRow, FirmContactRow, LeadGenBatchItemRow
+        out = []
+        async with AsyncSessionLocal() as session:
+            items = (await session.execute(
+                _select(LeadGenBatchItemRow).where(LeadGenBatchItemRow.batch_id == batch_id)
+            )).scalars().all()
+            for it in items:
+                contact = await session.get(FirmContactRow, it.contact_id) if it.contact_id else None
+                if contact is None or not (contact.email or "").strip():
+                    out.append({"item": it.id, "skip": "no_contact_or_email"})
+                    continue
+                if skip_scheduled:
+                    live = (await session.execute(
+                        _select(AgentActionRow).where(
+                            AgentActionRow.entity_id == it.id,
+                            AgentActionRow.action_type == "send_email",
+                            AgentActionRow.status.in_(["approved", "waiting_for_approval"]),
+                            AgentActionRow.completed_at.is_(None),
+                        )
+                    )).scalars().first()
+                    if live is not None:
+                        out.append({"item": it.id, "skip": f"live_action:{live.id}"})
+                        continue
+                out.append({
+                    "item": it.id, "contact_id": contact.id, "pif_id": contact.pif_id,
+                    "email": contact.email.strip(), "first_name": (contact.first_name or "").strip(),
+                    "full_name": (contact.full_name or "").strip(), "firm": it.firm_name or "",
+                })
+        return out
+
+    rows = _run(_load_items())
+    sendable = [r for r in rows if not r.get("skip")]
+    skipped = [r for r in rows if r.get("skip")]
+
+    from datetime import timedelta as _timedelta
+    results = []
+    slot = 0
+    for row in sendable:
+        at = start_at + _timedelta(seconds=interval_seconds * slot)
+        link = ""
+        if link_kind == "workshop" and not dry_run:
+            link_rows = None
+            # mint/reuse via the same helper the workshop-links command uses
+
+            async def _one_link(item_id=row["item"], contact_id=row["contact_id"]):
+                from app.db import AsyncSessionLocal
+                from app.db.models import AuditLinkRow, FirmContactRow
+                from app.services.aiaudit_links import (
+                    _link_public_base_url, build_short_workshop_link,
+                )
+                async with AsyncSessionLocal() as session:
+                    existing = (await session.execute(
+                        _select(AuditLinkRow).where(
+                            AuditLinkRow.batch_item_id == item_id,
+                            AuditLinkRow.kind == "workshop",
+                        ).order_by(AuditLinkRow.created_at)
+                    )).scalars().first()
+                    if existing is not None:
+                        return f"{_link_public_base_url('workshop')}/w/{existing.code}"
+                    contact = await session.get(FirmContactRow, contact_id)
+                return await build_short_workshop_link(
+                    contact, batch_item_id=item_id, source="workshop_email",
+                )
+
+            link = _run(_one_link())
+        body = (
+            template
+            .replace("{first_name}", row["first_name"] or row["full_name"].split(" ")[0])
+            .replace("{full_name}", row["full_name"])
+            .replace("{firm}", row["firm"])
+            .replace("{link}", link)
+        )
+        if dry_run:
+            results.append({"item": row["item"], "email": row["email"], "at": at.isoformat(), "dry_run": True})
+            slot += 1
+            continue
+        data = _post(
+            "/api/actions/email/send?execute_now=false",
+            json_body={
+                "mode": "lead_gen", "to": row["email"], "subject": subject, "body": body,
+                "requested_by": approved_by, "approved_by": approved_by,
+                "contact_id": row["contact_id"], "batch_item_id": row["item"],
+                "pif_id": row["pif_id"] or None, "firm_name": row["firm"] or None,
+                "scheduled_for": at.isoformat(), "transport": transport,
+            },
+            timeout=120.0,
+        )
+        action = data.get("action") or {}
+        policy = data.get("policy") or {}
+        ok = bool(action.get("id")) and policy.get("allowed") is not False
+        results.append({
+            "item": row["item"], "email": row["email"], "at": at.isoformat(),
+            "action_id": action.get("id"), "status": action.get("status"),
+            "policy": policy.get("reason"), "ok": ok,
+        })
+        if not ok and slot == 0:
+            console.print(f"[red]First send failed policy ({policy.get('reason')}); stopping wave.[/red]")
+            break
+        slot += 1
+
+    if json_output:
+        console.print_json(data={
+            "batch_id": batch_id, "scheduled": sum(1 for r in results if r.get("ok") or r.get("dry_run")),
+            "skipped": skipped, "results": results,
+        })
+        return
+    for row in results:
+        marker = "[cyan]plan[/cyan]" if row.get("dry_run") else ("[green]ok[/green]" if row.get("ok") else "[red]FAIL[/red]")
+        console.print(f"{marker} {row['email']} at={format_pt(row['at'])} action={row.get('action_id') or '—'}")
+    for row in skipped:
+        console.print(f"[yellow]skipped[/yellow] item={row['item']} reason={row['skip']}")
+    console.print(
+        f"[dim]{sum(1 for r in results if r.get('ok') or r.get('dry_run'))} scheduled, "
+        f"{len(skipped)} skipped, batch={batch_id}[/dim]"
+    )
 
 
 @lead_gen_app.command("move-items")

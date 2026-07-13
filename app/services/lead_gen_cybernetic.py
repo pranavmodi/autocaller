@@ -367,14 +367,19 @@ async def set_lead_gen_transport(
     strategy: str | None = None,
     zoho_cap: int | None = None,
     resend_cap: int | None = None,
+    daily_budget: int | None = None,
     updated_by: str = "operator",
 ) -> LeadGenPolicyVersionRow:
-    """Set the lead-gen email transport strategy and/or per-provider daily caps.
+    """Set the lead-gen email transport strategy, per-provider caps, and/or
+    the total daily send budget.
 
     Deliverability lever: choose whether sends fill Zoho first
     (``zoho_first_then_resend``, the default) or Resend first
     (``resend_first_then_zoho``), and cap each provider. Setting ``zoho_cap`` to
-    0 forces the Resend-only path. Any argument left as ``None`` is unchanged.
+    0 forces the Resend-only path. ``daily_budget`` sets
+    ``weights_json.daily_send_budget`` — the total-per-day rail the daily run
+    and default provider caps derive from. Any argument left as ``None`` is
+    unchanged.
     """
     if strategy is not None and strategy not in VALID_TRANSPORT_STRATEGIES:
         raise ValueError(f"invalid_transport_strategy: {strategy}")
@@ -394,6 +399,8 @@ async def set_lead_gen_transport(
         if resend_cap is not None:
             caps["resend"] = max(0, min(200, int(resend_cap)))
         weights["provider_daily_caps"] = caps
+        if daily_budget is not None:
+            weights["daily_send_budget"] = max(0, min(200, int(daily_budget)))
         weights["lead_gen_transport_updated_by"] = updated_by
         weights["lead_gen_transport_updated_at"] = _utcnow().isoformat()
         row.weights_json = weights

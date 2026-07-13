@@ -142,6 +142,7 @@ class TransportSettingsRequest(BaseModel):
     )
     zoho_cap: Optional[int] = Field(default=None, ge=0, le=200)
     resend_cap: Optional[int] = Field(default=None, ge=0, le=200)
+    daily_budget: Optional[int] = Field(default=None, ge=0, le=200)
     updated_by: str = "operator"
 
 
@@ -396,6 +397,7 @@ async def update_transport_settings(req: TransportSettingsRequest):
             strategy=req.strategy,
             zoho_cap=req.zoho_cap,
             resend_cap=req.resend_cap,
+            daily_budget=req.daily_budget,
             updated_by=req.updated_by,
         )
     except ValueError as e:

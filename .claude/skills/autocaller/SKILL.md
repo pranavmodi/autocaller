@@ -66,13 +66,18 @@ action is `waiting_for_approval` or `approved`; `actions reschedule` only works
 for approved scheduled actions and prints old -> new in PT and UTC. The first
 high-risk supported action is `send_approved_lead_gen_draft`, exposed as
 `bin/possibleos actions send-approved-lead-gen-draft --item=<batch_item_id>
---subject=... --body=...`; it creates an exact approved draft action, checks
-policy, and sends through the existing Zoho-backed lead-gen path. Regular
+--subject=... --body=... --transport=resend`; it creates an exact approved draft
+action, checks policy, and sends through the chosen transport. **Every CLI email
+send requires an explicit `--transport` (`resend` or `zoho_api`) — the provider
+is never auto-selected, and it is echoed in the output + stored on the action.**
+Use `resend` (from getpossibleminds.com, lands in the inbox) for now; `zoho_api`
+uses the shared Zoho India IP and is junk-prone. An explicit `--transport` is
+authoritative and bypasses the policy transport strategy. Regular
 durable email actions use `bin/possibleos actions send-email --mode=test
---to=<email> --subject=... --body=...`; `actions send-test-email` is a
-convenience alias. Lead-gen email actions use
+--to=<email> --subject=... --body=... --transport=resend`; `actions
+send-test-email` is a convenience alias. Lead-gen email actions use
 `bin/possibleos actions send-email --mode=lead_gen --contact=<contact_id>
---item=<batch_item_id> --to=<email> --subject=... --body=... --no-execute`.
+--item=<batch_item_id> --to=<email> --subject=... --body=... --transport=resend --no-execute`.
 Both `actions send-approved-lead-gen-draft` and `actions send-email` accept
 `--at "09:30 PT"` or an ISO-8601 time with offset. With `--at`, the CLI stores
 `scheduled_for`, runs the normal policy check, prints PT and UTC, and does not
@@ -101,6 +106,34 @@ onto the action's `execution_result`: recipient, subject, provider message id,
 transport, linked `email_logs.id`, email log status, and timestamp. Heartbeat
 recent-action summaries expose the same evidence so the master agent can see
 what actually happened.
+
+For explicit operator-curated outreach lists, create a first-class batch instead
+of writing raw SQL: `bin/possibleos lead-gen create-batch --name "Curated owner outreach"`,
+then `bin/possibleos lead-gen add-contacts <batch_id> --contact <firm_contacts.id-or-email>`
+or `--from <path>` (one id/email per line or a JSON array). `add-contacts` is
+idempotent and updates the batch `counts_json.returned/requested` from the live
+item count so `/lead-gen` renders items. Use
+`bin/possibleos lead-gen recount <batch_id>` to repair older curated batches
+whose counts metadata is empty. Consolidate several curated batches into one
+with `bin/possibleos lead-gen move-items <target_batch_id> --from <src> [--from
+<src2> ...]` — it re-parents items (ids unchanged, so scheduled sends stay
+valid) and recounts both batches.
+
+A full curated A/B wave runs end-to-end on the CLI — never write raw SQL for
+it: `contacts select --persona <p> [--vendor filevine] [--max-per-firm 2]
+[--seed N] --ids` picks a fresh cohort (freshness = no prior email_logs /
+batch items / outreach_sends; firms stay contiguous so each firm lands in one
+arm); `lead-gen items <batch_id>` prints the item_id <-> contact map;
+`lead-gen workshop-links <batch_id>` mints or reuses per-recipient tracked
+`/w/{code}` links (redirect lands on `WORKSHOP_PAGE_URL` with contact prefill
+params); and `lead-gen schedule-wave <batch_id> --subject ... --body-file
+<tmpl> --transport resend --start "09:00 PT" --interval-seconds 180 [--link
+workshop] [--dry-run]` renders `{first_name}`/`{full_name}`/`{firm}`/`{link}`
+per item and creates approved scheduled sends the daemon executes when due.
+Interleave A/B arms with offset --start times. The experiment send gate
+requires a complete wave card first: `lead-gen wave-card <batch_id> --from
+<card.json>`. See docs/cli.md §10 "run an A/B email wave" for the exact
+sequence.
 
 For the current master-agent lead-generation slice, use
 `bin/possibleos lead-gen email-agent-slice --limit 3 --approval-ready`. To compose for a hand-curated batch instead of auto-selection: `lead-gen email-agent-slice --batch <batch_id> --limit 10`.
@@ -141,6 +174,17 @@ Front or send email, and it creates pending lead-gen batch items with
 `reason_json.basis = "front-warm"`. `lead-gen-v2` includes the Front warmth
 feature but is created inactive; do not activate it without
 operator/orchestrator review.
+
+The native PIF firm mirror reads EmailTag's v2 firm-intel contract, not the
+deprecated v1 pif-info API. Use `bin/possibleos pif sync [--full] [--limit N]`
+to populate `pif_directory_firms`, `firm_intel_aliases`, and the
+`firm_intel_sync_state` watermark. `pif sync --limit 20` is the smoke run;
+`--full` ignores the saved watermark. Check mirror and remote coverage with
+`pif status`, resolve domains/emails/legacy PIF IDs with `pif resolve <value>`
+(local first, v2 `/firms/resolve` fallback), and inspect a mirrored profile
+with `pif show <firm_id|domain>`. The daemon's native PIF loop runs this v2
+sync and then ingests directory contacts; do not use the old v1 sync path for
+operations because deployed v1 routes require cookie auth.
 
 PIF Stats firm research is operator-triggered only because it spends production
 Precise web/LLM budget. Use `bin/possibleos research status --tasks` for
@@ -478,6 +522,13 @@ Common causes: Geo permissions not enabled, AMD mis-classifying carrier voicemai
 | `Possible OS listening prep <firm-or-name>` | Build a pre-call one-pager from local `patients`/`firm_contacts`, top matched listening insights, and one gateway call. Read-only. |
 | `Possible OS contacts backfill` | Populate `firm_contacts` from PIF Stats `leadership[]` + the patient DM. Idempotent. Run once before any `sequences start`. |
 | `Possible OS contacts list [--firm <pif_id>]` | List firm_contacts roster. |
+| `Possible OS contacts resolve-linkedin <contact_id> [--force] [--json]` | Resolve one contact's direct personal LinkedIn `/in/` URL with Responses web_search and write only a validated URL to `firm_contacts.linkedin_url`; skips existing values unless forced. |
+| `Possible OS contacts resolve-linkedin-batch <batch_id> [--force] [--all] [--limit N] [--json]` | Resolve missing LinkedIn profile URLs for a lead-gen batch, defaulting to decision-makers only. `--all` includes non-DM staff; live calls are capped at 25. |
+| `Possible OS lead-gen transport [--strategy resend-first\|zoho-first] [--zoho-cap N] [--resend-cap N] [--daily-budget N] [--json]` | Deliverability lever. Show (no options) or set the email transport send order, per-provider daily caps, and the total daily send budget (`weights_json.daily_send_budget`) on the active policy. Resend sends from `getpossibleminds.com` (inbox); the shared Zoho India IP (`possiblemindshq.com`) tends to land in junk. `--strategy resend-first` or `--zoho-cap 0` (Resend-only) routes cold sends through Resend. Persists in `weights_json`; survives UI daily-budget saves. Mind Resend's account send limit. |
+| `Possible OS contacts select --persona <p> [--vendor <cms>] [--max-per-firm N] [--second-contact-min-team N] [--limit N] [--seed N] [--ids] [--json]` | Fresh-cohort selection for curated waves: persona + firm vendor_stack filter, freshness exclusions, per-firm cap, deterministic shuffle. `--ids` pipes into `lead-gen add-contacts --from`. |
+| `Possible OS lead-gen items <batch_id> [--json]` | Item_id <-> contact map for a batch (email, firm, status) — inputs for per-item send/link commands. |
+| `Possible OS lead-gen workshop-links <batch_id> [--item ...] [--reuse/--no-reuse] [--json]` | Mint/reuse per-recipient tracked `/w/{code}` workshop links (audit_links kind=workshop; redirect adds contact prefill params + lc/c). |
+| `Possible OS lead-gen schedule-wave <batch_id> --subject ... --body-file <tmpl> --transport resend\|zoho_api --start "HH:MM PT" [--interval-seconds N] [--link workshop\|none] [--dry-run] [--json]` | Template-compose ({first_name} {full_name} {firm} {link}) and schedule one approved send per item, spaced from --start; daemon executes when due. Offset --start per arm to interleave an A/B wave. |
 | `Possible OS front sync [--full] [--max-calls N]` | Read-only Precise Front sync for contacts, activity metadata, domain resolution, and warm-score refresh. Persists cursors and hard-caps API calls. |
 | `Possible OS front status` | Show Front sync health, cursors, watermarks, counts, funnel deltas, timing feed, and stale/error state. |
 | `Possible OS front contacts [--firm <pif_id> \| --domain <domain> --q <text>]` | List synced Front contacts with masked emails, matched pif_id, warm score, and tech signals. |
@@ -492,6 +543,7 @@ Common causes: Geo permissions not enabled, AMD mis-classifying carrier voicemai
 | `Possible OS sequences start <contact_id>` | Start the configured sequence (one contact at a time, by design). Idempotent — second start returns 409. Sends are gated by `ALLOW_SEQUENCE_SEND=true`. UI: `/sequences` page has the same flow with a forced "I've reviewed all drafts" checkbox before the Start button enables. |
 | `Possible OS sequences list [--status active\|paused\|completed]` | List sequence rows + step state. |
 | `Possible OS lead-gen policy\|recommend\|batches\|show\|approve\|observe\|observations\|propose` | Cybernetic lead-generation loop for Precise Imaging. Recommends bounded batches, requires approval, and creates lightweight operator action-center approvals immediately when selected email sequences are queued; drafts compose lazily when an action is opened. Automatic observations capture sends, failures, replies, clicks, bookings, call dispositions, cancellations, and reschedules. Use `lead-gen observations summary --since 7d` for the weekly learning KPI. UI: `/lead-gen`. Concept doc: `docs/CYBERNETIC_LEAD_GEN_CONCEPT.md`. |
+| `Possible OS lead-gen create-batch\|add-contacts\|recount` | Operator-curated lead-gen batches from explicit `firm_contacts` ids/emails. `create-batch` initializes `counts_json` with `basis=operator-curated`; `add-contacts` resolves contacts, creates pending items idempotently, and repairs counts; `recount` fixes older batches whose UI showed missing item counts. |
 | `Possible OS lead-gen daily-run\|top-up\|daily-status\|throughput\|daily-enable\|daily-disable` | Daily lead-selection and drafting pipeline. `daily-run --dry-run` is no-write/no-action validation. A real run creates a checkpointed daily batch, drafts emails, and schedules send actions. `top-up --count N --variant ai-audit` adds fresh first-touch sends to today's run via a sidecar batch without recomposing the existing batch, excluding contacts already batched that run date. `throughput` shows selected, with evidence, composed, sending today, held, shortfall, and blocker. The daemon loop defaults off and is controlled by persisted `daily_run_enabled`. |
 | `Possible OS lead-gen backfill-consult-links [--scope today\|all] [--dry-run]` | Swap the bare `getpossibleminds.com/consult` link for a per-recipient tracked `/c/{code}` short link in **unsent** lead-gen sends, re-hashing + re-approving each at its existing slot (keeps `scheduled_for`; idempotent). `--scope today`=live daily batch, `--scope all`=every unsent approved/waiting send. New composes already emit the tracked link, so this is only for emails composed before the feature. |
 | `Possible OS aiaudit link --contact <contact_id>` / `aiaudit clicks --since 7d` | AI Audit freeware attribution. `link` prints a contact-attributed signed redirect URL; `clicks` lists `audit_link_clicks` and AI Audit `link_clicked` observations. Public redirect: `/aiaudit/go?t=<signed-token>`. **Consult link** now has the same per-recipient tracking: the consult CTA renders as `/c/{code}` (reuses `audit_links`, `kind=consult`, `source=consult_email`), logs a `link_clicked` observation with `channel=consult`, then 302s to `getpossibleminds.com/consult`. **Solution link** works identically: `/s/{code}` (`kind=solution`, `source=solution_email`, `channel=solution`) 302s to the outbound voice-AI solution page and appends `?lc=<code>` so the page's early-access form can attribute the signup. nginx on `aiaudit.getpossibleminds.com` proxies `/a/`, `/c/`, and `/s/` to possibleos. |
@@ -501,9 +553,9 @@ Common causes: Geo permissions not enabled, AMD mis-classifying carrier voicemai
 | `Possible OS actions list\|show\|policy-check\|execute` | Durable Possible OS action execution queue. Supported high-risk actions must be policy-checked and use narrow executors. |
 | `Possible OS actions list [--scheduled]` | List durable action records. `--scheduled` shows future approved scheduled sends ordered by send time. |
 | `Possible OS actions scheduler-status` | Show daemon scheduled-action loop status, last tick, pending scheduled count, and due count. |
-| `Possible OS actions send-approved-lead-gen-draft --item=... --subject=... --body=... [--at "09:30 PT" --no-execute]` | Create and optionally execute an exact approved lead-gen email draft action. With `--at`, schedule it instead of sending now. Do not use arbitrary shell email sends for master-agent execution. |
-| `Possible OS actions send-email --mode=test --to=... --subject=... --body=... [--at "2026-06-11T09:30:00-07:00" --no-execute]` | Create and optionally execute a regular durable email action. With `--at`, create an approved scheduled action and do not send immediately. |
-| `Possible OS actions send-test-email --to=... [--subject ... --body ... --no-execute]` | Convenience alias for `send-email --mode=test`. Use this to validate the durable execution path. |
+| `Possible OS actions send-approved-lead-gen-draft --item=... --subject=... --body=... --transport=resend\|zoho_api [--at "09:30 PT" --no-execute]` | Create and optionally execute an exact approved lead-gen email draft action. **`--transport` is required** (never auto-selected; echoed + stored). With `--at`, schedule instead of send. Do not use arbitrary shell email sends. |
+| `Possible OS actions send-email --mode=test\|lead_gen --to=... --subject=... --body=... --transport=resend\|zoho_api [--contact=... --item=... --at "..." --no-execute]` | Create and optionally execute a durable email action. **`--transport` is required and authoritative** (bypasses the policy transport strategy). With `--at`, create an approved scheduled action and do not send immediately. |
+| `Possible OS actions send-test-email --to=... --transport=resend\|zoho_api [--subject ... --body ... --no-execute]` | Convenience alias for `send-email --mode=test`. **`--transport` is required.** Use this to validate the durable execution path. |
 | `Possible OS todos list\|add\|update\|delete` | DB-backed editable project backlog. Use this or the `/todos` UI for new active backlog items; do not add new todo markdown files. |
 | `Possible OS ideas list\|add\|edit` | Simple future product, marketing, and GTM idea capture. Backed by the todos API/table with `area=ideas`; use `add -` or `edit <id> -` for multiline stdin. UI: `/ideas`. |
 | `Possible OS outreach campaigns create --post-slug=...` | Spin up a new LLM-composed blog-post outreach campaign. Snapshot of post metadata + excerpts is frozen on the row so every recipient sees the same context. |

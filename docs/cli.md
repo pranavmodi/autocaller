@@ -150,6 +150,7 @@ Every command accepts `--help`. Exit code is `0` on success, `1` on any error
 | `contacts list [--firm=<pif_id>] [--limit=N]` | List firm_contacts rows. Without `--firm`, walks across firms. |
 | `contacts resolve-linkedin <contact_id> [--force] [--json]` | Resolve one contact's personal LinkedIn `/in/` URL on demand with OpenAI Responses web_search, write it to `firm_contacts.linkedin_url` only when validated, and skip existing values unless forced. |
 | `contacts resolve-linkedin-batch <batch_id> [--force] [--all] [--limit N] [--json]` | Resolve missing LinkedIn URLs for contacts in a lead-gen batch, defaulting to decision-makers only. `--all` includes non-DM staff; `--limit` caps live web_search calls at 25. |
+| `contacts select --persona <p> [--vendor filevine] [--fresh/--no-fresh] [--max-per-firm N] [--second-contact-min-team N] [--limit N] [--seed N] [--ids] [--json]` | Select a fresh outreach cohort: persona filter, optional firm `vendor_stack.case_mgmt` requirement, freshness exclusions (prior email_logs / batch items / outreach_sends), per-firm cap, deterministic firm shuffle. Firms stay contiguous so a wave can assign whole firms to one A/B arm. `--ids` prints one contact_id per line for `lead-gen add-contacts --from`. |
 | `front sync [--full] [--max-calls N] [--json]` | Budgeted read-only Precise Front sync: contacts, inbox activity metadata, offline firm resolution, and warm-score refresh. Hard-caps API calls and persists cursors/watermarks. |
 | `front status [--json]` | Show Front sync health, cursors, watermarks, table counts, funnel counts, day-over-day deltas, and timing feed data used by `/front`. |
 | `front contacts [--firm=<pif_id> \| --domain=<domain> --q=<text>] [--limit=N] [--json]` | List synced Front contacts with matched pif_id, masked email display, warm score, and tech signals. |
@@ -183,9 +184,12 @@ Every command accepts `--help`. Exit code is `0` on success, `1` on any error
 | `ideas edit <id> "..." [--json]` | Replace the text for a saved idea. Use `ideas edit <id> - < idea.txt` for multiline text. |
 | `lead-gen create-batch --name <name> [--template-key ...] [--target-metric ...] [--created-by ...] [--json]` | Create an empty operator-curated lead-gen batch through the daemon. Counts start as `basis=operator-curated, returned=0, requested=0` so the Lead Gen UI can render the batch before contacts are added. |
 | `lead-gen add-contacts <batch_id> (--contact <id\|email> ... \| --from <path>) [--json]` | Resolve explicit `firm_contacts` ids/emails into pending batch items. Idempotent per contact in the batch; updates `counts.returned`/`requested` from the live item count and prints the contact email -> batch item id table for follow-up send commands. |
+| `lead-gen items <batch_id> [--json]` | List a batch's items with the item_id <-> contact mapping (email, firm, status). The id map every per-item command needs (`actions send-email --item`, `workshop-links --item`, `edit-draft`). |
+| `lead-gen workshop-links <batch_id> [--item <id> ...] [--reuse/--no-reuse] [--json]` | Mint (or reuse — the default) per-recipient tracked `/w/{code}` workshop links (`audit_links` kind=workshop) for a batch's items. The `/w/` redirect 302s to `WORKSHOP_PAGE_URL` with contact prefill params (`contact_name`/`contact_email`/`firm_name`) plus `lc`/`c`, so the registration form is one click and the signup attributes back to the recipient. |
+| `lead-gen schedule-wave <batch_id> --subject ... --body-file <tmpl> --transport resend\|zoho_api --start "09:00 PT" [--interval-seconds 90] [--link workshop\|none] [--skip-scheduled/--include-scheduled] [--dry-run] [--json]` | Compose from a plaintext template (placeholders `{first_name}` `{full_name}` `{firm}` `{link}`) and create one **approved scheduled** `send_email mode=lead_gen` action per batch item, spaced `--interval-seconds` apart from `--start`; the daemon scheduler executes them when due. Mints/reuses the tracked `/w/` link per item when `--link workshop`. For an A/B wave run once per arm with offset `--start` times (arm A 09:00:00, arm B 09:01:30, both `--interval-seconds 180`) so arms interleave. Skips items with a live scheduled send unless `--include-scheduled`; stops immediately if the first item fails policy. |
 | `lead-gen recount <batch_id> [--json]` | Repair a batch's `counts_json.returned`/`requested` from the live `lead_gen_batch_items` count. Use for older curated batches that show missing item counts in `/lead-gen`. |
 | `lead-gen move-items <target_batch_id> --from <src> [--from <src2> ...] [--json]` | Re-parent every item from the source batch(es) into the target batch and recount both. Item ids are unchanged, so scheduled send actions stay valid — only the grouping moves. Use to consolidate several curated batches (one firm per batch) into a single wave batch. |
-| `lead-gen transport [--strategy resend-first\|zoho-first] [--zoho-cap N] [--resend-cap N] [--updated-by ...] [--json]` | Deliverability lever: show (no options) or set the email transport send order and per-provider daily caps on the active policy. Resend sends from `getpossibleminds.com` and lands in the inbox; the shared Zoho India IP (`possiblemindshq.com`) tends to land in junk. `--strategy resend-first` fills Resend before Zoho; `--zoho-cap 0` disables Zoho entirely (Resend-only). Persists in `weights_json`; a UI daily-budget save no longer clobbers it. |
+| `lead-gen transport [--strategy resend-first\|zoho-first] [--zoho-cap N] [--resend-cap N] [--daily-budget N] [--updated-by ...] [--json]` | Deliverability lever: show (no options) or set the email transport send order, per-provider daily caps, and the total daily send budget (`weights_json.daily_send_budget` — the per-day rail the daily run and default caps derive from) on the active policy. Resend sends from `getpossibleminds.com` and lands in the inbox; the shared Zoho India IP (`possiblemindshq.com`) tends to land in junk. `--strategy resend-first` fills Resend before Zoho; `--zoho-cap 0` disables Zoho entirely (Resend-only). Persists in `weights_json`; a UI daily-budget save no longer clobbers it. |
 | `lead-gen email-agent-slice [--limit=3 --composer-variant=... --approval-ready --batch=<batch_id> --json]` | Select eligible contacts, collect bounded internal evidence, compose drafts with the Possible Minds email composer skill, and create durable `send_email mode=lead_gen` actions for review or policy checks. With `--batch`, skip selection and compose for an existing batch's pending undrafted items (operator- or agent-curated lists, e.g. Front-warm shortlists). |
 | `lead-gen visibility-report [--batch-item=<id> \| --firm-name=... --domain=...] [--market=...] [--dry-run] [--force] [--json]` | Ensure an AI Search Visibility report exists through the `ai-visibility` CLI. Existing scanned reports are reused by domain/firm unless `--force` is passed. With `--batch-item`, caches a compact report package at `reason_json.ai_visibility_report` for the `ai-visibility-report` composer variant. |
 | `lead-gen daily-run [--dry-run] [--force] [--variant=<key>] [--json]` | Run the deterministic daily lead-selection pipeline now. It gates on system enabled, active policy budget, weekday, and deliverability health; refreshes stale Front-derived signals without Front API calls; queues bounded research; maps personas; creates a persona-mixed batch; composes drafts; and schedules `waiting_for_approval` lead-gen email actions in the PT morning window. `--dry-run` performs no writes, no external research calls, no actions, and no WhatsApp. `--variant=<key>` pins one composer skill variant on **every** email in the run — first-touch and follow-up — overriding the per-item default/A-B (must be an active variant; see `composer-ab variants`). Without it, first-touch uses `LEAD_GEN_FIRST_TOUCH_VARIANT` (default `review-evidence`), follow-ups use the per-contact A/B unless `LEAD_GEN_FOLLOW_UP_VARIANT` is set. |
@@ -625,6 +629,40 @@ bin/possibleos call LEAD-000001
 ---
 
 ## 10. Typical AI-agent recipes
+
+### Recipe: "run an A/B email wave to a curated cohort, end-to-end"
+```bash
+# 1. Select the cohort (fresh Filevine case managers, ≤2/firm, deterministic)
+bin/possibleos contacts select --persona case_manager --vendor filevine \
+  --max-per-firm 2 --second-contact-min-team 5 --seed 42 --limit 80 --ids > /tmp/cohort.txt
+# split /tmp/cohort.txt into armA.txt / armB.txt keeping each firm in ONE arm
+
+# 2. One batch per arm + experiment card (send gate requires a complete card)
+bin/possibleos lead-gen create-batch --name "Wave A - <angle>" --json   # note batch ids
+bin/possibleos lead-gen add-contacts <batch_a> --from /tmp/armA.txt
+bin/possibleos lead-gen wave-card <batch_a> --from /tmp/card_a.json
+# repeat for arm B
+
+# 3. Raise the daily rail if the wave exceeds it (e.g. 80 sends today)
+bin/possibleos lead-gen transport --daily-budget 80
+
+# 4. Compose + schedule each arm, interleaved (A at :00, B at :90, both every 180s)
+bin/possibleos lead-gen schedule-wave <batch_a> --subject "..." \
+  --body-file /tmp/body_a.txt --transport resend --start "09:00 PT" \
+  --interval-seconds 180 --link workshop --dry-run     # inspect plan first
+bin/possibleos lead-gen schedule-wave <batch_a> --subject "..." \
+  --body-file /tmp/body_a.txt --transport resend --start "09:00 PT" --interval-seconds 180
+bin/possibleos lead-gen schedule-wave <batch_b> --subject "..." \
+  --body-file /tmp/body_b.txt --transport resend --start "09:01:30 PT" --interval-seconds 180
+
+# 5. Watch and read out
+bin/possibleos actions scheduler-status
+bin/possibleos lead-gen items <batch_a>
+bin/possibleos lead-gen observations --since=7d --type=product_interest
+bin/possibleos lead-gen wave-rollup <batch_a>
+```
+Template placeholders: `{first_name}` `{full_name}` `{firm}` `{link}`. Abort a
+scheduled send with `bin/possibleos actions cancel <action_id>`.
 
 ### Recipe: "import leads and start calling"
 ```bash
