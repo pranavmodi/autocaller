@@ -285,10 +285,58 @@ Current event taxonomy:
 | `email_reply_received` | Zoho inbound reply matched to a lead-gen contact/batch item | existing LLM feedback classifier |
 | `link_clicked` | tracked `link_events` click attributed to an outreach send, `audit_link_clicks` from `/aiaudit/go` or `/a/<code>` (`raw_event_json.channel = "ai_audit"`), consult-link clicks from `/c/<code>` (`channel = "consult"`, `source = consult_email`; reuses `audit_links` with `kind=consult`, 302s to `getpossibleminds.com/consult`), solution/product-link clicks from `/s/<code>` (`channel = "solution"`, `source = solution_email`, `kind=solution`, 302s to the outbound voice-AI solution page with `?lc=<code>`), AI Visibility report clicks from `/v/<code>` (`channel = "ai_visibility"`), or workshop-link clicks from `/w/<code>` (`channel = "workshop"`, `source = workshop_email`, `kind=workshop`, 302s to the workshop landing page — `WORKSHOP_PAGE_URL`, default the Filevine case-manager page — with per-recipient prefill params `contact_name`/`contact_email`/`firm_name` plus `?lc=<code>`) | deterministic opened-or-clicked |
 | `product_interest` | early-access / design-partner signup from a product solution page via `POST /api/lead-gen/product-interest` (public). `raw_event_json` carries `email`, `firm`, `product`, `channel = "solution"`; attributed to a contact/batch_item when the `/s/` link code (`lc`) is supplied. Workshop registration pages (`product = "workshop-*"`, `source = "workshop_page_register"`) additionally send optional ICP-qualification fields `role`, `case_management_system`, `firm_size`. Every signup fires a best-effort operator alert (WhatsApp via openclaw CLI to `OPERATOR_WHATSAPP`, Telnyx SMS fallback — SMS to the +91 operator number fails DLT rules, hence WhatsApp-first; `app/services/operator_sms.py`); `workshop-*` products additionally send the registrant a plaintext confirmation email via Resend (`send_workshop_registration_confirmation`, `message_type=workshop_registration_confirmation` in `email_logs`). Notification failures never fail the signup | deterministic high-intent product signal |
+| `page_session` | JS beacon from a tracked landing page via `POST /api/lead-gen/page-event` (public). `raw_event_json.event` is a progressive-funnel step: `session_ready` (page JS ran), `first_pointer` (first real pointer/scroll/touch/key gesture), `scroll_50` (scrolled ≥50% depth), `content_revealed` (tapped a tap-to-reveal control), `click` (on-page link/button click; `engagement_type`/`click_*` fields), or `page_leave` (carries final `time_on_page_ms`). Events share a client-generated `session_id`; attribution to contact/batch item comes from the `/s/`, `/c/`, or `/w/` link code (`lc`). Also carries user agent, IP (plus masked display form), and geo headers. The emitter is the shared `ClickBeacon` component in the getpossibleminds site (`components/analytics/click-beacon.tsx`); `content_revealed` is dispatched by the `RevealPanel` gate via a `pm:funnel-step` window event | deterministic; session-level quality classified at rollup time (see below) |
 | `consult_booked` | website consult booking or Cal.com booking made during a call | deterministic booked qualified conversation |
 | `call_disposition` | judge persistence after outbound call review finalizes GTM disposition | deterministic mapping from GTM disposition |
 | `email_action_cancelled` | approved/waiting lead-gen email action cancellation | deterministic audit trail |
 | `email_rescheduled` | scheduled lead-gen email action moved to a new time | deterministic audit trail |
+
+#### Wave-rollup session quality (`classify_page_sessions`)
+
+`GET /api/lead-gen/batches/{batch_id}/experiment-rollup` (CLI:
+`bin/possibleos lead-gen wave-rollup <batch_id>`) classifies page sessions at
+the **session** level, not per observation. `page_session` observations are
+grouped by `raw_event_json.session_id` (falling back to the observation id)
+in `app/services/lead_gen_experiments.py::classify_page_sessions`. A
+`session_ready` beacon alone is **not** human evidence — email-security
+scanners execute JS too (observed on the 2026-07-13 workshop wave:
+session_ready + ~4s `page_leave` dwell, zero click events, arrival within
+~2 minutes of the send). A session is `human` only with interaction evidence:
+
+- `page_leave` dwell above `HUMAN_SESSION_MIN_TIME_ON_PAGE_MS` (10s), or
+- at least one on-page `click` event in the same session, or
+- first activity later than `HUMAN_SESSION_MIN_DELAY_AFTER_SEND` (15 min)
+  after the item's `email_sent` observation.
+
+Sessions matching `SCANNER_UA_PATTERNS` are `scanner`; everything else without
+evidence is `suspect`. The rollup's `measurement` block reports
+`raw_page_sessions` (every distinct session, unfiltered) alongside
+`human_page_sessions` / `suspect_page_sessions` / `scanner_page_sessions`, and
+`signal_quality.page_sessions` carries the same session-level breakdown. The
+per-observation labels in `signal_quality.observations` use the same 10s dwell
+threshold (`signal_quality()`), mirroring the click classifier's stance that a
+browser user agent alone is never proof of a human.
+
+**Progressive-funnel gestures are the high-confidence human signal.** Modern
+email-security scanners execute page JS *and* can emulate dwell, so dwell alone
+(and, to a lesser extent, delayed arrival) is no longer reliable — the
+2026-07-13 workshop wave showed scanners holding pages open ~15–25s and rotating
+spoofed UAs. The trustworthy evidence is a *gesture* a scanner does not perform:
+`first_pointer`, `scroll_50`, `content_revealed`, or an on-page `click`.
+`classify_page_sessions` returns per session `{quality, reached_reveal,
+has_gesture}`, and the rollup adds two gesture metrics:
+
+- `gesture_page_sessions` — sessions with any funnel gesture (the number to
+  trust over `human_page_sessions`, which still includes the weaker dwell/late
+  fallbacks).
+- `revealed_page_sessions` — sessions that tapped `content_revealed`, the
+  strongest pre-conversion signal (a human chose to unlock the gifted content).
+
+The landing page is designed to *manufacture* these gestures: the gifted payload
+(e.g. workshop "instruction one") sits behind a `RevealPanel` tap-to-reveal, so a
+genuine reader produces a `content_revealed` event a scanner never will. The
+north-star remains the conversion itself (`product_interest` registration /
+`consult_booked`), which no scanner performs.
 
 The weekly learning KPI is:
 

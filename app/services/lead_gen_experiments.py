@@ -81,6 +81,18 @@ SCANNER_UA_PATTERNS = (
     "headlesschrome",
 )
 BROWSER_UA_PATTERNS = ("mozilla/", "chrome/", "safari/", "firefox/", "edg/")
+# Email-security scanners execute JS (session_ready fires, ~4s dwell, no
+# clicks, arrival seconds after the send), so a bare beacon is not human
+# evidence — the same stance the click classifier takes on browser-UA clicks.
+HUMAN_SESSION_MIN_TIME_ON_PAGE_MS = 10_000
+HUMAN_SESSION_MIN_DELAY_AFTER_SEND = timedelta(minutes=15)
+# Progressive-funnel steps a real browser emits on a tracked landing page,
+# weakest -> strongest. `session_ready` fires on load (a scanner runs page JS
+# too, and can even emulate dwell). The gesture steps require a human pointer,
+# scroll, or tap the scanner does not perform; `content_revealed` (tap-to-reveal
+# the gifted content) is the strongest pre-conversion human signal.
+PAGE_FUNNEL_GESTURE_STEPS = ("first_pointer", "scroll_50", "content_revealed", "click")
+PAGE_FUNNEL_REVEAL_STEPS = ("content_revealed",)
 
 
 def _utcnow() -> datetime:
@@ -313,7 +325,7 @@ def signal_quality(event_type: str, raw_event: dict[str, Any] | None = None, *, 
             time_ms = 0
         if not ua:
             return "suspect"
-        if any(pattern in ua for pattern in BROWSER_UA_PATTERNS) and time_ms >= 3000:
+        if any(pattern in ua for pattern in BROWSER_UA_PATTERNS) and time_ms > HUMAN_SESSION_MIN_TIME_ON_PAGE_MS:
             return "human"
         return "suspect"
     if event_type == "link_clicked":
@@ -323,6 +335,89 @@ def signal_quality(event_type: str, raw_event: dict[str, Any] | None = None, *, 
             return "suspect"
         return "unknown"
     return "unknown"
+
+
+def classify_page_sessions(
+    observations: list[LeadGenObservationRow],
+    sent_at_by_item: dict[str, datetime] | None = None,
+) -> dict[str, dict[str, Any]]:
+    """Session-level quality for page_session observations, keyed by session_id.
+
+    Returns one record per session: ``{"quality": ..., "reached_reveal": bool,
+    "has_gesture": bool}``.
+
+    A session is ``human`` when it carries evidence a scanner does not produce.
+    The high-confidence signal is a progressive-funnel *gesture* — a
+    ``first_pointer`` / ``scroll_50`` / ``content_revealed`` / ``click`` event
+    that requires a human pointer, scroll, or tap. Scanners now execute page JS
+    and can emulate dwell, so dwell alone is the weakest signal; the older
+    heuristics (dwell above HUMAN_SESSION_MIN_TIME_ON_PAGE_MS, or first activity
+    later than HUMAN_SESSION_MIN_DELAY_AFTER_SEND after the item's email_sent)
+    are kept as fallbacks. Sessions with a scanner user agent are ``scanner``;
+    everything else without evidence is ``suspect``.
+    """
+    sent_at_by_item = sent_at_by_item or {}
+    sessions: dict[str, dict[str, Any]] = {}
+    for obs in observations:
+        if obs.event_type != "page_session":
+            continue
+        raw = _as_dict(obs.raw_event_json)
+        key = _clean_text(raw.get("session_id")) or obs.id
+        info = sessions.setdefault(key, {
+            "scanner": False,
+            "max_time_ms": 0,
+            "has_click": False,
+            "has_gesture": False,
+            "reached_reveal": False,
+            "first_seen": obs.created_at,
+            "batch_item_id": obs.batch_item_id,
+        })
+        ua = _clean_text(raw.get("user_agent") or raw.get("ua")).lower()
+        if any(pattern in ua for pattern in SCANNER_UA_PATTERNS):
+            info["scanner"] = True
+        try:
+            time_ms = int(raw.get("time_on_page_ms") or 0)
+        except (TypeError, ValueError):
+            time_ms = 0
+        info["max_time_ms"] = max(info["max_time_ms"], time_ms)
+        step = _clean_text(raw.get("event"))
+        if step == "click" or _clean_text(raw.get("engagement_type")):
+            info["has_click"] = True
+        if step in PAGE_FUNNEL_GESTURE_STEPS:
+            info["has_gesture"] = True
+        if step in PAGE_FUNNEL_REVEAL_STEPS:
+            info["reached_reveal"] = True
+        if obs.created_at and (info["first_seen"] is None or obs.created_at < info["first_seen"]):
+            info["first_seen"] = obs.created_at
+        if not info["batch_item_id"]:
+            info["batch_item_id"] = obs.batch_item_id
+    result: dict[str, dict[str, Any]] = {}
+    for key, info in sessions.items():
+        record = {
+            "reached_reveal": info["reached_reveal"],
+            "has_gesture": info["has_gesture"],
+        }
+        if info["scanner"]:
+            record["quality"] = "scanner"
+            result[key] = record
+            continue
+        sent_at = sent_at_by_item.get(info["batch_item_id"] or "")
+        delayed_arrival = bool(
+            sent_at
+            and info["first_seen"]
+            and info["first_seen"] - sent_at > HUMAN_SESSION_MIN_DELAY_AFTER_SEND
+        )
+        if (
+            info["has_gesture"]
+            or info["has_click"]
+            or info["max_time_ms"] > HUMAN_SESSION_MIN_TIME_ON_PAGE_MS
+            or delayed_arrival
+        ):
+            record["quality"] = "human"
+        else:
+            record["quality"] = "suspect"
+        result[key] = record
+    return result
 
 
 def _is_sent(item: LeadGenBatchItemRow) -> bool:
@@ -406,16 +501,25 @@ async def experiment_rollup(batch_id: str) -> dict[str, Any]:
     event_counts: Counter[str] = Counter()
     signal_counts: Counter[str] = Counter()
     reply_strength_counts: Counter[str] = Counter()
+    sent_at_by_item: dict[str, datetime] = {}
     for obs in observations:
         event_counts[obs.event_type] += 1
         if obs.batch_item_id:
             observations_by_item[obs.batch_item_id].append(obs)
+        if obs.event_type == "email_sent" and obs.batch_item_id and obs.created_at:
+            existing = sent_at_by_item.get(obs.batch_item_id)
+            if existing is None or obs.created_at < existing:
+                sent_at_by_item[obs.batch_item_id] = obs.created_at
         if obs.event_type in {"page_session", "link_clicked"}:
             signal_counts[f"{obs.event_type}:{signal_quality(obs.event_type, _as_dict(obs.raw_event_json))}"] += 1
         if obs.event_type in {"email_reply", "email_reply_received"}:
             raw = _as_dict(obs.raw_event_json)
             strength = _group_key(raw.get("attribution_strength"), "weak")
             reply_strength_counts[strength] += 1
+    session_records = classify_page_sessions(observations, sent_at_by_item)
+    session_quality = Counter(rec["quality"] for rec in session_records.values())
+    revealed_sessions = sum(1 for rec in session_records.values() if rec["reached_reveal"])
+    gesture_sessions = sum(1 for rec in session_records.values() if rec["has_gesture"])
 
     click_quality = Counter(signal_quality("link_clicked", user_agent=click.user_agent) for click in clicks)
     sent = sum(1 for item in items if _is_sent(item))
@@ -423,8 +527,6 @@ async def experiment_rollup(batch_id: str) -> dict[str, Any]:
     failed = event_counts.get("email_send_failed", 0)
     strong_replies = sum(reply_strength_counts[key] for key in ("strong", "medium"))
     weak_replies = sum(reply_strength_counts.values()) - strong_replies
-    page_human = signal_counts.get("page_session:human", 0)
-    page_suspect = signal_counts.get("page_session:suspect", 0)
 
     return {
         "batch_id": batch_id,
@@ -439,8 +541,12 @@ async def experiment_rollup(batch_id: str) -> dict[str, Any]:
             "scanner_clicks": click_quality.get("scanner", 0),
             "suspect_clicks": click_quality.get("suspect", 0),
             "unknown_clicks": click_quality.get("unknown", 0),
-            "human_page_sessions": page_human,
-            "suspect_page_sessions": page_suspect,
+            "raw_page_sessions": len(session_records),
+            "human_page_sessions": session_quality.get("human", 0),
+            "suspect_page_sessions": session_quality.get("suspect", 0),
+            "scanner_page_sessions": session_quality.get("scanner", 0),
+            "gesture_page_sessions": gesture_sessions,
+            "revealed_page_sessions": revealed_sessions,
             "strong_human_replies": strong_replies,
             "weak_attributed_replies": weak_replies,
             "inbound_messages": len(inbound),
@@ -450,6 +556,7 @@ async def experiment_rollup(batch_id: str) -> dict[str, Any]:
         "signal_quality": {
             "clicks": dict(click_quality),
             "observations": dict(signal_counts),
+            "page_sessions": dict(session_quality),
             "replies": dict(reply_strength_counts),
         },
         "groups": {
@@ -477,6 +584,8 @@ async def experiment_rollup(batch_id: str) -> dict[str, Any]:
             "missing_card_fields": _card_missing_fields(_as_dict(batch.experiment_json)),
             "reply_metric_counts_only_strong_or_medium": True,
             "clicks_are_never_counted_as_human_without_page_or_reply_evidence": True,
+            "page_sessions_require_interaction_evidence": True,
+            "gesture_page_sessions_are_the_high_confidence_human_signal": True,
         },
     }
 

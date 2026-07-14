@@ -133,7 +133,11 @@ per item and creates approved scheduled sends the daemon executes when due.
 Interleave A/B arms with offset --start times. The experiment send gate
 requires a complete wave card first: `lead-gen wave-card <batch_id> --from
 <card.json>`. See docs/cli.md §10 "run an A/B email wave" for the exact
-sequence.
+sequence. Read the wave with `lead-gen wave-rollup <batch_id>`: page sessions
+are grouped by session_id and `human_page_sessions` needs interaction evidence
+(>10s page_leave dwell, an on-page click, or arrival >15 min after the item's
+email_sent) — email-security scanners run JS, so bare session_ready beacons
+count only in `raw_page_sessions` / `suspect_page_sessions`.
 
 For the current master-agent lead-generation slice, use
 `bin/possibleos lead-gen email-agent-slice --limit 3 --approval-ready`. To compose for a hand-curated batch instead of auto-selection: `lead-gen email-agent-slice --batch <batch_id> --limit 10`.
@@ -529,6 +533,7 @@ Common causes: Geo permissions not enabled, AMD mis-classifying carrier voicemai
 | `Possible OS lead-gen items <batch_id> [--json]` | Item_id <-> contact map for a batch (email, firm, status) — inputs for per-item send/link commands. |
 | `Possible OS lead-gen workshop-links <batch_id> [--item ...] [--reuse/--no-reuse] [--json]` | Mint/reuse per-recipient tracked `/w/{code}` workshop links (audit_links kind=workshop; redirect adds contact prefill params + lc/c). |
 | `Possible OS lead-gen schedule-wave <batch_id> --subject ... --body-file <tmpl> --transport resend\|zoho_api --start "HH:MM PT" [--interval-seconds N] [--link workshop\|none] [--dry-run] [--json]` | Template-compose ({first_name} {full_name} {firm} {link}) and schedule one approved send per item, spaced from --start; daemon executes when due. Offset --start per arm to interleave an A/B wave. |
+| `Possible OS lead-gen wave-rollup <batch_id> [--json]` | Honest wave readout. Page sessions grouped by session_id: `human_page_sessions` needs interaction evidence (>10s dwell, on-page click, or arrival >15 min after the item's email_sent); JS-running scanner beacons stay in `raw_page_sessions`/`suspect_page_sessions`, scanner UAs in `scanner_page_sessions`. |
 | `Possible OS front sync [--full] [--max-calls N]` | Read-only Precise Front sync for contacts, activity metadata, domain resolution, and warm-score refresh. Persists cursors and hard-caps API calls. |
 | `Possible OS front status` | Show Front sync health, cursors, watermarks, counts, funnel deltas, timing feed, and stale/error state. |
 | `Possible OS front contacts [--firm <pif_id> \| --domain <domain> --q <text>]` | List synced Front contacts with masked emails, matched pif_id, warm score, and tech signals. |
