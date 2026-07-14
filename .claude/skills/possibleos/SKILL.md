@@ -184,11 +184,19 @@ deprecated v1 pif-info API. Use `bin/possibleos pif sync [--full] [--limit N]`
 to populate `pif_directory_firms`, `firm_intel_aliases`, and the
 `firm_intel_sync_state` watermark. `pif sync --limit 20` is the smoke run;
 `--full` ignores the saved watermark. Check mirror and remote coverage with
-`pif status`, resolve domains/emails/legacy PIF IDs with `pif resolve <value>`
-(local first, v2 `/firms/resolve` fallback), and inspect a mirrored profile
-with `pif show <firm_id|domain>`. The daemon's native PIF loop runs this v2
-sync and then ingests directory contacts; do not use the old v1 sync path for
-operations because deployed v1 routes require cookie auth.
+`pif status`, or use local-only `pif sync-status` for the last daily-sync delta
+without calling EmailTag health. Resolve domains/emails/legacy PIF IDs with
+`pif resolve <value>` (local first, v2 `/firms/resolve` fallback), and inspect a
+mirrored profile with `pif show <firm_id|domain>`. Use `pif vendors` to list
+every extracted vendor in the mirror with counts, and `pif firms --vendor
+<vendor> --limit N` to inspect the same vendor-specific firm set used by the
+Leads page; use `pif people --leader leader --role <text> --limit N` to inspect
+the local people set used by the Leads contacts view. Normal Leads page reads
+should use the local mirror;
+the remote EmailTag API is for the daily sync and explicit task-triggering
+operations. The daemon's native PIF loop runs this v2 sync and then ingests
+directory contacts; do not use the old v1 sync path for operations because
+deployed v1 routes require cookie auth.
 
 PIF Stats firm research is operator-triggered only because it spends production
 Precise web/LLM budget. Use `bin/possibleos research status --tasks` for

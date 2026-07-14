@@ -9,11 +9,11 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from typing import Any
 
 import httpx
-from sqlalchemy import func, inspect, select, text
+from sqlalchemy import String, cast, func, inspect, or_, select, text
 
 from app.db import AsyncSessionLocal, async_engine
 from app.db.models import FirmAliasRow, FirmIntelSyncStateRow, PifFirmRow
@@ -27,6 +27,7 @@ FIRM_INTEL_BASE_URL = os.getenv(
 ).rstrip("/")
 
 ALIAS_TYPES = ("domain", "vanity_domain", "legacy_pif_id")
+STATUS_RUNNING = {"queued", "in_progress", "running", "started"}
 
 _tables_checked = False
 
@@ -173,6 +174,85 @@ def _profile_website(profile: dict[str, Any]) -> str | None:
         if normalized:
             return normalized
     return None
+
+
+def _vendor_key(value: Any) -> str:
+    return str(value or "").strip().lower()
+
+
+def _vendor_label(value: str) -> str:
+    overrides = {
+        "case-status": "Case Status",
+        "filevine": "Filevine",
+        "casepeer": "Casepeer",
+        "practicepanther": "PracticePanther",
+        "smartadvocate": "SmartAdvocate",
+        "foundationai": "FoundationAI",
+        "lawmatics": "Lawmatics",
+        "salesforce": "Salesforce",
+        "chartsquad": "ChartSquad",
+        "smokeball": "Smokeball",
+        "mycase": "MyCase",
+        "litify": "Litify",
+        "clio": "Clio",
+        "lexitas": "Lexitas",
+        "gladiate": "Gladiate",
+    }
+    key = _vendor_key(value)
+    return overrides.get(key) or key.replace("_", " ").replace("-", " ").title()
+
+
+def _vendor_entries_from_stack(value: Any) -> list[dict[str, Any]]:
+    if isinstance(value, list):
+        return [item for item in value if isinstance(item, dict) and _vendor_key(item.get("vendor"))]
+    if not isinstance(value, dict):
+        return []
+
+    entries: list[dict[str, Any]] = []
+    case_mgmt = _vendor_key(value.get("case_mgmt"))
+    if case_mgmt:
+        entries.append({"vendor": case_mgmt, "source": "case_mgmt"})
+    other = value.get("other")
+    if isinstance(other, dict):
+        for vendor, detail in other.items():
+            entry = dict(detail) if isinstance(detail, dict) else {}
+            entry.setdefault("vendor", _vendor_key(vendor))
+            entry.setdefault("source", "other")
+            if _vendor_key(entry.get("vendor")):
+                entries.append(entry)
+    return entries
+
+
+def _vendor_entries_for_row(row: PifFirmRow) -> list[dict[str, Any]]:
+    entries: list[dict[str, Any]] = []
+    source = row.source_json or {}
+    raw = row.raw_json or {}
+    for stack in (
+        source.get("vendor_stack") if isinstance(source, dict) else None,
+        row.vendor_stack,
+        raw.get("vendor_stack") if isinstance(raw, dict) else None,
+    ):
+        entries.extend(_vendor_entries_from_stack(stack))
+
+    seen: set[str] = set()
+    deduped: list[dict[str, Any]] = []
+    for entry in entries:
+        key = _vendor_key(entry.get("vendor"))
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        normalized = dict(entry)
+        normalized["vendor"] = key
+        deduped.append(normalized)
+    return deduped
+
+
+def _row_has_vendor(row: PifFirmRow, vendor: str | None = None) -> bool:
+    entries = _vendor_entries_for_row(row)
+    if not vendor:
+        return bool(entries)
+    wanted = _vendor_key(vendor)
+    return any(_vendor_key(entry.get("vendor")) == wanted for entry in entries)
 
 
 def _people(profile: dict[str, Any]) -> list[dict[str, Any]]:
@@ -637,3 +717,577 @@ async def firm_intel_status() -> dict[str, Any]:
         "api_base": FIRM_INTEL_BASE_URL,
         "remote_health": remote_health,
     }
+
+
+async def firm_intel_sync_status() -> dict[str, Any]:
+    """Local-only mirror sync status for lightweight UI polling."""
+    await ensure_firm_intel_tables()
+    async with AsyncSessionLocal() as session:
+        total = int((await session.execute(select(func.count()).select_from(PifFirmRow))).scalar_one() or 0)
+        alias_count = int((await session.execute(select(func.count()).select_from(FirmAliasRow))).scalar_one() or 0)
+        state = await session.get(FirmIntelSyncStateRow, 1)
+
+    return {
+        "total_firms": total,
+        "alias_count": alias_count,
+        "watermark": _dt_iso(state.last_updated_since) if state else None,
+        "last_synced_at": _dt_iso(state.last_synced_at) if state else None,
+        "last_result": state.last_result if state else {},
+        "api_base": FIRM_INTEL_BASE_URL,
+    }
+
+
+async def list_extracted_vendors() -> dict[str, Any]:
+    """Return all vendor names currently extracted in the local EmailTag mirror."""
+    await ensure_firm_intel_tables()
+    vendor_sql = text("""
+        WITH vendor_rows AS (
+            SELECT id, lower(elem->>'vendor') AS vendor
+            FROM pif_directory_firms
+            CROSS JOIN LATERAL jsonb_array_elements(
+                CASE
+                    WHEN jsonb_typeof(source_json->'vendor_stack') = 'array'
+                    THEN source_json->'vendor_stack'
+                    ELSE '[]'::jsonb
+                END
+            ) elem
+            WHERE coalesce(elem->>'vendor', '') <> ''
+            UNION
+            SELECT id, lower(vendor_stack->>'case_mgmt') AS vendor
+            FROM pif_directory_firms
+            WHERE coalesce(vendor_stack->>'case_mgmt', '') <> ''
+            UNION
+            SELECT id, lower(raw_json #>> '{vendor_stack,case_mgmt}') AS vendor
+            FROM pif_directory_firms
+            WHERE coalesce(raw_json #>> '{vendor_stack,case_mgmt}', '') <> ''
+            UNION
+            SELECT f.id, lower(other.key) AS vendor
+            FROM pif_directory_firms f
+            CROSS JOIN LATERAL jsonb_each(
+                CASE
+                    WHEN jsonb_typeof(f.raw_json #> '{vendor_stack,other}') = 'object'
+                    THEN f.raw_json #> '{vendor_stack,other}'
+                    ELSE '{}'::jsonb
+                END
+            ) other
+            WHERE coalesce(other.key, '') <> ''
+        )
+        SELECT vendor, count(DISTINCT id) AS firm_count
+        FROM vendor_rows
+        WHERE vendor <> ''
+        GROUP BY vendor
+        ORDER BY firm_count DESC, vendor ASC
+    """)
+    async with AsyncSessionLocal() as session:
+        rows = (await session.execute(vendor_sql)).all()
+
+    vendors = [
+        {"vendor": vendor, "label": _vendor_label(vendor), "count": int(count)}
+        for vendor, count in rows
+    ]
+    return {"vendors": vendors, "total_vendors": len(vendors), "total_firms": sum(item["count"] for item in vendors)}
+
+
+async def _firm_ids_for_vendor(vendor: str) -> set[str]:
+    wanted = _vendor_key(vendor)
+    if not wanted:
+        return set()
+    vendor_sql = text("""
+        WITH vendor_rows AS (
+            SELECT id, lower(elem->>'vendor') AS vendor
+            FROM pif_directory_firms
+            CROSS JOIN LATERAL jsonb_array_elements(
+                CASE
+                    WHEN jsonb_typeof(source_json->'vendor_stack') = 'array'
+                    THEN source_json->'vendor_stack'
+                    ELSE '[]'::jsonb
+                END
+            ) elem
+            WHERE coalesce(elem->>'vendor', '') <> ''
+            UNION
+            SELECT id, lower(vendor_stack->>'case_mgmt') AS vendor
+            FROM pif_directory_firms
+            WHERE coalesce(vendor_stack->>'case_mgmt', '') <> ''
+            UNION
+            SELECT id, lower(raw_json #>> '{vendor_stack,case_mgmt}') AS vendor
+            FROM pif_directory_firms
+            WHERE coalesce(raw_json #>> '{vendor_stack,case_mgmt}', '') <> ''
+            UNION
+            SELECT f.id, lower(other.key) AS vendor
+            FROM pif_directory_firms f
+            CROSS JOIN LATERAL jsonb_each(
+                CASE
+                    WHEN jsonb_typeof(f.raw_json #> '{vendor_stack,other}') = 'object'
+                    THEN f.raw_json #> '{vendor_stack,other}'
+                    ELSE '{}'::jsonb
+                END
+            ) other
+            WHERE coalesce(other.key, '') <> ''
+        )
+        SELECT DISTINCT id
+        FROM vendor_rows
+        WHERE vendor = :vendor
+    """)
+    async with AsyncSessionLocal() as session:
+        return {str(row[0]) for row in (await session.execute(vendor_sql, {"vendor": wanted})).all()}
+
+
+async def _firm_ids_with_any_vendor() -> set[str]:
+    vendor_sql = text("""
+        WITH vendor_rows AS (
+            SELECT id, lower(elem->>'vendor') AS vendor
+            FROM pif_directory_firms
+            CROSS JOIN LATERAL jsonb_array_elements(
+                CASE
+                    WHEN jsonb_typeof(source_json->'vendor_stack') = 'array'
+                    THEN source_json->'vendor_stack'
+                    ELSE '[]'::jsonb
+                END
+            ) elem
+            WHERE coalesce(elem->>'vendor', '') <> ''
+            UNION
+            SELECT id, lower(vendor_stack->>'case_mgmt') AS vendor
+            FROM pif_directory_firms
+            WHERE coalesce(vendor_stack->>'case_mgmt', '') <> ''
+            UNION
+            SELECT id, lower(raw_json #>> '{vendor_stack,case_mgmt}') AS vendor
+            FROM pif_directory_firms
+            WHERE coalesce(raw_json #>> '{vendor_stack,case_mgmt}', '') <> ''
+            UNION
+            SELECT f.id, lower(other.key) AS vendor
+            FROM pif_directory_firms f
+            CROSS JOIN LATERAL jsonb_each(
+                CASE
+                    WHEN jsonb_typeof(f.raw_json #> '{vendor_stack,other}') = 'object'
+                    THEN f.raw_json #> '{vendor_stack,other}'
+                    ELSE '{}'::jsonb
+                END
+            ) other
+            WHERE coalesce(other.key, '') <> ''
+        )
+        SELECT DISTINCT id
+        FROM vendor_rows
+        WHERE vendor <> ''
+    """)
+    async with AsyncSessionLocal() as session:
+        return {str(row[0]) for row in (await session.execute(vendor_sql)).all()}
+
+
+def _dt_to_iso(value: datetime | None) -> str | None:
+    if value is None:
+        return None
+    return value.isoformat()
+
+
+def _source_value(row: PifFirmRow, key: str) -> Any:
+    source = row.source_json if isinstance(row.source_json, dict) else {}
+    raw_source = _source_record(row.raw_json if isinstance(row.raw_json, dict) else {})
+    return source.get(key, raw_source.get(key))
+
+
+def _serialize_pif_row(row: PifFirmRow) -> dict[str, Any]:
+    source = row.source_json if isinstance(row.source_json, dict) else {}
+    return {
+        "id": row.id,
+        "firm_name": row.firm_name or "",
+        "entity_type": row.entity_type or "",
+        "website": row.website,
+        "canonical_website": row.canonical_website,
+        "website_status": _source_value(row, "website_status"),
+        "website_source": _source_value(row, "website_source"),
+        "website_confidence": _source_value(row, "website_confidence"),
+        "emails": row.emails or [],
+        "phones": row.phones or [],
+        "fax": row.fax,
+        "addresses": row.addresses or [],
+        "contacts": row.contacts or [],
+        "first_contacted_precise_at": _dt_to_iso(row.first_contacted_precise_at),
+        "conversation_ids": row.conversation_ids or source.get("conversation_ids") or [],
+        "extraction_notes": row.extraction_notes,
+        "leadership": row.leadership or [],
+        "research_data": row.research_data or None,
+        "research_status": row.research_status,
+        "last_researched_at": _dt_to_iso(row.last_researched_at),
+        "staff": row.staff or [],
+        "staff_research_status": row.staff_research_status,
+        "behavioral_data": row.behavioral_data or None,
+        "icp_score": row.icp_score,
+        "icp_tier": row.icp_tier,
+        "score_breakdown": row.score_breakdown or None,
+        "icp_scored_at": _dt_to_iso(row.icp_scored_at),
+        "vendor_stack": _vendor_entries_for_row(row) or None,
+        "created_at": _dt_to_iso(row.source_created_at or row.created_at) or "",
+        "updated_at": _dt_to_iso(row.source_updated_at or row.updated_at) or "",
+    }
+
+
+def _person_value(person: dict[str, Any], *keys: str) -> str | None:
+    for key in keys:
+        value = person.get(key)
+        if value is None:
+            continue
+        text = str(value).strip()
+        if text:
+            return text
+    return None
+
+
+def _person_matches(value: str | None, needle: str | None) -> bool:
+    if not needle or not needle.strip():
+        return True
+    return needle.strip().lower() in str(value or "").lower()
+
+
+def _people_for_row(row: PifFirmRow) -> list[dict[str, Any]]:
+    """Flatten local mirrored people, preferring classified leadership/staff rows."""
+    people: list[dict[str, Any]] = []
+    seen: set[str] = set()
+
+    def add_many(source: str, raw_people: Any) -> None:
+        for person in _as_list(raw_people):
+            if not isinstance(person, dict):
+                continue
+            name = _person_value(person, "name", "full_name")
+            title = _person_value(person, "title", "job_title", "position")
+            email = _person_value(person, "email")
+            phone = _person_value(person, "phone")
+            linkedin = _person_value(person, "linkedin", "linkedin_url")
+            role_category = _person_value(person, "role_category", "persona", "role")
+            if not any((name, title, email, phone, linkedin)):
+                continue
+            dedupe_key = (email or f"{name or ''}|{title or ''}").strip().lower()
+            if not dedupe_key:
+                continue
+            scoped_key = f"{row.id}:{dedupe_key}"
+            if scoped_key in seen:
+                continue
+            seen.add(scoped_key)
+            is_decision_maker = bool(person.get("is_decision_maker")) or source == "leadership"
+            people.append({
+                "name": name or email or phone or "Unknown contact",
+                "title": title or "",
+                "role_category": role_category,
+                "source": source,
+                "firm_name": row.firm_name,
+                "firm_id": row.id,
+                "email": email,
+                "phone": phone,
+                "linkedin": linkedin,
+                "bio": _person_value(person, "bio"),
+                "is_decision_maker": is_decision_maker,
+                "updated_at": _dt_to_iso(row.source_updated_at or row.updated_at),
+            })
+
+    add_many("leadership", row.leadership)
+    add_many("staff", row.staff)
+    add_many("contacts", row.contacts)
+    return people
+
+
+async def list_mirrored_pif_people(
+    *,
+    name: str | None = None,
+    firm: str | None = None,
+    title: str | None = None,
+    role_category: str | None = None,
+    source: str | None = "all",
+    leader: str | None = "any",
+    page: int = 1,
+    page_size: int = 25,
+) -> dict[str, Any]:
+    """List people extracted into the local EmailTag firm mirror."""
+    await ensure_firm_intel_tables()
+    page = max(1, int(page))
+    page_size = max(1, min(100, int(page_size)))
+    source_filter = (source or "all").strip().lower()
+    leader_filter = (leader or "any").strip().lower()
+
+    conditions = []
+    if firm and firm.strip():
+        needle = f"%{firm.strip().lower()}%"
+        conditions.append(or_(
+            func.lower(PifFirmRow.id).like(needle),
+            func.lower(PifFirmRow.firm_name).like(needle),
+        ))
+
+    async with AsyncSessionLocal() as session:
+        stmt = select(
+            PifFirmRow.id,
+            PifFirmRow.firm_name,
+            PifFirmRow.contacts,
+            PifFirmRow.leadership,
+            PifFirmRow.staff,
+            PifFirmRow.source_updated_at,
+            PifFirmRow.updated_at,
+        ).order_by(PifFirmRow.source_updated_at.desc().nullslast(), PifFirmRow.firm_name.asc())
+        if conditions:
+            stmt = stmt.where(*conditions)
+        rows = (await session.execute(stmt)).all()
+
+    people: list[dict[str, Any]] = []
+    for row in rows:
+        for person in _people_for_row(row):
+            if source_filter != "all" and person.get("source") != source_filter:
+                continue
+            is_leader = bool(person.get("is_decision_maker"))
+            if leader_filter == "leader" and not is_leader:
+                continue
+            if leader_filter == "non_leader" and is_leader:
+                continue
+            if not _person_matches(person.get("name"), name):
+                continue
+            if not _person_matches(person.get("firm_name"), firm):
+                continue
+            if not _person_matches(person.get("title"), title):
+                continue
+            if role_category and role_category.strip() and not (
+                _person_matches(person.get("role_category"), role_category)
+                or _person_matches(person.get("title"), role_category)
+            ):
+                continue
+            people.append(person)
+
+    total = len(people)
+    start = (page - 1) * page_size
+    return {
+        "items": people[start:start + page_size],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": (total + page_size - 1) // page_size if total else 0,
+    }
+
+
+def _row_matches_presence(row: PifFirmRow, field: str, value: str | None) -> bool:
+    if value in (None, "", "any"):
+        return True
+    if field == "website_presence":
+        has_website = bool(row.canonical_website or row.website or _source_value(row, "website_status") == "resolved")
+        if value == "has":
+            return has_website
+        if value == "missing":
+            return not has_website
+        if value == "resolved":
+            return _source_value(row, "website_status") == "resolved"
+        if value == "unresolved":
+            return _source_value(row, "website_status") != "resolved"
+    if field == "research_presence":
+        status = row.research_status
+        if value == "completed":
+            return status == "completed"
+        if value == "missing":
+            return status not in {"completed", *STATUS_RUNNING}
+        if value == "queued_or_running":
+            return status in STATUS_RUNNING
+        if value == "failed":
+            return status == "failed"
+    if field == "staff_presence":
+        status = row.staff_research_status
+        if value == "completed":
+            return status == "completed"
+        if value == "missing":
+            return status not in {"completed", *STATUS_RUNNING}
+        if value == "queued_or_running":
+            return status in STATUS_RUNNING
+        if value == "failed":
+            return status == "failed"
+    if field == "behavior_presence":
+        has_value = bool(row.behavioral_data)
+        return has_value if value == "has" else not has_value if value == "missing" else True
+    if field == "icp_presence":
+        has_value = row.icp_score is not None
+        return has_value if value == "has" else not has_value if value == "missing" else True
+    if field == "vendor_presence":
+        has_value = _row_has_vendor(row)
+        return has_value if value == "has" else not has_value if value == "missing" else True
+    return True
+
+
+def _row_matches_search(row: PifFirmRow, search: str | None) -> bool:
+    if not search:
+        return True
+    needle = search.strip().lower()
+    if not needle:
+        return True
+    haystack = [
+        row.firm_name,
+        row.website,
+        row.canonical_website,
+        *(row.emails or []),
+        *(row.phones or []),
+    ]
+    return any(needle in str(value or "").lower() for value in haystack)
+
+
+def _row_matches_dates(
+    row: PifFirmRow,
+    *,
+    recently_researched: int | None = None,
+    first_contacted_from: date | None = None,
+    first_contacted_to: date | None = None,
+) -> bool:
+    if recently_researched is not None:
+        if row.last_researched_at is None:
+            return False
+        cutoff = datetime.now(timezone.utc) - timedelta(days=recently_researched)
+        if row.last_researched_at < cutoff:
+            return False
+    if first_contacted_from is not None:
+        start = datetime.combine(first_contacted_from, time.min, tzinfo=timezone.utc)
+        if row.first_contacted_precise_at is None or row.first_contacted_precise_at < start:
+            return False
+    if first_contacted_to is not None:
+        end = datetime.combine(first_contacted_to + timedelta(days=1), time.min, tzinfo=timezone.utc)
+        if row.first_contacted_precise_at is None or row.first_contacted_precise_at >= end:
+            return False
+    return True
+
+
+async def list_mirrored_pif_firms(
+    *,
+    search: str | None = None,
+    page: int = 1,
+    page_size: int = 25,
+    sort_by: str | None = "updated_at",
+    research_status: str | None = None,
+    icp_tier: str | None = None,
+    entity_type: str | None = None,
+    recently_researched: int | None = None,
+    website_presence: str | None = None,
+    research_presence: str | None = None,
+    staff_presence: str | None = None,
+    behavior_presence: str | None = None,
+    icp_presence: str | None = None,
+    vendor_presence: str | None = None,
+    vendor: str | None = None,
+    first_contacted_from: date | None = None,
+    first_contacted_to: date | None = None,
+    active_only: bool = True,
+) -> dict[str, Any]:
+    """List local mirror rows, including vendor-name filtering absent upstream."""
+    del active_only  # The local mirror excludes merged rows at source sync time.
+    await ensure_firm_intel_tables()
+    page = max(1, int(page))
+    page_size = max(1, min(100, int(page_size)))
+
+    vendor_ids = await _firm_ids_for_vendor(vendor) if vendor else None
+    if vendor_ids is not None and not vendor_ids:
+        return {"items": [], "total": 0, "page": page, "page_size": page_size, "total_pages": 0}
+
+    any_vendor_ids: set[str] | None = None
+    if vendor_presence in {"has", "missing"} and vendor_ids is None:
+        any_vendor_ids = await _firm_ids_with_any_vendor()
+
+    conditions = []
+    if vendor_ids is not None:
+        conditions.append(PifFirmRow.id.in_(vendor_ids))
+    elif vendor_presence == "has":
+        if not any_vendor_ids:
+            return {"items": [], "total": 0, "page": page, "page_size": page_size, "total_pages": 0}
+        conditions.append(PifFirmRow.id.in_(any_vendor_ids))
+    elif vendor_presence == "missing" and any_vendor_ids:
+        conditions.append(PifFirmRow.id.notin_(any_vendor_ids))
+
+    if search and search.strip():
+        needle = f"%{search.strip().lower()}%"
+        conditions.append(or_(
+            func.lower(PifFirmRow.firm_name).like(needle),
+            func.lower(PifFirmRow.website).like(needle),
+            func.lower(PifFirmRow.canonical_website).like(needle),
+            func.lower(cast(PifFirmRow.emails, String)).like(needle),
+            func.lower(cast(PifFirmRow.phones, String)).like(needle),
+        ))
+    if research_status:
+        conditions.append(PifFirmRow.research_status == research_status)
+    if icp_tier:
+        conditions.append(PifFirmRow.icp_tier == icp_tier)
+    if entity_type:
+        conditions.append(PifFirmRow.entity_type == entity_type)
+    if recently_researched is not None:
+        conditions.append(PifFirmRow.last_researched_at >= datetime.now(timezone.utc) - timedelta(days=recently_researched))
+    if first_contacted_from is not None:
+        conditions.append(PifFirmRow.first_contacted_precise_at >= datetime.combine(first_contacted_from, time.min, tzinfo=timezone.utc))
+    if first_contacted_to is not None:
+        conditions.append(PifFirmRow.first_contacted_precise_at < datetime.combine(first_contacted_to + timedelta(days=1), time.min, tzinfo=timezone.utc))
+
+    for field, value in (
+        ("website_presence", website_presence),
+        ("research_presence", research_presence),
+        ("staff_presence", staff_presence),
+        ("behavior_presence", behavior_presence),
+        ("icp_presence", icp_presence),
+    ):
+        if value in (None, "", "any"):
+            continue
+        if field == "website_presence":
+            has_website = or_(
+                PifFirmRow.canonical_website.isnot(None),
+                PifFirmRow.website.isnot(None),
+                PifFirmRow.source_json["website_status"].astext == "resolved",
+            )
+            if value == "has":
+                conditions.append(has_website)
+            elif value == "missing":
+                conditions.append(~has_website)
+            elif value == "resolved":
+                conditions.append(PifFirmRow.source_json["website_status"].astext == "resolved")
+            elif value == "unresolved":
+                conditions.append(PifFirmRow.source_json["website_status"].astext != "resolved")
+        elif field == "research_presence":
+            if value == "completed":
+                conditions.append(PifFirmRow.research_status == "completed")
+            elif value == "missing":
+                conditions.append(or_(PifFirmRow.research_status.is_(None), ~PifFirmRow.research_status.in_(["completed", *STATUS_RUNNING])))
+            elif value == "queued_or_running":
+                conditions.append(PifFirmRow.research_status.in_(list(STATUS_RUNNING)))
+            elif value == "failed":
+                conditions.append(PifFirmRow.research_status == "failed")
+        elif field == "staff_presence":
+            if value == "completed":
+                conditions.append(PifFirmRow.staff_research_status == "completed")
+            elif value == "missing":
+                conditions.append(or_(PifFirmRow.staff_research_status.is_(None), ~PifFirmRow.staff_research_status.in_(["completed", *STATUS_RUNNING])))
+            elif value == "queued_or_running":
+                conditions.append(PifFirmRow.staff_research_status.in_(list(STATUS_RUNNING)))
+            elif value == "failed":
+                conditions.append(PifFirmRow.staff_research_status == "failed")
+        elif field == "behavior_presence":
+            has_value = PifFirmRow.behavioral_data != {}
+            conditions.append(has_value if value == "has" else ~has_value)
+        elif field == "icp_presence":
+            conditions.append(PifFirmRow.icp_score.isnot(None) if value == "has" else PifFirmRow.icp_score.is_(None))
+
+    order_by = [PifFirmRow.source_updated_at.desc().nullslast(), PifFirmRow.updated_at.desc()]
+    if sort_by == "conversation_count":
+        order_by = [func.jsonb_array_length(PifFirmRow.conversation_ids).desc(), PifFirmRow.firm_name.asc()]
+    elif sort_by == "firm_name":
+        order_by = [PifFirmRow.firm_name.asc()]
+    elif sort_by == "first_contacted_precise_at":
+        order_by = [PifFirmRow.first_contacted_precise_at.desc().nullslast(), PifFirmRow.firm_name.asc()]
+
+    async with AsyncSessionLocal() as session:
+        count_stmt = select(func.count()).select_from(PifFirmRow)
+        stmt = select(PifFirmRow)
+        if conditions:
+            count_stmt = count_stmt.where(*conditions)
+            stmt = stmt.where(*conditions)
+        total = int((await session.execute(count_stmt)).scalar_one() or 0)
+        rows = (await session.execute(
+            stmt.order_by(*order_by).offset((page - 1) * page_size).limit(page_size)
+        )).scalars().all()
+
+    items = [_serialize_pif_row(row) for row in rows]
+    return {
+        "items": items,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": (total + page_size - 1) // page_size if total else 0,
+    }
+
+
+async def get_mirrored_pif_firm(firm_id: str) -> dict[str, Any] | None:
+    await ensure_firm_intel_tables()
+    async with AsyncSessionLocal() as session:
+        row = await session.get(PifFirmRow, str(firm_id).strip())
+    return _serialize_pif_row(row) if row is not None else None

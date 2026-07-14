@@ -220,7 +220,8 @@ export type PresenceFilter =
   | "completed"
   | "queued_or_running"
   | "failed";
-export type PeopleSource = "leadership" | "staff" | "all";
+export type PeopleSource = "leadership" | "staff" | "contacts" | "all";
+export type LeaderFilter = "leader" | "non_leader" | "any";
 export type ExportFormat = "json" | "csv";
 
 export interface PifInfoListParams {
@@ -238,16 +239,57 @@ export interface PifInfoListParams {
   behavior_presence?: "any" | "has" | "missing";
   icp_presence?: "any" | "has" | "missing";
   vendor_presence?: "any" | "has" | "missing";
+  vendor?: string;
   first_contacted_from?: string;
   first_contacted_to?: string;
   active_only?: boolean;
 }
 
+export interface PifVendorOption {
+  vendor: string;
+  label: string;
+  count: number;
+}
+
+export interface PifVendorOptionsResponse {
+  vendors: PifVendorOption[];
+  total_vendors: number;
+  total_firms: number;
+}
+
+export interface PifSyncResult {
+  fetched?: number;
+  created?: number;
+  updated?: number;
+  skipped?: number;
+  pages?: number;
+  aliases_touched?: number;
+  total_reported?: number;
+  synced_at?: string;
+  full?: boolean;
+  previous_watermark?: string | null;
+  candidate_watermark?: string | null;
+  watermark?: string | null;
+  watermark_advanced?: boolean;
+  stopped_by_limit_with_more?: boolean;
+}
+
+export interface PifSyncStatusResponse {
+  total_firms: number;
+  alias_count: number;
+  watermark: string | null;
+  last_synced_at: string | null;
+  last_result: PifSyncResult;
+  api_base: string;
+}
+
 export interface PifPeopleListParams {
   title?: string;
   name?: string;
+  firm?: string;
   role_category?: string;
   source?: PeopleSource;
+  leader?: LeaderFilter;
   page?: number;
   page_size?: number;
 }
@@ -263,6 +305,8 @@ export interface PifPersonResult {
   phone?: string | null;
   linkedin?: string | null;
   bio?: string | null;
+  is_decision_maker?: boolean | null;
+  updated_at?: string | null;
 }
 
 export interface PifPeopleListResponse {
@@ -316,6 +360,28 @@ function appendParams(path: string, params: Record<string, string | number | boo
   }
   const query = search.toString();
   return query ? `${path}?${query}` : path;
+}
+
+async function possibleFetch<T>(path: string): Promise<T> {
+  const response = await fetch(path, {
+    credentials: "include",
+    headers: { Accept: "application/json" },
+  });
+  const contentType = response.headers.get("content-type") ?? "";
+  const payload: unknown =
+    contentType.includes("application/json") ? await response.json().catch(() => null) : null;
+
+  if (response.status === 401) {
+    throw new EmailtagAuthError(extractDetail(payload) ?? undefined);
+  }
+  if (!response.ok) {
+    throw new EmailtagApiError({
+      status: response.status,
+      detail: extractDetail(payload) ?? `Possible OS request failed: ${response.status}`,
+    });
+  }
+
+  return payload as T;
 }
 
 export async function emailtagFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -389,40 +455,60 @@ export function listPifInfo(params: PifInfoListParams = {}): Promise<PifInfoList
   );
 }
 
+export function listMirroredPifInfo(params: PifInfoListParams = {}): Promise<PifInfoListResponse> {
+  return possibleFetch<PifInfoListResponse>(
+    appendParams("/api/pif/firms", {
+      search: params.search,
+      page: params.page ?? 1,
+      page_size: params.page_size ?? 25,
+      sort_by: params.sort_by,
+      research_status: params.research_status,
+      icp_tier: params.icp_tier,
+      entity_type: params.entity_type,
+      recently_researched: params.recently_researched,
+      website_presence: params.website_presence,
+      research_presence: params.research_presence,
+      staff_presence: params.staff_presence,
+      behavior_presence: params.behavior_presence,
+      icp_presence: params.icp_presence,
+      vendor_presence: params.vendor_presence,
+      vendor: params.vendor,
+      first_contacted_from: params.first_contacted_from,
+      first_contacted_to: params.first_contacted_to,
+      active_only: params.active_only,
+    }),
+  );
+}
+
+export function listPifVendors(): Promise<PifVendorOptionsResponse> {
+  return possibleFetch<PifVendorOptionsResponse>("/api/pif/vendors");
+}
+
+export function getPifSyncStatus(): Promise<PifSyncStatusResponse> {
+  return possibleFetch<PifSyncStatusResponse>("/api/pif/sync-status");
+}
+
 export function getFirm(pifId: string): Promise<PifInfoResponse> {
   return emailtagFetch<PifInfoResponse>(`/pif-info/${encodeURIComponent(pifId)}`);
 }
 
+export function getMirroredFirm(pifId: string): Promise<PifInfoResponse> {
+  return possibleFetch<PifInfoResponse>(`/api/pif/firms/${encodeURIComponent(pifId)}`);
+}
+
 export async function listPifPeople(params: PifPeopleListParams = {}): Promise<PifPeopleListResponse> {
-  const response = await emailtagFetch<unknown>(
-    appendParams("/pif-info/people", {
+  return possibleFetch<PifPeopleListResponse>(
+    appendParams("/api/pif/people", {
       title: params.title,
       name: params.name,
+      firm: params.firm,
       role_category: params.role_category,
       source: params.source,
+      leader: params.leader,
       page: params.page ?? 1,
       page_size: params.page_size ?? 25,
     }),
   );
-
-  if (Array.isArray(response)) {
-    return { items: response as PifPersonResult[] };
-  }
-  if (isRecord(response)) {
-    // The backend returns people under `results`; older/other shapes use
-    // `items` or `data`. Normalize all of them to `items`.
-    const list = response.results ?? response.items ?? response.data;
-    if (Array.isArray(list)) {
-      return {
-        items: list as PifPersonResult[],
-        total: typeof response.total === "number" ? response.total : undefined,
-        page: typeof response.page === "number" ? response.page : undefined,
-        page_size: typeof response.page_size === "number" ? response.page_size : undefined,
-        total_pages: typeof response.total_pages === "number" ? response.total_pages : undefined,
-      };
-    }
-  }
-  return { items: [] };
 }
 
 function filenameFromContentDisposition(header: string | null, fallback: string): string {

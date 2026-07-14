@@ -117,9 +117,33 @@ console = Console()
 # Helpers
 # ---------------------------------------------------------------------------
 
+def _env_file_value(key: str) -> str | None:
+    candidates = [
+        Path.cwd() / ".env",
+        Path(__file__).resolve().parents[1] / ".env",
+    ]
+    seen: set[Path] = set()
+    for path in candidates:
+        if path in seen or not path.exists():
+            continue
+        seen.add(path)
+        try:
+            for line in path.read_text(encoding="utf-8").splitlines():
+                raw = line.strip()
+                if not raw or raw.startswith("#") or "=" not in raw:
+                    continue
+                name, value = raw.split("=", 1)
+                if name.strip() != key:
+                    continue
+                return value.strip().strip("\"'")
+        except OSError:
+            continue
+    return None
+
+
 def _api_base() -> str:
     """Base URL of the FastAPI daemon (loopback by default)."""
-    port = os.getenv("BACKEND_PORT", "8000").strip() or "8000"
+    port = (os.getenv("BACKEND_PORT") or _env_file_value("BACKEND_PORT") or "8000").strip() or "8000"
     return (
         os.getenv("POSSIBLEOS_API_BASE")
         or os.getenv("AUTOCALLER_API_BASE")
@@ -142,7 +166,7 @@ def _http_error_detail(exc: httpx.HTTPError) -> str:
 def _get(path: str, **params) -> dict:
     query_params = {key: value for key, value in params.items() if value is not None}
     try:
-        resp = httpx.get(f"{_api_base()}{path}", params=query_params or None, timeout=15.0)
+        resp = httpx.get(f"{_api_base()}{path}", params=query_params or None, timeout=60.0)
         resp.raise_for_status()
     except httpx.HTTPError as e:
         console.print(f"[red]API request failed: {_http_error_detail(e)}[/red]")
@@ -4331,6 +4355,8 @@ def actions_send_approved_lead_gen_draft(
         help="Required send provider: 'resend' (inbox) or 'zoho_api' (junk-prone). Never auto-selected.",
     ),
     approved_by: str = typer.Option("operator", "--approved-by"),
+    composer_experiment_key: str = typer.Option("", "--composer-experiment", help="Optional composer experiment key."),
+    composer_variant_key: str = typer.Option("", "--composer-variant", help="Optional composer variant key."),
     at: str = typer.Option("", "--at", help='Schedule send time: ISO-8601 with offset, or "HH:MM PT|PDT|PST" today.'),
     execute_now: bool = typer.Option(True, "--execute/--no-execute", help="Execute immediately after creating the action."),
     json_output: bool = typer.Option(False, "--json"),
@@ -4356,6 +4382,8 @@ def actions_send_approved_lead_gen_draft(
             "approved_by": approved_by,
             "scheduled_for": scheduled_for.isoformat() if scheduled_for else None,
             "transport": transport,
+            "composer_experiment_key": composer_experiment_key or None,
+            "composer_variant_key": composer_variant_key or None,
         },
         timeout=120.0,
     )
@@ -6129,6 +6157,247 @@ def lead_gen_batches(
     console.print(table)
 
 
+def _read_json_object(path: str) -> dict[str, Any]:
+    try:
+        parsed = json.loads(Path(path).read_text(encoding="utf-8"))
+    except Exception as exc:
+        console.print(f"[red]Failed to read JSON from {path}: {exc}[/red]")
+        raise typer.Exit(code=1) from exc
+    if not isinstance(parsed, dict):
+        console.print("[red]JSON file must contain an object.[/red]")
+        raise typer.Exit(code=1)
+    return parsed
+
+
+def _parse_wave_fields(fields: list[str]) -> dict[str, Any]:
+    parsed: dict[str, Any] = {}
+    numeric = {"measurement_window_hours", "minimum_n"}
+    for raw in fields:
+        if "=" not in raw:
+            console.print(f"[red]Invalid --field {raw!r}; use key=value.[/red]")
+            raise typer.Exit(code=1)
+        key, value = raw.split("=", 1)
+        key = key.strip()
+        value = value.strip()
+        if not key:
+            console.print("[red]Wave card field key cannot be empty.[/red]")
+            raise typer.Exit(code=1)
+        if key in numeric:
+            try:
+                parsed[key] = int(value)
+            except ValueError as exc:
+                console.print(f"[red]{key} must be an integer.[/red]")
+                raise typer.Exit(code=1) from exc
+        else:
+            parsed[key] = value
+    return parsed
+
+
+def _print_experiment_summary(row: dict[str, Any]) -> None:
+    experiment = row.get("experiment") or {}
+    card = experiment.get("card") or {}
+    missing = experiment.get("missing_fields") or []
+    console.print(
+        f"[bold]{row.get('batch_name') or row.get('batch_id')}[/bold] "
+        f"[dim]batch={row.get('batch_id')} status={experiment.get('status')} "
+        f"ready={experiment.get('is_ready')} missing={len(missing)}[/dim]"
+    )
+    if card:
+        for key in [
+            "wave_id",
+            "goal",
+            "primary_metric",
+            "hypothesis",
+            "changed_vs_previous",
+            "prediction",
+            "success_threshold",
+            "measurement_window_hours",
+            "minimum_n",
+            "confidence_note",
+            "invalidation_criteria",
+            "owner",
+        ]:
+            if card.get(key) not in (None, ""):
+                console.print(f"  {key}: {card.get(key)}")
+    if missing:
+        console.print(f"  [yellow]missing[/yellow]: {', '.join(missing)}")
+
+
+@lead_gen_app.command("experiments")
+def lead_gen_experiments(
+    status: str = typer.Option("", "--status", help="Filter: draft | ready | scheduled | measuring | awaiting_verdict | closed | superseded"),
+    limit: int = typer.Option(50, "--limit", "-n", min=1, max=200),
+    json_output: bool = typer.Option(False, "--json", help="Print raw JSON."),
+):
+    """List wave/experiment batches."""
+    data = _get("/api/lead-gen/experiments", status=status or None, limit=limit)
+    if json_output:
+        console.print_json(data=data)
+        return
+    rows = data.get("experiments") or []
+    if not rows:
+        console.print("[dim]No wave batches.[/dim]")
+        return
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("batch", no_wrap=True)
+    table.add_column("exp", no_wrap=True)
+    table.add_column("ready", no_wrap=True)
+    table.add_column("missing", justify="right", no_wrap=True)
+    table.add_column("created", no_wrap=True)
+    table.add_column("name")
+    for row in rows:
+        experiment = row.get("experiment") or {}
+        table.add_row(
+            str(row.get("batch_id") or "")[:8] + "...",
+            str(experiment.get("status") or ""),
+            "yes" if experiment.get("is_ready") else "no",
+            str(len(experiment.get("missing_fields") or [])),
+            str(row.get("created_at") or "")[:19],
+            str(row.get("batch_name") or ""),
+        )
+    console.print(table)
+
+
+@lead_gen_app.command("wave-card")
+def lead_gen_wave_card(
+    batch_id: str = typer.Argument(..., help="lead_gen_batches.id"),
+    from_path: str = typer.Option("", "--from", help="JSON object of experiment card fields."),
+    field: list[str] = typer.Option([], "--field", help="Set one card field as key=value. Repeatable."),
+    actor: str = typer.Option("operator", "--actor"),
+    json_output: bool = typer.Option(False, "--json", help="Print raw JSON."),
+):
+    """Show or update the experiment card for a wave batch."""
+    patch: dict[str, Any] = {}
+    if from_path:
+        patch.update(_read_json_object(from_path))
+    patch.update(_parse_wave_fields(field))
+    if not patch:
+        data = _get(f"/api/lead-gen/batches/{batch_id}")
+        experiment = (data.get("batch") or {}).get("experiment") or {}
+        payload = {"batch_id": batch_id, "experiment": experiment}
+        if json_output:
+            console.print_json(data=payload)
+            return
+        _print_experiment_summary({
+            "batch_id": batch_id,
+            "batch_name": (data.get("batch") or {}).get("name"),
+            "experiment": experiment,
+        })
+        return
+    data = _put(f"/api/lead-gen/batches/{batch_id}/experiment", {"actor": actor, "card": patch})
+    if json_output:
+        console.print_json(data=data)
+        return
+    _print_experiment_summary({
+        "batch_id": data.get("batch_id") or batch_id,
+        "batch_name": batch_id,
+        "experiment": data.get("experiment") or {},
+    })
+
+
+@lead_gen_app.command("wave-rollup")
+def lead_gen_wave_rollup(
+    batch_id: str = typer.Argument(..., help="lead_gen_batches.id"),
+    json_output: bool = typer.Option(False, "--json", help="Print raw JSON."),
+):
+    """Show the honest human/scanner/reply rollup for a wave batch."""
+    data = _get(f"/api/lead-gen/batches/{batch_id}/experiment-rollup")
+    if json_output:
+        console.print_json(data=data)
+        return
+    experiment = data.get("experiment") or {}
+    measurement = data.get("measurement") or {}
+    console.print(
+        f"[bold]wave rollup[/bold] batch={batch_id} "
+        f"status={experiment.get('status')} ready={experiment.get('is_ready')}"
+    )
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("metric")
+    table.add_column("value", justify="right")
+    for key in [
+        "planned",
+        "approved",
+        "sent",
+        "send_failed",
+        "bounced",
+        "raw_clicks",
+        "scanner_clicks",
+        "suspect_clicks",
+        "raw_page_sessions",
+        "human_page_sessions",
+        "gesture_page_sessions",
+        "revealed_page_sessions",
+        "suspect_page_sessions",
+        "scanner_page_sessions",
+        "strong_human_replies",
+        "weak_attributed_replies",
+        "inbound_messages",
+        "meetings",
+    ]:
+        table.add_row(key, str(measurement.get(key, 0)))
+    console.print(table)
+
+
+@lead_gen_app.command("wave-close")
+def lead_gen_wave_close(
+    batch_id: str = typer.Argument(..., help="lead_gen_batches.id"),
+    from_path: str = typer.Option("", "--from", help="JSON object with verdict/learning fields."),
+    verdict: str = typer.Option("", "--verdict", help="worked | null | loss."),
+    learning: str = typer.Option("", "--learning"),
+    why: str = typer.Option("", "--why"),
+    next_hypothesis: str = typer.Option("", "--next-hypothesis"),
+    next_recommended_wave: str = typer.Option("", "--next-recommended-wave"),
+    confidence_note: str = typer.Option("", "--confidence-note"),
+    superseded: bool = typer.Option(False, "--superseded", help="Close as superseded instead of closed."),
+    actor: str = typer.Option("operator", "--actor"),
+    json_output: bool = typer.Option(False, "--json", help="Print raw JSON."),
+):
+    """Close a wave with a verdict and learning."""
+    payload = _read_json_object(from_path) if from_path else {}
+    for key, value in {
+        "verdict": verdict,
+        "learning": learning,
+        "why": why,
+        "next_hypothesis": next_hypothesis,
+        "next_recommended_wave": next_recommended_wave,
+        "confidence_note": confidence_note,
+    }.items():
+        if value:
+            payload[key] = value
+    payload["superseded"] = superseded
+    payload["actor"] = actor
+    data = _post(f"/api/lead-gen/batches/{batch_id}/experiment/close", json_body=payload, timeout=60.0)
+    if json_output:
+        console.print_json(data=data)
+        return
+    _print_experiment_summary({
+        "batch_id": data.get("batch_id") or batch_id,
+        "batch_name": batch_id,
+        "experiment": data.get("experiment") or {},
+    })
+
+
+@lead_gen_app.command("approve-actions")
+def lead_gen_approve_actions(
+    batch_id: str = typer.Argument(..., help="lead_gen_batches.id"),
+    approved_by: str = typer.Option("operator", "--approved-by"),
+    json_output: bool = typer.Option(False, "--json", help="Print raw JSON."),
+):
+    """Approve reviewed draft actions so the scheduler sends the exact drafts."""
+    data = _post(
+        f"/api/lead-gen/batches/{batch_id}/approve-actions",
+        json_body={"approved_by": approved_by},
+        timeout=120.0,
+    )
+    if json_output:
+        console.print_json(data=data)
+        return
+    console.print(
+        f"[green]Approved actions[/green] batch={data.get('batch_id') or batch_id} "
+        f"approved={data.get('approved_count')} skipped={len(data.get('skipped') or [])}"
+    )
+
+
 @lead_gen_app.command("show")
 def lead_gen_show(
     batch_id: str = typer.Argument(..., help="lead_gen_batches.id"),
@@ -7129,6 +7398,76 @@ def pif_status():
     from app.services.firm_intel_sync import firm_intel_status
 
     console.print_json(data=asyncio.run(firm_intel_status()))
+
+
+@pif_app.command("sync-status")
+def pif_sync_status():
+    """Show local mirror sync status and the last daily-sync delta."""
+    from app.services.firm_intel_sync import firm_intel_sync_status
+
+    console.print_json(data=asyncio.run(firm_intel_sync_status()))
+
+
+@pif_app.command("vendors")
+def pif_vendors():
+    """List extracted vendors available for filtering the local firm mirror."""
+    from app.services.firm_intel_sync import list_extracted_vendors
+
+    console.print_json(data=asyncio.run(list_extracted_vendors()))
+
+
+@pif_app.command("firms")
+def pif_firms(
+    vendor: str | None = typer.Option(None, "--vendor", help="Filter by extracted vendor key, e.g. filevine."),
+    search: str | None = typer.Option(None, "--search", help="Search firm name, website, email, or phone."),
+    limit: int = typer.Option(25, "--limit", min=1, max=100, help="Rows to return."),
+):
+    """List local mirrored firms, optionally filtered by extracted vendor."""
+    from app.services.firm_intel_sync import list_mirrored_pif_firms
+
+    payload = asyncio.run(list_mirrored_pif_firms(vendor=vendor, search=search, page_size=limit))
+    rows = [
+        {
+            "id": item.get("id"),
+            "firm_name": item.get("firm_name"),
+            "website": item.get("canonical_website") or item.get("website"),
+            "vendors": [v.get("vendor") for v in (item.get("vendor_stack") or []) if isinstance(v, dict)],
+            "updated_at": item.get("updated_at"),
+        }
+        for item in payload.get("items", [])
+    ]
+    console.print_json(data={
+        "items": rows,
+        "total": payload.get("total"),
+        "page": payload.get("page"),
+        "page_size": payload.get("page_size"),
+        "total_pages": payload.get("total_pages"),
+    })
+
+
+@pif_app.command("people")
+def pif_people(
+    name: str | None = typer.Option(None, "--name", help="Filter by contact name."),
+    firm: str | None = typer.Option(None, "--firm", help="Filter by firm ID or firm name."),
+    title: str | None = typer.Option(None, "--title", help="Filter by title text."),
+    role: str | None = typer.Option(None, "--role", help="Filter by extracted role/persona."),
+    source: str = typer.Option("all", "--source", help="all, leadership, staff, or contacts."),
+    leader: str = typer.Option("any", "--leader", help="any, leader, or non_leader."),
+    limit: int = typer.Option(25, "--limit", min=1, max=100, help="Rows to return."),
+):
+    """List people extracted into the local mirrored firm directory."""
+    from app.services.firm_intel_sync import list_mirrored_pif_people
+
+    payload = asyncio.run(list_mirrored_pif_people(
+        name=name,
+        firm=firm,
+        title=title,
+        role_category=role,
+        source=source,
+        leader=leader,
+        page_size=limit,
+    ))
+    console.print_json(data=payload)
 
 
 @pif_app.command("sync")

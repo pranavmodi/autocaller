@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import type React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -21,8 +21,6 @@ import {
   Filter,
   Globe,
   Loader2,
-  LogIn,
-  LogOut,
   Mail,
   PhoneCall,
   Play,
@@ -49,16 +47,15 @@ import {
   ENTITY_TYPE_LABELS,
   EmailtagAuthError,
   analyzeBehavior,
-  checkEmailtagAuth,
   detectVendors,
   downloadEmailtagExport,
-  getFirm,
   getFullEnrichmentStatus,
+  getMirroredFirm,
+  getPifSyncStatus,
   getResearchStatus,
-  listPifInfo,
+  listMirroredPifInfo,
   listPifPeople,
-  loginEmailtag,
-  logoutEmailtag,
+  listPifVendors,
   scoreFirm,
   startFullEnrichment,
   startResearch,
@@ -69,7 +66,9 @@ import {
   type PifInfoResponse,
   type PifPeopleListParams,
   type PifPersonResult,
+  type PifSyncStatusResponse,
   type PifTier,
+  type PifVendorOption,
 } from "@/lib/emailtag";
 
 const PAGE_SIZE = 25;
@@ -84,6 +83,8 @@ type WebsitePresence = NonNullable<PifInfoListParams["website_presence"]>;
 type StatusPresence = NonNullable<PifInfoListParams["research_presence"]>;
 type SimplePresence = NonNullable<PifInfoListParams["behavior_presence"]>;
 type PeopleSource = NonNullable<PifPeopleListParams["source"]>;
+type LeaderFilter = NonNullable<PifPeopleListParams["leader"]>;
+type LeadsView = "firms" | "contacts";
 type FirstContactPeriod = "any" | "last_1_month" | "last_6_months" | "custom";
 type WorkflowStepState = "completed" | "running" | "failed" | "waiting" | "skipped";
 
@@ -134,6 +135,7 @@ interface FiltersState {
   behavior_presence: SimplePresence;
   icp_presence: SimplePresence;
   vendor_presence: SimplePresence;
+  vendor: string;
   first_contact_period: FirstContactPeriod;
   first_contacted_from: string;
   first_contacted_to: string;
@@ -153,6 +155,7 @@ const DEFAULT_FILTERS: FiltersState = {
   behavior_presence: "any",
   icp_presence: "any",
   vendor_presence: "any",
+  vendor: "",
   first_contact_period: "any",
   first_contacted_from: "",
   first_contacted_to: "",
@@ -373,7 +376,8 @@ function filtersToParams(filters: FiltersState, page: number): PifInfoListParams
     staff_presence: filters.staff_presence,
     behavior_presence: filters.behavior_presence,
     icp_presence: filters.icp_presence,
-    vendor_presence: filters.vendor_presence,
+    vendor_presence: filters.vendor === "__missing" ? "missing" : filters.vendor.trim() ? "has" : filters.vendor_presence,
+    vendor: filters.vendor && filters.vendor !== "__missing" ? filters.vendor.trim() : undefined,
     first_contacted_from: firstContact.from,
     first_contacted_to: firstContact.to,
     active_only: filters.active_only,
@@ -392,57 +396,28 @@ function EmailtagFirmsFallback() {
   return (
     <div className="flex min-h-[50vh] items-center justify-center text-sm text-neutral-500">
       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-      Loading EmailTag firms...
+      Loading leads...
     </div>
   );
 }
 
 function EmailtagFirmsContent() {
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const selectedFirmId = searchParams.get("firm") ?? "";
-  const [authenticated, setAuthenticated] = useState<boolean | null>(null);
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
   const [batchResearchLimit, setBatchResearchLimit] = useState("10");
   const [batchResearchRun, setBatchResearchRun] = useState<BatchResearchRun | null>(null);
   const [filters, setFilters] = useState<FiltersState>(DEFAULT_FILTERS);
   const [page, setPage] = useState(1);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [view, setView] = useState<LeadsView>("firms");
   const [peopleFilters, setPeopleFilters] = useState<PifPeopleListParams>({
     source: "all",
+    leader: "any",
     page: 1,
-    page_size: 10,
-  });
-  const [peopleOpen, setPeopleOpen] = useState(false);
-
-  const authQuery = useQuery({
-    queryKey: ["emailtag-auth"],
-    queryFn: checkEmailtagAuth,
-    retry: false,
-  });
-
-  useEffect(() => {
-    if (authQuery.data?.authenticated) setAuthenticated(true);
-    if (isAuthError(authQuery.error)) setAuthenticated(false);
-  }, [authQuery.data, authQuery.error]);
-
-  const login = useMutation({
-    mutationFn: () => loginEmailtag(username.trim(), password),
-    onSuccess: async () => {
-      setPassword("");
-      await queryClient.invalidateQueries({ queryKey: ["emailtag-auth"] });
-      setAuthenticated(true);
-    },
-  });
-
-  const logout = useMutation({
-    mutationFn: logoutEmailtag,
-    onSettled: () => {
-      setAuthenticated(false);
-      queryClient.removeQueries({ queryKey: ["emailtag"] });
-    },
+    page_size: 25,
   });
 
   const listParams = useMemo(() => filtersToParams(filters, page), [filters, page]);
@@ -459,37 +434,38 @@ function EmailtagFirmsContent() {
       params.delete("firm");
     }
     const query = params.toString();
-    router.push(query ? `/emailtag-firms?${query}` : "/emailtag-firms");
+    const basePath = pathname?.startsWith("/leads") ? "/leads" : "/emailtag-firms";
+    router.push(query ? `${basePath}?${query}` : basePath);
     setExpandedId(pifId);
   };
 
   const firmsQuery = useQuery({
     queryKey: ["emailtag", "firms", listParams],
-    queryFn: () => listPifInfo(listParams),
-    enabled: authenticated === true,
+    queryFn: () => listMirroredPifInfo(listParams),
     refetchInterval: 60_000,
   });
 
-  useEffect(() => {
-    if (isAuthError(firmsQuery.error)) setAuthenticated(false);
-  }, [firmsQuery.error]);
+  const syncStatusQuery = useQuery({
+    queryKey: ["pif", "sync-status"],
+    queryFn: getPifSyncStatus,
+    refetchInterval: 5 * 60_000,
+  });
+
+  const vendorOptionsQuery = useQuery({
+    queryKey: ["pif", "vendors"],
+    queryFn: listPifVendors,
+    staleTime: 5 * 60_000,
+  });
 
   const peopleQuery = useQuery({
     queryKey: ["emailtag", "people", peopleFilters],
     queryFn: () => listPifPeople(peopleFilters),
-    enabled: authenticated === true && peopleOpen,
+    enabled: view === "contacts",
   });
-
-  useEffect(() => {
-    if (isAuthError(peopleQuery.error)) setAuthenticated(false);
-  }, [peopleQuery.error]);
 
   const exportAll = useMutation({
     mutationFn: (format: ExportFormat) => downloadEmailtagExport({ format, include_merged: false }),
     onSuccess: ({ blob, filename }) => downloadBlob(blob, filename),
-    onError: (error) => {
-      if (isAuthError(error)) setAuthenticated(false);
-    },
   });
 
   const queueMissingResearch = useMutation({
@@ -500,7 +476,7 @@ function EmailtagFirmsContent() {
       let totalPages = 1;
 
       while (selected.length < requested && lookupPage <= totalPages) {
-        const payload = await listPifInfo({
+        const payload = await listMirroredPifInfo({
           page: lookupPage,
           page_size: BATCH_PAGE_SIZE,
           sort_by: "updated_at",
@@ -541,9 +517,6 @@ function EmailtagFirmsContent() {
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["emailtag", "firms"] });
     },
-    onError: (error) => {
-      if (isAuthError(error)) setAuthenticated(false);
-    },
   });
 
   const batchTaskKey = useMemo(
@@ -568,7 +541,6 @@ function EmailtagFirmsContent() {
       );
     },
     enabled:
-      authenticated === true &&
       Boolean(batchTaskKey) &&
       Boolean(batchResearchRun?.rows.some((row) => row.task_id && !TERMINAL_TASK_STATUSES.has(row.status))),
     refetchInterval: (query) => {
@@ -576,10 +548,6 @@ function EmailtagFirmsContent() {
       return statuses.length > 0 && statuses.every((status) => TERMINAL_TASK_STATUSES.has(status)) ? false : 5_000;
     },
   });
-
-  useEffect(() => {
-    if (isAuthError(batchStatusQuery.error)) setAuthenticated(false);
-  }, [batchStatusQuery.error]);
 
   useEffect(() => {
     const updates = batchStatusQuery.data;
@@ -609,75 +577,12 @@ function EmailtagFirmsContent() {
     setPage(1);
   }
 
-  if (authenticated === null && authQuery.isLoading) {
-    return (
-      <div className="flex min-h-[50vh] items-center justify-center text-sm text-neutral-500">
-        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-        Checking EmailTag session...
-      </div>
-    );
-  }
-
-  if (authenticated !== true) {
-    return (
-      <div className="mx-auto flex min-h-[60vh] max-w-sm items-center">
-        <form
-          className="w-full rounded-xl border border-neutral-200 bg-white p-5 shadow-sm"
-          onSubmit={(event) => {
-            event.preventDefault();
-            login.mutate();
-          }}
-        >
-          <div className="mb-5">
-            <h1 className="text-lg font-semibold">EmailTag Firms</h1>
-            <p className="mt-1 text-sm text-neutral-500">
-              Sign in with PIFStats credentials to load firm intelligence.
-            </p>
-          </div>
-          <div className="space-y-3">
-            <label className="block text-xs font-medium text-neutral-600">
-              Username
-              <input
-                value={username}
-                onChange={(event) => setUsername(event.target.value)}
-                className="mt-1 w-full rounded-md border border-neutral-200 px-3 py-2 text-sm focus:border-neutral-400 focus:outline-none focus:ring-1 focus:ring-neutral-400"
-                autoComplete="username"
-              />
-            </label>
-            <label className="block text-xs font-medium text-neutral-600">
-              Password
-              <input
-                type="password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                className="mt-1 w-full rounded-md border border-neutral-200 px-3 py-2 text-sm focus:border-neutral-400 focus:outline-none focus:ring-1 focus:ring-neutral-400"
-                autoComplete="current-password"
-              />
-            </label>
-          </div>
-          {login.isError && (
-            <div className="mt-3 flex items-start gap-2 rounded-md bg-rose-50 px-3 py-2 text-xs text-rose-700">
-              <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-              {login.error instanceof Error ? login.error.message : "Login failed"}
-            </div>
-          )}
-          <button
-            type="submit"
-            disabled={login.isPending || !username.trim() || !password}
-            className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-md bg-neutral-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-40"
-          >
-            {login.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogIn className="h-4 w-4" />}
-            Sign in
-          </button>
-        </form>
-      </div>
-    );
-  }
-
   const data = firmsQuery.data;
   const firms = data?.items ?? [];
   const selectedFirmOnPage = Boolean(selectedFirmId && firms.some((firm) => firm.id === selectedFirmId));
   const totalPages = data?.total_pages ?? 1;
+  const peopleData = peopleQuery.data;
+  const peopleTotalPages = peopleData?.total_pages ?? 1;
   const pageSummary = {
     missingWebsite: firms.filter((firm) => !(firm.canonical_website ?? firm.website)).length,
     scored: firms.filter((firm) => firm.icp_score != null).length,
@@ -687,19 +592,21 @@ function EmailtagFirmsContent() {
     <div className="space-y-5">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <h1 className="text-xl font-semibold">EmailTag Firms</h1>
+          <h1 className="text-xl font-semibold">Leads</h1>
           <p className="text-sm text-neutral-500">
-            {data?.total?.toLocaleString() ?? "—"} authenticated PIFStats firms from EmailTag.
+            {view === "contacts"
+              ? `${peopleData?.total?.toLocaleString() ?? "—"} contacts from the local EmailTag mirror.`
+              : `${data?.total?.toLocaleString() ?? "—"} firms from the local EmailTag mirror.`}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
-            onClick={() => void firmsQuery.refetch()}
-            disabled={firmsQuery.isFetching}
+            onClick={() => void (view === "contacts" ? peopleQuery.refetch() : firmsQuery.refetch())}
+            disabled={view === "contacts" ? peopleQuery.isFetching : firmsQuery.isFetching}
             className="inline-flex items-center gap-1.5 rounded-md border border-neutral-200 bg-white px-3 py-1.5 text-xs font-medium text-neutral-700 hover:bg-neutral-50 disabled:opacity-40"
           >
-            {firmsQuery.isFetching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+            {(view === "contacts" ? peopleQuery.isFetching : firmsQuery.isFetching) ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
             Refresh
           </button>
           <button
@@ -720,15 +627,6 @@ function EmailtagFirmsContent() {
             <Download className="h-3.5 w-3.5" />
             Export all CSV
           </button>
-          <button
-            type="button"
-            onClick={() => logout.mutate()}
-            disabled={logout.isPending}
-            className="inline-flex items-center gap-1.5 rounded-md border border-neutral-200 bg-white px-3 py-1.5 text-xs font-medium text-neutral-500 hover:bg-neutral-50 disabled:opacity-40"
-          >
-            <LogOut className="h-3.5 w-3.5" />
-            Logout
-          </button>
         </div>
       </div>
 
@@ -739,113 +637,196 @@ function EmailtagFirmsContent() {
         <MetricTile icon={<BarChart3 className="h-4 w-4" />} label="Scored on page" value={pageSummary.scored} />
       </div>
 
-      <BatchResearchPanel
-        limit={batchResearchLimit}
-        setLimit={setBatchResearchLimit}
-        onQueue={() => queueMissingResearch.mutate()}
-        pending={queueMissingResearch.isPending}
-        result={queueMissingResearch.data}
-        error={queueMissingResearch.error}
-        run={batchResearchRun}
-        polling={batchStatusQuery.isFetching}
-      />
+      <SyncStatusPanel status={syncStatusQuery.data} loading={syncStatusQuery.isLoading} />
 
-      <FilterBar filters={filters} updateFilter={updateFilter} clearFilters={() => {
-        setFilters(DEFAULT_FILTERS);
-        setPage(1);
-      }} />
+      <LeadsViewTabs value={view} onChange={setView} />
 
-      <PeoplePanel
-        open={peopleOpen}
-        setOpen={setPeopleOpen}
-        filters={peopleFilters}
-        setFilters={setPeopleFilters}
-        items={peopleQuery.data?.items ?? []}
-        loading={peopleQuery.isLoading}
-      />
+      {view === "firms" ? (
+        <>
+          <BatchResearchPanel
+            limit={batchResearchLimit}
+            setLimit={setBatchResearchLimit}
+            onQueue={() => queueMissingResearch.mutate()}
+            pending={queueMissingResearch.isPending}
+            result={queueMissingResearch.data}
+            error={queueMissingResearch.error}
+            run={batchResearchRun}
+            polling={batchStatusQuery.isFetching}
+          />
 
-      {selectedFirmId && !selectedFirmOnPage && (
-        <SelectedFirmPanel
-          pifId={selectedFirmId}
-          onClear={() => setSelectedFirm(null)}
-          onAuthError={() => setAuthenticated(false)}
+          <FilterBar filters={filters} updateFilter={updateFilter} clearFilters={() => {
+            setFilters(DEFAULT_FILTERS);
+            setPage(1);
+          }} vendorOptions={vendorOptionsQuery.data?.vendors ?? []} />
+
+          {selectedFirmId && !selectedFirmOnPage && (
+            <SelectedFirmPanel
+              pifId={selectedFirmId}
+              onClear={() => setSelectedFirm(null)}
+              onAuthError={() => undefined}
+            />
+          )}
+
+          <div className="overflow-hidden rounded-xl border border-neutral-200 bg-white">
+            {firmsQuery.isLoading && (
+              <div className="px-5 py-8 text-center text-xs text-neutral-400">Loading leads...</div>
+            )}
+            {firmsQuery.isError && !isAuthError(firmsQuery.error) && (
+              <div className="px-5 py-8 text-center text-xs text-rose-600">
+                {firmsQuery.error instanceof Error ? firmsQuery.error.message : "Lead list failed"}
+              </div>
+            )}
+            {!firmsQuery.isLoading && firms.length === 0 && (
+              <div className="px-5 py-8 text-center text-xs text-neutral-400">No firms match the filters.</div>
+            )}
+            {firms.length > 0 && (
+              <div className="mobile-table-card overflow-hidden">
+                <table className="w-full table-fixed divide-y divide-neutral-100 text-sm">
+                  <thead className="bg-neutral-50 text-left text-[11px] uppercase text-neutral-500">
+                    <tr>
+                      <th className="w-[3%] px-2 py-2" />
+                      <th className="w-[15%] px-2 py-2 font-medium">Firm</th>
+                      <th className="hidden w-[8%] px-2 py-2 font-medium 2xl:table-cell">Entity</th>
+                      <th className="w-[15%] px-2 py-2 font-medium">Website</th>
+                      <th className="w-[8%] px-2 py-2 font-medium">Staff</th>
+                      <th className="w-[7%] px-2 py-2 font-medium">ICP</th>
+                      <th className="w-[8%] px-2 py-2 font-medium">Research</th>
+                      <th className="w-[10%] px-2 py-2 font-medium">First contact</th>
+                      <th className="hidden w-[11%] px-2 py-2 font-medium xl:table-cell">Signals</th>
+                      <th className="w-[8%] px-2 py-2 font-medium">Updated</th>
+                      <th className="w-[9%] px-2 py-2 font-medium">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-neutral-100">
+                    {firms.map((firm) => (
+                      <FirmTableRows
+                        key={firm.id}
+                        firm={firm}
+                        expanded={expandedId === firm.id || selectedFirmId === firm.id}
+                        onToggle={() => {
+                          const open = expandedId === firm.id || selectedFirmId === firm.id;
+                          setSelectedFirm(open ? null : firm.id);
+                        }}
+                        onAuthError={() => undefined}
+                      />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          <div className="flex items-center justify-between text-xs text-neutral-500">
+            <span>
+              Page {data?.page ?? page} of {totalPages} ({data?.total?.toLocaleString() ?? 0} firms)
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setPage((current) => Math.max(1, current - 1))}
+                disabled={page <= 1}
+                className="inline-flex items-center gap-1 rounded-md border border-neutral-300 px-2.5 py-1 text-xs font-medium disabled:opacity-30"
+              >
+                <ChevronLeft className="h-3 w-3" />
+                Prev
+              </button>
+              <button
+                type="button"
+                onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+                disabled={page >= totalPages}
+                className="inline-flex items-center gap-1 rounded-md border border-neutral-300 px-2.5 py-1 text-xs font-medium disabled:opacity-30"
+              >
+                Next
+                <ChevronRight className="h-3 w-3" />
+              </button>
+            </div>
+          </div>
+        </>
+      ) : (
+        <ContactsView
+          filters={peopleFilters}
+          setFilters={setPeopleFilters}
+          items={peopleData?.items ?? []}
+          loading={peopleQuery.isLoading}
+          error={peopleQuery.error}
+          page={peopleData?.page ?? peopleFilters.page ?? 1}
+          total={peopleData?.total ?? 0}
+          totalPages={peopleTotalPages}
         />
       )}
+    </div>
+  );
+}
 
-      <div className="overflow-hidden rounded-xl border border-neutral-200 bg-white">
-        {firmsQuery.isLoading && (
-          <div className="px-5 py-8 text-center text-xs text-neutral-400">Loading EmailTag firms...</div>
-        )}
-        {firmsQuery.isError && !isAuthError(firmsQuery.error) && (
-          <div className="px-5 py-8 text-center text-xs text-rose-600">
-            {firmsQuery.error instanceof Error ? firmsQuery.error.message : "EmailTag firm list failed"}
-          </div>
-        )}
-        {!firmsQuery.isLoading && firms.length === 0 && (
-          <div className="px-5 py-8 text-center text-xs text-neutral-400">No firms match the filters.</div>
-        )}
-        {firms.length > 0 && (
-          <div className="mobile-table-card overflow-hidden">
-            <table className="w-full table-fixed divide-y divide-neutral-100 text-sm">
-              <thead className="bg-neutral-50 text-left text-[11px] uppercase text-neutral-500">
-                <tr>
-                  <th className="w-[3%] px-2 py-2" />
-                  <th className="w-[15%] px-2 py-2 font-medium">Firm</th>
-                  <th className="hidden w-[8%] px-2 py-2 font-medium 2xl:table-cell">Entity</th>
-                  <th className="w-[15%] px-2 py-2 font-medium">Website</th>
-                  <th className="w-[8%] px-2 py-2 font-medium">Staff</th>
-                  <th className="w-[7%] px-2 py-2 font-medium">ICP</th>
-                  <th className="w-[8%] px-2 py-2 font-medium">Research</th>
-                  <th className="w-[10%] px-2 py-2 font-medium">First contact</th>
-                  <th className="hidden w-[11%] px-2 py-2 font-medium xl:table-cell">Signals</th>
-                  <th className="w-[8%] px-2 py-2 font-medium">Updated</th>
-                  <th className="w-[9%] px-2 py-2 font-medium">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-neutral-100">
-                {firms.map((firm) => (
-                  <FirmTableRows
-                    key={firm.id}
-                    firm={firm}
-                    expanded={expandedId === firm.id || selectedFirmId === firm.id}
-                    onToggle={() => {
-                      const open = expandedId === firm.id || selectedFirmId === firm.id;
-                      setSelectedFirm(open ? null : firm.id);
-                    }}
-                    onAuthError={() => setAuthenticated(false)}
-                  />
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+function SyncStatusPanel({
+  status,
+  loading,
+}: {
+  status: PifSyncStatusResponse | undefined;
+  loading: boolean;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const last = status?.last_result ?? {};
+  const lastSynced = status?.last_synced_at ?? last.synced_at ?? null;
+  const fetched = last.fetched ?? 0;
+  const created = last.created ?? 0;
+  const updated = last.updated ?? 0;
+  const skipped = last.skipped ?? 0;
+  const aliases = last.aliases_touched ?? 0;
+  const pages = last.pages ?? 0;
+  const totalReported = last.total_reported ?? 0;
 
-      <div className="flex items-center justify-between text-xs text-neutral-500">
-        <span>
-          Page {data?.page ?? page} of {totalPages} ({data?.total?.toLocaleString() ?? 0} firms)
-        </span>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setPage((current) => Math.max(1, current - 1))}
-            disabled={page <= 1}
-            className="inline-flex items-center gap-1 rounded-md border border-neutral-300 px-2.5 py-1 text-xs font-medium disabled:opacity-30"
-          >
-            <ChevronLeft className="h-3 w-3" />
-            Prev
-          </button>
-          <button
-            type="button"
-            onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
-            disabled={page >= totalPages}
-            className="inline-flex items-center gap-1 rounded-md border border-neutral-300 px-2.5 py-1 text-xs font-medium disabled:opacity-30"
-          >
-            Next
-            <ChevronRight className="h-3 w-3" />
-          </button>
+  return (
+    <section className="overflow-hidden rounded-lg border border-neutral-200 bg-white">
+      <button
+        type="button"
+        onClick={() => setExpanded((current) => !current)}
+        className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-neutral-50"
+      >
+        <div className="min-w-0">
+          <div className="text-[11px] font-semibold uppercase text-neutral-400">Mirror sync</div>
+          <div className="mt-0.5 truncate text-sm text-neutral-800">
+            {loading ? "Loading sync status..." : `Last synced ${formatDateTime(lastSynced)}`}
+          </div>
         </div>
-      </div>
+        <div className="flex shrink-0 items-center gap-3 text-xs text-neutral-500">
+          {status && (
+            <>
+              <span>{status.total_firms.toLocaleString()} firms</span>
+              <span>{fetched.toLocaleString()} pulled</span>
+            </>
+          )}
+          <ChevronDown className={cn("h-4 w-4 transition", expanded && "rotate-180")} />
+        </div>
+      </button>
+      {expanded && (
+        <div className="border-t border-neutral-100 px-3 py-3">
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
+            <SyncStat label="Fetched" value={fetched} />
+            <SyncStat label="Created" value={created} />
+            <SyncStat label="Updated" value={updated} />
+            <SyncStat label="Skipped" value={skipped} />
+            <SyncStat label="Aliases" value={aliases} />
+            <SyncStat label="Pages" value={pages} />
+            <SyncStat label="Remote total" value={totalReported} />
+          </div>
+          <div className="mt-3 grid gap-2 text-xs text-neutral-500 md:grid-cols-2">
+            <KeyValue label="Previous watermark" value={last.previous_watermark ? formatDateTime(last.previous_watermark) : "—"} />
+            <KeyValue label="Current watermark" value={(last.watermark ?? status?.watermark) ? formatDateTime(last.watermark ?? status?.watermark) : "—"} />
+            <KeyValue label="Candidate watermark" value={last.candidate_watermark ? formatDateTime(last.candidate_watermark) : "—"} />
+            <KeyValue label="Alias rows" value={status?.alias_count?.toLocaleString() ?? "—"} />
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function SyncStat({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-md border border-neutral-100 bg-neutral-50 px-3 py-2">
+      <div className="text-[10px] font-semibold uppercase text-neutral-400">{label}</div>
+      <div className="mt-0.5 text-sm font-semibold text-neutral-900">{value.toLocaleString()}</div>
     </div>
   );
 }
@@ -854,10 +835,12 @@ function FilterBar({
   filters,
   updateFilter,
   clearFilters,
+  vendorOptions,
 }: {
   filters: FiltersState;
   updateFilter: <K extends keyof FiltersState>(key: K, value: FiltersState[K]) => void;
   clearFilters: () => void;
+  vendorOptions: PifVendorOption[];
 }) {
   return (
     <div className="space-y-3 rounded-xl border border-neutral-200 bg-white p-3">
@@ -920,8 +903,14 @@ function FilterBar({
         <SelectField label="ICP" value={filters.icp_presence} onChange={(value) => updateFilter("icp_presence", value as SimplePresence)}>
           {PRESENCE.map((value) => <option key={value} value={value}>{formatLabel(value)}</option>)}
         </SelectField>
-        <SelectField label="Vendors" value={filters.vendor_presence} onChange={(value) => updateFilter("vendor_presence", value as SimplePresence)}>
-          {PRESENCE.map((value) => <option key={value} value={value}>{formatLabel(value)}</option>)}
+        <SelectField label="Vendor" value={filters.vendor} onChange={(value) => updateFilter("vendor", value)}>
+          <option value="">Any vendor</option>
+          <option value="__missing">No vendors detected</option>
+          {vendorOptions.map((option) => (
+            <option key={option.vendor} value={option.vendor}>
+              {option.label} ({option.count})
+            </option>
+          ))}
         </SelectField>
         <SelectField label="First contact period" value={filters.first_contact_period} onChange={(value) => updateFilter("first_contact_period", value as FirstContactPeriod)}>
           <option value="any">Any period</option>
@@ -1005,68 +994,199 @@ function InputField({
   );
 }
 
-function PeoplePanel({
-  open,
-  setOpen,
+function LeadsViewTabs({
+  value,
+  onChange,
+}: {
+  value: LeadsView;
+  onChange: (value: LeadsView) => void;
+}) {
+  return (
+    <div className="inline-flex w-full rounded-lg border border-neutral-200 bg-white p-1 sm:w-auto">
+      <button
+        type="button"
+        onClick={() => onChange("firms")}
+        className={cn(
+          "inline-flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2 text-xs font-semibold sm:flex-none",
+          value === "firms" ? "bg-neutral-900 text-white" : "text-neutral-600 hover:bg-neutral-50",
+        )}
+      >
+        <Database className="h-3.5 w-3.5" />
+        Firms
+      </button>
+      <button
+        type="button"
+        onClick={() => onChange("contacts")}
+        className={cn(
+          "inline-flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2 text-xs font-semibold sm:flex-none",
+          value === "contacts" ? "bg-neutral-900 text-white" : "text-neutral-600 hover:bg-neutral-50",
+        )}
+      >
+        <Users className="h-3.5 w-3.5" />
+        Contacts
+      </button>
+    </div>
+  );
+}
+
+function ContactsView({
   filters,
   setFilters,
   items,
   loading,
+  error,
+  page,
+  total,
+  totalPages,
 }: {
-  open: boolean;
-  setOpen: (open: boolean) => void;
   filters: PifPeopleListParams;
   setFilters: React.Dispatch<React.SetStateAction<PifPeopleListParams>>;
   items: PifPersonResult[];
   loading: boolean;
+  error: unknown;
+  page: number;
+  total: number;
+  totalPages: number;
 }) {
+  const update = <K extends keyof PifPeopleListParams>(key: K, value: PifPeopleListParams[K]) => {
+    setFilters((current) => ({ ...current, [key]: value, page: 1 }));
+  };
+  const setPage = (nextPage: number) => {
+    setFilters((current) => ({ ...current, page: Math.max(1, nextPage) }));
+  };
+
   return (
-    <div className="rounded-xl border border-neutral-200 bg-white">
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        className="flex w-full items-center justify-between px-4 py-3 text-sm font-medium text-neutral-800"
-      >
-        <span className="inline-flex items-center gap-2">
-          <Users className="h-4 w-4 text-neutral-400" />
-          People search
-        </span>
-        <ChevronDown className={cn("h-4 w-4 text-neutral-400 transition", open && "rotate-180")} />
-      </button>
-      {open && (
-        <div className="space-y-3 border-t border-neutral-100 p-3">
-          <div className="grid gap-2 md:grid-cols-4">
-            <InputField label="Name" value={filters.name ?? ""} onChange={(value) => setFilters((current) => ({ ...current, name: value || undefined, page: 1 }))} />
-            <InputField label="Title" value={filters.title ?? ""} onChange={(value) => setFilters((current) => ({ ...current, title: value || undefined, page: 1 }))} />
-            <InputField label="Role" value={filters.role_category ?? ""} onChange={(value) => setFilters((current) => ({ ...current, role_category: value || undefined, page: 1 }))} />
-            <SelectField label="Source" value={filters.source ?? "all"} onChange={(value) => setFilters((current) => ({ ...current, source: value as PeopleSource, page: 1 }))}>
-              <option value="all">All</option>
-              <option value="leadership">Leadership</option>
-              <option value="staff">Staff</option>
-            </SelectField>
-          </div>
-          {loading && <div className="py-4 text-center text-xs text-neutral-400">Searching people...</div>}
-          {!loading && items.length === 0 && <div className="py-4 text-center text-xs text-neutral-400">No people found.</div>}
-          <div className="divide-y divide-neutral-100">
-            {items.map((person, index) => (
-              <div key={`${person.name}-${person.firm_id ?? index}`} className="flex flex-col gap-1 py-2 text-sm sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <div className="font-medium text-neutral-900">{person.name}</div>
-                  <div className="text-xs text-neutral-500">
-                    {display(person.title)}
-                    {person.firm_name ? ` · ${person.firm_name}` : ""}
-                    {person.role_category ? ` · ${person.role_category}` : ""}
-                  </div>
-                </div>
-                <div className="text-xs text-neutral-500">
-                  {person.email ?? person.phone ?? person.linkedin ?? person.source ?? ""}
-                </div>
-              </div>
-            ))}
-          </div>
+    <section className="space-y-3">
+      <div className="space-y-3 rounded-xl border border-neutral-200 bg-white p-3">
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-6">
+          <InputField label="Name" value={filters.name ?? ""} onChange={(value) => update("name", value || undefined)} />
+          <InputField label="Firm" value={filters.firm ?? ""} onChange={(value) => update("firm", value || undefined)} />
+          <InputField label="Title" value={filters.title ?? ""} onChange={(value) => update("title", value || undefined)} />
+          <InputField label="Role" value={filters.role_category ?? ""} onChange={(value) => update("role_category", value || undefined)} />
+          <SelectField label="Source" value={filters.source ?? "all"} onChange={(value) => update("source", value as PeopleSource)}>
+            <option value="all">All sources</option>
+            <option value="leadership">Leadership</option>
+            <option value="staff">Staff</option>
+            <option value="contacts">Contacts</option>
+          </SelectField>
+          <SelectField label="Leader" value={filters.leader ?? "any"} onChange={(value) => update("leader", value as LeaderFilter)}>
+            <option value="any">Any</option>
+            <option value="leader">Leader</option>
+            <option value="non_leader">Not leader</option>
+          </SelectField>
         </div>
-      )}
-    </div>
+        <div className="flex items-center justify-between text-xs text-neutral-500">
+          <span>{total.toLocaleString()} contacts</span>
+          <button
+            type="button"
+            onClick={() => setFilters({ source: "all", leader: "any", page: 1, page_size: filters.page_size ?? 25 })}
+            className="inline-flex items-center gap-1.5 rounded-md border border-neutral-200 px-3 py-1.5 text-xs font-medium text-neutral-600 hover:bg-neutral-50"
+          >
+            <Filter className="h-3.5 w-3.5" />
+            Clear filters
+          </button>
+        </div>
+      </div>
+
+      <div className="overflow-hidden rounded-xl border border-neutral-200 bg-white">
+        {loading && <div className="px-5 py-8 text-center text-xs text-neutral-400">Loading contacts...</div>}
+        {Boolean(error) && !loading && (
+          <div className="px-5 py-8 text-center text-xs text-rose-600">
+            {error instanceof Error ? error.message : "Contact list failed"}
+          </div>
+        )}
+        {!loading && !error && items.length === 0 && (
+          <div className="px-5 py-8 text-center text-xs text-neutral-400">No contacts match the filters.</div>
+        )}
+        {items.length > 0 && (
+          <div className="mobile-table-card overflow-hidden">
+            <table className="w-full table-fixed divide-y divide-neutral-100 text-sm">
+              <thead className="bg-neutral-50 text-left text-[11px] uppercase text-neutral-500">
+                <tr>
+                  <th className="w-[18%] px-3 py-2 font-medium">Contact</th>
+                  <th className="w-[18%] px-3 py-2 font-medium">Firm</th>
+                  <th className="w-[18%] px-3 py-2 font-medium">Title</th>
+                  <th className="w-[12%] px-3 py-2 font-medium">Role</th>
+                  <th className="w-[12%] px-3 py-2 font-medium">Leader</th>
+                  <th className="w-[14%] px-3 py-2 font-medium">Reach</th>
+                  <th className="w-[8%] px-3 py-2 font-medium">Updated</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-neutral-100">
+                {items.map((person, index) => (
+                  <tr key={`${person.firm_id ?? "firm"}-${person.email ?? person.name}-${index}`} className="hover:bg-neutral-50">
+                    <td data-label="Contact" className="min-w-0 px-3 py-3">
+                      <div className="truncate font-medium text-neutral-900">{display(person.name)}</div>
+                      <div className="text-[11px] text-neutral-500">{formatLabel(person.source ?? "contact")}</div>
+                    </td>
+                    <td data-label="Firm" className="min-w-0 px-3 py-3">
+                      {person.firm_id ? (
+                        <Link href={`/leads?firm=${encodeURIComponent(person.firm_id)}`} className="block truncate text-blue-600 hover:underline">
+                          {display(person.firm_name)}
+                        </Link>
+                      ) : (
+                        <span className="truncate text-neutral-600">{display(person.firm_name)}</span>
+                      )}
+                      {person.firm_id && <div className="truncate text-[11px] text-neutral-400">{person.firm_id}</div>}
+                    </td>
+                    <td data-label="Title" className="min-w-0 px-3 py-3 text-xs text-neutral-600">
+                      <span className="line-clamp-2">{display(person.title)}</span>
+                    </td>
+                    <td data-label="Role" className="min-w-0 px-3 py-3 text-xs text-neutral-600">
+                      {display(person.role_category)}
+                    </td>
+                    <td data-label="Leader" className="px-3 py-3">
+                      <span className={cn(
+                        "rounded-full px-2 py-0.5 text-[10px] font-semibold",
+                        person.is_decision_maker ? "bg-emerald-50 text-emerald-700" : "bg-neutral-100 text-neutral-500",
+                      )}>
+                        {person.is_decision_maker ? "Leader" : "No"}
+                      </span>
+                    </td>
+                    <td data-label="Reach" className="min-w-0 px-3 py-3 text-xs text-neutral-600">
+                      {person.email ? (
+                        <a href={`mailto:${person.email}`} className="block truncate text-blue-600 hover:underline">{person.email}</a>
+                      ) : (
+                        <span className="block truncate">{display(person.phone ?? person.linkedin)}</span>
+                      )}
+                    </td>
+                    <td data-label="Updated" className="px-3 py-3 text-xs text-neutral-500">
+                      {formatDateTime(person.updated_at ?? null)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <div className="flex items-center justify-between text-xs text-neutral-500">
+        <span>
+          Page {page} of {totalPages || 1} ({total.toLocaleString()} contacts)
+        </span>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setPage(page - 1)}
+            disabled={page <= 1}
+            className="inline-flex items-center gap-1 rounded-md border border-neutral-300 px-2.5 py-1 text-xs font-medium disabled:opacity-30"
+          >
+            <ChevronLeft className="h-3 w-3" />
+            Prev
+          </button>
+          <button
+            type="button"
+            onClick={() => setPage(Math.min(totalPages || 1, page + 1))}
+            disabled={page >= (totalPages || 1)}
+            className="inline-flex items-center gap-1 rounded-md border border-neutral-300 px-2.5 py-1 text-xs font-medium disabled:opacity-30"
+          >
+            Next
+            <ChevronRight className="h-3 w-3" />
+          </button>
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -1366,7 +1486,7 @@ function SelectedFirmPanel({
 }) {
   const firmQuery = useQuery({
     queryKey: ["emailtag", "selected-firm", pifId],
-    queryFn: () => getFirm(pifId),
+    queryFn: () => getMirroredFirm(pifId),
     enabled: Boolean(pifId),
   });
 
@@ -1417,7 +1537,7 @@ function FirmDetail({ initialFirm, onAuthError }: { initialFirm: PifInfoResponse
 
   const firmQuery = useQuery({
     queryKey: ["emailtag", "firm", initialFirm.id],
-    queryFn: () => getFirm(initialFirm.id),
+    queryFn: () => getMirroredFirm(initialFirm.id),
     initialData: initialFirm,
     refetchInterval: vendorPolling ? 3_000 : false,
   });

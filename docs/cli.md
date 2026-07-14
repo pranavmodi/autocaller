@@ -107,6 +107,10 @@ Every command accepts `--help`. Exit code is `0` on success, `1` on any error
 |---|---|
 | `pif sync [--full] [--limit N] [--restart]` | Pull EmailTag firm-intel v2 profiles into Postgres (`pif_directory_firms`) and aliases into `firm_intel_aliases`. Delta sync uses `firm_intel_sync_state.last_updated_since`; `--full` ignores the watermark; `--limit` is for smoke runs such as `pif sync --limit 20`. Interrupted full crawls save a resume point and continue from it on the next run (the upstream feed tolerates a bounded number of requests per session); `--restart` discards the saved point. |
 | `pif status` | Show native firm-intel mirror state: total firms, profile-source counts, alias count, watermark, last sync summary, and EmailTag v2 `/health` passthrough. |
+| `pif sync-status` | Show local-only mirror sync state and the last daily-sync delta (`fetched`, `created`, `updated`, aliases, watermarks) without calling EmailTag health. |
+| `pif vendors` | List every extracted vendor currently present in the local EmailTag mirror, with firm counts. This is the CLI counterpart to the Leads vendor dropdown. |
+| `pif firms [--vendor <vendor>] [--search <text>] [--limit N]` | List local mirrored firms, optionally filtered by an extracted vendor key such as `filevine` or `casepeer`. |
+| `pif people [--firm <text>] [--name <text>] [--title <text>] [--role <text>] [--source all\|leadership\|staff\|contacts] [--leader any\|leader\|non_leader] [--limit N]` | List people extracted into the local mirrored firm directory. This is the CLI counterpart to the Leads contacts view. |
 | `pif resolve <domain\|email\|url\|legacy_pif_id>` | Resolve locally through `firm_intel_aliases` and mirrored websites; if no local hit, fall back to EmailTag v2 `/firms/resolve`. Prints `firm_id`, `firm_name`, and source. |
 | `pif show <firm_id\|domain>` | Print the mirrored v2 profile summary for a firm: name, website, metro, ICP tier, warm score, decision-makers with emails, and vendor stack. Local-only; no upstream HTTP. |
 | `pif ingest-contacts` | Populate `firm_contacts` from the synced directory's titled `contacts[]` + `leadership[]` (then map personas). Local-only, no API calls. This is the lead-supply unlock: emailtag's named, titled contacts give personas + firm names for free, lifting daily eligible leads (verified: selection 11 → full 20, decision-maker-weighted). Runs automatically after each `pif sync` when `PIF_DIRECTORY_NATIVE=1`. |
@@ -716,6 +720,10 @@ restart any service.
 
 ```bash
 bin/possibleos pif status
+bin/possibleos pif sync-status
+bin/possibleos pif vendors
+bin/possibleos pif firms --vendor filevine --limit 10
+bin/possibleos pif people --leader leader --role owner --limit 10
 bin/possibleos pif sync --limit 20
 bin/possibleos pif resolve smithlaw.com
 bin/possibleos pif show smithlaw.com
