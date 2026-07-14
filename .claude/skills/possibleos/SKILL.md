@@ -191,8 +191,9 @@ mirrored profile with `pif show <firm_id|domain>`. Use `pif vendors` to list
 every extracted vendor in the mirror with counts, and `pif firms --vendor
 <vendor> --limit N` to inspect the same vendor-specific firm set used by the
 Leads page; use `pif people --leader leader --role <text> --limit N` to inspect
-the local people set used by the Leads contacts view. Normal Leads page reads
-should use the local mirror;
+the local people set used by the Leads contacts view. Use `pif people-options`
+to list Title and derived Role dropdown values with counts. Normal Leads page
+reads should use the local mirror;
 the remote EmailTag API is for the daily sync and explicit task-triggering
 operations. The daemon's native PIF loop runs this v2 sync and then ingests
 directory contacts; do not use the old v1 sync path for operations because

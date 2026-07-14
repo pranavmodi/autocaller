@@ -7470,6 +7470,14 @@ def pif_people(
     console.print_json(data=payload)
 
 
+@pif_app.command("people-options")
+def pif_people_options():
+    """List title and role dropdown values for mirrored people, with counts."""
+    from app.services.firm_intel_sync import list_mirrored_pif_people_filter_options
+
+    console.print_json(data=asyncio.run(list_mirrored_pif_people_filter_options()))
+
+
 @pif_app.command("sync")
 def pif_sync(
     full: bool = typer.Option(False, "--full", help="Ignore the saved v2 watermark and crawl all firms."),

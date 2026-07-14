@@ -51,6 +51,7 @@ import {
   downloadEmailtagExport,
   getFullEnrichmentStatus,
   getMirroredFirm,
+  getPifPeopleFilterOptions,
   getPifSyncStatus,
   getResearchStatus,
   listMirroredPifInfo,
@@ -65,6 +66,7 @@ import {
   type PifInfoListResponse,
   type PifInfoResponse,
   type PifPeopleListParams,
+  type PifPeopleFilterOption,
   type PifPersonResult,
   type PifSyncStatusResponse,
   type PifTier,
@@ -463,6 +465,13 @@ function EmailtagFirmsContent() {
     enabled: view === "contacts",
   });
 
+  const peopleFilterOptionsQuery = useQuery({
+    queryKey: ["pif", "people-filter-options"],
+    queryFn: getPifPeopleFilterOptions,
+    enabled: view === "contacts",
+    staleTime: 5 * 60_000,
+  });
+
   const exportAll = useMutation({
     mutationFn: (format: ExportFormat) => downloadEmailtagExport({ format, include_merged: false }),
     onSuccess: ({ blob, filename }) => downloadBlob(blob, filename),
@@ -752,6 +761,8 @@ function EmailtagFirmsContent() {
           page={peopleData?.page ?? peopleFilters.page ?? 1}
           total={peopleData?.total ?? 0}
           totalPages={peopleTotalPages}
+          titleOptions={peopleFilterOptionsQuery.data?.titles ?? []}
+          roleOptions={peopleFilterOptionsQuery.data?.roles ?? []}
         />
       )}
     </div>
@@ -1038,6 +1049,8 @@ function ContactsView({
   page,
   total,
   totalPages,
+  titleOptions,
+  roleOptions,
 }: {
   filters: PifPeopleListParams;
   setFilters: React.Dispatch<React.SetStateAction<PifPeopleListParams>>;
@@ -1047,6 +1060,8 @@ function ContactsView({
   page: number;
   total: number;
   totalPages: number;
+  titleOptions: PifPeopleFilterOption[];
+  roleOptions: PifPeopleFilterOption[];
 }) {
   const update = <K extends keyof PifPeopleListParams>(key: K, value: PifPeopleListParams[K]) => {
     setFilters((current) => ({ ...current, [key]: value, page: 1 }));
@@ -1061,8 +1076,22 @@ function ContactsView({
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-6">
           <InputField label="Name" value={filters.name ?? ""} onChange={(value) => update("name", value || undefined)} />
           <InputField label="Firm" value={filters.firm ?? ""} onChange={(value) => update("firm", value || undefined)} />
-          <InputField label="Title" value={filters.title ?? ""} onChange={(value) => update("title", value || undefined)} />
-          <InputField label="Role" value={filters.role_category ?? ""} onChange={(value) => update("role_category", value || undefined)} />
+          <SelectField label="Title" value={filters.title ?? ""} onChange={(value) => update("title", value || undefined)}>
+            <option value="">Any title</option>
+            {titleOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.value} ({option.count.toLocaleString()})
+              </option>
+            ))}
+          </SelectField>
+          <SelectField label="Role" value={filters.role_category ?? ""} onChange={(value) => update("role_category", value || undefined)}>
+            <option value="">Any role</option>
+            {roleOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {formatLabel(option.value)} ({option.count.toLocaleString()})
+              </option>
+            ))}
+          </SelectField>
           <SelectField label="Source" value={filters.source ?? "all"} onChange={(value) => update("source", value as PeopleSource)}>
             <option value="all">All sources</option>
             <option value="leadership">Leadership</option>

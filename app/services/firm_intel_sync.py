@@ -10,6 +10,7 @@ import asyncio
 import logging
 import os
 from datetime import date, datetime, time, timedelta, timezone
+from functools import lru_cache
 from typing import Any
 
 import httpx
@@ -18,6 +19,7 @@ from sqlalchemy import String, cast, func, inspect, or_, select, text
 from app.db import AsyncSessionLocal, async_engine
 from app.db.models import FirmAliasRow, FirmIntelSyncStateRow, PifFirmRow
 from app.services.front_sync import is_consumer_domain, normalize_domain
+from app.services.persona_mapper import classify_contact
 
 logger = logging.getLogger(__name__)
 
@@ -938,6 +940,21 @@ def _person_matches(value: str | None, needle: str | None) -> bool:
     return needle.strip().lower() in str(value or "").lower()
 
 
+@lru_cache(maxsize=8192)
+def _role_from_title(title: str | None) -> str | None:
+    return classify_contact(title, None, None)[0]
+
+
+@lru_cache(maxsize=8192)
+def _role_from_email(email: str | None) -> str | None:
+    return classify_contact(None, email, None)[0]
+
+
+def _derived_role_category(title: str | None, email: str | None, name: str | None) -> str | None:
+    del name
+    return _role_from_title(title) or _role_from_email(email)
+
+
 def _people_for_row(row: PifFirmRow) -> list[dict[str, Any]]:
     """Flatten local mirrored people, preferring classified leadership/staff rows."""
     people: list[dict[str, Any]] = []
@@ -953,6 +970,8 @@ def _people_for_row(row: PifFirmRow) -> list[dict[str, Any]]:
             phone = _person_value(person, "phone")
             linkedin = _person_value(person, "linkedin", "linkedin_url")
             role_category = _person_value(person, "role_category", "persona", "role")
+            if not role_category:
+                role_category = _derived_role_category(title, email, name)
             if not any((name, title, email, phone, linkedin)):
                 continue
             dedupe_key = (email or f"{name or ''}|{title or ''}").strip().lower()
@@ -982,6 +1001,48 @@ def _people_for_row(row: PifFirmRow) -> list[dict[str, Any]]:
     add_many("staff", row.staff)
     add_many("contacts", row.contacts)
     return people
+
+
+def _people_option_counts(people: list[dict[str, Any]], key: str) -> list[dict[str, Any]]:
+    counts: dict[str, int] = {}
+    for person in people:
+        value = str(person.get(key) or "").strip()
+        if not value:
+            continue
+        counts[value] = counts.get(value, 0) + 1
+    return [
+        {"value": value, "count": count}
+        for value, count in sorted(counts.items(), key=lambda item: (-item[1], item[0].lower()))
+    ]
+
+
+async def list_mirrored_pif_people_filter_options() -> dict[str, Any]:
+    """Return local mirrored contact filter values with counts."""
+    await ensure_firm_intel_tables()
+    async with AsyncSessionLocal() as session:
+        rows = (await session.execute(select(
+            PifFirmRow.id,
+            PifFirmRow.firm_name,
+            PifFirmRow.contacts,
+            PifFirmRow.leadership,
+            PifFirmRow.staff,
+            PifFirmRow.source_updated_at,
+            PifFirmRow.updated_at,
+        ))).all()
+
+    people: list[dict[str, Any]] = []
+    for row in rows:
+        people.extend(_people_for_row(row))
+
+    titles = _people_option_counts(people, "title")
+    roles = _people_option_counts(people, "role_category")
+    return {
+        "titles": titles,
+        "roles": roles,
+        "total_titles": len(titles),
+        "total_roles": len(roles),
+        "total_people": len(people),
+    }
 
 
 async def list_mirrored_pif_people(

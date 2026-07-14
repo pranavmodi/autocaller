@@ -317,6 +317,19 @@ export interface PifPeopleListResponse {
   total_pages?: number;
 }
 
+export interface PifPeopleFilterOption {
+  value: string;
+  count: number;
+}
+
+export interface PifPeopleFilterOptionsResponse {
+  titles: PifPeopleFilterOption[];
+  roles: PifPeopleFilterOption[];
+  total_titles: number;
+  total_roles: number;
+  total_people: number;
+}
+
 export interface DownloadedEmailtagExport {
   blob: Blob;
   filename: string;
@@ -509,6 +522,10 @@ export async function listPifPeople(params: PifPeopleListParams = {}): Promise<P
       page_size: params.page_size ?? 25,
     }),
   );
+}
+
+export function getPifPeopleFilterOptions(): Promise<PifPeopleFilterOptionsResponse> {
+  return possibleFetch<PifPeopleFilterOptionsResponse>("/api/pif/people/filter-options");
 }
 
 function filenameFromContentDisposition(header: string | null, fallback: string): string {

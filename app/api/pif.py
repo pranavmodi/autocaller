@@ -14,6 +14,7 @@ from app.services.firm_intel_sync import (
     firm_intel_sync_status,
     get_mirrored_pif_firm,
     list_extracted_vendors,
+    list_mirrored_pif_people_filter_options,
     list_mirrored_pif_people,
     list_mirrored_pif_firms,
     sync_firm_intel,
@@ -35,6 +36,11 @@ async def get_pif_sync_status():
 @router.get("/vendors")
 async def get_pif_vendors():
     return await list_extracted_vendors()
+
+
+@router.get("/people/filter-options")
+async def get_pif_people_filter_options():
+    return await list_mirrored_pif_people_filter_options()
 
 
 @router.get("/people")
