@@ -1049,6 +1049,7 @@ async def list_mirrored_pif_people(
     *,
     name: str | None = None,
     firm: str | None = None,
+    vendor: str | None = None,
     title: str | None = None,
     role_category: str | None = None,
     source: str | None = "all",
@@ -1062,8 +1063,19 @@ async def list_mirrored_pif_people(
     page_size = max(1, min(100, int(page_size)))
     source_filter = (source or "all").strip().lower()
     leader_filter = (leader or "any").strip().lower()
+    vendor_ids = await _firm_ids_for_vendor(vendor) if vendor and vendor.strip() else None
+    if vendor_ids is not None and not vendor_ids:
+        return {
+            "items": [],
+            "total": 0,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": 0,
+        }
 
     conditions = []
+    if vendor_ids is not None:
+        conditions.append(PifFirmRow.id.in_(vendor_ids))
     if firm and firm.strip():
         needle = f"%{firm.strip().lower()}%"
         conditions.append(or_(

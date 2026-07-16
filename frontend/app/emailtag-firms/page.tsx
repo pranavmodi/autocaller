@@ -212,6 +212,30 @@ function safeWebsiteUrl(value: string | null) {
   return value.startsWith("http://") || value.startsWith("https://") ? value : `https://${value}`;
 }
 
+function safeLinkedInUrl(value: string | null | undefined) {
+  const trimmed = value?.trim();
+  if (!trimmed) return null;
+  const candidate = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed.replace(/^\/+/, "")}`;
+  try {
+    const url = new URL(candidate);
+    const hostname = url.hostname.toLowerCase();
+    if (hostname === "linkedin.com" || hostname.endsWith(".linkedin.com")) return url.toString();
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+function linkedInSearchUrl(person: PifPersonResult) {
+  const query = [
+    person.name,
+    person.title,
+    person.firm_name,
+    "LinkedIn",
+  ].filter(Boolean).join(" ");
+  return `https://www.google.com/search?q=${encodeURIComponent(query)}`;
+}
+
 function frontConversationUrl(conversationId: string) {
   return `https://app.frontapp.com/open/${encodeURIComponent(conversationId)}`;
 }
@@ -763,6 +787,7 @@ function EmailtagFirmsContent() {
           totalPages={peopleTotalPages}
           titleOptions={peopleFilterOptionsQuery.data?.titles ?? []}
           roleOptions={peopleFilterOptionsQuery.data?.roles ?? []}
+          vendorOptions={vendorOptionsQuery.data?.vendors ?? []}
         />
       )}
     </div>
@@ -1051,6 +1076,7 @@ function ContactsView({
   totalPages,
   titleOptions,
   roleOptions,
+  vendorOptions,
 }: {
   filters: PifPeopleListParams;
   setFilters: React.Dispatch<React.SetStateAction<PifPeopleListParams>>;
@@ -1062,6 +1088,7 @@ function ContactsView({
   totalPages: number;
   titleOptions: PifPeopleFilterOption[];
   roleOptions: PifPeopleFilterOption[];
+  vendorOptions: PifVendorOption[];
 }) {
   const update = <K extends keyof PifPeopleListParams>(key: K, value: PifPeopleListParams[K]) => {
     setFilters((current) => ({ ...current, [key]: value, page: 1 }));
@@ -1073,9 +1100,17 @@ function ContactsView({
   return (
     <section className="space-y-3">
       <div className="space-y-3 rounded-xl border border-neutral-200 bg-white p-3">
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-6">
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
           <InputField label="Name" value={filters.name ?? ""} onChange={(value) => update("name", value || undefined)} />
           <InputField label="Firm" value={filters.firm ?? ""} onChange={(value) => update("firm", value || undefined)} />
+          <SelectField label="Vendor" value={filters.vendor ?? ""} onChange={(value) => update("vendor", value || undefined)}>
+            <option value="">Any vendor</option>
+            {vendorOptions.map((option) => (
+              <option key={option.vendor} value={option.vendor}>
+                {option.label} ({option.count.toLocaleString()})
+              </option>
+            ))}
+          </SelectField>
           <SelectField label="Title" value={filters.title ?? ""} onChange={(value) => update("title", value || undefined)}>
             <option value="">Any title</option>
             {titleOptions.map((option) => (
@@ -1132,13 +1167,14 @@ function ContactsView({
             <table className="w-full table-fixed divide-y divide-neutral-100 text-sm">
               <thead className="bg-neutral-50 text-left text-[11px] uppercase text-neutral-500">
                 <tr>
-                  <th className="w-[18%] px-3 py-2 font-medium">Contact</th>
-                  <th className="w-[18%] px-3 py-2 font-medium">Firm</th>
-                  <th className="w-[18%] px-3 py-2 font-medium">Title</th>
-                  <th className="w-[12%] px-3 py-2 font-medium">Role</th>
-                  <th className="w-[12%] px-3 py-2 font-medium">Leader</th>
+                  <th className="w-[16%] px-3 py-2 font-medium">Contact</th>
+                  <th className="w-[17%] px-3 py-2 font-medium">Firm</th>
+                  <th className="w-[17%] px-3 py-2 font-medium">Title</th>
+                  <th className="w-[11%] px-3 py-2 font-medium">Role</th>
+                  <th className="w-[10%] px-3 py-2 font-medium">Leader</th>
                   <th className="w-[14%] px-3 py-2 font-medium">Reach</th>
-                  <th className="w-[8%] px-3 py-2 font-medium">Updated</th>
+                  <th className="w-[8%] px-3 py-2 font-medium">LinkedIn</th>
+                  <th className="w-[7%] px-3 py-2 font-medium">Updated</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-neutral-100">
@@ -1179,6 +1215,9 @@ function ContactsView({
                         <span className="block truncate">{display(person.phone ?? person.linkedin)}</span>
                       )}
                     </td>
+                    <td data-label="LinkedIn" className="px-3 py-3">
+                      <LinkedInContactAction person={person} />
+                    </td>
                     <td data-label="Updated" className="px-3 py-3 text-xs text-neutral-500">
                       {formatDateTime(person.updated_at ?? null)}
                     </td>
@@ -1216,6 +1255,28 @@ function ContactsView({
         </div>
       </div>
     </section>
+  );
+}
+
+function LinkedInContactAction({ person }: { person: PifPersonResult }) {
+  const linkedInUrl = safeLinkedInUrl(person.linkedin);
+  const href = linkedInUrl || linkedInSearchUrl(person);
+  const label = linkedInUrl ? "Open LinkedIn profile" : "Search Google for LinkedIn profile";
+
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+      title={label}
+      aria-label={label}
+      className={cn(
+        "inline-flex h-8 w-8 items-center justify-center rounded-md border text-neutral-600 hover:bg-neutral-50",
+        linkedInUrl ? "border-blue-200 text-blue-600" : "border-neutral-200",
+      )}
+    >
+      {linkedInUrl ? <ExternalLink className="h-3.5 w-3.5" /> : <Search className="h-3.5 w-3.5" />}
+    </a>
   );
 }
 

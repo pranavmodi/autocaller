@@ -287,6 +287,7 @@ export interface PifPeopleListParams {
   title?: string;
   name?: string;
   firm?: string;
+  vendor?: string;
   role_category?: string;
   source?: PeopleSource;
   leader?: LeaderFilter;
@@ -515,6 +516,7 @@ export async function listPifPeople(params: PifPeopleListParams = {}): Promise<P
       title: params.title,
       name: params.name,
       firm: params.firm,
+      vendor: params.vendor,
       role_category: params.role_category,
       source: params.source,
       leader: params.leader,

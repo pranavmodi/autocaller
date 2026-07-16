@@ -47,6 +47,7 @@ async def get_pif_people_filter_options():
 async def get_pif_people(
     name: str | None = Query(None),
     firm: str | None = Query(None),
+    vendor: str | None = Query(None, description="Exact extracted vendor key for the person's firm"),
     title: str | None = Query(None),
     role_category: str | None = Query(None),
     source: str | None = Query("all", description="all, leadership, staff, or contacts"),
@@ -57,6 +58,7 @@ async def get_pif_people(
     return await list_mirrored_pif_people(
         name=name,
         firm=firm,
+        vendor=vendor,
         title=title,
         role_category=role_category,
         source=source,
