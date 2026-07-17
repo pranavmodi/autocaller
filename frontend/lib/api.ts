@@ -687,6 +687,44 @@ export const getClickAnalytics = (args: {
   return get<ClickAnalyticsResponse>(`/api/aiaudit/click-analytics?${params.toString()}`);
 };
 
+export type DataReturnedEvent = {
+  id: number;
+  payload: Record<string, unknown> | unknown[];
+  headers: Record<string, string>;
+  source_ip: string | null;
+  user_agent: string | null;
+  content_type: string | null;
+  received_at: string | null;
+};
+
+export type DataReturnedResponse = {
+  events: DataReturnedEvent[];
+  total: number;
+};
+
+export const getDataReturnedEvents = (limit = 100) =>
+  get<DataReturnedResponse>(`/api/datareturned?limit=${limit}`);
+
+export async function getDataReturnedScript(): Promise<string> {
+  const path = "/datareturned/script";
+  const res = await fetch(apiUrl(path), { credentials: "include" });
+  if (res.status === 401) {
+    _handle401(path);
+    throw new Error(`GET ${path} 401`);
+  }
+  if (!res.ok) throw new Error(`GET ${path} ${res.status}`);
+  return res.text();
+}
+
+export type DataReturnedScriptSaveResponse = {
+  script: string;
+  customized: boolean;
+  updated_at: string | null;
+};
+
+export const saveDataReturnedScript = (script: string) =>
+  put<DataReturnedScriptSaveResponse>("/api/datareturned/script", { script });
+
 async function get<T>(path: string, options?: ApiRequestOptions): Promise<T> {
   const res = await fetch(apiUrl(path), {
     credentials: "include",

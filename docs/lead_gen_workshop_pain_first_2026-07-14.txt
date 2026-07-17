@@ -1,0 +1,22 @@
+Hi {first_name},
+
+You know the worst version of the file surprise.
+
+The demand is almost ready, the attorney asks one more question, and suddenly everyone sees the problem at once: a treatment gap, a missing bill, a provider note nobody reconciled, or a record that was referenced but never requested.
+
+By then it is urgent, visible, and somehow yours.
+
+We are running a free 60 minute working session for Filevine case managers built around that exact moment. You will build five AI instructions on sample files we provide: records timelines, treatment-gap sweeps, client updates, records chasing, and attorney handoff memos.
+
+The goal is not to use AI as a shortcut. The goal is to catch the file problems earlier, before they become Friday afternoon cleanup.
+
+We keep it practical and safe: ten firms per cohort, case managers only, no product demo, nothing to install, and the first rule is what never goes into a public chatbot.
+
+You leave with the instructions, plus a one page summary written for your managing partner, so the work shows up as visible credit.
+
+Reserve a seat: {link}
+
+If AI has mostly sounded like one more thing that will eventually land on your desk, this session is designed to turn it into something you control.
+
+Pranav Modi
+Founder, Possible Minds

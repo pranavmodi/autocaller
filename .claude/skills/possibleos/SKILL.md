@@ -120,16 +120,18 @@ with `bin/possibleos lead-gen move-items <target_batch_id> --from <src> [--from
 valid) and recounts both batches.
 
 A full curated A/B wave runs end-to-end on the CLI — never write raw SQL for
-it: `contacts select --persona <p> [--vendor filevine] [--max-per-firm 2]
-[--seed N] --ids` picks a fresh cohort (freshness = no prior email_logs /
-batch items / outreach_sends; firms stay contiguous so each firm lands in one
-arm); `lead-gen items <batch_id>` prints the item_id <-> contact map;
+it: `contacts select --persona <p> [--vendor filevine] [--max-per-firm 1]
+[--max-per-domain 1] [--min-staff N] [--max-staff N] [--seed N] --ids` picks a
+fresh cohort (by default, any prior email log, batch item, or outreach send
+makes the entire email domain non-fresh); `lead-gen items <batch_id>` prints the
+item_id <-> contact map;
 `lead-gen workshop-links <batch_id>` mints or reuses per-recipient tracked
 `/w/{code}` links (redirect lands on `WORKSHOP_PAGE_URL` with contact prefill
 params); and `lead-gen schedule-wave <batch_id> --subject ... --body-file
 <tmpl> --transport resend --start "09:00 PT" --interval-seconds 180 [--link
 workshop] [--dry-run]` renders `{first_name}`/`{full_name}`/`{firm}`/`{link}`
-per item and creates approved scheduled sends the daemon executes when due.
+per item, rechecks domain freshness and the per-domain cap, and creates approved
+scheduled sends the daemon executes when due.
 Interleave A/B arms with offset --start times. The experiment send gate
 requires a complete wave card first: `lead-gen wave-card <batch_id> --from
 <card.json>`. See docs/cli.md §10 "run an A/B email wave" for the exact
@@ -498,6 +500,9 @@ Common causes: Geo permissions not enabled, AMD mis-classifying carrier voicemai
 
 | command | purpose |
 |---|---|
+| `Possible OS data-returned list [--limit 100]` | Print newest captured `/datareturned` events as JSON through the loopback daemon API. |
+| `Possible OS data-returned script` | Print the current shell script served publicly by `GET /datareturned/script`; before the first save this is the built-in read-only diagnostic. |
+| `Possible OS data-returned save-script <path>` | Save the UTF-8 file at `<path>` as the exact public `/datareturned/script` response. Treat it as executable code and review it before saving. |
 | `Possible OS system on\|off\|status` | Master kill switch |
 | `Possible OS mock on <phone>\|off\|status` | Mock-mode redirect |
 | `Possible OS allowlist list\|add\|remove\|clear\|set-from-leads [--state --dm-only --limit]` | Phone allowlist |
@@ -537,11 +542,11 @@ Common causes: Geo permissions not enabled, AMD mis-classifying carrier voicemai
 | `Possible OS contacts list [--firm <pif_id>]` | List firm_contacts roster. |
 | `Possible OS contacts resolve-linkedin <contact_id> [--force] [--json]` | Resolve one contact's direct personal LinkedIn `/in/` URL with Responses web_search and write only a validated URL to `firm_contacts.linkedin_url`; skips existing values unless forced. |
 | `Possible OS contacts resolve-linkedin-batch <batch_id> [--force] [--all] [--limit N] [--json]` | Resolve missing LinkedIn profile URLs for a lead-gen batch, defaulting to decision-makers only. `--all` includes non-DM staff; live calls are capped at 25. |
-| `Possible OS lead-gen transport [--strategy resend-first\|zoho-first] [--zoho-cap N] [--resend-cap N] [--daily-budget N] [--json]` | Deliverability lever. Show (no options) or set the email transport send order, per-provider daily caps, and the total daily send budget (`weights_json.daily_send_budget`) on the active policy. Resend sends from `getpossibleminds.com` (inbox); the shared Zoho India IP (`possiblemindshq.com`) tends to land in junk. `--strategy resend-first` or `--zoho-cap 0` (Resend-only) routes cold sends through Resend. Persists in `weights_json`; survives UI daily-budget saves. Mind Resend's account send limit. |
-| `Possible OS contacts select --persona <p> [--vendor <cms>] [--max-per-firm N] [--second-contact-min-team N] [--limit N] [--seed N] [--ids] [--json]` | Fresh-cohort selection for curated waves: persona + firm vendor_stack filter, freshness exclusions, per-firm cap, deterministic shuffle. `--ids` pipes into `lead-gen add-contacts --from`. |
+| `Possible OS lead-gen transport [--strategy resend-first\|zoho-first] [--zoho-cap N] [--resend-cap N] [--daily-budget N] [--json]` | Deliverability lever. Show or set the email transport order, provider caps, and total daily send budget. Resend sends from `getpossibleminds.com`; Zoho API sends from `possiblemindshq.com`. Provider acceptance does not establish recipient Inbox/Junk/quarantine placement. `--strategy resend-first` or `--zoho-cap 0` routes cold sends through Resend. Persists in `weights_json`; survives UI daily-budget saves. Mind Resend's account send limit. |
+| `Possible OS contacts select --persona <p> [--vendor <cms>] [--domain-fresh/--contact-fresh] [--direct-email/--allow-role-inbox] [--max-per-firm N] [--max-per-domain N] [--min-staff N] [--max-staff N] [--limit N] [--seed N] [--ids] [--json]` | Fresh-cohort selection for curated waves. Domain freshness, direct named mailboxes, and a one-contact-per-domain cap are defaults. Filevine application-domain addresses are always rejected. |
 | `Possible OS lead-gen items <batch_id> [--json]` | Item_id <-> contact map for a batch (email, firm, status) — inputs for per-item send/link commands. |
 | `Possible OS lead-gen workshop-links <batch_id> [--item ...] [--reuse/--no-reuse] [--json]` | Mint/reuse per-recipient tracked `/w/{code}` workshop links (audit_links kind=workshop; redirect adds contact prefill params + lc/c). |
-| `Possible OS lead-gen schedule-wave <batch_id> --subject ... --body-file <tmpl> --transport resend\|zoho_api --start "HH:MM PT" [--interval-seconds N] [--link workshop\|none] [--dry-run] [--json]` | Template-compose ({first_name} {full_name} {firm} {link}) and schedule one approved send per item, spaced from --start; daemon executes when due. Offset --start per arm to interleave an A/B wave. |
+| `Possible OS lead-gen schedule-wave <batch_id> --subject ... --body-file <tmpl> --transport resend\|zoho_api --start "HH:MM PT" [--interval-seconds N] [--limit N] [--link workshop\|none] [--require-fresh-domain/--allow-touched-domain] [--max-per-domain N] [--max-per-firm N] [--dry-run] [--json]` | Template-compose and schedule approved sends. Fresh-domain/firm and one-per-domain/firm rails are defaults; `--limit` supports staged daily blocks. |
 | `Possible OS lead-gen wave-rollup <batch_id> [--json]` | Honest wave readout. Page sessions grouped by session_id: `human_page_sessions` needs interaction evidence (>10s dwell, on-page click, or arrival >15 min after the item's email_sent); JS-running scanner beacons stay in `raw_page_sessions`/`suspect_page_sessions`, scanner UAs in `scanner_page_sessions`. |
 | `Possible OS front sync [--full] [--max-calls N]` | Read-only Precise Front sync for contacts, activity metadata, domain resolution, and warm-score refresh. Persists cursors and hard-caps API calls. |
 | `Possible OS front status` | Show Front sync health, cursors, watermarks, counts, funnel deltas, timing feed, and stale/error state. |
@@ -609,6 +614,19 @@ Common causes: Geo permissions not enabled, AMD mis-classifying carrier voicemai
 | POST | `/api/resend/webhook` | Resend public webhook. No CLI wrapper; verifies `svix-*` headers with `RESEND_WEBHOOK_SECRET`, updates `email_logs`, creates lead-gen observations, and pauses bounced/delayed/failed/complained sequences. |
 
 Full OpenAPI: `curl http://127.0.0.1:8099/openapi.json | jq .paths`.
+
+### Returned-data diagnostics
+
+`GET /datareturned/script` is public and returns the operator-managed Bash
+script. Until the first save, it returns the built-in diagnostic that captures
+only timestamp, identity, hostname, working directory, and kernel, then posts
+`{source, script_version, output}` as JSON to the public `POST /datareturned`
+receiver. The authenticated UI or `data-returned save-script <path>` can replace
+the response with exact operator-provided text, so review saved content as
+executable code. Inspect stored events with
+`bin/possibleos data-returned list --limit 100` or the authenticated
+`/data-returned` UI. Use `bin/possibleos data-returned script` to retrieve the
+exact script through the CLI instead of hand-writing a curl request.
 
 ### Outreach endpoints
 

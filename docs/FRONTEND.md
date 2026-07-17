@@ -111,6 +111,19 @@ The `doctor` command as a page. Visible whether the plumbing is OK.
 - Funnel stats for the last 7 days: dials → connects → conversations →
   demos, with conversion rates between each.
 
+### 6. `/data-returned` — Callback diagnostics
+
+- **Returned Data tab** — newest captured JSON payloads, selected request
+  metadata, source count, and a 15-second refresh loop.
+- **Shell Script tab** — edits, saves, previews, and copies the script served by
+  `GET /datareturned/script`. The built-in default performs only read-only
+  execution-context checks and posts its combined output back to
+  `/datareturned`. After an operator saves a replacement, the public endpoint
+  serves that exact text, so the UI explicitly treats it as executable code.
+- The script endpoint and receiver are public for server-to-server callbacks;
+  the event-list API, script-save API, and dashboard remain
+  operator-authenticated.
+
 ---
 
 ## What explicitly does NOT exist in v1

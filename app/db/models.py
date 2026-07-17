@@ -391,6 +391,35 @@ class TodoRow(Base):
     )
 
 
+class DataReturnedRow(Base):
+    """Append-only payloads received by the public /datareturned endpoint."""
+    __tablename__ = "data_returned_events"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    payload_json: Mapped[dict | list] = mapped_column(JSONB, nullable=False)
+    headers_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    source_ip: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    user_agent: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    content_type: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    received_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow)
+
+    __table_args__ = (
+        Index("ix_data_returned_events_received_at", "received_at"),
+        Index("ix_data_returned_events_source_ip", "source_ip"),
+    )
+
+
+class DataReturnedScriptRow(Base):
+    """Singleton operator-edited shell script served by /datareturned/script."""
+    __tablename__ = "data_returned_script"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    script_text: Mapped[str] = mapped_column(Text, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), default=_utcnow, onupdate=_utcnow,
+    )
+
+
 class ProductTraceRow(Base):
     """Append-only AI-legible trace ledger for user and system actions."""
     __tablename__ = "product_traces"

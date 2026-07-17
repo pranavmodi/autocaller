@@ -120,16 +120,18 @@ with `bin/possibleos lead-gen move-items <target_batch_id> --from <src> [--from
 valid) and recounts both batches.
 
 A full curated A/B wave runs end-to-end on the CLI — never write raw SQL for
-it: `contacts select --persona <p> [--vendor filevine] [--max-per-firm 2]
-[--seed N] --ids` picks a fresh cohort (freshness = no prior email_logs /
-batch items / outreach_sends; firms stay contiguous so each firm lands in one
-arm); `lead-gen items <batch_id>` prints the item_id <-> contact map;
+it: `contacts select --persona <p> [--vendor filevine] [--max-per-firm 1]
+[--max-per-domain 1] [--min-staff N] [--max-staff N] [--seed N] --ids` picks a
+fresh cohort (by default, any prior email log, batch item, or outreach send
+makes the entire email domain non-fresh); `lead-gen items <batch_id>` prints the
+item_id <-> contact map;
 `lead-gen workshop-links <batch_id>` mints or reuses per-recipient tracked
 `/w/{code}` links (redirect lands on `WORKSHOP_PAGE_URL` with contact prefill
 params); and `lead-gen schedule-wave <batch_id> --subject ... --body-file
 <tmpl> --transport resend --start "09:00 PT" --interval-seconds 180 [--link
 workshop] [--dry-run]` renders `{first_name}`/`{full_name}`/`{firm}`/`{link}`
-per item and creates approved scheduled sends the daemon executes when due.
+per item, rechecks domain freshness and the per-domain cap, and creates approved
+scheduled sends the daemon executes when due.
 Interleave A/B arms with offset --start times. The experiment send gate
 requires a complete wave card first: `lead-gen wave-card <batch_id> --from
 <card.json>`. See docs/cli.md §10 "run an A/B email wave" for the exact
@@ -524,11 +526,11 @@ Common causes: Geo permissions not enabled, AMD mis-classifying carrier voicemai
 | `Possible OS contacts list [--firm <pif_id>]` | List firm_contacts roster. |
 | `Possible OS contacts resolve-linkedin <contact_id> [--force] [--json]` | Resolve one contact's direct personal LinkedIn `/in/` URL with Responses web_search and write only a validated URL to `firm_contacts.linkedin_url`; skips existing values unless forced. |
 | `Possible OS contacts resolve-linkedin-batch <batch_id> [--force] [--all] [--limit N] [--json]` | Resolve missing LinkedIn profile URLs for a lead-gen batch, defaulting to decision-makers only. `--all` includes non-DM staff; live calls are capped at 25. |
-| `Possible OS lead-gen transport [--strategy resend-first\|zoho-first] [--zoho-cap N] [--resend-cap N] [--daily-budget N] [--json]` | Deliverability lever. Show (no options) or set the email transport send order, per-provider daily caps, and the total daily send budget (`weights_json.daily_send_budget`) on the active policy. Resend sends from `getpossibleminds.com` (inbox); the shared Zoho India IP (`possiblemindshq.com`) tends to land in junk. `--strategy resend-first` or `--zoho-cap 0` (Resend-only) routes cold sends through Resend. Persists in `weights_json`; survives UI daily-budget saves. Mind Resend's account send limit. |
-| `Possible OS contacts select --persona <p> [--vendor <cms>] [--max-per-firm N] [--second-contact-min-team N] [--limit N] [--seed N] [--ids] [--json]` | Fresh-cohort selection for curated waves: persona + firm vendor_stack filter, freshness exclusions, per-firm cap, deterministic shuffle. `--ids` pipes into `lead-gen add-contacts --from`. |
+| `Possible OS lead-gen transport [--strategy resend-first\|zoho-first] [--zoho-cap N] [--resend-cap N] [--daily-budget N] [--json]` | Deliverability lever. Show or set the email transport order, provider caps, and total daily send budget. Resend sends from `getpossibleminds.com`; Zoho API sends from `possiblemindshq.com`. Provider acceptance does not establish recipient Inbox/Junk/quarantine placement. `--strategy resend-first` or `--zoho-cap 0` routes cold sends through Resend. Persists in `weights_json`; survives UI daily-budget saves. Mind Resend's account send limit. |
+| `Possible OS contacts select --persona <p> [--vendor <cms>] [--domain-fresh/--contact-fresh] [--direct-email/--allow-role-inbox] [--max-per-firm N] [--max-per-domain N] [--min-staff N] [--max-staff N] [--limit N] [--seed N] [--ids] [--json]` | Fresh-cohort selection for curated waves. Domain freshness, direct named mailboxes, and a one-contact-per-domain cap are defaults. Filevine application-domain addresses are always rejected. |
 | `Possible OS lead-gen items <batch_id> [--json]` | Item_id <-> contact map for a batch (email, firm, status) — inputs for per-item send/link commands. |
 | `Possible OS lead-gen workshop-links <batch_id> [--item ...] [--reuse/--no-reuse] [--json]` | Mint/reuse per-recipient tracked `/w/{code}` workshop links (audit_links kind=workshop; redirect adds contact prefill params + lc/c). |
-| `Possible OS lead-gen schedule-wave <batch_id> --subject ... --body-file <tmpl> --transport resend\|zoho_api --start "HH:MM PT" [--interval-seconds N] [--link workshop\|none] [--dry-run] [--json]` | Template-compose ({first_name} {full_name} {firm} {link}) and schedule one approved send per item, spaced from --start; daemon executes when due. Offset --start per arm to interleave an A/B wave. |
+| `Possible OS lead-gen schedule-wave <batch_id> --subject ... --body-file <tmpl> --transport resend\|zoho_api --start "HH:MM PT" [--interval-seconds N] [--limit N] [--link workshop\|none] [--require-fresh-domain/--allow-touched-domain] [--max-per-domain N] [--max-per-firm N] [--dry-run] [--json]` | Template-compose and schedule approved sends. Fresh-domain/firm and one-per-domain/firm rails are defaults; `--limit` supports staged daily blocks. |
 | `Possible OS front sync [--full] [--max-calls N]` | Read-only Precise Front sync for contacts, activity metadata, domain resolution, and warm-score refresh. Persists cursors and hard-caps API calls. |
 | `Possible OS front status` | Show Front sync health, cursors, watermarks, counts, funnel deltas, timing feed, and stale/error state. |
 | `Possible OS front contacts [--firm <pif_id> \| --domain <domain> --q <text>]` | List synced Front contacts with masked emails, matched pif_id, warm score, and tech signals. |

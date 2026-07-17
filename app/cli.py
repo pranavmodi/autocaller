@@ -69,6 +69,7 @@ agents_app = typer.Typer(help="Possible OS master-agent heartbeat and subagent t
 actions_app = typer.Typer(help="Durable Possible OS action execution queue.", no_args_is_help=True)
 fs_app = typer.Typer(help="Read-only repo filesystem inspection for Possible OS agents.", no_args_is_help=True)
 listening_app = typer.Typer(help="Mission Control listening brief, insights, sources, and prep.", no_args_is_help=True)
+data_returned_app = typer.Typer(help="Inspect returned payloads and manage the callback shell script.", no_args_is_help=True)
 outreach_campaigns_app = typer.Typer(help="Create / list / show outreach campaigns.", no_args_is_help=True)
 outreach_audience_app = typer.Typer(help="Build a campaign's recipient list from firm contacts.", no_args_is_help=True)
 outreach_app.add_typer(outreach_campaigns_app, name="campaigns")
@@ -109,6 +110,7 @@ app.add_typer(agents_app, name="agents")
 app.add_typer(actions_app, name="actions")
 app.add_typer(fs_app, name="fs")
 app.add_typer(listening_app, name="listening")
+app.add_typer(data_returned_app, name="data-returned")
 
 console = Console()
 
@@ -172,6 +174,17 @@ def _get(path: str, **params) -> dict:
         console.print(f"[red]API request failed: {_http_error_detail(e)}[/red]")
         raise typer.Exit(code=1) from e
     return resp.json()
+
+
+def _get_text(path: str, **params) -> str:
+    query_params = {key: value for key, value in params.items() if value is not None}
+    try:
+        resp = httpx.get(f"{_api_base()}{path}", params=query_params or None, timeout=60.0)
+        resp.raise_for_status()
+    except httpx.HTTPError as e:
+        console.print(f"[red]API request failed: {_http_error_detail(e)}[/red]")
+        raise typer.Exit(code=1) from e
+    return resp.text
 
 
 def _post(path: str, json_body: Optional[dict] = None, timeout: float = 30.0) -> dict:
@@ -340,6 +353,40 @@ def serve(
     import uvicorn
     log_level = "warning" if not reload else "info"
     uvicorn.run("app.main:app", host=host, port=port, reload=reload, log_level=log_level)
+
+
+# ---------------------------------------------------------------------------
+# returned data
+# ---------------------------------------------------------------------------
+
+@data_returned_app.command("list")
+def data_returned_list(
+    limit: int = typer.Option(100, min=1, max=500, help="Newest events to return."),
+):
+    """Print recently captured /datareturned events as JSON."""
+    console.print_json(data=_get("/api/datareturned", limit=limit))
+
+
+@data_returned_app.command("script")
+def data_returned_script():
+    """Print the current shell script served by the daemon."""
+    typer.echo(_get_text("/datareturned/script"), nl=False)
+
+
+@data_returned_app.command("save-script")
+def data_returned_save_script(
+    script_path: Path = typer.Argument(..., exists=True, readable=True, help="Shell script file to save."),
+):
+    """Save a shell script that GET /datareturned/script will serve publicly."""
+    try:
+        script = script_path.read_text(encoding="utf-8")
+    except (OSError, UnicodeError) as exc:
+        console.print(f"[red]Could not read {script_path}: {exc}[/red]")
+        raise typer.Exit(code=1) from exc
+    saved = _put("/api/datareturned/script", {"script": script})
+    console.print(
+        f"[green]saved[/green] {len(saved.get('script', script))} characters to /datareturned/script"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -3030,13 +3077,27 @@ def contacts_select(
     vendor: str = typer.Option("", "--vendor", help="Require the firm's vendor_stack.case_mgmt (e.g. filevine)."),
     fresh: bool = typer.Option(
         True, "--fresh/--no-fresh",
-        help="Exclude contacts with ANY prior touch (email_logs by address, lead_gen_batch_items, outreach_sends).",
+        help="Exclude prior touches. By default, any touch to the email domain makes the whole domain non-fresh.",
+    ),
+    domain_fresh: bool = typer.Option(
+        True, "--domain-fresh/--contact-fresh",
+        help="With --fresh, exclude the whole email domain after any prior touch; --contact-fresh uses address/contact history only.",
     ),
     require_first_name: bool = typer.Option(
         True, "--require-first-name/--allow-missing-first-name",
         help="Skip contacts without a first name (personalized templates need it).",
     ),
+    direct_email: bool = typer.Option(
+        True, "--direct-email/--allow-role-inbox",
+        help="Require a usable named mailbox; always rejects Filevine application-domain addresses.",
+    ),
     max_per_firm: int = typer.Option(1, "--max-per-firm", min=1, max=5, help="Cap contacts per firm."),
+    max_per_domain: int = typer.Option(
+        1, "--max-per-domain", min=1, max=5,
+        help="Cap contacts sharing an email domain, including duplicate firm records.",
+    ),
+    min_staff: int = typer.Option(0, "--min-staff", min=0, help="Minimum stored firm staff count (0 = no minimum)."),
+    max_staff: int = typer.Option(0, "--max-staff", min=0, help="Maximum stored firm staff count (0 = no maximum)."),
     second_contact_min_team: int = typer.Option(
         0, "--second-contact-min-team", min=0,
         help="Take a 2nd+ contact only at firms with at least this many eligible contacts (0 = no restriction).",
@@ -3052,9 +3113,14 @@ def contacts_select(
     before `lead-gen create-batch` + `lead-gen add-contacts`. Firms are kept
     contiguous so a wave can assign whole firms to one A/B arm.
     """
-    import random as _random
-
     from sqlalchemy import text as _sql_text
+
+    from app.services.contact_cohort import select_curated_contact_rows
+    from app.services.contact_selection import classify_email_quality, has_usable_email
+
+    if min_staff and max_staff and max_staff < min_staff:
+        console.print("[red]--max-staff must be greater than or equal to --min-staff.[/red]")
+        raise typer.Exit(code=1)
 
     async def _run_select():
         from app.db import AsyncSessionLocal
@@ -3065,6 +3131,16 @@ def contacts_select(
         if vendor.strip():
             conditions.append("f.vendor_stack->>'case_mgmt' = :vendor")
             params["vendor"] = vendor.strip().lower()
+        staff_count_sql = (
+            "jsonb_array_length(CASE WHEN jsonb_typeof(f.staff) = 'array' "
+            "THEN f.staff ELSE '[]'::jsonb END)"
+        )
+        if min_staff:
+            conditions.append(f"{staff_count_sql} >= :min_staff")
+            params["min_staff"] = min_staff
+        if max_staff:
+            conditions.append(f"{staff_count_sql} <= :max_staff")
+            params["max_staff"] = max_staff
         if fresh:
             conditions.append(
                 "NOT EXISTS (SELECT 1 FROM email_logs el WHERE lower(el.recipient_email) = lower(fc.email))"
@@ -3075,8 +3151,34 @@ def contacts_select(
             conditions.append(
                 "NOT EXISTS (SELECT 1 FROM outreach_sends os WHERE os.contact_id = fc.id)"
             )
+            conditions.append(
+                "NOT EXISTS (SELECT 1 FROM email_logs pif_el WHERE pif_el.pif_id = fc.pif_id)"
+            )
+            conditions.append(
+                "NOT EXISTS (SELECT 1 FROM lead_gen_batch_items pif_bi WHERE pif_bi.pif_id = fc.pif_id)"
+            )
+            conditions.append(
+                "NOT EXISTS (SELECT 1 FROM outreach_sends pif_os WHERE pif_os.pif_id = fc.pif_id)"
+            )
+            if domain_fresh:
+                domain_sql = "lower(split_part(fc.email, '@', 2))"
+                conditions.append(
+                    "NOT EXISTS (SELECT 1 FROM email_logs el "
+                    f"WHERE lower(split_part(el.recipient_email, '@', 2)) = {domain_sql})"
+                )
+                conditions.append(
+                    "NOT EXISTS (SELECT 1 FROM lead_gen_batch_items prior_bi "
+                    "JOIN firm_contacts prior_fc ON prior_fc.id = prior_bi.contact_id "
+                    f"WHERE lower(split_part(prior_fc.email, '@', 2)) = {domain_sql})"
+                )
+                conditions.append(
+                    "NOT EXISTS (SELECT 1 FROM outreach_sends prior_os "
+                    f"WHERE lower(split_part(prior_os.recipient_email, '@', 2)) = {domain_sql})"
+                )
         query = _sql_text(
             "SELECT fc.id, fc.pif_id, f.firm_name, fc.first_name, fc.full_name, fc.email, "
+            "lower(split_part(fc.email, '@', 2)) AS email_domain, "
+            f"{staff_count_sql} AS staff_count, "
             "COALESCE(fc.persona_confidence, 0) AS conf, "
             "count(*) OVER (PARTITION BY fc.pif_id) AS firm_eligible "
             "FROM firm_contacts fc JOIN pif_directory_firms f ON f.id = fc.pif_id "
@@ -3088,32 +3190,21 @@ def contacts_select(
             return [dict(row._mapping) for row in result]
 
     rows = _run(_run_select())
+    rows = [row for row in rows if has_usable_email(row.get("email"))]
+    if direct_email:
+        rows = [
+            row for row in rows
+            if classify_email_quality(row.get("email"), row.get("full_name")) == "direct_named_email"
+        ]
 
-    firms: dict[str, list[dict]] = {}
-    seen_emails: set[str] = set()
-    for row in rows:
-        email = str(row["email"]).strip().lower()
-        if email in seen_emails:
-            continue
-        seen_emails.add(email)
-        firms.setdefault(row["pif_id"], []).append(row)
-
-    firm_order = list(firms.keys())
-    if seed:
-        _random.Random(seed).shuffle(firm_order)
-
-    selected: list[dict] = []
-    for pif_id in firm_order:
-        contacts = firms[pif_id]
-        take = max_per_firm
-        if second_contact_min_team and len(contacts) < second_contact_min_team:
-            take = 1
-        for row in contacts[:take]:
-            if limit and len(selected) >= limit:
-                break
-            selected.append(row)
-        if limit and len(selected) >= limit:
-            break
+    selected = select_curated_contact_rows(
+        rows,
+        max_per_firm=max_per_firm,
+        max_per_domain=max_per_domain,
+        second_contact_min_team=second_contact_min_team,
+        limit=limit,
+        seed=seed,
+    )
 
     if ids_only:
         for row in selected:
@@ -3123,12 +3214,18 @@ def contacts_select(
         {
             "contact_id": r["id"], "pif_id": r["pif_id"], "firm_name": r["firm_name"],
             "first_name": r["first_name"], "full_name": r["full_name"], "email": r["email"],
+            "email_domain": r["email_domain"], "staff_count": int(r["staff_count"] or 0),
             "persona_confidence": float(r["conf"]),
         }
         for r in selected
     ]
     if json_output:
-        console.print_json(data={"count": len(payload), "firms": len({r['pif_id'] for r in payload}), "contacts": payload})
+        console.print_json(data={
+            "count": len(payload),
+            "firms": len({r['pif_id'] for r in payload}),
+            "domains": len({r['email_domain'] for r in payload}),
+            "contacts": payload,
+        })
         return
     table = Table(show_header=True, header_style="bold")
     table.add_column("contact_id", no_wrap=True)
@@ -3139,8 +3236,8 @@ def contacts_select(
         table.add_row(r["contact_id"], r["firm_name"] or "—", r["full_name"] or "—", r["email"])
     console.print(table)
     console.print(
-        f"[dim]{len(payload)} contact(s) across {len({r['pif_id'] for r in payload})} firm(s); "
-        f"eligible pool {len(seen_emails)} contact(s) / {len(firms)} firm(s)[/dim]"
+        f"[dim]{len(payload)} contact(s) across {len({r['pif_id'] for r in payload})} firm(s) / "
+        f"{len({r['email_domain'] for r in payload})} domain(s); eligible pool {len(rows)} row(s)[/dim]"
     )
 
 
@@ -4329,8 +4426,9 @@ _VALID_CLI_TRANSPORTS = {"resend", "zoho_api"}
 def _validate_transport(value: str) -> str:
     """Require an explicit, valid email transport — CLI sends are never opaque.
 
-    Resend sends from getpossibleminds.com and lands in the inbox; zoho_api uses
-    the shared Zoho India IP and is junk-prone. Default to resend for now.
+    Resend sends from getpossibleminds.com; zoho_api sends from
+    possiblemindshq.com. Provider acceptance does not establish recipient
+    folder placement. Default to resend for now.
     """
     norm = (value or "").strip().lower()
     aliases = {"zoho": "zoho_api", "zoho-api": "zoho_api"}
@@ -5228,10 +5326,9 @@ def lead_gen_transport_cmd(
 ):
     """Show or set the lead-gen email transport strategy, per-provider caps, and daily budget.
 
-    Deliverability lever. With no options it prints the current config. Resend
-    sends from getpossibleminds.com (lands in the inbox); the shared Zoho India
-    IP tends to land in junk — so `transport --strategy resend-first` or
-    `transport --zoho-cap 0` routes cold sends through Resend.
+    Deliverability lever. With no options it prints the current config. Provider
+    acceptance does not prove inbox placement; use the strategy and caps to run
+    controlled transport experiments without exceeding the daily budget.
     """
     aliases = {
         "resend-first": "resend_first_then_zoho",
@@ -5540,6 +5637,22 @@ def lead_gen_schedule_wave(
         "workshop", "--link",
         help="'workshop' mints/reuses a tracked /w/ link per item for {link}; 'none' skips links.",
     ),
+    require_fresh_domain: bool = typer.Option(
+        True, "--require-fresh-domain/--allow-touched-domain",
+        help="Skip domains found in any prior email log, outreach send, or other lead-gen batch.",
+    ),
+    max_per_domain: int = typer.Option(
+        1, "--max-per-domain", min=1, max=5,
+        help="Maximum scheduled recipients sharing an email domain in this wave.",
+    ),
+    max_per_firm: int = typer.Option(
+        1, "--max-per-firm", min=1, max=5,
+        help="Maximum scheduled recipients sharing a PIF firm record in this wave.",
+    ),
+    wave_limit: int = typer.Option(
+        0, "--limit", min=0,
+        help="Schedule at most this many currently eligible items (0 = all).",
+    ),
     approved_by: str = typer.Option("operator", "--approved-by"),
     skip_scheduled: bool = typer.Option(
         True, "--skip-scheduled/--include-scheduled",
@@ -5551,9 +5664,10 @@ def lead_gen_schedule_wave(
     """Compose from a template and schedule one approved send per batch item.
 
     The CLI path for a curated wave: renders {first_name}/{full_name}/{firm}/
-    {link} per recipient, mints/reuses the tracked link, and creates approved
-    scheduled `send_email mode=lead_gen` actions spaced --interval-seconds
-    apart, starting at --start. The daemon scheduler executes them when due.
+    {link} per recipient, enforces fresh-domain and per-domain rails, optionally
+    mints/reuses a tracked link, and creates approved scheduled `send_email
+    mode=lead_gen` actions spaced --interval-seconds apart, starting at --start.
+    The daemon scheduler executes them when due.
     For an A/B wave run this once per arm with offset --start times (e.g. arm
     A at 09:00:00 and arm B at 09:01:30, both with --interval-seconds 180).
     """
@@ -5581,16 +5695,78 @@ def lead_gen_schedule_wave(
 
     async def _load_items():
         from app.db import AsyncSessionLocal
-        from app.db.models import AgentActionRow, FirmContactRow, LeadGenBatchItemRow
+        from app.db.models import (
+            AgentActionRow,
+            AuditLinkRow,
+            EmailLogRow,
+            FirmContactRow,
+            LeadGenBatchItemRow,
+            OutreachSendRow,
+        )
+        from app.services.aiaudit_links import _link_public_base_url, build_short_workshop_link
+        from app.services.contact_cohort import email_domain
+
         out = []
         async with AsyncSessionLocal() as session:
+            touched_domains: set[str] = set()
+            touched_pif_ids: set[str] = set()
+            if require_fresh_domain:
+                logged = (await session.execute(
+                    _select(EmailLogRow.recipient_email)
+                )).scalars().all()
+                outreach = (await session.execute(
+                    _select(OutreachSendRow.recipient_email)
+                )).scalars().all()
+                prior_batch_contacts = (await session.execute(
+                    _select(FirmContactRow.email)
+                    .join(LeadGenBatchItemRow, LeadGenBatchItemRow.contact_id == FirmContactRow.id)
+                    .where(LeadGenBatchItemRow.batch_id != batch_id)
+                )).scalars().all()
+                touched_domains = {
+                    domain
+                    for value in [*logged, *outreach, *prior_batch_contacts]
+                    if (domain := email_domain(value))
+                }
+                logged_pifs = (await session.execute(
+                    _select(EmailLogRow.pif_id).where(EmailLogRow.pif_id.is_not(None))
+                )).scalars().all()
+                outreach_pifs = (await session.execute(
+                    _select(OutreachSendRow.pif_id).where(OutreachSendRow.pif_id.is_not(None))
+                )).scalars().all()
+                prior_batch_pifs = (await session.execute(
+                    _select(LeadGenBatchItemRow.pif_id)
+                    .where(LeadGenBatchItemRow.batch_id != batch_id)
+                )).scalars().all()
+                touched_pif_ids = {
+                    str(value) for value in [*logged_pifs, *outreach_pifs, *prior_batch_pifs] if value
+                }
             items = (await session.execute(
-                _select(LeadGenBatchItemRow).where(LeadGenBatchItemRow.batch_id == batch_id)
+                _select(LeadGenBatchItemRow)
+                .where(LeadGenBatchItemRow.batch_id == batch_id)
+                .order_by(LeadGenBatchItemRow.created_at, LeadGenBatchItemRow.id)
             )).scalars().all()
+            batch_domain_counts: dict[str, int] = {}
+            batch_firm_counts: dict[str, int] = {}
             for it in items:
                 contact = await session.get(FirmContactRow, it.contact_id) if it.contact_id else None
                 if contact is None or not (contact.email or "").strip():
                     out.append({"item": it.id, "skip": "no_contact_or_email"})
+                    continue
+                domain = email_domain(contact.email)
+                if not domain:
+                    out.append({"item": it.id, "skip": "invalid_email_domain"})
+                    continue
+                if require_fresh_domain and domain in touched_domains:
+                    out.append({"item": it.id, "email": contact.email, "skip": f"touched_domain:{domain}"})
+                    continue
+                if require_fresh_domain and contact.pif_id in touched_pif_ids:
+                    out.append({"item": it.id, "email": contact.email, "skip": f"touched_firm:{contact.pif_id}"})
+                    continue
+                if batch_domain_counts.get(domain, 0) >= max_per_domain:
+                    out.append({"item": it.id, "email": contact.email, "skip": f"domain_cap:{domain}"})
+                    continue
+                if batch_firm_counts.get(contact.pif_id, 0) >= max_per_firm:
+                    out.append({"item": it.id, "email": contact.email, "skip": f"firm_cap:{contact.pif_id}"})
                     continue
                 if skip_scheduled:
                     live = (await session.execute(
@@ -5604,48 +5780,43 @@ def lead_gen_schedule_wave(
                     if live is not None:
                         out.append({"item": it.id, "skip": f"live_action:{live.id}"})
                         continue
-                out.append({
+                row = {
                     "item": it.id, "contact_id": contact.id, "pif_id": contact.pif_id,
                     "email": contact.email.strip(), "first_name": (contact.first_name or "").strip(),
                     "full_name": (contact.full_name or "").strip(), "firm": it.firm_name or "",
-                })
+                    "email_domain": domain,
+                }
+                if link_kind == "workshop" and not dry_run:
+                    existing = (await session.execute(
+                        _select(AuditLinkRow).where(
+                            AuditLinkRow.batch_item_id == it.id,
+                            AuditLinkRow.kind == "workshop",
+                        ).order_by(AuditLinkRow.created_at)
+                    )).scalars().first()
+                    if existing is not None:
+                        row["link"] = f"{_link_public_base_url('workshop')}/w/{existing.code}"
+                    else:
+                        row["link"] = await build_short_workshop_link(
+                            contact, batch_item_id=it.id, source="workshop_email",
+                        )
+                out.append(row)
+                batch_domain_counts[domain] = batch_domain_counts.get(domain, 0) + 1
+                batch_firm_counts[contact.pif_id] = batch_firm_counts.get(contact.pif_id, 0) + 1
         return out
 
     rows = _run(_load_items())
     sendable = [r for r in rows if not r.get("skip")]
     skipped = [r for r in rows if r.get("skip")]
+    deferred = sendable[wave_limit:] if wave_limit else []
+    if wave_limit:
+        sendable = sendable[:wave_limit]
 
     from datetime import timedelta as _timedelta
     results = []
     slot = 0
     for row in sendable:
         at = start_at + _timedelta(seconds=interval_seconds * slot)
-        link = ""
-        if link_kind == "workshop" and not dry_run:
-            link_rows = None
-            # mint/reuse via the same helper the workshop-links command uses
-
-            async def _one_link(item_id=row["item"], contact_id=row["contact_id"]):
-                from app.db import AsyncSessionLocal
-                from app.db.models import AuditLinkRow, FirmContactRow
-                from app.services.aiaudit_links import (
-                    _link_public_base_url, build_short_workshop_link,
-                )
-                async with AsyncSessionLocal() as session:
-                    existing = (await session.execute(
-                        _select(AuditLinkRow).where(
-                            AuditLinkRow.batch_item_id == item_id,
-                            AuditLinkRow.kind == "workshop",
-                        ).order_by(AuditLinkRow.created_at)
-                    )).scalars().first()
-                    if existing is not None:
-                        return f"{_link_public_base_url('workshop')}/w/{existing.code}"
-                    contact = await session.get(FirmContactRow, contact_id)
-                return await build_short_workshop_link(
-                    contact, batch_item_id=item_id, source="workshop_email",
-                )
-
-            link = _run(_one_link())
+        link = row.get("link", "")
         body = (
             template
             .replace("{first_name}", row["first_name"] or row["full_name"].split(" ")[0])
@@ -5684,7 +5855,9 @@ def lead_gen_schedule_wave(
     if json_output:
         console.print_json(data={
             "batch_id": batch_id, "scheduled": sum(1 for r in results if r.get("ok") or r.get("dry_run")),
-            "skipped": skipped, "results": results,
+            "skipped": skipped,
+            "deferred": [{"item": row["item"], "email": row["email"]} for row in deferred],
+            "results": results,
         })
         return
     for row in results:
@@ -5694,7 +5867,7 @@ def lead_gen_schedule_wave(
         console.print(f"[yellow]skipped[/yellow] item={row['item']} reason={row['skip']}")
     console.print(
         f"[dim]{sum(1 for r in results if r.get('ok') or r.get('dry_run'))} scheduled, "
-        f"{len(skipped)} skipped, batch={batch_id}[/dim]"
+        f"{len(skipped)} skipped, {len(deferred)} deferred, batch={batch_id}[/dim]"
     )
 
 

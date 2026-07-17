@@ -60,6 +60,10 @@ TARGET_LEAD_PERSONA_KEYS = {
 
 GENERIC_LOCAL_PARTS = {
     "admin",
+    "client",
+    "clients",
+    "clientservice",
+    "clientservices",
     "contact",
     "hello",
     "help",
@@ -129,7 +133,12 @@ def has_usable_email(email: str | None) -> bool:
         return False
     if "email protected" in value or "[email" in value:
         return False
-    return "@" in value and "." in value.rsplit("@", 1)[-1]
+    if value.count("@") != 1:
+        return False
+    domain = value.rsplit("@", 1)[-1].rstrip(".")
+    if "." not in domain:
+        return False
+    return domain != "filevineapp.com" and not domain.endswith(".filevineapp.com")
 
 
 def classify_persona(title: str | None, source: str | None) -> tuple[str, str]:
@@ -170,20 +179,25 @@ def classify_email_quality(email: str | None, contact_name: str | None) -> str:
     value = (email or "").strip().lower()
     if "@" not in value:
         return "unusable_email"
-    local = value.split("@", 1)[0].replace(".", " ").replace("_", " ").replace("-", " ")
-    compact_local = value.split("@", 1)[0].replace(".", "").replace("_", "").replace("-", "")
+    raw_local = value.split("@", 1)[0]
+    compact_local = "".join(char for char in raw_local if char.isalnum())
     if compact_local in GENERIC_LOCAL_PARTS:
         return "generic_inbox"
     if compact_local in ROLE_LOCAL_PARTS:
         return "role_inbox"
     name_tokens = [
-        token.lower()
+        "".join(char for char in token.lower() if char.isalnum())
         for token in (contact_name or "").replace(".", " ").replace("-", " ").split()
-        if len(token) >= 3
     ]
-    if any(token in local for token in name_tokens):
+    name_tokens = [token for token in name_tokens if len(token) >= 2]
+    if any(len(token) >= 3 and token in compact_local for token in name_tokens):
         return "direct_named_email"
-    return "direct_named_email"
+    if name_tokens and len(compact_local) >= 3 and compact_local[:3] == name_tokens[0][:3]:
+        return "direct_named_email"
+    initials = "".join(token[0] for token in name_tokens)
+    if len(initials) >= 2 and compact_local == initials:
+        return "direct_named_email"
+    return "role_inbox"
 
 
 def firm_fit_signals(firm_name: str, title: str | None, state: str | None) -> list[str]:

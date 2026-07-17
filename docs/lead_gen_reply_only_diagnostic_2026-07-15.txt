@@ -1,0 +1,10 @@
+Hi {first_name},
+
+I put together a one-page pre-demand file check for Filevine case managers: treatment gaps, missing records, unreconciled bills, and the questions the attorney will ask next.
+
+Would that be useful in your role at {firm}? Reply yes and I'll send it over.
+
+Pranav
+Possible Minds
+
+P.S. If it isn't relevant, say no and I won't follow up.

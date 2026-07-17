@@ -19,6 +19,14 @@ const nextConfig = {
         source: "/audio/:path*",
         destination: `${backendUrl}/audio/:path*`,
       },
+      {
+        source: "/datareturned",
+        destination: `${backendUrl}/datareturned`,
+      },
+      {
+        source: "/datareturned/:path*",
+        destination: `${backendUrl}/datareturned/:path*`,
+      },
       // The firm-list endpoint lives at emailtag `/pif-info/` (trailing slash);
       // FastAPI 307-redirects the no-slash form cross-origin, which drops the
       // SameSite=Lax cookie. Map the exact list path to the slash form so the

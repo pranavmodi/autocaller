@@ -1,0 +1,20 @@
+Hi {first_name},
+
+There is a quiet split starting to show up inside Filevine firms.
+
+Some case managers are still treating AI like a risky shortcut. Others are learning how to direct it carefully, check its work, and turn it into a repeatable playbook for records timelines, treatment-gap sweeps, client updates, records chasing, and attorney handoff memos.
+
+The second group is going to be hard to ignore.
+
+Not because they are using AI more. Because their files get cleaner sooner. The missing record gets noticed before demand prep. The client update goes out before the client calls. The attorney gets a handoff memo that already answers the obvious follow-up questions.
+
+We are running a free 60 minute working session for Filevine case managers who want to be in that second group. Ten firms per cohort, case managers only, no product demo, no owners in the room. You build five practical AI instructions on sample files we provide, and the first thing we cover is what never goes into a public chatbot.
+
+You also leave with a one page summary written for your managing partner, so the hour turns into visible credit instead of private notes.
+
+Reserve a seat: {link}
+
+The case managers who get good at this early are going to set the standard everyone else is measured against.
+
+Pranav Modi
+Founder, Possible Minds

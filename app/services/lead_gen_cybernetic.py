@@ -19,6 +19,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.db import AsyncSessionLocal
 from app.db.models import (
+    AgentActionRow,
     FirmContactRow,
     EmailSequenceRow,
     LeadGenBatchItemRow,
@@ -52,12 +53,14 @@ from app.services.sequence_scheduler import (
     start_sequence,
 )
 from app.services.sequences.registry import DEFAULT_TEMPLATE_KEY, cadence_for, normalize_template_key
+from app.services.scheduled_time import format_pt, format_utc
 
 
 TARGET_METRIC = "booked_qualified_conversations"
 DEFAULT_POLICY_VERSION = "lead-gen-v1"
 DEFAULT_BATCH_STAGGER_MINUTES = 60
 DEFAULT_DAILY_SEND_BUDGET = 50
+LEAD_GEN_SEND_ACTION_TYPES = {"send_email", "send_approved_lead_gen_draft"}
 
 
 def _new_id() -> str:
@@ -710,7 +713,92 @@ def _batch_to_dict(batch: LeadGenBatchRow) -> dict[str, Any]:
     }
 
 
-def _item_to_dict(item: LeadGenBatchItemRow, linkedin_url: str | None = None) -> dict[str, Any]:
+def _item_send_action_id(item: LeadGenBatchItemRow) -> str:
+    reason = item.reason_json or {}
+    draft = reason.get("agent_draft") if isinstance(reason.get("agent_draft"), dict) else {}
+    return str(reason.get("send_email_action_id") or draft.get("action_id") or "").strip()
+
+
+def _action_iso(value: datetime | None) -> str | None:
+    return value.isoformat() if value else None
+
+
+def _action_pt(value: datetime | None) -> str | None:
+    return format_pt(value) if value else None
+
+
+def _action_utc(value: datetime | None) -> str | None:
+    return format_utc(value) if value else None
+
+
+def _action_is_live_scheduled(action: AgentActionRow) -> bool:
+    return (
+        action.status == "approved"
+        and action.scheduled_for is not None
+        and action.started_at is None
+        and action.completed_at is None
+    )
+
+
+def _send_action_snapshot(action: AgentActionRow) -> dict[str, Any]:
+    result = action.execution_result_json or {}
+    sent_at = result.get("sent_at") or _action_iso(action.completed_at) if action.status == "succeeded" else None
+    return {
+        "id": action.id,
+        "action_type": action.action_type,
+        "status": action.status,
+        "scheduled_for": _action_iso(action.scheduled_for),
+        "scheduled_for_pt": _action_pt(action.scheduled_for),
+        "scheduled_for_utc": _action_utc(action.scheduled_for),
+        "started_at": _action_iso(action.started_at),
+        "completed_at": _action_iso(action.completed_at),
+        "sent_at": sent_at,
+        "sent_message_id": result.get("sent_message_id"),
+        "email_log_id": result.get("email_log_id"),
+        "transport": result.get("transport") or (action.input_json or {}).get("transport"),
+        "error": action.error or result.get("error"),
+    }
+
+
+def _enriched_reason_for_item(
+    item: LeadGenBatchItemRow,
+    action: AgentActionRow | None,
+) -> dict[str, Any]:
+    reason = dict(item.reason_json or {})
+    if not action:
+        return reason
+    draft = dict(reason.get("agent_draft") or {})
+    snapshot = _send_action_snapshot(action)
+    reason["send_action"] = snapshot
+    reason["send_email_action_id"] = action.id
+    reason["send_email_action_status"] = action.status
+    reason["send_email_action_type"] = action.action_type
+    reason["send_email_action_scheduled_for"] = snapshot["scheduled_for"]
+    reason["send_email_action_scheduled_for_pt"] = snapshot["scheduled_for_pt"]
+    reason["send_email_action_started_at"] = snapshot["started_at"]
+    reason["send_email_action_completed_at"] = snapshot["completed_at"]
+    if snapshot["error"]:
+        reason["send_email_action_error"] = snapshot["error"]
+    draft["action_id"] = action.id
+    draft["action_status"] = action.status
+    draft["action_type"] = action.action_type
+    draft["action_error"] = snapshot["error"]
+    draft["scheduled_for"] = snapshot["scheduled_for"]
+    if _action_is_live_scheduled(action):
+        draft["scheduled_for_pt"] = snapshot["scheduled_for_pt"]
+        draft["scheduled_for_utc"] = snapshot["scheduled_for_utc"]
+    else:
+        draft.pop("scheduled_for_pt", None)
+        draft.pop("scheduled_for_utc", None)
+    reason["agent_draft"] = draft
+    return reason
+
+
+def _item_to_dict(
+    item: LeadGenBatchItemRow,
+    linkedin_url: str | None = None,
+    send_action: AgentActionRow | None = None,
+) -> dict[str, Any]:
     return {
         "id": item.id,
         "batch_id": item.batch_id,
@@ -724,7 +812,7 @@ def _item_to_dict(item: LeadGenBatchItemRow, linkedin_url: str | None = None) ->
         "persona": item.persona,
         "template_key": item.template_key,
         "score": item.score,
-        "reason": item.reason_json or {},
+        "reason": _enriched_reason_for_item(item, send_action),
         "approval_status": item.approval_status,
         "sequence_id": item.sequence_id,
         "outcome": item.outcome,
@@ -904,6 +992,30 @@ async def get_batch(batch_id: str, *, include_observations: bool = False) -> dic
             linkedin_by_contact = {
                 cid: url for cid, url in rows if url
             }
+        action_ids = [_item_send_action_id(item) for item in items]
+        action_ids = [action_id for action_id in action_ids if action_id]
+        item_ids = [item.id for item in items]
+        explicit_actions_by_id: dict[str, AgentActionRow] = {}
+        latest_actions_by_item: dict[str, AgentActionRow] = {}
+        if action_ids or item_ids:
+            action_filters = []
+            if action_ids:
+                action_filters.append(AgentActionRow.id.in_(action_ids))
+            if item_ids:
+                action_filters.append(AgentActionRow.entity_id.in_(item_ids))
+            action_rows = (await session.execute(
+                select(AgentActionRow)
+                .where(AgentActionRow.action_type.in_(list(LEAD_GEN_SEND_ACTION_TYPES)))
+                .where(or_(*action_filters))
+                .order_by(desc(AgentActionRow.created_at), desc(AgentActionRow.id))
+            )).scalars().all()
+            action_id_set = set(action_ids)
+            explicit_actions_by_id = {
+                row.id: row for row in action_rows if row.id in action_id_set
+            }
+            for row in action_rows:
+                if row.entity_id and row.entity_id not in latest_actions_by_item:
+                    latest_actions_by_item[row.entity_id] = row
         observations: list[LeadGenObservationRow] = []
         if include_observations:
             observations = (await session.execute(
@@ -914,7 +1026,11 @@ async def get_batch(batch_id: str, *, include_observations: bool = False) -> dic
     return {
         "batch": _batch_to_dict(batch),
         "items": [
-            _item_to_dict(item, linkedin_by_contact.get(item.contact_id))
+            _item_to_dict(
+                item,
+                linkedin_by_contact.get(item.contact_id),
+                explicit_actions_by_id.get(_item_send_action_id(item)) or latest_actions_by_item.get(item.id),
+            )
             for item in items
         ],
         "observations": [_observation_to_dict(obs) for obs in observations],

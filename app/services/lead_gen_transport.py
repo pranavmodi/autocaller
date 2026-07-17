@@ -18,6 +18,17 @@ RESEND = "resend"
 SUPPORTED_LEAD_GEN_TRANSPORTS = (ZOHO_API, RESEND)
 DEFAULT_LEAD_GEN_TRANSPORT_STRATEGY = "zoho_first_then_resend"
 DEFAULT_ZOHO_DAILY_CAP = 20
+COUNTED_SEND_STATUSES = (
+    "sent",
+    "delivered",
+    "delayed",
+    "bounced",
+    "failed",
+    "complained",
+    "suppressed",
+    "opened",
+    "clicked",
+)
 
 
 def _today_pt() -> date:
@@ -80,7 +91,7 @@ async def sent_counts_by_transport_for_day(
     async with AsyncSessionLocal() as session:
         rows = (await session.execute(
             select(EmailLogRow.transport, func.count(EmailLogRow.id))
-            .where(EmailLogRow.status == "sent")
+            .where(EmailLogRow.status.in_(COUNTED_SEND_STATUSES))
             .where(EmailLogRow.sent_at >= start_utc)
             .where(EmailLogRow.sent_at < end_utc)
             .where(EmailLogRow.transport.in_(SUPPORTED_LEAD_GEN_TRANSPORTS))

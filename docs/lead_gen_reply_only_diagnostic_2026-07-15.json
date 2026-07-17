@@ -1,0 +1,14 @@
+{
+  "wave_id": "filevine-cm-reply-only-2026-07-15",
+  "goal": "Determine whether a no-link, reply-gated pre-demand checklist offer produces observable human reach after the July 13-14 workshop wave showed no human engagement.",
+  "primary_metric": "human_reply_rate",
+  "hypothesis": "A short plain-text email offering a relevant pre-demand checklist but requiring a reply before it is sent, delivered without links to one Filevine case manager per firm and email domain, will generate at least two human replies while maintaining at least 95 percent provider acceptance and zero complaints.",
+  "changed_vs_previous": "Removed the workshop link, tracked redirect, event framing, and registration ask; replaced them with a concrete pre-demand checklist offer gated by a yes reply; limited exposure to one mailbox per firm and domain; stratified the cohort by receiving mail provider; retained a visible reply-based opt-out.",
+  "prediction": "At least 19 of 20 messages will be accepted, no complaints will be recorded, and at least two recipients will send a human reply within 120 hours.",
+  "success_threshold": "At least two human replies from 20 sends within 120 hours, with at least 95 percent provider acceptance and zero complaints.",
+  "measurement_window_hours": 120,
+  "minimum_n": 20,
+  "confidence_note": "This is a directional human-reach diagnostic. It cannot prove folder placement, and 20 recipients are too few for reliable provider-level comparisons. A reply proves human reach; silence remains ambiguous.",
+  "invalidation_criteria": "Any complaint, more than one hard bounce, duplicate firm or email-domain exposure, a copy/sender/transport difference between recipients, or discovery that a selected mailbox is invalid or not a named person's mailbox.",
+  "owner": "Pranav"
+}

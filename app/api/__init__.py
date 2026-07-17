@@ -27,6 +27,8 @@ from .front import router as front_router
 from .research import router as research_router
 from .aiaudit import router as aiaudit_router
 from .visibility_links import router as visibility_links_router
+from .data_returned import router as data_returned_router
+from .front_inbox import router as front_inbox_router
 
 __all__ = [
     "dashboard_router", "websocket_router", "settings_router",
@@ -38,5 +40,6 @@ __all__ = [
     "operator_notifications_router", "seo_router", "product_traces_router",
     "learning_router", "todos_router", "composer_variants_router", "actions_router",
     "front_router", "research_router", "aiaudit_router",
-    "visibility_links_router",
+    "visibility_links_router", "data_returned_router",
+    "front_inbox_router",
 ]

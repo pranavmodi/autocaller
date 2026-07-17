@@ -3009,16 +3009,17 @@ function DailyActionPlan({
         {items.map((item) => {
           const linkedInUrl = founderLinkedInUrl(item);
           const searchUrl = founderLinkedInSearchUrl(item);
+          const sendIssue = sendActionIssue(item);
           return (
           <article
             key={item.id}
             className={cn(
               "grid min-w-0 gap-3 px-4 py-3 text-sm lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1.35fr)_minmax(180px,0.9fr)_minmax(130px,auto)]",
               sentItemIds.has(item.id) && "bg-sky-50",
-              !sentItemIds.has(item.id) && draftStatuses[item.id] === "completed" && "bg-emerald-50",
-              !sentItemIds.has(item.id) && storedAgentDraftStep(item) && "bg-emerald-50",
+              !sendIssue && !sentItemIds.has(item.id) && draftStatuses[item.id] === "completed" && "bg-emerald-50",
+              !sendIssue && !sentItemIds.has(item.id) && storedAgentDraftStep(item) && "bg-emerald-50",
               draftStatuses[item.id] === "generating" && "bg-amber-50",
-              draftStatuses[item.id] === "failed" && "bg-red-50",
+              (sendIssue?.tone === "red" || draftStatuses[item.id] === "failed") && "bg-red-50",
             )}
           >
             <div className="min-w-0">
@@ -3098,7 +3099,21 @@ function DailyActionPlan({
                   Scheduled, sends {scheduledSendPt(item)}
                 </div>
               )}
-              {!isEmailSent(item) && !scheduledSendPt(item) && (draftStatuses[item.id] === "completed" || storedAgentDraftStep(item)) && (
+              {!isEmailSent(item) && sendIssue && (
+                <div
+                  title={sendActionError(item) || undefined}
+                  className={cn(
+                    "mt-2 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium",
+                    sendIssue.tone === "red"
+                      ? "bg-red-100 text-red-700"
+                      : "bg-neutral-200 text-neutral-700",
+                  )}
+                >
+                  <AlertTriangle className="h-3 w-3" />
+                  {sendIssue.label}
+                </div>
+              )}
+              {!isEmailSent(item) && !sendIssue && !scheduledSendPt(item) && (draftStatuses[item.id] === "completed" || storedAgentDraftStep(item)) && (
                 <div className="mt-2 inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-800">
                   <CheckCircle2 className="h-3 w-3" />
                   Draft generated
@@ -3388,8 +3403,31 @@ function isEmailSent(item: LeadGenBatchItem) {
   return Boolean(reasonValue(item, "last_sent_at") || reasonValue(item, "last_sent_message_id"));
 }
 
+function sendActionStatus(item: LeadGenBatchItem): string {
+  const reasonStatus = reasonValue(item, "send_email_action_status");
+  if (reasonStatus) return reasonStatus;
+  const draft = objectValue(item.reason?.agent_draft);
+  const draftStatus = draft && typeof draft.action_status === "string" ? draft.action_status : "";
+  return draftStatus;
+}
+
+function sendActionIssue(item: LeadGenBatchItem): { label: string; tone: "red" | "neutral" } | null {
+  const status = sendActionStatus(item);
+  if (status === "failed") return { label: "Send failed", tone: "red" };
+  if (status === "cancelled") return { label: "Send cancelled", tone: "neutral" };
+  if (status === "expired") return { label: "Send expired", tone: "neutral" };
+  if (status === "blocked") return { label: "Send blocked", tone: "red" };
+  return null;
+}
+
+function sendActionError(item: LeadGenBatchItem): string {
+  return reasonValue(item, "send_email_action_error");
+}
+
 function scheduledSendPt(item: LeadGenBatchItem): string {
   if (!reasonValue(item, "send_email_action_id")) return "";
+  const status = sendActionStatus(item);
+  if (status && status !== "approved") return "";
   const draft = objectValue(item.reason?.agent_draft);
   const pt = draft && typeof draft.scheduled_for_pt === "string" ? draft.scheduled_for_pt : "";
   return pt;
@@ -3655,6 +3693,7 @@ function AllDraftsModal({
               reasonValue(item, "last_sent_composer_variant_key") ||
               "—";
             const scheduled = scheduledSendPt(item);
+            const sendIssue = sendActionIssue(item);
             const words = body.trim() ? body.trim().split(/\s+/).length : 0;
             return (
               <div key={item.id} className="rounded-lg border border-neutral-200">
@@ -3677,6 +3716,18 @@ function AllDraftsModal({
                   ) : scheduled ? (
                     <span className="rounded bg-violet-100 px-1.5 py-0.5 text-[11px] text-violet-800">
                       sends {scheduled}
+                    </span>
+                  ) : sendIssue ? (
+                    <span
+                      title={sendActionError(item) || undefined}
+                      className={cn(
+                        "rounded px-1.5 py-0.5 text-[11px]",
+                        sendIssue.tone === "red"
+                          ? "bg-red-100 text-red-700"
+                          : "bg-neutral-200 text-neutral-700",
+                      )}
+                    >
+                      {sendIssue.label.toLowerCase()}
                     </span>
                   ) : null}
                   <span className="text-[11px] text-neutral-400">{words}w</span>

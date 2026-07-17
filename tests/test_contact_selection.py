@@ -1,9 +1,25 @@
 from app.services.contact_selection import (
     ContactSelectionInput,
+    classify_email_quality,
     contact_selection_weights,
+    has_usable_email,
     is_target_lead_persona,
     score_contact_selection,
 )
+
+
+def test_filevine_application_addresses_are_not_usable_for_outreach():
+    assert not has_usable_email("matter@smithlaw.filevineapp.com")
+    assert not has_usable_email("iara@ruiz@sedlawgroup.com")
+    assert has_usable_email("jane@smithlaw.com")
+
+
+def test_email_quality_requires_a_name_match_for_direct_mailboxes():
+    assert classify_email_quality("jane.smith@firm.com", "Jane Smith") == "direct_named_email"
+    assert classify_email_quality("js@firm.com", "Jane Smith") == "direct_named_email"
+    assert classify_email_quality("alex@firm.com", "Alejandra Nuno") == "direct_named_email"
+    assert classify_email_quality("pa2@firm.com", "Darling Rivera") == "role_inbox"
+    assert classify_email_quality("cmassistant@firm.com", "Rafael Mejia") == "role_inbox"
 
 
 def test_contact_selection_scores_direct_founder_with_trace():
