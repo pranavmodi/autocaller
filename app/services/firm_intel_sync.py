@@ -1101,6 +1101,17 @@ def _person_matches(value: str | None, needle: str | None) -> bool:
     return needle.strip().lower() in str(value or "").lower()
 
 
+def _people_filter_values(values: str | list[str] | None) -> list[str]:
+    if isinstance(values, str):
+        values = [values]
+    return [value.strip() for value in (values or []) if value and value.strip()]
+
+
+def _person_matches_any(value: str | None, needles: str | list[str] | None) -> bool:
+    filters = _people_filter_values(needles)
+    return not filters or any(_person_matches(value, needle) for needle in filters)
+
+
 @lru_cache(maxsize=8192)
 def _role_from_title(title: str | None) -> str | None:
     return classify_contact(title, None, None)[0]
@@ -1211,8 +1222,8 @@ async def list_mirrored_pif_people(
     name: str | None = None,
     firm: str | None = None,
     vendor: str | None = None,
-    title: str | None = None,
-    role_category: str | None = None,
+    title: str | list[str] | None = None,
+    role_category: str | list[str] | None = None,
     source: str | None = "all",
     leader: str | None = "any",
     page: int = 1,
@@ -1272,11 +1283,13 @@ async def list_mirrored_pif_people(
                 continue
             if not _person_matches(person.get("firm_name"), firm):
                 continue
-            if not _person_matches(person.get("title"), title):
+            if not _person_matches_any(person.get("title"), title):
                 continue
-            if role_category and role_category.strip() and not (
-                _person_matches(person.get("role_category"), role_category)
-                or _person_matches(person.get("title"), role_category)
+            role_filters = _people_filter_values(role_category)
+            if role_filters and not any(
+                _person_matches(person.get("role_category"), role)
+                or _person_matches(person.get("title"), role)
+                for role in role_filters
             ):
                 continue
             people.append(person)

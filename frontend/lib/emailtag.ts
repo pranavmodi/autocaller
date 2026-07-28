@@ -300,10 +300,12 @@ export interface PifSyncStatusResponse {
 
 export interface PifPeopleListParams {
   title?: string;
+  titles?: string[];
   name?: string;
   firm?: string;
   vendor?: string;
   role_category?: string;
+  role_categories?: string[];
   source?: PeopleSource;
   leader?: LeaderFilter;
   page?: number;
@@ -381,11 +383,20 @@ function buildUrl(path: string): string {
   return `${EMAILTAG_BASE}${normalized}`;
 }
 
-function appendParams(path: string, params: Record<string, string | number | boolean | undefined>): string {
+function appendParams(
+  path: string,
+  params: Record<string, string | number | boolean | readonly string[] | undefined>,
+): string {
   const search = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {
     if (value === undefined || value === "") continue;
-    search.set(key, String(value));
+    if (Array.isArray(value)) {
+      value.forEach((item) => {
+        if (item) search.append(key, item);
+      });
+    } else {
+      search.set(key, String(value));
+    }
   }
   const query = search.toString();
   return query ? `${path}?${query}` : path;
@@ -529,11 +540,11 @@ export function getMirroredFirm(pifId: string): Promise<PifInfoResponse> {
 export async function listPifPeople(params: PifPeopleListParams = {}): Promise<PifPeopleListResponse> {
   return possibleFetch<PifPeopleListResponse>(
     appendParams("/api/pif/people", {
-      title: params.title,
+      title: params.titles?.length ? params.titles : params.title,
       name: params.name,
       firm: params.firm,
       vendor: params.vendor,
-      role_category: params.role_category,
+      role_category: params.role_categories?.length ? params.role_categories : params.role_category,
       source: params.source,
       leader: params.leader,
       page: params.page ?? 1,

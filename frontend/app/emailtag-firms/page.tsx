@@ -10,6 +10,7 @@ import {
   AlertCircle,
   AlertTriangle,
   BarChart3,
+  Check,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -31,6 +32,7 @@ import {
   Star,
   Trash2,
   Users,
+  X,
 } from "lucide-react";
 import { CommsTable } from "@/components/CommsTable";
 import { Switch } from "@/components/ui/switch";
@@ -1113,6 +1115,142 @@ function SelectField({
   );
 }
 
+function SearchableMultiSelectField({
+  label,
+  values,
+  options,
+  emptyLabel,
+  searchPlaceholder,
+  formatValue = (value) => value,
+  onChange,
+}: {
+  label: string;
+  values: string[];
+  options: PifPeopleFilterOption[];
+  emptyLabel: string;
+  searchPlaceholder: string;
+  formatValue?: (value: string) => string;
+  onChange: (values: string[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const selected = useMemo(() => new Set(values), [values]);
+  const filteredOptions = useMemo(() => {
+    const needle = query.trim().toLocaleLowerCase();
+    return options
+      .filter((option) => !needle || formatValue(option.value).toLocaleLowerCase().includes(needle))
+      .sort((left, right) => Number(selected.has(right.value)) - Number(selected.has(left.value)));
+  }, [formatValue, options, query, selected]);
+  const visibleOptions = filteredOptions.slice(0, 200);
+  const summary = values.length === 0
+    ? emptyLabel
+    : values.length === 1
+      ? formatValue(values[0])
+      : `${values.length} selected`;
+
+  const close = () => {
+    setOpen(false);
+    setQuery("");
+  };
+
+  return (
+    <div className="block text-[11px] font-medium uppercase tracking-wide text-neutral-400">
+      <div>{label}</div>
+      <div
+        className="relative mt-1"
+        onBlur={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget as Node | null)) close();
+        }}
+      >
+        <button
+          type="button"
+          aria-haspopup="listbox"
+          aria-expanded={open}
+          aria-label={`${label} filter`}
+          onClick={() => {
+            if (open) close();
+            else setOpen(true);
+          }}
+          className="flex w-full items-center justify-between gap-2 rounded-md border border-neutral-200 bg-white px-2 py-1.5 text-left text-sm font-normal normal-case tracking-normal text-neutral-800 focus:border-neutral-400 focus:outline-none focus:ring-1 focus:ring-neutral-400"
+          title={values.length ? values.map(formatValue).join(", ") : undefined}
+        >
+          <span className={cn("truncate", values.length === 0 && "text-neutral-500")}>{summary}</span>
+          <ChevronDown className={cn("h-3.5 w-3.5 shrink-0 text-neutral-400 transition", open && "rotate-180")} />
+        </button>
+        {open && (
+          <div className="absolute left-0 z-40 mt-1 w-full min-w-72 overflow-hidden rounded-md border border-neutral-200 bg-white shadow-lg">
+            <div className="flex items-center gap-2 border-b border-neutral-100 p-2">
+              <Search className="h-3.5 w-3.5 shrink-0 text-neutral-400" />
+              <input
+                autoFocus
+                type="search"
+                aria-label={`Search ${label.toLocaleLowerCase()}`}
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") close();
+                }}
+                placeholder={searchPlaceholder}
+                className="min-w-0 flex-1 text-sm font-normal normal-case tracking-normal text-neutral-800 placeholder:text-neutral-400 focus:outline-none"
+              />
+              {values.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => onChange([])}
+                  title={`Clear selected ${label.toLocaleLowerCase()}`}
+                  className="rounded p-1 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+            <div role="listbox" aria-multiselectable="true" className="max-h-72 overflow-y-auto py-1">
+              {visibleOptions.map((option) => {
+                const checked = selected.has(option.value);
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    role="option"
+                    aria-selected={checked}
+                    onClick={() => {
+                      onChange(checked
+                        ? values.filter((value) => value !== option.value)
+                        : [...values, option.value]);
+                    }}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left normal-case tracking-normal hover:bg-neutral-50"
+                  >
+                    <span className={cn(
+                      "flex h-4 w-4 shrink-0 items-center justify-center rounded border",
+                      checked ? "border-neutral-900 bg-neutral-900 text-white" : "border-neutral-300 bg-white",
+                    )}>
+                      {checked && <Check className="h-3 w-3" />}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-sm font-normal text-neutral-800">
+                      {formatValue(option.value)}
+                    </span>
+                    <span className="shrink-0 text-[11px] text-neutral-400">{option.count.toLocaleString()}</span>
+                  </button>
+                );
+              })}
+              {filteredOptions.length === 0 && (
+                <div className="px-3 py-4 text-center text-xs font-normal normal-case tracking-normal text-neutral-500">
+                  No matches
+                </div>
+              )}
+            </div>
+            {filteredOptions.length > visibleOptions.length && (
+              <div className="border-t border-neutral-100 px-3 py-2 text-[11px] font-normal normal-case tracking-normal text-neutral-500">
+                {visibleOptions.length.toLocaleString()} of {filteredOptions.length.toLocaleString()} matches
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function InputField({
   label,
   value,
@@ -1327,6 +1465,18 @@ function ContactsView({
   const update = <K extends keyof PifPeopleListParams>(key: K, value: PifPeopleListParams[K]) => {
     setFilters((current) => ({ ...current, [key]: value, page: 1 }));
   };
+  const updateMulti = (
+    key: "titles" | "role_categories",
+    legacyKey: "title" | "role_category",
+    values: string[],
+  ) => {
+    setFilters((current) => ({
+      ...current,
+      [legacyKey]: undefined,
+      [key]: values.length ? values : undefined,
+      page: 1,
+    }));
+  };
   const setPage = (nextPage: number) => {
     setFilters((current) => ({ ...current, page: Math.max(1, nextPage) }));
   };
@@ -1345,22 +1495,23 @@ function ContactsView({
               </option>
             ))}
           </SelectField>
-          <SelectField label="Title" value={filters.title ?? ""} onChange={(value) => update("title", value || undefined)}>
-            <option value="">Any title</option>
-            {titleOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.value} ({option.count.toLocaleString()})
-              </option>
-            ))}
-          </SelectField>
-          <SelectField label="Role" value={filters.role_category ?? ""} onChange={(value) => update("role_category", value || undefined)}>
-            <option value="">Any role</option>
-            {roleOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {formatLabel(option.value)} ({option.count.toLocaleString()})
-              </option>
-            ))}
-          </SelectField>
+          <SearchableMultiSelectField
+            label="Title"
+            values={filters.titles ?? (filters.title ? [filters.title] : [])}
+            options={titleOptions}
+            emptyLabel="Any title"
+            searchPlaceholder="Search titles..."
+            onChange={(values) => updateMulti("titles", "title", values)}
+          />
+          <SearchableMultiSelectField
+            label="Role"
+            values={filters.role_categories ?? (filters.role_category ? [filters.role_category] : [])}
+            options={roleOptions}
+            emptyLabel="Any role"
+            searchPlaceholder="Search roles..."
+            formatValue={formatLabel}
+            onChange={(values) => updateMulti("role_categories", "role_category", values)}
+          />
           <SelectField label="Source" value={filters.source ?? "all"} onChange={(value) => update("source", value as PeopleSource)}>
             <option value="all">All sources</option>
             <option value="leadership">Leadership</option>
