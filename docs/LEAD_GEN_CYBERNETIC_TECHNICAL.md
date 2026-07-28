@@ -283,7 +283,7 @@ Current event taxonomy:
 | `email_sent` | successful `send_email mode=lead_gen` or approved lead-gen draft execution, including scheduled daemon execution | deterministic neutral / continue sequence |
 | `email_send_failed` | transport exception or policy refusal in `execute_action` | deterministic failure / pause sequence |
 | `email_reply_received` | Zoho inbound reply matched to a lead-gen contact/batch item | existing LLM feedback classifier |
-| `link_clicked` | tracked `link_events` click attributed to an outreach send, `audit_link_clicks` from `/aiaudit/go` or `/a/<code>` (`raw_event_json.channel = "ai_audit"`), consult-link clicks from `/c/<code>` (`channel = "consult"`, `source = consult_email`; reuses `audit_links` with `kind=consult`, 302s to `getpossibleminds.com/consult`), solution/product-link clicks from `/s/<code>` (`channel = "solution"`, `source = solution_email`, `kind=solution`, 302s to the outbound voice-AI solution page with `?lc=<code>`), AI Visibility report clicks from `/v/<code>` (`channel = "ai_visibility"`), or workshop-link clicks from `/w/<code>` (`channel = "workshop"`, `source = workshop_email`, `kind=workshop`, 302s to the workshop landing page — `WORKSHOP_PAGE_URL`, default the Filevine case-manager page — with per-recipient prefill params `contact_name`/`contact_email`/`firm_name` plus `?lc=<code>`) | deterministic opened-or-clicked |
+| `link_clicked` | tracked `link_events` click attributed to an outreach send, `audit_link_clicks` from `/aiaudit/go` or `/a/<code>` (`raw_event_json.channel = "ai_audit"`), consult-link clicks from `/c/<code>` (`channel = "consult"`, `source = consult_email`; reuses `audit_links` with `kind=consult`, 302s to `getpossibleminds.com/consult`), solution/product-link clicks from `/s/<code>` (`channel = "solution"`, `source = solution_email`, `kind=solution`, 302s to the outbound voice-AI solution page with `?lc=<code>`), AI Visibility report clicks from `/v/<code>` (`channel = "ai_visibility"`), or workshop-link clicks from `/w/<code>` (`channel = "workshop"`, `kind=workshop`). Email workshop links (`source = workshop_email`) retain one-click contact prefill; LinkedIn workshop links (`source = workshop_linkedin`) redirect with opaque `lc`/`c` values only so contact PII does not enter the visible URL. | deterministic opened-or-clicked |
 | `product_interest` | early-access / design-partner signup from a product solution page via `POST /api/lead-gen/product-interest` (public). `raw_event_json` carries `email`, `firm`, `product`, `channel = "solution"`; attributed to a contact/batch_item when the `/s/` link code (`lc`) is supplied. Workshop registration pages (`product = "workshop-*"`, `source = "workshop_page_register"`) additionally send optional ICP-qualification fields `role`, `case_management_system`, `firm_size`. Every signup fires a best-effort operator alert (WhatsApp via openclaw CLI to `OPERATOR_WHATSAPP`, Telnyx SMS fallback — SMS to the +91 operator number fails DLT rules, hence WhatsApp-first; `app/services/operator_sms.py`); `workshop-*` products additionally send the registrant a plaintext confirmation email via Resend (`send_workshop_registration_confirmation`, `message_type=workshop_registration_confirmation` in `email_logs`). Notification failures never fail the signup | deterministic high-intent product signal |
 | `page_session` | JS beacon from a tracked landing page via `POST /api/lead-gen/page-event` (public). `raw_event_json.event` is a progressive-funnel step: `session_ready` (page JS ran), `first_pointer` (first real pointer/scroll/touch/key gesture), `scroll_50` (scrolled ≥50% depth), `content_revealed` (tapped a tap-to-reveal control), `click` (on-page link/button click; `engagement_type`/`click_*` fields), or `page_leave` (carries final `time_on_page_ms`). Events share a client-generated `session_id`; attribution to contact/batch item comes from the `/s/`, `/c/`, or `/w/` link code (`lc`). Also carries user agent, IP (plus masked display form), and geo headers. The emitter is the shared `ClickBeacon` component in the getpossibleminds site (`components/analytics/click-beacon.tsx`); `content_revealed` is dispatched by the `RevealPanel` gate via a `pm:funnel-step` window event | deterministic; session-level quality classified at rollup time (see below) |
 | `consult_booked` | website consult booking or Cal.com booking made during a call | deterministic booked qualified conversation |
@@ -337,6 +337,15 @@ The landing page is designed to *manufacture* these gestures: the gifted payload
 genuine reader produces a `content_revealed` event a scanner never will. The
 north-star remains the conversion itself (`product_interest` registration /
 `consult_booked`), which no scanner performs.
+
+`GET /api/aiaudit/workshop-click-analytics` and `lead-gen workshop-analytics`
+power the workshop-only `/click-analytics` operator view. They join `/w/`
+redirects to attributed `page_session` observations, collapse duplicate global
+and page-specific beacons, and expose the exact `content_revealed`, `click`, and
+`scroll_50` actions per contact. This view deliberately does not accept
+`first_pointer` by itself as human proof: observed preview automation can emit a
+synthetic pointer before leaving after roughly four seconds. Known scanner UAs
+and short load/pointer/leave-only sessions remain scanner or suspect signals.
 
 The weekly learning KPI is:
 
@@ -1295,8 +1304,12 @@ refresh cadence and no longer depends on the dead mission.db sync.
   the mission.db map (legacy). When "1", it reads `load_pif_domain_map_from_db()`
   (the native directory; ~2,175 matchable domains vs ~1,141 from mission.db).
   `pif sync` is safe regardless of the flag — warm the table, then cut over.
-- **Surface:** REST `POST /api/pif/sync`, `GET /api/pif/status`; CLI
-  `bin/possibleos pif sync | status`.
+- **Surface:** REST `POST /api/pif/sync`, `GET /api/pif/status`, and local-only
+  `GET /api/pif/sync-status`; CLI `bin/possibleos pif sync | status |
+  sync-status`. Completed syncs persist a bounded firm-level ledger with each
+  touched firm's created/updated status, website, source timestamp, people
+  count, and aliases touched. Aggregate-only legacy runs are reconstructed
+  from the exact mirror `synced_at` timestamp when possible.
 - **PHI:** `extraction_notes` and conversation context can contain patient names.
   This data is internal-only for selection/targeting; the PHI egress guard
   remains authoritative for anything emitted in outreach.

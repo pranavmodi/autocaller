@@ -656,6 +656,7 @@ export type HumanSessionsByDayRow = {
 
 export type ClickAnalyticsResponse = {
   since_days: number;
+  source?: string | null;
   group_by: ClickAnalyticsGroupBy;
   group_label: string;
   available_groups: Array<{ key: ClickAnalyticsGroupBy; label: string }>;
@@ -679,12 +680,80 @@ export const getClickAnalytics = (args: {
   sinceDays?: number;
   groupBy?: ClickAnalyticsGroupBy;
   limit?: number;
+  source?: string;
 } = {}) => {
   const params = new URLSearchParams();
   params.set("since_days", String(args.sinceDays ?? 30));
   params.set("group_by", args.groupBy ?? "firm_name");
   params.set("limit", String(args.limit ?? 50));
+  if (args.source) params.set("source", args.source);
   return get<ClickAnalyticsResponse>(`/api/aiaudit/click-analytics?${params.toString()}`);
+};
+
+export type WorkshopTrackingContact = {
+  contact_id: string;
+  contact_name: string;
+  contact_email: string;
+  title: string;
+  linkedin_url: string;
+  firm_name: string;
+  source: string;
+  tracking_link_created_at: string | null;
+  raw_link_clicks: number;
+  scanner_link_clicks: number;
+  sessions: number;
+  confirmed_sessions: number;
+  scanner_or_suspect_sessions: number;
+  prompt_reveals: number;
+  on_page_clicks: number;
+  scroll_50: number;
+  max_time_on_page_ms: number;
+  last_activity_at: string | null;
+  status: "Prompt revealed" | "Engaged" | "Visited" | "Scanner / suspect only" | "No activity";
+};
+
+export type WorkshopTrackingActivity = {
+  id: string;
+  contact_id: string;
+  contact_name: string;
+  firm_name: string;
+  occurred_at: string | null;
+  event: string;
+  label: string;
+  detail: string;
+  quality: "human" | "scanner" | "suspect";
+  page: string;
+  session_id: string | null;
+  time_on_page_ms: number | null;
+  user_agent: string | null;
+};
+
+export type WorkshopClickAnalyticsResponse = {
+  since_days: number;
+  summary: {
+    tracked_contacts: number;
+    raw_link_clicks: number;
+    scanner_link_clicks: number;
+    confirmed_visitors: number;
+    scanner_or_suspect_sessions: number;
+    prompt_reveals: number;
+    on_page_clicks: number;
+    last_activity_at: string | null;
+  };
+  contacts: WorkshopTrackingContact[];
+  activities: WorkshopTrackingActivity[];
+};
+
+export const getWorkshopClickAnalytics = (args: {
+  sinceDays?: number;
+  limit?: number;
+} = {}) => {
+  const params = new URLSearchParams();
+  params.set("since_days", String(args.sinceDays ?? 30));
+  params.set("limit", String(args.limit ?? 250));
+  return get<WorkshopClickAnalyticsResponse>(
+    `/api/aiaudit/workshop-click-analytics?${params.toString()}`,
+  );
 };
 
 export type DataReturnedEvent = {
@@ -716,14 +785,21 @@ export async function getDataReturnedScript(): Promise<string> {
   return res.text();
 }
 
-export type DataReturnedScriptSaveResponse = {
+export type DataReturnedScriptConfig = {
   script: string;
+  enabled: boolean;
   customized: boolean;
   updated_at: string | null;
 };
 
+export const getDataReturnedScriptConfig = () =>
+  get<DataReturnedScriptConfig>("/api/datareturned/script");
+
 export const saveDataReturnedScript = (script: string) =>
-  put<DataReturnedScriptSaveResponse>("/api/datareturned/script", { script });
+  put<DataReturnedScriptConfig>("/api/datareturned/script", { script });
+
+export const setDataReturnedScriptEnabled = (enabled: boolean) =>
+  put<DataReturnedScriptConfig>("/api/datareturned/script/enabled", { enabled });
 
 async function get<T>(path: string, options?: ApiRequestOptions): Promise<T> {
   const res = await fetch(apiUrl(path), {

@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { Check, Clipboard, Database, Loader2, RefreshCw, Save, Terminal } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Check, Clipboard, Database, Loader2, Power, RefreshCw, Save, Terminal } from "lucide-react";
 import {
   getDataReturnedEvents,
-  getDataReturnedScript,
+  getDataReturnedScriptConfig,
   saveDataReturnedScript,
+  setDataReturnedScriptEnabled,
+  type DataReturnedScriptConfig,
   type DataReturnedEvent,
 } from "@/lib/api";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -120,9 +122,11 @@ function EventRow({ event }: { event: DataReturnedEvent }) {
 }
 
 export default function DataReturnedPage() {
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState("events");
   const [scriptDraft, setScriptDraft] = useState("");
   const [lastSavedScript, setLastSavedScript] = useState("");
+  const [scriptEnabled, setScriptEnabled] = useState(true);
   const [scriptInitialized, setScriptInitialized] = useState(false);
   const eventsQuery = useQuery({
     queryKey: ["datareturned"],
@@ -131,7 +135,7 @@ export default function DataReturnedPage() {
   });
   const scriptQuery = useQuery({
     queryKey: ["datareturned-script"],
-    queryFn: getDataReturnedScript,
+    queryFn: getDataReturnedScriptConfig,
     staleTime: 60_000,
   });
   const saveScript = useMutation({
@@ -139,15 +143,29 @@ export default function DataReturnedPage() {
     onSuccess: (saved) => {
       setScriptDraft(saved.script);
       setLastSavedScript(saved.script);
+      setScriptEnabled(saved.enabled);
+      queryClient.setQueryData<DataReturnedScriptConfig>(["datareturned-script"], saved);
+    },
+  });
+  const toggleScript = useMutation({
+    mutationFn: () => setDataReturnedScriptEnabled(!scriptEnabled),
+    onSuccess: (saved) => {
+      setScriptEnabled(saved.enabled);
+      queryClient.setQueryData<DataReturnedScriptConfig>(["datareturned-script"], saved);
     },
   });
 
   useEffect(() => {
     if (scriptQuery.data === undefined || scriptInitialized) return;
-    setScriptDraft(scriptQuery.data);
-    setLastSavedScript(scriptQuery.data);
+    setScriptDraft(scriptQuery.data.script);
+    setLastSavedScript(scriptQuery.data.script);
     setScriptInitialized(true);
   }, [scriptInitialized, scriptQuery.data]);
+
+  useEffect(() => {
+    if (scriptQuery.data === undefined) return;
+    setScriptEnabled(scriptQuery.data.enabled);
+  }, [scriptQuery.data]);
 
   const events = eventsQuery.data?.events ?? [];
   const latest = events[0]?.received_at ?? null;
@@ -258,6 +276,24 @@ export default function DataReturnedPage() {
                   Edit the script served by <span className="font-mono">/datareturned/script</span>. Saved content is publicly retrievable and may be executed by machines that fetch this endpoint.
                 </p>
               </div>
+              <button
+                type="button"
+                aria-pressed={scriptEnabled}
+                onClick={() => toggleScript.mutate()}
+                disabled={toggleScript.isPending || scriptQuery.isLoading}
+                className={`inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50 ${
+                  scriptEnabled
+                    ? "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                    : "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100"
+                }`}
+              >
+                {toggleScript.isPending ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Power className="h-3.5 w-3.5" />
+                )}
+                {scriptEnabled ? "Active" : "No-op"}
+              </button>
               <CopyButton text="/datareturned/script" label="Copy endpoint" />
             </div>
             {scriptQuery.isLoading ? (
@@ -271,6 +307,11 @@ export default function DataReturnedPage() {
               </div>
             ) : (
               <div className="p-4">
+                {!scriptEnabled ? (
+                  <div className="mb-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                    No-op mode is active. The public endpoint posts only an empty <span className="font-mono">{`{}`}</span> callback so the run remains visible, while your saved script stays preserved below.
+                  </div>
+                ) : null}
                 <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-xs text-neutral-500">
                   <span>
                     Endpoint: <span className="font-mono text-neutral-700">GET /datareturned/script</span>
@@ -291,6 +332,11 @@ export default function DataReturnedPage() {
                 {saveScript.isError ? (
                   <div className="mt-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
                     Could not save the shell script. {saveScript.error instanceof Error ? saveScript.error.message : ""}
+                  </div>
+                ) : null}
+                {toggleScript.isError ? (
+                  <div className="mt-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+                    Could not change the script mode. {toggleScript.error instanceof Error ? toggleScript.error.message : ""}
                   </div>
                 ) : null}
               </div>

@@ -20,14 +20,22 @@ VALID_SOURCES = {"ai_audit_signature", "ai_audit_email"}
 VALID_CONSULT_SOURCES = {"consult_email", "consult_signature"}
 # Solution/product short links (kind="solution") redirect to a product solution
 # page (e.g. the outbound voice-AI page) with the same per-recipient attribution.
-VALID_SOLUTION_SOURCES = {"solution_email", "solution_signature"}
+VALID_SOLUTION_SOURCES = {
+    "solution_email",
+    "solution_signature",
+    "solution_email_automation",
+}
 # Intake demo short links (kind="intake") redirect to the browser-call demo and
 # preserve per-recipient attribution.
 VALID_INTAKE_SOURCES = {"intake_demo_email", "intake_demo_signature"}
 # Workshop short links (kind="workshop") redirect to a workshop landing page on
 # the marketing site; the redirect appends per-recipient prefill params so the
 # registration form is one click for invitees.
-VALID_WORKSHOP_SOURCES = {"workshop_email", "workshop_signature"}
+VALID_WORKSHOP_SOURCES = {
+    "workshop_email",
+    "workshop_signature",
+    "workshop_linkedin",
+}
 
 
 def _secret() -> bytes:

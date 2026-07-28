@@ -19,6 +19,7 @@ import sys
 import tempfile
 from pathlib import Path
 from typing import Any, Optional
+from urllib.parse import quote
 
 import httpx
 import typer
@@ -305,7 +306,7 @@ def _delete(path: str, timeout: float = 30.0) -> dict:
         resp = httpx.delete(f"{_api_base()}{path}", timeout=timeout)
         resp.raise_for_status()
     except httpx.HTTPError as e:
-        console.print(f"[red]API request failed: {e}[/red]")
+        console.print(f"[red]API request failed: {_http_error_detail(e)}[/red]")
         raise typer.Exit(code=1) from e
     return resp.json() if resp.content else {}
 
@@ -361,10 +362,20 @@ def serve(
 
 @data_returned_app.command("list")
 def data_returned_list(
-    limit: int = typer.Option(100, min=1, max=500, help="Newest events to return."),
+    limit: int = typer.Option(100, min=1, max=100, help="Newest events to return."),
 ):
     """Print recently captured /datareturned events as JSON."""
     console.print_json(data=_get("/api/datareturned", limit=limit))
+
+
+@data_returned_app.command("prune")
+def data_returned_prune():
+    """Delete all returned-data events except the newest 100."""
+    result = _post("/api/datareturned/prune")
+    console.print(
+        f"[green]pruned[/green] deleted={result.get('deleted', 0)} "
+        f"retained={result.get('retained', 0)}"
+    )
 
 
 @data_returned_app.command("script")
@@ -387,6 +398,31 @@ def data_returned_save_script(
     console.print(
         f"[green]saved[/green] {len(saved.get('script', script))} characters to /datareturned/script"
     )
+
+
+@data_returned_app.command("script-status")
+def data_returned_script_status():
+    """Show whether /datareturned/script serves saved logic or an empty callback."""
+    config = _get("/api/datareturned/script")
+    mode = "active" if config.get("enabled", True) else "no-op"
+    console.print(
+        f"mode={mode} customized={str(bool(config.get('customized'))).lower()} "
+        f"characters={len(config.get('script', ''))}"
+    )
+
+
+@data_returned_app.command("script-on")
+def data_returned_script_on():
+    """Serve the saved shell script from /datareturned/script."""
+    _put("/api/datareturned/script/enabled", {"enabled": True})
+    console.print("[green]data-returned script active[/green]")
+
+
+@data_returned_app.command("script-off")
+def data_returned_script_off():
+    """Serve an empty callback while preserving the saved shell script."""
+    _put("/api/datareturned/script/enabled", {"enabled": False})
+    console.print("[yellow]data-returned script set to empty-callback mode[/yellow]")
 
 
 # ---------------------------------------------------------------------------
@@ -5545,6 +5581,112 @@ def lead_gen_items(
     console.print(f"[dim]{len(items)} item(s) in batch {batch_id}[/dim]")
 
 
+@lead_gen_app.command("workshop-link")
+def lead_gen_workshop_link(
+    full_name: str = typer.Option(..., "--name", help="LinkedIn contact's full name."),
+    firm_name: str = typer.Option(..., "--firm", help="Current firm or company."),
+    title: str = typer.Option("", "--title", help="Current role/title."),
+    linkedin_url: str = typer.Option("", "--linkedin-url", help="Canonical profile URL when it is not in the pasted text."),
+    json_output: bool = typer.Option(False, "--json", help="Print raw JSON."),
+):
+    """Create or reuse one person's tracked workshop link; generates no copy."""
+    from app.services.workshop_linkedin_tracking import (
+        WorkshopLinkedInTrackingError,
+        create_workshop_linkedin_tracking_link,
+    )
+
+    try:
+        result = _run(create_workshop_linkedin_tracking_link(
+            full_name=full_name,
+            firm_name=firm_name,
+            title=title,
+            linkedin_url=linkedin_url,
+        ))
+    except WorkshopLinkedInTrackingError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(1) from exc
+
+    if json_output:
+        console.print_json(data=result)
+        return
+    contact = result.get("contact") or {}
+    console.print(
+        f"[bold]{contact.get('full_name') or 'Unknown'}[/bold] · "
+        f"{contact.get('firm_name') or 'Unknown firm'}"
+    )
+    console.print()
+    console.print(result["tracking_url"])
+    state = "reused" if result.get("tracking_link_reused") else "created"
+    console.print(f"[dim]Tracking link {state}; clicks appear in /click-analytics.[/dim]")
+
+
+@lead_gen_app.command("workshop-analytics")
+def lead_gen_workshop_analytics(
+    since_days: int = typer.Option(30, "--days", min=0, max=3650, help="Activity window; 0 means all time."),
+    limit: int = typer.Option(250, "--limit", min=1, max=500, help="Maximum contacts and activities."),
+    events: bool = typer.Option(False, "--events", help="Also print the recent workshop activity feed."),
+    json_output: bool = typer.Option(False, "--json", help="Print raw JSON."),
+):
+    """Inspect workshop-only opens, visits, prompt reveals, and page clicks."""
+    data = _get(
+        "/api/aiaudit/workshop-click-analytics",
+        since_days=since_days,
+        limit=limit,
+    )
+    if json_output:
+        console.print_json(data=data)
+        return
+
+    summary = data.get("summary") or {}
+    console.print(
+        f"[bold]Workshop tracking[/bold] · contacts={summary.get('tracked_contacts', 0)} "
+        f"raw_opens={summary.get('raw_link_clicks', 0)} "
+        f"known_scanners={summary.get('scanner_link_clicks', 0)} "
+        f"confirmed_visits={summary.get('confirmed_visitors', 0)} "
+        f"prompt_reveals={summary.get('prompt_reveals', 0)} "
+        f"page_clicks={summary.get('on_page_clicks', 0)}"
+    )
+
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("contact")
+    table.add_column("firm")
+    table.add_column("status")
+    table.add_column("raw", justify="right")
+    table.add_column("visits", justify="right")
+    table.add_column("reveals", justify="right")
+    table.add_column("page clicks", justify="right")
+    table.add_column("last activity")
+    for row in data.get("contacts") or []:
+        table.add_row(
+            row.get("contact_name") or "Unknown contact",
+            row.get("firm_name") or "Unknown firm",
+            row.get("status") or "No activity",
+            str(row.get("raw_link_clicks") or 0),
+            str(row.get("confirmed_sessions") or 0),
+            str(row.get("prompt_reveals") or 0),
+            str(row.get("on_page_clicks") or 0),
+            row.get("last_activity_at") or "—",
+        )
+    console.print(table)
+
+    if events:
+        activity_table = Table(show_header=True, header_style="bold")
+        activity_table.add_column("when")
+        activity_table.add_column("contact")
+        activity_table.add_column("action")
+        activity_table.add_column("signal")
+        activity_table.add_column("detail")
+        for row in data.get("activities") or []:
+            activity_table.add_row(
+                row.get("occurred_at") or "—",
+                row.get("contact_name") or "Unknown contact",
+                row.get("label") or row.get("event") or "—",
+                row.get("quality") or "unknown",
+                row.get("detail") or "",
+            )
+        console.print(activity_table)
+
+
 @lead_gen_app.command("workshop-links")
 def lead_gen_workshop_links(
     batch_id: str = typer.Argument(..., help="lead_gen_batches.id"),
@@ -6208,6 +6350,66 @@ def lead_gen_backfill_consult_links(
     )
     for u in (data.get("updated") or [])[:60]:
         console.print(f"  [green]+[/green] {u.get('firm') or u.get('action_id')} -> {u.get('tracked_url')}")
+
+
+@lead_gen_app.command("backfill-email-automation-links")
+def lead_gen_backfill_email_automation_links(
+    scope: str = typer.Option("today", "--scope", help="'today' or 'all' unsent lead-gen sends."),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Report changes without modifying actions."),
+    json_output: bool = typer.Option(False, "--json", help="Print raw JSON."),
+):
+    """Replace bare email-automation CTAs with per-recipient tracked /s links."""
+    data = _post(
+        "/api/lead-gen/backfill-email-automation-links",
+        json_body={"scope": scope, "dry_run": dry_run, "actor": "operator"},
+        timeout=300.0,
+    )
+    if json_output:
+        console.print_json(data=data)
+        return
+    console.print(
+        f"[bold]backfill-email-automation-links[/bold] scope={data.get('scope')} "
+        f"dry_run={data.get('dry_run')} updated={data.get('updated_count')} "
+        f"skipped={data.get('skipped_count')}"
+    )
+    for row in (data.get("updated") or [])[:60]:
+        console.print(
+            f"  [green]+[/green] {row.get('firm') or row.get('contact_email') or row.get('action_id')} "
+            f"-> {row.get('tracked_url')}"
+        )
+
+
+@lead_gen_app.command("email-automation-clicks")
+def lead_gen_email_automation_clicks(
+    days: int = typer.Option(30, "--days", min=0, max=3650, help="Click lookback window."),
+    limit: int = typer.Option(500, "--limit", min=1, max=500, help="Maximum recent clicks to inspect."),
+    json_output: bool = typer.Option(False, "--json", help="Print raw JSON."),
+):
+    """Show attributed clicks from tracked email-automation CTAs."""
+    data = _get(
+        "/api/aiaudit/click-analytics",
+        since_days=days,
+        group_by="firm_name",
+        limit=limit,
+        source="solution_email_automation",
+    )
+    clicks = data.get("recent_clicks") or []
+    result = {"days": days, "click_count": len(clicks), "clicks": clicks}
+    if json_output:
+        console.print_json(data=result)
+        return
+    table = Table(title=f"Email automation clicks ({len(clicks)})")
+    for column in ["clicked_at", "contact", "email", "firm", "source"]:
+        table.add_column(column, overflow="fold")
+    for row in clicks:
+        table.add_row(
+            str(row.get("clicked_at") or ""),
+            str(row.get("contact_name") or ""),
+            str(row.get("contact_email") or ""),
+            str(row.get("firm_name") or ""),
+            str(row.get("source_label") or row.get("source") or ""),
+        )
+    console.print(table)
 
 
 @lead_gen_app.command("daily-status")
@@ -7589,21 +7791,103 @@ def pif_vendors():
     console.print_json(data=asyncio.run(list_extracted_vendors()))
 
 
+def _load_pif_write_file(path: Path) -> dict[str, Any]:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except OSError as exc:
+        console.print(f"[red]Could not read {path}: {exc}[/red]")
+        raise typer.Exit(1) from exc
+    except json.JSONDecodeError as exc:
+        console.print(f"[red]Invalid JSON in {path}: {exc}[/red]")
+        raise typer.Exit(1) from exc
+    if not isinstance(payload, dict):
+        console.print("[red]Firm write file must contain one JSON object.[/red]")
+        raise typer.Exit(1)
+    return payload
+
+
+@pif_app.command("create")
+def pif_create(
+    file: Path = typer.Option(..., "--file", "-f", exists=True, dir_okay=False, readable=True),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Validate and preview without writing."),
+):
+    """Create an operator-managed firm from a JSON profile."""
+    suffix = "?dry_run=true" if dry_run else ""
+    result = _post(f"/api/pif/firms{suffix}", json_body=_load_pif_write_file(file))
+    console.print_json(data=result)
+
+
+@pif_app.command("upsert")
+def pif_upsert(
+    file: Path = typer.Option(..., "--file", "-f", exists=True, dir_okay=False, readable=True),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Validate and preview without writing."),
+):
+    """Create by canonical domain or update the matching firm."""
+    suffix = "?dry_run=true" if dry_run else ""
+    result = _post(f"/api/pif/firms/upsert{suffix}", json_body=_load_pif_write_file(file))
+    console.print_json(data=result)
+
+
+@pif_app.command("update")
+def pif_update(
+    firm: str = typer.Argument(..., help="Firm ID, domain, email, or URL."),
+    file: Path = typer.Option(..., "--file", "-f", exists=True, dir_okay=False, readable=True),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Validate and preview without writing."),
+):
+    """Partially update a firm from a JSON object."""
+    suffix = "?dry_run=true" if dry_run else ""
+    result = _patch(
+        f"/api/pif/firms/{quote(firm, safe='')}{suffix}",
+        json_body=_load_pif_write_file(file),
+    )
+    console.print_json(data=result)
+
+
+@pif_app.command("delete")
+def pif_delete(
+    firm: str = typer.Argument(..., help="Firm ID, domain, email, or URL."),
+    force: bool = typer.Option(False, "--force", help="Allow deletion of an upstream-synced firm."),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Preview without deleting."),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip the confirmation prompt."),
+):
+    """Delete a firm and its aliases while preserving operational history."""
+    if not dry_run and not yes:
+        typer.confirm(
+            f"Delete firm '{firm}' from the local PIF directory?",
+            abort=True,
+        )
+    params = f"force={str(force).lower()}&dry_run={str(dry_run).lower()}"
+    result = _delete(f"/api/pif/firms/{quote(firm, safe='')}?{params}")
+    console.print_json(data=result)
+
+
 @pif_app.command("firms")
 def pif_firms(
     vendor: str | None = typer.Option(None, "--vendor", help="Filter by extracted vendor key, e.g. filevine."),
     search: str | None = typer.Option(None, "--search", help="Search firm name, website, email, or phone."),
+    source: str = typer.Option("all", "--source", help="Record origin: all, manual, or synced."),
     limit: int = typer.Option(25, "--limit", min=1, max=100, help="Rows to return."),
 ):
     """List local mirrored firms, optionally filtered by extracted vendor."""
     from app.services.firm_intel_sync import list_mirrored_pif_firms
 
-    payload = asyncio.run(list_mirrored_pif_firms(vendor=vendor, search=search, page_size=limit))
+    source_key = source.strip().lower()
+    if source_key not in {"all", "manual", "synced"}:
+        console.print("[red]--source must be one of: all, manual, synced[/red]")
+        raise typer.Exit(1)
+    manually_added = True if source_key == "manual" else False if source_key == "synced" else None
+    payload = asyncio.run(list_mirrored_pif_firms(
+        vendor=vendor,
+        search=search,
+        manually_added=manually_added,
+        page_size=limit,
+    ))
     rows = [
         {
             "id": item.get("id"),
             "firm_name": item.get("firm_name"),
             "website": item.get("canonical_website") or item.get("website"),
+            "manually_added": bool(item.get("manually_added")),
             "vendors": [v.get("vendor") for v in (item.get("vendor_stack") or []) if isinstance(v, dict)],
             "updated_at": item.get("updated_at"),
         }

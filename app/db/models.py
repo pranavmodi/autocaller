@@ -415,6 +415,7 @@ class DataReturnedScriptRow(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
     script_text: Mapped[str] = mapped_column(Text, nullable=False)
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     updated_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), default=_utcnow, onupdate=_utcnow,
     )
@@ -1601,6 +1602,7 @@ class PifFirmRow(Base):
     warm_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     vendor_stack: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     profile_source: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    manually_added: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     entity_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
     fax: Mapped[str | None] = mapped_column(String(64), nullable=True)
     icp_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -1640,6 +1642,7 @@ class PifFirmRow(Base):
         Index("ix_pif_directory_firms_icp_score", "icp_score"),
         Index("ix_pif_directory_firms_website", "website"),
         Index("ix_pif_directory_firms_canonical_website", "canonical_website"),
+        Index("ix_pif_directory_firms_manually_added", "manually_added"),
         Index("ix_pif_directory_firms_source_updated_at", "source_updated_at"),
         Index("ix_pif_directory_firms_first_contacted_precise_at", "first_contacted_precise_at"),
     )

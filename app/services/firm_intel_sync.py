@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+from copy import deepcopy
 from datetime import date, datetime, time, timedelta, timezone
 from functools import lru_cache
 from typing import Any
@@ -30,6 +31,7 @@ FIRM_INTEL_BASE_URL = os.getenv(
 
 ALIAS_TYPES = ("domain", "vanity_domain", "legacy_pif_id")
 STATUS_RUNNING = {"queued", "in_progress", "running", "started"}
+SYNC_DETAIL_LIMIT = 100
 
 _tables_checked = False
 
@@ -211,10 +213,14 @@ def _vendor_entries_from_stack(value: Any) -> list[dict[str, Any]]:
         return []
 
     entries: list[dict[str, Any]] = []
+    other = value.get("other")
     case_mgmt = _vendor_key(value.get("case_mgmt"))
     if case_mgmt:
-        entries.append({"vendor": case_mgmt, "source": "case_mgmt"})
-    other = value.get("other")
+        case_detail = other.get(case_mgmt) if isinstance(other, dict) else None
+        entry = dict(case_detail) if isinstance(case_detail, dict) else {}
+        entry.setdefault("vendor", case_mgmt)
+        entry.setdefault("source", "case_mgmt")
+        entries.append(entry)
     if isinstance(other, dict):
         for vendor, detail in other.items():
             entry = dict(detail) if isinstance(detail, dict) else {}
@@ -229,11 +235,22 @@ def _vendor_entries_for_row(row: PifFirmRow) -> list[dict[str, Any]]:
     entries: list[dict[str, Any]] = []
     source = row.source_json or {}
     raw = row.raw_json or {}
-    for stack in (
-        source.get("vendor_stack") if isinstance(source, dict) else None,
-        row.vendor_stack,
-        raw.get("vendor_stack") if isinstance(raw, dict) else None,
-    ):
+    manual_overrides = (
+        source.get("_possibleos_manual_overrides")
+        if isinstance(source, dict)
+        else None
+    )
+    manual_stack = manual_overrides.get("vendor_stack") if isinstance(manual_overrides, dict) else None
+    stacks = (
+        (manual_stack,)
+        if isinstance(manual_stack, (dict, list))
+        else (
+            row.vendor_stack,
+            source.get("vendor_stack") if isinstance(source, dict) else None,
+            raw.get("vendor_stack") if isinstance(raw, dict) else None,
+        )
+    )
+    for stack in stacks:
         entries.extend(_vendor_entries_from_stack(stack))
 
     seen: set[str] = set()
@@ -295,6 +312,10 @@ def _apply_source_record(row: PifFirmRow, source: dict[str, Any]) -> None:
 
 
 def _apply_v2_profile(row: PifFirmRow, profile: dict[str, Any], *, now: datetime) -> None:
+    existing_source = row.source_json if isinstance(row.source_json, dict) else {}
+    manual_overrides = existing_source.get("_possibleos_manual_overrides")
+    if not isinstance(manual_overrides, dict):
+        manual_overrides = {}
     aliases = _as_dict(profile.get("aliases"))
     identity = _as_dict(profile.get("identity"))
     relationship = _as_dict(profile.get("relationship"))
@@ -327,6 +348,11 @@ def _apply_v2_profile(row: PifFirmRow, profile: dict[str, Any], *, now: datetime
     row.updated_at = now
 
     _apply_source_record(row, _source_record(profile))
+
+    if manual_overrides:
+        from app.services.pif_firm_crud import apply_stored_manual_overrides
+
+        apply_stored_manual_overrides(row, manual_overrides, now=now)
 
     # Preserve v1-only mirror fields unless v2 supplies an equivalent value.
     row.entity_type = row.entity_type
@@ -383,6 +409,7 @@ def _ensure_v2_columns(sync_conn) -> None:
         "warm_score": "ALTER TABLE pif_directory_firms ADD COLUMN IF NOT EXISTS warm_score DOUBLE PRECISION",
         "vendor_stack": "ALTER TABLE pif_directory_firms ADD COLUMN IF NOT EXISTS vendor_stack JSONB NOT NULL DEFAULT '{}'::jsonb",
         "profile_source": "ALTER TABLE pif_directory_firms ADD COLUMN IF NOT EXISTS profile_source VARCHAR(8)",
+        "manually_added": "ALTER TABLE pif_directory_firms ADD COLUMN IF NOT EXISTS manually_added BOOLEAN NOT NULL DEFAULT false",
         "source_json": "ALTER TABLE pif_directory_firms ADD COLUMN IF NOT EXISTS source_json JSONB NOT NULL DEFAULT '{}'::jsonb",
         "first_contacted_precise_at": "ALTER TABLE pif_directory_firms ADD COLUMN IF NOT EXISTS first_contacted_precise_at TIMESTAMP WITH TIME ZONE",
     }
@@ -413,6 +440,7 @@ async def _upsert_aliases(session, profile: dict[str, Any], *, now: datetime) ->
     firm_id = str(profile.get("firm_id") or "").strip()
     if not firm_id:
         return 0
+    canonical = _profile_website(profile)
     touched = 0
     for alias_type, alias_value in _alias_candidates(profile):
         row = await session.get(
@@ -428,25 +456,57 @@ async def _upsert_aliases(session, profile: dict[str, Any], *, now: datetime) ->
             )
             session.add(row)
         else:
+            if alias_type == "domain" and row.firm_id != firm_id:
+                current_owner = await session.get(PifFirmRow, row.firm_id)
+                current_is_canonical = bool(
+                    current_owner
+                    and (
+                        normalize_domain(current_owner.canonical_website) == alias_value
+                        or normalize_domain(current_owner.website) == alias_value
+                    )
+                )
+                incoming_is_canonical = canonical == alias_value
+                if current_is_canonical or not incoming_is_canonical:
+                    logger.warning(
+                        "firm-intel alias conflict: preserving %s owner %s over %s",
+                        alias_value,
+                        row.firm_id,
+                        firm_id,
+                    )
+                    continue
             row.firm_id = firm_id
             row.synced_at = now
         touched += 1
     return touched
 
 
-async def _upsert_profile(session, profile: dict[str, Any], *, now: datetime) -> tuple[str, int]:
+async def _upsert_profile(session, profile: dict[str, Any], *, now: datetime) -> tuple[str, int, str | None]:
     firm_id = str(profile.get("firm_id") or "").strip()
     if not firm_id:
-        return "skipped", 0
+        return "skipped", 0, None
     row = await session.get(PifFirmRow, firm_id)
     status = "updated"
     if row is None:
-        row = PifFirmRow(id=firm_id, created_at=now)
-        status = "created"
-        session.add(row)
+        canonical = _profile_website(profile)
+        existing_id = await _firm_id_by_website(session, canonical) if canonical else None
+        existing = await session.get(PifFirmRow, existing_id) if existing_id else None
+        if existing is not None and existing.profile_source == "manual":
+            row = existing
+        else:
+            row = PifFirmRow(id=firm_id, created_at=now)
+            status = "created"
+            session.add(row)
     _apply_v2_profile(row, profile, now=now)
-    aliases = await _upsert_aliases(session, profile, now=now)
-    return status, aliases
+    alias_profile = profile
+    if row.id != firm_id:
+        alias_profile = deepcopy(profile)
+        alias_profile["firm_id"] = row.id
+        aliases_block = _as_dict(alias_profile.get("aliases"))
+        legacy_ids = _as_list(aliases_block.get("legacy_pif_ids"))
+        aliases_block["legacy_pif_ids"] = _distinct([*legacy_ids, firm_id])
+        alias_profile["aliases"] = aliases_block
+    aliases = await _upsert_aliases(session, alias_profile, now=now)
+    return status, aliases, row.id
 
 
 async def sync_firm_intel(
@@ -468,6 +528,7 @@ async def sync_firm_intel(
     total_reported = 0
     max_watermark: datetime | None = None
     stopped_by_limit_with_more = False
+    sync_items: list[dict[str, Any]] = []
 
     async with AsyncSessionLocal() as session:
         state = await session.get(FirmIntelSyncStateRow, 1)
@@ -531,7 +592,7 @@ async def sync_firm_intel(
                 for profile in items:
                     if limit_value is not None and fetched >= limit_value:
                         break
-                    status, alias_count = await _upsert_profile(session, profile, now=now)
+                    status, alias_count, local_firm_id = await _upsert_profile(session, profile, now=now)
                     aliases_touched += alias_count
                     if status == "created":
                         created += 1
@@ -543,6 +604,19 @@ async def sync_firm_intel(
                     watermark = _profile_watermark(profile)
                     if watermark and (max_watermark is None or watermark > max_watermark):
                         max_watermark = watermark
+                    source_firm_id = str(profile.get("firm_id") or "").strip()
+                    firm_id = local_firm_id or source_firm_id
+                    if firm_id and len(sync_items) < SYNC_DETAIL_LIMIT:
+                        sync_items.append({
+                            "firm_id": firm_id,
+                            "source_firm_id": source_firm_id if source_firm_id != firm_id else None,
+                            "firm_name": profile.get("firm_name") or firm_id,
+                            "status": status,
+                            "canonical_website": _profile_website(profile),
+                            "source_updated_at": _dt_iso(_source_updated_at(profile)),
+                            "people_count": len(_people(profile)),
+                            "aliases_touched": alias_count,
+                        })
 
                 cursor = data.get("next_cursor") or None
                 await session.commit()
@@ -571,6 +645,8 @@ async def sync_firm_intel(
             "watermark": _dt_iso(max_watermark if watermark_advanced else updated_since),
             "watermark_advanced": watermark_advanced,
             "stopped_by_limit_with_more": stopped_by_limit_with_more,
+            "items": sync_items,
+            "items_truncated": fetched > len(sync_items),
         }
         if watermark_advanced:
             state.last_updated_since = max_watermark
@@ -728,13 +804,49 @@ async def firm_intel_sync_status() -> dict[str, Any]:
         total = int((await session.execute(select(func.count()).select_from(PifFirmRow))).scalar_one() or 0)
         alias_count = int((await session.execute(select(func.count()).select_from(FirmAliasRow))).scalar_one() or 0)
         state = await session.get(FirmIntelSyncStateRow, 1)
+        last_result = dict(state.last_result) if state and isinstance(state.last_result, dict) else {}
+        if "items" not in last_result and state and state.last_synced_at:
+            rows = (await session.execute(
+                select(
+                    PifFirmRow.id,
+                    PifFirmRow.firm_name,
+                    PifFirmRow.canonical_website,
+                    PifFirmRow.website,
+                    PifFirmRow.source_updated_at,
+                    PifFirmRow.contacts,
+                )
+                .where(PifFirmRow.synced_at == state.last_synced_at)
+                .order_by(PifFirmRow.source_updated_at.desc().nullslast(), PifFirmRow.firm_name.asc())
+                .limit(SYNC_DETAIL_LIMIT)
+            )).all()
+            created = int(last_result.get("created") or 0)
+            updated = int(last_result.get("updated") or 0)
+            inferred_status = (
+                "created" if created and not updated
+                else "updated" if updated and not created
+                else "synced"
+            )
+            last_result["items"] = [
+                {
+                    "firm_id": firm_id,
+                    "firm_name": firm_name or firm_id,
+                    "status": inferred_status,
+                    "canonical_website": canonical_website or website,
+                    "source_updated_at": _dt_iso(source_updated_at),
+                    "people_count": len(_as_list(contacts)),
+                    "aliases_touched": None,
+                }
+                for firm_id, firm_name, canonical_website, website, source_updated_at, contacts in rows
+            ]
+            last_result["items_inferred"] = True
+            last_result["items_truncated"] = int(last_result.get("fetched") or 0) > len(rows)
 
     return {
         "total_firms": total,
         "alias_count": alias_count,
         "watermark": _dt_iso(state.last_updated_since) if state else None,
         "last_synced_at": _dt_iso(state.last_synced_at) if state else None,
-        "last_result": state.last_result if state else {},
+        "last_result": last_result,
         "api_base": FIRM_INTEL_BASE_URL,
     }
 
@@ -754,14 +866,27 @@ async def list_extracted_vendors() -> dict[str, Any]:
                 END
             ) elem
             WHERE coalesce(elem->>'vendor', '') <> ''
+              AND source_json #> '{_possibleos_manual_overrides,vendor_stack}' IS NULL
             UNION
             SELECT id, lower(vendor_stack->>'case_mgmt') AS vendor
             FROM pif_directory_firms
             WHERE coalesce(vendor_stack->>'case_mgmt', '') <> ''
             UNION
+            SELECT f.id, lower(other.key) AS vendor
+            FROM pif_directory_firms f
+            CROSS JOIN LATERAL jsonb_each(
+                CASE
+                    WHEN jsonb_typeof(f.vendor_stack->'other') = 'object'
+                    THEN f.vendor_stack->'other'
+                    ELSE '{}'::jsonb
+                END
+            ) other
+            WHERE coalesce(other.key, '') <> ''
+            UNION
             SELECT id, lower(raw_json #>> '{vendor_stack,case_mgmt}') AS vendor
             FROM pif_directory_firms
             WHERE coalesce(raw_json #>> '{vendor_stack,case_mgmt}', '') <> ''
+              AND source_json #> '{_possibleos_manual_overrides,vendor_stack}' IS NULL
             UNION
             SELECT f.id, lower(other.key) AS vendor
             FROM pif_directory_firms f
@@ -773,6 +898,7 @@ async def list_extracted_vendors() -> dict[str, Any]:
                 END
             ) other
             WHERE coalesce(other.key, '') <> ''
+              AND f.source_json #> '{_possibleos_manual_overrides,vendor_stack}' IS NULL
         )
         SELECT vendor, count(DISTINCT id) AS firm_count
         FROM vendor_rows
@@ -806,14 +932,27 @@ async def _firm_ids_for_vendor(vendor: str) -> set[str]:
                 END
             ) elem
             WHERE coalesce(elem->>'vendor', '') <> ''
+              AND source_json #> '{_possibleos_manual_overrides,vendor_stack}' IS NULL
             UNION
             SELECT id, lower(vendor_stack->>'case_mgmt') AS vendor
             FROM pif_directory_firms
             WHERE coalesce(vendor_stack->>'case_mgmt', '') <> ''
             UNION
+            SELECT f.id, lower(other.key) AS vendor
+            FROM pif_directory_firms f
+            CROSS JOIN LATERAL jsonb_each(
+                CASE
+                    WHEN jsonb_typeof(f.vendor_stack->'other') = 'object'
+                    THEN f.vendor_stack->'other'
+                    ELSE '{}'::jsonb
+                END
+            ) other
+            WHERE coalesce(other.key, '') <> ''
+            UNION
             SELECT id, lower(raw_json #>> '{vendor_stack,case_mgmt}') AS vendor
             FROM pif_directory_firms
             WHERE coalesce(raw_json #>> '{vendor_stack,case_mgmt}', '') <> ''
+              AND source_json #> '{_possibleos_manual_overrides,vendor_stack}' IS NULL
             UNION
             SELECT f.id, lower(other.key) AS vendor
             FROM pif_directory_firms f
@@ -825,6 +964,7 @@ async def _firm_ids_for_vendor(vendor: str) -> set[str]:
                 END
             ) other
             WHERE coalesce(other.key, '') <> ''
+              AND f.source_json #> '{_possibleos_manual_overrides,vendor_stack}' IS NULL
         )
         SELECT DISTINCT id
         FROM vendor_rows
@@ -847,14 +987,27 @@ async def _firm_ids_with_any_vendor() -> set[str]:
                 END
             ) elem
             WHERE coalesce(elem->>'vendor', '') <> ''
+              AND source_json #> '{_possibleos_manual_overrides,vendor_stack}' IS NULL
             UNION
             SELECT id, lower(vendor_stack->>'case_mgmt') AS vendor
             FROM pif_directory_firms
             WHERE coalesce(vendor_stack->>'case_mgmt', '') <> ''
             UNION
+            SELECT f.id, lower(other.key) AS vendor
+            FROM pif_directory_firms f
+            CROSS JOIN LATERAL jsonb_each(
+                CASE
+                    WHEN jsonb_typeof(f.vendor_stack->'other') = 'object'
+                    THEN f.vendor_stack->'other'
+                    ELSE '{}'::jsonb
+                END
+            ) other
+            WHERE coalesce(other.key, '') <> ''
+            UNION
             SELECT id, lower(raw_json #>> '{vendor_stack,case_mgmt}') AS vendor
             FROM pif_directory_firms
             WHERE coalesce(raw_json #>> '{vendor_stack,case_mgmt}', '') <> ''
+              AND source_json #> '{_possibleos_manual_overrides,vendor_stack}' IS NULL
             UNION
             SELECT f.id, lower(other.key) AS vendor
             FROM pif_directory_firms f
@@ -866,6 +1019,7 @@ async def _firm_ids_with_any_vendor() -> set[str]:
                 END
             ) other
             WHERE coalesce(other.key, '') <> ''
+              AND f.source_json #> '{_possibleos_manual_overrides,vendor_stack}' IS NULL
         )
         SELECT DISTINCT id
         FROM vendor_rows
@@ -889,10 +1043,15 @@ def _source_value(row: PifFirmRow, key: str) -> Any:
 
 def _serialize_pif_row(row: PifFirmRow) -> dict[str, Any]:
     source = row.source_json if isinstance(row.source_json, dict) else {}
+    raw = row.raw_json if isinstance(row.raw_json, dict) else {}
     return {
         "id": row.id,
         "firm_name": row.firm_name or "",
         "entity_type": row.entity_type or "",
+        "metro": row.metro,
+        "profile_source": row.profile_source,
+        "manually_added": bool(row.manually_added),
+        "operator_managed": bool(row.manually_added or source.get("operator_managed")),
         "website": row.website,
         "canonical_website": row.canonical_website,
         "website_status": _source_value(row, "website_status"),
@@ -918,6 +1077,8 @@ def _serialize_pif_row(row: PifFirmRow) -> dict[str, Any]:
         "score_breakdown": row.score_breakdown or None,
         "icp_scored_at": _dt_to_iso(row.icp_scored_at),
         "vendor_stack": _vendor_entries_for_row(row) or None,
+        "aliases": raw.get("aliases") if isinstance(raw.get("aliases"), dict) else {},
+        "provenance": raw.get("provenance") if isinstance(raw.get("provenance"), dict) else {},
         "created_at": _dt_to_iso(row.source_created_at or row.created_at) or "",
         "updated_at": _dt_to_iso(row.source_updated_at or row.updated_at) or "",
     }
@@ -1233,6 +1394,7 @@ async def list_mirrored_pif_firms(
     icp_presence: str | None = None,
     vendor_presence: str | None = None,
     vendor: str | None = None,
+    manually_added: bool | None = None,
     first_contacted_from: date | None = None,
     first_contacted_to: date | None = None,
     active_only: bool = True,
@@ -1276,6 +1438,8 @@ async def list_mirrored_pif_firms(
         conditions.append(PifFirmRow.icp_tier == icp_tier)
     if entity_type:
         conditions.append(PifFirmRow.entity_type == entity_type)
+    if manually_added is not None:
+        conditions.append(PifFirmRow.manually_added.is_(manually_added))
     if recently_researched is not None:
         conditions.append(PifFirmRow.last_researched_at >= datetime.now(timezone.utc) - timedelta(days=recently_researched))
     if first_contacted_from is not None:

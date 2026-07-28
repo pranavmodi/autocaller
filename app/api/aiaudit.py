@@ -135,6 +135,13 @@ def _solution_public_url() -> str:
     ).rstrip("/")
 
 
+def _email_automation_public_url() -> str:
+    return os.getenv(
+        "EMAIL_AUTOMATION_SOLUTION_URL",
+        "https://getpossibleminds.com/solutions/email-automation",
+    ).rstrip("/")
+
+
 def _intake_demo_public_url() -> str:
     return os.getenv(
         "INTAKE_DEMO_PUBLIC_URL",
@@ -266,7 +273,12 @@ async def _solution_redirect_for_payload(
     """Solution/product link redirect: record the click, then send to the
     solution page. Carries the link code as a query param so the page's
     early-access form can attribute the signup back to this recipient."""
-    dest = _solution_public_url()
+    source = _clean((payload or {}).get("source"), 64)
+    dest = (
+        _email_automation_public_url()
+        if source == "solution_email_automation"
+        else _solution_public_url()
+    )
     if not payload:
         return RedirectResponse(url=dest, status_code=302)
     click_id = await _record_link_click(request, payload, channel="solution")
@@ -295,24 +307,28 @@ async def _workshop_redirect_for_payload(
     click_id = await _record_link_click(request, payload, channel="workshop")
     code = _clean(payload.get("link_code"), 64)
     params = {}
-    contact_id = _clean(payload.get("contact_id"), 64)
-    if contact_id:
+    # LinkedIn DMs use a bearer-style opaque short code. Keep recipient PII out
+    # of the visible destination URL and browser/history/referrer logs. Email
+    # invitations retain the established one-click form prefill behavior.
+    if _clean(payload.get("source"), 64) != "workshop_linkedin":
+        contact_id = _clean(payload.get("contact_id"), 64)
+        if contact_id:
+            try:
+                async with AsyncSessionLocal() as session:
+                    contact = await session.get(FirmContactRow, contact_id)
+                if contact:
+                    if _clean(contact.full_name):
+                        params["contact_name"] = _clean(contact.full_name)
+                    if _clean(contact.email):
+                        params["contact_email"] = _clean(contact.email)
+            except Exception:
+                pass
         try:
-            async with AsyncSessionLocal() as session:
-                contact = await session.get(FirmContactRow, contact_id)
-            if contact:
-                if _clean(contact.full_name):
-                    params["contact_name"] = _clean(contact.full_name)
-                if _clean(contact.email):
-                    params["contact_email"] = _clean(contact.email)
+            firm = await _firm_name_for_payload(payload)
         except Exception:
-            pass
-    try:
-        firm = await _firm_name_for_payload(payload)
-    except Exception:
-        firm = ""
-    if firm:
-        params["firm_name"] = firm
+            firm = ""
+        if firm:
+            params["firm_name"] = firm
     if code:
         params["lc"] = code
     if click_id:
@@ -397,9 +413,10 @@ def _app_name_expr():
     return case(
         (AuditLinkClickRow.source.in_(["ai_audit_signature", "ai_audit_email"]), "AI Audit"),
         (AuditLinkClickRow.source.in_(["consult_email", "consult_signature"]), "Consult"),
+        (AuditLinkClickRow.source == "solution_email_automation", "Email Automation"),
         (AuditLinkClickRow.source.in_(["solution_email", "solution_signature"]), "Solution"),
         (AuditLinkClickRow.source.in_(["intake_demo_email", "intake_demo_signature"]), "Intake Demo"),
-        (AuditLinkClickRow.source.in_(["workshop_email", "workshop_signature"]), "Workshop"),
+        (AuditLinkClickRow.source.in_(["workshop_email", "workshop_signature", "workshop_linkedin"]), "Workshop"),
         else_="Unknown",
     )
 
@@ -436,10 +453,12 @@ def _click_base_select():
     )
 
 
-def _click_where(stmt, *, since_days: int):
+def _click_where(stmt, *, since_days: int, source: str | None = None):
     if since_days > 0:
         cutoff = datetime.now(timezone.utc) - timedelta(days=since_days)
         stmt = stmt.where(AuditLinkClickRow.clicked_at >= cutoff)
+    if source:
+        stmt = stmt.where(AuditLinkClickRow.source == source)
     return stmt
 
 
@@ -548,8 +567,12 @@ def _source_label(source: str) -> str:
         "consult_signature": "Consult signature",
         "solution_email": "Solution email",
         "solution_signature": "Solution signature",
+        "solution_email_automation": "Email automation email",
         "intake_demo_email": "Intake demo email",
         "intake_demo_signature": "Intake demo signature",
+        "workshop_email": "Workshop email",
+        "workshop_signature": "Workshop signature",
+        "workshop_linkedin": "Workshop LinkedIn",
     }
     return labels.get(source or "", source or "Unknown")
 
@@ -561,8 +584,12 @@ def _app_name_for_source(source: str) -> str:
         return "Consult"
     if source in {"solution_email", "solution_signature"}:
         return "Solution"
+    if source == "solution_email_automation":
+        return "Email Automation"
     if source in {"intake_demo_email", "intake_demo_signature"}:
         return "Intake Demo"
+    if source in {"workshop_email", "workshop_signature", "workshop_linkedin"}:
+        return "Workshop"
     return "Unknown"
 
 
@@ -571,6 +598,7 @@ async def audit_click_analytics(
     since_days: int = Query(30, ge=0, le=3650),
     group_by: str = Query("firm_name"),
     limit: int = Query(50, ge=1, le=500),
+    source: str | None = Query(default=None, max_length=64),
 ):
     if group_by not in CLICK_ANALYTICS_GROUPS:
         raise HTTPException(status_code=400, detail=f"unsupported_group_by:{group_by}")
@@ -591,8 +619,10 @@ async def audit_click_analytics(
         .order_by(desc("click_count"), desc("last_clicked_at"))
         .limit(limit)
     )
-    rollup_stmt = _click_where(rollup_stmt, since_days=since_days)
-    recent_stmt = _click_where(_click_base_select(), since_days=since_days).order_by(
+    rollup_stmt = _click_where(rollup_stmt, since_days=since_days, source=source)
+    recent_stmt = _click_where(
+        _click_base_select(), since_days=since_days, source=source
+    ).order_by(
         desc(AuditLinkClickRow.clicked_at)
     ).limit(limit)
     summary_stmt = _click_where(
@@ -604,6 +634,7 @@ async def audit_click_analytics(
             func.max(AuditLinkClickRow.clicked_at),
         ),
         since_days=since_days,
+        source=source,
     )
 
     async with AsyncSessionLocal() as session:
@@ -657,6 +688,7 @@ async def audit_click_analytics(
 
     return {
         "since_days": since_days,
+        "source": source,
         "group_by": group_by,
         "group_label": CLICK_ANALYTICS_GROUPS[group_by],
         "available_groups": [
@@ -676,3 +708,14 @@ async def audit_click_analytics(
         "groups": groups,
         "recent_clicks": clicks,
     }
+
+
+@router.get("/api/aiaudit/workshop-click-analytics")
+async def workshop_click_analytics_view(
+    since_days: int = Query(30, ge=0, le=3650),
+    limit: int = Query(250, ge=1, le=500),
+):
+    """Workshop-only recipient funnel, including deduplicated on-page actions."""
+    from app.services.workshop_tracking_analytics import workshop_click_analytics
+
+    return await workshop_click_analytics(since_days=since_days, limit=limit)

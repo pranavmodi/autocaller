@@ -846,6 +846,56 @@ class BackfillConsultLinksRequest(BaseModel):
     dry_run: bool = False
 
 
+class BackfillEmailAutomationLinksRequest(BaseModel):
+    scope: str = Field(default="today", pattern="^(today|all)$")
+    actor: str = "operator"
+    dry_run: bool = False
+
+
+class WorkshopLinkedInLinkRequest(BaseModel):
+    full_name: str = Field(..., min_length=1, max_length=255)
+    firm_name: str = Field(..., min_length=1, max_length=512)
+    title: Optional[str] = Field(default=None, max_length=255)
+    linkedin_url: Optional[str] = Field(default=None, max_length=512)
+
+
+@router.post("/api/lead-gen/workshop-linkedin-link")
+async def workshop_linkedin_link(req: WorkshopLinkedInLinkRequest):
+    """Create or reuse one person's attributed workshop link.
+
+    This operator-only endpoint does not generate or send message copy.
+    """
+    from app.services.workshop_linkedin_tracking import (
+        WorkshopLinkedInTrackingError,
+        create_workshop_linkedin_tracking_link,
+    )
+
+    try:
+        result = await create_workshop_linkedin_tracking_link(
+            full_name=req.full_name,
+            firm_name=req.firm_name,
+            title=req.title or "",
+            linkedin_url=req.linkedin_url or "",
+        )
+    except WorkshopLinkedInTrackingError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    contact = result.get("contact") or {}
+    await record_observation(
+        event_type="linkedin_workshop_link_created",
+        raw_event={
+            "channel": "linkedin",
+            "source": "workshop_linkedin",
+            "tracking_url": result.get("tracking_url"),
+            "tracking_link_reused": result.get("tracking_link_reused"),
+            "firm_name": contact.get("firm_name"),
+            "linkedin_url": contact.get("linkedin_url"),
+        },
+        contact_id=contact.get("id"),
+    )
+    return result
+
+
 class ProductInterestRequest(BaseModel):
     email: str = Field(..., min_length=3, max_length=320)
     firm: Optional[str] = Field(default=None, max_length=300)
@@ -1380,6 +1430,16 @@ async def backfill_consult_links(req: BackfillConsultLinksRequest):
     targets the live daily batch; scope=all covers every unsent lead-gen send."""
     from app.services.action_execution import backfill_consult_short_links
     return await backfill_consult_short_links(
+        scope=req.scope, actor=req.actor, dry_run=req.dry_run
+    )
+
+
+@router.post("/api/lead-gen/backfill-email-automation-links")
+async def backfill_email_automation_links(req: BackfillEmailAutomationLinksRequest):
+    """Give unsent email-automation CTAs per-recipient tracked short links."""
+    from app.services.action_execution import backfill_email_automation_short_links
+
+    return await backfill_email_automation_short_links(
         scope=req.scope, actor=req.actor, dry_run=req.dry_run
     )
 

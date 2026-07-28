@@ -132,6 +132,15 @@ params); and `lead-gen schedule-wave <batch_id> --subject ... --body-file
 workshop] [--dry-run]` renders `{first_name}`/`{full_name}`/`{firm}`/`{link}`
 per item, rechecks domain freshness and the per-domain cap, and creates approved
 scheduled sends the daemon executes when due.
+For a single person from LinkedIn, use `lead-gen workshop-link --name "..."
+--firm "..." [--title "..." --linkedin-url "..."]`. It only creates or reuses
+the person's attributed URL; write the message in the active chat. LinkedIn
+redirects carry opaque `lc`/`c` values only, with no contact PII in the visible
+destination URL. Inspect clicks in `/click-analytics`.
+That page is workshop-only and shows recipient-level raw opens, scanner or
+suspect sessions, confirmed visits, prompt reveals, scroll depth, and on-page
+button/link clicks. The CLI equivalent is `lead-gen workshop-analytics
+[--days N] [--events] [--json]`.
 Interleave A/B arms with offset --start times. The experiment send gate
 requires a complete wave card first: `lead-gen wave-card <batch_id> --from
 <card.json>`. See docs/cli.md §10 "run an A/B email wave" for the exact
@@ -187,7 +196,10 @@ to populate `pif_directory_firms`, `firm_intel_aliases`, and the
 `firm_intel_sync_state` watermark. `pif sync --limit 20` is the smoke run;
 `--full` ignores the saved watermark. Check mirror and remote coverage with
 `pif status`, or use local-only `pif sync-status` for the last daily-sync delta
-without calling EmailTag health. Resolve domains/emails/legacy PIF IDs with
+and its firm-level touched ledger without calling EmailTag health. The ledger
+includes firm name/id, created/updated status, website, source timestamp,
+people count, and per-firm alias count when the run recorded it. Resolve
+domains/emails/legacy PIF IDs with
 `pif resolve <value>` (local first, v2 `/firms/resolve` fallback), and inspect a
 mirrored profile with `pif show <firm_id|domain>`. Use `pif vendors` to list
 every extracted vendor in the mirror with counts, and `pif firms --vendor
@@ -501,8 +513,11 @@ Common causes: Geo permissions not enabled, AMD mis-classifying carrier voicemai
 | command | purpose |
 |---|---|
 | `Possible OS data-returned list [--limit 100]` | Print newest captured `/datareturned` events as JSON through the loopback daemon API. |
+| `Possible OS data-returned prune` | Immediately delete all callback events except the newest 100; future callbacks enforce the same cap automatically. |
 | `Possible OS data-returned script` | Print the current shell script served publicly by `GET /datareturned/script`; before the first save this is the built-in read-only diagnostic. |
 | `Possible OS data-returned save-script <path>` | Save the UTF-8 file at `<path>` as the exact public `/datareturned/script` response. Treat it as executable code and review it before saving. |
+| `Possible OS data-returned script-status` | Show whether `/datareturned/script` is active or serving the no-op, without exposing the saved script. |
+| `Possible OS data-returned script-on` / `script-off` | Toggle between the preserved saved script and a no-op that posts exactly `{}` to `/datareturned`. |
 | `Possible OS system on\|off\|status` | Master kill switch |
 | `Possible OS mock on <phone>\|off\|status` | Mock-mode redirect |
 | `Possible OS allowlist list\|add\|remove\|clear\|set-from-leads [--state --dm-only --limit]` | Phone allowlist |
@@ -546,6 +561,8 @@ Common causes: Geo permissions not enabled, AMD mis-classifying carrier voicemai
 | `Possible OS contacts select --persona <p> [--vendor <cms>] [--domain-fresh/--contact-fresh] [--direct-email/--allow-role-inbox] [--max-per-firm N] [--max-per-domain N] [--min-staff N] [--max-staff N] [--limit N] [--seed N] [--ids] [--json]` | Fresh-cohort selection for curated waves. Domain freshness, direct named mailboxes, and a one-contact-per-domain cap are defaults. Filevine application-domain addresses are always rejected. |
 | `Possible OS lead-gen items <batch_id> [--json]` | Item_id <-> contact map for a batch (email, firm, status) — inputs for per-item send/link commands. |
 | `Possible OS lead-gen workshop-links <batch_id> [--item ...] [--reuse/--no-reuse] [--json]` | Mint/reuse per-recipient tracked `/w/{code}` workshop links (audit_links kind=workshop; redirect adds contact prefill params + lc/c). |
+| `Possible OS lead-gen workshop-link --name <person> --firm <firm> [--title <role> --linkedin-url <url> --json]` | Create/reuse a stable person-attributed LinkedIn workshop URL only; message writing stays in chat and clicks appear in `/click-analytics`. |
+| `Possible OS lead-gen workshop-analytics [--days N] [--limit N] [--events] [--json]` | Workshop-only recipient funnel: raw opens, scanner/suspect sessions, confirmed visits, prompt reveals, page clicks, scroll depth, and deduplicated event details. |
 | `Possible OS lead-gen schedule-wave <batch_id> --subject ... --body-file <tmpl> --transport resend\|zoho_api --start "HH:MM PT" [--interval-seconds N] [--limit N] [--link workshop\|none] [--require-fresh-domain/--allow-touched-domain] [--max-per-domain N] [--max-per-firm N] [--dry-run] [--json]` | Template-compose and schedule approved sends. Fresh-domain/firm and one-per-domain/firm rails are defaults; `--limit` supports staged daily blocks. |
 | `Possible OS lead-gen wave-rollup <batch_id> [--json]` | Honest wave readout. Page sessions grouped by session_id: `human_page_sessions` needs interaction evidence (>10s dwell, on-page click, or arrival >15 min after the item's email_sent); JS-running scanner beacons stay in `raw_page_sessions`/`suspect_page_sessions`, scanner UAs in `scanner_page_sessions`. |
 | `Possible OS front sync [--full] [--max-calls N]` | Read-only Precise Front sync for contacts, activity metadata, domain resolution, and warm-score refresh. Persists cursors and hard-caps API calls. |
@@ -623,7 +640,9 @@ only timestamp, identity, hostname, working directory, and kernel, then posts
 `{source, script_version, output}` as JSON to the public `POST /datareturned`
 receiver. The authenticated UI or `data-returned save-script <path>` can replace
 the response with exact operator-provided text, so review saved content as
-executable code. Inspect stored events with
+executable code. The UI toggle or `data-returned script-on|script-off` switches
+the public response between the saved script and an empty-callback no-op that
+posts exactly `{}`; turning it off never overwrites the saved script. Inspect stored events with
 `bin/possibleos data-returned list --limit 100` or the authenticated
 `/data-returned` UI. Use `bin/possibleos data-returned script` to retrieve the
 exact script through the CLI instead of hand-writing a curl request.

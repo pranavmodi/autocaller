@@ -1,0 +1,4 @@
+interface:
+  display_name: "Review Leadership Outreach"
+  short_description: "Draft and schedule review-based leadership emails"
+  default_prompt: "Use $review-leadership-outreach to draft and schedule attributed Yelp or Google review outreach to firm leadership."

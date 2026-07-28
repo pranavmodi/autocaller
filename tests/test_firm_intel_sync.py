@@ -69,6 +69,28 @@ class FakeSession:
 
     async def execute(self, stmt):
         rendered = str(stmt)
+        if "count(" in rendered and "FROM pif_directory_firms" in rendered:
+            return FakeResult(scalar=len(self.store.firms))
+        if "count(" in rendered and "FROM firm_intel_aliases" in rendered:
+            return FakeResult(scalar=len(self.store.aliases))
+        if "pif_directory_firms.synced_at" in rendered:
+            last_synced_at = next(
+                (state.last_synced_at for state in self.store.states.values() if state.last_synced_at),
+                None,
+            )
+            rows = [
+                (
+                    row.id,
+                    row.firm_name,
+                    row.canonical_website,
+                    row.website,
+                    row.source_updated_at,
+                    row.contacts,
+                )
+                for row in self.store.firms.values()
+                if row.synced_at == last_synced_at
+            ]
+            return FakeResult(rows=rows)
         if "pif_directory_firms" in rendered and "canonical_website" in rendered:
             return FakeResult(
                 rows=[
@@ -235,6 +257,10 @@ def test_delta_sync_two_pages_upserts_and_advances_watermark(monkeypatch):
     assert store.states[1].last_updated_since == datetime(2026, 7, 3, 12, 0, tzinfo=timezone.utc)
     assert set(store.firms) == {"firm-1", "firm-2", "firm-3"}
     assert ("domain", "smithlaw.com") in store.aliases
+    assert [item["firm_id"] for item in result["items"]] == ["firm-1", "firm-2", "firm-3"]
+    assert all(item["status"] == "created" for item in result["items"])
+    assert result["items"][0]["people_count"] == 2
+    assert result["items_truncated"] is False
 
 
 def test_full_sync_ignores_watermark(monkeypatch):
@@ -327,7 +353,232 @@ def test_alias_upsert_idempotent_on_rerun(monkeypatch):
 
     assert first["created"] == 1
     assert second["updated"] == 1
+    assert second["items"][0]["status"] == "updated"
     assert len(store.aliases) == alias_count
+
+
+def test_incidental_domain_alias_cannot_steal_canonical_owner():
+    store = FakeStore()
+    store.firms["dk-law"] = PifFirmRow(
+        id="dk-law",
+        firm_name="DK Law",
+        website="dklaw.com",
+        canonical_website="dklaw.com",
+    )
+    store.firms["vendor"] = PifFirmRow(
+        id="vendor",
+        firm_name="Vendor",
+        website="vendor.example",
+        canonical_website="vendor.example",
+    )
+    store.aliases[("domain", "dklaw.com")] = FirmAliasRow(
+        alias_type="domain",
+        alias_value="dklaw.com",
+        firm_id="dk-law",
+    )
+    incoming = profile("vendor", canonical="vendor.example", domains=["vendor.example", "dklaw.com"])
+
+    asyncio.run(svc._upsert_aliases(FakeSession(store), incoming, now=datetime.now(timezone.utc)))
+
+    assert store.aliases[("domain", "dklaw.com")].firm_id == "dk-law"
+
+
+def test_canonical_domain_reclaims_alias_from_incidental_owner():
+    store = FakeStore()
+    store.firms["dk-law"] = PifFirmRow(
+        id="dk-law",
+        firm_name="DK Law",
+        website="dklaw.com",
+        canonical_website="dklaw.com",
+    )
+    store.firms["vendor"] = PifFirmRow(
+        id="vendor",
+        firm_name="Vendor",
+        website="vendor.example",
+        canonical_website="vendor.example",
+    )
+    store.aliases[("domain", "dklaw.com")] = FirmAliasRow(
+        alias_type="domain",
+        alias_value="dklaw.com",
+        firm_id="vendor",
+    )
+    incoming = profile("dk-law", canonical="dklaw.com", domains=["dklaw.com"])
+
+    asyncio.run(svc._upsert_aliases(FakeSession(store), incoming, now=datetime.now(timezone.utc)))
+
+    assert store.aliases[("domain", "dklaw.com")].firm_id == "dk-law"
+
+
+def test_sync_reapplies_operator_vendor_overrides(monkeypatch):
+    fixture = profile("firm-1")
+    store, _calls = install_fakes(monkeypatch, [
+        {"items": [fixture], "next_cursor": None, "total": 1},
+    ])
+    store.firms["firm-1"] = PifFirmRow(
+        id="firm-1",
+        firm_name="Old Firm",
+        website="smithlaw.com",
+        canonical_website="smithlaw.com",
+        profile_source="v2",
+        source_json={
+            "_possibleos_manual_overrides": {
+                "vendor_stack": {
+                    "other": {"intaker": {"confidence": 0.99, "grade": "A"}}
+                }
+            }
+        },
+        raw_json={},
+        contacts=[],
+        leadership=[],
+        staff=[],
+        emails=[],
+        phones=[],
+    )
+
+    asyncio.run(svc.sync_firm_intel(full=True))
+
+    row = store.firms["firm-1"]
+    assert row.vendor_stack["other"]["intaker"]["confidence"] == 0.99
+    assert row.source_json["_possibleos_manual_overrides"]["vendor_stack"] == row.vendor_stack
+    assert row.raw_json["provenance"]["source"] == "emailtag"
+    assert row.raw_json["provenance"]["operator_updated_at"]
+
+
+def test_operator_vendor_evidence_takes_precedence_over_synced_signal():
+    row = PifFirmRow(
+        id="firm-1",
+        source_json={
+            "vendor_stack": [
+                {
+                    "vendor": "filevine",
+                    "source": "email_domain",
+                    "confidence": "high",
+                }
+            ],
+            "_possibleos_manual_overrides": {
+                "vendor_stack": {
+                    "case_mgmt": "filevine",
+                    "other": {
+                        "filevine": {
+                            "source": "public_technographic_research",
+                            "confidence": 0.98,
+                            "grade": "A",
+                        },
+                        "callrail": {
+                            "confidence": 0.97,
+                            "grade": "A",
+                        },
+                    },
+                }
+            },
+        },
+        vendor_stack={"case_mgmt": "filevine"},
+        raw_json={},
+    )
+
+    entries = svc._vendor_entries_for_row(row)
+
+    assert [entry["vendor"] for entry in entries] == ["filevine", "callrail"]
+    assert entries[0]["confidence"] == 0.98
+    assert entries[0]["grade"] == "A"
+
+
+def test_operator_vendor_stack_replaces_stale_synced_vendors():
+    row = PifFirmRow(
+        id="firm-1",
+        source_json={
+            "vendor_stack": [
+                {"vendor": "clio", "source": "stale_sync"},
+                {"vendor": "filevine", "source": "stale_sync"},
+            ],
+            "_possibleos_manual_overrides": {
+                "vendor_stack": {
+                    "case_mgmt": "litify",
+                    "other": {"salesforce": {"confidence": 0.98, "grade": "A"}},
+                }
+            },
+        },
+        vendor_stack={"case_mgmt": "litify"},
+        raw_json={"vendor_stack": {"case_mgmt": "clio"}},
+    )
+
+    entries = svc._vendor_entries_for_row(row)
+
+    assert [entry["vendor"] for entry in entries] == ["litify", "salesforce"]
+
+
+def test_sync_reconciles_upstream_profile_into_manual_domain_record(monkeypatch):
+    fixture = profile("upstream-1", canonical="sterncohenlaw.com", domains=["sterncohenlaw.com"])
+    store, _calls = install_fakes(monkeypatch, [
+        {"items": [fixture], "next_cursor": None, "total": 1},
+    ])
+    store.firms["manual-1"] = PifFirmRow(
+        id="manual-1",
+        firm_name="Stern & Cohen, P.C.",
+        website="sterncohenlaw.com",
+        canonical_website="sterncohenlaw.com",
+        profile_source="manual",
+        manually_added=True,
+        source_json={
+            "_possibleos_manual_overrides": {
+                "firm_name": "Stern & Cohen, P.C.",
+                "website": "sterncohenlaw.com",
+                "vendor_stack": {"other": {"intaker": {"confidence": 0.99}}},
+            }
+        },
+        raw_json={"aliases": {"domains": ["sterncohenlaw.com"]}},
+        contacts=[],
+        leadership=[],
+        staff=[],
+        emails=[],
+        phones=[],
+    )
+
+    result = asyncio.run(svc.sync_firm_intel(full=True))
+
+    assert set(store.firms) == {"manual-1"}
+    assert store.firms["manual-1"].profile_source == "v2"
+    assert store.firms["manual-1"].manually_added is True
+    assert store.firms["manual-1"].vendor_stack["other"]["intaker"]["confidence"] == 0.99
+    assert store.aliases[("legacy_pif_id", "upstream-1")].firm_id == "manual-1"
+    assert result["items"][0]["firm_id"] == "manual-1"
+    assert result["items"][0]["source_firm_id"] == "upstream-1"
+
+
+def test_sync_status_reconstructs_legacy_run_firm_details(monkeypatch):
+    store, _calls = install_fakes(monkeypatch, [])
+    synced_at = datetime(2026, 7, 20, 7, 21, 27, tzinfo=timezone.utc)
+    source_updated_at = datetime(2026, 7, 20, 6, 45, 2, tzinfo=timezone.utc)
+    row = PifFirmRow(
+        id="firm-legacy",
+        firm_name="Legacy Firm",
+        website="legacy.example",
+        canonical_website="legacy.example",
+        contacts=[{"name": "A"}, {"name": "B"}],
+        synced_at=synced_at,
+        source_updated_at=source_updated_at,
+    )
+    store.firms[row.id] = row
+    store.states[1] = FirmIntelSyncStateRow(
+        id=1,
+        last_updated_since=source_updated_at,
+        last_synced_at=synced_at,
+        last_result={"fetched": 1, "created": 0, "updated": 1},
+    )
+
+    result = asyncio.run(svc.firm_intel_sync_status())
+
+    assert result["last_result"]["items_inferred"] is True
+    assert result["last_result"]["items_truncated"] is False
+    assert result["last_result"]["items"] == [{
+        "firm_id": "firm-legacy",
+        "firm_name": "Legacy Firm",
+        "status": "updated",
+        "canonical_website": "legacy.example",
+        "source_updated_at": "2026-07-20T06:45:02+00:00",
+        "people_count": 2,
+        "aliases_touched": None,
+    }]
 
 
 def test_resolve_firm_local_hits_domain_email_and_legacy_id(monkeypatch):

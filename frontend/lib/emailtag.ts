@@ -117,6 +117,7 @@ export interface PifInfoResponse {
   id: string;
   firm_name: string;
   entity_type: string;
+  manually_added: boolean;
   website: string | null;
   canonical_website: string | null;
   website_status: string | null;
@@ -240,6 +241,7 @@ export interface PifInfoListParams {
   icp_presence?: "any" | "has" | "missing";
   vendor_presence?: "any" | "has" | "missing";
   vendor?: string;
+  manually_added?: boolean;
   first_contacted_from?: string;
   first_contacted_to?: string;
   active_only?: boolean;
@@ -272,6 +274,19 @@ export interface PifSyncResult {
   watermark?: string | null;
   watermark_advanced?: boolean;
   stopped_by_limit_with_more?: boolean;
+  items?: PifSyncItem[];
+  items_truncated?: boolean;
+  items_inferred?: boolean;
+}
+
+export interface PifSyncItem {
+  firm_id: string;
+  firm_name: string;
+  status: "created" | "updated" | "skipped" | "synced" | string;
+  canonical_website?: string | null;
+  source_updated_at?: string | null;
+  people_count?: number;
+  aliases_touched?: number | null;
 }
 
 export interface PifSyncStatusResponse {
@@ -487,6 +502,7 @@ export function listMirroredPifInfo(params: PifInfoListParams = {}): Promise<Pif
       icp_presence: params.icp_presence,
       vendor_presence: params.vendor_presence,
       vendor: params.vendor,
+      manually_added: params.manually_added,
       first_contacted_from: params.first_contacted_from,
       first_contacted_to: params.first_contacted_to,
       active_only: params.active_only,

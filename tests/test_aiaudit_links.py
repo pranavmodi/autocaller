@@ -2,6 +2,7 @@ import asyncio
 from types import SimpleNamespace
 
 from sqlalchemy.dialects import postgresql
+from starlette.requests import Request
 
 from app.api import aiaudit
 from app.db.models import FirmContactRow
@@ -107,6 +108,75 @@ def test_prefill_for_payload_adds_case_system_preanswer(monkeypatch):
     assert query["firm"] == "Demo Firm"
     assert query["case_mgmt"] == "filevine"
     assert query["pa.case_system"] == "3"
+
+
+def test_linkedin_workshop_redirect_keeps_contact_pii_out_of_url(monkeypatch):
+    async def fake_record_link_click(request, payload, *, channel):
+        assert channel == "workshop"
+        return "click-1"
+
+    monkeypatch.setattr(aiaudit, "_record_link_click", fake_record_link_click)
+    monkeypatch.setattr(aiaudit, "_workshop_public_url", lambda: "https://getpossibleminds.com/workshops/demo")
+    request = Request({
+        "type": "http",
+        "method": "GET",
+        "path": "/w/code-1",
+        "headers": [],
+        "client": ("127.0.0.1", 1234),
+        "scheme": "https",
+        "server": ("getpossibleminds.com", 443),
+        "query_string": b"",
+    })
+    response = asyncio.run(aiaudit._workshop_redirect_for_payload(request, {
+        "contact_id": "contact-1",
+        "source": "workshop_linkedin",
+        "link_code": "code-1",
+    }))
+
+    assert response.headers["location"] == (
+        "https://getpossibleminds.com/workshops/demo?lc=code-1&c=click-1"
+    )
+    assert "contact_name" not in response.headers["location"]
+    assert "contact_email" not in response.headers["location"]
+
+
+def test_linkedin_workshop_click_is_grouped_as_workshop():
+    assert aiaudit._app_name_for_source("workshop_linkedin") == "Workshop"
+    assert aiaudit._source_label("workshop_linkedin") == "Workshop LinkedIn"
+
+
+def test_email_automation_solution_redirect_uses_email_automation_page(monkeypatch):
+    async def fake_record_link_click(request, payload, *, channel):
+        assert channel == "solution"
+        return "click-1"
+
+    monkeypatch.setattr(aiaudit, "_record_link_click", fake_record_link_click)
+    monkeypatch.setattr(
+        aiaudit,
+        "_email_automation_public_url",
+        lambda: "https://getpossibleminds.com/solutions/email-automation",
+    )
+    request = Request({
+        "type": "http",
+        "method": "GET",
+        "path": "/s/code-1",
+        "headers": [],
+        "client": ("127.0.0.1", 1234),
+        "scheme": "https",
+        "server": ("getpossibleminds.com", 443),
+        "query_string": b"",
+    })
+    response = asyncio.run(aiaudit._solution_redirect_for_payload(request, {
+        "source": "solution_email_automation",
+        "link_code": "code-1",
+    }))
+
+    assert response.headers["location"] == (
+        "https://getpossibleminds.com/solutions/email-automation"
+        "?lc=code-1&c=click-1"
+    )
+    assert aiaudit._app_name_for_source("solution_email_automation") == "Email Automation"
+    assert aiaudit._source_label("solution_email_automation") == "Email automation email"
 
 
 def test_click_analytics_includes_human_session_rollup(monkeypatch):

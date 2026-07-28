@@ -7,6 +7,7 @@ import os
 import uuid
 from datetime import datetime, timezone
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import desc, select
 
@@ -786,6 +787,135 @@ async def backfill_consult_short_links(
             updated.append({"action_id": action.id, "firm": firm, "tracked_url": tracked})
         if not dry_run:
             await session.commit()
+    return {
+        "scope": scope,
+        "dry_run": dry_run,
+        "updated_count": len(updated),
+        "skipped_count": len(skipped),
+        "updated": updated,
+        "skipped": skipped,
+    }
+
+
+async def backfill_email_automation_short_links(
+    *, scope: str = "today", actor: str = "operator", dry_run: bool = False
+) -> dict[str, Any]:
+    """Replace the bare email-automation CTA with a per-recipient tracked
+    /s/{code} link while preserving each unsent action's approved slot."""
+    from app.services.aiaudit_links import build_short_solution_link
+
+    await ensure_agent_tables()
+    now = _utcnow()
+    today_pt = now.astimezone(ZoneInfo("America/Los_Angeles")).date()
+    target_url = "https://getpossibleminds.com/solutions/email-automation"
+    updated: list[dict[str, Any]] = []
+    skipped: list[dict[str, str]] = []
+
+    async with AsyncSessionLocal() as session:
+        actions = (
+            await session.execute(
+                select(AgentActionRow)
+                .where(
+                    AgentActionRow.action_type.in_([SEND_EMAIL, SEND_APPROVED_LEAD_GEN_DRAFT]),
+                    AgentActionRow.status.in_(["approved", "waiting_for_approval"]),
+                )
+                .order_by(AgentActionRow.scheduled_for.asc())
+            )
+        ).scalars().all()
+
+        for action in actions:
+            payload = dict(action.input_json) if isinstance(action.input_json, dict) else {}
+            body = str(payload.get("body") or "")
+            batch_item_id = str(payload.get("batch_item_id") or "") or None
+            if scope == "today":
+                scheduled_for = action.scheduled_for
+                if (
+                    not scheduled_for
+                    or _as_utc(scheduled_for).astimezone(
+                        ZoneInfo("America/Los_Angeles")
+                    ).date()
+                    != today_pt
+                ):
+                    skipped.append({"action_id": action.id, "reason": "not_scheduled_today"})
+                    continue
+            if "/s/" in body and target_url not in body:
+                skipped.append({"action_id": action.id, "reason": "already_tracked"})
+                continue
+            if target_url not in body:
+                skipped.append({"action_id": action.id, "reason": "no_email_automation_link"})
+                continue
+
+            item = (
+                await session.get(LeadGenBatchItemRow, batch_item_id)
+                if batch_item_id
+                else None
+            )
+            contact_id = str(payload.get("contact_id") or getattr(item, "contact_id", "") or "")
+            contact = await session.get(FirmContactRow, contact_id) if contact_id else None
+            if not contact:
+                skipped.append({"action_id": action.id, "reason": "contact_not_found"})
+                continue
+            if dry_run:
+                updated.append({
+                    "action_id": action.id,
+                    "firm": str(getattr(item, "firm_name", "") or ""),
+                    "contact_email": str(contact.email or ""),
+                    "tracked_url": "(dry-run)",
+                })
+                continue
+
+            tracked = await build_short_solution_link(
+                contact,
+                batch_item_id=batch_item_id,
+                source="solution_email_automation",
+            )
+            new_body = body.replace(target_url, tracked)
+            subject = str(payload.get("subject") or "")
+            subject_hash = _sha256(_sanitize_email_copy(subject))
+            body_hash = _sha256(_sanitize_email_copy(new_body))
+            payload["body"] = new_body
+            payload["subject_sha256"] = subject_hash
+            payload["body_sha256"] = body_hash
+            approval = dict(payload.get("approval") or {})
+            approval.update({
+                "approved_at": now.isoformat(),
+                "approved_by": actor,
+                "subject_sha256": subject_hash,
+                "body_sha256": body_hash,
+            })
+            payload["approval"] = approval
+            action.input_json = payload
+            action.updated_at = now
+
+            if item:
+                reason = dict(item.reason_json or {})
+                draft = dict(reason.get("agent_draft") or {})
+                if draft:
+                    draft["body"] = new_body
+                    reason["agent_draft"] = draft
+                    item.reason_json = reason
+                    item.updated_at = now
+
+            await _record_action_event(
+                session,
+                action_id=action.id,
+                event_type="email_automation_link_backfilled",
+                actor=actor,
+                message=(
+                    "Replaced bare email-automation URL with a tracked /s link; "
+                    "re-approved at the existing slot."
+                ),
+                input_json={"tracked_url": tracked, "scope": scope},
+            )
+            updated.append({
+                "action_id": action.id,
+                "firm": str(getattr(item, "firm_name", "") or ""),
+                "contact_email": str(contact.email or ""),
+                "tracked_url": tracked,
+            })
+        if not dry_run:
+            await session.commit()
+
     return {
         "scope": scope,
         "dry_run": dry_run,

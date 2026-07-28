@@ -5,22 +5,82 @@ possibleos Postgres so matching no longer depends on the stale mission.db cache.
 """
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
+from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.services.firm_intel_sync import (
     firm_intel_status,
     firm_intel_sync_status,
-    get_mirrored_pif_firm,
     list_extracted_vendors,
     list_mirrored_pif_people_filter_options,
     list_mirrored_pif_people,
     list_mirrored_pif_firms,
     sync_firm_intel,
 )
+from app.services.pif_firm_crud import (
+    PifFirmConflictError,
+    PifFirmCrudError,
+    PifFirmNotFoundError,
+    PifFirmProtectedError,
+    create_pif_firm,
+    delete_pif_firm,
+    get_pif_firm_for_crud,
+    update_pif_firm,
+    upsert_pif_firm,
+)
 
 router = APIRouter(prefix="/api/pif", tags=["pif-directory"])
+
+
+class PifFirmWriteRequest(BaseModel):
+    """Fields operators may write to a local firm-intel record."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    firm_id: str | None = Field(None, max_length=64)
+    firm_name: str | None = Field(None, max_length=512)
+    website: str | None = Field(None, max_length=512)
+    canonical_website: str | None = Field(None, max_length=512)
+    entity_type: str | None = Field(None, max_length=64)
+    metro: str | None = Field(None, max_length=128)
+    warm_score: float | None = None
+    emails: list[str] | None = None
+    phones: list[str] | None = None
+    fax: str | None = Field(None, max_length=64)
+    addresses: list[Any] | None = None
+    contacts: list[dict[str, Any]] | None = None
+    leadership: list[dict[str, Any]] | None = None
+    staff: list[dict[str, Any]] | None = None
+    contact_profiles: dict[str, Any] | None = None
+    research_data: dict[str, Any] | None = None
+    behavioral_data: dict[str, Any] | None = None
+    score_breakdown: dict[str, Any] | None = None
+    conversation_ids: list[str] | None = None
+    extraction_notes: str | None = None
+    vendor_stack: dict[str, Any] | None = None
+    icp_score: int | None = None
+    icp_tier: str | None = Field(None, max_length=16)
+    research_status: str | None = Field(None, max_length=32)
+    staff_research_status: str | None = Field(None, max_length=32)
+    first_contacted_precise_at: datetime | None = None
+    last_researched_at: datetime | None = None
+    icp_scored_at: datetime | None = None
+    aliases: dict[str, list[str]] | None = None
+    provenance: dict[str, Any] | None = None
+
+
+def _raise_crud_http(exc: PifFirmCrudError) -> None:
+    if isinstance(exc, PifFirmNotFoundError):
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    if isinstance(exc, (PifFirmConflictError, PifFirmProtectedError)):
+        detail: dict[str, Any] = {"message": str(exc)}
+        if isinstance(exc, PifFirmConflictError) and exc.firm_id:
+            detail["firm_id"] = exc.firm_id
+        raise HTTPException(status_code=409, detail=detail) from exc
+    raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.get("/status")
@@ -85,6 +145,7 @@ async def get_pif_firms(
     icp_presence: str | None = Query(None),
     vendor_presence: str | None = Query(None),
     vendor: str | None = Query(None, description="Exact extracted vendor key, e.g. filevine"),
+    manually_added: bool | None = Query(None, description="True for operator-created firms; false for sync-origin firms"),
     first_contacted_from: date | None = Query(None),
     first_contacted_to: date | None = Query(None),
     active_only: bool = Query(True),
@@ -105,6 +166,7 @@ async def get_pif_firms(
         icp_presence=icp_presence,
         vendor_presence=vendor_presence,
         vendor=vendor,
+        manually_added=manually_added,
         first_contacted_from=first_contacted_from,
         first_contacted_to=first_contacted_to,
         active_only=active_only,
@@ -113,10 +175,70 @@ async def get_pif_firms(
 
 @router.get("/firms/{firm_id}")
 async def get_pif_firm(firm_id: str):
-    item = await get_mirrored_pif_firm(firm_id)
+    item = await get_pif_firm_for_crud(firm_id)
     if item:
         return item
     raise HTTPException(status_code=404, detail="firm_not_found")
+
+
+@router.post("/firms", status_code=201)
+async def create_pif_firm_endpoint(
+    request: PifFirmWriteRequest,
+    dry_run: bool = Query(False),
+):
+    """Create an operator-managed firm, deduplicated by canonical domain."""
+    try:
+        return await create_pif_firm(
+            request.model_dump(exclude_unset=True),
+            dry_run=dry_run,
+        )
+    except PifFirmCrudError as exc:
+        _raise_crud_http(exc)
+
+
+@router.post("/firms/upsert")
+async def upsert_pif_firm_endpoint(
+    request: PifFirmWriteRequest,
+    dry_run: bool = Query(False),
+):
+    """Create by canonical domain or patch the existing matching firm."""
+    try:
+        return await upsert_pif_firm(
+            request.model_dump(exclude_unset=True),
+            dry_run=dry_run,
+        )
+    except PifFirmCrudError as exc:
+        _raise_crud_http(exc)
+
+
+@router.patch("/firms/{firm_id}")
+async def update_pif_firm_endpoint(
+    firm_id: str,
+    request: PifFirmWriteRequest,
+    dry_run: bool = Query(False),
+):
+    """Partially update a firm by ID or canonical domain."""
+    try:
+        return await update_pif_firm(
+            firm_id,
+            request.model_dump(exclude_unset=True),
+            dry_run=dry_run,
+        )
+    except PifFirmCrudError as exc:
+        _raise_crud_http(exc)
+
+
+@router.delete("/firms/{firm_id}")
+async def delete_pif_firm_endpoint(
+    firm_id: str,
+    force: bool = Query(False),
+    dry_run: bool = Query(False),
+):
+    """Delete a directory record and its aliases, preserving operational history."""
+    try:
+        return await delete_pif_firm(firm_id, force=force, dry_run=dry_run)
+    except PifFirmCrudError as exc:
+        _raise_crud_http(exc)
 
 
 @router.post("/sync")

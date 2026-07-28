@@ -1,0 +1,17 @@
+<svg width="128" height="128" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Possible Minds icon">
+  <rect x="0" y="0" width="128" height="128" rx="28" fill="#0A0A0A"/>
+  <g fill="none">
+    <circle cx="64" cy="64" r="40" stroke="#E8E8E8" stroke-width="2.6"/>
+    <line x1="64" y1="30" x2="64" y2="98" stroke="#E8E8E8" stroke-width="0.8" stroke-dasharray="1.8 4.5"/>
+    <path d="M64 37.5 A26.5 26.5 0 0 0 64 90.5" stroke="#E8E8E8" stroke-width="2.2"/>
+    <path d="M64 50 A14 14 0 0 0 64 78" stroke="#E8E8E8" stroke-width="2.2"/>
+  </g>
+  <g stroke="#24E070" stroke-width="1.5">
+    <line x1="76.5" y1="45.7" x2="82.3" y2="64"/>
+    <line x1="82.3" y1="64" x2="76.5" y2="82.3"/>
+    <line x1="76.5" y1="45.7" x2="76.5" y2="82.3"/>
+  </g>
+  <circle cx="76.5" cy="45.7" r="3.3" fill="#24E070"/>
+  <circle cx="82.3" cy="64" r="3.3" fill="#24E070"/>
+  <circle cx="76.5" cy="82.3" r="3.3" fill="#24E070"/>
+</svg>

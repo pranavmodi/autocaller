@@ -114,15 +114,29 @@ The `doctor` command as a page. Visible whether the plumbing is OK.
 ### 6. `/data-returned` — Callback diagnostics
 
 - **Returned Data tab** — newest captured JSON payloads, selected request
-  metadata, source count, and a 15-second refresh loop.
+  metadata, source count, and a 15-second refresh loop. The receiver retains
+  only the newest 100 events and prunes older rows after every callback.
 - **Shell Script tab** — edits, saves, previews, and copies the script served by
   `GET /datareturned/script`. The built-in default performs only read-only
   execution-context checks and posts its combined output back to
   `/datareturned`. After an operator saves a replacement, the public endpoint
   serves that exact text, so the UI explicitly treats it as executable code.
+  An Active/No-op toggle can temporarily make the endpoint post only an empty
+  `{}` callback without deleting or changing the saved script. Empty callbacks
+  remain visible in Returned Data as heartbeat events with no diagnostic data.
 - The script endpoint and receiver are public for server-to-server callbacks;
-  the event-list API, script-save API, and dashboard remain
+  the event-list API, script-config/save/toggle APIs, and dashboard remain
   operator-authenticated.
+
+### 7. `/click-analytics` — Workshop click tracking
+
+- Workshop tracking only; generic AI Audit, consult, solution, and intake-demo
+  click rollups do not appear on this page.
+- Shows every tracked workshop recipient, including people with no activity.
+- Separates raw redirect opens and scanner/suspect traffic from confirmed
+  workshop visits.
+- Shows prompt reveals, 50% scrolls, and the exact button/link text and target
+  captured by the landing-page beacon, with a per-contact activity feed.
 
 ---
 

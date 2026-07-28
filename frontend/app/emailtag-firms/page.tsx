@@ -88,6 +88,7 @@ type PeopleSource = NonNullable<PifPeopleListParams["source"]>;
 type LeaderFilter = NonNullable<PifPeopleListParams["leader"]>;
 type LeadsView = "firms" | "contacts";
 type FirstContactPeriod = "any" | "last_1_month" | "last_6_months" | "custom";
+type RecordOrigin = "any" | "manual" | "synced";
 type WorkflowStepState = "completed" | "running" | "failed" | "waiting" | "skipped";
 
 interface WorkflowStepInfo {
@@ -107,6 +108,12 @@ interface BatchResearchRow {
 interface BatchResearchRun {
   requested: number;
   rows: BatchResearchRow[];
+}
+
+interface ContactLookupOption {
+  value: string;
+  label: string;
+  secondary?: string;
 }
 
 type ExtractedQuote = {
@@ -138,6 +145,7 @@ interface FiltersState {
   icp_presence: SimplePresence;
   vendor_presence: SimplePresence;
   vendor: string;
+  record_origin: RecordOrigin;
   first_contact_period: FirstContactPeriod;
   first_contacted_from: string;
   first_contacted_to: string;
@@ -158,6 +166,7 @@ const DEFAULT_FILTERS: FiltersState = {
   icp_presence: "any",
   vendor_presence: "any",
   vendor: "",
+  record_origin: "any",
   first_contact_period: "any",
   first_contacted_from: "",
   first_contacted_to: "",
@@ -229,7 +238,6 @@ function safeLinkedInUrl(value: string | null | undefined) {
 function linkedInSearchUrl(person: PifPersonResult) {
   const query = [
     person.name,
-    person.title,
     person.firm_name,
     "LinkedIn",
   ].filter(Boolean).join(" ");
@@ -404,10 +412,23 @@ function filtersToParams(filters: FiltersState, page: number): PifInfoListParams
     icp_presence: filters.icp_presence,
     vendor_presence: filters.vendor === "__missing" ? "missing" : filters.vendor.trim() ? "has" : filters.vendor_presence,
     vendor: filters.vendor && filters.vendor !== "__missing" ? filters.vendor.trim() : undefined,
+    manually_added:
+      filters.record_origin === "manual" ? true : filters.record_origin === "synced" ? false : undefined,
     first_contacted_from: firstContact.from,
     first_contacted_to: firstContact.to,
     active_only: filters.active_only,
   };
+}
+
+function useDebouncedValue<T>(value: T, delayMs: number): T {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedValue(value), delayMs);
+    return () => window.clearTimeout(timer);
+  }, [delayMs, value]);
+
+  return debouncedValue;
 }
 
 export default function EmailtagFirmsPage() {
@@ -445,6 +466,7 @@ function EmailtagFirmsContent() {
     page: 1,
     page_size: 25,
   });
+  const debouncedPeopleFilters = useDebouncedValue(peopleFilters, 250);
 
   const listParams = useMemo(() => filtersToParams(filters, page), [filters, page]);
 
@@ -484,8 +506,8 @@ function EmailtagFirmsContent() {
   });
 
   const peopleQuery = useQuery({
-    queryKey: ["emailtag", "people", peopleFilters],
-    queryFn: () => listPifPeople(peopleFilters),
+    queryKey: ["emailtag", "people", debouncedPeopleFilters],
+    queryFn: () => listPifPeople(debouncedPeopleFilters),
     enabled: view === "contacts",
   });
 
@@ -608,6 +630,17 @@ function EmailtagFirmsContent() {
   function updateFilter<K extends keyof FiltersState>(key: K, value: FiltersState[K]) {
     setFilters((current) => ({ ...current, [key]: value }));
     setPage(1);
+  }
+
+  function showFirmContacts(firm: PifInfoResponse) {
+    setPeopleFilters((current) => ({
+      firm: firm.firm_name || firm.id,
+      source: "all",
+      leader: "any",
+      page: 1,
+      page_size: current.page_size ?? 25,
+    }));
+    setView("contacts");
   }
 
   const data = firmsQuery.data;
@@ -740,6 +773,7 @@ function EmailtagFirmsContent() {
                           const open = expandedId === firm.id || selectedFirmId === firm.id;
                           setSelectedFirm(open ? null : firm.id);
                         }}
+                        onViewContacts={() => showFirmContacts(firm)}
                         onAuthError={() => undefined}
                       />
                     ))}
@@ -811,6 +845,7 @@ function SyncStatusPanel({
   const aliases = last.aliases_touched ?? 0;
   const pages = last.pages ?? 0;
   const totalReported = last.total_reported ?? 0;
+  const syncItems = last.items ?? [];
 
   return (
     <section className="overflow-hidden rounded-lg border border-neutral-200 bg-white">
@@ -851,6 +886,79 @@ function SyncStatusPanel({
             <KeyValue label="Current watermark" value={(last.watermark ?? status?.watermark) ? formatDateTime(last.watermark ?? status?.watermark) : "—"} />
             <KeyValue label="Candidate watermark" value={last.candidate_watermark ? formatDateTime(last.candidate_watermark) : "—"} />
             <KeyValue label="Alias rows" value={status?.alias_count?.toLocaleString() ?? "—"} />
+          </div>
+          <div className="mt-4">
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <div className="text-xs font-semibold text-neutral-900">Firms touched in this sync</div>
+                <div className="text-[11px] text-neutral-500">
+                  Showing {syncItems.length.toLocaleString()} of {fetched.toLocaleString()} fetched profiles.
+                </div>
+              </div>
+              {last.items_inferred && (
+                <span className="rounded-full bg-amber-50 px-2 py-1 text-[10px] font-semibold text-amber-700">
+                  Reconstructed from sync timestamp
+                </span>
+              )}
+            </div>
+            {syncItems.length === 0 ? (
+              <div className="rounded-md border border-dashed border-neutral-200 px-3 py-4 text-xs text-neutral-400">
+                No firm-level details were recorded for this sync.
+              </div>
+            ) : (
+              <div className="mobile-table-card overflow-hidden rounded-md border border-neutral-200">
+                <table className="w-full table-fixed divide-y divide-neutral-100 text-xs">
+                  <thead className="bg-neutral-50 text-left text-[10px] uppercase text-neutral-500">
+                    <tr>
+                      <th className="w-[12%] px-3 py-2 font-medium">Change</th>
+                      <th className="w-[28%] px-3 py-2 font-medium">Firm</th>
+                      <th className="w-[22%] px-3 py-2 font-medium">Website</th>
+                      <th className="w-[10%] px-3 py-2 font-medium">People</th>
+                      <th className="w-[10%] px-3 py-2 font-medium">Aliases</th>
+                      <th className="w-[18%] px-3 py-2 font-medium">Source updated</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-neutral-100">
+                    {syncItems.map((item) => {
+                      const websiteUrl = safeWebsiteUrl(item.canonical_website ?? null);
+                      return (
+                        <tr key={item.firm_id} className="hover:bg-neutral-50">
+                          <td data-label="Change" className="px-3 py-2">
+                            <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-semibold", statusColor(item.status))}>
+                              {formatLabel(item.status)}
+                            </span>
+                          </td>
+                          <td data-label="Firm" className="min-w-0 px-3 py-2">
+                            <Link href={`/leads?firm=${encodeURIComponent(item.firm_id)}`} className="block truncate font-medium text-blue-600 hover:underline">
+                              {item.firm_name}
+                            </Link>
+                            <div className="truncate font-mono text-[10px] text-neutral-400">{item.firm_id}</div>
+                          </td>
+                          <td data-label="Website" className="min-w-0 px-3 py-2">
+                            {websiteUrl ? (
+                              <a href={websiteUrl} target="_blank" rel="noreferrer" className="block truncate text-blue-600 hover:underline">
+                                {item.canonical_website}
+                              </a>
+                            ) : "—"}
+                          </td>
+                          <td data-label="People" className="px-3 py-2 text-neutral-600">{item.people_count?.toLocaleString() ?? "—"}</td>
+                          <td data-label="Aliases" className="px-3 py-2 text-neutral-600">{item.aliases_touched?.toLocaleString() ?? "—"}</td>
+                          <td data-label="Source updated" className="px-3 py-2 text-neutral-500">{formatDateTime(item.source_updated_at ?? null)}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {last.items_truncated && (
+              <div className="mt-2 text-[11px] text-amber-700">Only the first {syncItems.length.toLocaleString()} firm details are retained.</div>
+            )}
+            {last.items_inferred && syncItems.length > 0 && (
+              <div className="mt-2 text-[11px] text-neutral-500">
+                Firm membership is exact for this run; per-firm alias counts were not recorded by the older sync format.
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -948,6 +1056,11 @@ function FilterBar({
             </option>
           ))}
         </SelectField>
+        <SelectField label="Record source" value={filters.record_origin} onChange={(value) => updateFilter("record_origin", value as RecordOrigin)}>
+          <option value="any">Any source</option>
+          <option value="manual">Manually added</option>
+          <option value="synced">Synced</option>
+        </SelectField>
         <SelectField label="First contact period" value={filters.first_contact_period} onChange={(value) => updateFilter("first_contact_period", value as FirstContactPeriod)}>
           <option value="any">Any period</option>
           <option value="last_1_month">Last 1 month</option>
@@ -1030,6 +1143,127 @@ function InputField({
   );
 }
 
+function ContactLookupField({
+  kind,
+  label,
+  value,
+  onChange,
+}: {
+  kind: "name" | "firm";
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const debouncedQuery = useDebouncedValue(value.trim(), 200);
+  const optionsQuery = useQuery({
+    queryKey: ["pif", "contact-lookup", kind, debouncedQuery],
+    queryFn: async (): Promise<ContactLookupOption[]> => {
+      if (kind === "name") {
+        const response = await listPifPeople({
+          name: debouncedQuery || undefined,
+          source: "all",
+          leader: "any",
+          page: 1,
+          page_size: 25,
+        });
+        const seen = new Set<string>();
+        return response.items.flatMap((person) => {
+          const name = person.name?.trim();
+          if (!name || seen.has(name.toLocaleLowerCase())) return [];
+          seen.add(name.toLocaleLowerCase());
+          return [{
+            value: name,
+            label: name,
+            secondary: [person.title, person.firm_name].filter(Boolean).join(" · ") || undefined,
+          }];
+        });
+      }
+
+      const response = await listMirroredPifInfo({
+        search: debouncedQuery || undefined,
+        sort_by: "firm_name",
+        page: 1,
+        page_size: 25,
+        active_only: true,
+      });
+      return response.items.flatMap((firm) => {
+        const firmName = firm.firm_name?.trim();
+        if (!firmName) return [];
+        return [{
+          value: firmName,
+          label: firmName,
+          secondary: firm.canonical_website || firm.website || undefined,
+        }];
+      });
+    },
+    enabled: open,
+    staleTime: 30_000,
+  });
+  const options = optionsQuery.data ?? [];
+
+  return (
+    <label className="relative block text-[11px] font-medium uppercase tracking-wide text-neutral-400">
+      {label}
+      <div className="relative mt-1">
+        <input
+          type="text"
+          value={value}
+          onChange={(event) => {
+            onChange(event.target.value);
+            setOpen(true);
+          }}
+          onFocus={() => setOpen(true)}
+          onBlur={() => window.setTimeout(() => setOpen(false), 120)}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") setOpen(false);
+          }}
+          autoComplete="off"
+          role="combobox"
+          aria-expanded={open}
+          aria-autocomplete="list"
+          aria-controls={`${kind}-contact-options`}
+          placeholder={kind === "name" ? "Search names..." : "Search firms..."}
+          className="w-full rounded-md border border-neutral-200 py-1.5 pl-2 pr-8 text-sm normal-case tracking-normal text-neutral-800 placeholder:text-neutral-400 focus:border-neutral-400 focus:outline-none focus:ring-1 focus:ring-neutral-400"
+        />
+        <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-neutral-400">
+          {optionsQuery.isFetching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Search className="h-3.5 w-3.5" />}
+        </span>
+      </div>
+      {open && (
+        <div
+          id={`${kind}-contact-options`}
+          role="listbox"
+          className="absolute z-30 mt-1 max-h-64 w-full min-w-64 overflow-y-auto rounded-md border border-neutral-200 bg-white py-1 normal-case tracking-normal shadow-lg"
+        >
+          {options.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              role="option"
+              aria-selected={option.value === value}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => {
+                onChange(option.value);
+                setOpen(false);
+              }}
+              className="block w-full px-3 py-2 text-left hover:bg-neutral-50"
+            >
+              <span className="block truncate text-sm font-medium text-neutral-800">{option.label}</span>
+              {option.secondary && <span className="block truncate text-[11px] text-neutral-500">{option.secondary}</span>}
+            </button>
+          ))}
+          {!optionsQuery.isFetching && options.length === 0 && (
+            <div className="px-3 py-3 text-xs text-neutral-500">
+              No matching {kind === "name" ? "names" : "firms"}.
+            </div>
+          )}
+        </div>
+      )}
+    </label>
+  );
+}
+
 function LeadsViewTabs({
   value,
   onChange,
@@ -1101,8 +1335,8 @@ function ContactsView({
     <section className="space-y-3">
       <div className="space-y-3 rounded-xl border border-neutral-200 bg-white p-3">
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
-          <InputField label="Name" value={filters.name ?? ""} onChange={(value) => update("name", value || undefined)} />
-          <InputField label="Firm" value={filters.firm ?? ""} onChange={(value) => update("firm", value || undefined)} />
+          <ContactLookupField kind="name" label="Name" value={filters.name ?? ""} onChange={(value) => update("name", value || undefined)} />
+          <ContactLookupField kind="firm" label="Firm" value={filters.firm ?? ""} onChange={(value) => update("firm", value || undefined)} />
           <SelectField label="Vendor" value={filters.vendor ?? ""} onChange={(value) => update("vendor", value || undefined)}>
             <option value="">Any vendor</option>
             {vendorOptions.map((option) => (
@@ -1284,11 +1518,13 @@ function FirmTableRows({
   firm,
   expanded,
   onToggle,
+  onViewContacts,
   onAuthError,
 }: {
   firm: PifInfoResponse;
   expanded: boolean;
   onToggle: () => void;
+  onViewContacts: () => void;
   onAuthError: () => void;
 }) {
   const queryClient = useQueryClient();
@@ -1344,7 +1580,15 @@ function FirmTableRows({
           </button>
         </td>
         <td data-label="Firm" className="min-w-0 px-2 py-3">
-          <div className="truncate font-medium text-neutral-900">{firm.firm_name}</div>
+          <div className="flex min-w-0 items-center gap-1.5">
+            <div className="truncate font-medium text-neutral-900">{firm.firm_name}</div>
+            <span className={cn(
+              "shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase",
+              firm.manually_added ? "bg-amber-50 text-amber-700" : "bg-neutral-100 text-neutral-500",
+            )}>
+              {firm.manually_added ? "Manual" : "Synced"}
+            </span>
+          </div>
           <div className="text-[11px] text-neutral-500">{firm.id}</div>
         </td>
         <td data-label="Entity" className="hidden min-w-0 px-2 py-3 text-xs text-neutral-600 2xl:table-cell">
@@ -1398,14 +1642,22 @@ function FirmTableRows({
           {formatDateTime(firm.updated_at)}
         </td>
         <td data-label="Actions" className="px-2 py-3">
-          <ActionButton
-            onClick={() => enrichment.mutate()}
-            pending={enrichmentRunning}
-            icon={<Sparkles className="h-3.5 w-3.5" />}
-          >
-            <span className="xl:hidden">Enrich</span>
-            <span className="hidden xl:inline">Run full enrichment</span>
-          </ActionButton>
+          <div className="flex flex-col items-start gap-1">
+            <ActionButton
+              onClick={onViewContacts}
+              icon={<Users className="h-3.5 w-3.5" />}
+            >
+              Contacts
+            </ActionButton>
+            <ActionButton
+              onClick={() => enrichment.mutate()}
+              pending={enrichmentRunning}
+              icon={<Sparkles className="h-3.5 w-3.5" />}
+            >
+              <span className="xl:hidden">Enrich</span>
+              <span className="hidden xl:inline">Run full enrichment</span>
+            </ActionButton>
+          </div>
           <TaskStatus label="Enrichment" status={enrichmentStatus.data?.status} message={undefined} compact />
         </td>
       </tr>
@@ -1721,7 +1973,15 @@ function FirmDetail({ initialFirm, onAuthError }: { initialFirm: PifInfoResponse
     <div className="space-y-4 rounded-xl border border-neutral-200 bg-white p-4">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <div className="text-base font-semibold text-neutral-900">{firm.firm_name}</div>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="text-base font-semibold text-neutral-900">{firm.firm_name}</div>
+            <span className={cn(
+              "rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase",
+              firm.manually_added ? "bg-amber-50 text-amber-700" : "bg-neutral-100 text-neutral-500",
+            )}>
+              {firm.manually_added ? "Manually added" : "Synced"}
+            </span>
+          </div>
           <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-neutral-500">
             <span>Updated {formatDateTime(firm.updated_at)}</span>
             <span>Created {formatDateTime(firm.created_at)}</span>

@@ -60,7 +60,7 @@ const items = [
   { href: "/comms", label: "Comms", icon: MessageSquare },
   { href: "/sequences", label: "Sequences", icon: Mail },
   { href: "/lead-gen", label: "Lead Gen", icon: BrainCircuit },
-  { href: "/click-analytics", label: "Clicks", icon: BarChart3 },
+  { href: "/click-analytics", label: "Workflow Clicks", icon: BarChart3 },
   { href: "/data-returned", label: "Data Returned", icon: Database },
   { href: "/front", label: "Front", icon: Radar },
   { href: "/frontUI", label: "frontUI", icon: Inbox },
