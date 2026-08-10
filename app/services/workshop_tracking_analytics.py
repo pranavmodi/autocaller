@@ -139,6 +139,14 @@ def _firm_name(contact: FirmContactRow, firm: PifFirmRow | None) -> str:
     return "Unknown firm"
 
 
+def _contacts_with_activity(contacts: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+    return sorted(
+        (item for item in contacts.values() if item.get("last_activity_at")),
+        key=lambda item: (item["last_activity_at"], item["contact_name"]),
+        reverse=True,
+    )
+
+
 async def workshop_click_analytics(*, since_days: int = 30, limit: int = 250) -> dict[str, Any]:
     cutoff = datetime.now(timezone.utc) - timedelta(days=since_days) if since_days > 0 else None
 
@@ -295,11 +303,7 @@ async def workshop_click_analytics(*, since_days: int = 30, limit: int = 250) ->
         else:
             item["status"] = "No activity"
 
-    contact_rows = sorted(
-        contacts.values(),
-        key=lambda item: (item["last_activity_at"] or "", item["contact_name"]),
-        reverse=True,
-    )
+    contact_rows = _contacts_with_activity(contacts)
     activities.sort(key=lambda item: item["occurred_at"] or "", reverse=True)
     all_last_activity = [item["last_activity_at"] for item in contact_rows if item["last_activity_at"]]
     return {

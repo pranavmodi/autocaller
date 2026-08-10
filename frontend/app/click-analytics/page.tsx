@@ -240,7 +240,7 @@ function EmailClickRow({ click }: { click: ClickAnalyticsRow }) {
 }
 
 export default function ClickAnalyticsPage() {
-  const [sinceDays, setSinceDays] = useState(30);
+  const [sinceDays, setSinceDays] = useState(1);
   const workshopAnalytics = useQuery({
     queryKey: ["workshop-click-analytics", sinceDays],
     queryFn: () => getWorkshopClickAnalytics({ sinceDays, limit: 250 }),
@@ -316,7 +316,7 @@ export default function ClickAnalyticsPage() {
 
       <section className="rounded-xl border border-neutral-200 bg-neutral-50 p-4">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
-          <Metric label="Tracked people" value={summary?.tracked_contacts ?? 0} icon={Users} />
+          <Metric label="People with activity" value={summary?.tracked_contacts ?? 0} icon={Users} />
           <Metric label="Raw link opens" value={summary?.raw_link_clicks ?? 0} icon={MousePointerClick} />
           <Metric label="Known scanners" value={summary?.scanner_link_clicks ?? 0} icon={ShieldAlert} />
           <Metric label="Confirmed visits" value={summary?.confirmed_visitors ?? 0} icon={Eye} />
@@ -329,7 +329,7 @@ export default function ClickAnalyticsPage() {
         <div className="border-b border-neutral-100 px-4 py-3">
           <h2 className="text-sm font-semibold text-neutral-950">People</h2>
           <p className="mt-0.5 text-xs text-neutral-500">
-            meaningful actions are separated from automatic previews and unconfirmed opens
+            recipients with workshop activity in the selected window
           </p>
         </div>
         {workshopAnalytics.isLoading ? (
@@ -339,7 +339,7 @@ export default function ClickAnalyticsPage() {
         ) : workshopAnalytics.isError ? (
           <div className="px-4 py-8 text-sm text-red-600">Could not load workshop tracking.</div>
         ) : contacts.length === 0 ? (
-          <div className="px-4 py-8 text-sm text-neutral-500">No tracked workshop recipients yet.</div>
+          <div className="px-4 py-8 text-sm text-neutral-500">No workshop recipient activity in this window.</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full text-left">

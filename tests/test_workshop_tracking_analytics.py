@@ -2,6 +2,7 @@ from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
 from app.services.workshop_tracking_analytics import (
+    _contacts_with_activity,
     _dedupe_page_events,
     _event_label,
     _session_quality,
@@ -71,3 +72,27 @@ def test_prompt_reveal_is_human_unless_user_agent_is_scanner():
     assert _session_quality(human) == "human"
     assert _session_quality(scanner) == "scanner"
     assert _event_label("content_revealed", {}, "human")[0] == "Prompt revealed"
+
+
+def test_contacts_without_activity_in_the_selected_window_are_omitted():
+    contacts = {
+        "inactive": {
+            "contact_name": "Inactive Person",
+            "last_activity_at": None,
+        },
+        "older": {
+            "contact_name": "Older Activity",
+            "last_activity_at": "2026-08-09T10:00:00+00:00",
+        },
+        "newer": {
+            "contact_name": "Newer Activity",
+            "last_activity_at": "2026-08-10T10:00:00+00:00",
+        },
+    }
+
+    rows = _contacts_with_activity(contacts)
+
+    assert [row["contact_name"] for row in rows] == [
+        "Newer Activity",
+        "Older Activity",
+    ]
