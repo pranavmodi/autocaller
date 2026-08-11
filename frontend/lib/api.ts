@@ -756,6 +756,94 @@ export const getWorkshopClickAnalytics = (args: {
   );
 };
 
+export type EngagementFilterOption = {
+  key: string;
+  label: string;
+};
+
+export type EngagementRecipient = {
+  contact_id: string;
+  contact_name: string;
+  contact_email: string;
+  title: string;
+  firm_name: string;
+  pif_id: string | null;
+  workflows: string[];
+  workflow_labels: string[];
+  channels: string[];
+  channel_labels: string[];
+  tracked_links: number;
+  sent: number;
+  delivered: number;
+  delivery_failures: number;
+  email_opens: number;
+  raw_clicks: number;
+  scanner_or_suspect_clicks: number;
+  confirmed_visits: number;
+  meaningful_actions: number;
+  replies: number;
+  last_activity_at: string | null;
+  status: "Replied" | "Engaged" | "Visited" | "Unconfirmed click" | "Delivered" | "Sent" | "Tracked";
+};
+
+export type EngagementActivity = {
+  id: string;
+  contact_id: string;
+  contact_name: string;
+  contact_email: string;
+  firm_name: string;
+  occurred_at: string | null;
+  event: string;
+  label: string;
+  detail: string;
+  quality: "human" | "scanner" | "suspect" | "system";
+  page: string;
+  source: string;
+  workflow: string;
+  workflow_label: string;
+  channel: "email" | "linkedin";
+  channel_label: "Email" | "LinkedIn";
+};
+
+export type EngagementAnalyticsResponse = {
+  since_days: number;
+  workflow: string;
+  channel: string;
+  filters: {
+    workflows: EngagementFilterOption[];
+    channels: EngagementFilterOption[];
+  };
+  summary: {
+    tracked_recipients: number;
+    sent: number;
+    delivered: number;
+    delivery_failures: number;
+    raw_clicks: number;
+    scanner_or_suspect_clicks: number;
+    confirmed_visits: number;
+    meaningful_actions: number;
+    replies: number;
+  };
+  recipients: EngagementRecipient[];
+  activities: EngagementActivity[];
+};
+
+export const getEngagementAnalytics = (args: {
+  sinceDays?: number;
+  workflow?: string;
+  channel?: string;
+  limit?: number;
+} = {}) => {
+  const params = new URLSearchParams();
+  params.set("since_days", String(args.sinceDays ?? 30));
+  params.set("workflow", args.workflow ?? "all");
+  params.set("channel", args.channel ?? "all");
+  params.set("limit", String(args.limit ?? 250));
+  return get<EngagementAnalyticsResponse>(
+    `/api/aiaudit/engagement-analytics?${params.toString()}`,
+  );
+};
+
 export type DataReturnedEvent = {
   id: number;
   payload: Record<string, unknown> | unknown[];

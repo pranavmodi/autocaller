@@ -9,13 +9,16 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import re
+import time as time_module
 from copy import deepcopy
 from datetime import date, datetime, time, timedelta, timezone
 from functools import lru_cache
+from types import SimpleNamespace
 from typing import Any
 
 import httpx
-from sqlalchemy import String, cast, func, inspect, or_, select, text
+from sqlalchemy import String, bindparam, cast, func, inspect, or_, select, text
 
 from app.db import AsyncSessionLocal, async_engine
 from app.db.models import FirmAliasRow, FirmIntelSyncStateRow, PifFirmRow
@@ -34,6 +37,8 @@ STATUS_RUNNING = {"queued", "in_progress", "running", "started"}
 SYNC_DETAIL_LIMIT = 100
 
 _tables_checked = False
+_vendor_firm_ids_cache: dict[str, tuple[float, set[str]]] = {}
+_VENDOR_FIRM_IDS_CACHE_SECONDS = 300
 
 
 def _utcnow() -> datetime:
@@ -920,6 +925,10 @@ async def _firm_ids_for_vendor(vendor: str) -> set[str]:
     wanted = _vendor_key(vendor)
     if not wanted:
         return set()
+    cached = _vendor_firm_ids_cache.get(wanted)
+    now = time_module.monotonic()
+    if cached and cached[0] > now:
+        return set(cached[1])
     vendor_sql = text("""
         WITH vendor_rows AS (
             SELECT id, lower(elem->>'vendor') AS vendor
@@ -971,7 +980,15 @@ async def _firm_ids_for_vendor(vendor: str) -> set[str]:
         WHERE vendor = :vendor
     """)
     async with AsyncSessionLocal() as session:
-        return {str(row[0]) for row in (await session.execute(vendor_sql, {"vendor": wanted})).all()}
+        firm_ids = {
+            str(row[0])
+            for row in (await session.execute(vendor_sql, {"vendor": wanted})).all()
+        }
+    _vendor_firm_ids_cache[wanted] = (
+        now + _VENDOR_FIRM_IDS_CACHE_SECONDS,
+        firm_ids,
+    )
+    return set(firm_ids)
 
 
 async def _firm_ids_with_any_vendor() -> set[str]:
@@ -1093,6 +1110,13 @@ def _person_value(person: dict[str, Any], *keys: str) -> str | None:
         if text:
             return text
     return None
+
+
+def _has_contact_email(value: Any) -> bool:
+    email = str(value or "").strip()
+    if email.lower() in {"null", "none", "n/a", "na", "unknown", "-"}:
+        return False
+    return bool(re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email))
 
 
 def _person_matches(value: str | None, needle: str | None) -> bool:
@@ -1226,6 +1250,7 @@ async def list_mirrored_pif_people(
     role_category: str | list[str] | None = None,
     source: str | None = "all",
     leader: str | None = "any",
+    email_presence: str | None = "any",
     page: int = 1,
     page_size: int = 25,
 ) -> dict[str, Any]:
@@ -1235,6 +1260,13 @@ async def list_mirrored_pif_people(
     page_size = max(1, min(100, int(page_size)))
     source_filter = (source or "all").strip().lower()
     leader_filter = (leader or "any").strip().lower()
+    email_filter = (email_presence or "any").strip().lower()
+    if source_filter not in {"all", "leadership", "staff", "contacts"}:
+        raise ValueError(f"unsupported_contact_source:{source_filter}")
+    if leader_filter not in {"any", "leader", "non_leader"}:
+        raise ValueError(f"unsupported_leader_filter:{leader_filter}")
+    if email_filter not in {"any", "has", "missing"}:
+        raise ValueError(f"unsupported_email_presence:{email_filter}")
     vendor_ids = await _firm_ids_for_vendor(vendor) if vendor and vendor.strip() else None
     if vendor_ids is not None and not vendor_ids:
         return {
@@ -1255,44 +1287,93 @@ async def list_mirrored_pif_people(
             func.lower(PifFirmRow.firm_name).like(needle),
         ))
 
+    candidate_people: list[dict[str, Any]] = []
     async with AsyncSessionLocal() as session:
-        stmt = select(
-            PifFirmRow.id,
-            PifFirmRow.firm_name,
-            PifFirmRow.contacts,
-            PifFirmRow.leadership,
-            PifFirmRow.staff,
-            PifFirmRow.source_updated_at,
-            PifFirmRow.updated_at,
-        ).order_by(PifFirmRow.source_updated_at.desc().nullslast(), PifFirmRow.firm_name.asc())
-        if conditions:
-            stmt = stmt.where(*conditions)
-        rows = (await session.execute(stmt)).all()
+        if source_filter == "leadership":
+            sql = """
+                SELECT f.id, f.firm_name, f.source_updated_at, f.updated_at, person.value AS person
+                FROM pif_directory_firms f
+                CROSS JOIN LATERAL jsonb_array_elements(COALESCE(f.leadership, '[]'::jsonb)) person(value)
+            """
+            params: dict[str, Any] = {}
+            if vendor_ids is not None:
+                sql += " WHERE f.id IN :vendor_ids"
+                params["vendor_ids"] = sorted(vendor_ids)
+            sql += " ORDER BY f.source_updated_at DESC NULLS LAST, f.firm_name ASC"
+            stmt = text(sql)
+            if vendor_ids is not None:
+                stmt = stmt.bindparams(bindparam("vendor_ids", expanding=True))
+            rows = (await session.execute(stmt, params)).all()
+            grouped: dict[str, SimpleNamespace] = {}
+            for row in rows:
+                people_row = grouped.setdefault(row.id, SimpleNamespace(
+                    id=row.id,
+                    firm_name=row.firm_name,
+                    contacts=[],
+                    leadership=[],
+                    staff=[],
+                    source_updated_at=row.source_updated_at,
+                    updated_at=row.updated_at,
+                ))
+                people_row.leadership.append(row.person)
+            for people_row in grouped.values():
+                candidate_people.extend(_people_for_row(people_row))
+        else:
+            columns = [PifFirmRow.id, PifFirmRow.firm_name]
+            if source_filter in {"all", "contacts"}:
+                columns.append(PifFirmRow.contacts)
+            if source_filter == "all":
+                columns.append(PifFirmRow.leadership)
+            if source_filter in {"all", "staff"}:
+                columns.append(PifFirmRow.staff)
+            columns.extend([PifFirmRow.source_updated_at, PifFirmRow.updated_at])
+            stmt = select(*columns).order_by(
+                PifFirmRow.source_updated_at.desc().nullslast(),
+                PifFirmRow.firm_name.asc(),
+            )
+            if conditions:
+                stmt = stmt.where(*conditions)
+            rows = (await session.execute(stmt)).all()
+            for row in rows:
+                people_row = SimpleNamespace(
+                    id=row.id,
+                    firm_name=row.firm_name,
+                    contacts=getattr(row, "contacts", []),
+                    leadership=getattr(row, "leadership", []),
+                    staff=getattr(row, "staff", []),
+                    source_updated_at=row.source_updated_at,
+                    updated_at=row.updated_at,
+                )
+                candidate_people.extend(_people_for_row(people_row))
 
     people: list[dict[str, Any]] = []
-    for row in rows:
-        for person in _people_for_row(row):
-            if source_filter != "all" and person.get("source") != source_filter:
-                continue
-            is_leader = bool(person.get("is_decision_maker"))
-            if leader_filter == "leader" and not is_leader:
-                continue
-            if leader_filter == "non_leader" and is_leader:
-                continue
-            if not _person_matches(person.get("name"), name):
-                continue
-            if not _person_matches(person.get("firm_name"), firm):
-                continue
-            if not _person_matches_any(person.get("title"), title):
-                continue
-            role_filters = _people_filter_values(role_category)
-            if role_filters and not any(
-                _person_matches(person.get("role_category"), role)
-                or _person_matches(person.get("title"), role)
-                for role in role_filters
-            ):
-                continue
-            people.append(person)
+    for person in candidate_people:
+        if source_filter != "all" and person.get("source") != source_filter:
+            continue
+        is_leader = bool(person.get("is_decision_maker"))
+        if leader_filter == "leader" and not is_leader:
+            continue
+        if leader_filter == "non_leader" and is_leader:
+            continue
+        has_email = _has_contact_email(person.get("email"))
+        if email_filter == "has" and not has_email:
+            continue
+        if email_filter == "missing" and has_email:
+            continue
+        if not _person_matches(person.get("name"), name):
+            continue
+        if not _person_matches(person.get("firm_name"), firm):
+            continue
+        if not _person_matches_any(person.get("title"), title):
+            continue
+        role_filters = _people_filter_values(role_category)
+        if role_filters and not any(
+            _person_matches(person.get("role_category"), role)
+            or _person_matches(person.get("title"), role)
+            for role in role_filters
+        ):
+            continue
+        people.append(person)
 
     total = len(people)
     start = (page - 1) * page_size

@@ -6,7 +6,7 @@ possibleos Postgres so matching no longer depends on the stale mission.db cache.
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
@@ -30,6 +30,12 @@ from app.services.pif_firm_crud import (
     get_pif_firm_for_crud,
     update_pif_firm,
     upsert_pif_firm,
+)
+from app.services.pif_saved_searches import (
+    create_saved_search,
+    delete_saved_search,
+    list_saved_searches,
+    update_saved_search,
 )
 
 router = APIRouter(prefix="/api/pif", tags=["pif-directory"])
@@ -72,6 +78,36 @@ class PifFirmWriteRequest(BaseModel):
     provenance: dict[str, Any] | None = None
 
 
+class ContactSearchCriteria(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str | None = Field(None, max_length=255)
+    firm: str | None = Field(None, max_length=512)
+    vendor: str | None = Field(None, max_length=128)
+    titles: list[str] = Field(default_factory=list)
+    role_categories: list[str] = Field(default_factory=list)
+    source: Literal["all", "leadership", "staff", "contacts"] = "all"
+    leader: Literal["any", "leader", "non_leader"] = "any"
+    email_presence: Literal["any", "has", "missing"] = "any"
+
+
+class SavedLeadSearchCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(..., min_length=1, max_length=255)
+    view: Literal["contacts"] = "contacts"
+    criteria: ContactSearchCriteria
+    actor: str = Field("operator", max_length=128)
+
+
+class SavedLeadSearchUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str | None = Field(None, min_length=1, max_length=255)
+    criteria: ContactSearchCriteria | None = None
+    actor: str = Field("operator", max_length=128)
+
+
 def _raise_crud_http(exc: PifFirmCrudError) -> None:
     if isinstance(exc, PifFirmNotFoundError):
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -112,20 +148,67 @@ async def get_pif_people(
     role_category: list[str] | None = Query(None, description="Repeat to match any selected role"),
     source: str | None = Query("all", description="all, leadership, staff, or contacts"),
     leader: str | None = Query("any", description="any, leader, or non_leader"),
+    email_presence: str | None = Query("any", description="any, has, or missing"),
     page: int = Query(1, ge=1),
     page_size: int = Query(25, ge=1, le=100),
 ):
-    return await list_mirrored_pif_people(
-        name=name,
-        firm=firm,
-        vendor=vendor,
-        title=title,
-        role_category=role_category,
-        source=source,
-        leader=leader,
-        page=page,
-        page_size=page_size,
-    )
+    try:
+        return await list_mirrored_pif_people(
+            name=name,
+            firm=firm,
+            vendor=vendor,
+            title=title,
+            role_category=role_category,
+            source=source,
+            leader=leader,
+            email_presence=email_presence,
+            page=page,
+            page_size=page_size,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get("/saved-searches")
+async def get_saved_lead_searches(view: Literal["contacts"] = Query("contacts")):
+    return {"saved_searches": await list_saved_searches(view=view)}
+
+
+@router.post("/saved-searches", status_code=201)
+async def post_saved_lead_search(req: SavedLeadSearchCreateRequest):
+    try:
+        search = await create_saved_search(
+            name=req.name,
+            view=req.view,
+            criteria=req.criteria.model_dump(),
+            actor=req.actor,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return {"saved_search": search}
+
+
+@router.patch("/saved-searches/{search_id}")
+async def patch_saved_lead_search(search_id: str, req: SavedLeadSearchUpdateRequest):
+    try:
+        search = await update_saved_search(
+            search_id,
+            name=req.name,
+            criteria=req.criteria.model_dump() if req.criteria else None,
+            actor=req.actor,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if search is None:
+        raise HTTPException(status_code=404, detail="saved_search_not_found")
+    return {"saved_search": search}
+
+
+@router.delete("/saved-searches/{search_id}")
+async def remove_saved_lead_search(search_id: str):
+    if not await delete_saved_search(search_id):
+        raise HTTPException(status_code=404, detail="saved_search_not_found")
+    return {"deleted": True, "id": search_id}
 
 
 @router.get("/firms")

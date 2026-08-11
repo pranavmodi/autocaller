@@ -223,6 +223,7 @@ export type PresenceFilter =
   | "failed";
 export type PeopleSource = "leadership" | "staff" | "contacts" | "all";
 export type LeaderFilter = "leader" | "non_leader" | "any";
+export type EmailPresence = "has" | "missing" | "any";
 export type ExportFormat = "json" | "csv";
 
 export interface PifInfoListParams {
@@ -308,8 +309,32 @@ export interface PifPeopleListParams {
   role_categories?: string[];
   source?: PeopleSource;
   leader?: LeaderFilter;
+  email_presence?: EmailPresence;
   page?: number;
   page_size?: number;
+}
+
+export interface SavedLeadSearchCriteria {
+  name?: string;
+  firm?: string;
+  vendor?: string;
+  titles?: string[];
+  role_categories?: string[];
+  source: PeopleSource;
+  leader: LeaderFilter;
+  email_presence: EmailPresence;
+}
+
+export interface SavedLeadSearch {
+  id: string;
+  name: string;
+  view: "contacts";
+  criteria: SavedLeadSearchCriteria;
+  schema_version: number;
+  created_by: string;
+  updated_by: string;
+  created_at: string | null;
+  updated_at: string | null;
 }
 
 export interface PifPersonResult {
@@ -402,10 +427,14 @@ function appendParams(
   return query ? `${path}?${query}` : path;
 }
 
-async function possibleFetch<T>(path: string): Promise<T> {
+async function possibleFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const headers = new Headers(init.headers);
+  if (!headers.has("Accept")) headers.set("Accept", "application/json");
+  if (init.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
   const response = await fetch(path, {
+    ...init,
     credentials: "include",
-    headers: { Accept: "application/json" },
+    headers,
   });
   const contentType = response.headers.get("content-type") ?? "";
   const payload: unknown =
@@ -547,9 +576,43 @@ export async function listPifPeople(params: PifPeopleListParams = {}): Promise<P
       role_category: params.role_categories?.length ? params.role_categories : params.role_category,
       source: params.source,
       leader: params.leader,
+      email_presence: params.email_presence,
       page: params.page ?? 1,
       page_size: params.page_size ?? 25,
     }),
+  );
+}
+
+export function listSavedLeadSearches(): Promise<{ saved_searches: SavedLeadSearch[] }> {
+  return possibleFetch<{ saved_searches: SavedLeadSearch[] }>(
+    "/api/pif/saved-searches?view=contacts",
+  );
+}
+
+export function createSavedLeadSearch(input: {
+  name: string;
+  criteria: SavedLeadSearchCriteria;
+}): Promise<{ saved_search: SavedLeadSearch }> {
+  return possibleFetch<{ saved_search: SavedLeadSearch }>("/api/pif/saved-searches", {
+    method: "POST",
+    body: JSON.stringify({ ...input, view: "contacts" }),
+  });
+}
+
+export function updateSavedLeadSearch(
+  id: string,
+  input: { name?: string; criteria?: SavedLeadSearchCriteria },
+): Promise<{ saved_search: SavedLeadSearch }> {
+  return possibleFetch<{ saved_search: SavedLeadSearch }>(
+    `/api/pif/saved-searches/${encodeURIComponent(id)}`,
+    { method: "PATCH", body: JSON.stringify(input) },
+  );
+}
+
+export function deleteSavedLeadSearch(id: string): Promise<{ deleted: boolean; id: string }> {
+  return possibleFetch<{ deleted: boolean; id: string }>(
+    `/api/pif/saved-searches/${encodeURIComponent(id)}`,
+    { method: "DELETE" },
   );
 }
 

@@ -142,6 +142,13 @@ def _email_automation_public_url() -> str:
     ).rstrip("/")
 
 
+def _client_communication_public_url() -> str:
+    return os.getenv(
+        "CLIENT_COMMUNICATION_SOLUTION_URL",
+        "https://getpossibleminds.com/personal-injury/client-communication",
+    ).rstrip("/")
+
+
 def _intake_demo_public_url() -> str:
     return os.getenv(
         "INTAKE_DEMO_PUBLIC_URL",
@@ -274,11 +281,11 @@ async def _solution_redirect_for_payload(
     solution page. Carries the link code as a query param so the page's
     early-access form can attribute the signup back to this recipient."""
     source = _clean((payload or {}).get("source"), 64)
-    dest = (
-        _email_automation_public_url()
-        if source == "solution_email_automation"
-        else _solution_public_url()
-    )
+    destinations = {
+        "solution_email_automation": _email_automation_public_url,
+        "solution_client_communication": _client_communication_public_url,
+    }
+    dest = destinations.get(source, _solution_public_url)()
     if not payload:
         return RedirectResponse(url=dest, status_code=302)
     click_id = await _record_link_click(request, payload, channel="solution")
@@ -414,6 +421,7 @@ def _app_name_expr():
         (AuditLinkClickRow.source.in_(["ai_audit_signature", "ai_audit_email"]), "AI Audit"),
         (AuditLinkClickRow.source.in_(["consult_email", "consult_signature"]), "Consult"),
         (AuditLinkClickRow.source == "solution_email_automation", "Email Automation"),
+        (AuditLinkClickRow.source == "solution_client_communication", "Client Communication"),
         (AuditLinkClickRow.source.in_(["solution_email", "solution_signature"]), "Solution"),
         (AuditLinkClickRow.source.in_(["intake_demo_email", "intake_demo_signature"]), "Intake Demo"),
         (AuditLinkClickRow.source.in_(["workshop_email", "workshop_signature", "workshop_linkedin"]), "Workshop"),
@@ -568,6 +576,7 @@ def _source_label(source: str) -> str:
         "solution_email": "Solution email",
         "solution_signature": "Solution signature",
         "solution_email_automation": "Email automation email",
+        "solution_client_communication": "Client communication email",
         "intake_demo_email": "Intake demo email",
         "intake_demo_signature": "Intake demo signature",
         "workshop_email": "Workshop email",
@@ -586,6 +595,8 @@ def _app_name_for_source(source: str) -> str:
         return "Solution"
     if source == "solution_email_automation":
         return "Email Automation"
+    if source == "solution_client_communication":
+        return "Client Communication"
     if source in {"intake_demo_email", "intake_demo_signature"}:
         return "Intake Demo"
     if source in {"workshop_email", "workshop_signature", "workshop_linkedin"}:
@@ -719,3 +730,24 @@ async def workshop_click_analytics_view(
     from app.services.workshop_tracking_analytics import workshop_click_analytics
 
     return await workshop_click_analytics(since_days=since_days, limit=limit)
+
+
+@router.get("/api/aiaudit/engagement-analytics")
+async def engagement_analytics_view(
+    since_days: int = Query(30, ge=0, le=3650),
+    workflow: str = Query("all", max_length=64),
+    channel: str = Query("all", max_length=32),
+    limit: int = Query(250, ge=1, le=500),
+):
+    """Unified recipient funnel across email and LinkedIn outreach."""
+    from app.services.engagement_analytics import engagement_analytics
+
+    try:
+        return await engagement_analytics(
+            since_days=since_days,
+            workflow=workflow,
+            channel=channel,
+            limit=limit,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc

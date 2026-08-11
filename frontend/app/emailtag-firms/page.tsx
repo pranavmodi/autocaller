@@ -10,6 +10,7 @@ import {
   AlertCircle,
   AlertTriangle,
   BarChart3,
+  Bookmark,
   Check,
   ChevronDown,
   ChevronLeft,
@@ -27,6 +28,7 @@ import {
   Play,
   RefreshCw,
   Search,
+  Save,
   SlidersHorizontal,
   Sparkles,
   Star,
@@ -49,6 +51,8 @@ import {
   ENTITY_TYPE_LABELS,
   EmailtagAuthError,
   analyzeBehavior,
+  createSavedLeadSearch,
+  deleteSavedLeadSearch,
   detectVendors,
   downloadEmailtagExport,
   getFullEnrichmentStatus,
@@ -59,10 +63,13 @@ import {
   listMirroredPifInfo,
   listPifPeople,
   listPifVendors,
+  listSavedLeadSearches,
   scoreFirm,
   startFullEnrichment,
   startResearch,
   startStaffResearch,
+  updateSavedLeadSearch,
+  type EmailPresence,
   type ExportFormat,
   type PifInfoListParams,
   type PifInfoListResponse,
@@ -73,6 +80,8 @@ import {
   type PifSyncStatusResponse,
   type PifTier,
   type PifVendorOption,
+  type SavedLeadSearch,
+  type SavedLeadSearchCriteria,
 } from "@/lib/emailtag";
 
 const PAGE_SIZE = 25;
@@ -174,6 +183,76 @@ const DEFAULT_FILTERS: FiltersState = {
   first_contacted_to: "",
   active_only: true,
 };
+
+const CONTACT_QUERY_KEYS = [
+  "contact_name",
+  "contact_firm",
+  "vendor",
+  "title",
+  "role",
+  "source",
+  "leader",
+  "email",
+  "contact_page",
+  "contact_page_size",
+] as const;
+
+function peopleFiltersFromParams(params: URLSearchParams): PifPeopleListParams {
+  const page = Math.max(1, Number(params.get("contact_page")) || 1);
+  const pageSize = Math.max(1, Math.min(100, Number(params.get("contact_page_size")) || 25));
+  const titles = params.getAll("title").filter(Boolean);
+  const roles = params.getAll("role").filter(Boolean);
+  return {
+    name: params.get("contact_name") || undefined,
+    firm: params.get("contact_firm") || undefined,
+    vendor: params.get("vendor") || undefined,
+    titles: titles.length ? titles : undefined,
+    role_categories: roles.length ? roles : undefined,
+    source: (params.get("source") as PeopleSource | null) ?? "all",
+    leader: (params.get("leader") as LeaderFilter | null) ?? "any",
+    email_presence: (params.get("email") as EmailPresence | null) ?? "any",
+    page,
+    page_size: pageSize,
+  };
+}
+
+function writePeopleFilters(params: URLSearchParams, filters: PifPeopleListParams) {
+  CONTACT_QUERY_KEYS.forEach((key) => params.delete(key));
+  if (filters.name) params.set("contact_name", filters.name);
+  if (filters.firm) params.set("contact_firm", filters.firm);
+  if (filters.vendor) params.set("vendor", filters.vendor);
+  (filters.titles ?? (filters.title ? [filters.title] : [])).forEach((value) => params.append("title", value));
+  (filters.role_categories ?? (filters.role_category ? [filters.role_category] : [])).forEach((value) => params.append("role", value));
+  if (filters.source && filters.source !== "all") params.set("source", filters.source);
+  if (filters.leader && filters.leader !== "any") params.set("leader", filters.leader);
+  if (filters.email_presence && filters.email_presence !== "any") params.set("email", filters.email_presence);
+  if ((filters.page ?? 1) > 1) params.set("contact_page", String(filters.page));
+  if ((filters.page_size ?? 25) !== 25) params.set("contact_page_size", String(filters.page_size));
+}
+
+function criteriaFromPeopleFilters(filters: PifPeopleListParams): SavedLeadSearchCriteria {
+  return {
+    name: filters.name || undefined,
+    firm: filters.firm || undefined,
+    vendor: filters.vendor || undefined,
+    titles: filters.titles ?? (filters.title ? [filters.title] : []),
+    role_categories: filters.role_categories ?? (filters.role_category ? [filters.role_category] : []),
+    source: filters.source ?? "all",
+    leader: filters.leader ?? "any",
+    email_presence: filters.email_presence ?? "any",
+  };
+}
+
+function peopleFiltersFromSavedSearch(
+  search: SavedLeadSearch,
+  pageSize: number,
+): PifPeopleListParams {
+  return {
+    ...search.criteria,
+    page: 1,
+    page_size: pageSize,
+  };
+}
 
 function isAuthError(error: unknown): error is EmailtagAuthError {
   return error instanceof EmailtagAuthError;
@@ -461,13 +540,18 @@ function EmailtagFirmsContent() {
   const [filters, setFilters] = useState<FiltersState>(DEFAULT_FILTERS);
   const [page, setPage] = useState(1);
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [view, setView] = useState<LeadsView>("firms");
-  const [peopleFilters, setPeopleFilters] = useState<PifPeopleListParams>({
-    source: "all",
-    leader: "any",
-    page: 1,
-    page_size: 25,
-  });
+  const [view, setView] = useState<LeadsView>(
+    searchParams.get("view") === "contacts" ? "contacts" : "firms",
+  );
+  const [activeSavedSearchId, setActiveSavedSearchId] = useState(searchParams.get("saved") ?? "");
+  const [peopleFiltersState, setPeopleFiltersState] = useState<PifPeopleListParams>(() =>
+    peopleFiltersFromParams(new URLSearchParams(searchParams.toString())),
+  );
+  const peopleFilters = peopleFiltersState;
+  const setPeopleFilters: React.Dispatch<React.SetStateAction<PifPeopleListParams>> = (update) => {
+    setActiveSavedSearchId("");
+    setPeopleFiltersState(update);
+  };
   const debouncedPeopleFilters = useDebouncedValue(peopleFilters, 250);
 
   const listParams = useMemo(() => filtersToParams(filters, page), [filters, page]);
@@ -475,6 +559,24 @@ function EmailtagFirmsContent() {
   useEffect(() => {
     if (selectedFirmId) setExpandedId(selectedFirmId);
   }, [selectedFirmId]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (view === "contacts") {
+      params.set("view", "contacts");
+      writePeopleFilters(params, peopleFilters);
+      if (activeSavedSearchId) params.set("saved", activeSavedSearchId);
+      else params.delete("saved");
+    } else {
+      params.delete("view");
+      params.delete("saved");
+      CONTACT_QUERY_KEYS.forEach((key) => params.delete(key));
+    }
+    const query = params.toString();
+    const nextUrl = query ? `${pathname}?${query}` : pathname;
+    const currentUrl = `${window.location.pathname}${window.location.search}`;
+    if (nextUrl !== currentUrl) router.replace(nextUrl, { scroll: false });
+  }, [activeSavedSearchId, pathname, peopleFilters, router, view]);
 
   const setSelectedFirm = (pifId: string | null) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -518,6 +620,39 @@ function EmailtagFirmsContent() {
     queryFn: getPifPeopleFilterOptions,
     enabled: view === "contacts",
     staleTime: 5 * 60_000,
+  });
+
+  const savedSearchesQuery = useQuery({
+    queryKey: ["pif", "saved-lead-searches", "contacts"],
+    queryFn: listSavedLeadSearches,
+  });
+
+  const createSavedSearchMutation = useMutation({
+    mutationFn: (name: string) => createSavedLeadSearch({
+      name,
+      criteria: criteriaFromPeopleFilters(peopleFilters),
+    }),
+    onSuccess: async ({ saved_search: savedSearch }) => {
+      setActiveSavedSearchId(savedSearch.id);
+      await queryClient.invalidateQueries({ queryKey: ["pif", "saved-lead-searches"] });
+    },
+  });
+
+  const updateSavedSearchMutation = useMutation({
+    mutationFn: (searchId: string) => updateSavedLeadSearch(searchId, {
+      criteria: criteriaFromPeopleFilters(peopleFilters),
+    }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["pif", "saved-lead-searches"] });
+    },
+  });
+
+  const deleteSavedSearchMutation = useMutation({
+    mutationFn: deleteSavedLeadSearch,
+    onSuccess: async () => {
+      setActiveSavedSearchId("");
+      await queryClient.invalidateQueries({ queryKey: ["pif", "saved-lead-searches"] });
+    },
   });
 
   const exportAll = useMutation({
@@ -635,13 +770,20 @@ function EmailtagFirmsContent() {
   }
 
   function showFirmContacts(firm: PifInfoResponse) {
-    setPeopleFilters((current) => ({
+    setPeopleFiltersState((current) => ({
       firm: firm.firm_name || firm.id,
       source: "all",
       leader: "any",
       page: 1,
       page_size: current.page_size ?? 25,
     }));
+    setActiveSavedSearchId("");
+    setView("contacts");
+  }
+
+  function applySavedSearch(search: SavedLeadSearch) {
+    setPeopleFiltersState(peopleFiltersFromSavedSearch(search, peopleFilters.page_size ?? 25));
+    setActiveSavedSearchId(search.id);
     setView("contacts");
   }
 
@@ -824,6 +966,28 @@ function EmailtagFirmsContent() {
           titleOptions={peopleFilterOptionsQuery.data?.titles ?? []}
           roleOptions={peopleFilterOptionsQuery.data?.roles ?? []}
           vendorOptions={vendorOptionsQuery.data?.vendors ?? []}
+          savedSearches={savedSearchesQuery.data?.saved_searches ?? []}
+          activeSavedSearchId={activeSavedSearchId}
+          onApplySavedSearch={applySavedSearch}
+          onCreateSavedSearch={(name) => createSavedSearchMutation.mutate(name)}
+          onUpdateSavedSearch={() => {
+            if (activeSavedSearchId) updateSavedSearchMutation.mutate(activeSavedSearchId);
+          }}
+          onDeleteSavedSearch={() => {
+            if (activeSavedSearchId) deleteSavedSearchMutation.mutate(activeSavedSearchId);
+          }}
+          savedSearchPending={
+            savedSearchesQuery.isLoading
+            || createSavedSearchMutation.isPending
+            || updateSavedSearchMutation.isPending
+            || deleteSavedSearchMutation.isPending
+          }
+          savedSearchError={
+            savedSearchesQuery.error
+            || createSavedSearchMutation.error
+            || updateSavedSearchMutation.error
+            || deleteSavedSearchMutation.error
+          }
         />
       )}
     </div>
@@ -1449,6 +1613,14 @@ function ContactsView({
   titleOptions,
   roleOptions,
   vendorOptions,
+  savedSearches,
+  activeSavedSearchId,
+  onApplySavedSearch,
+  onCreateSavedSearch,
+  onUpdateSavedSearch,
+  onDeleteSavedSearch,
+  savedSearchPending,
+  savedSearchError,
 }: {
   filters: PifPeopleListParams;
   setFilters: React.Dispatch<React.SetStateAction<PifPeopleListParams>>;
@@ -1461,7 +1633,16 @@ function ContactsView({
   titleOptions: PifPeopleFilterOption[];
   roleOptions: PifPeopleFilterOption[];
   vendorOptions: PifVendorOption[];
+  savedSearches: SavedLeadSearch[];
+  activeSavedSearchId: string;
+  onApplySavedSearch: (search: SavedLeadSearch) => void;
+  onCreateSavedSearch: (name: string) => void;
+  onUpdateSavedSearch: () => void;
+  onDeleteSavedSearch: () => void;
+  savedSearchPending: boolean;
+  savedSearchError: unknown;
 }) {
+  const [newSearchName, setNewSearchName] = useState("");
   const update = <K extends keyof PifPeopleListParams>(key: K, value: PifPeopleListParams[K]) => {
     setFilters((current) => ({ ...current, [key]: value, page: 1 }));
   };
@@ -1484,7 +1665,77 @@ function ContactsView({
   return (
     <section className="space-y-3">
       <div className="space-y-3 rounded-xl border border-neutral-200 bg-white p-3">
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
+        <div className="flex flex-wrap items-end gap-2 border-b border-neutral-100 pb-3">
+          <label className="min-w-64 flex-1 text-[11px] font-medium uppercase text-neutral-400">
+            Saved search
+            <select
+              value={activeSavedSearchId}
+              onChange={(event) => {
+                const search = savedSearches.find((item) => item.id === event.target.value);
+                if (search) onApplySavedSearch(search);
+              }}
+              disabled={savedSearchPending}
+              className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-2 py-1.5 text-sm normal-case text-neutral-800 focus:border-neutral-400 focus:outline-none focus:ring-1 focus:ring-neutral-400"
+            >
+              <option value="">Select saved search</option>
+              {savedSearches.map((search) => (
+                <option key={search.id} value={search.id}>{search.name}</option>
+              ))}
+            </select>
+          </label>
+          <label className="min-w-64 flex-1 text-[11px] font-medium uppercase text-neutral-400">
+            New search name
+            <input
+              value={newSearchName}
+              onChange={(event) => setNewSearchName(event.target.value)}
+              placeholder="Name these criteria"
+              className="mt-1 w-full rounded-md border border-neutral-200 px-2 py-1.5 text-sm normal-case text-neutral-800 placeholder:text-neutral-400 focus:border-neutral-400 focus:outline-none focus:ring-1 focus:ring-neutral-400"
+            />
+          </label>
+          <button
+            type="button"
+            onClick={() => {
+              const name = newSearchName.trim();
+              if (!name) return;
+              onCreateSavedSearch(name);
+              setNewSearchName("");
+            }}
+            disabled={!newSearchName.trim() || savedSearchPending}
+            className="inline-flex h-8 items-center gap-1.5 rounded-md bg-neutral-900 px-3 text-xs font-medium text-white hover:bg-neutral-800 disabled:opacity-40"
+          >
+            <Bookmark className="h-3.5 w-3.5" />
+            Save new
+          </button>
+          {activeSavedSearchId ? (
+            <>
+              <button
+                type="button"
+                onClick={onUpdateSavedSearch}
+                disabled={savedSearchPending}
+                className="inline-flex h-8 items-center gap-1.5 rounded-md border border-neutral-200 px-3 text-xs font-medium text-neutral-700 hover:bg-neutral-50 disabled:opacity-40"
+              >
+                <Save className="h-3.5 w-3.5" />
+                Update
+              </button>
+              <button
+                type="button"
+                onClick={onDeleteSavedSearch}
+                disabled={savedSearchPending}
+                title="Delete saved search"
+                aria-label="Delete saved search"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-neutral-200 text-neutral-500 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-700 disabled:opacity-40"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </>
+          ) : null}
+        </div>
+        {savedSearchError ? (
+          <div className="text-xs text-rose-600">
+            {savedSearchError instanceof Error ? savedSearchError.message : "Saved search request failed"}
+          </div>
+        ) : null}
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
           <ContactLookupField kind="name" label="Name" value={filters.name ?? ""} onChange={(value) => update("name", value || undefined)} />
           <ContactLookupField kind="firm" label="Firm" value={filters.firm ?? ""} onChange={(value) => update("firm", value || undefined)} />
           <SelectField label="Vendor" value={filters.vendor ?? ""} onChange={(value) => update("vendor", value || undefined)}>
@@ -1523,12 +1774,17 @@ function ContactsView({
             <option value="leader">Leader</option>
             <option value="non_leader">Not leader</option>
           </SelectField>
+          <SelectField label="Email" value={filters.email_presence ?? "any"} onChange={(value) => update("email_presence", value as EmailPresence)}>
+            <option value="any">Any</option>
+            <option value="has">Has email</option>
+            <option value="missing">Missing email</option>
+          </SelectField>
         </div>
         <div className="flex items-center justify-between text-xs text-neutral-500">
           <span>{total.toLocaleString()} contacts</span>
           <button
             type="button"
-            onClick={() => setFilters({ source: "all", leader: "any", page: 1, page_size: filters.page_size ?? 25 })}
+            onClick={() => setFilters({ source: "all", leader: "any", email_presence: "any", page: 1, page_size: filters.page_size ?? 25 })}
             className="inline-flex items-center gap-1.5 rounded-md border border-neutral-200 px-3 py-1.5 text-xs font-medium text-neutral-600 hover:bg-neutral-50"
           >
             <Filter className="h-3.5 w-3.5" />

@@ -7,9 +7,9 @@ without changing the no-downgrade update rule.
 """
 from __future__ import annotations
 
+import asyncio
 import re
 from dataclasses import dataclass
-from typing import Iterable
 
 from sqlalchemy import select
 
@@ -158,9 +158,11 @@ async def map_personas(pif_id: str | None = None) -> dict[str, int]:
         stmt = select(FirmContactRow)
         if pif_id:
             stmt = stmt.where(FirmContactRow.pif_id == str(pif_id))
-        contacts: Iterable[FirmContactRow] = (await session.execute(stmt)).scalars().all()
-        for contact in contacts:
+        contacts = await session.stream_scalars(stmt.execution_options(yield_per=500))
+        async for contact in contacts:
             scanned += 1
+            if scanned % 250 == 0:
+                await asyncio.sleep(0)
             match = classify_contact_fields(
                 research_title=contact.research_title,
                 title=contact.title,

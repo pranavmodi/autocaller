@@ -24,6 +24,7 @@ VALID_SOLUTION_SOURCES = {
     "solution_email",
     "solution_signature",
     "solution_email_automation",
+    "solution_client_communication",
 }
 # Intake demo short links (kind="intake") redirect to the browser-call demo and
 # preserve per-recipient attribution.

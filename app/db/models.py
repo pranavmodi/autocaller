@@ -1648,6 +1648,29 @@ class PifFirmRow(Base):
     )
 
 
+class SavedLeadSearchRow(Base):
+    """Reusable server-persisted criteria for the Leads workspace."""
+    __tablename__ = "saved_lead_searches"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    view: Mapped[str] = mapped_column(String(32), nullable=False, default="contacts")
+    criteria_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    schema_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    created_by: Mapped[str] = mapped_column(String(128), nullable=False, default="operator")
+    updated_by: Mapped[str] = mapped_column(String(128), nullable=False, default="operator")
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), default=_utcnow, onupdate=_utcnow,
+    )
+
+    __table_args__ = (
+        CheckConstraint("view IN ('contacts')", name="ck_saved_lead_searches_view"),
+        UniqueConstraint("view", "name", name="uq_saved_lead_searches_view_name"),
+        Index("ix_saved_lead_searches_view_updated", "view", "updated_at"),
+    )
+
+
 class FirmAliasRow(Base):
     """Local alias index for resolving firm-intel domains, emails, and legacy IDs."""
     __tablename__ = "firm_intel_aliases"

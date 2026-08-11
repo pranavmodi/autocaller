@@ -30,6 +30,13 @@ class _Session:
     async def execute(self, _stmt):
         return _Result(self.rows)
 
+    async def stream_scalars(self, _stmt):
+        async def rows():
+            for row in self.rows:
+                yield row
+
+        return rows()
+
     async def commit(self):
         self.committed = True
 

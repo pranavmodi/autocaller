@@ -3,24 +3,22 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
-  Building2,
-  Clock3,
+  Activity,
+  CheckCircle2,
   Eye,
+  Linkedin,
   Loader2,
-  MailOpen,
+  Mail,
+  MessageSquareReply,
   MousePointerClick,
   RefreshCw,
-  ShieldAlert,
-  Sparkles,
-  UserRound,
+  Send,
   Users,
 } from "lucide-react";
 import {
-  getClickAnalytics,
-  getWorkshopClickAnalytics,
-  type ClickAnalyticsRow,
-  type WorkshopTrackingActivity,
-  type WorkshopTrackingContact,
+  getEngagementAnalytics,
+  type EngagementActivity,
+  type EngagementRecipient,
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -30,6 +28,13 @@ const WINDOWS = [
   { label: "30d", days: 30 },
   { label: "90d", days: 90 },
   { label: "All", days: 0 },
+];
+
+const DEFAULT_WORKFLOWS = [{ key: "all", label: "All workflows" }];
+const DEFAULT_CHANNELS = [
+  { key: "all", label: "All channels" },
+  { key: "email", label: "Email" },
+  { key: "linkedin", label: "LinkedIn" },
 ];
 
 function formatDateTime(value: string | null) {
@@ -45,75 +50,41 @@ function formatDateTime(value: string | null) {
   });
 }
 
-function formatDuration(value: number | null | undefined) {
-  if (!value) return "-";
-  if (value < 1000) return `${value} ms`;
-  return `${(value / 1000).toFixed(1)}s`;
-}
-
-const SCANNER_MARKERS = [
-  "proofpoint",
-  "mimecast",
-  "barracuda",
-  "safelinks",
-  "urlprotect",
-  "defender",
-  "microsoft office",
-  "microsoft preview",
-  "googleimageproxy",
-  "google web preview",
-  "headlesschrome",
-  "curl/",
-  "python-requests",
-];
-
-function isKnownScanner(userAgent: string | null) {
-  const value = (userAgent ?? "").toLowerCase();
-  return SCANNER_MARKERS.some((marker) => value.includes(marker));
-}
-
-function clientLabel(userAgent: string | null) {
-  const value = userAgent ?? "";
-  if (!value) return "Unknown client";
-  if (isKnownScanner(value)) return "Known scanner";
-  if (/edg\//i.test(value)) return "Edge";
-  if (/chrome\//i.test(value)) return "Chrome";
-  if (/safari\//i.test(value) && !/chrome\//i.test(value)) return "Safari";
-  if (/firefox\//i.test(value)) return "Firefox";
-  if (/outlook|microsoft office/i.test(value)) return "Outlook";
-  return "Other client";
-}
-
 function Metric({
   label,
   value,
+  note,
   icon: Icon,
 }: {
   label: string;
-  value: string | number;
+  value: number;
+  note?: string;
   icon: typeof Users;
 }) {
   return (
     <div className="rounded-lg border border-neutral-200 bg-white p-3">
-      <div className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-wider text-neutral-400">
+      <div className="flex items-center gap-2 text-[11px] font-medium uppercase text-neutral-500">
         <Icon className="h-3.5 w-3.5" />
         {label}
       </div>
       <div className="mt-2 text-2xl font-semibold text-neutral-950">{value}</div>
+      <div className="mt-1 min-h-4 text-[11px] text-neutral-400">{note}</div>
     </div>
   );
 }
 
-function StatusBadge({ status }: { status: WorkshopTrackingContact["status"] }) {
+function StatusBadge({ status }: { status: EngagementRecipient["status"] }) {
   return (
     <span
       className={cn(
-        "inline-flex whitespace-nowrap rounded-full px-2 py-1 text-[11px] font-semibold",
-        status === "Prompt revealed" && "bg-emerald-100 text-emerald-800",
-        status === "Engaged" && "bg-blue-100 text-blue-800",
-        status === "Visited" && "bg-violet-100 text-violet-800",
-        status === "Scanner / suspect only" && "bg-amber-100 text-amber-800",
-        status === "No activity" && "bg-neutral-100 text-neutral-500",
+        "inline-flex whitespace-nowrap rounded-md px-2 py-1 text-[11px] font-semibold",
+        status === "Replied" && "bg-emerald-100 text-emerald-800",
+        status === "Engaged" && "bg-cyan-100 text-cyan-800",
+        status === "Visited" && "bg-blue-100 text-blue-800",
+        status === "Unconfirmed click" && "bg-amber-100 text-amber-800",
+        status === "Delivered" && "bg-violet-100 text-violet-800",
+        status === "Sent" && "bg-neutral-200 text-neutral-700",
+        status === "Tracked" && "bg-neutral-100 text-neutral-500",
       )}
     >
       {status}
@@ -121,15 +92,21 @@ function StatusBadge({ status }: { status: WorkshopTrackingContact["status"] }) 
   );
 }
 
-function QualityBadge({ quality }: { quality: WorkshopTrackingActivity["quality"] }) {
-  const label = quality === "human" ? "Human" : quality === "scanner" ? "Scanner" : "Unconfirmed";
+function QualityBadge({ quality }: { quality: EngagementActivity["quality"] }) {
+  const label = {
+    human: "Human",
+    scanner: "Scanner",
+    suspect: "Unconfirmed",
+    system: "System",
+  }[quality];
   return (
     <span
       className={cn(
-        "inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
+        "inline-flex whitespace-nowrap rounded-md px-2 py-1 text-[10px] font-semibold uppercase",
         quality === "human" && "bg-emerald-100 text-emerald-800",
         quality === "scanner" && "bg-amber-100 text-amber-800",
         quality === "suspect" && "bg-neutral-100 text-neutral-600",
+        quality === "system" && "bg-blue-50 text-blue-700",
       )}
     >
       {label}
@@ -137,49 +114,60 @@ function QualityBadge({ quality }: { quality: WorkshopTrackingActivity["quality"
   );
 }
 
-function ContactRow({ contact }: { contact: WorkshopTrackingContact }) {
+function ChannelLabel({ channel }: { channel: "Email" | "LinkedIn" }) {
+  const Icon = channel === "LinkedIn" ? Linkedin : Mail;
+  return (
+    <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs font-medium text-neutral-700">
+      <Icon className="h-3.5 w-3.5" />
+      {channel}
+    </span>
+  );
+}
+
+function RecipientRow({ recipient }: { recipient: EngagementRecipient }) {
   return (
     <tr className="border-t border-neutral-100 align-top">
       <td className="px-3 py-3">
-        <div className="text-sm font-semibold text-neutral-950">{contact.contact_name}</div>
-        <div className="mt-0.5 text-xs text-neutral-500">{contact.title || contact.firm_name}</div>
-        {contact.title ? <div className="mt-0.5 text-xs text-neutral-400">{contact.firm_name}</div> : null}
+        <div className="text-sm font-semibold text-neutral-950">{recipient.contact_name}</div>
+        <div className="mt-0.5 text-xs text-neutral-500">{recipient.contact_email || "-"}</div>
+        <div className="mt-0.5 text-xs text-neutral-400">
+          {[recipient.title, recipient.firm_name].filter(Boolean).join(" · ")}
+        </div>
       </td>
-      <td className="px-3 py-3"><StatusBadge status={contact.status} /></td>
-      <td className="px-3 py-3 text-right text-sm font-semibold text-neutral-900">
-        {contact.raw_link_clicks}
-        {contact.scanner_link_clicks ? (
-          <div className="mt-0.5 text-[10px] font-normal text-amber-700">
-            {contact.scanner_link_clicks} known scanner
-          </div>
-        ) : null}
+      <td className="px-3 py-3 text-xs text-neutral-700">{recipient.workflow_labels.join(", ")}</td>
+      <td className="px-3 py-3">
+        <div className="flex flex-col items-start gap-1">
+          {recipient.channel_labels.map((label) => (
+            <ChannelLabel key={label} channel={label as "Email" | "LinkedIn"} />
+          ))}
+        </div>
       </td>
+      <td className="px-3 py-3"><StatusBadge status={recipient.status} /></td>
       <td className="px-3 py-3 text-right text-sm text-neutral-700">
-        {contact.confirmed_sessions}
-        {contact.scanner_or_suspect_sessions ? (
-          <div className="mt-0.5 text-[10px] text-neutral-400">
-            {contact.scanner_or_suspect_sessions} unconfirmed
+        {recipient.sent}<span className="text-neutral-300"> / </span>{recipient.delivered}
+        {recipient.delivery_failures ? (
+          <div className="mt-0.5 text-[10px] text-red-600">{recipient.delivery_failures} failed</div>
+        ) : null}
+      </td>
+      <td className="px-3 py-3 text-right text-sm font-semibold text-neutral-900">
+        {recipient.raw_clicks}
+        {recipient.scanner_or_suspect_clicks ? (
+          <div className="mt-0.5 text-[10px] font-normal text-amber-700">
+            {recipient.scanner_or_suspect_clicks} unconfirmed
           </div>
         ) : null}
       </td>
-      <td className="px-3 py-3 text-right text-sm font-semibold text-emerald-700">
-        {contact.prompt_reveals}
-      </td>
-      <td className="px-3 py-3 text-right text-sm text-neutral-700">{contact.on_page_clicks}</td>
-      <td className="px-3 py-3 text-right text-sm text-neutral-700">{contact.scroll_50}</td>
+      <td className="px-3 py-3 text-right text-sm text-neutral-700">{recipient.confirmed_visits}</td>
+      <td className="px-3 py-3 text-right text-sm text-neutral-700">{recipient.meaningful_actions}</td>
+      <td className="px-3 py-3 text-right text-sm text-neutral-700">{recipient.replies}</td>
       <td className="whitespace-nowrap px-3 py-3 text-xs text-neutral-500">
-        {formatDateTime(contact.last_activity_at)}
-        {contact.max_time_on_page_ms ? (
-          <div className="mt-0.5 text-[10px] text-neutral-400">
-            max {formatDuration(contact.max_time_on_page_ms)}
-          </div>
-        ) : null}
+        {formatDateTime(recipient.last_activity_at)}
       </td>
     </tr>
   );
 }
 
-function ActivityRow({ activity }: { activity: WorkshopTrackingActivity }) {
+function ActivityRow({ activity }: { activity: EngagementActivity }) {
   return (
     <tr className="border-t border-neutral-100 align-top">
       <td className="whitespace-nowrap px-3 py-3 text-xs text-neutral-500">
@@ -189,255 +177,186 @@ function ActivityRow({ activity }: { activity: WorkshopTrackingActivity }) {
         <div className="text-sm font-medium text-neutral-950">{activity.contact_name}</div>
         <div className="mt-0.5 text-xs text-neutral-400">{activity.firm_name}</div>
       </td>
+      <td className="px-3 py-3 text-xs text-neutral-700">{activity.workflow_label}</td>
+      <td className="px-3 py-3"><ChannelLabel channel={activity.channel_label} /></td>
       <td className="px-3 py-3">
         <div className="text-sm font-medium text-neutral-900">{activity.label}</div>
-        <div className="mt-0.5 max-w-2xl break-words text-xs text-neutral-500">{activity.detail}</div>
+        <div className="mt-0.5 max-w-xl break-words text-xs text-neutral-500">{activity.detail}</div>
       </td>
       <td className="px-3 py-3"><QualityBadge quality={activity.quality} /></td>
-      <td className="px-3 py-3 text-xs text-neutral-500">
-        <div>{activity.page}</div>
-        {activity.time_on_page_ms ? (
-          <div className="mt-0.5 text-neutral-400">{formatDuration(activity.time_on_page_ms)}</div>
-        ) : null}
-      </td>
-    </tr>
-  );
-}
-
-function EmailClickRow({ click }: { click: ClickAnalyticsRow }) {
-  const scanner = isKnownScanner(click.user_agent);
-  return (
-    <tr className="border-t border-neutral-100 align-top">
-      <td className="whitespace-nowrap px-3 py-3 text-xs text-neutral-500">
-        {formatDateTime(click.clicked_at)}
-      </td>
-      <td className="px-3 py-3">
-        <div className="text-sm font-semibold text-neutral-950">
-          {click.contact_name || "Unknown contact"}
-        </div>
-        <div className="mt-0.5 text-xs text-neutral-500">{click.contact_email || "-"}</div>
-      </td>
-      <td className="px-3 py-3">
-        <div className="text-sm text-neutral-900">{click.firm_name}</div>
-        {click.persona ? <div className="mt-0.5 text-xs text-neutral-400">{click.persona}</div> : null}
-      </td>
-      <td className="px-3 py-3">
-        <span
-          className={cn(
-            "inline-flex whitespace-nowrap rounded-full px-2 py-1 text-[11px] font-semibold",
-            scanner ? "bg-amber-100 text-amber-800" : "bg-blue-100 text-blue-800",
-          )}
-        >
-          {scanner ? "Known scanner" : "Unconfirmed click"}
-        </span>
-      </td>
-      <td className="px-3 py-3 text-xs text-neutral-500">
-        <div>{clientLabel(click.user_agent)}</div>
-        <div className="mt-0.5 font-mono text-[10px] text-neutral-400">{click.ip || "No IP"}</div>
-      </td>
     </tr>
   );
 }
 
 export default function ClickAnalyticsPage() {
   const [sinceDays, setSinceDays] = useState(1);
-  const workshopAnalytics = useQuery({
-    queryKey: ["workshop-click-analytics", sinceDays],
-    queryFn: () => getWorkshopClickAnalytics({ sinceDays, limit: 250 }),
+  const [workflow, setWorkflow] = useState("all");
+  const [channel, setChannel] = useState("all");
+  const analytics = useQuery({
+    queryKey: ["engagement-analytics", sinceDays, workflow, channel],
+    queryFn: () => getEngagementAnalytics({ sinceDays, workflow, channel, limit: 250 }),
     refetchInterval: 30_000,
   });
-  const emailAnalytics = useQuery({
-    queryKey: ["email-automation-click-analytics", sinceDays],
-    queryFn: () => getClickAnalytics({
-      sinceDays,
-      groupBy: "firm_name",
-      limit: 250,
-      source: "solution_email_automation",
-    }),
-    refetchInterval: 30_000,
-  });
-  const summary = workshopAnalytics.data?.summary;
-  const contacts = workshopAnalytics.data?.contacts ?? [];
-  const activities = workshopAnalytics.data?.activities ?? [];
-  const emailSummary = emailAnalytics.data?.summary;
-  const emailClicks = emailAnalytics.data?.recent_clicks ?? [];
-  const refreshing = workshopAnalytics.isFetching || emailAnalytics.isFetching;
+
+  const data = analytics.data;
+  const summary = data?.summary;
+  const workflows = data?.filters.workflows ?? DEFAULT_WORKFLOWS;
+  const channels = data?.filters.channels ?? DEFAULT_CHANNELS;
 
   return (
-    <div className="mx-auto max-w-[1500px] space-y-4">
+    <div className="mx-auto max-w-[1600px] space-y-4">
       <div className="flex flex-wrap items-center gap-3">
         <div className="rounded-lg bg-neutral-900 p-2 text-white">
-          <MousePointerClick className="h-4 w-4" />
+          <Activity className="h-4 w-4" />
         </div>
         <div>
-          <h1 className="text-lg font-semibold text-neutral-950">Workflow Clicks</h1>
-          <p className="mt-0.5 text-sm text-neutral-500">
-            recipient-level email and workshop engagement
-          </p>
+          <h1 className="text-lg font-semibold text-neutral-950">Engagement</h1>
+          <p className="mt-0.5 text-sm text-neutral-500">Recipient activity across outreach workflows</p>
         </div>
         <button
           type="button"
-          onClick={() => {
-            workshopAnalytics.refetch();
-            emailAnalytics.refetch();
-          }}
-          disabled={refreshing}
+          onClick={() => analytics.refetch()}
+          disabled={analytics.isFetching}
           className="ml-auto inline-flex items-center gap-2 rounded-md border border-neutral-200 px-3 py-1.5 text-xs font-medium text-neutral-700 hover:bg-neutral-50 disabled:opacity-60"
         >
-          {refreshing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+          {analytics.isFetching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
           Refresh
         </button>
       </div>
 
-      <div className="flex flex-wrap gap-1">
-        {WINDOWS.map((window) => (
-          <button
-            key={window.label}
-            type="button"
-            onClick={() => setSinceDays(window.days)}
-            className={cn(
-              "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
-              sinceDays === window.days
-                ? "bg-neutral-900 text-white"
-                : "border border-neutral-200 bg-white text-neutral-600 hover:bg-neutral-100",
-            )}
-          >
-            {window.label}
-          </button>
-        ))}
-      </div>
-
-      <div className="pt-2">
-        <h2 className="text-sm font-semibold text-neutral-950">Workshop clicks</h2>
-        <p className="mt-0.5 text-xs text-neutral-500">
-          page visits, prompt reveals, and workshop actions
-        </p>
-      </div>
-
-      <section className="rounded-xl border border-neutral-200 bg-neutral-50 p-4">
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
-          <Metric label="People with activity" value={summary?.tracked_contacts ?? 0} icon={Users} />
-          <Metric label="Raw link opens" value={summary?.raw_link_clicks ?? 0} icon={MousePointerClick} />
-          <Metric label="Known scanners" value={summary?.scanner_link_clicks ?? 0} icon={ShieldAlert} />
-          <Metric label="Confirmed visits" value={summary?.confirmed_visitors ?? 0} icon={Eye} />
-          <Metric label="Prompt reveals" value={summary?.prompt_reveals ?? 0} icon={Sparkles} />
-          <Metric label="Page clicks" value={summary?.on_page_clicks ?? 0} icon={MousePointerClick} />
+      <div className="flex flex-wrap items-center gap-3 border-y border-neutral-200 py-3">
+        <div className="flex flex-wrap gap-1">
+          {WINDOWS.map((window) => (
+            <button
+              key={window.label}
+              type="button"
+              onClick={() => setSinceDays(window.days)}
+              className={cn(
+                "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
+                sinceDays === window.days
+                  ? "bg-neutral-900 text-white"
+                  : "border border-neutral-200 bg-white text-neutral-600 hover:bg-neutral-100",
+              )}
+            >
+              {window.label}
+            </button>
+          ))}
         </div>
-      </section>
+        <div className="h-5 w-px bg-neutral-200" />
+        <div className="flex max-w-full flex-wrap gap-1">
+          {workflows.map((option) => (
+            <button
+              key={option.key}
+              type="button"
+              onClick={() => setWorkflow(option.key)}
+              className={cn(
+                "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
+                workflow === option.key
+                  ? "bg-cyan-700 text-white"
+                  : "border border-neutral-200 bg-white text-neutral-600 hover:bg-neutral-100",
+              )}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+        <div className="h-5 w-px bg-neutral-200" />
+        <div className="flex flex-wrap gap-1">
+          {channels.map((option) => (
+            <button
+              key={option.key}
+              type="button"
+              onClick={() => setChannel(option.key)}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
+                channel === option.key
+                  ? "bg-blue-700 text-white"
+                  : "border border-neutral-200 bg-white text-neutral-600 hover:bg-neutral-100",
+              )}
+            >
+              {option.key === "email" ? <Mail className="h-3.5 w-3.5" /> : null}
+              {option.key === "linkedin" ? <Linkedin className="h-3.5 w-3.5" /> : null}
+              {option.label}
+            </button>
+          ))}
+        </div>
+      </div>
 
-      <section className="rounded-xl border border-neutral-200 bg-white">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
+        <Metric label="Tracked people" value={summary?.tracked_recipients ?? 0} icon={Users} />
+        <Metric label="Sent" value={summary?.sent ?? 0} icon={Send} />
+        <Metric
+          label="Delivered"
+          value={summary?.delivered ?? 0}
+          note={summary?.delivery_failures ? `${summary.delivery_failures} failed or delayed` : undefined}
+          icon={CheckCircle2}
+        />
+        <Metric
+          label="Raw clicks"
+          value={summary?.raw_clicks ?? 0}
+          note={summary?.scanner_or_suspect_clicks ? `${summary.scanner_or_suspect_clicks} scanner or unconfirmed` : undefined}
+          icon={MousePointerClick}
+        />
+        <Metric label="Confirmed visits" value={summary?.confirmed_visits ?? 0} icon={Eye} />
+        <Metric label="Actions" value={summary?.meaningful_actions ?? 0} icon={Activity} />
+        <Metric label="Replies" value={summary?.replies ?? 0} icon={MessageSquareReply} />
+      </div>
+
+      <section className="overflow-hidden rounded-lg border border-neutral-200 bg-white">
         <div className="border-b border-neutral-100 px-4 py-3">
           <h2 className="text-sm font-semibold text-neutral-950">People</h2>
-          <p className="mt-0.5 text-xs text-neutral-500">
-            recipients with workshop activity in the selected window
-          </p>
         </div>
-        {workshopAnalytics.isLoading ? (
+        {analytics.isLoading ? (
           <div className="flex items-center gap-2 px-4 py-8 text-sm text-neutral-500">
-            <Loader2 className="h-4 w-4 animate-spin" /> Loading workshop tracking...
+            <Loader2 className="h-4 w-4 animate-spin" /> Loading engagement...
           </div>
-        ) : workshopAnalytics.isError ? (
-          <div className="px-4 py-8 text-sm text-red-600">Could not load workshop tracking.</div>
-        ) : contacts.length === 0 ? (
-          <div className="px-4 py-8 text-sm text-neutral-500">No workshop recipient activity in this window.</div>
+        ) : analytics.isError ? (
+          <div className="px-4 py-8 text-sm text-red-600">Could not load engagement analytics.</div>
+        ) : !data?.recipients.length ? (
+          <div className="px-4 py-8 text-sm text-neutral-500">No tracked recipients in this view.</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full text-left">
-              <thead className="bg-neutral-50 text-[11px] uppercase tracking-wider text-neutral-400">
+              <thead className="bg-neutral-50 text-[11px] uppercase text-neutral-500">
                 <tr>
                   <th className="px-3 py-2 font-semibold">Contact</th>
+                  <th className="px-3 py-2 font-semibold">Workflow</th>
+                  <th className="px-3 py-2 font-semibold">Channel</th>
                   <th className="px-3 py-2 font-semibold">Status</th>
-                  <th className="px-3 py-2 text-right font-semibold">Raw opens</th>
-                  <th className="px-3 py-2 text-right font-semibold">Confirmed visits</th>
-                  <th className="px-3 py-2 text-right font-semibold">Prompts revealed</th>
-                  <th className="px-3 py-2 text-right font-semibold">Page clicks</th>
-                  <th className="px-3 py-2 text-right font-semibold">50% scroll</th>
+                  <th className="px-3 py-2 text-right font-semibold">Sent / delivered</th>
+                  <th className="px-3 py-2 text-right font-semibold">Raw clicks</th>
+                  <th className="px-3 py-2 text-right font-semibold">Visits</th>
+                  <th className="px-3 py-2 text-right font-semibold">Actions</th>
+                  <th className="px-3 py-2 text-right font-semibold">Replies</th>
                   <th className="px-3 py-2 font-semibold">Last activity</th>
                 </tr>
               </thead>
-              <tbody>{contacts.map((contact) => <ContactRow key={contact.contact_id} contact={contact} />)}</tbody>
+              <tbody>{data.recipients.map((recipient) => <RecipientRow key={recipient.contact_id} recipient={recipient} />)}</tbody>
             </table>
           </div>
         )}
       </section>
 
-      <section className="rounded-xl border border-neutral-200 bg-white">
+      <section className="overflow-hidden rounded-lg border border-neutral-200 bg-white">
         <div className="border-b border-neutral-100 px-4 py-3">
-          <h2 className="text-sm font-semibold text-neutral-950">Workshop activity</h2>
-          <p className="mt-0.5 text-xs text-neutral-500">
-            individual tracked actions, including the exact prompt-reveal and button-click events
-          </p>
+          <h2 className="text-sm font-semibold text-neutral-950">Activity</h2>
         </div>
-        {activities.length === 0 ? (
-          <div className="px-4 py-8 text-sm text-neutral-500">No workshop activity in this window.</div>
+        {!data?.activities.length ? (
+          <div className="px-4 py-8 text-sm text-neutral-500">No activity in this view.</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full text-left">
-              <thead className="bg-neutral-50 text-[11px] uppercase tracking-wider text-neutral-400">
+              <thead className="bg-neutral-50 text-[11px] uppercase text-neutral-500">
                 <tr>
                   <th className="px-3 py-2 font-semibold">When</th>
                   <th className="px-3 py-2 font-semibold">Contact</th>
-                  <th className="px-3 py-2 font-semibold">Action</th>
+                  <th className="px-3 py-2 font-semibold">Workflow</th>
+                  <th className="px-3 py-2 font-semibold">Channel</th>
+                  <th className="px-3 py-2 font-semibold">Event</th>
                   <th className="px-3 py-2 font-semibold">Signal</th>
-                  <th className="px-3 py-2 font-semibold">Workshop</th>
                 </tr>
               </thead>
-              <tbody>{activities.map((activity) => <ActivityRow key={activity.id} activity={activity} />)}</tbody>
-            </table>
-          </div>
-        )}
-      </section>
-
-      <div className="pt-4">
-        <h2 className="text-sm font-semibold text-neutral-950">Email automation clicks</h2>
-        <p className="mt-0.5 text-xs text-neutral-500">
-          attributed opens of the tracked email-automation links
-        </p>
-      </div>
-
-      <section className="rounded-xl border border-neutral-200 bg-neutral-50 p-4">
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <Metric label="Total clicks" value={emailSummary?.click_count ?? 0} icon={MailOpen} />
-          <Metric label="Unique recipients" value={emailSummary?.contact_count ?? 0} icon={UserRound} />
-          <Metric label="Firms clicked" value={emailSummary?.firm_count ?? 0} icon={Building2} />
-          <Metric
-            label="Last click"
-            value={emailSummary?.last_clicked_at ? formatDateTime(emailSummary.last_clicked_at) : "-"}
-            icon={Clock3}
-          />
-        </div>
-      </section>
-
-      <section className="rounded-xl border border-neutral-200 bg-white">
-        <div className="border-b border-neutral-100 px-4 py-3">
-          <h2 className="text-sm font-semibold text-neutral-950">Email click activity</h2>
-          <p className="mt-0.5 text-xs text-neutral-500">
-            automatic security previews are labeled separately from browser-like clicks
-          </p>
-        </div>
-        {emailAnalytics.isLoading ? (
-          <div className="flex items-center gap-2 px-4 py-8 text-sm text-neutral-500">
-            <Loader2 className="h-4 w-4 animate-spin" /> Loading email clicks...
-          </div>
-        ) : emailAnalytics.isError ? (
-          <div className="px-4 py-8 text-sm text-red-600">Could not load email click analytics.</div>
-        ) : emailClicks.length === 0 ? (
-          <div className="px-4 py-8 text-sm text-neutral-500">
-            No email-automation link clicks in this window.
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-left">
-              <thead className="bg-neutral-50 text-[11px] uppercase tracking-wider text-neutral-400">
-                <tr>
-                  <th className="px-3 py-2 font-semibold">When</th>
-                  <th className="px-3 py-2 font-semibold">Recipient</th>
-                  <th className="px-3 py-2 font-semibold">Firm</th>
-                  <th className="px-3 py-2 font-semibold">Signal</th>
-                  <th className="px-3 py-2 font-semibold">Client</th>
-                </tr>
-              </thead>
-              <tbody>{emailClicks.map((click) => <EmailClickRow key={click.id} click={click} />)}</tbody>
+              <tbody>{data.activities.map((activity) => <ActivityRow key={activity.id} activity={activity} />)}</tbody>
             </table>
           </div>
         )}

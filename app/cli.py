@@ -5764,6 +5764,84 @@ def lead_gen_workshop_links(
     console.print(table)
 
 
+@lead_gen_app.command("client-communication-links")
+def lead_gen_client_communication_links(
+    batch_id: str = typer.Argument(..., help="lead_gen_batches.id"),
+    item: list[str] = typer.Option([], "--item", help="Limit to specific batch item id(s). Repeatable."),
+    reuse: bool = typer.Option(
+        True, "--reuse/--no-reuse",
+        help="Reuse an existing client-communication /s/ link for the item.",
+    ),
+    json_output: bool = typer.Option(False, "--json", help="Print raw JSON."),
+):
+    """Mint per-recipient tracked links to the PI client-communication page."""
+    from sqlalchemy import select as _select
+
+    async def _run_links():
+        from app.db import AsyncSessionLocal
+        from app.db.models import AuditLinkRow, FirmContactRow, LeadGenBatchItemRow
+        from app.services.aiaudit_links import _link_public_base_url, build_short_solution_link
+
+        wanted = {str(i).strip() for i in item if str(i or "").strip()} or None
+        out = []
+        async with AsyncSessionLocal() as session:
+            items = (await session.execute(
+                _select(LeadGenBatchItemRow).where(LeadGenBatchItemRow.batch_id == batch_id)
+            )).scalars().all()
+            for it in items:
+                if wanted and it.id not in wanted:
+                    continue
+                contact = await session.get(FirmContactRow, it.contact_id) if it.contact_id else None
+                if contact is None:
+                    out.append({"item_id": it.id, "contact_id": it.contact_id, "error": "contact_missing"})
+                    continue
+                link = None
+                reused = False
+                if reuse:
+                    existing = (await session.execute(
+                        _select(AuditLinkRow).where(
+                            AuditLinkRow.batch_item_id == it.id,
+                            AuditLinkRow.kind == "solution",
+                            AuditLinkRow.source == "solution_client_communication",
+                        ).order_by(AuditLinkRow.created_at)
+                    )).scalars().first()
+                    if existing is not None:
+                        link = f"{_link_public_base_url('solution')}/s/{existing.code}"
+                        reused = True
+                if link is None:
+                    link = await build_short_solution_link(
+                        contact,
+                        batch_item_id=it.id,
+                        source="solution_client_communication",
+                    )
+                out.append({
+                    "item_id": it.id,
+                    "contact_id": it.contact_id,
+                    "email": contact.email,
+                    "link": link,
+                    "reused": reused,
+                })
+        return out
+
+    results = _run(_run_links())
+    if json_output:
+        console.print_json(data={"batch_id": batch_id, "count": len(results), "links": results})
+        return
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("item_id", no_wrap=True)
+    table.add_column("email")
+    table.add_column("link", no_wrap=True)
+    table.add_column("reused", no_wrap=True)
+    for row in results:
+        table.add_row(
+            row.get("item_id") or "—",
+            row.get("email") or row.get("error") or "—",
+            row.get("link") or "—",
+            "yes" if row.get("reused") else "new",
+        )
+    console.print(table)
+
+
 @lead_gen_app.command("schedule-wave")
 def lead_gen_schedule_wave(
     batch_id: str = typer.Argument(..., help="lead_gen_batches.id"),
