@@ -1344,6 +1344,93 @@ class AuditLinkRow(Base):
     )
 
 
+class EngagementCampaignRow(Base):
+    """One dated, cross-channel Possible Minds outreach campaign."""
+    __tablename__ = "engagement_campaigns"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    campaign_date: Mapped[date] = mapped_column(Date, nullable=False)
+    timezone: Mapped[str] = mapped_column(String(64), nullable=False, default="UTC")
+    workflow: Mapped[str] = mapped_column(String(64), nullable=False, default="content")
+    destination_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="draft")
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_by: Mapped[str] = mapped_column(String(128), nullable=False, default="operator")
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), default=_utcnow, onupdate=_utcnow,
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('draft', 'active', 'completed', 'archived')",
+            name="ck_engagement_campaigns_status",
+        ),
+        Index("ix_engagement_campaigns_date", "campaign_date"),
+        Index("ix_engagement_campaigns_status", "status"),
+        Index("ix_engagement_campaigns_created_at", "created_at"),
+    )
+
+
+class EngagementCampaignLinkRow(Base):
+    """A campaign/channel/contact-specific redirect to a Possible Minds page."""
+    __tablename__ = "engagement_campaign_links"
+
+    code: Mapped[str] = mapped_column(String(32), primary_key=True)
+    campaign_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("engagement_campaigns.id", ondelete="CASCADE"), nullable=False,
+    )
+    contact_id: Mapped[str | None] = mapped_column(
+        String(64), ForeignKey("firm_contacts.id", ondelete="SET NULL"), nullable=True,
+    )
+    pif_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    channel: Mapped[str] = mapped_column(String(16), nullable=False)
+    label: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    destination_url: Mapped[str] = mapped_column(String(2048), nullable=False)
+    sent_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow)
+
+    __table_args__ = (
+        CheckConstraint(
+            "channel IN ('email', 'linkedin', 'public')",
+            name="ck_engagement_campaign_links_channel",
+        ),
+        Index("ix_engagement_campaign_links_campaign", "campaign_id"),
+        Index("ix_engagement_campaign_links_contact", "contact_id"),
+        Index("ix_engagement_campaign_links_created_at", "created_at"),
+    )
+
+
+class EngagementCampaignClickRow(Base):
+    """Append-only redirect fetches for campaign tracking links."""
+    __tablename__ = "engagement_campaign_clicks"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    link_code: Mapped[str] = mapped_column(
+        String(32), ForeignKey("engagement_campaign_links.code", ondelete="CASCADE"), nullable=False,
+    )
+    campaign_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("engagement_campaigns.id", ondelete="CASCADE"), nullable=False,
+    )
+    contact_id: Mapped[str | None] = mapped_column(
+        String(64), ForeignKey("firm_contacts.id", ondelete="SET NULL"), nullable=True,
+    )
+    pif_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    channel: Mapped[str] = mapped_column(String(16), nullable=False)
+    ip: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    user_agent: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    referer: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    clicked_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow)
+
+    __table_args__ = (
+        Index("ix_engagement_campaign_clicks_campaign", "campaign_id"),
+        Index("ix_engagement_campaign_clicks_link", "link_code"),
+        Index("ix_engagement_campaign_clicks_contact", "contact_id"),
+        Index("ix_engagement_campaign_clicks_clicked_at", "clicked_at"),
+    )
+
+
 class VisibilityLinkRow(Base):
     """Short, clickable AI Visibility report redirect codes used in plaintext email."""
     __tablename__ = "visibility_links"

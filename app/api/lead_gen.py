@@ -1006,6 +1006,7 @@ class PageEventRequest(BaseModel):
     utm_term: Optional[str] = Field(default=None, max_length=256)
     utm_content: Optional[str] = Field(default=None, max_length=512)
     engagement_type: Optional[str] = Field(default=None, max_length=64)
+    interaction_trusted: Optional[int] = Field(default=None, ge=0, le=1)
     click_text: Optional[str] = Field(default=None, max_length=240)
     click_href: Optional[str] = Field(default=None, max_length=2048)
     click_tag: Optional[str] = Field(default=None, max_length=64)
@@ -1120,15 +1121,23 @@ async def page_event(req: PageEventRequest, request: Request):
         return (value or "").strip() or None
 
     contact_id = batch_item_id = None
+    campaign_id = campaign_name = None
+    resolved_source = None
     pif_id = clean(req.pif_id)
     if req.link_code:
         from app.services.aiaudit_links import resolve_short_audit_code
         resolved = await resolve_short_audit_code(req.link_code)
+        if not resolved:
+            from app.services.engagement_campaigns import resolve_campaign_tracking_code
+            resolved = await resolve_campaign_tracking_code(req.link_code)
         if resolved:
             contact_id = resolved.get("contact_id")
             batch_item_id = resolved.get("batch_item_id")
             pif_id = resolved.get("pif_id")
-    source = clean(req.source) or clean(req.utm_source)
+            campaign_id = resolved.get("campaign_id")
+            campaign_name = resolved.get("campaign_name")
+            resolved_source = resolved.get("source")
+    source = clean(resolved_source) or clean(req.source) or clean(req.utm_source)
     ip_address = _request_ip(request, clean(req.ip_address))
     country_code = _country_code(request, clean(req.country_code))
     country_name = _country_name(country_code, clean(req.country_name))
@@ -1146,6 +1155,8 @@ async def page_event(req: PageEventRequest, request: Request):
             "link_code": clean(req.link_code),
             "click_id": clean(req.click_id),
             "source": source,
+            "campaign_id": clean(campaign_id),
+            "campaign_name": clean(campaign_name),
             "firm_name": clean(req.firm_name),
             "contact_id": clean(req.contact_id),
             "contact_name": clean(req.contact_name),
@@ -1156,6 +1167,7 @@ async def page_event(req: PageEventRequest, request: Request):
             "utm_term": clean(req.utm_term),
             "utm_content": clean(req.utm_content),
             "engagement_type": clean(req.engagement_type),
+            "interaction_trusted": req.interaction_trusted,
             "click_text": clean(req.click_text),
             "click_href": clean(req.click_href),
             "click_tag": clean(req.click_tag),
@@ -1173,8 +1185,13 @@ async def page_event(req: PageEventRequest, request: Request):
         },
         contact_id=contact_id,
         batch_item_id=batch_item_id,
+        infer_batch_from_contact=not bool(campaign_id),
     )
-    return {"ok": True, "attributed": bool(contact_id)}
+    return {
+        "ok": True,
+        "attributed": bool(contact_id),
+        "campaign_attributed": bool(campaign_id),
+    }
 
 
 def _page_event_time_ms(raw_event: dict[str, Any] | None) -> int | None:

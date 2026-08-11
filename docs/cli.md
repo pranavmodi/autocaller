@@ -95,6 +95,7 @@ Commands
   allowlist      Manage allowed_phones (phone allowlist).
   followups      GTM follow-up queue — calls awaiting action.
   ideas          Simple future product, marketing, and GTM idea capture.
+  campaigns      Create daily cross-channel campaigns and tracked Possible Minds links.
   listening      Mission Control mindset brief, insights, sources, and prep.
   data-returned  Inspect captured payloads and manage the callback shell script.
 ```
@@ -106,6 +107,10 @@ Every command accepts `--help`. Exit code is `0` on success, `1` on any error
 
 | command | purpose |
 |---|---|
+| `campaigns create "<name>" [--date YYYY-MM-DD] [--url https://getpossibleminds.com/...] [--workflow content] [--timezone UTC] [--json]` | Create one dated campaign that can span email, LinkedIn DMs, and public links. The destination is optional at campaign creation and, when supplied, must be HTTPS on `getpossibleminds.com` or a subdomain. |
+| `campaigns list [--search <text>] [--limit N] [--json]` / `campaigns show <campaign_id> [--json]` | Look up campaigns and inspect combined/channel-level links, raw clicks, confirmed visits, meaningful actions, and engaged people. |
+| `campaigns link <campaign_id> --channel email\|linkedin\|public [--url <possible-minds-url>] [--contact-id <id>] [--label <text>] [--mark-sent] [--json]` | Mint a new `/t/{code}` URL for any page on the Possible Minds website. Email and LinkedIn links may be recipient-specific; public links remain campaign-level. Each invocation creates a new link so daily/channel attribution is not reused. |
+| `campaigns mark-sent <code> [--json]` | Mark an operator-sent email or LinkedIn touch as sent. Link clicks and page behavior are recorded automatically. |
 | `data-returned list [--limit 100]` | Print the newest captured `/datareturned` events as JSON. The daemon read endpoint remains session-gated externally; the CLI uses loopback. |
 | `data-returned prune` | Immediately delete all callback events except the newest 100. New callbacks enforce the same hard retention cap automatically. |
 | `data-returned script` | Print the exact current shell script from public `GET /datareturned/script`. Before the first save, this is the built-in read-only diagnostic script. |
@@ -648,6 +653,29 @@ bin/possibleos call LEAD-000001
 ---
 
 ## 10. Typical AI-agent recipes
+
+### Recipe: "create today's cross-channel content campaign"
+```bash
+bin/possibleos campaigns create "PI attribution - managing partners" \
+  --url https://getpossibleminds.com/blog/personal-injury-marketing-attribution \
+  --workflow content --timezone America/Los_Angeles --json
+
+# Create a unique URL for each recipient/channel. The returned URL is ready to paste.
+bin/possibleos campaigns link <campaign_id> --channel email \
+  --contact-id <contact_id> --mark-sent
+bin/possibleos campaigns link <campaign_id> --channel linkedin \
+  --contact-id <contact_id>
+
+# Public LinkedIn post: campaign-level attribution, no named recipient.
+bin/possibleos campaigns link <campaign_id> --channel public \
+  --label founder-linkedin-post
+
+bin/possibleos campaigns show <campaign_id>
+```
+The campaign date defines the cohort; engagement continues to accumulate after
+that date. Use unique recipient links for email/DM attribution and a public link
+for a post where identifying an individual visitor is neither possible nor
+appropriate.
 
 ### Recipe: "run an A/B email wave to a curated cohort, end-to-end"
 ```bash

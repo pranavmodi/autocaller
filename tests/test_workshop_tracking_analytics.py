@@ -46,7 +46,7 @@ def test_duplicate_global_and_page_beacons_are_collapsed():
     assert len(deduped) == 1
 
 
-def test_short_session_without_meaningful_action_is_scanner_like():
+def test_short_session_without_meaningful_action_is_unconfirmed():
     now = datetime.now(timezone.utc)
     rows = [
         _event(event="session_ready", page="workshop-filevine-case-managers", at=now),
@@ -54,7 +54,7 @@ def test_short_session_without_meaningful_action_is_scanner_like():
         _event(event="page_leave", page="workshop-filevine-case-managers", at=now, ms=4200),
     ]
 
-    assert _session_quality(rows) == "scanner"
+    assert _session_quality(rows) == "suspect"
 
 
 def test_prompt_reveal_is_human_unless_user_agent_is_scanner():

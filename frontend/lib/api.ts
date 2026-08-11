@@ -844,6 +844,145 @@ export const getEngagementAnalytics = (args: {
   );
 };
 
+export type EngagementCampaign = {
+  id: string;
+  name: string;
+  campaign_date: string;
+  timezone: string;
+  workflow: string;
+  destination_url: string | null;
+  status: "draft" | "active" | "completed" | "archived";
+  notes: string | null;
+  created_by: string;
+  created_at: string | null;
+  updated_at: string | null;
+  tracked_links?: number;
+  raw_clicks?: number;
+};
+
+export type EngagementCampaignChannelStats = {
+  channel: "email" | "linkedin" | "public";
+  tracked_links: number;
+  tracked_people: number;
+  sent: number;
+  raw_clicks: number;
+  scanner_or_suspect_clicks: number;
+  confirmed_visits: number;
+  meaningful_actions: number;
+  engaged_people: number;
+};
+
+export type EngagementCampaignLink = {
+  code: string;
+  tracking_url: string;
+  destination_url: string;
+  channel: "email" | "linkedin" | "public";
+  label: string | null;
+  contact_id: string | null;
+  contact_name: string;
+  contact_email: string;
+  firm_name: string;
+  sent_at: string | null;
+  created_at: string | null;
+  raw_clicks: number;
+  confirmed_visits: number;
+  meaningful_actions: number;
+  deepest_scroll: number;
+};
+
+export type EngagementCampaignActivity = {
+  id: string;
+  occurred_at: string | null;
+  contact_id: string | null;
+  contact_name: string;
+  contact_email: string;
+  firm_name: string;
+  channel: "email" | "linkedin" | "public";
+  event: string;
+  label: string;
+  detail: string;
+  quality: "human" | "scanner" | "suspect" | "system";
+  page: string;
+  link_code: string;
+};
+
+export type EngagementCampaignAnalytics = {
+  campaign: EngagementCampaign;
+  summary: {
+    tracked_links: number;
+    tracked_people: number;
+    sent: number;
+    raw_clicks: number;
+    scanner_or_suspect_clicks: number;
+    confirmed_visits: number;
+    meaningful_actions: number;
+    engaged_people: number;
+    anonymous_human_sessions: number;
+  };
+  channels: EngagementCampaignChannelStats[];
+  links: EngagementCampaignLink[];
+  activities: EngagementCampaignActivity[];
+};
+
+export type EngagementCampaignContactOption = {
+  id: string;
+  name: string;
+  email: string;
+  title: string;
+  firm_name: string;
+  pif_id: string | null;
+};
+
+export const listEngagementCampaigns = (args: { search?: string; limit?: number } = {}) => {
+  const params = new URLSearchParams();
+  if (args.search) params.set("search", args.search);
+  params.set("limit", String(args.limit ?? 100));
+  return get<{ campaigns: EngagementCampaign[] }>(
+    `/api/engagement-campaigns?${params.toString()}`,
+  );
+};
+
+export const createEngagementCampaign = (body: {
+  name: string;
+  campaign_date: string;
+  timezone: string;
+  workflow: string;
+  destination_url?: string;
+  notes?: string;
+}) => post<EngagementCampaign>("/api/engagement-campaigns", body);
+
+export const getEngagementCampaign = (campaignId: string) =>
+  get<EngagementCampaignAnalytics>(
+    `/api/engagement-campaigns/${encodeURIComponent(campaignId)}`,
+  );
+
+export const createEngagementCampaignLink = (
+  campaignId: string,
+  body: {
+    channel: "email" | "linkedin" | "public";
+    destination_url?: string;
+    contact_id?: string;
+    label?: string;
+    mark_sent?: boolean;
+  },
+) => post<EngagementCampaignLink>(
+  `/api/engagement-campaigns/${encodeURIComponent(campaignId)}/links`,
+  body,
+);
+
+export const markEngagementCampaignLinkSent = (code: string) =>
+  post<{ code: string; sent_at: string }>(
+    `/api/engagement-campaigns/links/${encodeURIComponent(code)}/mark-sent`,
+    {},
+  );
+
+export const searchEngagementCampaignContacts = (query: string, limit = 30) => {
+  const params = new URLSearchParams({ q: query, limit: String(limit) });
+  return get<{ contacts: EngagementCampaignContactOption[] }>(
+    `/api/engagement-campaigns/contact-options?${params.toString()}`,
+  );
+};
+
 export type DataReturnedEvent = {
   id: number;
   payload: Record<string, unknown> | unknown[];

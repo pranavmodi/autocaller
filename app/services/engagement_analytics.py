@@ -69,7 +69,7 @@ FAILURE_EVENT_TYPES = {
     "email_suppressed",
     "email_complaint",
 }
-MEANINGFUL_PAGE_EVENTS = {"click", "scroll_50"}
+MEANINGFUL_PAGE_EVENTS = {"click", "scroll_25", "scroll_50", "scroll_75", "scroll_90"}
 
 
 def _clean(value: Any, limit: int = 255) -> str:
@@ -411,9 +411,10 @@ async def engagement_analytics(
         if _is_reveal_event(event):
             label = "Content revealed"
             detail = "The recipient revealed gated workshop content"
-        elif event == "scroll_50":
-            label = "Scrolled 50%"
-            detail = "The recipient reached at least halfway down the page"
+        elif event.startswith("scroll_"):
+            percent = event.split("_", 1)[1]
+            label = f"Scrolled {percent}%"
+            detail = f"The recipient reached at least {percent}% of the page"
         else:
             label = "Page action"
             text = _clean(raw.get("click_text"), 180) or "Button or link"
@@ -443,7 +444,13 @@ async def engagement_analytics(
     activities.sort(key=lambda row: row["occurred_at"] or "", reverse=True)
 
     workflow_options = sorted(
-        ({"key": values[0], "label": values[1]} for values in set(SOURCE_META.values())),
+        (
+            {"key": key, "label": label}
+            for key, label in {
+                values[0]: values[1]
+                for values in SOURCE_META.values()
+            }.items()
+        ),
         key=lambda row: row["label"],
     )
     return {

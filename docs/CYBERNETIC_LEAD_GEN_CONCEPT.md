@@ -538,6 +538,13 @@ The system can improve only by changing things it is allowed to change.
 
 In the ideal state, the system runs a daily closed loop:
 
+Daily outreach is organized around one channel-neutral campaign rather than
+separate email and LinkedIn reports. A campaign owns its dated audience and
+message objective; each email, LinkedIn DM, or public post receives a distinct
+tracking link. This lets the system compare channels while deduplicating the
+person, preserve anonymous public traffic, and attribute meaningful website
+behavior back to the exact campaign touch.
+
 1. Ingest feedback from delivery, inboxes, Front, bookings, CRM, and operator
    decisions.
 2. Normalize observations.

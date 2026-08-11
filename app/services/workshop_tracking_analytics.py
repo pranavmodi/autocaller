@@ -35,6 +35,7 @@ SCANNER_UA_MARKERS = (
     "python-requests",
 )
 REVEAL_EVENTS = {"content_revealed"}
+SCROLL_EVENTS = {"scroll_25", "scroll_50", "scroll_75", "scroll_90"}
 
 
 def _clean(value: Any, limit: int = 255) -> str:
@@ -98,11 +99,11 @@ def _session_quality(rows: list[Any]) -> str:
     if any(_is_scanner_ua(raw.get("user_agent")) for raw in raws):
         return "scanner"
     events = {_clean(raw.get("event"), 64) or "session_ready" for raw in raws}
-    if any(_is_reveal_event(event) for event in events) or events.intersection({"click", "scroll_50"}):
+    if any(_is_reveal_event(event) for event in events) or events.intersection({"click", *SCROLL_EVENTS}):
         return "human"
     max_time = max((int(raw.get("time_on_page_ms") or 0) for raw in raws), default=0)
     if max_time <= 6_000 and events.issubset({"session_ready", "first_pointer", "page_leave"}):
-        return "scanner"
+        return "suspect"
     return "suspect"
 
 
@@ -117,8 +118,9 @@ def _event_label(event: str, raw: dict[str, Any], quality: str) -> tuple[str, st
         text = _clean(raw.get("click_text"), 180) or "Button or link"
         href = _clean(raw.get("click_href"), 512)
         return "Page click", f"{text}{f' -> {href}' if href else ''}"
-    if event == "scroll_50":
-        return "Scrolled 50%", "Reached at least halfway down the workshop page"
+    if event in SCROLL_EVENTS:
+        percent = event.split("_", 1)[1]
+        return f"Scrolled {percent}%", f"Reached at least {percent}% of the workshop page"
     if event == "session_ready":
         return "Workshop page loaded", "The landing-page tracking script ran"
     if event == "first_pointer":

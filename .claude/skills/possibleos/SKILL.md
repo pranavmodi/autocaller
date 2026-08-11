@@ -137,6 +137,12 @@ For a single person from LinkedIn, use `lead-gen workshop-link --name "..."
 the person's attributed URL; write the message in the active chat. LinkedIn
 redirects carry opaque `lc`/`c` values only, with no contact PII in the visible
 destination URL. Inspect clicks in `/click-analytics`.
+For daily multi-channel content outreach, use `campaigns create`, then mint a
+fresh `campaigns link` for each email/LinkedIn recipient or one `public` link for
+a post. Campaign links use `/t/{code}`, accept any HTTPS Possible Minds page or
+subdomain, and roll raw clicks plus classified on-page behavior into the
+Engagement page. Use `campaigns list --search ...` or `campaigns show <id>` for
+campaign-level and per-channel stats.
 That page is workshop-only and shows recipient-level raw opens, scanner or
 suspect sessions, confirmed visits, prompt reveals, scroll depth, and on-page
 button/link clicks. The CLI equivalent is `lead-gen workshop-analytics
@@ -563,6 +569,10 @@ Common causes: Geo permissions not enabled, AMD mis-classifying carrier voicemai
 | `Possible OS lead-gen workshop-links <batch_id> [--item ...] [--reuse/--no-reuse] [--json]` | Mint/reuse per-recipient tracked `/w/{code}` workshop links (audit_links kind=workshop; redirect adds contact prefill params + lc/c). |
 | `Possible OS lead-gen workshop-link --name <person> --firm <firm> [--title <role> --linkedin-url <url> --json]` | Create/reuse a stable person-attributed LinkedIn workshop URL only; message writing stays in chat and clicks appear in `/click-analytics`. |
 | `Possible OS lead-gen workshop-analytics [--days N] [--limit N] [--events] [--json]` | Workshop-only recipient funnel: raw opens, scanner/suspect sessions, confirmed visits, prompt reveals, page clicks, scroll depth, and deduplicated event details. |
+| `Possible OS campaigns create "<name>" [--date YYYY-MM-DD] [--url https://getpossibleminds.com/...] [--workflow content] [--json]` | Create one dated campaign spanning email, LinkedIn, and public links. UI: `/click-analytics` Engagement page. |
+| `Possible OS campaigns list [--search <text>] [--json]` / `campaigns show <id> [--json]` | Look up campaigns and inspect combined and per-channel engagement. |
+| `Possible OS campaigns link <id> --channel email\|linkedin\|public [--contact-id <id>] [--url <possible-minds-url>] [--mark-sent] [--json]` | Mint a unique `/t/{code}` tracking URL for any HTTPS Possible Minds page. Use recipient-specific links for email/DMs and contactless links for public posts. |
+| `Possible OS campaigns mark-sent <code>` | Record that an operator sent a manual email or LinkedIn touch; this does not claim delivery or read status. |
 | `Possible OS lead-gen schedule-wave <batch_id> --subject ... --body-file <tmpl> --transport resend\|zoho_api --start "HH:MM PT" [--interval-seconds N] [--limit N] [--link workshop\|none] [--require-fresh-domain/--allow-touched-domain] [--max-per-domain N] [--max-per-firm N] [--dry-run] [--json]` | Template-compose and schedule approved sends. Fresh-domain/firm and one-per-domain/firm rails are defaults; `--limit` supports staged daily blocks. |
 | `Possible OS lead-gen wave-rollup <batch_id> [--json]` | Honest wave readout. Page sessions grouped by session_id: `human_page_sessions` needs interaction evidence (>10s dwell, on-page click, or arrival >15 min after the item's email_sent); JS-running scanner beacons stay in `raw_page_sessions`/`suspect_page_sessions`, scanner UAs in `scanner_page_sessions`. |
 | `Possible OS front sync [--full] [--max-calls N]` | Read-only Precise Front sync for contacts, activity metadata, domain resolution, and warm-score refresh. Persists cursors and hard-caps API calls. |

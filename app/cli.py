@@ -71,6 +71,7 @@ actions_app = typer.Typer(help="Durable Possible OS action execution queue.", no
 fs_app = typer.Typer(help="Read-only repo filesystem inspection for Possible OS agents.", no_args_is_help=True)
 listening_app = typer.Typer(help="Mission Control listening brief, insights, sources, and prep.", no_args_is_help=True)
 data_returned_app = typer.Typer(help="Inspect returned payloads and manage the callback shell script.", no_args_is_help=True)
+campaigns_app = typer.Typer(help="Create cross-channel daily campaigns and tracked Possible Minds links.", no_args_is_help=True)
 outreach_campaigns_app = typer.Typer(help="Create / list / show outreach campaigns.", no_args_is_help=True)
 outreach_audience_app = typer.Typer(help="Build a campaign's recipient list from firm contacts.", no_args_is_help=True)
 outreach_app.add_typer(outreach_campaigns_app, name="campaigns")
@@ -112,6 +113,7 @@ app.add_typer(actions_app, name="actions")
 app.add_typer(fs_app, name="fs")
 app.add_typer(listening_app, name="listening")
 app.add_typer(data_returned_app, name="data-returned")
+app.add_typer(campaigns_app, name="campaigns")
 
 console = Console()
 
@@ -7339,6 +7341,163 @@ def _print_inbound_messages(messages: list[dict]) -> None:
             (msg.get("text_excerpt") or "").replace("\n", " ")[:80],
         )
     console.print(table)
+
+
+# ===========================================================================
+# Engagement campaigns — dated, cross-channel tracking
+# ===========================================================================
+
+@campaigns_app.command("create")
+def campaigns_create(
+    name: str = typer.Argument(..., help="Campaign display name."),
+    campaign_date: str = typer.Option("", "--date", help="Campaign date (YYYY-MM-DD); defaults to today UTC."),
+    url: str = typer.Option("", "--url", help="Default getpossibleminds.com destination URL."),
+    workflow: str = typer.Option("content", "--workflow"),
+    timezone_name: str = typer.Option("UTC", "--timezone"),
+    notes: str = typer.Option("", "--notes"),
+    created_by: str = typer.Option("operator", "--created-by"),
+    json_output: bool = typer.Option(False, "--json"),
+):
+    """Create one dated campaign spanning email, LinkedIn, and public links."""
+    from datetime import date
+
+    day = campaign_date or date.today().isoformat()
+    try:
+        date.fromisoformat(day)
+    except ValueError as exc:
+        console.print("[red]--date must use YYYY-MM-DD[/red]")
+        raise typer.Exit(code=1) from exc
+    data = _post("/api/engagement-campaigns", {
+        "name": name,
+        "campaign_date": day,
+        "timezone": timezone_name,
+        "workflow": workflow,
+        "destination_url": url,
+        "notes": notes,
+        "created_by": created_by,
+    })
+    if json_output:
+        console.print_json(data=data)
+        return
+    console.print(f"[green]Created[/green] {data['id']}  {data['name']}")
+    console.print(f"  date: {data['campaign_date']}  workflow: {data['workflow']}  status: {data['status']}")
+    if data.get("destination_url"):
+        console.print(f"  destination: {data['destination_url']}")
+
+
+@campaigns_app.command("list")
+def campaigns_list(
+    search: str = typer.Option("", "--search", "-q"),
+    limit: int = typer.Option(100, "--limit", "-n", min=1, max=500),
+    json_output: bool = typer.Option(False, "--json"),
+):
+    """List or look up daily campaigns by name or workflow."""
+    data = _get("/api/engagement-campaigns", search=search or None, limit=limit)
+    rows = data.get("campaigns") or []
+    if json_output:
+        console.print_json(data=data)
+        return
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("date", no_wrap=True)
+    table.add_column("id", no_wrap=True)
+    table.add_column("name")
+    table.add_column("workflow", no_wrap=True)
+    table.add_column("status", no_wrap=True)
+    table.add_column("links", justify="right")
+    table.add_column("clicks", justify="right")
+    for row in rows:
+        table.add_row(
+            row.get("campaign_date") or "",
+            row.get("id") or "",
+            row.get("name") or "",
+            row.get("workflow") or "",
+            row.get("status") or "",
+            str(row.get("tracked_links") or 0),
+            str(row.get("raw_clicks") or 0),
+        )
+    console.print(table)
+
+
+@campaigns_app.command("show")
+def campaigns_show(
+    campaign_id: str = typer.Argument(...),
+    json_output: bool = typer.Option(False, "--json"),
+):
+    """Show one campaign, its channel rollup, links, and recent activity."""
+    data = _get(f"/api/engagement-campaigns/{quote(campaign_id, safe='')}")
+    if json_output:
+        console.print_json(data=data)
+        return
+    campaign = data.get("campaign") or {}
+    summary = data.get("summary") or {}
+    console.print(f"[bold]{campaign.get('name') or campaign_id}[/bold]  {campaign.get('campaign_date') or ''}")
+    console.print(
+        f"links {summary.get('tracked_links', 0)}  sent {summary.get('sent', 0)}  "
+        f"clicks {summary.get('raw_clicks', 0)}  visits {summary.get('confirmed_visits', 0)}  "
+        f"actions {summary.get('meaningful_actions', 0)}  engaged {summary.get('engaged_people', 0)}"
+    )
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("channel")
+    table.add_column("links", justify="right")
+    table.add_column("sent", justify="right")
+    table.add_column("clicks", justify="right")
+    table.add_column("visits", justify="right")
+    table.add_column("actions", justify="right")
+    for row in data.get("channels") or []:
+        table.add_row(
+            row.get("channel") or "",
+            str(row.get("tracked_links") or 0),
+            str(row.get("sent") or 0),
+            str(row.get("raw_clicks") or 0),
+            str(row.get("confirmed_visits") or 0),
+            str(row.get("meaningful_actions") or 0),
+        )
+    console.print(table)
+
+
+@campaigns_app.command("link")
+def campaigns_link(
+    campaign_id: str = typer.Argument(...),
+    channel: str = typer.Option(..., "--channel", help="email | linkedin | public"),
+    url: str = typer.Option("", "--url", help="Override the campaign destination."),
+    contact_id: str = typer.Option("", "--contact-id", help="Optional recipient contact ID."),
+    label: str = typer.Option("", "--label"),
+    mark_sent: bool = typer.Option(False, "--mark-sent"),
+    json_output: bool = typer.Option(False, "--json"),
+):
+    """Create a campaign-attributed tracking URL for any Possible Minds page."""
+    clean_channel = channel.strip().lower()
+    if clean_channel not in {"email", "linkedin", "public"}:
+        console.print("[red]--channel must be email, linkedin, or public[/red]")
+        raise typer.Exit(code=1)
+    data = _post(
+        f"/api/engagement-campaigns/{quote(campaign_id, safe='')}/links",
+        {
+            "channel": clean_channel,
+            "destination_url": url,
+            "contact_id": contact_id,
+            "label": label,
+            "mark_sent": mark_sent,
+        },
+    )
+    if json_output:
+        console.print_json(data=data)
+        return
+    console.print(data.get("tracking_url") or "")
+    console.print(f"[dim]{data.get('channel')} -> {data.get('destination_url')}[/dim]")
+
+
+@campaigns_app.command("mark-sent")
+def campaigns_mark_sent(
+    code: str = typer.Argument(..., help="Tracking-link code, not the full URL."),
+    json_output: bool = typer.Option(False, "--json"),
+):
+    """Mark a manually sent email or LinkedIn campaign touch as sent."""
+    data = _post(f"/api/engagement-campaigns/links/{quote(code, safe='')}/mark-sent")
+    if json_output:
+        console.print_json(data=data)
+    else:
+        console.print(f"[green]sent[/green] {data.get('code')} at {data.get('sent_at')}")
 
 
 # ===========================================================================

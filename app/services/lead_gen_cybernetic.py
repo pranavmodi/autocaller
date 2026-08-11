@@ -849,6 +849,7 @@ async def record_observation(
     batch_id: str | None = None,
     batch_item_id: str | None = None,
     classification: Any | None = None,
+    infer_batch_from_contact: bool = True,
 ) -> dict[str, Any]:
     """Store one deduped lead-gen observation.
 
@@ -888,7 +889,7 @@ async def record_observation(
                     LeadGenBatchItemRow.contact_id == lookup_contact_id,
                 )
             )).scalar_one_or_none()
-        elif lookup_contact_id:
+        elif lookup_contact_id and infer_batch_from_contact:
             item = (await session.execute(
                 select(LeadGenBatchItemRow)
                 .where(LeadGenBatchItemRow.contact_id == lookup_contact_id)
