@@ -191,6 +191,7 @@ async def create_tracking_link(
     destination_url: str = "",
     contact_id: str = "",
     label: str = "",
+    advisor_briefing: str = "",
     mark_sent: bool = False,
 ) -> dict[str, Any]:
     clean_channel = _clean(channel, 16).lower()
@@ -219,6 +220,7 @@ async def create_tracking_link(
             channel=clean_channel,
             label=_clean(label, 255) or None,
             destination_url=clean_destination,
+            advisor_briefing=_clean(advisor_briefing, 4000) or None,
             sent_at=datetime.now(timezone.utc) if mark_sent else None,
         )
         session.add(row)
@@ -234,6 +236,7 @@ async def create_tracking_link(
         "channel": row.channel,
         "label": row.label,
         "destination_url": row.destination_url,
+        "advisor_briefing": row.advisor_briefing,
         "tracking_url": tracking_url(row.code),
         "sent_at": _iso(row.sent_at),
         "created_at": _iso(row.created_at),
@@ -271,6 +274,49 @@ async def resolve_campaign_tracking_code(code: str) -> dict[str, Any] | None:
         "channel": link.channel,
         "link_code": link.code,
         "destination_url": link.destination_url,
+    }
+
+
+def _approved_vendor_stack(value: Any) -> dict[str, Any]:
+    """Return only evidence-bearing technographic observations."""
+    if not isinstance(value, dict):
+        return {}
+    approved: dict[str, Any] = {}
+    for key, detail in value.items():
+        if isinstance(detail, dict):
+            evidence = detail.get("evidence") or detail.get("source") or detail.get("sources")
+            status = str(detail.get("status") or detail.get("confidence") or "").lower()
+            if evidence or status in {"confirmed", "verified", "high"}:
+                approved[_clean(key, 128)] = detail
+        elif isinstance(detail, str) and detail.lower() in {"confirmed", "verified"}:
+            approved[_clean(key, 128)] = detail
+    return approved
+
+
+async def advisor_context(code: str) -> dict[str, Any] | None:
+    clean_code = _clean(code, 32)
+    if not clean_code:
+        return None
+    async with AsyncSessionLocal() as session:
+        link = await session.get(EngagementCampaignLinkRow, clean_code)
+        if link is None or not link.contact_id:
+            return None
+        campaign = await session.get(EngagementCampaignRow, link.campaign_id)
+        contact = await session.get(FirmContactRow, link.contact_id)
+        firm = await session.get(PifFirmRow, link.pif_id) if link.pif_id else None
+    if campaign is None or contact is None:
+        return None
+    return {
+        "first_name": _clean(contact.first_name, 128),
+        "full_name": _clean(contact.full_name, 255),
+        "role": _clean(contact.title or contact.research_title, 255),
+        "firm_name": _clean(firm.firm_name, 512) if firm else "",
+        "location": _clean(firm.metro, 255) if firm else "",
+        "vendor_stack": _approved_vendor_stack(firm.vendor_stack) if firm else {},
+        "briefing": _clean(link.advisor_briefing, 4000),
+        "contact_id": contact.id,
+        "pif_id": link.pif_id,
+        "campaign_id": campaign.id,
     }
 
 

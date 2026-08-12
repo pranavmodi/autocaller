@@ -196,6 +196,9 @@ _AUTH_EXEMPT_PREFIXES = (
     "/api/lead-gen/page-event",
     # Engagement dashboard readout for the Possible Minds admin page.
     "/api/lead-gen/engagement-analytics",
+    # Server-to-server Mira personalization. The endpoint enforces its own
+    # shared-secret header and returns a deliberately narrow context object.
+    "/api/engagement-campaigns/advisor-context/",
     # Outreach open-pixel + click-redirect — fetched by recipients' email
     # clients, no session cookie possible.
     "/t/o/",

@@ -4,10 +4,20 @@ from urllib.parse import parse_qs, urlsplit
 import pytest
 
 from app.services.engagement_campaigns import (
+    _approved_vendor_stack,
     EngagementCampaignError,
     tracked_destination,
     validate_destination_url,
 )
+
+
+def test_advisor_vendor_stack_keeps_only_evidence_bearing_signals():
+    stack = _approved_vendor_stack({
+        "filevine": {"status": "confirmed", "evidence": "careers page"},
+        "lead_docket": {"status": "suspected"},
+        "casepeer": "verified",
+    })
+    assert set(stack) == {"filevine", "casepeer"}
 
 
 def test_destination_accepts_possible_minds_pages_and_subdomains():

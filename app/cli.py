@@ -7462,6 +7462,7 @@ def campaigns_link(
     url: str = typer.Option("", "--url", help="Override the campaign destination."),
     contact_id: str = typer.Option("", "--contact-id", help="Optional recipient contact ID."),
     label: str = typer.Option("", "--label"),
+    advisor_briefing: str = typer.Option("", "--advisor-briefing", help="Private, operator-approved context for Mira."),
     mark_sent: bool = typer.Option(False, "--mark-sent"),
     json_output: bool = typer.Option(False, "--json"),
 ):
@@ -7477,6 +7478,7 @@ def campaigns_link(
             "destination_url": url,
             "contact_id": contact_id,
             "label": label,
+            "advisor_briefing": advisor_briefing,
             "mark_sent": mark_sent,
         },
     )

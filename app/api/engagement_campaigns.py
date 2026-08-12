@@ -1,6 +1,8 @@
 """Cross-channel campaign management and public tracking redirects."""
 from __future__ import annotations
 
+import hmac
+import os
 from datetime import date
 from typing import Literal
 
@@ -10,6 +12,7 @@ from pydantic import BaseModel, Field
 
 from app.services.engagement_campaigns import (
     EngagementCampaignError,
+    advisor_context,
     campaign_analytics,
     create_campaign,
     create_tracking_link,
@@ -40,6 +43,7 @@ class CampaignLinkCreateRequest(BaseModel):
     destination_url: str = Field(default="", max_length=2048)
     contact_id: str = Field(default="", max_length=64)
     label: str = Field(default="", max_length=255)
+    advisor_briefing: str = Field(default="", max_length=4000)
     mark_sent: bool = False
 
 
@@ -110,10 +114,23 @@ async def create_campaign_link_endpoint(campaign_id: str, req: CampaignLinkCreat
             destination_url=req.destination_url,
             contact_id=req.contact_id,
             label=req.label,
+            advisor_briefing=req.advisor_briefing,
             mark_sent=req.mark_sent,
         )
     except EngagementCampaignError as exc:
         _raise_campaign_error(exc)
+
+
+@router.get("/api/engagement-campaigns/advisor-context/{code}")
+async def campaign_advisor_context(code: str, request: Request):
+    expected = os.getenv("ADVISOR_CONTEXT_SECRET", "").strip()
+    supplied = request.headers.get("x-advisor-context-secret", "")
+    if not expected or not hmac.compare_digest(expected, supplied):
+        raise HTTPException(status_code=403, detail="advisor_context_unauthorized")
+    result = await advisor_context(code)
+    if result is None:
+        raise HTTPException(status_code=404, detail="tracking_link_not_found")
+    return result
 
 
 @router.post("/api/engagement-campaigns/links/{code}/mark-sent")

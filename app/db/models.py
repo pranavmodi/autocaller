@@ -1388,6 +1388,7 @@ class EngagementCampaignLinkRow(Base):
     channel: Mapped[str] = mapped_column(String(16), nullable=False)
     label: Mapped[str | None] = mapped_column(String(255), nullable=True)
     destination_url: Mapped[str] = mapped_column(String(2048), nullable=False)
+    advisor_briefing: Mapped[str | None] = mapped_column(Text, nullable=True)
     sent_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow)
 
