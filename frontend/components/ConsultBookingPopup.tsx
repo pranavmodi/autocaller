@@ -43,6 +43,7 @@ export function ConsultBookingPopup() {
   useEffect(() => {
     if (!current) return;
     if (lastChimedId.current === current.id) return;
+    if (!navigator.userActivation?.hasBeenActive) return;
     lastChimedId.current = current.id;
     try {
       // Three-beat tone via Web Audio — no external asset needed.

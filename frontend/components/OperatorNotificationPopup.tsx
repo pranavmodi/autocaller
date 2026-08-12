@@ -40,6 +40,7 @@ export function OperatorNotificationPopup() {
   useEffect(() => {
     if (!latest) return;
     if (lastChimedId.current === latest.id) return;
+    if (!navigator.userActivation?.hasBeenActive) return;
     lastChimedId.current = latest.id;
     setDismissedToastId(null);
     try {

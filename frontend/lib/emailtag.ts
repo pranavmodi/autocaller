@@ -113,6 +113,17 @@ export interface VendorStackEntry {
   evidence?: string;
 }
 
+export interface PifAddress {
+  street?: string;
+  city?: string;
+  state?: string;
+  postal_code?: string;
+  country?: string;
+  source?: string;
+  source_url?: string;
+  [key: string]: unknown;
+}
+
 export interface PifInfoResponse {
   id: string;
   firm_name: string;
@@ -126,7 +137,7 @@ export interface PifInfoResponse {
   emails: string[];
   phones: string[];
   fax: string | null;
-  addresses: string[];
+  addresses: Array<string | PifAddress>;
   contacts: PifContact[];
   first_contacted_precise_at: string | null;
   conversation_ids: string[];

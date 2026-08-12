@@ -74,6 +74,7 @@ import {
   type PifInfoListParams,
   type PifInfoListResponse,
   type PifInfoResponse,
+  type PifAddress,
   type PifPeopleListParams,
   type PifPeopleFilterOption,
   type PifPersonResult,
@@ -367,9 +368,23 @@ const STATE_NAMES: Record<string, string> = {
   WI: "Wisconsin", WY: "Wyoming", DC: "District of Columbia",
 };
 
-function extractState(address: string | null | undefined): string {
+function formatAddress(address: string | PifAddress | null | undefined): string {
   if (!address) return "";
-  const match = address.match(/\b([A-Z]{2})\b\s*\d{5}(?:-\d{4})?\b/);
+  if (typeof address === "string") return address.trim();
+  return [address.street, address.city, address.state, address.postal_code, address.country]
+    .filter((part): part is string => typeof part === "string" && Boolean(part.trim()))
+    .map((part) => part.trim())
+    .join(", ");
+}
+
+function extractState(address: string | PifAddress | null | undefined): string {
+  if (!address) return "";
+  if (typeof address !== "string" && typeof address.state === "string") {
+    const state = address.state.trim();
+    return STATE_NAMES[state.toUpperCase()] ?? state;
+  }
+  const formatted = formatAddress(address);
+  const match = formatted.match(/\b([A-Z]{2})\b\s*\d{5}(?:-\d{4})?\b/);
   const abbreviation = (match?.[1] ?? "").toUpperCase();
   return STATE_NAMES[abbreviation] ?? "";
 }
@@ -2446,7 +2461,10 @@ function FirmDetail({ initialFirm, onAuthError }: { initialFirm: PifInfoResponse
           <KeyValue label="Emails" value={firm.emails?.join(", ") || "—"} />
           <KeyValue label="Phones" value={firm.phones?.join(", ") || "—"} />
           <KeyValue label="Fax" value={firm.fax ?? "—"} />
-          <KeyValue label="Addresses" value={firm.addresses?.join(" · ") || "—"} />
+          <KeyValue
+            label="Addresses"
+            value={firm.addresses?.map(formatAddress).filter(Boolean).join(" · ") || "—"}
+          />
           <KeyValue label="Extraction notes" value={firm.extraction_notes ?? "—"} />
         </InfoBlock>
 
@@ -2544,7 +2562,7 @@ function FirmReviewsPanel({
 }: {
   pifId: string;
   firmName: string;
-  address: string | null;
+  address: string | PifAddress | null;
 }) {
   const { data, isLoading } = useQuery({
     queryKey: ["firm-reviews", pifId],
