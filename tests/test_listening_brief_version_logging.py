@@ -43,6 +43,22 @@ def test_listening_brief_version_is_inserted_on_email_log(monkeypatch):
     assert engine.connection.params["brief_version"] == 2
 
 
+def test_email_log_retains_complete_body(monkeypatch):
+    engine = _FakeEngine()
+    monkeypatch.setattr(comms_log, "_engine", lambda: engine)
+    body = "Opening\n\n" + ("full email body " * 100) + "\n\nSignature"
+
+    comms_log.log_email(
+        recipient_email="lead@example.com",
+        subject="Subject",
+        body=body,
+        message_type="dynamic_lead_email",
+    )
+
+    assert len(body) > 500
+    assert engine.connection.params["body"] == body
+
+
 def test_listening_brief_version_reaches_email_send_log(monkeypatch):
     calls = []
     monkeypatch.setattr(email_notification_service, "_resolve_sender_address", lambda from_addr: "sender@example.com")

@@ -42,7 +42,8 @@ def _engine() -> Engine:
     return _ENGINE
 
 
-def _excerpt(s: str, n: int = 500) -> str:
+def _excerpt(s: str, n: int = 100_000) -> str:
+    """Retain the sent message body; the Text column is not an excerpt limit."""
     s = (s or "").strip()
     return s[:n]
 

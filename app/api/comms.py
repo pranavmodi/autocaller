@@ -23,7 +23,7 @@ from sqlalchemy import select, or_, func
 
 from app.db import AsyncSessionLocal
 from app.db.models import (
-    CallLogRow, EmailLogRow, SmsLogRow,
+    CallLogRow, EmailLogRow, ProductTraceRow, SmsLogRow,
 )
 
 
@@ -141,23 +141,47 @@ async def _emails_to_items(
             )).all()
             firm_map = {cid: name for cid, name in firm_rows if name}
 
-    return [
-        CommItem(
+        # Older email_logs rows stored only the first 500 body characters.
+        # Lead-gen sends also carry the exact body keyed by provider message ID
+        # in the append-only product trace, so recover it in one batched query.
+        trace_map: dict[str, ProductTraceRow] = {}
+        message_ids = [r.message_id for r in rows if r.message_id]
+        if message_ids:
+            trace_rows = (await session.execute(
+                select(ProductTraceRow)
+                .where(
+                    ProductTraceRow.event_type == "email_sent",
+                    ProductTraceRow.output_json["message_id"].astext.in_(message_ids),
+                )
+                .order_by(ProductTraceRow.created_at.desc())
+            )).scalars().all()
+            for trace in trace_rows:
+                message_id = str((trace.output_json or {}).get("message_id") or "")
+                if message_id and message_id not in trace_map:
+                    trace_map[message_id] = trace
+
+    items: list[CommItem] = []
+    for r in rows:
+        trace = trace_map.get(r.message_id or "")
+        trace_input = trace.input_json if trace and isinstance(trace.input_json, dict) else {}
+        trace_context = trace.context_json if trace and isinstance(trace.context_json, dict) else {}
+        traced_body = trace_input.get("body")
+        body = traced_body if isinstance(traced_body, str) and traced_body else r.body_excerpt
+        items.append(CommItem(
             id=f"email:{r.id}",
             channel="email",
             occurred_at=r.sent_at.astimezone(timezone.utc).isoformat(),
             pif_id=r.pif_id,
-            firm_name=firm_map.get(r.call_id or ""),
+            firm_name=(firm_map.get(r.call_id or "") or str(trace_context.get("firm_name") or "") or None),
             contact_name=r.recipient_name,
             recipient=r.recipient_email,
             summary=(r.subject or r.body_excerpt or "")[:300],
             status=r.status,
-            body_excerpt=r.body_excerpt,
+            body_excerpt=body,
             call_id=r.call_id,
             message_type=r.message_type,
-        )
-        for r in rows
-    ]
+        ))
+    return items
 
 
 async def _sms_to_items(
