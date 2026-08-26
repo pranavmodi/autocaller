@@ -30,6 +30,8 @@ from .visibility_links import router as visibility_links_router
 from .data_returned import router as data_returned_router
 from .engagement_campaigns import router as engagement_campaigns_router
 from .front_inbox import router as front_inbox_router
+from .call_lab import router as call_lab_router
+from .knowledge import router as knowledge_router
 
 __all__ = [
     "dashboard_router", "websocket_router", "settings_router",
@@ -43,4 +45,6 @@ __all__ = [
     "front_router", "research_router", "aiaudit_router", "engagement_campaigns_router",
     "visibility_links_router", "data_returned_router",
     "front_inbox_router",
+    "call_lab_router",
+    "knowledge_router",
 ]

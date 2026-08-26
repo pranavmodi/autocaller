@@ -391,6 +391,29 @@ class TodoRow(Base):
     )
 
 
+class KnowledgeEntryRow(Base):
+    """Operator-captured source material for the Possible OS knowledge base."""
+    __tablename__ = "knowledge_entries"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    source_type: Mapped[str] = mapped_column(String(32), nullable=False, default="web")
+    source_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
+    author: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    tags: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    created_by: Mapped[str] = mapped_column(String(128), nullable=False, default="operator")
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), default=_utcnow, onupdate=_utcnow,
+    )
+
+    __table_args__ = (
+        Index("ix_knowledge_entries_created_at", "created_at"),
+        Index("ix_knowledge_entries_source_type", "source_type"),
+    )
+
+
 class DataReturnedRow(Base):
     """Append-only payloads received by the public /datareturned endpoint."""
     __tablename__ = "data_returned_events"
@@ -1006,6 +1029,50 @@ class ResearchTaskRow(Base):
         Index("ix_research_tasks_pif_id", "pif_id"),
         Index("ix_research_tasks_status", "status"),
         Index("ix_research_tasks_kind_status", "kind", "status"),
+    )
+
+
+class PifJobResearchTaskRow(Base):
+    """Durable local OpenClaw job-opening research queue."""
+    __tablename__ = "pif_job_research_tasks"
+
+    task_id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    pif_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="queued")
+    requested_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow)
+    started_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    result_summary: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('queued', 'in_progress', 'completed', 'failed')",
+            name="ck_pif_job_research_tasks_status",
+        ),
+        Index("ix_pif_job_research_tasks_pif_id", "pif_id"),
+        Index("ix_pif_job_research_tasks_status_requested", "status", "requested_at"),
+    )
+
+
+class PifEnrichmentTaskRow(Base):
+    """Durable local queue for post-extraction firm enrichment."""
+    __tablename__ = "pif_enrichment_tasks"
+
+    task_id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    pif_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="queued")
+    requested_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow)
+    started_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    result_summary: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('queued', 'in_progress', 'completed', 'failed')",
+            name="ck_pif_enrichment_tasks_status",
+        ),
+        Index("ix_pif_enrichment_tasks_pif_id", "pif_id"),
+        Index("ix_pif_enrichment_tasks_status_requested", "status", "requested_at"),
     )
 
 
@@ -1786,4 +1853,26 @@ class FirmIntelSyncStateRow(Base):
 
     __table_args__ = (
         CheckConstraint("id = 1", name="singleton_firm_intel_sync_state"),
+    )
+
+
+class PifAutorespondEventRow(Base):
+    """Compact local mirror of EmailTag autorespond events."""
+    __tablename__ = "pif_autorespond_events"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    source_pif_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    canonical_pif_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    firm_name: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    contact_email: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    agent_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    response_sent: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    test_mode: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    event_created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
+    synced_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow)
+
+    __table_args__ = (
+        Index("ix_pif_autorespond_canonical_created", "canonical_pif_id", "event_created_at"),
+        Index("ix_pif_autorespond_agent_created", "agent_type", "event_created_at"),
+        Index("ix_pif_autorespond_created", "event_created_at"),
     )

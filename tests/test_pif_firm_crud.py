@@ -116,6 +116,30 @@ def test_normalize_firm_write_rejects_unknown_and_consumer_domains():
         svc.normalize_firm_write({"firm_name": "Firm", "website": "gmail.com"}, creating=True)
 
 
+def test_stored_manual_overrides_drop_legacy_consumer_aliases():
+    now = datetime.now(timezone.utc)
+    row = PifFirmRow(
+        id="legacy-firm",
+        firm_name="Legacy Firm",
+        website="legacyfirm.com",
+        canonical_website="legacyfirm.com",
+        raw_json={"aliases": {"domains": ["legacyfirm.com", "yahoo.com"]}},
+        source_json={},
+        created_at=now,
+        updated_at=now,
+        synced_at=now,
+    )
+
+    svc.apply_stored_manual_overrides(
+        row,
+        {"vendor_stack": {"case_management": {"filevine": {"confidence": 1.0}}}},
+        now=now,
+    )
+
+    assert row.raw_json["aliases"]["domains"] == ["legacyfirm.com"]
+    assert row.source_json["_possibleos_manual_overrides"]["vendor_stack"] == row.vendor_stack
+
+
 def test_create_manual_firm_derives_people_fields_and_aliases(monkeypatch):
     store = install_store(monkeypatch)
 
@@ -275,3 +299,45 @@ def test_api_filters_firms_by_manually_added_boolean(monkeypatch):
 
     assert response.status_code == 200
     assert captured["manually_added"] is True
+
+
+def test_api_forwards_contact_email_and_staff_count_ranges(monkeypatch):
+    captured = {}
+
+    async def fake_list(**kwargs):
+        captured.update(kwargs)
+        return {"items": [], "total": 0, "page": 1, "page_size": 25, "total_pages": 0}
+
+    monkeypatch.setattr(pif_api, "list_mirrored_pif_firms", fake_list)
+    app = FastAPI()
+    app.include_router(pif_api.router)
+    client = TestClient(app)
+
+    response = client.get(
+        "/api/pif/firms?contact_email_min=6&contact_email_max=10&staff_count_min=26&staff_count_max=50"
+    )
+
+    assert response.status_code == 200
+    assert captured["contact_email_min"] == 6
+    assert captured["contact_email_max"] == 10
+    assert captured["staff_count_min"] == 26
+    assert captured["staff_count_max"] == 50
+
+
+def test_api_forwards_autorespond_filters(monkeypatch):
+    captured = {}
+
+    async def fake_list(**kwargs):
+        captured.update(kwargs)
+        return {"items": [], "total": 0, "page": 1, "page_size": 25, "total_pages": 0}
+
+    monkeypatch.setattr(pif_api, "list_mirrored_pif_firms", fake_list)
+    app = FastAPI()
+    app.include_router(pif_api.router)
+    client = TestClient(app)
+
+    response = client.get("/api/pif/firms?autorespond_window=7d&autorespond_type=bill_offer")
+
+    assert response.status_code == 200
+    assert captured["autorespond_window"] == "7d"
+    assert captured["autorespond_type"] == "bill_offer"

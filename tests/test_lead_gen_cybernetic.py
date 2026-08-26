@@ -1,8 +1,10 @@
-from app.services.lead_feedback_classifier import validate_classification
 from datetime import datetime, timezone
+from types import SimpleNamespace
 
+from app.services.lead_feedback_classifier import validate_classification
 from app.services.lead_gen_cybernetic import (
     _default_weights,
+    _enriched_reason_for_item,
     parse_scheduled_start_at,
     staggered_due_at,
 )
@@ -63,3 +65,29 @@ def test_parse_scheduled_start_at_interprets_naive_time_as_california():
     )
 
     assert parsed.isoformat() == "2026-05-27T16:30:00+00:00"
+
+
+def test_batch_reason_includes_draft_stored_only_on_send_action():
+    item = SimpleNamespace(reason_json={})
+    action = SimpleNamespace(
+        id="action_123",
+        action_type="send_email",
+        status="approved",
+        scheduled_for=datetime(2026, 8, 20, 16, 45, tzinfo=timezone.utc),
+        started_at=None,
+        completed_at=None,
+        input_json={
+            "subject": "Quick question",
+            "body": "Hi Khalif,\n\nWould you be open to a brief call?",
+            "composer_variant_key": "possible-minds-dynamic",
+        },
+        execution_result_json={},
+        error=None,
+    )
+
+    reason = _enriched_reason_for_item(item, action)
+
+    assert reason["agent_draft"]["subject"] == "Quick question"
+    assert reason["agent_draft"]["body"].startswith("Hi Khalif")
+    assert reason["agent_draft"]["composer_variant_key"] == "possible-minds-dynamic"
+    assert reason["agent_draft"]["action_id"] == "action_123"

@@ -15,6 +15,7 @@ from typing import Protocol, Callable, Any, Awaitable, Optional, runtime_checkab
 
 BACKEND_OPENAI = "openai"
 BACKEND_GEMINI = "gemini"
+BACKEND_OPERATOR = "operator"
 
 # Callback signatures the orchestrator assigns before connect().
 TranscriptCallback = Callable[[str, str], Awaitable[None]]        # (speaker, text)

@@ -6,7 +6,7 @@ from datetime import date, datetime, time, timedelta, timezone
 import ipaddress
 from typing import Any, Optional
 from urllib.parse import unquote
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel, Field
@@ -49,6 +49,7 @@ from app.services.lead_gen_curated import (
     create_curated_batch,
     move_items_to_batch,
     recount_batch,
+    schedule_manual_email,
 )
 from app.services.lead_gen_email_agent import (
     create_founder_profile_email_batch,
@@ -183,6 +184,21 @@ class EditBatchItemDraftRequest(BaseModel):
     actor: str = Field("operator", max_length=128)
     scheduled_for: Optional[str] = None
     execute_now: bool = False
+    transport: Optional[str] = None
+    in_reply_to: Optional[str] = Field(default=None, max_length=998)
+    references: Optional[str] = Field(default=None, max_length=4000)
+    lead_gen_action_type: Optional[str] = Field(default=None, max_length=64)
+
+
+class ManualLeadGenEmailRequest(BaseModel):
+    contact_id: str = Field(..., min_length=1, max_length=64)
+    subject: str = Field(..., min_length=1, max_length=500)
+    body: str = Field(..., min_length=1, max_length=20000)
+    send_date: date
+    send_time: time
+    timezone: str = Field("America/Los_Angeles", max_length=80)
+    transport: Optional[str] = None
+    actor: str = Field("operator", max_length=128)
 
 
 class LeadGenEmailAgentSliceRequest(BaseModel):
@@ -336,6 +352,7 @@ def _lead_gen_send_plan_item(
         "linkedin_url": linkedin_url,
         "action_type": action_type or "first_touch",
         "subject": payload.get("subject"),
+        "body": payload.get("body"),
         "composer_variant_key": payload.get("composer_variant_key"),
         "scheduled_for": action.scheduled_for.isoformat() if action.scheduled_for else None,
         "scheduled_for_pt": _format_pt(action.scheduled_for),
@@ -449,6 +466,34 @@ async def create_email_agent_slice(req: LeadGenEmailAgentSliceRequest):
         raise HTTPException(
             status_code=400,
             detail=f"lead_gen_email_agent_slice_failed: {type(e).__name__}: {str(e)[:300]}",
+        )
+
+
+@router.post("/api/lead-gen/manual-email")
+async def create_manual_lead_gen_email(req: ManualLeadGenEmailRequest):
+    try:
+        target_zone = ZoneInfo(req.timezone)
+        scheduled_for = datetime.combine(
+            req.send_date,
+            req.send_time,
+            tzinfo=target_zone,
+        ).astimezone(timezone.utc)
+        return await schedule_manual_email(
+            contact_id=req.contact_id,
+            subject=req.subject,
+            body=req.body,
+            scheduled_for=scheduled_for,
+            transport=req.transport,
+            actor=req.actor,
+        )
+    except ZoneInfoNotFoundError as e:
+        raise HTTPException(status_code=400, detail="invalid_timezone") from e
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"manual_email_failed: {type(e).__name__}: {str(e)[:300]}",
         )
 
 
@@ -1529,6 +1574,8 @@ async def get_batch_item_editable_draft(batch_item_id: str):
         detail = str(e)
         if detail in {"batch_item_not_found", "agent_draft_not_found"}:
             raise HTTPException(status_code=404, detail=detail)
+        if detail == "batch_item_already_sent_use_new_batch_item":
+            raise HTTPException(status_code=409, detail=detail)
         raise HTTPException(status_code=400, detail=detail)
 
 
@@ -1547,6 +1594,10 @@ async def edit_batch_item_draft(batch_item_id: str, req: EditBatchItemDraftReque
             actor=req.actor,
             scheduled_for=scheduled_for,
             execute_now=req.execute_now,
+            transport=req.transport,
+            in_reply_to=req.in_reply_to,
+            references=req.references,
+            lead_gen_action_type=req.lead_gen_action_type,
         )
     except ValueError as e:
         detail = str(e)

@@ -216,6 +216,11 @@ export function useLiveListener(callId: string | null) {
     if (callId) openSocket(callId);
   }, [callId, openSocket]);
 
+  /** Listen to this call only. Used by operator-started Call Lab calls. */
+  const startOnce = useCallback(() => {
+    if (callId) openSocket(callId);
+  }, [callId, openSocket]);
+
   /** Stop — closes socket AND disables auto-reconnect. */
   const stop = useCallback(() => {
     if (typeof window !== "undefined") {
@@ -436,5 +441,5 @@ export function useLiveListener(callId: string | null) {
     }
   }, [callId, state.takeover, tearDownMic]);
 
-  return { ...state, start, stop, startTakeover, stopTakeover };
+  return { ...state, start, startOnce, stop, startTakeover, stopTakeover };
 }

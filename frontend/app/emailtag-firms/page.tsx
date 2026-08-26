@@ -11,6 +11,7 @@ import {
   AlertTriangle,
   BarChart3,
   Bookmark,
+  Briefcase,
   Check,
   ChevronDown,
   ChevronLeft,
@@ -60,12 +61,14 @@ import {
   getPifPeopleFilterOptions,
   getPifSyncStatus,
   getResearchStatus,
+  getProxiedResearchStatus,
   listMirroredPifInfo,
   listPifPeople,
   listPifVendors,
   listSavedLeadSearches,
   scoreFirm,
   startFullEnrichment,
+  startJobPostingsResearch,
   startResearch,
   startStaffResearch,
   updateSavedLeadSearch,
@@ -74,10 +77,12 @@ import {
   type PifInfoListParams,
   type PifInfoListResponse,
   type PifInfoResponse,
+  type JobPostingsResearch,
   type PifAddress,
   type PifPeopleListParams,
   type PifPeopleFilterOption,
   type PifPersonResult,
+  type ResearchStartResponse,
   type PifSyncStatusResponse,
   type PifTier,
   type PifVendorOption,
@@ -146,13 +151,17 @@ type ExtractedReviews = {
 interface FiltersState {
   search: string;
   sort_by: SortBy;
-  research_status: string;
   icp_tier: "" | PifTier;
   entity_type: string;
   recently_researched: string;
+  contact_email_range: string;
+  staff_count_range: string;
+  autorespond_window: string;
+  autorespond_type: string;
   website_presence: WebsitePresence;
   research_presence: StatusPresence;
   staff_presence: StatusPresence;
+  job_postings_presence: "any" | "has" | "none" | "not_researched" | "queued_or_running" | "failed";
   behavior_presence: SimplePresence;
   icp_presence: SimplePresence;
   vendor_presence: SimplePresence;
@@ -167,13 +176,17 @@ interface FiltersState {
 const DEFAULT_FILTERS: FiltersState = {
   search: "",
   sort_by: "updated_at",
-  research_status: "",
   icp_tier: "",
   entity_type: "",
   recently_researched: "",
+  contact_email_range: "",
+  staff_count_range: "",
+  autorespond_window: "any",
+  autorespond_type: "",
   website_presence: "any",
   research_presence: "any",
   staff_presence: "any",
+  job_postings_presence: "any",
   behavior_presence: "any",
   icp_presence: "any",
   vendor_presence: "any",
@@ -292,6 +305,18 @@ function formatDateTime(value: string | null | undefined) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleString();
+}
+
+function formatDateOnly(value: string | null | undefined) {
+  if (!value) return "—";
+  const date = new Date(`${value}T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  });
 }
 
 function formatLabel(value: string) {
@@ -491,19 +516,27 @@ function firstContactRange(filters: FiltersState) {
 function filtersToParams(filters: FiltersState, page: number): PifInfoListParams {
   const recently = Number(filters.recently_researched);
   const firstContact = firstContactRange(filters);
+  const contactEmailRange = countRange(filters.contact_email_range);
+  const staffCountRange = countRange(filters.staff_count_range);
   return {
     search: filters.search.trim() || undefined,
     page,
     page_size: PAGE_SIZE,
     sort_by: filters.sort_by,
-    research_status: filters.research_status.trim() || undefined,
     icp_tier: filters.icp_tier || undefined,
     entity_type: filters.entity_type.trim() || undefined,
     recently_researched:
       filters.recently_researched.trim() && Number.isFinite(recently) ? recently : undefined,
+    contact_email_min: contactEmailRange.min,
+    contact_email_max: contactEmailRange.max,
+    staff_count_min: staffCountRange.min,
+    staff_count_max: staffCountRange.max,
+    autorespond_window: filters.autorespond_window,
+    autorespond_type: filters.autorespond_type || undefined,
     website_presence: filters.website_presence,
     research_presence: filters.research_presence,
     staff_presence: filters.staff_presence,
+    job_postings_presence: filters.job_postings_presence,
     behavior_presence: filters.behavior_presence,
     icp_presence: filters.icp_presence,
     vendor_presence: filters.vendor === "__missing" ? "missing" : filters.vendor.trim() ? "has" : filters.vendor_presence,
@@ -515,6 +548,40 @@ function filtersToParams(filters: FiltersState, page: number): PifInfoListParams
     active_only: filters.active_only,
   };
 }
+
+function countRange(value: string): { min?: number; max?: number } {
+  if (!value) return {};
+  if (value.endsWith("+")) return { min: Number(value.slice(0, -1)) };
+  const [min, max] = value.split("-").map(Number);
+  return Number.isFinite(min) && Number.isFinite(max) ? { min, max } : {};
+}
+
+const COUNT_RANGES = ["0-0", "1-5", "6-10", "11-25", "26-50", "51-100", "101+"] as const;
+const ENTITY_TYPES = [
+  "pi_law_firm",
+  "law_firm",
+  "personal_injury_law_firm",
+  "medical_referring",
+  "medical_facility",
+  "administrative",
+  "insurance",
+  "funding",
+  "patient_adjacent",
+  "collections",
+  "legal_other",
+  "legal_technology_vendor",
+] as const;
+const AUTORESPOND_TYPES = [
+  "apt_status_req",
+  "bill_balance_request",
+  "bill_offer",
+  "medical_records",
+  "psl_lien",
+  "asl_lien",
+  "missing_lien_request",
+  "case_updates",
+  "unknown_sig_lien",
+] as const;
 
 function useDebouncedValue<T>(value: T, delayMs: number): T {
   const [debouncedValue, setDebouncedValue] = useState(value);
@@ -552,6 +619,8 @@ function EmailtagFirmsContent() {
   const selectedFirmId = searchParams.get("firm") ?? "";
   const [batchResearchLimit, setBatchResearchLimit] = useState("10");
   const [batchResearchRun, setBatchResearchRun] = useState<BatchResearchRun | null>(null);
+  const [jobPostingResearchLimit, setJobPostingResearchLimit] = useState("25");
+  const [jobPostingResearchRun, setJobPostingResearchRun] = useState<BatchResearchRun | null>(null);
   const [filters, setFilters] = useState<FiltersState>(DEFAULT_FILTERS);
   const [page, setPage] = useState(1);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -726,6 +795,67 @@ function EmailtagFirmsContent() {
     },
   });
 
+  const queueFilteredJobPostings = useMutation({
+    mutationFn: async () => {
+      const requested = Math.max(1, Math.min(100, Number(jobPostingResearchLimit) || 1));
+      const selected: PifInfoResponse[] = [];
+      let lookupPage = 1;
+      let totalPages = 1;
+
+      while (selected.length < requested && lookupPage <= totalPages) {
+        const payload = await listMirroredPifInfo({
+          ...filtersToParams(filters, lookupPage),
+          page: lookupPage,
+          page_size: BATCH_PAGE_SIZE,
+        });
+        totalPages = payload.total_pages || 1;
+        for (const firm of payload.items) {
+          const status = firm.research_data?.job_postings_research_status;
+          if (!isWorkflowRunning(status) && selected.length < requested) selected.push(firm);
+        }
+        lookupPage += 1;
+      }
+
+      setJobPostingResearchRun({
+        requested: selected.length,
+        rows: selected.map((firm) => ({
+          pif_id: firm.id,
+          firm_name: firm.firm_name,
+          task_id: null,
+          status: "remaining",
+          message: "Waiting to queue",
+        })),
+      });
+
+      const queued: ResearchStartResponse[] = [];
+      for (let offset = 0; offset < selected.length; offset += 5) {
+        const chunk = selected.slice(offset, offset + 5);
+        const responses = await Promise.all(chunk.map(async (firm) => {
+          try {
+            const response = await startJobPostingsResearch(firm.id);
+            setJobPostingResearchRun((current) => updateBatchResearchRow(current, firm.id, {
+              task_id: response.task_id,
+              status: response.status || "queued",
+              message: response.message || "Queued",
+            }));
+            return response;
+          } catch (error) {
+            setJobPostingResearchRun((current) => updateBatchResearchRow(current, firm.id, {
+              status: "failed",
+              message: error instanceof Error ? error.message : "Could not queue job-posting research",
+            }));
+            return null;
+          }
+        }));
+        queued.push(...responses.filter((response): response is ResearchStartResponse => response !== null));
+      }
+      return { requested, selected, queued };
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["emailtag", "firms"] });
+    },
+  });
+
   const batchTaskKey = useMemo(
     () =>
       batchResearchRun?.rows
@@ -756,6 +886,36 @@ function EmailtagFirmsContent() {
     },
   });
 
+  const jobPostingTaskKey = useMemo(
+    () =>
+      jobPostingResearchRun?.rows
+        .map((row) => row.task_id)
+        .filter((taskId): taskId is string => Boolean(taskId))
+        .sort()
+        .join(",") ?? "",
+    [jobPostingResearchRun],
+  );
+
+  const jobPostingStatusQuery = useQuery({
+    queryKey: ["emailtag", "job-posting-research-status", jobPostingTaskKey],
+    queryFn: async () => {
+      const rows = jobPostingResearchRun?.rows.filter((row) => row.task_id) ?? [];
+      return Promise.all(
+        rows.map(async (row) => ({
+          pif_id: row.pif_id,
+          status: await getProxiedResearchStatus(row.task_id ?? ""),
+        })),
+      );
+    },
+    enabled:
+      Boolean(jobPostingTaskKey) &&
+      Boolean(jobPostingResearchRun?.rows.some((row) => row.task_id && !TERMINAL_TASK_STATUSES.has(row.status))),
+    refetchInterval: (query) => {
+      const statuses = query.state.data?.map((item) => item.status.status) ?? [];
+      return statuses.length > 0 && statuses.every((status) => TERMINAL_TASK_STATUSES.has(status)) ? false : 5_000;
+    },
+  });
+
   useEffect(() => {
     const updates = batchStatusQuery.data;
     if (!updates?.length) return;
@@ -778,6 +938,29 @@ function EmailtagFirmsContent() {
       void queryClient.invalidateQueries({ queryKey: ["emailtag", "firms"] });
     }
   }, [batchStatusQuery.data, queryClient]);
+
+  useEffect(() => {
+    const updates = jobPostingStatusQuery.data;
+    if (!updates?.length) return;
+    setJobPostingResearchRun((current) => {
+      if (!current) return current;
+      return {
+        ...current,
+        rows: current.rows.map((row) => {
+          const update = updates.find((item) => item.pif_id === row.pif_id);
+          if (!update) return row;
+          return {
+            ...row,
+            status: update.status.status,
+            message: update.status.message,
+          };
+        }),
+      };
+    });
+    if (updates.some((item) => TERMINAL_TASK_STATUSES.has(item.status.status))) {
+      void queryClient.invalidateQueries({ queryKey: ["emailtag", "firms"] });
+    }
+  }, [jobPostingStatusQuery.data, queryClient]);
 
   function updateFilter<K extends keyof FiltersState>(key: K, value: FiltersState[K]) {
     setFilters((current) => ({ ...current, [key]: value }));
@@ -869,6 +1052,9 @@ function EmailtagFirmsContent() {
       {view === "firms" ? (
         <>
           <BatchResearchPanel
+            title="Queue missing firm research"
+            description="Most recently updated firms first, only where research has never been started."
+            buttonLabel="Queue research"
             limit={batchResearchLimit}
             setLimit={setBatchResearchLimit}
             onQueue={() => queueMissingResearch.mutate()}
@@ -883,6 +1069,20 @@ function EmailtagFirmsContent() {
             setFilters(DEFAULT_FILTERS);
             setPage(1);
           }} vendorOptions={vendorOptionsQuery.data?.vendors ?? []} />
+
+          <BatchResearchPanel
+            title="Research job postings for filtered firms"
+            description={`${data?.total ?? 0} firms match the current filters. Firms already running job-posting research are skipped.`}
+            buttonLabel="Research job postings"
+            limit={jobPostingResearchLimit}
+            setLimit={setJobPostingResearchLimit}
+            onQueue={() => queueFilteredJobPostings.mutate()}
+            pending={queueFilteredJobPostings.isPending}
+            result={queueFilteredJobPostings.data}
+            error={queueFilteredJobPostings.error}
+            run={jobPostingResearchRun}
+            polling={jobPostingStatusQuery.isFetching}
+          />
 
           {selectedFirmId && !selectedFirmOnPage && (
             <SelectedFirmPanel
@@ -1203,7 +1403,6 @@ function FilterBar({
           <option value="firm_name">Firm name</option>
           <option value="conversation_count">Conversations</option>
         </SelectField>
-        <InputField label="Research status" value={filters.research_status} onChange={(value) => updateFilter("research_status", value)} placeholder="completed" />
         <SelectField label="ICP tier" value={filters.icp_tier} onChange={(value) => updateFilter("icp_tier", value as "" | PifTier)}>
           <option value="">Any</option>
           <option value="A">A</option>
@@ -1211,8 +1410,32 @@ function FilterBar({
           <option value="C">C</option>
           <option value="D">D</option>
         </SelectField>
-        <InputField label="Entity type" value={filters.entity_type} onChange={(value) => updateFilter("entity_type", value)} placeholder="pi_law_firm" />
+        <SelectField label="Entity type" value={filters.entity_type} onChange={(value) => updateFilter("entity_type", value)}>
+          <option value="">Any entity</option>
+          {ENTITY_TYPES.map((value) => <option key={value} value={value}>{formatLabel(value)}</option>)}
+        </SelectField>
         <InputField label="Recently researched" value={filters.recently_researched} onChange={(value) => updateFilter("recently_researched", value)} placeholder="days" inputMode="numeric" />
+        <SelectField label="Contact emails" value={filters.contact_email_range} onChange={(value) => updateFilter("contact_email_range", value)}>
+          <option value="">Any count</option>
+          {COUNT_RANGES.map((value) => <option key={value} value={value}>{value === "0-0" ? "0" : value}</option>)}
+        </SelectField>
+        <SelectField label="Staff count" value={filters.staff_count_range} onChange={(value) => updateFilter("staff_count_range", value)}>
+          <option value="">Any count</option>
+          {COUNT_RANGES.map((value) => <option key={value} value={value}>{value === "0-0" ? "0" : value}</option>)}
+        </SelectField>
+        <SelectField label="Autoresponse" value={filters.autorespond_window} onChange={(value) => updateFilter("autorespond_window", value)}>
+          <option value="any">Any</option>
+          <option value="24h">Sent in last 24 hours</option>
+          <option value="7d">Sent in last 7 days</option>
+          <option value="30d">Sent in last 30 days</option>
+          <option value="90d">Sent in last 90 days</option>
+          <option value="ever">Ever sent</option>
+          <option value="never">Never sent</option>
+        </SelectField>
+        <SelectField label="Autoresponse type" value={filters.autorespond_type} onChange={(value) => updateFilter("autorespond_type", value)}>
+          <option value="">Any type</option>
+          {AUTORESPOND_TYPES.map((value) => <option key={value} value={value}>{formatLabel(value)}</option>)}
+        </SelectField>
         <SelectField label="Website" value={filters.website_presence} onChange={(value) => updateFilter("website_presence", value as WebsitePresence)}>
           {WEBSITE_PRESENCE.map((value) => <option key={value} value={value}>{formatLabel(value)}</option>)}
         </SelectField>
@@ -1221,6 +1444,14 @@ function FilterBar({
         </SelectField>
         <SelectField label="Staff" value={filters.staff_presence} onChange={(value) => updateFilter("staff_presence", value as StatusPresence)}>
           {STATUS_PRESENCE.map((value) => <option key={value} value={value}>{formatLabel(value)}</option>)}
+        </SelectField>
+        <SelectField label="Job postings" value={filters.job_postings_presence} onChange={(value) => updateFilter("job_postings_presence", value as FiltersState["job_postings_presence"])}>
+          <option value="any">Any</option>
+          <option value="has">Has recent openings</option>
+          <option value="none">No recent openings</option>
+          <option value="not_researched">Not researched</option>
+          <option value="queued_or_running">Queued or running</option>
+          <option value="failed">Failed</option>
         </SelectField>
         <SelectField label="Behavior" value={filters.behavior_presence} onChange={(value) => updateFilter("behavior_presence", value as SimplePresence)}>
           {PRESENCE.map((value) => <option key={value} value={value}>{formatLabel(value)}</option>)}
@@ -1842,7 +2073,7 @@ function ContactsView({
                     </td>
                     <td data-label="Firm" className="min-w-0 px-3 py-3">
                       {person.firm_id ? (
-                        <Link href={`/leads?firm=${encodeURIComponent(person.firm_id)}`} className="block truncate text-blue-600 hover:underline">
+                        <Link href={`/firms/${encodeURIComponent(person.firm_id)}`} className="block truncate text-blue-600 hover:underline">
                           {display(person.firm_name)}
                         </Link>
                       ) : (
@@ -1951,6 +2182,7 @@ function FirmTableRows({
 }) {
   const queryClient = useQueryClient();
   const [enrichmentTaskId, setEnrichmentTaskId] = useState<string | null>(null);
+  const [jobPostingTaskId, setJobPostingTaskId] = useState<string | null>(null);
   const websiteUrl = safeWebsiteUrl(firm.canonical_website ?? firm.website);
   const contactCount = firm.contacts?.length ?? 0;
   const conversationCount = firm.conversation_ids?.length ?? 0;
@@ -1959,6 +2191,14 @@ function FirmTableRows({
   const enrichment = useMutation({
     mutationFn: () => startFullEnrichment(firm.id),
     onSuccess: (response) => setEnrichmentTaskId(response.task_id),
+    onError: (error) => {
+      if (isAuthError(error)) onAuthError();
+    },
+  });
+
+  const jobPostingResearch = useMutation({
+    mutationFn: () => startJobPostingsResearch(firm.id),
+    onSuccess: (response) => setJobPostingTaskId(response.task_id),
     onError: (error) => {
       if (isAuthError(error)) onAuthError();
     },
@@ -1974,6 +2214,16 @@ function FirmTableRows({
     },
   });
 
+  const jobPostingStatus = useQuery({
+    queryKey: ["emailtag", "job-posting-research-status", jobPostingTaskId],
+    queryFn: () => getProxiedResearchStatus(jobPostingTaskId ?? ""),
+    enabled: Boolean(jobPostingTaskId),
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      return status && TERMINAL_TASK_STATUSES.has(status) ? false : 3_000;
+    },
+  });
+
   useEffect(() => {
     const status = enrichmentStatus.data?.status;
     if (status && TERMINAL_TASK_STATUSES.has(status)) {
@@ -1983,10 +2233,25 @@ function FirmTableRows({
   }, [enrichmentStatus.data?.status, firm.id, queryClient]);
 
   useEffect(() => {
+    const status = jobPostingStatus.data?.status;
+    if (status && TERMINAL_TASK_STATUSES.has(status)) {
+      void queryClient.invalidateQueries({ queryKey: ["emailtag", "firm", firm.id] });
+      void queryClient.invalidateQueries({ queryKey: ["emailtag", "firms"] });
+    }
+  }, [jobPostingStatus.data?.status, firm.id, queryClient]);
+
+  useEffect(() => {
     if (isAuthError(enrichmentStatus.error)) onAuthError();
   }, [enrichmentStatus.error, onAuthError]);
 
+  useEffect(() => {
+    if (isAuthError(jobPostingStatus.error)) onAuthError();
+  }, [jobPostingStatus.error, onAuthError]);
+
   const enrichmentRunning = enrichment.isPending || isWorkflowRunning(enrichmentStatus.data?.status);
+  const jobPostingRunning = jobPostingResearch.isPending
+    || isWorkflowRunning(jobPostingStatus.data?.status)
+    || (!jobPostingTaskId && isWorkflowRunning(firm.research_data?.job_postings_research_status));
 
   return (
     <>
@@ -2079,8 +2344,22 @@ function FirmTableRows({
               <span className="xl:hidden">Enrich</span>
               <span className="hidden xl:inline">Run full enrichment</span>
             </ActionButton>
+            <ActionButton
+              onClick={() => jobPostingResearch.mutate()}
+              pending={jobPostingRunning}
+              icon={<Briefcase className="h-3.5 w-3.5" />}
+            >
+              <span className="xl:hidden">Jobs</span>
+              <span className="hidden xl:inline">Research job postings</span>
+            </ActionButton>
           </div>
           <TaskStatus label="Enrichment" status={enrichmentStatus.data?.status} message={undefined} compact />
+          <TaskStatus
+            label="Job postings"
+            status={jobPostingStatus.data?.status ?? firm.research_data?.job_postings_research_status ?? undefined}
+            message={jobPostingStatus.data?.message}
+            compact
+          />
         </td>
       </tr>
       {expanded && (
@@ -2095,6 +2374,9 @@ function FirmTableRows({
 }
 
 function BatchResearchPanel({
+  title,
+  description,
+  buttonLabel,
   limit,
   setLimit,
   onQueue,
@@ -2104,6 +2386,9 @@ function BatchResearchPanel({
   run,
   polling,
 }: {
+  title: string;
+  description: string;
+  buttonLabel: string;
   limit: string;
   setLimit: (value: string) => void;
   onQueue: () => void;
@@ -2125,10 +2410,8 @@ function BatchResearchPanel({
     <div className="rounded-xl border border-neutral-200 bg-white p-3">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <div className="text-sm font-semibold text-neutral-900">Queue missing firm research</div>
-          <div className="mt-1 text-xs text-neutral-500">
-            Most recently updated firms first, only where research has never been started.
-          </div>
+          <div className="text-sm font-semibold text-neutral-900">{title}</div>
+          <div className="mt-1 text-xs text-neutral-500">{description}</div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <label className="flex items-center gap-2 text-xs font-medium text-neutral-500">
@@ -2151,7 +2434,7 @@ function BatchResearchPanel({
             className="inline-flex items-center gap-1.5 rounded-md bg-neutral-900 px-3 py-2 text-xs font-medium text-white hover:bg-neutral-800 disabled:opacity-40"
           >
             {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
-            Queue research
+            {buttonLabel}
           </button>
         </div>
       </div>
@@ -2364,6 +2647,7 @@ function FirmDetail({ initialFirm, onAuthError }: { initialFirm: PifInfoResponse
       setVendorPolling(false);
       if (isAuthError(error)) onAuthError();
     },
+    onSuccess: (response) => setResearchTaskId(response.task_id),
   });
 
   const behavior = useMutation({
@@ -2515,6 +2799,12 @@ function FirmDetail({ initialFirm, onAuthError }: { initialFirm: PifInfoResponse
         )}
       </InfoBlock>
 
+      <JobPostingsPanel
+        research={firm.research_data?.job_postings}
+        status={firm.research_data?.job_postings_research_status}
+        lastResearchedAt={firm.research_data?.last_job_postings_researched_at}
+      />
+
       <div className="grid gap-4 xl:grid-cols-3">
         <PeopleList title="Leadership" empty="No leadership records." items={firm.leadership ?? []} />
         <PeopleList title="Staff" empty="No staff records." items={firm.staff ?? []} />
@@ -2551,6 +2841,91 @@ function FirmDetail({ initialFirm, onAuthError }: { initialFirm: PifInfoResponse
       </div>
 
       <FirmDangerZone pifId={firm.id} firmName={firm.firm_name} />
+    </div>
+  );
+}
+
+function JobPostingsPanel({
+  research,
+  status,
+  lastResearchedAt,
+}: {
+  research: JobPostingsResearch | undefined;
+  status: string | null | undefined;
+  lastResearchedAt: string | null | undefined;
+}) {
+  const postings = research?.postings ?? [];
+  const windowLabel = research?.window_start && research?.window_end
+    ? `${formatDateOnly(research.window_start)} to ${formatDateOnly(research.window_end)}`
+    : "Last 30 days";
+
+  return (
+    <InfoBlock title="Job Postings">
+      <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-neutral-500">
+        <span className="inline-flex items-center gap-1.5 font-medium text-neutral-700">
+          <Briefcase className="h-3.5 w-3.5" />
+          {postings.length} recent {postings.length === 1 ? "opening" : "openings"}
+        </span>
+        <span>{windowLabel}</span>
+        <span>{formatLabel(status || "not researched")}</span>
+        {lastResearchedAt && <span>Checked {formatDateTime(lastResearchedAt)}</span>}
+      </div>
+
+      {postings.length === 0 ? (
+        <div className="border-t border-neutral-100 pt-3 text-xs text-neutral-400">
+          {status === "completed" ? "No dated job postings found in this window." : "Job-posting research has not completed."}
+        </div>
+      ) : (
+        <div className="divide-y divide-neutral-100 border-t border-neutral-100">
+          {postings.map((posting, index) => (
+            <article key={`${posting.source_url}-${posting.title}-${index}`} className="py-3">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold text-neutral-900">{posting.title}</div>
+                  <div className="mt-0.5 flex flex-wrap gap-x-2 text-xs text-neutral-500">
+                    <span>Posted {formatDateOnly(posting.posted_date)}</span>
+                    {posting.location && <span>{posting.location}</span>}
+                    {posting.employment_type && <span>{posting.employment_type}</span>}
+                  </div>
+                </div>
+                <a
+                  href={posting.source_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-blue-600 hover:underline"
+                >
+                  {posting.source_name || "Source"}
+                  <ExternalLink className="h-3 w-3" />
+                </a>
+              </div>
+              {posting.description_summary && (
+                <p className="mt-2 text-xs leading-5 text-neutral-700">{posting.description_summary}</p>
+              )}
+              {(posting.responsibilities.length > 0 || posting.qualifications.length > 0) && (
+                <div className="mt-2 grid gap-3 md:grid-cols-2">
+                  {posting.responsibilities.length > 0 && (
+                    <JobPostingDetails label="Responsibilities" items={posting.responsibilities} />
+                  )}
+                  {posting.qualifications.length > 0 && (
+                    <JobPostingDetails label="Qualifications" items={posting.qualifications} />
+                  )}
+                </div>
+              )}
+            </article>
+          ))}
+        </div>
+      )}
+    </InfoBlock>
+  );
+}
+
+function JobPostingDetails({ label, items }: { label: string; items: string[] }) {
+  return (
+    <div>
+      <div className="text-[10px] font-semibold uppercase text-neutral-400">{label}</div>
+      <ul className="mt-1 space-y-1 text-xs text-neutral-600">
+        {items.map((item, index) => <li key={`${item}-${index}`}>• {item}</li>)}
+      </ul>
     </div>
   );
 }

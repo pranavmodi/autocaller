@@ -63,6 +63,27 @@ export interface StaffMember {
   bio: string | null;
 }
 
+export interface JobPosting {
+  title: string;
+  location: string | null;
+  employment_type: string | null;
+  posted_date: string;
+  description_summary: string;
+  responsibilities: string[];
+  qualifications: string[];
+  source_name: string;
+  source_url: string;
+}
+
+export interface JobPostingsResearch {
+  has_recent_openings: boolean;
+  window_days: number;
+  window_start: string;
+  window_end: string;
+  researched_at: string;
+  postings: JobPosting[];
+}
+
 export interface ResearchData {
   practice_areas: string[];
   founded_year: string | null;
@@ -75,6 +96,9 @@ export interface ResearchData {
   additional_info: string | null;
   sources: string[];
   leadership_email_history?: unknown[];
+  job_postings?: JobPostingsResearch;
+  job_postings_research_status?: string | null;
+  last_job_postings_researched_at?: string | null;
 }
 
 export interface BehavioralData {
@@ -246,9 +270,16 @@ export interface PifInfoListParams {
   icp_tier?: PifTier;
   entity_type?: string;
   recently_researched?: number;
+  contact_email_min?: number;
+  contact_email_max?: number;
+  staff_count_min?: number;
+  staff_count_max?: number;
+  autorespond_window?: string;
+  autorespond_type?: string;
   website_presence?: "any" | "has" | "missing" | "resolved" | "unresolved";
   research_presence?: "any" | "completed" | "missing" | "queued_or_running" | "failed";
   staff_presence?: "any" | "completed" | "missing" | "queued_or_running" | "failed";
+  job_postings_presence?: "any" | "has" | "none" | "not_researched" | "queued_or_running" | "failed";
   behavior_presence?: "any" | "has" | "missing";
   icp_presence?: "any" | "has" | "missing";
   vendor_presence?: "any" | "has" | "missing";
@@ -522,6 +553,12 @@ export function listPifInfo(params: PifInfoListParams = {}): Promise<PifInfoList
       icp_tier: params.icp_tier,
       entity_type: params.entity_type,
       recently_researched: params.recently_researched,
+      contact_email_min: params.contact_email_min,
+      contact_email_max: params.contact_email_max,
+      staff_count_min: params.staff_count_min,
+      staff_count_max: params.staff_count_max,
+      autorespond_window: params.autorespond_window,
+      autorespond_type: params.autorespond_type,
       website_presence: params.website_presence,
       research_presence: params.research_presence,
       staff_presence: params.staff_presence,
@@ -546,9 +583,16 @@ export function listMirroredPifInfo(params: PifInfoListParams = {}): Promise<Pif
       icp_tier: params.icp_tier,
       entity_type: params.entity_type,
       recently_researched: params.recently_researched,
+      contact_email_min: params.contact_email_min,
+      contact_email_max: params.contact_email_max,
+      staff_count_min: params.staff_count_min,
+      staff_count_max: params.staff_count_max,
+      autorespond_window: params.autorespond_window,
+      autorespond_type: params.autorespond_type,
       website_presence: params.website_presence,
       research_presence: params.research_presence,
       staff_presence: params.staff_presence,
+      job_postings_presence: params.job_postings_presence,
       behavior_presence: params.behavior_presence,
       icp_presence: params.icp_presence,
       vendor_presence: params.vendor_presence,
@@ -677,53 +721,59 @@ export async function downloadEmailtagExport(options: {
 }
 
 export function startFullEnrichment(pifId: string): Promise<ResearchStartResponse> {
-  return emailtagFetch<ResearchStartResponse>(`/pif-info/${encodeURIComponent(pifId)}/enrich-all`, {
-    method: "POST",
-  });
+  return possibleFetch<ResearchStartResponse>(
+    `/api/pif/firms/${encodeURIComponent(pifId)}/research`,
+    { method: "POST" },
+  );
 }
 
 export function getFullEnrichmentStatus(taskId: string): Promise<FullEnrichmentStatusResponse> {
-  return emailtagFetch<FullEnrichmentStatusResponse>(
-    `/pif-info/enrich-all/status/${encodeURIComponent(taskId)}`,
+  return possibleFetch<FullEnrichmentStatusResponse>(
+    `/api/pif/enrichment-status/${encodeURIComponent(taskId)}`,
   );
 }
 
 export function startResearch(pifId: string): Promise<ResearchStartResponse> {
-  return emailtagFetch<ResearchStartResponse>(`/pif-info/${encodeURIComponent(pifId)}/research`, {
-    method: "POST",
-  });
+  return startFullEnrichment(pifId);
 }
 
-export function startStaffResearch(pifId: string): Promise<ResearchStartResponse> {
-  return emailtagFetch<ResearchStartResponse>(
-    `/pif-info/${encodeURIComponent(pifId)}/research-staff`,
+export function startJobPostingsResearch(pifId: string): Promise<ResearchStartResponse> {
+  return possibleFetch<ResearchStartResponse>(
+    `/api/pif/firms/${encodeURIComponent(pifId)}/research-job-postings`,
     { method: "POST" },
   );
 }
 
+export function getProxiedResearchStatus(taskId: string): Promise<ResearchStatusResponse> {
+  return possibleFetch<ResearchStatusResponse>(
+    `/api/pif/research-status/${encodeURIComponent(taskId)}`,
+  );
+}
+
+export function startStaffResearch(pifId: string): Promise<ResearchStartResponse> {
+  return startFullEnrichment(pifId);
+}
+
 export function getResearchStatus(taskId: string): Promise<ResearchStatusResponse> {
-  return emailtagFetch<ResearchStatusResponse>(
-    `/pif-info/research-status/${encodeURIComponent(taskId)}`,
+  return possibleFetch<ResearchStatusResponse>(
+    `/api/pif/enrichment-status/${encodeURIComponent(taskId)}`,
   );
 }
 
 export function detectVendors(pifId: string): Promise<VendorDetectionStartResponse> {
-  return emailtagFetch<VendorDetectionStartResponse>(
-    `/pif-info/${encodeURIComponent(pifId)}/detect-vendors`,
-    { method: "POST" },
-  );
+  return startFullEnrichment(pifId);
 }
 
 export function analyzeBehavior(pifId: string): Promise<BehaviorAnalysisResponse> {
-  return emailtagFetch<BehaviorAnalysisResponse>(
-    `/pif-info/${encodeURIComponent(pifId)}/analyze-behavior`,
+  return possibleFetch<BehaviorAnalysisResponse>(
+    `/api/pif/firms/${encodeURIComponent(pifId)}/analyze-behavior`,
     { method: "POST" },
   );
 }
 
 export function scoreFirm(pifId: string): Promise<PifInfoResponse> {
-  return emailtagFetch<PifInfoResponse>(
-    `/pif-info/${encodeURIComponent(pifId)}/score`,
+  return possibleFetch<PifInfoResponse>(
+    `/api/pif/firms/${encodeURIComponent(pifId)}/score`,
     { method: "POST" },
   );
 }

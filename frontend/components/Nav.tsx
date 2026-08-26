@@ -6,23 +6,20 @@ import { usePathname } from "next/navigation";
 import {
   Activity,
   BrainCircuit,
+  BookOpen,
   Bot,
   Building2,
   CalendarCheck,
   Database,
-  FlaskConical,
   GitBranch,
   Grid3x3,
+  Headset,
   Inbox,
-  ListChecks,
-  Lightbulb,
   LogOut,
-  Mail,
   Menu,
   MessageSquare,
   PhoneCall,
   Radar,
-  SearchCheck,
   Send,
   Stethoscope,
 } from "lucide-react";
@@ -52,29 +49,24 @@ async function signOut() {
 const items = [
   { href: "/", label: "Now", icon: Activity },
   { href: "/actions", label: "Actions", icon: Inbox },
-  { href: "/todos", label: "Todos", icon: ListChecks },
-  { href: "/ideas", label: "Ideas", icon: Lightbulb },
-  { href: "/cadence", label: "Queue", icon: ListChecks },
+  { href: "/cadence", label: "Call Lab", icon: Headset },
   { href: "/calls", label: "Calls", icon: PhoneCall },
   { href: "/comms", label: "Comms", icon: MessageSquare },
-  { href: "/sequences", label: "Sequences", icon: Mail },
   { href: "/lead-gen", label: "Lead Gen", icon: BrainCircuit },
+  { href: "/knowledge", label: "Knowledge", icon: BookOpen },
   { href: "/click-analytics", label: "Engagement", icon: Activity },
   { href: "/data-returned", label: "Data Returned", icon: Database },
   { href: "/front", label: "Front", icon: Radar },
   { href: "/frontUI", label: "frontUI", icon: Inbox },
-  { href: "/composer-ab", label: "Composer A/B", icon: FlaskConical },
   { href: "/agents", label: "Agents", icon: Bot },
   { href: "/traces", label: "Traces", icon: GitBranch },
-  { href: "/seo", label: "SEO", icon: SearchCheck },
   { href: "/outreach", label: "Outreach", icon: Send },
-  { href: "/calllists", label: "Call lists", icon: ListChecks },
   { href: "/consults", label: "Consults", icon: CalendarCheck },
   { href: "/leads", label: "Leads", icon: Building2 },
   { href: "/system", label: "Health", icon: Stethoscope },
 ];
 
-const mobilePrimaryHrefs = ["/", "/actions", "/todos", "/calls"];
+const mobilePrimaryHrefs = ["/", "/actions", "/calls"];
 
 export function Nav() {
   const pathname = usePathname();
@@ -196,7 +188,7 @@ export function Nav() {
       </header>
 
       {/* Mobile bottom nav */}
-      <nav className="fixed bottom-0 left-0 right-0 z-20 grid grid-cols-5 border-t border-neutral-200 bg-white/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-10px_30px_rgba(15,23,42,0.08)] backdrop-blur md:hidden">
+      <nav className="fixed bottom-0 left-0 right-0 z-20 grid grid-cols-4 border-t border-neutral-200 bg-white/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-10px_30px_rgba(15,23,42,0.08)] backdrop-blur md:hidden">
         {mobilePrimaryItems.map(({ href, label, icon: Icon }) => (
           <Link
             key={href}

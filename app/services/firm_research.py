@@ -1,9 +1,7 @@
-"""Budgeted PIF Stats firm-research orchestration.
+"""Possible OS firm-research orchestration.
 
-This module only uses the safe production PIF Stats surfaces needed for
-research warm-up: task-creating POSTs for firm/staff/behavior research and
-read-only GETs for status and firm payloads. It deliberately does not call
-score, outreach-generation, process-day, PUT, or DELETE endpoints.
+Production entry points delegate to the durable local enrichment queue. The
+legacy client remains only for compatibility with historical tests and data.
 """
 from __future__ import annotations
 
@@ -19,7 +17,14 @@ import httpx
 from sqlalchemy import desc, func, or_, select
 
 from app.db import AsyncSessionLocal
-from app.db.models import FirmContactRow, FrontFirmActivityRow, ResearchTaskRow
+from app.db.models import (
+    FirmAliasRow,
+    FirmContactRow,
+    FrontFirmActivityRow,
+    PifEnrichmentTaskRow,
+    PifFirmRow,
+    ResearchTaskRow,
+)
 from app.services.front_sync import normalize_domain
 from app.services.persona_mapper import map_personas
 
@@ -243,6 +248,21 @@ async def queue_firm_research(
     kinds: Iterable[str] | None = None,
     client: PifStatsClient | None = None,
 ) -> dict[str, Any]:
+    if client is None:
+        from app.services.pif_local_enrichment import start_local_firm_enrichment
+
+        result = await start_local_firm_enrichment(pif_id)
+        return {
+            "pif_id": pif_id,
+            "queued": [{
+                "kind": "local_enrichment",
+                "task_id": result["task_id"],
+                "status": result["status"],
+            }],
+            "skipped": [],
+            "budget": {"task_posts_made": 0, "remaining_task_posts": None, "rate_limited": 0},
+            "owner": "possibleos",
+        }
     requested_kinds = normalize_kinds(kinds, staff=staff, behavior=behavior)
     own_client = client is None
     pif_client = client or PifStatsClient()
@@ -408,6 +428,32 @@ async def poll_research_tasks(
     task_ids: Iterable[str] | None = None,
     limit: int = 100,
 ) -> dict[str, Any]:
+    if client is None:
+        task_id_filter = {str(value) for value in (task_ids or []) if value}
+        async with AsyncSessionLocal() as session:
+            stmt = select(PifEnrichmentTaskRow).order_by(PifEnrichmentTaskRow.requested_at.asc())
+            if task_id_filter:
+                stmt = stmt.where(PifEnrichmentTaskRow.task_id.in_(task_id_filter))
+            else:
+                stmt = stmt.where(PifEnrichmentTaskRow.status.in_({"queued", "in_progress"}))
+            rows = (await session.execute(stmt.limit(max(1, min(limit, 500))))).scalars().all()
+        tasks = [{
+            "task_id": row.task_id,
+            "pif_id": row.pif_id,
+            "kind": "local_enrichment",
+            "status": row.status,
+            "summary": row.result_summary or {},
+        } for row in rows]
+        return {
+            "polled": len(tasks),
+            "completed": sum(row["status"] == "completed" for row in tasks),
+            "failed": sum(row["status"] == "failed" for row in tasks),
+            "open": sum(row["status"] in {"queued", "in_progress"} for row in tasks),
+            "tasks": tasks,
+            "persona_mapping": await map_personas(),
+            "budget": {"task_posts_made": 0, "get_calls_made": 0, "remaining_task_posts": None, "rate_limited": 0},
+            "owner": "possibleos",
+        }
     own_client = client is None
     pif_client = client or PifStatsClient()
     task_id_filter = {str(t) for t in (task_ids or []) if t}
@@ -518,6 +564,34 @@ async def orchestrate_warm_research(
     poll_interval_seconds: float = 15.0,
     client: PifStatsClient | None = None,
 ) -> dict[str, Any]:
+    if client is None:
+        async with AsyncSessionLocal() as session:
+            pif_ids = [str(value) for value in (await session.execute(
+                select(FrontFirmActivityRow.pif_id)
+                .where(FrontFirmActivityRow.pif_id.isnot(None))
+                .order_by(desc(FrontFirmActivityRow.warm_score), desc(FrontFirmActivityRow.last_seen_at))
+                .limit(max(1, min(top_n, 500)))
+            )).scalars().all() if value]
+        queue_results = [await queue_firm_research(pif_id) for pif_id in dict.fromkeys(pif_ids)]
+        task_ids = [row["task_id"] for result in queue_results for row in result.get("queued") or []]
+        poll_result: dict[str, Any] = {"polled": 0, "completed": 0, "failed": 0, "open": 0, "tasks": []}
+        deadline = time.monotonic() + max(1, timeout_seconds)
+        while task_ids and time.monotonic() < deadline:
+            poll_result = await poll_research_tasks(task_ids=task_ids, limit=len(task_ids))
+            if not poll_result.get("open"):
+                break
+            await asyncio.sleep(max(0.1, poll_interval_seconds))
+        return {
+            "top_n": top_n,
+            "requested_kinds": ["local_enrichment"],
+            "queued_task_ids": task_ids,
+            "queue_results": queue_results,
+            "skipped_firms": max(0, top_n - len(queue_results)),
+            "poll": poll_result,
+            "timed_out": bool(task_ids) and bool(poll_result.get("open")),
+            "budget": {"task_posts_made": 0, "remaining_task_posts": None, "rate_limited": 0},
+            "owner": "possibleos",
+        }
     requested_kinds = normalize_kinds(kinds)
     own_client = client is None
     pif_client = client or PifStatsClient()
@@ -584,7 +658,20 @@ async def resolve_domain_or_pif(value: str) -> str:
     raw = _clean(value)
     domain = normalize_domain(raw)
     async with AsyncSessionLocal() as session:
+        direct = await session.get(PifFirmRow, raw)
+        if direct:
+            return str(direct.id)
         if domain:
+            alias = await session.get(FirmAliasRow, {"alias_type": "domain", "alias_value": domain})
+            if alias:
+                return str(alias.firm_id)
+            firm_id = (await session.execute(
+                select(PifFirmRow.id)
+                .where(or_(PifFirmRow.canonical_website == domain, PifFirmRow.website == domain))
+                .limit(1)
+            )).scalar_one_or_none()
+            if firm_id:
+                return str(firm_id)
             pif_id = (await session.execute(
                 select(FrontFirmActivityRow.pif_id)
                 .where(FrontFirmActivityRow.domain == domain)
@@ -604,6 +691,46 @@ async def resolve_domain_or_pif(value: str) -> str:
 
 
 async def research_coverage() -> dict[str, Any]:
+    async with AsyncSessionLocal() as session:
+        total = int((await session.execute(select(func.count(PifFirmRow.id)))).scalar_one() or 0)
+        researched = int((await session.execute(
+            select(func.count(PifFirmRow.id)).where(PifFirmRow.research_status == "completed")
+        )).scalar_one() or 0)
+        staff = int((await session.execute(
+            select(func.count(PifFirmRow.id)).where(PifFirmRow.staff_research_status == "completed")
+        )).scalar_one() or 0)
+        open_tasks = (await session.execute(
+            select(PifEnrichmentTaskRow)
+            .where(PifEnrichmentTaskRow.status.in_({"queued", "in_progress"}))
+            .order_by(desc(PifEnrichmentTaskRow.requested_at))
+            .limit(100)
+        )).scalars().all()
+        task_counts = (await session.execute(
+            select(PifEnrichmentTaskRow.status, func.count(PifEnrichmentTaskRow.task_id))
+            .group_by(PifEnrichmentTaskRow.status)
+        )).all()
+    return {
+        "coverage": {
+            "matched_firms": total,
+            "researched_firms": researched,
+            "staff_researched_firms": staff,
+            "behavior_analyzed_firms": 0,
+            "research_percent": round((researched / total) * 100, 1) if total else 0.0,
+            "staff_percent": round((staff / total) * 100, 1) if total else 0.0,
+            "behavior_percent": 0.0,
+        },
+        "open_tasks": [{
+            "task_id": row.task_id,
+            "pif_id": row.pif_id,
+            "kind": "local_enrichment",
+            "status": row.status,
+            "requested_at": row.requested_at.isoformat() if row.requested_at else None,
+        } for row in open_tasks],
+        "task_counts": {str(status): int(count) for status, count in task_counts},
+        "owner": "possibleos",
+    }
+
+    # Historical EmailTag task coverage remains below for migration reference.
     async with AsyncSessionLocal() as session:
         matched_pifs = {
             pif_id for pif_id in (await session.execute(

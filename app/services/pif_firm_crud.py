@@ -241,9 +241,10 @@ def _record_manual_overrides(row: PifFirmRow, payload: dict[str, Any]) -> None:
 
 def _effective_aliases(row: PifFirmRow, payload: dict[str, Any]) -> dict[str, list[str]]:
     raw = row.raw_json if isinstance(row.raw_json, dict) else {}
-    aliases = _normalize_aliases(raw.get("aliases"))
     if "aliases" in payload:
         aliases = deepcopy(payload["aliases"])
+    else:
+        aliases = _normalize_aliases(raw.get("aliases"))
     canonical = row.canonical_website or row.website
     if canonical:
         domains = aliases.setdefault("domains", [])
@@ -533,6 +534,36 @@ def apply_stored_manual_overrides(
     now: datetime,
 ) -> None:
     """Reapply durable local overrides after an upstream mirror refresh."""
-    data = normalize_firm_write(payload, creating=False)
+    raw_json = deepcopy(row.raw_json) if isinstance(row.raw_json, dict) else {}
+    raw_aliases = raw_json.get("aliases")
+    if isinstance(raw_aliases, dict):
+        for key in ("domains", "vanity_domains"):
+            values = raw_aliases.get(key)
+            if isinstance(values, list):
+                raw_aliases[key] = [
+                    value
+                    for value in values
+                    if (domain := normalize_domain(str(value or "")))
+                    and not is_consumer_domain(domain)
+                ]
+        raw_json["aliases"] = raw_aliases
+        row.raw_json = raw_json
+
+    cleaned_payload = deepcopy(payload)
+    aliases = cleaned_payload.get("aliases")
+    if isinstance(aliases, dict):
+        cleaned_aliases = deepcopy(aliases)
+        for key in ("domains", "vanity_domains"):
+            values = cleaned_aliases.get(key)
+            if isinstance(values, list):
+                cleaned_aliases[key] = [
+                    value
+                    for value in values
+                    if (domain := normalize_domain(str(value or "")))
+                    and not is_consumer_domain(domain)
+                ]
+        cleaned_payload["aliases"] = cleaned_aliases
+
+    data = normalize_firm_write(cleaned_payload, creating=False)
     _record_manual_overrides(row, data)
     _apply_payload(row, data, now=now, creating=False)

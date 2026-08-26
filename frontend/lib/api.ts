@@ -138,48 +138,6 @@ export type ProductTrace = {
   created_at: string | null;
 };
 
-export type Todo = {
-  id: number;
-  area: string;
-  section: string;
-  title: string;
-  status: string;
-  body: string;
-  source_url: string | null;
-  created_by: string | null;
-  updated_by: string | null;
-  completed_at: string | null;
-  created_at: string | null;
-  updated_at: string | null;
-};
-
-export type TodoPayload = {
-  title?: string;
-  area?: string;
-  section?: string;
-  status?: string;
-  body?: string;
-  source_url?: string | null;
-  actor?: string;
-};
-
-export const listTodos = (args: { area?: string; status?: string } = {}) => {
-  const params = new URLSearchParams();
-  if (args.area) params.set("area", args.area);
-  if (args.status) params.set("status", args.status);
-  const qs = params.toString();
-  return get<{ todos: Todo[] }>(`/api/todos${qs ? `?${qs}` : ""}`);
-};
-
-export const createTodo = (payload: TodoPayload & { title: string }) =>
-  post<{ todo: Todo }>("/api/todos", payload);
-
-export const updateTodo = (id: number, payload: TodoPayload) =>
-  patch<{ todo: Todo }>(`/api/todos/${id}`, payload);
-
-export const deleteTodo = (id: number) =>
-  del<{ deleted: boolean; id: number }>(`/api/todos/${id}`);
-
 export function recordProductTrace(payload: ProductTracePayload): Promise<void> {
   if (typeof window === "undefined") return Promise.resolve();
   const traceId = payload.trace_id || newProductTraceId();
@@ -888,6 +846,7 @@ export type EngagementCampaignLink = {
   confirmed_visits: number;
   meaningful_actions: number;
   deepest_scroll: number;
+  max_time_on_page_seconds: number;
 };
 
 export type EngagementCampaignActivity = {
@@ -1182,8 +1141,10 @@ export const getCall = (callId: string) =>
 export const getActiveCall = () =>
   get<{ active: boolean; call: CallLog | null }>("/api/calls/active");
 
-export const clearActiveCall = () =>
-  post<{ status: string }>("/api/calls/clear-active");
+export const endActiveCall = (callId: string) =>
+  post<{ status: string; call_id: string; already_terminal: boolean }>(
+    `/api/calls/${encodeURIComponent(callId)}/end`,
+  );
 
 export const startCall = (patientId: string, mode: "twilio" | "web" = "twilio") =>
   post<{ call: CallLog }>("/api/call/start", { patient_id: patientId, mode });
@@ -1418,25 +1379,6 @@ export const sendDtmfBatch = (callId: string, digits: string) =>
   );
 
 
-export type VoicemailRecipient = {
-  call_id: string;
-  patient_id: string;
-  patient_name: string;
-  firm_name: string | null;
-  phone: string;
-  lead_state: string | null;
-  started_at: string | null;
-  duration_seconds: number;
-  voicemail_left: boolean;
-  prompt_version: string | null;
-};
-
-export const getVoicemailRecipients = () =>
-  get<{ rows: VoicemailRecipient[]; count: number }>(
-    "/api/call-lists/voicemail?limit=500",
-  );
-
-
 export type ConsultBooking = {
   id: number;
   name: string;
@@ -1590,78 +1532,58 @@ export const listAgentActions = (args: {
   );
 };
 
-// ---- SEO and Agent Optimization ----
-export type SeoAuditAction = {
-  id: string;
-  action_type: string;
-  priority: "high" | "normal" | "low" | string;
+// ---- Knowledge capture ----
+export type KnowledgeSourceType =
+  | "linkedin"
+  | "web"
+  | "article"
+  | "transcript"
+  | "note"
+  | "other";
+
+export type KnowledgeEntry = {
+  id: number;
   title: string;
-  rationale: string;
-  suggested_change: string;
-  category: string;
-  page_url: string;
+  content: string;
+  source_type: KnowledgeSourceType;
+  source_url: string | null;
+  author: string | null;
+  tags: string[];
+  created_by: string;
+  created_at: string | null;
+  updated_at: string | null;
 };
 
-export type SeoAuditPage = {
-  url: string;
-  status_code: number | null;
-  title: string;
-  description: string;
-  canonical: string;
-  h1: string[];
-  h2: string[];
-  word_count: number;
-  internal_link_count: number;
-  consult_link_count: number;
-  schema_count: number;
-  missing_image_alt_count: number;
-  seo_score: number;
-  aeo_score: number;
-  score: number;
-  issues: string[];
-  opportunities: string[];
-  actions: SeoAuditAction[];
+export type KnowledgeEntryPayload = {
+  content: string;
+  title?: string;
+  source_type: KnowledgeSourceType;
+  source_url?: string;
+  author?: string;
+  tags?: string[];
 };
 
-export type SeoAudit = {
-  site_url: string;
-  generated_at: string;
-  summary: {
-    page_count: number;
-    avg_seo_score: number;
-    avg_aeo_score: number;
-    avg_score: number;
-    issue_counts: Record<string, number>;
-    action_count: number;
-    high_priority_action_count: number;
-    top_actions: SeoAuditAction[];
-  };
-  pages: SeoAuditPage[];
-  actions: SeoAuditAction[];
-};
-
-export const getSeoAudit = (args?: { site_url?: string; limit?: number }) => {
-  const params = new URLSearchParams();
-  if (args?.site_url) params.set("site_url", args.site_url);
-  if (args?.limit) params.set("limit", String(args.limit));
-  const suffix = params.toString() ? `?${params}` : "";
-  return get<SeoAudit>(`/api/seo/audit${suffix}`);
-};
-
-export const generateSeoActions = (args?: {
-  site_url?: string;
+export const listKnowledgeEntries = (args: {
+  query?: string;
+  source_type?: KnowledgeSourceType | "all";
   limit?: number;
-  action_limit?: number;
-}) =>
-  post<{ created_count: number; created: Array<{ notification_id: number; status: string; action: SeoAuditAction }>; audit: SeoAudit }>(
-    "/api/seo/actions",
-    {
-      site_url: args?.site_url,
-      limit: args?.limit ?? 20,
-      action_limit: args?.action_limit ?? 20,
-    },
+} = {}) => {
+  const params = new URLSearchParams();
+  if (args.query?.trim()) params.set("query", args.query.trim());
+  if (args.source_type && args.source_type !== "all") {
+    params.set("source_type", args.source_type);
+  }
+  params.set("limit", String(args.limit ?? 100));
+  return get<{ entries: KnowledgeEntry[]; count: number }>(
+    `/api/knowledge?${params.toString()}`,
   );
+};
 
+export const createKnowledgeEntry = (payload: KnowledgeEntryPayload) =>
+  post<{ entry: KnowledgeEntry }>("/api/knowledge", payload);
+
+export const deleteKnowledgeEntry = (entryId: number) =>
+  del<{ deleted: boolean; id: number }>(`/api/knowledge/${entryId}`);
 
 // ---- Firm reviews (operator-pasted, split by source) ----
 export type FirmReviews = {
@@ -1790,14 +1712,6 @@ export type RenderedSequenceStep = {
   risk_flags?: string[];
 };
 
-export type SequenceTemplate = {
-  template_key: string;
-  label: string;
-  description: string;
-  steps_total: number;
-  default_variant: string;
-};
-
 export type SequenceState = {
   id: string;
   contact_id: string;
@@ -1833,34 +1747,6 @@ export type ContactDetail = {
   }>;
 };
 
-export type SequenceRecommendation = {
-  contact_id: string;
-  pif_id: string;
-  firm_name: string;
-  contact_name: string;
-  contact_email: string;
-  contact_title: string;
-  contact_source: string;
-  persona: string;
-  score: number;
-  reason: string;
-};
-
-export type SequenceRecommendationResponse = {
-  template_key: string;
-  limit: number;
-  recommended: SequenceRecommendation[];
-  counts: Record<string, number>;
-};
-
-export const listSequenceTemplates = () =>
-  get<SequenceTemplate[]>("/api/sequences/templates");
-
-export const recommendSequenceContacts = (templateKey: string, limit = 50) =>
-  get<SequenceRecommendationResponse>(
-    `/api/sequences/recommendations?template_key=${encodeURIComponent(templateKey)}&limit=${limit}`,
-  );
-
 export const listFirmsWithContacts = () =>
   get<FirmWithContacts[]>("/api/firms/with-contacts");
 
@@ -1893,42 +1779,6 @@ export const previewSequence = (
   ));
 };
 
-export const startSequence = (contactId: string, templateKey?: string) =>
-  post<{
-    sequence_id: string;
-    template_key: string;
-    variant: string;
-    steps_total: number;
-    next_step_due_at: string | null;
-  }>(
-    `/api/contacts/${encodeURIComponent(contactId)}/sequence/start`,
-    { template_key: templateKey ?? "possible_minds_dynamic" },
-  );
-
-export type PauseResumeResponse = {
-  sequence_id: string;
-  status: string;
-  paused_reason: string | null;
-  next_step_due_at: string | null;
-};
-
-export const pauseSequence = (contactId: string, reason?: string, templateKey?: string) => {
-  const qs = templateKey ? `?template_key=${encodeURIComponent(templateKey)}` : "";
-  return (
-  post<PauseResumeResponse>(
-    `/api/contacts/${encodeURIComponent(contactId)}/sequence/pause${qs}`,
-    { reason: reason ?? "" },
-  ));
-};
-
-export const resumeSequence = (contactId: string, templateKey?: string) => {
-  const qs = templateKey ? `?template_key=${encodeURIComponent(templateKey)}` : "";
-  return (
-  post<PauseResumeResponse>(
-    `/api/contacts/${encodeURIComponent(contactId)}/sequence/resume${qs}`,
-  ));
-};
-
 export type DeleteContactResult = {
   deleted: boolean;
   contact_id: string;
@@ -1957,28 +1807,6 @@ export const backfillFirmContacts = () =>
   post<{ firms: number; inserted: number; updated: number; skipped: number; errors: number }>(
     "/api/firm-contacts/backfill",
   );
-
-export type SequenceListItem = {
-  sequence_id: string;
-  contact_id: string;
-  contact_name: string;
-  contact_email: string | null;
-  pif_id: string;
-  firm_name: string | null;
-  template_key: string;
-  status: string;
-  current_step: number;
-  steps_total: number;
-  variant: string;
-  last_sent_at: string | null;
-  next_step_due_at: string | null;
-  paused_reason: string | null;
-};
-
-export const listSequences = (status?: string) => {
-  const qs = status ? `?status=${encodeURIComponent(status)}` : "";
-  return get<SequenceListItem[]>(`/api/sequences${qs}`);
-};
 
 // ---- Cybernetic lead generation loop ----
 export type LeadGenPolicy = {
@@ -2191,6 +2019,7 @@ export type LeadGenSendPlanItem = {
   linkedin_url: string | null;
   action_type: string;
   subject: string | null;
+  body: string | null;
   composer_variant_key: string | null;
   scheduled_for: string | null;
   scheduled_for_pt: string | null;
@@ -2273,6 +2102,29 @@ export const getLeadGenSendPlan = (sendDate?: string) => {
   const qs = sendDate ? `?send_date=${encodeURIComponent(sendDate)}` : "";
   return get<LeadGenSendPlan>(`/api/lead-gen/send-plan${qs}`);
 };
+
+export type ManualLeadGenEmailResult = {
+  batch_id: string;
+  batch_item_id: string;
+  action: AgentAction;
+  policy: Record<string, unknown>;
+  contact: EngagementCampaignContactOption;
+};
+
+export const scheduleManualLeadGenEmail = (args: {
+  contact_id: string;
+  subject: string;
+  body: string;
+  send_date: string;
+  send_time: string;
+  transport?: "zoho_api" | "resend" | null;
+  actor?: string;
+}) =>
+  post<ManualLeadGenEmailResult>("/api/lead-gen/manual-email", {
+    ...args,
+    timezone: "America/Los_Angeles",
+    actor: args.actor ?? "operator",
+  });
 
 export const getLeadGenDailyEnabled = () =>
   get<{ enabled: boolean; key: string }>("/api/lead-gen/daily-run/enabled");
@@ -2450,6 +2302,31 @@ export const sendLeadGenBatchItemDraft = (
     },
   );
 
+export const editLeadGenBatchItemDraft = (
+  batchItemId: string,
+  args: {
+    subject: string;
+    body: string;
+    actor?: string;
+  },
+) =>
+  post<{
+    action: Record<string, unknown>;
+    updated_existing: boolean;
+    created: boolean;
+    executed: boolean;
+    scheduled_for_pt?: string | null;
+    scheduled_for_utc?: string | null;
+  }>(
+    `/api/lead-gen/batch-items/${encodeURIComponent(batchItemId)}/edit-draft`,
+    {
+      subject: args.subject,
+      body: args.body,
+      actor: args.actor ?? "operator",
+      execute_now: false,
+    },
+  );
+
 export const recomposeLeadGenBatchItemDraft = (
   batchItemId: string,
   args: {
@@ -2498,31 +2375,6 @@ export const selectBatchItemVariant = (batchItemId: string, variantKey: string) 
     { variant_key: variantKey },
   );
 
-export type ComposerSkillVariantStats = {
-  key: string;
-  label: string;
-  description: string;
-  skill_path: string;
-  skill_sha256: string | null;
-  allocation_weight: number;
-  active: boolean;
-  is_baseline: boolean;
-  compose_count: number;
-  send_count: number;
-  manual_edit_count: number;
-  regenerate_count: number;
-  bounce_count: number;
-  reply_count: number;
-  booked_qualified_conversation_count: number;
-  manual_edit_rate: number | null;
-  send_rate: number | null;
-  reply_rate: number | null;
-  bounce_rate: number | null;
-  booked_qualified_conversation_rate: number | null;
-  first_seen_at: string | null;
-  last_seen_at: string | null;
-};
-
 export type ComposerSkillVariant = {
   key: string;
   label: string;
@@ -2538,60 +2390,8 @@ export type ComposerVariantsResponse = {
   variants: ComposerSkillVariant[];
 };
 
-export type ComposerVariantStatsResponse = {
-  experiment_key: string;
-  days: number;
-  variants_dir: string;
-  variants: ComposerSkillVariantStats[];
-};
-
 export const getComposerVariants = () =>
   get<ComposerVariantsResponse>("/api/lead-email-composer/variants");
-
-export const updateComposerVariant = (
-  variantKey: string,
-  args: { label: string; description?: string | null },
-) =>
-  patch<ComposerSkillVariant>(
-    `/api/lead-email-composer/variants/${encodeURIComponent(variantKey)}`,
-    args,
-  );
-
-export async function uploadComposerVariant(args: {
-  file: File;
-  label: string;
-  description?: string;
-  allocationWeight?: number;
-  active?: boolean;
-}) {
-  const form = new FormData();
-  form.set("file", args.file);
-  form.set("label", args.label);
-  form.set("description", args.description ?? "");
-  form.set("allocation_weight", String(args.allocationWeight ?? 100));
-  form.set("active", String(args.active ?? true));
-  const path = "/api/lead-email-composer/variants/upload";
-  const res = await fetch(apiUrl(path), {
-    method: "POST",
-    body: form,
-    credentials: "include",
-    headers: traceHeaders(),
-  });
-  if (res.status === 401) {
-    _handle401(path);
-    throw new Error(`POST ${path} 401`);
-  }
-  if (!res.ok) {
-    const detail = await errorDetail(res);
-    throw new Error(`POST ${path} ${res.status}${detail ? ` - ${detail}` : ""}`);
-  }
-  return res.json() as Promise<ComposerSkillVariant>;
-}
-
-export const getComposerVariantStats = (days = 30) =>
-  get<ComposerVariantStatsResponse>(
-    `/api/lead-email-composer/variant-stats?days=${encodeURIComponent(String(days))}`,
-  );
 
 // ---- Front observability ----
 export type FrontFunnelStep = {
@@ -3148,32 +2948,3 @@ export const editOutreachSend = (
   sendId: number,
   body: { subject?: string; body_html?: string; plaintext?: string; by?: string },
 ) => post<OutreachSend>(`/api/outreach/sends/${sendId}/edit`, body);
-
-export interface ComposerAbArm {
-  variant: string;
-  is_baseline: boolean;
-  sent: number;
-  opened: number;
-  replied: number;
-  declined: number;
-  bounced: number;
-  open_rate: number | null;
-  reply_rate: number | null;
-  p_beats_baseline_opens: number | null;
-  p_beats_baseline_replies: number | null;
-  verdict: string;
-  personas: Record<string, { sent: number; opened: number; replied: number; declined: number; bounced: number }>;
-}
-
-export interface ComposerAbReport {
-  experiment_key: string;
-  axis: string;
-  days: number;
-  min_sends_per_arm: number;
-  decision_probability: number;
-  arms: ComposerAbArm[];
-  warnings: string[];
-}
-
-export const getComposerAbReport = (days = 60) =>
-  get<ComposerAbReport>(`/api/lead-email-composer/report?days=${encodeURIComponent(String(days))}`);

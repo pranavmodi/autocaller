@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import re
 import secrets
 from collections import defaultdict
 from datetime import date, datetime, timezone
@@ -30,6 +31,9 @@ from app.services.workshop_tracking_analytics import (
 CHANNELS = {"email", "linkedin", "public"}
 STATUSES = {"draft", "active", "completed", "archived"}
 MEANINGFUL_EVENTS = {"click", "scroll_25", "scroll_50", "scroll_75", "scroll_90"}
+TRACKING_LINK_RE = re.compile(
+    r"https://(?:www\.)?getpossibleminds\.com/t/([A-Za-z0-9_-]{1,32})"
+)
 
 
 class EngagementCampaignError(ValueError):
@@ -42,6 +46,20 @@ def _clean(value: Any, limit: int = 255) -> str:
 
 def _iso(value: datetime | None) -> str | None:
     return value.isoformat() if value else None
+
+
+def _observed_time_on_page_ms(rows: list[LeadGenObservationRow]) -> int:
+    values = []
+    for row in rows:
+        try:
+            values.append(max(0, int((row.raw_event_json or {}).get("time_on_page_ms") or 0)))
+        except (TypeError, ValueError):
+            continue
+    return max(values, default=0)
+
+
+def _tracking_codes_from_text(value: Any) -> list[str]:
+    return list(dict.fromkeys(TRACKING_LINK_RE.findall(str(value or ""))))
 
 
 def _new_id(prefix: str) -> str:
@@ -255,6 +273,30 @@ async def mark_tracking_link_sent(code: str) -> dict[str, Any]:
     return {"code": row.code, "sent_at": _iso(row.sent_at)}
 
 
+async def mark_tracking_links_sent_from_text(
+    value: Any,
+    *,
+    sent_at: datetime | None = None,
+) -> list[str]:
+    codes = _tracking_codes_from_text(value)
+    if not codes:
+        return []
+    marked_at = sent_at or datetime.now(timezone.utc)
+    async with AsyncSessionLocal() as session:
+        rows = list((await session.execute(
+            select(EngagementCampaignLinkRow).where(
+                EngagementCampaignLinkRow.code.in_(codes),
+                EngagementCampaignLinkRow.channel == "email",
+            )
+        )).scalars().all())
+        for row in rows:
+            if row.sent_at is None:
+                row.sent_at = marked_at
+        await session.commit()
+    found = {row.code for row in rows}
+    return [code for code in codes if code in found]
+
+
 async def resolve_campaign_tracking_code(code: str) -> dict[str, Any] | None:
     clean_code = _clean(code, 32)
     if not clean_code:
@@ -452,6 +494,7 @@ async def campaign_analytics(campaign_id: str) -> dict[str, Any]:
             "confirmed_visits": 0,
             "meaningful_actions": 0,
             "deepest_scroll": 0,
+            "max_time_on_page_seconds": 0.0,
         }
         for link in links
     }
@@ -504,10 +547,14 @@ async def campaign_analytics(campaign_id: str) -> dict[str, Any]:
         quality = _session_quality(rows)
         raw_last = rows[-1].raw_event_json or {}
         page = _clean(raw_last.get("page"), 160).strip("/") or "landing page"
-        max_time = max((int((row.raw_event_json or {}).get("time_on_page_ms") or 0) for row in rows), default=0)
+        max_time = _observed_time_on_page_ms(rows)
         if quality == "human":
             channel_stats[link.channel]["confirmed_visits"] += 1
             link_metrics[code]["confirmed_visits"] += 1
+            link_metrics[code]["max_time_on_page_seconds"] = max(
+                link_metrics[code]["max_time_on_page_seconds"],
+                round(max_time / 1000, 1),
+            )
             if link.contact_id:
                 engaged_contacts.add(link.contact_id)
                 channel_engaged_contacts[link.channel].add(link.contact_id)

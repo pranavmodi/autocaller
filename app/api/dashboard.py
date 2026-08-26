@@ -1223,6 +1223,59 @@ async def clear_active_call_marker():
     return {"status": "ok", "hung_up": hung_up}
 
 
+@router.post("/calls/{call_id}/end")
+async def end_operator_call(call_id: str):
+    """End the exact call shown to the operator and verify carrier teardown."""
+    from app.models.call_log import CallOutcome
+    from app.services.call_reconciler import force_hangup
+
+    provider = get_call_log_provider()
+    call = await provider.get_call(call_id)
+    if call is None:
+        raise HTTPException(status_code=404, detail="call not found")
+
+    terminal = call.ended_at is not None or call.termination_state in {
+        "hangup_acked", "carrier_confirmed_ended"
+    }
+    if terminal:
+        if call.outcome == CallOutcome.IN_PROGRESS:
+            await provider.end_call(call_id, CallOutcome.COMPLETED, ended_by="manual")
+        provider.clear_active_call()
+        return {"status": "ended", "call_id": call_id, "already_terminal": True}
+
+    orchestrator = get_orchestrator()
+    current = getattr(orchestrator, "_current_call", None)
+    if current is not None and current.call_id == call_id and not orchestrator._ending_call:
+        await orchestrator.end_call(CallOutcome.COMPLETED, ended_by="manual")
+        refreshed = await provider.get_call(call_id)
+        if refreshed and refreshed.termination_state in {"hangup_acked", "carrier_confirmed_ended"}:
+            return {"status": "ended", "call_id": call_id, "already_terminal": False}
+
+    # The orchestrator can be stuck in a re-entrant teardown while the carrier
+    # leg remains live. Record intent, then use the carrier adapter directly.
+    await provider.end_call(call_id, CallOutcome.COMPLETED, ended_by="manual")
+    refreshed = await provider.get_call(call_id)
+    if refreshed is not None and not refreshed.carrier_call_sid and current is None:
+        # After a backend restart there is no carrier handle or live
+        # orchestrator left to act on. The operator's end intent is the only
+        # authoritative terminal signal available; close the stale DB row.
+        await provider.mark_carrier_terminal(
+            call_id,
+            state="carrier_confirmed_ended",
+            error="manual_end_no_carrier_handle_after_restart",
+        )
+        provider.clear_active_call()
+        return {
+            "status": "ended", "call_id": call_id,
+            "already_terminal": False, "carrier_handle_missing": True,
+        }
+    result = await force_hangup(call_id)
+    provider.clear_active_call()
+    if not result.get("ok"):
+        raise HTTPException(status_code=502, detail=result.get("error") or "carrier hangup failed")
+    return {"status": "ended", "call_id": call_id, "already_terminal": False}
+
+
 @router.post("/calls/{call_id}/force-hangup")
 async def call_force_hangup(call_id: str):
     """Operator-invoked force-hangup via the carrier REST API.

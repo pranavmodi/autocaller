@@ -45,13 +45,30 @@ def notification_to_dict(row: OperatorNotificationRow) -> dict[str, Any]:
 # center. lead_sequence_email_approval duplicated the /lead-gen review surface
 # and made the bottom-right action center noisy — drafts are reviewed on
 # /lead-gen, not here.
-_SUPPRESSED_NOTIFICATION_TYPES = {"lead_sequence_email_approval"}
+_SUPPRESSED_NOTIFICATION_TYPES = {
+    "lead_sequence_email_approval",
+    "yelp_review_needed",
+}
 
 # Allowlist of notification types the operator action center (bottom-right
 # popup + /actions page) surfaces. Other types (e.g. seo_action) still persist
 # — the /seo page reads them — but are not shown here. To re-surface a type,
 # add it here (and restart the backend).
-_ACTION_CENTER_SURFACED_TYPES = {"yelp_review_needed", "lead_email_reply"}
+_ACTION_CENTER_SURFACED_TYPES = {"lead_email_reply"}
+
+
+def _notification_is_suppressed(
+    notification_type: str,
+    suggested_action: dict[str, Any] | None = None,
+) -> bool:
+    if notification_type in _SUPPRESSED_NOTIFICATION_TYPES:
+        return True
+    action_kind = str((suggested_action or {}).get("kind") or "").strip().lower()
+    if notification_type == "lead_email_reply" and action_kind == "needs_human_review":
+        # Keep noisy/ambiguous reply classifications out of the action center
+        # for now. Set this env flag to re-enable them without another code edit.
+        return not _truthy(os.getenv("OPERATOR_NOTIFY_NEEDS_HUMAN_REVIEW", ""))
+    return False
 
 
 async def create_operator_notification(
@@ -67,7 +84,7 @@ async def create_operator_notification(
     context: dict[str, Any] | None = None,
     suggested_action: dict[str, Any] | None = None,
 ) -> OperatorNotificationRow:
-    if notification_type in _SUPPRESSED_NOTIFICATION_TYPES:
+    if _notification_is_suppressed(notification_type, suggested_action):
         # Transient, un-persisted row: callers that read `.id` (paused_reason
         # bookkeeping) keep working; nothing is written to the DB.
         return OperatorNotificationRow(
@@ -117,9 +134,17 @@ async def list_pending_notifications(limit: int = 10) -> list[dict[str, Any]]:
                 OperatorNotificationRow.notification_type.in_(_ACTION_CENTER_SURFACED_TYPES),
             )
             .order_by(OperatorNotificationRow.created_at.desc(), OperatorNotificationRow.id.desc())
-            .limit(limit)
+            .limit(min(200, limit * 4))
         )).scalars().all())
-    return [notification_to_dict(row) for row in rows]
+    visible = [
+        row
+        for row in rows
+        if not _notification_is_suppressed(
+            row.notification_type,
+            row.suggested_action_json if isinstance(row.suggested_action_json, dict) else {},
+        )
+    ]
+    return [notification_to_dict(row) for row in visible[:limit]]
 
 
 async def acknowledge_notification(
@@ -327,6 +352,8 @@ def _send_thread_reply(
                 pif_id=context.get("pif_id"),
                 recipient_name=context.get("contact_name"),
                 transport="zoho_api",
+                in_reply_to=inbound.message_id,
+                references=_thread_references(inbound),
             ),
             "zoho_api_thread",
         )

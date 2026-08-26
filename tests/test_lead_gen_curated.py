@@ -1,4 +1,5 @@
 import asyncio
+from datetime import datetime, timezone
 from types import SimpleNamespace
 
 from app.db.models import FirmContactRow, LeadGenBatchItemRow, LeadGenBatchRow
@@ -204,3 +205,66 @@ def test_recount_batch_repairs_empty_counts(monkeypatch):
         "requested": 3,
     }
     assert session.commits == 1
+
+
+def test_schedule_manual_email_creates_policy_checked_scheduled_action(monkeypatch):
+    session = _FakeSession()
+    contact = _contact("contact_1", "owner@example.com")
+    session.contacts[contact.id] = contact
+    scheduled_for = datetime(2030, 6, 11, 16, 30, tzinfo=timezone.utc)
+    captured: dict[str, object] = {}
+
+    async def fake_firm_name(_session, _contact):
+        return "Example Injury Law"
+
+    async def fake_create_batch(**kwargs):
+        captured["batch"] = kwargs
+        return {"id": "batch_manual"}
+
+    async def fake_add_contacts(batch_id, contact_refs, actor):
+        captured["added"] = (batch_id, contact_refs, actor)
+        return {"item_ids": [{"item_id": "item_manual", "contact_email": contact.email}]}
+
+    async def fake_create_action(**kwargs):
+        captured["action"] = kwargs
+        return {"id": "action_manual", "status": "approved"}
+
+    async def fake_policy(action_id, actor):
+        captured["policy"] = (action_id, actor)
+        return {"allowed": True, "reason": "allowed"}
+
+    monkeypatch.setattr(lead_gen_curated, "AsyncSessionLocal", lambda: session)
+    monkeypatch.setattr(lead_gen_curated, "_firm_name_for_contact", fake_firm_name)
+    monkeypatch.setattr(lead_gen_curated, "create_curated_batch", fake_create_batch)
+    monkeypatch.setattr(lead_gen_curated, "add_contacts_to_batch", fake_add_contacts)
+    monkeypatch.setattr(lead_gen_curated, "create_send_email_action", fake_create_action)
+    monkeypatch.setattr(lead_gen_curated, "check_action_policy", fake_policy)
+
+    result = asyncio.run(lead_gen_curated.schedule_manual_email(
+        contact_id=contact.id,
+        subject="A manual note",
+        body="Hi there,\n\nThis was written by the operator.",
+        scheduled_for=scheduled_for,
+        transport="zoho_api",
+        actor="tester",
+    ))
+
+    assert result["batch_id"] == "batch_manual"
+    assert result["batch_item_id"] == "item_manual"
+    assert result["policy"]["allowed"] is True
+    assert captured["action"] == {
+        "to": "owner@example.com",
+        "subject": "A manual note",
+        "body": "Hi there,\n\nThis was written by the operator.",
+        "mode": "lead_gen",
+        "requested_by": "tester",
+        "approved_by": "tester",
+        "contact_id": "contact_1",
+        "batch_item_id": "item_manual",
+        "pif_id": "pif_1",
+        "firm_name": "Example Injury Law",
+        "composer_variant_key": "manual",
+        "lead_gen_action_type": "manual_email",
+        "scheduled_for": scheduled_for,
+        "transport": "zoho_api",
+    }

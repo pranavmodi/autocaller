@@ -16,6 +16,7 @@ import {
   Eye,
   ExternalLink,
   Loader2,
+  Mail,
   MailPlus,
   Play,
   RefreshCw,
@@ -33,6 +34,7 @@ import {
   createLeadGenBatch,
   createLeadGenEmailAgentSlice,
   createLeadGenProposal,
+  editLeadGenBatchItemDraft,
   getContactDetail,
   getComposerVariants,
   getLeadGenBatch,
@@ -48,6 +50,8 @@ import {
   putFirmReviews,
   recomposeLeadGenBatchItemDraft,
   runLeadGenDaily,
+  scheduleManualLeadGenEmail,
+  searchEngagementCampaignContacts,
   sendLeadGenBatchItemDraft,
   composeBatchItemVariants,
   selectBatchItemVariant,
@@ -66,6 +70,7 @@ import {
   type LeadGenSendPlanItem,
   type LeadGenThroughput,
   type LeadGenThroughputHeldFirm,
+  type EngagementCampaignContactOption,
   type RenderedSequenceStep,
   type ComposerSkillVariant,
 } from "@/lib/api";
@@ -133,6 +138,7 @@ function LeadGenPageContent() {
   );
   const [selectedSendDate, setSelectedSendDate] = useState(() => sendDateKey(new Date()));
   const [queuePreviewTarget, setQueuePreviewTarget] = useState<QueuePreviewTarget | null>(null);
+  const [manualComposerOpen, setManualComposerOpen] = useState(false);
   const requestedBatchId = searchParams.get("batch") || "";
   const requestedItemId = searchParams.get("item") || "";
   const requestedContactId = searchParams.get("contact") || "";
@@ -338,6 +344,7 @@ function LeadGenPageContent() {
             plan={sendPlan.data ?? null}
             loading={sendPlan.isLoading}
             error={sendPlan.isError}
+            onCompose={() => setManualComposerOpen(true)}
             onOpenDraft={(item) =>
               setQueuePreviewTarget({
                 batchId: item.batch_id,
@@ -351,6 +358,18 @@ function LeadGenPageContent() {
               onClose={() => {
                 setQueuePreviewTarget(null);
                 qc.invalidateQueries({ queryKey: ["lead-gen-send-plan"] });
+              }}
+            />
+          )}
+          {manualComposerOpen && (
+            <ManualEmailComposerModal
+              selectedDate={selectedSendDate}
+              onClose={() => setManualComposerOpen(false)}
+              onScheduled={(sendDate) => {
+                setManualComposerOpen(false);
+                setSelectedSendDate(sendDate);
+                qc.invalidateQueries({ queryKey: ["lead-gen-send-plan"] });
+                qc.invalidateQueries({ queryKey: ["lead-gen-batches"] });
               }}
             />
           )}
@@ -2034,6 +2053,13 @@ function BatchDetail({
     () => (data?.items ?? []).filter((item) => Boolean(storedAgentDraftStep(item))).length,
     [data?.items],
   );
+  const reviewableDraftCount = useMemo(
+    () =>
+      (data?.items ?? []).filter(
+        (item) => Boolean(storedAgentDraftStep(item)) || isEmailSent(item),
+      ).length,
+    [data?.items],
+  );
   const heldItemCount = useMemo(
     () => (data?.items ?? []).filter((item) => Boolean(reasonValue(item, "held_reason"))).length,
     [data?.items],
@@ -2259,6 +2285,15 @@ function BatchDetail({
                 <span className="text-neutral-400">
                   Completed · {formatIstDate(data.batch.created_at)}
                 </span>
+                <button
+                  type="button"
+                  onClick={() => setShowAllDrafts(true)}
+                  disabled={reviewableDraftCount === 0}
+                  className="inline-flex items-center gap-1.5 font-medium text-neutral-600 hover:text-neutral-900 disabled:opacity-50"
+                >
+                  <Eye className="h-3.5 w-3.5" />
+                  View all drafts
+                </button>
                 <Link href="/comms" className="font-medium text-neutral-600 hover:text-neutral-900">
                   View emails in Comms →
                 </Link>
@@ -2303,6 +2338,15 @@ function BatchDetail({
           >
             {approveActions.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
             Approve &amp; send
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowAllDrafts(true)}
+            disabled={reviewableDraftCount === 0}
+            className="inline-flex items-center gap-2 rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50 disabled:opacity-50"
+          >
+            <Eye className="h-4 w-4" />
+            View all drafts ({reviewableDraftCount})
           </button>
           <button
             type="button"
@@ -2387,15 +2431,6 @@ function BatchDetail({
               >
                 {approve.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ClipboardCheck className="h-4 w-4" />}
                 Approve without sending
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowAllDrafts(true)}
-                disabled={composedItemCount === 0}
-                className="inline-flex items-center gap-2 rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50 disabled:opacity-50"
-              >
-                <Eye className="h-4 w-4" />
-                View all drafts
               </button>
               <button
                 type="button"
@@ -2536,6 +2571,7 @@ function SelectedDateSendPlanPanel({
   plan,
   loading,
   error,
+  onCompose,
   onOpenDraft,
 }: {
   selectedDate: string;
@@ -2543,6 +2579,7 @@ function SelectedDateSendPlanPanel({
   plan: LeadGenSendPlan | null;
   loading: boolean;
   error: boolean;
+  onCompose: () => void;
   onOpenDraft: (item: LeadGenSendPlanItem) => void;
 }) {
   const items = plan?.items ?? [];
@@ -2569,6 +2606,14 @@ function SelectedDateSendPlanPanel({
           </p>
         </div>
         <div className="ml-auto flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={onCompose}
+            className="inline-flex items-center gap-2 rounded-md bg-neutral-900 px-3 py-2 text-sm font-medium text-white hover:bg-neutral-800"
+          >
+            <MailPlus className="h-4 w-4" />
+            Compose email
+          </button>
           <label className="flex items-center gap-2 text-xs font-medium text-neutral-500">
             <CalendarDays className="h-3.5 w-3.5" />
             <input
@@ -2744,6 +2789,233 @@ function SelectedDateSendPlanRow({
         )}
       </div>
     </article>
+  );
+}
+
+function ManualEmailComposerModal({
+  selectedDate,
+  onClose,
+  onScheduled,
+}: {
+  selectedDate: string;
+  onClose: () => void;
+  onScheduled: (sendDate: string) => void;
+}) {
+  const initialSchedule = manualEmailDefaultSchedule(selectedDate);
+  const [contactQuery, setContactQuery] = useState("");
+  const [debouncedContactQuery, setDebouncedContactQuery] = useState("");
+  const [selectedContact, setSelectedContact] = useState<EngagementCampaignContactOption | null>(null);
+  const [subject, setSubject] = useState("");
+  const [body, setBody] = useState("");
+  const [sendDate, setSendDate] = useState(initialSchedule.date);
+  const [sendTime, setSendTime] = useState(initialSchedule.time);
+  const [transport, setTransport] = useState<"" | "zoho_api" | "resend">("");
+
+  useEffect(() => {
+    const timeout = window.setTimeout(
+      () => setDebouncedContactQuery(contactQuery.trim()),
+      250,
+    );
+    return () => window.clearTimeout(timeout);
+  }, [contactQuery]);
+
+  const contacts = useQuery({
+    queryKey: ["manual-email-contact-options", debouncedContactQuery],
+    queryFn: () => searchEngagementCampaignContacts(debouncedContactQuery, 20),
+    enabled: !selectedContact && debouncedContactQuery.length >= 2,
+    staleTime: 60_000,
+  });
+  const schedule = useMutation({
+    mutationFn: () =>
+      scheduleManualLeadGenEmail({
+        contact_id: selectedContact?.id || "",
+        subject,
+        body,
+        send_date: sendDate,
+        send_time: sendTime,
+        transport: transport || null,
+      }),
+    onSuccess: () => onScheduled(sendDate),
+  });
+  const hasUnsavedCopy = Boolean(selectedContact || subject.trim() || body.trim());
+  const closeComposer = () => {
+    if (hasUnsavedCopy && !window.confirm("Discard this unscheduled email draft?")) return;
+    onClose();
+  };
+  const canSchedule = Boolean(
+    selectedContact?.email && subject.trim() && body.trim() && sendDate && sendTime,
+  );
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4 py-6">
+      <div className="flex max-h-[92vh] w-full max-w-3xl flex-col rounded-lg bg-white shadow-xl">
+        <div className="flex items-center justify-between gap-3 border-b border-neutral-100 px-5 py-4">
+          <div>
+            <h3 className="text-sm font-semibold text-neutral-900">Compose email</h3>
+            <p className="mt-1 text-xs text-neutral-500">Send Queue · manual</p>
+          </div>
+          <button
+            type="button"
+            onClick={closeComposer}
+            className="rounded-md border border-neutral-200 px-3 py-1.5 text-sm font-medium text-neutral-600 hover:bg-neutral-50"
+          >
+            Close
+          </button>
+        </div>
+
+        <div className="space-y-4 overflow-y-auto px-5 py-4">
+          <section>
+            <label className="block text-xs font-medium text-neutral-600">
+              Recipient
+              {!selectedContact ? (
+                <input
+                  value={contactQuery}
+                  onChange={(event) => setContactQuery(event.target.value)}
+                  placeholder="Search name, firm, or email"
+                  autoFocus
+                  className="mt-1 w-full rounded-md border border-neutral-200 px-3 py-2 text-sm text-neutral-900"
+                />
+              ) : (
+                <div className="mt-1 flex min-w-0 items-center gap-3 rounded-md border border-neutral-200 px-3 py-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-medium text-neutral-900">
+                      {selectedContact.name}
+                    </div>
+                    <div className="truncate text-xs text-neutral-500">
+                      {selectedContact.email} · {selectedContact.firm_name || "No firm"}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedContact(null);
+                      setContactQuery("");
+                    }}
+                    className="shrink-0 text-xs font-medium text-neutral-600 hover:text-neutral-900"
+                  >
+                    Change
+                  </button>
+                </div>
+              )}
+            </label>
+            {!selectedContact && debouncedContactQuery.length >= 2 && (
+              <div className="mt-1 max-h-52 overflow-y-auto rounded-md border border-neutral-200 bg-white shadow-sm">
+                {contacts.isLoading ? (
+                  <div className="flex items-center gap-2 px-3 py-3 text-sm text-neutral-500">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Searching
+                  </div>
+                ) : contacts.isError ? (
+                  <div className="px-3 py-3 text-sm text-red-600">Contact search failed.</div>
+                ) : (contacts.data?.contacts ?? []).length === 0 ? (
+                  <div className="px-3 py-3 text-sm text-neutral-500">No matching contacts.</div>
+                ) : (
+                  (contacts.data?.contacts ?? []).map((contact) => (
+                    <button
+                      key={contact.id}
+                      type="button"
+                      onClick={() => contact.email && setSelectedContact(contact)}
+                      disabled={!contact.email}
+                      className="flex w-full min-w-0 items-center justify-between gap-3 border-b border-neutral-100 px-3 py-2 text-left last:border-b-0 hover:bg-neutral-50 disabled:opacity-50"
+                    >
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm font-medium text-neutral-900">
+                          {contact.name}
+                        </span>
+                        <span className="block truncate text-xs text-neutral-500">
+                          {contact.title || "No title"} · {contact.firm_name || "No firm"}
+                        </span>
+                      </span>
+                      <span className="max-w-[45%] truncate text-xs text-neutral-600">
+                        {contact.email || "No email"}
+                      </span>
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
+          </section>
+
+          <label className="block text-xs font-medium text-neutral-600">
+            Subject
+            <input
+              value={subject}
+              onChange={(event) => setSubject(event.target.value)}
+              maxLength={500}
+              className="mt-1 w-full rounded-md border border-neutral-200 px-3 py-2 text-sm font-medium text-neutral-900"
+            />
+          </label>
+          <label className="block text-xs font-medium text-neutral-600">
+            Body
+            <textarea
+              value={body}
+              onChange={(event) => setBody(event.target.value)}
+              rows={14}
+              maxLength={20_000}
+              className="mt-1 w-full rounded-md border border-neutral-200 px-3 py-2 font-sans text-sm leading-6 text-neutral-800"
+            />
+          </label>
+
+          <div className="grid gap-3 sm:grid-cols-3">
+            <label className="block text-xs font-medium text-neutral-600">
+              Send date
+              <input
+                type="date"
+                value={sendDate}
+                min={sendDateKey(new Date())}
+                onChange={(event) => setSendDate(event.target.value)}
+                className="mt-1 w-full rounded-md border border-neutral-200 px-3 py-2 text-sm text-neutral-900"
+              />
+            </label>
+            <label className="block text-xs font-medium text-neutral-600">
+              Pacific time
+              <input
+                type="time"
+                value={sendTime}
+                onChange={(event) => setSendTime(event.target.value)}
+                className="mt-1 w-full rounded-md border border-neutral-200 px-3 py-2 text-sm text-neutral-900"
+              />
+            </label>
+            <label className="block text-xs font-medium text-neutral-600">
+              Transport
+              <select
+                value={transport}
+                onChange={(event) => setTransport(event.target.value as "" | "zoho_api" | "resend")}
+                className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-900"
+              >
+                <option value="">Automatic</option>
+                <option value="zoho_api">Zoho</option>
+                <option value="resend">Resend</option>
+              </select>
+            </label>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center justify-end gap-2 border-t border-neutral-100 px-5 py-3">
+          {schedule.isError && (
+            <div className="mr-auto max-w-lg text-xs text-red-600">
+              {errorMessage(schedule.error)}
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={closeComposer}
+            className="rounded-md border border-neutral-200 px-3 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={() => schedule.mutate()}
+            disabled={!canSchedule || schedule.isPending}
+            className="inline-flex items-center gap-2 rounded-md bg-neutral-900 px-3 py-2 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-50"
+          >
+            {schedule.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Clock className="h-4 w-4" />}
+            Schedule email
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -3660,7 +3932,7 @@ function AllDraftsModal({
   );
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4">
-      <div className="flex max-h-[90vh] w-full max-w-3xl flex-col rounded-xl bg-white shadow-xl">
+      <div className="flex max-h-[90vh] w-full max-w-4xl flex-col rounded-lg bg-white shadow-xl">
         <div className="flex items-center justify-between border-b border-neutral-100 px-5 py-4">
           <div>
             <h3 className="text-sm font-semibold text-neutral-900">
@@ -3740,6 +4012,23 @@ function AllDraftsModal({
                   </button>
                 </div>
                 <div className="px-3 py-2">
+                  <div className="mb-2 flex min-w-0 items-center gap-2 border-b border-neutral-100 pb-2 text-sm">
+                    <Mail className="h-4 w-4 shrink-0 text-neutral-400" />
+                    <span className="shrink-0 font-medium text-neutral-500">To:</span>
+                    <span className="truncate font-medium text-neutral-800">
+                      {item.contact_name || "Unknown recipient"}
+                    </span>
+                    {item.contact_email ? (
+                      <a
+                        href={`mailto:${item.contact_email}`}
+                        className="min-w-0 truncate text-sky-700 hover:underline"
+                      >
+                        {item.contact_email}
+                      </a>
+                    ) : (
+                      <span className="text-red-600">No recipient email</span>
+                    )}
+                  </div>
                   <p className="text-sm font-semibold text-neutral-900">{subject}</p>
                   <pre className="mt-1 whitespace-pre-wrap font-sans text-sm text-neutral-700">
                     {body}
@@ -3798,12 +4087,12 @@ function PreviewModal({
     setRecomposedStep(null);
   }, [item.id]);
   useEffect(() => {
-    if (nextStep) {
+    if (nextStep && !draftTouched) {
       setDraftSubject(nextStep.subject);
       setDraftBody(nextStep.body);
       setDraftTouched(false);
     }
-  }, [nextStep]);
+  }, [draftTouched, nextStep]);
   const regeneratePreview = async () => {
     if (
       isDynamic &&
@@ -3847,6 +4136,27 @@ function PreviewModal({
       onClose();
     },
   });
+  const saveDraft = useMutation({
+    mutationFn: () =>
+      editLeadGenBatchItemDraft(item.id, {
+        subject: draftSubject,
+        body: draftBody,
+        actor: "operator",
+      }),
+    onSuccess: () => {
+      if (nextStep) {
+        setRecomposedStep({
+          ...nextStep,
+          subject: draftSubject,
+          body: draftBody,
+        });
+      }
+      setDraftTouched(false);
+      qc.invalidateQueries({ queryKey: ["lead-gen-batch", item.batch_id] });
+      qc.invalidateQueries({ queryKey: ["lead-gen-batches"] });
+      qc.invalidateQueries({ queryKey: ["lead-gen-send-plan"] });
+    },
+  });
   const recomposeDraft = useMutation({
     mutationFn: () =>
       recomposeLeadGenBatchItemDraft(item.id, {
@@ -3884,6 +4194,12 @@ function PreviewModal({
       return;
     }
     recomposeDraft.mutate();
+  };
+  const closePreview = () => {
+    if (draftTouched && !window.confirm("Discard your unsaved draft changes?")) {
+      return;
+    }
+    onClose();
   };
 
   // Multi-variant compare: generate all composer variants on-demand, pick one to send.
@@ -3936,9 +4252,9 @@ function PreviewModal({
               <div>
                 <div className="font-medium">Scheduled for auto-send at {scheduledSendPt(item)}.</div>
                 <div className="mt-0.5 text-xs">
-                  The daemon will send this automatically. To change it, use{" "}
+                  Save subject or body edits here. To change the send time, use{" "}
                   <code>actions reschedule</code> / <code>actions cancel</code> or the /actions page.
-                  Manual send is disabled to prevent a duplicate.
+                  The daemon will send the saved draft automatically.
                 </div>
               </div>
             </div>
@@ -4093,6 +4409,7 @@ function PreviewModal({
               onClick={redoCompose}
               disabled={
                 recomposeDraft.isPending ||
+                saveDraft.isPending ||
                 sendDraft.isPending ||
                 composeVariants.isPending ||
                 selectVariant.isPending
@@ -4122,6 +4439,27 @@ function PreviewModal({
               {isDynamic ? "Regenerate draft" : "Refresh preview"}
             </button>
           )}
+          {isDynamic && storedDraft && !alreadySent && nextStep && (
+            <button
+              type="button"
+              onClick={() => saveDraft.mutate()}
+              disabled={
+                !draftTouched ||
+                !draftSubject.trim() ||
+                !draftBody.trim() ||
+                saveDraft.isPending ||
+                recomposeDraft.isPending ||
+                sendDraft.isPending
+              }
+              className="inline-flex items-center gap-2 rounded-md bg-neutral-900 px-3 py-2 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-50"
+            >
+              {saveDraft.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ClipboardCheck className="h-4 w-4" />}
+              Save changes
+            </button>
+          )}
+          {saveDraft.isSuccess && !draftTouched && (
+            <span className="self-center text-xs font-medium text-emerald-700">Saved</span>
+          )}
           {canSendDraft && nextStep && (
             <button
               type="button"
@@ -4135,7 +4473,7 @@ function PreviewModal({
           )}
           <button
             type="button"
-            onClick={onClose}
+            onClick={closePreview}
             className="rounded-md border border-neutral-200 px-3 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50"
           >
             Close
@@ -4145,6 +4483,13 @@ function PreviewModal({
               {sendDraft.error instanceof Error
                 ? sendDraft.error.message
                 : "Could not send this email."}
+            </div>
+          )}
+          {saveDraft.isError && (
+            <div className="basis-full text-right text-xs text-red-600">
+              {saveDraft.error instanceof Error
+                ? saveDraft.error.message
+                : "Could not save this draft."}
             </div>
           )}
           {recomposeDraft.isError && (
@@ -4470,6 +4815,29 @@ function sendDateKey(value: Date | string | null | undefined) {
   }).formatToParts(date);
   const byType = Object.fromEntries(parts.map((part) => [part.type, part.value]));
   return `${byType.year}-${byType.month}-${byType.day}`;
+}
+
+function manualEmailDefaultSchedule(selectedDate: string) {
+  const now = new Date();
+  const today = sendDateKey(now);
+  if (selectedDate > today) {
+    return { date: selectedDate, time: "09:30" };
+  }
+  const candidate = new Date(now.getTime() + 15 * 60_000);
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: SEND_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(candidate);
+  const byType = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return {
+    date: `${byType.year}-${byType.month}-${byType.day}`,
+    time: `${byType.hour}:${byType.minute}`,
+  };
 }
 
 function groupBatchesByDate(batches: LeadGenBatch[]) {

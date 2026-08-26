@@ -65,6 +65,15 @@ A reasonable heuristic: if someone three months from now had only the CLI and `d
 
 ## Other standing rules
 
+- **EmailTag web search is disabled.** Do not build or retain Possible OS
+  functionality that depends on EmailTag executing web searches or web
+  research. Any such workflow must run locally in Possible OS, normally through
+  the loopback OpenClaw gateway, and persist results in the local Possible OS
+  database. Audit older start/status relays before relying on them; if they
+  still queue EmailTag research, migrate them locally first. EmailTag may remain
+  a source for data it already stores through its supported sync APIs, but it is
+  not an available web-research backend. Job-opening research is already local.
+
 - **Decision log — record important decisions every session.** Architectural,
   strategic, policy, tooling/transport, flag-flip, deferral, and reversal
   decisions MUST be appended to `docs/decisions/<YYYY-MM-DD>.md` (UTC date), in
@@ -83,26 +92,14 @@ A reasonable heuristic: if someone three months from now had only the CLI and `d
   - **Log decisions, not activity.** A routine bugfix, refactor, or rename is not
     a decision; a choice between approaches, a policy/flag change, a deferral, or
     a reversal is. One line per decision is fine.
-- **OpenClaw gateway: always use the `openclaw/proxy` agent, never `openclaw`.**
-  Every Possible OS LLM call that goes through the OpenClaw gateway
-  (`call_skill_json`, the composer, PHI egress guard, lead-feedback
-  classifier, blog/outreach composer, listening-prep, etc.) MUST target the
-  lightweight **`openclaw/proxy`** agent. The default `openclaw` (main) agent
-  loads the `active-memory` extension, which reads a *daily* memory file
-  (`~/.openclaw/workspace/memory/<date>.md`); when that day's file is missing
-  the tool fails on every turn, which (a) injects `⚠️ 🛠️ … failed` chatter
-  into responses, (b) adds ~30s latency, and (c) causes intermittent
-  "incomplete turn" failures that fail-close the PHI guard and block sends.
-  The proxy agent has no memory extension — it's fast, clean, and stateless,
-  which is correct for Possible OS single-shot JSON tasks (they're fully
-  specified by SKILL.md + payload and gain nothing from cross-session memory).
-  Code defaults are set to `openclaw/proxy`; keep it that way. Env overrides:
-  `OPENCLAW_DEFAULT_MODEL`, `LEAD_EMAIL_COMPOSER_MODEL`, `LEAD_FEEDBACK_MODEL`,
-  `BLOG_OUTREACH_MODEL`, `OUTREACH_PHI_GUARD_MODEL` — all should be
-  `openclaw/proxy` (or another lightweight, memory-less agent), never the bare
-  `openclaw`. Direct-OpenAI calls (`gpt-4o-mini` for the judge, lead-extractor,
-  IVR navigator) do not use the gateway and are unaffected. When the
-  master-agent WIP lands, point `MASTER_AGENT_*_MODEL` at `openclaw/proxy` too.
+- **OpenClaw gateway: use an agent that exists in the live gateway.** The former
+  `openclaw/proxy` agent is unavailable and returns `Unknown agent 'proxy'`.
+  New local web-research workflows must explicitly use `openclaw/main` unless a
+  tested lightweight replacement is introduced. The gateway is loopback-only,
+  so these calls execute on the Possible OS server. Before changing an older
+  single-shot JSON workflow that still defaults to `openclaw/proxy`, verify its
+  live model and migrate it deliberately; do not assume the stale default works.
+  Direct-OpenAI calls do not use this gateway and are unaffected.
 - **Keep safety rails explicit.** `ALLOW_TWILIO_CALLS`, `allow_live_calls`, `allowed_phones`, `mock_mode`, `system_enabled` — every new risk vector needs a gate of comparable clarity.
 - **Never auto-start the dispatcher on daemon boot.** Restarts must not trigger outbound calls. Explicit operator action only.
 - **Prompt change protocol.** Every prompt change must: (1) bump `PROMPT_VERSION` in `app/prompts/attorney_cold_call.py`, (2) `git commit` with a descriptive message, (3) `git push`, (4) restart the backend. No prompt change ships without all four steps. This ensures every live call's `prompt_version` traces to a committed, pushed revision.

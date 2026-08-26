@@ -242,6 +242,57 @@ def _edit_subject_body(subject: str, body: str, *, use_editor: bool) -> tuple[st
             raise typer.Exit(code=1) from exc
 
 
+def _load_custom_draft_inputs(
+    *,
+    subject: str,
+    body: str,
+    body_file: str,
+    draft_file: str,
+) -> tuple[str, str] | None:
+    """Load non-interactive custom draft input for ``lead-gen edit-draft``.
+
+    A full draft file uses the same format as the interactive editor: its first
+    line is ``Subject: ...`` and the remaining text is the message body.  The
+    split ``--subject``/``--body`` and ``--subject``/``--body-file`` forms are
+    useful for shell automation.  Returning ``None`` preserves the legacy
+    composer-backed interactive edit path.
+    """
+    clean_subject = subject.strip()
+    has_body = bool(body)
+    has_body_file = bool(body_file.strip())
+    has_draft_file = bool(draft_file.strip())
+
+    if has_draft_file:
+        if clean_subject or has_body or has_body_file:
+            raise ValueError("--draft-file cannot be combined with --subject, --body, or --body-file")
+        try:
+            raw = Path(draft_file).read_text(encoding="utf-8")
+        except OSError as exc:
+            raise ValueError(f"unable to read --draft-file: {exc}") from exc
+        return _parse_editor_draft(raw)
+
+    if has_body and has_body_file:
+        raise ValueError("use only one of --body or --body-file")
+    if not clean_subject and not has_body and not has_body_file:
+        return None
+    if not clean_subject:
+        raise ValueError("--subject is required with --body or --body-file")
+    if not has_body and not has_body_file:
+        raise ValueError("provide --body or --body-file with --subject")
+
+    if has_body_file:
+        try:
+            loaded_body = Path(body_file).read_text(encoding="utf-8")
+        except OSError as exc:
+            raise ValueError(f"unable to read --body-file: {exc}") from exc
+    else:
+        loaded_body = body
+    clean_body = loaded_body.strip()
+    if not clean_body:
+        raise ValueError("custom draft body cannot be empty")
+    return clean_subject, clean_body
+
+
 def _patch(path: str, json_body: Optional[dict] = None, timeout: float = 30.0) -> dict:
     try:
         resp = httpx.patch(f"{_api_base()}{path}", json=json_body or {}, timeout=timeout)
@@ -4485,6 +4536,11 @@ def actions_send_approved_lead_gen_draft(
     batch_item_id: str = typer.Option(..., "--item", help="Lead-gen batch item id."),
     subject: str = typer.Option(..., "--subject", help="Approved subject."),
     body: str = typer.Option(..., "--body", help="Approved body."),
+    in_reply_to: str = typer.Option("", "--in-reply-to", help="RFC Message-ID of the message being answered."),
+    references: str = typer.Option("", "--references", help="Space-separated RFC Message-ID ancestry; defaults to --in-reply-to."),
+    action_type: str = typer.Option("", "--action-type", help="Outreach classification: first_touch or follow_up."),
+    sequence_id: str = typer.Option("", "--sequence-id", help="Existing sequence id for a follow-up action."),
+    sequence_step_num: int = typer.Option(0, "--sequence-step", min=0, max=100, help="Existing sequence step number for a follow-up action."),
     transport: str = typer.Option(
         ...,
         "--transport",
@@ -4518,6 +4574,11 @@ def actions_send_approved_lead_gen_draft(
             "approved_by": approved_by,
             "scheduled_for": scheduled_for.isoformat() if scheduled_for else None,
             "transport": transport,
+            "in_reply_to": in_reply_to or None,
+            "references": references or in_reply_to or None,
+            "lead_gen_action_type": action_type or None,
+            "sequence_id": sequence_id or None,
+            "sequence_step_num": sequence_step_num or None,
             "composer_experiment_key": composer_experiment_key or None,
             "composer_variant_key": composer_variant_key or None,
         },
@@ -4596,6 +4657,9 @@ def actions_send_email(
     to: str = typer.Option(..., "--to", help="Approved recipient."),
     subject: str = typer.Option(..., "--subject", help="Approved subject."),
     body: str = typer.Option(..., "--body", help="Approved body."),
+    in_reply_to: str = typer.Option("", "--in-reply-to", help="RFC Message-ID of the message being answered."),
+    references: str = typer.Option("", "--references", help="Space-separated RFC Message-ID ancestry; defaults to --in-reply-to."),
+    action_type: str = typer.Option("", "--action-type", help="For --mode=lead_gen: first_touch, follow_up, or manual_email."),
     mode: str = typer.Option("test", "--mode", help="Email mode: test or lead_gen."),
     transport: str = typer.Option(
         ...,
@@ -4639,6 +4703,9 @@ def actions_send_email(
             "firm_name": firm_name or None,
             "scheduled_for": scheduled_for.isoformat() if scheduled_for else None,
             "transport": transport,
+            "in_reply_to": in_reply_to or None,
+            "references": references or in_reply_to or None,
+            "lead_gen_action_type": action_type or None,
         },
         timeout=120.0,
     )
@@ -7015,13 +7082,29 @@ def lead_gen_select_variant(
 def lead_gen_edit_draft(
     batch_item_id: str = typer.Argument(..., help="lead_gen_batch_items.id"),
     at: str = typer.Option("", "--at", help='Optional scheduled send time: ISO-8601 with offset, or "HH:MM PT|PDT|PST" today.'),
+    subject: str = typer.Option("", "--subject", help="Custom subject; use with --body or --body-file. Bypasses the composer."),
+    body: str = typer.Option("", "--body", help="Custom plaintext body. Requires --subject and bypasses the composer."),
+    body_file: str = typer.Option("", "--body-file", help="Path to a custom plaintext body. Requires --subject and bypasses the composer."),
+    draft_file: str = typer.Option("", "--draft-file", help="Complete custom draft whose first line is 'Subject: ...'. Bypasses the composer."),
+    transport: str = typer.Option("", "--transport", help="Optional provider override: resend, zoho_api, or smtp."),
+    in_reply_to: str = typer.Option("", "--in-reply-to", help="RFC Message-ID of the message being answered."),
+    references: str = typer.Option("", "--references", help="Space-separated RFC Message-ID ancestry; defaults to --in-reply-to."),
+    action_type: str = typer.Option("", "--action-type", help="Outreach classification: first_touch or follow_up."),
     use_editor: bool = typer.Option(True, "--editor/--no-editor", help="Open $EDITOR before saving."),
     execute_now: bool = typer.Option(False, "--execute/--no-execute", help="Execute immediately after creating a new unscheduled action."),
     actor: str = typer.Option("operator", "--actor", help="Actor recorded on action events/traces."),
     json_output: bool = typer.Option(False, "--json"),
 ):
-    """Edit a lead-gen draft and create or update its approved action."""
+    """Create or edit a lead-gen draft and its approved action.
+
+    Pass ``--draft-file`` or ``--subject`` with ``--body``/``--body-file`` to
+    create a custom draft for an undrafted batch item without invoking the
+    composer. With no custom input, the existing interactive editor flow is
+    preserved.
+    """
     scheduled_for = None
+    if transport:
+        transport = _validate_transport(transport)
     if at:
         from app.services.scheduled_time import parse_scheduled_time
 
@@ -7031,21 +7114,38 @@ def lead_gen_edit_draft(
             console.print(f"[red]Invalid --at: {exc}[/red]")
             raise typer.Exit(code=1) from exc
         execute_now = False
-    loaded = _get(f"/api/lead-gen/batch-items/{batch_item_id}/draft")
-    draft = loaded.get("draft") or {}
-    subject, body = _edit_subject_body(
-        str(draft.get("subject") or ""),
-        str(draft.get("body") or ""),
-        use_editor=use_editor,
-    )
+    try:
+        custom_draft = _load_custom_draft_inputs(
+            subject=subject,
+            body=body,
+            body_file=body_file,
+            draft_file=draft_file,
+        )
+    except ValueError as exc:
+        console.print(f"[red]Invalid custom draft: {exc}[/red]")
+        raise typer.Exit(code=1) from exc
+    if custom_draft is None:
+        loaded = _get(f"/api/lead-gen/batch-items/{batch_item_id}/draft")
+        draft = loaded.get("draft") or {}
+        draft_subject, draft_body = _edit_subject_body(
+            str(draft.get("subject") or ""),
+            str(draft.get("body") or ""),
+            use_editor=use_editor,
+        )
+    else:
+        draft_subject, draft_body = custom_draft
     data = _post(
         f"/api/lead-gen/batch-items/{batch_item_id}/edit-draft",
         json_body={
-            "subject": subject,
-            "body": body,
+            "subject": draft_subject,
+            "body": draft_body,
             "actor": actor,
             "scheduled_for": scheduled_for.isoformat() if scheduled_for else None,
             "execute_now": execute_now,
+            "transport": transport or None,
+            "in_reply_to": in_reply_to or None,
+            "references": references or in_reply_to or None,
+            "lead_gen_action_type": action_type or None,
         },
         timeout=120.0,
     )
@@ -7060,6 +7160,36 @@ def lead_gen_edit_draft(
         f"action={action.get('id')} status={action.get('status')} "
         f"created={data.get('created')} updated_existing={data.get('updated_existing')} "
         f"executed={data.get('executed')}{suffix}"
+    )
+
+
+@lead_gen_app.command("set-action-type")
+def lead_gen_set_action_type(
+    batch_item_id: str = typer.Argument(..., help="lead_gen_batch_items.id"),
+    action_type: str = typer.Option(..., "--action-type", help="Classification: first_touch, follow_up, reply_to_inbound, or manual_email."),
+    actor: str = typer.Option("operator", "--actor"),
+    json_output: bool = typer.Option(False, "--json"),
+):
+    """Classify an existing queued lead-gen action without editing or rescheduling it."""
+    from app.services.action_execution import set_lead_gen_action_type
+
+    try:
+        data = asyncio.run(
+            set_lead_gen_action_type(
+                batch_item_id=batch_item_id,
+                lead_gen_action_type=action_type,
+                actor=actor,
+            )
+        )
+    except ValueError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from exc
+    if json_output:
+        console.print_json(data=data)
+        return
+    console.print(
+        f"batch_item_id={data['batch_item_id']} action={data['action_id']} "
+        f"action_type={data['lead_gen_action_type']} status={data['action_status']}"
     )
 
 
@@ -8180,16 +8310,117 @@ def pif_sync(
     limit: int | None = typer.Option(None, "--limit", min=1, help="Cap firms processed for smoke runs."),
     restart: bool = typer.Option(False, "--restart", help="Discard a saved resume point; full crawls start from page 0."),
 ):
-    """Pull EmailTag firm-intel v2 profiles into possibleos.
+    """Pull raw EmailTag PIF-extraction deltas into Possible OS.
 
     Interrupted full crawls resume from where they stopped (the upstream feed
     tolerates only a bounded number of requests per session). Safe to run
     regardless of the PIF_DIRECTORY_NATIVE flag — the flag only governs
-    whether lead-gen *matching* reads from this table, so you can warm it
-    before cutover."""
+    whether lead-gen *matching* reads from this table. Changed delta rows are
+    queued for durable local enrichment; full crawls do not enqueue all rows
+    unless PIF_ENRICH_ON_FULL_SYNC=true."""
     from app.services.firm_intel_sync import sync_firm_intel
 
     console.print_json(data=asyncio.run(sync_firm_intel(full=full, limit=limit, restart=restart)))
+
+
+@pif_app.command("autorespond-sync")
+def pif_autorespond_sync(
+    full: bool = typer.Option(False, "--full", help="Backfill all historical autorespond events."),
+):
+    """Mirror EmailTag autorespond events into Possible OS."""
+    from app.services.pif_autorespond_sync import sync_autorespond_events
+
+    console.print_json(data=asyncio.run(sync_autorespond_events(full=full)))
+
+
+@pif_app.command("research-job-postings")
+def pif_research_job_postings(
+    firm_id: str = typer.Argument(..., help="Mirrored firm UUID."),
+    poll: bool = typer.Option(False, "--poll", help="Wait for the research task to finish."),
+    poll_interval: float = typer.Option(5.0, "--poll-interval", min=0.1, help="Seconds between status checks."),
+    timeout: int = typer.Option(600, "--timeout", min=1, help="Maximum seconds to wait with --poll."),
+):
+    """Queue local job-posting web research through the Possible OS gateway."""
+    result = _post(
+        f"/api/pif/firms/{quote(firm_id, safe='')}/research-job-postings",
+        json_body=None,
+        timeout=90.0,
+    )
+    if not poll:
+        console.print_json(data=result)
+        return
+
+    task_id = str(result.get("task_id") or "").strip()
+    if not task_id:
+        console.print_json(data=result)
+        console.print("[red]Possible OS did not return a task_id.[/red]")
+        raise typer.Exit(1)
+
+    import time as _time
+
+    terminal_statuses = {"completed", "failed", "error", "success"}
+    deadline = _time.monotonic() + timeout
+    status_result = result
+    while _time.monotonic() < deadline:
+        status_result = _get(f"/api/pif/research-status/{quote(task_id, safe='')}")
+        status = str(status_result.get("status") or "").strip().lower()
+        if status in terminal_statuses:
+            console.print_json(data=status_result)
+            if status in {"failed", "error"}:
+                raise typer.Exit(1)
+            return
+        _time.sleep(poll_interval)
+
+    console.print_json(data=status_result)
+    console.print(f"[red]Timed out waiting for research task {task_id}.[/red]")
+    raise typer.Exit(1)
+
+
+@pif_app.command("enrich")
+def pif_enrich_locally(
+    firm_id: str = typer.Argument(..., help="Local mirrored firm UUID."),
+    poll: bool = typer.Option(False, "--poll", help="Wait for local enrichment to finish."),
+    poll_interval: float = typer.Option(5.0, "--poll-interval", min=0.1),
+    timeout: int = typer.Option(900, "--timeout", min=1),
+):
+    """Queue canonical-domain, firm, people, and vendor research locally."""
+    result = _post(
+        f"/api/pif/firms/{quote(firm_id, safe='')}/research",
+        json_body=None,
+        timeout=90.0,
+    )
+    if not poll:
+        console.print_json(data=result)
+        return
+    task_id = str(result.get("task_id") or "").strip()
+    if not task_id:
+        console.print_json(data=result)
+        raise typer.Exit(1)
+    import time as _time
+
+    deadline = _time.monotonic() + timeout
+    status_result = result
+    while _time.monotonic() < deadline:
+        status_result = _get(f"/api/pif/enrichment-status/{quote(task_id, safe='')}")
+        status = str(status_result.get("status") or "").strip().lower()
+        if status in {"completed", "failed"}:
+            console.print_json(data=status_result)
+            if status == "failed":
+                raise typer.Exit(1)
+            return
+        _time.sleep(poll_interval)
+    console.print_json(data=status_result)
+    console.print(f"[red]Timed out waiting for local enrichment task {task_id}.[/red]")
+    raise typer.Exit(1)
+
+
+@pif_app.command("research-status")
+def pif_research_status(
+    task_id: str = typer.Argument(..., help="Local job-posting research task ID."),
+):
+    """Show the current status of a local job-posting research task."""
+    result = _get(f"/api/pif/research-status/{quote(task_id, safe='')}")
+    console.print_json(data=result)
 
 
 @pif_app.command("resolve")

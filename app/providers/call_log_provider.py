@@ -222,7 +222,16 @@ class CallLogProvider:
     async def get_active_call(self) -> Optional[CallLog]:
         if self._active_call_id is None:
             return None
-        return await self.get_call(self._active_call_id)
+        call = await self.get_call(self._active_call_id)
+        if call is None:
+            self._active_call_id = None
+            return None
+        if call.ended_at is not None or call.termination_state in {
+            "hangup_acked", "carrier_confirmed_ended"
+        }:
+            self._active_call_id = None
+            return None
+        return call
 
     async def get_all_calls(self, limit: int = 50, offset: int = 0) -> list[CallLog]:
         async with AsyncSessionLocal() as session:
@@ -411,6 +420,8 @@ class CallLogProvider:
             if row.termination_state == "carrier_confirmed_ended":
                 row.termination_last_checked_at = now
                 await session.commit()
+                if self._active_call_id == call_id:
+                    self._active_call_id = None
                 return
             row.termination_state = state
             row.termination_last_checked_at = now
@@ -423,7 +434,25 @@ class CallLogProvider:
                         row.duration_seconds = int(
                             (now - row.started_at).total_seconds()
                         )
+                if row.outcome == CallOutcome.IN_PROGRESS.value:
+                    row.outcome = CallOutcome.DISCONNECTED.value
+                    row.ended_by = row.ended_by or "carrier"
+                    status, disposition = derive_status_and_disposition(
+                        outcome=CallOutcome.DISCONNECTED,
+                        error_code=row.error_code,
+                        had_patient_speech=any(
+                            entry.get("speaker") == "patient" and (entry.get("text") or "").strip()
+                            for entry in (row.transcript or [])
+                        ),
+                        duration_seconds=row.duration_seconds,
+                        ivr_detected=bool(getattr(row, "ivr_detected", False)),
+                        ivr_outcome=getattr(row, "ivr_outcome", None),
+                    )
+                    row.call_status = status.value
+                    row.call_disposition = disposition.value
             await session.commit()
+        if state in terminal_states and self._active_call_id == call_id:
+            self._active_call_id = None
 
     # Whitelist of columns update_call is allowed to set. Anything else is
     # ignored silently (safer than having callers accidentally set primary

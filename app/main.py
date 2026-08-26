@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pathlib import Path
 
-from .api import dashboard_router, websocket_router, settings_router, dispatcher_router, scenarios_router, carrier_router, cadence_router, consults_router, call_lists_router, voice_preview_router, firm_reviews_router, comms_router, sequences_router, outreach_router, lead_gen_router, resend_webhooks_router, inbound_email_router, operator_notifications_router, seo_router, product_traces_router, learning_router, todos_router, composer_variants_router, actions_router, front_router, research_router, aiaudit_router, visibility_links_router, data_returned_router, front_inbox_router, engagement_campaigns_router
+from .api import dashboard_router, websocket_router, settings_router, dispatcher_router, scenarios_router, carrier_router, cadence_router, consults_router, call_lists_router, voice_preview_router, firm_reviews_router, comms_router, sequences_router, outreach_router, lead_gen_router, resend_webhooks_router, inbound_email_router, operator_notifications_router, seo_router, product_traces_router, learning_router, todos_router, composer_variants_router, actions_router, front_router, research_router, aiaudit_router, visibility_links_router, data_returned_router, front_inbox_router, engagement_campaigns_router, call_lab_router, knowledge_router
 from .api.agents import router as agents_router
 from .api.pif import router as pif_router
 from .api.auth import router as auth_router, SESSION_COOKIE, verify_session_token, auth_configured
@@ -118,6 +118,28 @@ async def lifespan(app: FastAPI):
     # No-op while PIF_DIRECTORY_NATIVE is off, so it is safe to always start.
     from .services.pif_directory import pif_directory_sync_loop
     pif_directory_task = asyncio.create_task(pif_directory_sync_loop())
+    from .services.pif_job_posting_research import (
+        job_posting_research_loop,
+        recover_interrupted_job_research,
+    )
+    recovered_job_tasks = await recover_interrupted_job_research()
+    if recovered_job_tasks:
+        logger.info("Requeued %s interrupted job-opening research tasks", recovered_job_tasks)
+    job_research_workers = [
+        asyncio.create_task(job_posting_research_loop())
+        for _ in range(max(1, int(os.getenv("PIF_JOB_RESEARCH_WORKERS", "2"))))
+    ]
+    from .services.pif_local_enrichment import (
+        local_enrichment_loop,
+        recover_interrupted_local_enrichment,
+    )
+    recovered_enrichment_tasks = await recover_interrupted_local_enrichment()
+    if recovered_enrichment_tasks:
+        logger.info("Requeued %s interrupted local firm enrichment tasks", recovered_enrichment_tasks)
+    local_enrichment_workers = [
+        asyncio.create_task(local_enrichment_loop())
+        for _ in range(max(1, int(os.getenv("PIF_LOCAL_ENRICHMENT_WORKERS", "2"))))
+    ]
     yield
     # Shutdown: stop the dispatcher, cancel background tasks, dispose engine
     get_dispatcher().stop()
@@ -132,6 +154,8 @@ async def lifespan(app: FastAPI):
         lead_gen_daily_task,
         reconciler_task,
         pif_directory_task,
+        *job_research_workers,
+        *local_enrichment_workers,
     ]
     tasks_to_cancel.append(master_heartbeat_task)
     if master_subagent_runner_task is not None:
@@ -329,6 +353,8 @@ app.include_router(dispatcher_router)
 app.include_router(scenarios_router)
 app.include_router(carrier_router)
 app.include_router(cadence_router)
+app.include_router(call_lab_router)
+app.include_router(knowledge_router)
 app.include_router(consults_router)
 app.include_router(call_lists_router)
 app.include_router(voice_preview_router)

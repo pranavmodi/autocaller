@@ -93,7 +93,7 @@ def test_lead_gen_consult_link_variant_falls_back_to_batch_item_reason():
 
 
 def _action(**overrides):
-    now = datetime(2026, 6, 11, 16, 0, tzinfo=timezone.utc)
+    now = datetime(2030, 6, 11, 16, 0, tzinfo=timezone.utc)
     data = {
         "id": "action_1",
         "action_type": SEND_EMAIL,
@@ -250,12 +250,36 @@ async def test_edit_draft_updates_live_scheduled_action_instead_of_creating(monk
         body="New body",
         actor="operator",
         scheduled_for=action.scheduled_for + timedelta(days=1),
+        lead_gen_action_type="follow_up",
     )
 
     assert result["updated_existing"] is True
     assert result["created"] is False
     assert action.input_json["subject"] == "New subject"
     assert action.input_json["body"] == "New body"
+    assert action.input_json["lead_gen_action_type"] == "follow_up"
+    assert item.reason_json["action_type"] == "follow_up"
     assert item.reason_json["agent_draft"]["subject"] == "New subject"
     assert session.added[-2].event_type == "action_draft_edited"
     assert session.added[-1].event_type == "action_rescheduled"
+
+
+@pytest.mark.asyncio
+async def test_edit_draft_rejects_creating_action_on_sent_item(monkeypatch):
+    item = _item()
+    item.reason_json = {"last_sent_at": "2026-06-02T16:19:21Z"}
+    session = _FakeSession({(LeadGenBatchItemRow, "item_1"): item})
+    monkeypatch.setattr("app.services.action_execution.AsyncSessionLocal", lambda: session)
+
+    async def noop(*args, **kwargs):
+        return None
+
+    monkeypatch.setattr("app.services.action_execution.ensure_agent_tables", noop)
+
+    with pytest.raises(ValueError, match="batch_item_already_sent_use_new_batch_item"):
+        await save_edited_lead_gen_draft(
+            batch_item_id="item_1",
+            subject="New subject",
+            body="New body",
+            actor="operator",
+        )

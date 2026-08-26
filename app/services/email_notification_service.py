@@ -109,7 +109,36 @@ def send_disconnected_number_email(call: CallLog, status: str) -> str:
     )
 
 
-def _send_via_resend(*, subject: str, body: str, from_addr: str, to: str) -> str:
+def _normalize_thread_headers(
+    *,
+    in_reply_to: str | None = None,
+    references: str | None = None,
+) -> tuple[str | None, str | None]:
+    """Validate RFC message-id ancestry before it reaches a provider API."""
+    reply_id = (in_reply_to or "").strip() or None
+    raw_references = (references or "").strip()
+    if reply_id and ("\r" in reply_id or "\n" in reply_id or " " in reply_id):
+        raise RuntimeError("in_reply_to_must_be_one_rfc_message_id")
+    if reply_id and not (reply_id.startswith("<") and reply_id.endswith(">") and "@" in reply_id):
+        raise RuntimeError("in_reply_to_must_be_one_rfc_message_id")
+    reference_ids = raw_references.replace("\r", " ").replace("\n", " ").split()
+    for message_id in reference_ids:
+        if not (message_id.startswith("<") and message_id.endswith(">") and "@" in message_id):
+            raise RuntimeError("references_must_contain_rfc_message_ids")
+    if reply_id and not reference_ids:
+        reference_ids = [reply_id]
+    return reply_id, (" ".join(reference_ids) or None)
+
+
+def _send_via_resend(
+    *,
+    subject: str,
+    body: str,
+    from_addr: str,
+    to: str,
+    in_reply_to: str | None = None,
+    references: str | None = None,
+) -> str:
     """Send via Resend's HTTPS API. Works in environments where cloud
     providers block outbound SMTP (port 25/587/465).
     """
@@ -125,6 +154,11 @@ def _send_via_resend(*, subject: str, body: str, from_addr: str, to: str) -> str
     reply_to = os.getenv("REPLY_TO_EMAIL", "").strip()
     bcc = os.getenv("BCC_EMAIL", "").strip()
 
+    reply_id, reference_ids = _normalize_thread_headers(
+        in_reply_to=in_reply_to,
+        references=references,
+    )
+
     def _post(this_from: str) -> httpx.Response:
         payload: dict = {
             "from": this_from,
@@ -134,6 +168,13 @@ def _send_via_resend(*, subject: str, body: str, from_addr: str, to: str) -> str
         }
         if reply_to:
             payload["reply_to"] = reply_to
+        thread_headers: dict[str, str] = {}
+        if reply_id:
+            thread_headers["In-Reply-To"] = reply_id
+        if reference_ids:
+            thread_headers["References"] = reference_ids
+        if thread_headers:
+            payload["headers"] = thread_headers
         # BCC every outbound email to the operator (audit trail + "did
         # the thing I expect get sent" visibility). Only add the BCC if
         # it's not the same address as the primary recipient, so a
@@ -167,7 +208,15 @@ def _send_via_resend(*, subject: str, body: str, from_addr: str, to: str) -> str
     return str(data.get("id", ""))
 
 
-def _send_via_smtp(*, subject: str, body: str, from_addr: str, to: str) -> str:
+def _send_via_smtp(
+    *,
+    subject: str,
+    body: str,
+    from_addr: str,
+    to: str,
+    in_reply_to: str | None = None,
+    references: str | None = None,
+) -> str:
     smtp_host = os.getenv("SMTP_HOST", "").strip()
     smtp_port = int(os.getenv("SMTP_PORT", "587").strip() or "587")
     smtp_user = os.getenv("SMTP_USERNAME", "").strip()
@@ -186,6 +235,14 @@ def _send_via_smtp(*, subject: str, body: str, from_addr: str, to: str) -> str:
     msg["Message-ID"] = make_msgid()
     if reply_to:
         msg["Reply-To"] = reply_to
+    reply_id, reference_ids = _normalize_thread_headers(
+        in_reply_to=in_reply_to,
+        references=references,
+    )
+    if reply_id:
+        msg["In-Reply-To"] = reply_id
+    if reference_ids:
+        msg["References"] = reference_ids
     msg.set_content(body)
 
     # BCC: include in the SMTP envelope RCPT list but NOT in headers.
@@ -312,7 +369,15 @@ def _zoho_account_id() -> str:
     return account_id
 
 
-def _send_via_zoho_api(*, subject: str, body: str, from_addr: str, to: str) -> str:
+def _send_via_zoho_api(
+    *,
+    subject: str,
+    body: str,
+    from_addr: str,
+    to: str,
+    in_reply_to: str | None = None,
+    references: str | None = None,
+) -> str:
     account_id = _zoho_account_id()
     from_address = _sender_email_key(os.getenv("ZOHO_MAIL_FROM_ADDRESS", "").strip() or from_addr)
     if not from_address:
@@ -325,6 +390,14 @@ def _send_via_zoho_api(*, subject: str, body: str, from_addr: str, to: str) -> s
         "content": body,
         "mailFormat": "plaintext",
     }
+    reply_id, reference_ids = _normalize_thread_headers(
+        in_reply_to=in_reply_to,
+        references=references,
+    )
+    if reply_id:
+        payload["inReplyTo"] = reply_id
+    if reference_ids:
+        payload["refHeader"] = reference_ids
     if bcc and bcc.lower() != to.lower():
         payload["bccAddress"] = bcc
     data = _zoho_request("POST", f"/api/accounts/{account_id}/messages", json_body=payload)
@@ -365,6 +438,8 @@ def _send_email(
     recipient_name: str | None = None,
     from_addr: str | None = None,
     transport: str | None = None,
+    in_reply_to: str | None = None,
+    references: str | None = None,
     brief_version: int | None = None,
 ) -> str:
     """Send an email. Prefers the Zoho Mail HTTPS API when configured, then
@@ -389,11 +464,13 @@ def _send_email(
         if transport == "zoho_api":
             msg_id = _send_via_zoho_api(
                 subject=subject, body=body, from_addr=resolved_from_addr, to=recipient,
+                in_reply_to=in_reply_to, references=references,
             )
         elif transport == "resend":
             try:
                 msg_id = _send_via_resend(
                     subject=subject, body=body, from_addr=resolved_from_addr, to=recipient,
+                    in_reply_to=in_reply_to, references=references,
                 )
             except Exception as e:
                 # Only fall back to SMTP if it's actually plausible to
@@ -403,10 +480,12 @@ def _send_email(
                 transport = "smtp"
                 msg_id = _send_via_smtp(
                     subject=subject, body=body, from_addr=resolved_from_addr, to=recipient,
+                    in_reply_to=in_reply_to, references=references,
                 )
         else:
             msg_id = _send_via_smtp(
                 subject=subject, body=body, from_addr=resolved_from_addr, to=recipient,
+                in_reply_to=in_reply_to, references=references,
             )
     except Exception as e:
         log_email(

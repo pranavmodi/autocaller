@@ -117,7 +117,7 @@ Every command accepts `--help`. Exit code is `0` on success, `1` on any error
 | `data-returned save-script <path>` | Persist the UTF-8 shell script at `<path>` through the loopback daemon API. The exact saved text becomes publicly retrievable from `GET /datareturned/script`; review it as executable code before saving. |
 | `data-returned script-status` | Show whether the public endpoint is serving the saved script (`active`) or the empty-callback no-op, plus customization state and saved character count. |
 | `data-returned script-on` / `script-off` | Toggle between the preserved saved script and a no-op that posts exactly `{}` to `/datareturned`. Disabling never deletes or overwrites the saved script. |
-| `pif sync [--full] [--limit N] [--restart]` | Pull EmailTag firm-intel v2 profiles into Postgres (`pif_directory_firms`) and aliases into `firm_intel_aliases`. Delta sync uses `firm_intel_sync_state.last_updated_since`; `--full` ignores the watermark; `--limit` is for smoke runs such as `pif sync --limit 20`. Interrupted full crawls save a resume point and continue from it on the next run (the upstream feed tolerates a bounded number of requests per session); `--restart` discards the saved point. |
+| `pif sync [--full] [--limit N] [--restart]` | Pull EmailTag raw PIF-extraction deltas into Postgres, preserve locally derived fields, and queue changed firms for local Possible OS enrichment. Delta sync uses `firm_intel_sync_state.last_updated_since`; `--full` ignores the watermark; `--limit` is for smoke runs. Full crawls do not enqueue every firm unless `PIF_ENRICH_ON_FULL_SYNC=true`. |
 | `pif status` | Show native firm-intel mirror state: total firms, profile-source counts, alias count, watermark, last sync summary, and EmailTag v2 `/health` passthrough. |
 | `pif sync-status` | Show local-only mirror sync state and the last daily-sync delta (`fetched`, `created`, `updated`, aliases, watermarks) plus the firm-level ledger (name/id, status, website, source timestamp, people and alias counts) without calling EmailTag health. Older aggregate-only runs are reconstructed from the exact local `synced_at` timestamp. |
 | `pif vendors` | List every extracted vendor currently present in the local EmailTag mirror, with firm counts. This is the CLI counterpart to the Leads vendor dropdown. |
@@ -128,6 +128,8 @@ Every command accepts `--help`. Exit code is `0` on success, `1` on any error
 | `pif firms [--vendor <vendor>] [--search <text>] [--source all\|manual\|synced] [--limit N]` | List local firms, optionally filtered by vendor and record origin. Every result includes `manually_added`; `--source manual` returns operator-created firms and `--source synced` returns sync-origin firms. |
 | `pif people [--firm <text>] [--name <text>] [--title <text>] [--role <text>] [--source all\|leadership\|staff\|contacts] [--leader any\|leader\|non_leader] [--limit N]` | List people extracted into the local mirrored firm directory. This is the CLI counterpart to the Leads contacts view. |
 | `pif people-options` | List every Title and derived Role dropdown value available in the local mirrored people directory, with contact counts for each value. |
+| `pif enrich <firm_id> [--poll]` | Queue the durable local pipeline for canonical domain, firm profile, leadership/staff, vendor evidence, behavior, ICP score, contacts, and job postings. No EmailTag research call is made. |
+| `pif research-job-postings <firm_id> [--poll]` | Queue only local job-posting web research through the Possible OS gateway. |
 | `pif resolve <domain\|email\|url\|legacy_pif_id>` | Resolve locally through `firm_intel_aliases` and mirrored websites; if no local hit, fall back to EmailTag v2 `/firms/resolve`. Prints `firm_id`, `firm_name`, and source. |
 | `pif show <firm_id\|domain>` | Print the mirrored v2 profile summary for a firm: name, website, metro, ICP tier, warm score, decision-makers with emails, and vendor stack. Local-only; no upstream HTTP. |
 | `pif ingest-contacts` | Populate `firm_contacts` from the synced directory's titled `contacts[]` + `leadership[]` (then map personas). Local-only, no API calls. This is the lead-supply unlock: emailtag's named, titled contacts give personas + firm names for free, lifting daily eligible leads (verified: selection 11 → full 20, decision-maker-weighted). Runs automatically after each `pif sync` when `PIF_DIRECTORY_NATIVE=1`. |
@@ -236,11 +238,12 @@ Every command accepts `--help`. Exit code is `0` on success, `1` on any error
 | `actions cancel <action_id> [--reason=... --actor=operator --json]` | Cancel an action that is still `waiting_for_approval` or `approved`, including scheduled sends. Refuses terminal/running actions and appends `action_cancelled` to the timeline. |
 | `actions reschedule <action_id> --at "10:30 PT" [--actor=operator --json]` | Move an approved scheduled action to a new future ISO/PT time. Prints old -> new in Pacific and UTC and appends `action_rescheduled`. |
 | `actions execute-approved-lead-gen [--limit=1 --actor=operator --json]` | Execute already-approved `send_email mode=lead_gen` actions through the durable policy gate. This is the narrow action the master agent may use when approved-send automation is enabled. Successful sends link the action result to the `email_logs` row, transport, message id, and log status. |
-| `actions send-approved-lead-gen-draft --item=<batch_item_id> --subject=... --body=... --transport=resend\|zoho_api [--approved-by=operator] [--at "09:30 PT"] [--no-execute]` | Create and optionally execute the first high-risk action slice: an exact approved lead-gen email draft. **`--transport` is required** — CLI sends never auto-select a provider. Use `resend` (from getpossibleminds.com, inbox) for now; `zoho_api` uses the shared Zoho India IP and is junk-prone. The chosen transport is echoed in the output and stored on the action. With `--at`, stores `scheduled_for`, runs policy check, does not execute, and prints PT plus UTC. |
+| `actions send-approved-lead-gen-draft --item=<batch_item_id> --subject=... --body=... --transport=resend\|zoho_api [--action-type first_touch\|follow_up --sequence-id <id> --sequence-step <n>] [--in-reply-to '<message-id>'] [--references '<message-id> ...'] [--approved-by=operator] [--at "09:30 PT"] [--no-execute]` | Create and optionally execute an exact approved lead-gen draft. `--action-type` persists the classification used by Send Queue instead of allowing the UI to default to `First touch`; follow-ups can carry the existing sequence id/step so recipient-level duplicate protections recognize the intentional next step. `--in-reply-to` and `--references` carry RFC Message-ID ancestry through Resend, SMTP, or Zoho (`inReplyTo`/`refHeader`) so a follow-up is a real reply. `--references` defaults to `--in-reply-to`; provider UUIDs are not valid substitutes. **`--transport` is required.** With `--at`, stores `scheduled_for`, runs policy check, does not execute, and prints PT plus UTC. |
 | `actions send-email --mode=test --to=<email> --subject=... --body=... --transport=resend\|zoho_api [--approved-by=operator --from=... --at "2026-06-11T09:30:00-07:00" --no-execute --json]` | Create, policy-check, and optionally execute a regular durable test email action. **`--transport` is required.** With `--at`, creates an approved scheduled action and never sends immediately. |
-| `actions send-email --mode=lead_gen --to=<email> --subject=... --body=... --transport=resend\|zoho_api --contact=<contact_id> --item=<batch_item_id> [--pif=<pif_id> --firm=... --approved-by=operator --at "09:30 PT" --no-execute --json]` | Create, policy-check, and optionally execute an exact approved lead-gen email action. **`--transport` is required and authoritative** (bypasses the policy transport strategy). Policy verifies recipient/contact match, approval hashes, consult link, no patient data in outreach, no suppression, and no prior successful send for the same item/recipient. With `--at`, the daemon sends when due and expires stale actions more than 24h late. |
+| `actions send-email --mode=lead_gen --to=<email> --subject=... --body=... --transport=resend\|zoho_api --contact=<contact_id> --item=<batch_item_id> [--action-type first_touch\|follow_up\|manual_email --pif=<pif_id> --firm=... --approved-by=operator --at "09:30 PT" --no-execute --json]` | Create, policy-check, and optionally execute an exact approved lead-gen email action. `--action-type` persists the Send Queue classification. **`--transport` is required and authoritative** (bypasses the policy transport strategy). Policy verifies recipient/contact match, approval hashes, consult link, no patient data in outreach, no suppression, and no prior successful send for the same item/recipient. With `--at`, the daemon sends when due and expires stale actions more than 24h late. |
 | `actions send-test-email --to=<email> [--subject=... --body=...] --transport=resend\|zoho_api [--approved-by=operator --from=... --no-execute --json]` | Convenience alias for `actions send-email --mode=test`. **`--transport` is required.** Use the regular email action family for master-agent execution-path tests instead of free-form email shell commands. |
-| `lead-gen edit-draft <batch_item_id> [--at "10:30 PT"] [--editor/--no-editor] [--execute] [--json]` | Open the current `agent_draft` in `$EDITOR`, save it back to the queued action, and keep the batch item's UI draft fields approved/in sync. If a live scheduled action exists, edits update it instead of creating a duplicate; otherwise the command creates a new approved draft action. |
+| `lead-gen edit-draft <batch_item_id> [--at "10:30 PT"] [--transport zoho_api] [--action-type first_touch\|follow_up] [--in-reply-to '<message-id>'] [--references '<message-id> ...'] [--editor/--no-editor] [--execute] [--json]` | Open or replace the current `agent_draft`, save it back to the queued action, and keep the UI in sync. A live scheduled action is updated in place, including its outreach classification, provider, and RFC thread ancestry; approval metadata and policy state are refreshed. Use `--action-type follow_up` for manually curated replies so Send Queue does not fall back to `First touch`. |
+| `lead-gen set-action-type <batch_item_id> --action-type follow_up [--actor=operator --json]` | Classify an existing waiting/approved action without changing its copy, schedule, transport, or thread headers. Useful for correcting legacy queued follow-ups whose UI label defaulted to `First touch`. |
 | `listening brief [--version N]` | Print the Mission Control mindset brief markdown from `http://127.0.0.1:8001/api/listening`. |
 | `listening search "<q>" [--type T] [--who W] [--limit N]` | Search extracted listening insights by query, type, and buyer persona. |
 | `listening quotes --cluster <cluster> [--limit 5]` | Show direct quotes for one listening insight cluster. |
@@ -947,6 +950,12 @@ bin/possibleos actions send-approved-lead-gen-draft \
   --transport resend \
   --approved-by operator
 
+# Thread a follow-up to an earlier message, even across providers.
+bin/possibleos lead-gen edit-draft <batch_item_id> \
+  --no-editor \
+  --transport zoho_api \
+  --in-reply-to '<010001...@email.amazonses.com>'
+
 # Or schedule every already-drafted item in the batch for the morning window.
 bin/possibleos lead-gen schedule-drafts <batch_id> --start 09:00 --end 12:00
 
@@ -1005,12 +1014,17 @@ bin/possibleos lead-gen show <batch_id>
 
 If `reason_json.send_email_action_id` points to a live approved scheduled
 action, `lead-gen edit-draft` updates that action's subject/body and optional
-`scheduled_for` instead of creating a second queued send. If no live scheduled
+`scheduled_for`, transport, `In-Reply-To`, and `References` instead of creating a second queued send. If no live scheduled
 action exists, it creates a new approved `send_approved_lead_gen_draft` action.
 `--no-editor` reuses the current draft text; `--execute` is explicit and only
 applies when creating a new unscheduled action. The command syncs
 `reason_json.agent_draft` and `approval_status=approved` so the Lead Gen UI
 matches the action queue.
+
+Thread ancestry must use RFC Message-ID values such as
+`<010001...@email.amazonses.com>`. A Resend email UUID or Zoho mail id is only a
+provider record id and will be rejected. When `--references` is omitted, the
+CLI uses the `--in-reply-to` value for both headers.
 
 To operate directly on an action:
 

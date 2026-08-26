@@ -12,6 +12,7 @@ from app.services.voice import (
     get_voice_backend,
     BACKEND_OPENAI,
     BACKEND_GEMINI,
+    BACKEND_OPERATOR,
 )
 from app.services.voice.factory import resolve_default_provider
 from app.services.notification_service import CallNotificationService
@@ -229,6 +230,7 @@ class CallOrchestrator:
         voice_provider: Optional[str] = None,
         carrier: Optional[str] = None,
         persona: Optional[str] = None,
+        operator_mode: bool = False,
     ) -> Optional[CallLog]:
         """Start an outbound call to a patient.
 
@@ -239,8 +241,16 @@ class CallOrchestrator:
         `carrier` overrides the default telephony carrier ("twilio" or
         "telnyx") for this call only. If None, we fall back to the DB
         `default_carrier` setting, then `DEFAULT_CARRIER` env, then "twilio".
+
+        `operator_mode` creates a carrier media bridge without an AI voice
+        session and mutes AI audio before the remote party can hear anything.
         """
         self._last_start_error = None
+        if operator_mode and call_mode != "twilio":
+            self._last_start_error = "Operator calls require carrier mode"
+            if self.on_error:
+                await self.on_error(self._last_start_error)
+            return None
         call_log_provider = get_call_log_provider()
         if call_log_provider.has_active_call():
             self._last_start_error = "A call is already in progress"
@@ -270,6 +280,9 @@ class CallOrchestrator:
                     pif_id_for_block = rest[:36]
                 else:
                     pif_id_for_block = rest
+            elif pid.startswith("calllab-"):
+                rest = pid[len("calllab-"):]
+                pif_id_for_block = rest[:36] if len(rest) >= 36 else rest.rsplit("-", 1)[0]
             elif pid.startswith("mc-"):
                 pif_id_for_block = pid[3:]
             if is_blocked(pif_id_for_block, patient.firm_name):
@@ -341,12 +354,12 @@ class CallOrchestrator:
 
         # Resolve which voice backend this call will use.
         # precedence: per-call arg > DB setting > env > 'openai'.
-        resolved_provider = (
+        resolved_provider = BACKEND_OPERATOR if operator_mode else (
             (voice_provider or "").strip().lower()
             or (getattr(settings, "voice_provider", "") or "").strip().lower()
             or resolve_default_provider()
         )
-        if resolved_provider not in (BACKEND_OPENAI, BACKEND_GEMINI):
+        if resolved_provider not in (BACKEND_OPENAI, BACKEND_GEMINI, BACKEND_OPERATOR):
             self._last_start_error = f"Unknown voice_provider: {resolved_provider!r}"
             if self.on_error:
                 await self.on_error(self._last_start_error)
@@ -394,6 +407,7 @@ class CallOrchestrator:
         self._ivr_handled = False
         self._first_caller_audio_at = None
         self._on_hold = False
+        self._human_takeover_flag = False
 
         mode_label = "Twilio" if call_mode == "twilio" else "Web"
         print(f"[CallOrchestrator] Starting call to {patient.name} ({patient.phone}) in {mode_label} mode")
@@ -495,6 +509,8 @@ class CallOrchestrator:
                 bridge = carrier_adapter.MediaBridge(self._voice_service, verbose=self._verbose)
                 carrier_adapter.register_bridge(stream_id, bridge)
                 self._twilio_bridge = bridge  # name kept for back-compat; holds whichever carrier's bridge
+                if operator_mode:
+                    await self.set_human_takeover(True)
 
                 backend_host = os.getenv("PUBLIC_BASE_URL", "").rstrip("/")
                 if not backend_host:
@@ -629,7 +645,7 @@ class CallOrchestrator:
             if self._verbose:
                 print(f"[CallOrchestrator] Web mode — no Twilio phone call placed. call_id={call.call_id}, phone={patient.phone}")
             if self.on_status_update:
-                await self.on_status_update("Connected - AI Speaking")
+                await self.on_status_update("Connected - Operator" if operator_mode else "Connected - AI Speaking")
             self._web_recording_chunks = []
             self._web_recording_active = True
 
@@ -672,7 +688,7 @@ class CallOrchestrator:
             if self._verbose:
                 print(f"[CallOrchestrator] Twilio media stream connected for call {call.call_id}")
             if self.on_status_update:
-                await self.on_status_update("Connected - AI Speaking")
+                await self.on_status_update("Connected - Operator" if operator_mode else "Connected - AI Speaking")
 
         await self._voice_service.start_conversation(language=prompt_lang)
         if self._verbose:

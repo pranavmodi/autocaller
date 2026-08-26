@@ -17,7 +17,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useDashboardEvents } from "@/hooks/useDashboardEvents";
 import { useLiveListener } from "@/hooks/useLiveListener";
-import { clearActiveCall, sendDtmf, sendDtmfBatch, setManualIvr } from "@/lib/api";
+import { endActiveCall, sendDtmf, sendDtmfBatch, setManualIvr } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { TranscriptStream } from "@/components/TranscriptStream";
 
@@ -49,11 +49,17 @@ export function ActiveCallOverlay() {
   // doesn't render at all if the pill itself stalls).
   const [expanded, setExpanded] = useState<boolean>(true);
   const [autoExpandedFor, setAutoExpandedFor] = useState<string | null>(null);
+  const [autoListenedFor, setAutoListenedFor] = useState<string | null>(null);
+  const [autoTakeoverFor, setAutoTakeoverFor] = useState<string | null>(null);
+
+  const isCallLabCall = Boolean(activeCall?.patient_id?.startsWith("calllab-"));
 
   useEffect(() => {
     if (!activeCall) {
       // Call ended — reset so the next call auto-expands cleanly.
       setAutoExpandedFor(null);
+      setAutoListenedFor(null);
+      setAutoTakeoverFor(null);
       return;
     }
     if (autoExpandedFor !== activeCall.call_id) {
@@ -64,18 +70,53 @@ export function ActiveCallOverlay() {
     }
   }, [activeCall, autoExpandedFor]);
 
+  useEffect(() => {
+    if (!activeCall || !isCallLabCall || autoListenedFor === activeCall.call_id) return;
+    setAutoListenedFor(activeCall.call_id);
+    listener.startOnce();
+  }, [activeCall, autoListenedFor, isCallLabCall, listener.startOnce]);
+
+  useEffect(() => {
+    if (
+      !activeCall ||
+      !isCallLabCall ||
+      !listener.listening ||
+      listener.takeover ||
+      listener.takeoverPending ||
+      autoTakeoverFor === activeCall.call_id
+    ) return;
+    setAutoTakeoverFor(activeCall.call_id);
+    listener.startTakeover();
+  }, [
+    activeCall,
+    autoTakeoverFor,
+    isCallLabCall,
+    listener.listening,
+    listener.startTakeover,
+    listener.takeover,
+    listener.takeoverPending,
+  ]);
+
   const toggleExpanded = () => {
     setExpanded((v) => !v);
   };
 
+  // Manual IVR errors share this operator-control status area with hangup.
+  const [manualIvrOn, setManualIvrOn] = useState(false);
+  const [ivrError, setIvrError] = useState<string | null>(null);
+
   const hangup = useMutation({
-    mutationFn: clearActiveCall,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["active-call"] }),
+    mutationFn: () => endActiveCall(activeCall!.call_id),
+    onSuccess: () => {
+      setIvrError(null);
+      qc.invalidateQueries({ queryKey: ["active-call"] });
+    },
+    onError: (err: unknown) => {
+      setIvrError(err instanceof Error ? err.message : String(err));
+    },
   });
 
   // Manual IVR: operator drives the phone tree, AI stays muted.
-  const [manualIvrOn, setManualIvrOn] = useState(false);
-  const [ivrError, setIvrError] = useState<string | null>(null);
   // Reset when the call changes so the next call starts in auto mode.
   useEffect(() => {
     setManualIvrOn(false);

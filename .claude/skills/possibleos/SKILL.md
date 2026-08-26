@@ -72,7 +72,10 @@ send requires an explicit `--transport` (`resend` or `zoho_api`) — the provide
 is never auto-selected, and it is echoed in the output + stored on the action.**
 Use `resend` (from getpossibleminds.com, lands in the inbox) for now; `zoho_api`
 uses the shared Zoho India IP and is junk-prone. An explicit `--transport` is
-authoritative and bypasses the policy transport strategy. Regular
+authoritative and bypasses the policy transport strategy.
+Pass `--action-type follow_up` for a manually curated follow-up so Send Queue
+does not display it as a first touch.
+Regular
 durable email actions use `bin/possibleos actions send-email --mode=test
 --to=<email> --subject=... --body=... --transport=resend`; `actions
 send-test-email` is a convenience alias. Lead-gen email actions use
@@ -83,6 +86,22 @@ Both `actions send-approved-lead-gen-draft` and `actions send-email` accept
 `scheduled_for`, runs the normal policy check, prints PT and UTC, and does not
 send immediately; the daemon's scheduled-action loop sends due approved actions
 every 30 seconds and expires anything more than 24 hours stale.
+For a genuine reply, also pass `--in-reply-to '<RFC-Message-ID>'` and optionally
+`--references '<root-id> <parent-id>'`; references defaults to the parent id.
+These fields work through Resend, SMTP, and Zoho API, where they map to
+`inReplyTo` and `refHeader`. Use the RFC `message_id` from a sent-email or
+delivery record, never the Resend provider UUID. Thread ancestry is stored on
+the durable action, bound into approval metadata, and checked again at send
+time. `lead-gen edit-draft` accepts the same threading flags plus `--transport`
+to update an already scheduled action in place. It also accepts
+`--action-type first_touch|follow_up` and persists that classification on both
+the durable action and batch item.
+For a classification-only correction, use
+`bin/possibleos lead-gen set-action-type <batch_item_id> --action-type follow_up`;
+it leaves copy, schedule, transport, and thread headers unchanged.
+Do not create a new action on an item with `last_sent_at` or
+`last_sent_message_id`; create a fresh batch item for the next follow-up so the
+preview does not inherit the historical sent state.
 Policy verifies the exact approval hashes, contact/recipient match, consult
 link, no patient data in outreach, Zoho transport, no selection suppressions,
 and no prior successful send for the same item/recipient. The PHI egress guard
@@ -196,8 +215,8 @@ Front or send email, and it creates pending lead-gen batch items with
 feature but is created inactive; do not activate it without
 operator/orchestrator review.
 
-The native PIF firm mirror reads EmailTag's v2 firm-intel contract, not the
-deprecated v1 pif-info API. Use `bin/possibleos pif sync [--full] [--limit N]`
+The native PIF firm mirror reads EmailTag's raw v2 `/extractions` delta, not
+the deprecated v1 pif-info research API. Use `bin/possibleos pif sync [--full] [--limit N]`
 to populate `pif_directory_firms`, `firm_intel_aliases`, and the
 `firm_intel_sync_state` watermark. `pif sync --limit 20` is the smoke run;
 `--full` ignores the saved watermark. Check mirror and remote coverage with
@@ -213,22 +232,20 @@ every extracted vendor in the mirror with counts, and `pif firms --vendor
 Leads page; use `pif people --leader leader --role <text> --limit N` to inspect
 the local people set used by the Leads contacts view. Use `pif people-options`
 to list Title and derived Role dropdown values with counts. Normal Leads page
-reads should use the local mirror;
-the remote EmailTag API is for the daily sync and explicit task-triggering
-operations. The daemon's native PIF loop runs this v2 sync and then ingests
-directory contacts; do not use the old v1 sync path for operations because
-deployed v1 routes require cookie auth.
+reads use the local mirror. EmailTag owns extraction only; canonical domain
+resolution, firm/people/vendor research, behavior, scoring, contact ingestion,
+and job-posting research run and persist in Possible OS. Use `pif enrich
+<firm_id> [--poll]` for one firm. Daily deltas queue changed firms; a full crawl
+does not queue every row unless `PIF_ENRICH_ON_FULL_SYNC=true`.
 
-PIF Stats firm research is operator-triggered only because it spends production
-Precise web/LLM budget. Use `bin/possibleos research status --tasks` for
+Local firm research is operator-triggered outside the daily changed-firm queue
+because it spends web/LLM budget. Use `bin/possibleos research status --tasks` for
 coverage/open tasks, `research firm <domain-or-pif> [--staff/--no-staff]
 [--behavior] [--poll]` for one firm, `research warm --top 50 --kinds
 research,staff` before a Front-warm batch, and `research sync` to resume polling
-without queueing new work. The orchestrator only calls safe PIF Stats POST
-task endpoints, hard-caps task-creating POSTs at 30/run with >=2s spacing,
-upserts completed leadership/staff into `firm_contacts`, stores behavior
-analysis on `front_firm_activity.behavioral_json`, and then runs persona
-mapping. Use `bin/possibleos personas map [--pif=<id>]` and `personas show
+without queueing new work. These commands now use the durable local enrichment
+queue and OpenClaw gateway, then persist results and ingest contacts locally.
+Use `bin/possibleos personas map [--pif=<id>]` and `personas show
 <domain-or-pif>` to inspect mapped composer persona keys and confidence.
 
 Firm-vs-firm PI competition context is available through

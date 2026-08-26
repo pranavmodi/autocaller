@@ -121,7 +121,9 @@ export default function CommsPage() {
           <span className="ml-auto text-[11px] text-neutral-400">
             {comms.isLoading
               ? "loading…"
-              : `${items.length} of last ${limit}`}
+              : q
+                ? `${items.length} matches shown`
+                : `${items.length} of last ${limit}`}
           </span>
         </div>
       </section>

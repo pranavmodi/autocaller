@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Activity,
@@ -33,6 +33,7 @@ import {
   type EngagementActivity,
   type EngagementCampaign,
   type EngagementCampaignActivity,
+  type EngagementCampaignAnalytics,
   type EngagementCampaignLink,
   type EngagementRecipient,
 } from "@/lib/api";
@@ -282,10 +283,186 @@ function CampaignLinkRow({
   );
 }
 
+type CampaignView = "engaged" | "all" | "diagnostics";
+
+function cleanClickLabel(detail: string) {
+  return detail.split(" -> ", 1)[0].replace(/^\d{1,2}\s*/, "").trim();
+}
+
+function activitiesForLink(data: EngagementCampaignAnalytics, code: string) {
+  return data.activities.filter((activity) => activity.link_code === code && activity.quality === "human");
+}
+
+function uniqueClickLabels(activities: EngagementCampaignActivity[]) {
+  return Array.from(new Set(
+    activities
+      .filter((activity) => activity.event === "click" || activity.event === "page_click")
+      .map((activity) => cleanClickLabel(activity.detail))
+      .filter(Boolean),
+  ));
+}
+
+function latestActivity(activities: EngagementCampaignActivity[]) {
+  return activities.reduce<string | null>((latest, activity) => {
+    if (!activity.occurred_at) return latest;
+    return !latest || activity.occurred_at > latest ? activity.occurred_at : latest;
+  }, null);
+}
+
+function formatSeconds(value: number) {
+  if (!value) return "-";
+  return `${Number.isInteger(value) ? value : value.toFixed(1)}s`;
+}
+
+function behaviorSummary(link: EngagementCampaignLink, activities: EngagementCampaignActivity[]) {
+  const parts = [];
+  if (link.confirmed_visits) parts.push(`${link.confirmed_visits} ${link.confirmed_visits === 1 ? "visit" : "visits"}`);
+  if (link.max_time_on_page_seconds) parts.push(`${formatSeconds(link.max_time_on_page_seconds)} observed`);
+  if (link.deepest_scroll) parts.push(`read to ${link.deepest_scroll}%`);
+  const clicked = uniqueClickLabels(activities);
+  if (clicked.length) parts.push(`selected ${clicked.join(", ")}`);
+  return parts.join(" · ") || "No confirmed human behavior";
+}
+
+function EngagementSignal({ engaged }: { engaged: boolean }) {
+  return (
+    <span className={cn(
+      "inline-flex whitespace-nowrap rounded-md px-2 py-1 text-[11px] font-semibold",
+      engaged ? "bg-emerald-100 text-emerald-800" : "bg-neutral-100 text-neutral-500",
+    )}>
+      {engaged ? "Engaged" : "No human signal"}
+    </span>
+  );
+}
+
+function CampaignEngagedView({ data }: { data: EngagementCampaignAnalytics }) {
+  const engaged = useMemo(() => data.links
+    .map((link) => ({ link, activities: activitiesForLink(data, link.code) }))
+    .filter(({ link, activities }) => link.confirmed_visits > 0 || activities.length > 0)
+    .sort((a, b) => {
+      const activityDelta = b.link.confirmed_visits - a.link.confirmed_visits;
+      if (activityDelta) return activityDelta;
+      return (latestActivity(b.activities) || "").localeCompare(latestActivity(a.activities) || "");
+    }), [data]);
+  const [selectedCode, setSelectedCode] = useState("");
+
+  useEffect(() => {
+    if (!engaged.length) {
+      setSelectedCode("");
+      return;
+    }
+    if (!engaged.some(({ link }) => link.code === selectedCode)) setSelectedCode(engaged[0].link.code);
+  }, [engaged, selectedCode]);
+
+  if (!engaged.length) {
+    return <div className="py-10 text-sm text-neutral-500">No confirmed human engagement in this campaign yet.</div>;
+  }
+
+  const selected = engaged.find(({ link }) => link.code === selectedCode) ?? engaged[0];
+  const clicked = uniqueClickLabels(selected.activities);
+  const lastEngaged = latestActivity(selected.activities);
+
+  return (
+    <div className="grid border-y border-neutral-200 lg:grid-cols-[minmax(300px,0.85fr)_minmax(460px,1.4fr)]">
+      <div className="border-neutral-200 lg:border-r">
+        <div className="border-b border-neutral-100 px-3 py-2 text-[11px] font-semibold uppercase text-neutral-500">
+          Engaged people
+        </div>
+        {engaged.map(({ link, activities }) => (
+          <button
+            key={link.code}
+            type="button"
+            onClick={() => setSelectedCode(link.code)}
+            className={cn(
+              "block w-full border-b border-neutral-100 px-3 py-3 text-left transition-colors last:border-b-0",
+              selected.link.code === link.code ? "bg-cyan-50" : "hover:bg-neutral-50",
+            )}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="truncate text-sm font-semibold text-neutral-950">{link.contact_name}</div>
+                <div className="mt-0.5 truncate text-xs text-neutral-500">{link.firm_name || link.contact_email}</div>
+              </div>
+              <span className="whitespace-nowrap text-[11px] text-neutral-400">{formatDateTime(latestActivity(activities))}</span>
+            </div>
+            <div className="mt-2 text-xs leading-5 text-neutral-700">{behaviorSummary(link, activities)}</div>
+          </button>
+        ))}
+      </div>
+
+      <div className="min-w-0 px-4 py-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <div className="text-base font-semibold text-neutral-950">{selected.link.contact_name}</div>
+            <div className="mt-0.5 text-xs text-neutral-500">
+              {[selected.link.firm_name, selected.link.contact_email].filter(Boolean).join(" · ")}
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <CampaignChannel channel={selected.link.channel} />
+            <EngagementSignal engaged />
+          </div>
+        </div>
+
+        <div className="mt-5 grid grid-cols-2 border-y border-neutral-100 sm:grid-cols-5">
+          <div className="py-3 pr-3">
+            <div className="text-[10px] font-semibold uppercase text-neutral-400">Visits</div>
+            <div className="mt-1 text-lg font-semibold text-neutral-950">{selected.link.confirmed_visits}</div>
+          </div>
+          <div className="border-l border-neutral-100 px-3 py-3">
+            <div className="text-[10px] font-semibold uppercase text-neutral-400">Time on page</div>
+            <div className="mt-1 text-lg font-semibold text-neutral-950">{formatSeconds(selected.link.max_time_on_page_seconds)}</div>
+            <div className="mt-0.5 text-[10px] text-neutral-400">longest observed visit</div>
+          </div>
+          <div className="border-l border-neutral-100 px-3 py-3">
+            <div className="text-[10px] font-semibold uppercase text-neutral-400">Read depth</div>
+            <div className="mt-1 text-lg font-semibold text-neutral-950">{selected.link.deepest_scroll ? `${selected.link.deepest_scroll}%` : "-"}</div>
+          </div>
+          <div className="border-l border-neutral-100 px-3 py-3">
+            <div className="text-[10px] font-semibold uppercase text-neutral-400">Selections</div>
+            <div className="mt-1 text-lg font-semibold text-neutral-950">{clicked.length}</div>
+          </div>
+          <div className="border-l border-neutral-100 pl-3 py-3">
+            <div className="text-[10px] font-semibold uppercase text-neutral-400">Last engaged</div>
+            <div className="mt-1 text-xs font-semibold text-neutral-800">{formatDateTime(lastEngaged)}</div>
+          </div>
+        </div>
+
+        <div className="mt-5">
+          <div className="text-xs font-semibold uppercase text-neutral-500">What they did</div>
+          <div className="mt-3 space-y-2 text-sm text-neutral-800">
+            <div className="flex gap-2"><Eye className="mt-0.5 h-4 w-4 shrink-0 text-blue-600" /><span>Opened the page in {selected.link.confirmed_visits} confirmed browser {selected.link.confirmed_visits === 1 ? "visit" : "visits"}.</span></div>
+            {selected.link.max_time_on_page_seconds ? <div className="flex gap-2"><CalendarDays className="mt-0.5 h-4 w-4 shrink-0 text-violet-700" /><span>Stayed for {formatSeconds(selected.link.max_time_on_page_seconds)} in the longest observed visit.</span></div> : null}
+            {selected.link.deepest_scroll ? <div className="flex gap-2"><Activity className="mt-0.5 h-4 w-4 shrink-0 text-cyan-700" /><span>Read to approximately {selected.link.deepest_scroll}% of the article.</span></div> : null}
+            {clicked.map((label) => <div key={label} className="flex gap-2"><MousePointerClick className="mt-0.5 h-4 w-4 shrink-0 text-emerald-700" /><span>Selected <span className="font-semibold">{label}</span>.</span></div>)}
+          </div>
+        </div>
+
+        <details className="mt-5 border-t border-neutral-100 pt-3">
+          <summary className="cursor-pointer text-xs font-semibold text-neutral-600">Technical evidence</summary>
+          <div className="mt-3 grid gap-2 text-xs text-neutral-500 sm:grid-cols-2">
+            <div>Raw redirect fetches: <span className="font-semibold text-neutral-700">{selected.link.raw_clicks}</span></div>
+            <div>Recorded human events: <span className="font-semibold text-neutral-700">{selected.activities.length}</span></div>
+          </div>
+          <div className="mt-3 divide-y divide-neutral-100 border-y border-neutral-100">
+            {selected.activities.map((activity) => (
+              <div key={activity.id} className="flex flex-wrap items-start justify-between gap-2 py-2 text-xs">
+                <div><span className="font-medium text-neutral-800">{activity.label}</span><span className="ml-2 text-neutral-400">{activity.detail}</span></div>
+                <span className="whitespace-nowrap text-neutral-400">{formatDateTime(activity.occurred_at)}</span>
+              </div>
+            ))}
+          </div>
+        </details>
+      </div>
+    </div>
+  );
+}
+
 function CampaignWorkspace() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState("");
+  const [campaignView, setCampaignView] = useState<CampaignView>("engaged");
   const [showCreate, setShowCreate] = useState(false);
   const [name, setName] = useState("");
   const [campaignDate, setCampaignDate] = useState(() => new Date().toISOString().slice(0, 10));
@@ -354,6 +531,22 @@ function CampaignWorkspace() {
   const campaignRows = campaigns.data?.campaigns ?? [];
   const data = selected.data;
   const summary = data?.summary;
+  const readersAtFifty = data?.links.filter((link) => link.deepest_scroll >= 50).length ?? 0;
+
+  useEffect(() => {
+    if (selectedId || !campaignRows.length) return;
+    const requested = new URLSearchParams(window.location.search).get("campaign");
+    const initial = campaignRows.some((campaign) => campaign.id === requested) ? requested : campaignRows[0].id;
+    setSelectedId(initial || "");
+  }, [campaignRows, selectedId]);
+
+  const selectCampaign = (campaignId: string) => {
+    setSelectedId(campaignId);
+    const url = new URL(window.location.href);
+    if (campaignId) url.searchParams.set("campaign", campaignId);
+    else url.searchParams.delete("campaign");
+    window.history.replaceState({}, "", url);
+  };
 
   return (
     <section className="border-y border-neutral-200 py-4">
@@ -366,7 +559,7 @@ function CampaignWorkspace() {
           <Search className="pointer-events-none absolute left-2.5 top-2.5 h-3.5 w-3.5 text-neutral-400" />
           <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search campaigns" className="h-9 w-full rounded-md border border-neutral-200 bg-white pl-8 pr-3 text-sm outline-none focus:border-neutral-400" />
         </div>
-        <select value={selectedId} onChange={(event) => setSelectedId(event.target.value)} className="h-9 min-w-64 rounded-md border border-neutral-200 bg-white px-3 text-sm text-neutral-700 outline-none focus:border-neutral-400">
+        <select value={selectedId} onChange={(event) => selectCampaign(event.target.value)} className="h-9 min-w-64 rounded-md border border-neutral-200 bg-white px-3 text-sm text-neutral-700 outline-none focus:border-neutral-400">
           <option value="">Select a campaign</option>
           {campaignRows.map((campaign) => (
             <option key={campaign.id} value={campaign.id}>{campaign.campaign_date} · {campaign.name}</option>
@@ -403,53 +596,119 @@ function CampaignWorkspace() {
             {data.campaign.destination_url ? <a href={data.campaign.destination_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-xs font-medium text-cyan-700 hover:text-cyan-900">Open destination <ExternalLink className="h-3.5 w-3.5" /></a> : null}
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
-            <Metric label="Tracked people" value={summary?.tracked_people ?? 0} icon={Users} />
-            <Metric label="Links" value={summary?.tracked_links ?? 0} icon={Link2} />
-            <Metric label="Sent" value={summary?.sent ?? 0} icon={Send} />
-            <Metric label="Raw clicks" value={summary?.raw_clicks ?? 0} note={summary?.scanner_or_suspect_clicks ? `${summary.scanner_or_suspect_clicks} unconfirmed` : undefined} icon={MousePointerClick} />
-            <Metric label="Human visits" value={summary?.confirmed_visits ?? 0} note={summary?.anonymous_human_sessions ? `${summary.anonymous_human_sessions} anonymous` : undefined} icon={Eye} />
-            <Metric label="Actions" value={summary?.meaningful_actions ?? 0} icon={Activity} />
-            <Metric label="Engaged people" value={summary?.engaged_people ?? 0} icon={CheckCircle2} />
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <Metric label="Sent" value={summary?.sent ?? 0} note={`${summary?.tracked_people ?? 0} people tracked`} icon={Send} />
+            <Metric label="Engaged people" value={summary?.engaged_people ?? 0} note="confirmed human behavior" icon={CheckCircle2} />
+            <Metric label="Human visits" value={summary?.confirmed_visits ?? 0} note={summary?.anonymous_human_sessions ? `${summary.anonymous_human_sessions} anonymous` : "scanner traffic excluded"} icon={Eye} />
+            <Metric label="Read 50%+" value={readersAtFifty} note="people reaching article midpoint" icon={Activity} />
           </div>
 
-          <div className="overflow-x-auto border-y border-neutral-100">
-            <table className="min-w-full text-left">
-              <thead className="bg-neutral-50 text-[11px] uppercase text-neutral-500"><tr><th className="px-3 py-2">Channel</th><th className="px-3 py-2 text-right">Links</th><th className="px-3 py-2 text-right">People</th><th className="px-3 py-2 text-right">Sent</th><th className="px-3 py-2 text-right">Clicks</th><th className="px-3 py-2 text-right">Visits</th><th className="px-3 py-2 text-right">Actions</th><th className="px-3 py-2 text-right">Engaged</th></tr></thead>
-              <tbody>{data.channels.map((channel) => <tr key={channel.channel} className="border-t border-neutral-100"><td className="px-3 py-3"><CampaignChannel channel={channel.channel} /></td><td className="px-3 py-3 text-right text-sm">{channel.tracked_links}</td><td className="px-3 py-3 text-right text-sm">{channel.tracked_people}</td><td className="px-3 py-3 text-right text-sm">{channel.sent}</td><td className="px-3 py-3 text-right text-sm">{channel.raw_clicks}</td><td className="px-3 py-3 text-right text-sm">{channel.confirmed_visits}</td><td className="px-3 py-3 text-right text-sm">{channel.meaningful_actions}</td><td className="px-3 py-3 text-right text-sm">{channel.engaged_people}</td></tr>)}</tbody>
-            </table>
+          <div className="flex flex-wrap gap-1 border-b border-neutral-200">
+            {([
+              { key: "engaged", label: `Engaged (${summary?.engaged_people ?? 0})` },
+              { key: "all", label: `All recipients (${summary?.tracked_people ?? 0})` },
+              { key: "diagnostics", label: "Setup & diagnostics" },
+            ] as { key: CampaignView; label: string }[]).map((view) => (
+              <button
+                key={view.key}
+                type="button"
+                onClick={() => setCampaignView(view.key)}
+                className={cn(
+                  "border-b-2 px-3 py-2 text-xs font-semibold",
+                  campaignView === view.key
+                    ? "border-cyan-700 text-cyan-800"
+                    : "border-transparent text-neutral-500 hover:text-neutral-800",
+                )}
+              >
+                {view.label}
+              </button>
+            ))}
           </div>
 
-          <form onSubmit={(event) => { event.preventDefault(); createLink.mutate(); }} className="grid gap-3 border-y border-neutral-100 py-4 md:grid-cols-2 xl:grid-cols-[150px_1.4fr_1.2fr_1fr_auto]">
-            <select value={linkChannel} onChange={(event) => { setLinkChannel(event.target.value as "email" | "linkedin" | "public"); setContactId(""); }} className="h-9 rounded-md border border-neutral-200 bg-white px-3 text-sm outline-none focus:border-neutral-400">
-              <option value="email">Email</option><option value="linkedin">LinkedIn</option><option value="public">Public post</option>
-            </select>
-            <input value={linkDestination} onChange={(event) => setLinkDestination(event.target.value)} placeholder={data.campaign.destination_url || "https://getpossibleminds.com/..."} className="h-9 rounded-md border border-neutral-200 px-3 text-sm outline-none focus:border-neutral-400" />
-            {linkChannel === "public" ? (
-              <input value={linkLabel} onChange={(event) => setLinkLabel(event.target.value)} placeholder="Link label" className="h-9 rounded-md border border-neutral-200 px-3 text-sm outline-none focus:border-neutral-400" />
-            ) : (
-              <div className="grid grid-cols-[1fr_auto] gap-2">
-                <input value={contactSearch} onChange={(event) => { setContactSearch(event.target.value); setContactId(""); }} placeholder="Search contact or firm" className="h-9 min-w-0 rounded-md border border-neutral-200 px-3 text-sm outline-none focus:border-neutral-400" />
-                <select required value={contactId} onChange={(event) => setContactId(event.target.value)} className="h-9 max-w-52 rounded-md border border-neutral-200 bg-white px-2 text-xs outline-none focus:border-neutral-400">
-                  <option value="">Select</option>
-                  {(contacts.data?.contacts ?? []).map((contact) => <option key={contact.id} value={contact.id}>{contact.name} · {contact.firm_name || contact.email}</option>)}
-                </select>
+          {campaignView === "engaged" ? <CampaignEngagedView data={data} /> : null}
+
+          {campaignView === "all" ? (
+            <div className="overflow-x-auto border-y border-neutral-100">
+              <table className="min-w-full text-left">
+                <thead className="bg-neutral-50 text-[11px] uppercase text-neutral-500">
+                  <tr><th className="px-3 py-2">Person</th><th className="px-3 py-2">Signal</th><th className="px-3 py-2">Observed behavior</th><th className="px-3 py-2 text-right">Visits</th><th className="px-3 py-2 text-right">Time on page</th><th className="px-3 py-2 text-right">Read depth</th><th className="px-3 py-2">Last activity</th></tr>
+                </thead>
+                <tbody>
+                  {[...data.links]
+                    .sort((a, b) => Number(b.confirmed_visits > 0) - Number(a.confirmed_visits > 0) || a.contact_name.localeCompare(b.contact_name))
+                    .map((link) => {
+                      const activities = activitiesForLink(data, link.code);
+                      const engaged = link.confirmed_visits > 0 || activities.length > 0;
+                      return (
+                        <tr key={link.code} className="border-t border-neutral-100 align-top">
+                          <td className="px-3 py-3"><div className="text-sm font-medium text-neutral-950">{link.contact_name}</div><div className="mt-0.5 text-xs text-neutral-400">{link.firm_name || link.contact_email}</div></td>
+                          <td className="px-3 py-3"><EngagementSignal engaged={engaged} /></td>
+                          <td className="max-w-lg px-3 py-3 text-xs text-neutral-700">{behaviorSummary(link, activities)}</td>
+                          <td className="px-3 py-3 text-right text-sm text-neutral-700">{link.confirmed_visits}</td>
+                          <td className="px-3 py-3 text-right text-sm text-neutral-700">{formatSeconds(link.max_time_on_page_seconds)}</td>
+                          <td className="px-3 py-3 text-right text-sm text-neutral-700">{link.deepest_scroll ? `${link.deepest_scroll}%` : "-"}</td>
+                          <td className="whitespace-nowrap px-3 py-3 text-xs text-neutral-400">{formatDateTime(latestActivity(activities))}</td>
+                        </tr>
+                      );
+                    })}
+                </tbody>
+              </table>
+            </div>
+          ) : null}
+
+          {campaignView === "diagnostics" ? (
+            <div className="space-y-5">
+              <div className="grid gap-3 border-y border-neutral-100 py-3 sm:grid-cols-3">
+                <div><div className="text-[10px] font-semibold uppercase text-neutral-400">Raw redirect fetches</div><div className="mt-1 text-lg font-semibold text-neutral-950">{summary?.raw_clicks ?? 0}</div></div>
+                <div><div className="text-[10px] font-semibold uppercase text-neutral-400">Scanner or unconfirmed</div><div className="mt-1 text-lg font-semibold text-neutral-950">{summary?.scanner_or_suspect_clicks ?? 0}</div></div>
+                <div><div className="text-[10px] font-semibold uppercase text-neutral-400">Recorded event rows</div><div className="mt-1 text-lg font-semibold text-neutral-950">{data.activities.length}</div></div>
               </div>
-            )}
-            <label className="flex h-9 items-center gap-2 text-xs text-neutral-600"><input type="checkbox" checked={markSentOnCreate} disabled={linkChannel === "public"} onChange={(event) => setMarkSentOnCreate(event.target.checked)} /> Mark sent now</label>
-            <button type="submit" disabled={createLink.isPending || (linkChannel !== "public" && !contactId)} className="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-blue-700 px-4 text-xs font-medium text-white hover:bg-blue-800 disabled:opacity-50"><Link2 className="h-3.5 w-3.5" />{createLink.isPending ? "Creating..." : "Create link"}</button>
-            {createLink.isSuccess ? <div className="flex items-center gap-2 text-xs text-emerald-700 md:col-span-full"><CheckCircle2 className="h-3.5 w-3.5" /> Tracking URL created.</div> : null}
-            {createLink.isError ? <div className="text-xs text-red-600 md:col-span-full">Could not create link. Use a getpossibleminds.com destination and a valid contact.</div> : null}
-          </form>
 
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-left">
-              <thead className="bg-neutral-50 text-[11px] uppercase text-neutral-500"><tr><th className="px-3 py-2">Contact</th><th className="px-3 py-2">Channel</th><th className="px-3 py-2">Tracking URL</th><th className="px-3 py-2">Status</th><th className="px-3 py-2 text-right">Clicks</th><th className="px-3 py-2 text-right">Visits</th><th className="px-3 py-2 text-right">Depth</th><th className="px-3 py-2 text-right">Actions</th></tr></thead>
-              <tbody>{data.links.length ? data.links.map((link) => <CampaignLinkRow key={link.code} link={link} onMarkSent={(code) => markSent.mutate(code)} marking={markSent.isPending} />) : <tr><td colSpan={8} className="px-3 py-8 text-sm text-neutral-500">No tracking links yet.</td></tr>}</tbody>
-            </table>
-          </div>
+              <div className="overflow-x-auto border-y border-neutral-100">
+                <table className="min-w-full text-left">
+                  <thead className="bg-neutral-50 text-[11px] uppercase text-neutral-500"><tr><th className="px-3 py-2">Channel</th><th className="px-3 py-2 text-right">Links</th><th className="px-3 py-2 text-right">People</th><th className="px-3 py-2 text-right">Sent</th><th className="px-3 py-2 text-right">Raw fetches</th><th className="px-3 py-2 text-right">Human visits</th><th className="px-3 py-2 text-right">Engaged</th></tr></thead>
+                  <tbody>{data.channels.map((channel) => <tr key={channel.channel} className="border-t border-neutral-100"><td className="px-3 py-3"><CampaignChannel channel={channel.channel} /></td><td className="px-3 py-3 text-right text-sm">{channel.tracked_links}</td><td className="px-3 py-3 text-right text-sm">{channel.tracked_people}</td><td className="px-3 py-3 text-right text-sm">{channel.sent}</td><td className="px-3 py-3 text-right text-sm">{channel.raw_clicks}</td><td className="px-3 py-3 text-right text-sm">{channel.confirmed_visits}</td><td className="px-3 py-3 text-right text-sm">{channel.engaged_people}</td></tr>)}</tbody>
+                </table>
+              </div>
 
-          {data.activities.length ? <div className="overflow-x-auto border-t border-neutral-100 pt-4"><div className="mb-3 text-sm font-semibold text-neutral-950">Campaign activity</div><table className="min-w-full text-left"><thead className="bg-neutral-50 text-[11px] uppercase text-neutral-500"><tr><th className="px-3 py-2">When</th><th className="px-3 py-2">Contact</th><th className="px-3 py-2">Channel</th><th className="px-3 py-2">Event</th><th className="px-3 py-2">Signal</th></tr></thead><tbody>{data.activities.map((activity) => <CampaignActivityRow key={activity.id} activity={activity} />)}</tbody></table></div> : null}
+              <details className="border-y border-neutral-100 py-3">
+                <summary className="cursor-pointer text-sm font-semibold text-neutral-800">Create a tracking link</summary>
+                <form onSubmit={(event) => { event.preventDefault(); createLink.mutate(); }} className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-[150px_1.4fr_1.2fr_1fr_auto]">
+                  <select value={linkChannel} onChange={(event) => { setLinkChannel(event.target.value as "email" | "linkedin" | "public"); setContactId(""); }} className="h-9 rounded-md border border-neutral-200 bg-white px-3 text-sm outline-none focus:border-neutral-400">
+                    <option value="email">Email</option><option value="linkedin">LinkedIn</option><option value="public">Public post</option>
+                  </select>
+                  <input value={linkDestination} onChange={(event) => setLinkDestination(event.target.value)} placeholder={data.campaign.destination_url || "https://getpossibleminds.com/..."} className="h-9 rounded-md border border-neutral-200 px-3 text-sm outline-none focus:border-neutral-400" />
+                  {linkChannel === "public" ? (
+                    <input value={linkLabel} onChange={(event) => setLinkLabel(event.target.value)} placeholder="Link label" className="h-9 rounded-md border border-neutral-200 px-3 text-sm outline-none focus:border-neutral-400" />
+                  ) : (
+                    <div className="grid grid-cols-[1fr_auto] gap-2">
+                      <input value={contactSearch} onChange={(event) => { setContactSearch(event.target.value); setContactId(""); }} placeholder="Search contact or firm" className="h-9 min-w-0 rounded-md border border-neutral-200 px-3 text-sm outline-none focus:border-neutral-400" />
+                      <select required value={contactId} onChange={(event) => setContactId(event.target.value)} className="h-9 max-w-52 rounded-md border border-neutral-200 bg-white px-2 text-xs outline-none focus:border-neutral-400">
+                        <option value="">Select</option>
+                        {(contacts.data?.contacts ?? []).map((contact) => <option key={contact.id} value={contact.id}>{contact.name} · {contact.firm_name || contact.email}</option>)}
+                      </select>
+                    </div>
+                  )}
+                  <label className="flex h-9 items-center gap-2 text-xs text-neutral-600"><input type="checkbox" checked={markSentOnCreate} disabled={linkChannel === "public"} onChange={(event) => setMarkSentOnCreate(event.target.checked)} /> Mark sent now</label>
+                  <button type="submit" disabled={createLink.isPending || (linkChannel !== "public" && !contactId)} className="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-blue-700 px-4 text-xs font-medium text-white hover:bg-blue-800 disabled:opacity-50"><Link2 className="h-3.5 w-3.5" />{createLink.isPending ? "Creating..." : "Create link"}</button>
+                  {createLink.isSuccess ? <div className="flex items-center gap-2 text-xs text-emerald-700 md:col-span-full"><CheckCircle2 className="h-3.5 w-3.5" /> Tracking URL created.</div> : null}
+                  {createLink.isError ? <div className="text-xs text-red-600 md:col-span-full">Could not create link. Use a getpossibleminds.com destination and a valid contact.</div> : null}
+                </form>
+              </details>
+
+              <details className="border-y border-neutral-100 py-3">
+                <summary className="cursor-pointer text-sm font-semibold text-neutral-800">Tracking links ({data.links.length})</summary>
+                <div className="mt-3 overflow-x-auto">
+                  <table className="min-w-full text-left">
+                    <thead className="bg-neutral-50 text-[11px] uppercase text-neutral-500"><tr><th className="px-3 py-2">Contact</th><th className="px-3 py-2">Channel</th><th className="px-3 py-2">Tracking URL</th><th className="px-3 py-2">Status</th><th className="px-3 py-2 text-right">Raw fetches</th><th className="px-3 py-2 text-right">Visits</th><th className="px-3 py-2 text-right">Depth</th><th className="px-3 py-2 text-right">Events</th></tr></thead>
+                    <tbody>{data.links.length ? data.links.map((link) => <CampaignLinkRow key={link.code} link={link} onMarkSent={(code) => markSent.mutate(code)} marking={markSent.isPending} />) : <tr><td colSpan={8} className="px-3 py-8 text-sm text-neutral-500">No tracking links yet.</td></tr>}</tbody>
+                  </table>
+                </div>
+              </details>
+
+              {data.activities.length ? <details className="border-y border-neutral-100 py-3"><summary className="cursor-pointer text-sm font-semibold text-neutral-800">Raw event stream ({data.activities.length})</summary><div className="mt-3 overflow-x-auto"><table className="min-w-full text-left"><thead className="bg-neutral-50 text-[11px] uppercase text-neutral-500"><tr><th className="px-3 py-2">When</th><th className="px-3 py-2">Contact</th><th className="px-3 py-2">Channel</th><th className="px-3 py-2">Event</th><th className="px-3 py-2">Signal</th></tr></thead><tbody>{data.activities.map((activity) => <CampaignActivityRow key={activity.id} activity={activity} />)}</tbody></table></div></details> : null}
+            </div>
+          ) : null}
         </div>
       ) : null}
     </section>
@@ -494,6 +753,9 @@ export default function ClickAnalyticsPage() {
 
       <CampaignWorkspace />
 
+      <details className="border-y border-neutral-200 py-3">
+        <summary className="cursor-pointer text-sm font-semibold text-neutral-700">All-workflow engagement</summary>
+        <div className="mt-4 space-y-4">
       <div className="flex flex-wrap items-center gap-3 border-y border-neutral-200 py-3">
         <div className="flex flex-wrap gap-1">
           {WINDOWS.map((window) => (
@@ -631,6 +893,8 @@ export default function ClickAnalyticsPage() {
           </div>
         )}
       </section>
+        </div>
+      </details>
     </div>
   );
 }

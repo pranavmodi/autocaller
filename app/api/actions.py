@@ -40,6 +40,11 @@ class LeadGenDraftActionRequest(BaseModel):
     brief_version: int | None = None
     scheduled_for: datetime | None = None
     transport: str | None = None
+    in_reply_to: str | None = Field(None, max_length=998)
+    references: str | None = Field(None, max_length=4000)
+    lead_gen_action_type: str | None = Field(None, max_length=64)
+    sequence_id: str | None = Field(None, max_length=128)
+    sequence_step_num: int | None = Field(None, ge=1, le=100)
 
 
 class TestEmailActionRequest(BaseModel):
@@ -50,6 +55,8 @@ class TestEmailActionRequest(BaseModel):
     approved_by: str = Field("operator", max_length=128)
     from_addr: str | None = None
     transport: str | None = None
+    in_reply_to: str | None = Field(None, max_length=998)
+    references: str | None = Field(None, max_length=4000)
 
 
 class EmailActionRequest(TestEmailActionRequest):
@@ -64,6 +71,7 @@ class EmailActionRequest(TestEmailActionRequest):
     skill_sha256: str | None = None
     brief_version: int | None = None
     scheduled_for: datetime | None = None
+    lead_gen_action_type: str | None = Field(None, max_length=64)
 
 
 class ExecuteActionRequest(BaseModel):

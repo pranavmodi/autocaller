@@ -14,7 +14,7 @@ from __future__ import annotations
 import os
 from typing import Optional
 
-from .base import BACKEND_OPENAI, BACKEND_GEMINI, RealtimeVoiceBackend
+from .base import BACKEND_OPENAI, BACKEND_GEMINI, BACKEND_OPERATOR, RealtimeVoiceBackend
 
 
 def get_voice_backend(
@@ -33,7 +33,10 @@ def get_voice_backend(
     if p == BACKEND_GEMINI:
         from .gemini_live import GeminiLiveBackend
         return GeminiLiveBackend(audio_format=audio_format, verbose=verbose, model=model, voice_name=voice_name)
-    raise ValueError(f"Unknown voice provider: {provider!r} (expected 'openai' or 'gemini')")
+    if p == BACKEND_OPERATOR:
+        from .operator import OperatorVoiceBackend
+        return OperatorVoiceBackend(audio_format=audio_format)
+    raise ValueError(f"Unknown voice provider: {provider!r} (expected 'openai', 'gemini', or 'operator')")
 
 
 def resolve_default_provider() -> str:

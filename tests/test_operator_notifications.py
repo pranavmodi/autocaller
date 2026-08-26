@@ -1,6 +1,37 @@
 from app.db.models import InboundEmailRow
 from app.services import operator_notifications
-from app.services.operator_notifications import _reply_subject, _send_thread_reply, _thread_references
+from app.services.operator_notifications import (
+    _notification_is_suppressed,
+    _reply_subject,
+    _send_thread_reply,
+    _thread_references,
+)
+
+
+def test_needs_human_review_reply_notifications_are_disabled_by_default(monkeypatch):
+    monkeypatch.delenv("OPERATOR_NOTIFY_NEEDS_HUMAN_REVIEW", raising=False)
+
+    assert _notification_is_suppressed(
+        "lead_email_reply",
+        {"kind": "needs_human_review"},
+    ) is True
+    assert _notification_is_suppressed(
+        "lead_email_reply",
+        {"kind": "human_reply", "outcome": "positive_reply"},
+    ) is False
+
+
+def test_needs_human_review_reply_notifications_can_be_reenabled(monkeypatch):
+    monkeypatch.setenv("OPERATOR_NOTIFY_NEEDS_HUMAN_REVIEW", "true")
+
+    assert _notification_is_suppressed(
+        "lead_email_reply",
+        {"kind": "needs_human_review"},
+    ) is False
+
+
+def test_yelp_review_needed_notifications_are_suppressed():
+    assert _notification_is_suppressed("yelp_review_needed") is True
 
 
 def test_reply_subject_preserves_existing_re_prefix():

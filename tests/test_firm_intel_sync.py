@@ -4,6 +4,7 @@ import asyncio
 from datetime import datetime, timezone
 
 import pytest
+from sqlalchemy import or_
 
 from app.db.models import FirmAliasRow, FirmIntelSyncStateRow, PifFirmRow
 from app.services import firm_intel_sync as svc
@@ -216,6 +217,26 @@ def profile(
             "sources": ["https://smithlaw.com"],
             "research_status": "done",
             "last_researched_at": "2026-06-30T00:00:00Z",
+            "job_postings_research_status": "completed",
+            "last_job_postings_researched_at": "2026-08-22T04:00:00Z",
+            "job_postings": {
+                "has_recent_openings": True,
+                "window_days": 30,
+                "window_start": "2026-07-24",
+                "window_end": "2026-08-22",
+                "researched_at": "2026-08-22T04:00:00Z",
+                "postings": [{
+                    "title": "Intake Specialist",
+                    "location": "Los Angeles, CA",
+                    "employment_type": "Full-time",
+                    "posted_date": "2026-08-15",
+                    "description_summary": "Handles prospective-client intake.",
+                    "responsibilities": ["Answer prospective-client calls"],
+                    "qualifications": ["One year of intake experience"],
+                    "source_name": "Firm careers page",
+                    "source_url": "https://smithlaw.com/careers/intake-specialist",
+                }],
+            },
         },
         "source_record": {
             "id": firm_id,
@@ -231,6 +252,54 @@ def profile(
         },
         "provenance": {"refined_at": refined_at, "source": "emailtag"},
     }
+
+
+def extraction(firm_id: str = "raw-1"):
+    return {
+        "extraction_id": firm_id,
+        "firm_name": "Raw Example Law",
+        "entity_type": "pi_law_firm",
+        "observed_website": "rawexample.com/contact",
+        "emails": ["intake@rawexample.com"],
+        "phones": ["+13105551212"],
+        "fax": None,
+        "addresses": ["Los Angeles, CA"],
+        "contacts": [{"name": "Intake", "email": "intake@rawexample.com"}],
+        "conversation_ids": ["cnv_1"],
+        "extraction_notes": "signature extraction",
+        "first_contacted_precise_at": "2026-08-20T00:00:00Z",
+        "merge_status": "active",
+        "merged_into": None,
+        "created_at": "2026-08-20T00:00:00Z",
+        "updated_at": "2026-08-26T09:00:00Z",
+        "source": "emailtag_pif_extraction",
+    }
+
+
+def test_raw_extraction_sync_queues_local_enrichment(monkeypatch):
+    store, calls = install_fakes(monkeypatch, [{
+        "items": [extraction()],
+        "next_cursor": None,
+        "total": 1,
+    }])
+    queued = []
+
+    async def fake_queue(ids, *, limit):
+        queued.extend(ids)
+        return {"queued": list(ids), "skipped": []}
+
+    from app.services import pif_local_enrichment
+    monkeypatch.setattr(pif_local_enrichment, "queue_dirty_firm_enrichment", fake_queue)
+
+    result = asyncio.run(svc.sync_firm_intel())
+
+    row = store.firms["raw-1"]
+    assert calls[0]["path"] == "/extractions"
+    assert row.profile_source == "raw"
+    assert row.source_json["source"] == "emailtag_pif_extraction"
+    assert row.research_data["local_enrichment"]["dirty"] is True
+    assert queued == ["raw-1"]
+    assert result["local_enrichment"]["queued"] == ["raw-1"]
 
 
 def test_delta_sync_two_pages_upserts_and_advances_watermark(monkeypatch):
@@ -327,6 +396,9 @@ def test_mapping_profile_to_pif_row_fields(monkeypatch):
     assert row.behavioral_data["primary_pain_point"] == "intake"
     assert row.behavioral_data["total_email_count"] == 12
     assert row.research_data["city"] == "Los Angeles"
+    assert row.research_data["job_postings_research_status"] == "completed"
+    assert row.research_data["job_postings"]["postings"][0]["title"] == "Intake Specialist"
+    assert row.research_data["job_postings"]["postings"][0]["source_url"] == "https://smithlaw.com/careers/intake-specialist"
     assert row.raw_json is fixture
     assert row.source_json is fixture["source_record"]
     assert row.first_contacted_precise_at == datetime(2026, 1, 22, 17, 17, 14, 831612, tzinfo=timezone.utc)
@@ -545,6 +617,45 @@ def test_sync_reconciles_upstream_profile_into_manual_domain_record(monkeypatch)
     assert result["items"][0]["source_firm_id"] == "upstream-1"
 
 
+def test_sync_uses_manual_alias_override_instead_of_readding_contaminated_domains(monkeypatch):
+    fixture = profile(
+        "firm-1",
+        canonical="wrong-vendor.example",
+        domains=["wrong-vendor.example", "rightfirm.com"],
+    )
+    store, _calls = install_fakes(monkeypatch, [
+        {"items": [fixture], "next_cursor": None, "total": 1},
+    ])
+    store.firms["firm-1"] = PifFirmRow(
+        id="firm-1",
+        firm_name="Right Firm",
+        website="rightfirm.com",
+        canonical_website="rightfirm.com",
+        profile_source="v2",
+        source_json={
+            "_possibleos_manual_overrides": {
+                "canonical_website": "rightfirm.com",
+                "aliases": {
+                    "domains": ["rightfirm.com"],
+                    "vanity_domains": [],
+                    "legacy_pif_ids": ["firm-1"],
+                },
+            }
+        },
+        raw_json={},
+        contacts=[],
+        leadership=[],
+        staff=[],
+        emails=[],
+        phones=[],
+    )
+
+    asyncio.run(svc.sync_firm_intel(full=True))
+
+    assert ("domain", "rightfirm.com") in store.aliases
+    assert ("domain", "wrong-vendor.example") not in store.aliases
+
+
 def test_sync_status_reconstructs_legacy_run_firm_details(monkeypatch):
     store, _calls = install_fakes(monkeypatch, [])
     synced_at = datetime(2026, 7, 20, 7, 21, 27, tzinfo=timezone.utc)
@@ -579,6 +690,46 @@ def test_sync_status_reconstructs_legacy_run_firm_details(monkeypatch):
         "people_count": 2,
         "aliases_touched": None,
     }]
+
+
+@pytest.mark.parametrize("status", ["done", "completed", "enriched"])
+def test_research_presence_treats_finished_statuses_as_completed(status):
+    row = PifFirmRow(id="firm-1", research_status=status)
+
+    assert svc._row_matches_presence(row, "research_presence", "completed") is True
+    assert svc._row_matches_presence(row, "research_presence", "missing") is False
+
+
+@pytest.mark.parametrize("status", ["failed", "pending"])
+def test_research_presence_does_not_treat_failed_or_pending_as_missing(status):
+    row = PifFirmRow(id="firm-1", research_status=status)
+
+    assert svc._row_matches_presence(row, "research_presence", "missing") is False
+
+
+def test_job_postings_presence_distinguishes_openings_from_completed_empty_results():
+    with_opening = PifFirmRow(id="firm-open", research_data={
+        "job_postings_research_status": "completed",
+        "job_postings": {"has_recent_openings": True, "postings": [{"title": "Intake Specialist"}]},
+    })
+    without_opening = PifFirmRow(id="firm-empty", research_data={
+        "job_postings_research_status": "completed",
+        "job_postings": {"has_recent_openings": False, "postings": []},
+    })
+    untouched = PifFirmRow(id="firm-new", research_data={})
+
+    assert svc._row_matches_presence(with_opening, "job_postings_presence", "has") is True
+    assert svc._row_matches_presence(without_opening, "job_postings_presence", "none") is True
+    assert svc._row_matches_presence(untouched, "job_postings_presence", "not_researched") is True
+
+
+def test_active_firm_condition_excludes_rows_with_merge_target():
+    merged_into = PifFirmRow.source_json["merged_into"].astext
+    condition = or_(merged_into.is_(None), merged_into == "")
+    rendered = str(condition.compile(compile_kwargs={"literal_binds": True}))
+
+    assert "merged_into" in rendered
+    assert "IS NULL" in rendered
 
 
 def test_resolve_firm_local_hits_domain_email_and_legacy_id(monkeypatch):

@@ -109,7 +109,12 @@ def _apply_record(row: PifFirmRow, item: dict[str, Any], *, now: datetime) -> No
     row.leadership = _as_list(item.get("leadership"))
     row.staff = _as_list(item.get("staff"))
     row.contact_profiles = _as_dict(item.get("contact_profiles"))
-    row.research_data = _as_dict(item.get("research_data"))
+    from app.services.firm_intel_sync import _preserve_local_job_research
+
+    row.research_data = _preserve_local_job_research(
+        row.research_data,
+        _as_dict(item.get("research_data")),
+    )
     row.behavioral_data = _as_dict(item.get("behavioral_data"))
     row.score_breakdown = _as_dict(item.get("score_breakdown"))
     row.conversation_ids = _as_list(item.get("conversation_ids"))
@@ -241,6 +246,9 @@ async def pif_directory_sync_loop(*, interval_seconds: int = 86400) -> None:
                 from app.services.firm_intel_sync import sync_firm_intel
 
                 await sync_firm_intel()
+                from app.services.pif_autorespond_sync import sync_autorespond_events
+                autorespond_result = await sync_autorespond_events()
+                logger.info("pif autorespond event sync: %s", autorespond_result)
                 # Roadmap step 1: fold the directory's titled contacts +
                 # leadership into firm_contacts so daily selection has named,
                 # persona-mapped decision-makers. Local-only.

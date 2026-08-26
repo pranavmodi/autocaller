@@ -1,8 +1,8 @@
-"""EmailTag firm-intel v2 mirror.
+"""EmailTag PIF-extraction mirror.
 
-Pulls the published firm_profile contract into the local pif_directory_firms
-mirror and maintains a local alias table so lead-gen can resolve firms without
-calling EmailTag on the hot path.
+EmailTag owns extraction only. Possible OS mirrors raw extraction deltas and
+owns canonical identity, research, vendors, people, scoring, and job research.
+The legacy refined-profile mapper remains readable during the cutover.
 """
 from __future__ import annotations
 
@@ -18,10 +18,11 @@ from types import SimpleNamespace
 from typing import Any
 
 import httpx
-from sqlalchemy import String, bindparam, cast, func, inspect, or_, select, text
+from sqlalchemy import String, and_, bindparam, cast, exists, func, inspect, or_, select, text
+from sqlalchemy.dialects.postgresql import JSONPATH
 
 from app.db import AsyncSessionLocal, async_engine
-from app.db.models import FirmAliasRow, FirmIntelSyncStateRow, PifFirmRow
+from app.db.models import FirmAliasRow, FirmIntelSyncStateRow, PifAutorespondEventRow, PifFirmRow
 from app.services.front_sync import is_consumer_domain, normalize_domain
 from app.services.persona_mapper import classify_contact
 
@@ -33,7 +34,8 @@ FIRM_INTEL_BASE_URL = os.getenv(
 ).rstrip("/")
 
 ALIAS_TYPES = ("domain", "vanity_domain", "legacy_pif_id")
-STATUS_RUNNING = {"queued", "in_progress", "running", "started"}
+STATUS_COMPLETED = {"completed", "done", "enriched"}
+STATUS_RUNNING = {"queued", "pending", "in_progress", "running", "started"}
 SYNC_DETAIL_LIMIT = 100
 
 _tables_checked = False
@@ -161,6 +163,8 @@ def _as_float(value: Any) -> float | None:
 
 
 def _source_updated_at(profile: dict[str, Any]) -> datetime | None:
+    if profile.get("extraction_id"):
+        return _parse_dt(profile.get("updated_at"))
     provenance = _as_dict(profile.get("provenance"))
     return _parse_dt(provenance.get("refined_at")) or _parse_dt(profile.get("updated_at"))
 
@@ -301,6 +305,25 @@ def _research_data(profile: dict[str, Any]) -> dict[str, Any]:
     return research
 
 
+_LOCAL_JOB_RESEARCH_KEYS = (
+    "job_postings",
+    "job_postings_research_status",
+    "job_postings_research_provider",
+    "last_job_postings_researched_at",
+)
+
+
+def _preserve_local_job_research(existing: Any, incoming: dict[str, Any]) -> dict[str, Any]:
+    """Keep Possible OS-owned job research across EmailTag mirror refreshes."""
+    prior = existing if isinstance(existing, dict) else {}
+    merged = dict(incoming)
+    if prior.get("job_postings_research_provider") == "possibleos_openclaw":
+        for key in _LOCAL_JOB_RESEARCH_KEYS:
+            if key in prior:
+                merged[key] = prior[key]
+    return merged
+
+
 def _apply_source_record(row: PifFirmRow, source: dict[str, Any]) -> None:
     if not source:
         row.source_json = row.source_json or {}
@@ -343,7 +366,10 @@ def _apply_v2_profile(row: PifFirmRow, profile: dict[str, Any], *, now: datetime
     row.emails = _distinct([p.get("email") for p in people], lower=True)
     row.phones = _distinct([p.get("phone") for p in people])
     row.behavioral_data = _behavioral_data(profile)
-    row.research_data = _research_data(profile)
+    row.research_data = _preserve_local_job_research(
+        row.research_data,
+        _research_data(profile),
+    )
     row.raw_json = profile
     row.source_updated_at = _source_updated_at(profile)
     row.warm_score = _as_float(relationship.get("warm_score_neutral"))
@@ -372,6 +398,63 @@ def _apply_v2_profile(row: PifFirmRow, profile: dict[str, Any], *, now: datetime
     row.source_created_at = row.source_created_at
     if aliases and not canonical:
         row.website = _profile_website(profile)
+
+
+def _apply_extraction(row: PifFirmRow, extraction: dict[str, Any], *, now: datetime) -> None:
+    """Apply source facts without replacing Possible OS-owned derived fields."""
+    existing_source = row.source_json if isinstance(row.source_json, dict) else {}
+    manual_overrides = existing_source.get("_possibleos_manual_overrides")
+    source = dict(extraction)
+    if isinstance(manual_overrides, dict):
+        source["_possibleos_manual_overrides"] = deepcopy(manual_overrides)
+
+    source_updated = _parse_dt(extraction.get("updated_at"))
+    source_version = _dt_iso(source_updated)
+    research_data = dict(row.research_data) if isinstance(row.research_data, dict) else {}
+    local_state = _as_dict(research_data.get("local_enrichment"))
+    local_state["source_updated_at"] = source_version
+    local_state["dirty"] = local_state.get("enriched_source_updated_at") != source_version
+    research_data["local_enrichment"] = local_state
+
+    row.firm_name = extraction.get("firm_name") or row.firm_name
+    row.entity_type = extraction.get("entity_type") or row.entity_type
+    observed_website = normalize_domain(extraction.get("observed_website"))
+    if observed_website and not row.canonical_website:
+        row.website = observed_website
+    row.emails = _distinct([
+        *_as_list(extraction.get("emails")),
+        *[p.get("email") for p in [*(_as_list(row.leadership)), *(_as_list(row.staff))] if isinstance(p, dict)],
+    ], lower=True)
+    row.phones = _distinct([
+        *_as_list(extraction.get("phones")),
+        *[p.get("phone") for p in [*(_as_list(row.leadership)), *(_as_list(row.staff))] if isinstance(p, dict)],
+    ])
+    row.fax = extraction.get("fax") or row.fax
+    row.addresses = _as_list(extraction.get("addresses"))
+    row.contacts = _as_list(extraction.get("contacts"))
+    row.conversation_ids = _as_list(extraction.get("conversation_ids"))
+    row.extraction_notes = extraction.get("extraction_notes")
+    row.first_contacted_precise_at = _parse_dt(extraction.get("first_contacted_precise_at"))
+    row.source_created_at = _parse_dt(extraction.get("created_at"))
+    row.source_updated_at = source_updated
+    row.source_json = source
+    row.research_data = research_data
+    row.profile_source = "raw"
+    row.synced_at = now
+    row.updated_at = now
+
+    if isinstance(manual_overrides, dict):
+        from app.services.pif_firm_crud import apply_stored_manual_overrides
+
+        apply_stored_manual_overrides(row, manual_overrides, now=now)
+
+
+def _extraction_alias_profile(extraction: dict[str, Any], firm_id: str) -> dict[str, Any]:
+    """Raw observations claim only their source ID; domains are resolved locally."""
+    return {
+        "firm_id": firm_id,
+        "aliases": {"legacy_pif_ids": [str(extraction.get("extraction_id") or firm_id)]},
+    }
 
 
 def _alias_candidates(profile: dict[str, Any]) -> set[tuple[str, str]]:
@@ -438,6 +521,7 @@ async def ensure_firm_intel_tables() -> None:
         await conn.run_sync(_ensure_v2_columns)
         await conn.run_sync(FirmAliasRow.__table__.create, checkfirst=True)
         await conn.run_sync(FirmIntelSyncStateRow.__table__.create, checkfirst=True)
+        await conn.run_sync(PifAutorespondEventRow.__table__.create, checkfirst=True)
     _tables_checked = True
 
 
@@ -486,7 +570,8 @@ async def _upsert_aliases(session, profile: dict[str, Any], *, now: datetime) ->
 
 
 async def _upsert_profile(session, profile: dict[str, Any], *, now: datetime) -> tuple[str, int, str | None]:
-    firm_id = str(profile.get("firm_id") or "").strip()
+    is_extraction = bool(profile.get("extraction_id"))
+    firm_id = str(profile.get("extraction_id") or profile.get("firm_id") or "").strip()
     if not firm_id:
         return "skipped", 0, None
     row = await session.get(PifFirmRow, firm_id)
@@ -501,8 +586,22 @@ async def _upsert_profile(session, profile: dict[str, Any], *, now: datetime) ->
             row = PifFirmRow(id=firm_id, created_at=now)
             status = "created"
             session.add(row)
-    _apply_v2_profile(row, profile, now=now)
-    alias_profile = profile
+    if is_extraction:
+        _apply_extraction(row, profile, now=now)
+        alias_profile = _extraction_alias_profile(profile, row.id)
+    else:
+        _apply_v2_profile(row, profile, now=now)
+        alias_profile = profile
+    manual_overrides = (
+        row.source_json.get("_possibleos_manual_overrides")
+        if isinstance(row.source_json, dict)
+        else None
+    )
+    if isinstance(manual_overrides, dict) and isinstance(manual_overrides.get("aliases"), dict):
+        alias_profile = deepcopy(profile)
+        alias_profile["canonical_website"] = row.canonical_website or row.website
+        alias_profile["aliases"] = deepcopy(manual_overrides["aliases"])
+        alias_profile["people"] = []
     if row.id != firm_id:
         alias_profile = deepcopy(profile)
         alias_profile["firm_id"] = row.id
@@ -517,7 +616,7 @@ async def _upsert_profile(session, profile: dict[str, Any], *, now: datetime) ->
 async def sync_firm_intel(
     *, full: bool = False, limit: int | None = None, restart: bool = False
 ) -> dict[str, Any]:
-    """Sync EmailTag firm-intel v2 profiles into the local mirror.
+    """Sync raw EmailTag PIF extraction deltas into the local mirror.
 
     Full crawls are resumable: an interrupted run saves its cursor (and the
     max watermark seen so far) in the state row, and the next full run picks
@@ -534,6 +633,8 @@ async def sync_firm_intel(
     max_watermark: datetime | None = None
     stopped_by_limit_with_more = False
     sync_items: list[dict[str, Any]] = []
+    dirty_firm_ids: list[str] = []
+    feed_path = "/extractions"
 
     async with AsyncSessionLocal() as session:
         state = await session.get(FirmIntelSyncStateRow, 1)
@@ -581,7 +682,13 @@ async def sync_firm_intel(
                     params["cursor"] = cursor
 
                 try:
-                    resp = await _get_with_retry(client, "/firms", params)
+                    resp = await _get_with_retry(client, feed_path, params)
+                    if resp.status_code == 404 and feed_path == "/extractions" and pages == 0:
+                        feed_path = "/firms"
+                        logger.warning(
+                            "EmailTag extraction feed is not deployed yet; using the legacy read-only firm feed"
+                        )
+                        resp = await _get_with_retry(client, feed_path, params)
                     resp.raise_for_status()
                 except Exception:
                     await _save_resume_point()
@@ -609,15 +716,20 @@ async def sync_firm_intel(
                     watermark = _profile_watermark(profile)
                     if watermark and (max_watermark is None or watermark > max_watermark):
                         max_watermark = watermark
-                    source_firm_id = str(profile.get("firm_id") or "").strip()
+                    source_firm_id = str(profile.get("extraction_id") or profile.get("firm_id") or "").strip()
                     firm_id = local_firm_id or source_firm_id
+                    if profile.get("extraction_id") and firm_id and firm_id not in dirty_firm_ids:
+                        dirty_firm_ids.append(firm_id)
                     if firm_id and len(sync_items) < SYNC_DETAIL_LIMIT:
                         sync_items.append({
                             "firm_id": firm_id,
                             "source_firm_id": source_firm_id if source_firm_id != firm_id else None,
                             "firm_name": profile.get("firm_name") or firm_id,
                             "status": status,
-                            "canonical_website": _profile_website(profile),
+                            "canonical_website": (
+                                (await session.get(PifFirmRow, firm_id)).canonical_website
+                                if firm_id else None
+                            ),
                             "source_updated_at": _dt_iso(_source_updated_at(profile)),
                             "people_count": len(_people(profile)),
                             "aliases_touched": alias_count,
@@ -652,6 +764,7 @@ async def sync_firm_intel(
             "stopped_by_limit_with_more": stopped_by_limit_with_more,
             "items": sync_items,
             "items_truncated": fetched > len(sync_items),
+            "source_feed": feed_path,
         }
         if watermark_advanced:
             state.last_updated_since = max_watermark
@@ -666,6 +779,23 @@ async def sync_firm_intel(
         state.last_result = result
         await session.commit()
 
+    enrichment_queue = {"queued": [], "skipped": []}
+    should_queue = bool(dirty_firm_ids) and (
+        not full or os.getenv("PIF_ENRICH_ON_FULL_SYNC", "false").strip().lower() in {"1", "true", "yes", "on"}
+    )
+    if should_queue:
+        from app.services.pif_local_enrichment import queue_dirty_firm_enrichment
+
+        enrichment_queue = await queue_dirty_firm_enrichment(
+            dirty_firm_ids,
+            limit=max(1, int(os.getenv("PIF_LOCAL_ENRICHMENT_QUEUE_LIMIT", "100"))),
+        )
+    result["local_enrichment"] = enrichment_queue
+    async with AsyncSessionLocal() as session:
+        state = await session.get(FirmIntelSyncStateRow, 1)
+        if state is not None:
+            state.last_result = result
+            await session.commit()
     logger.info("firm_intel sync: %s", result)
     return result
 
@@ -1402,9 +1532,9 @@ def _row_matches_presence(row: PifFirmRow, field: str, value: str | None) -> boo
     if field == "research_presence":
         status = row.research_status
         if value == "completed":
-            return status == "completed"
+            return status in STATUS_COMPLETED
         if value == "missing":
-            return status not in {"completed", *STATUS_RUNNING}
+            return status not in {*STATUS_COMPLETED, *STATUS_RUNNING, "failed"}
         if value == "queued_or_running":
             return status in STATUS_RUNNING
         if value == "failed":
@@ -1412,9 +1542,25 @@ def _row_matches_presence(row: PifFirmRow, field: str, value: str | None) -> boo
     if field == "staff_presence":
         status = row.staff_research_status
         if value == "completed":
-            return status == "completed"
+            return status in STATUS_COMPLETED
         if value == "missing":
-            return status not in {"completed", *STATUS_RUNNING}
+            return status not in {*STATUS_COMPLETED, *STATUS_RUNNING, "failed"}
+        if value == "queued_or_running":
+            return status in STATUS_RUNNING
+        if value == "failed":
+            return status == "failed"
+    if field == "job_postings_presence":
+        research_data = row.research_data if isinstance(row.research_data, dict) else {}
+        status = research_data.get("job_postings_research_status")
+        job_postings = research_data.get("job_postings")
+        job_postings = job_postings if isinstance(job_postings, dict) else {}
+        has_recent = bool(job_postings.get("has_recent_openings") or job_postings.get("postings"))
+        if value == "has":
+            return has_recent
+        if value == "none":
+            return status in STATUS_COMPLETED and not has_recent
+        if value == "not_researched":
+            return status not in {*STATUS_COMPLETED, *STATUS_RUNNING, "failed"}
         if value == "queued_or_running":
             return status in STATUS_RUNNING
         if value == "failed":
@@ -1481,9 +1627,16 @@ async def list_mirrored_pif_firms(
     icp_tier: str | None = None,
     entity_type: str | None = None,
     recently_researched: int | None = None,
+    contact_email_min: int | None = None,
+    contact_email_max: int | None = None,
+    staff_count_min: int | None = None,
+    staff_count_max: int | None = None,
+    autorespond_window: str | None = None,
+    autorespond_type: str | None = None,
     website_presence: str | None = None,
     research_presence: str | None = None,
     staff_presence: str | None = None,
+    job_postings_presence: str | None = None,
     behavior_presence: str | None = None,
     icp_presence: str | None = None,
     vendor_presence: str | None = None,
@@ -1494,7 +1647,6 @@ async def list_mirrored_pif_firms(
     active_only: bool = True,
 ) -> dict[str, Any]:
     """List local mirror rows, including vendor-name filtering absent upstream."""
-    del active_only  # The local mirror excludes merged rows at source sync time.
     await ensure_firm_intel_tables()
     page = max(1, int(page))
     page_size = max(1, min(100, int(page_size)))
@@ -1508,6 +1660,9 @@ async def list_mirrored_pif_firms(
         any_vendor_ids = await _firm_ids_with_any_vendor()
 
     conditions = []
+    if active_only:
+        merged_into = PifFirmRow.source_json["merged_into"].astext
+        conditions.append(or_(merged_into.is_(None), merged_into == ""))
     if vendor_ids is not None:
         conditions.append(PifFirmRow.id.in_(vendor_ids))
     elif vendor_presence == "has":
@@ -1536,6 +1691,38 @@ async def list_mirrored_pif_firms(
         conditions.append(PifFirmRow.manually_added.is_(manually_added))
     if recently_researched is not None:
         conditions.append(PifFirmRow.last_researched_at >= datetime.now(timezone.utc) - timedelta(days=recently_researched))
+    email_count = func.jsonb_array_length(PifFirmRow.emails)
+    staff_count = func.jsonb_array_length(PifFirmRow.staff)
+    if contact_email_min is not None:
+        conditions.append(email_count >= contact_email_min)
+    if contact_email_max is not None:
+        conditions.append(email_count <= contact_email_max)
+    if staff_count_min is not None:
+        conditions.append(staff_count >= staff_count_min)
+    if staff_count_max is not None:
+        conditions.append(staff_count <= staff_count_max)
+    if autorespond_window and autorespond_window != "any":
+        event_conditions = [
+            PifAutorespondEventRow.canonical_pif_id == PifFirmRow.id,
+            PifAutorespondEventRow.response_sent.is_(True),
+            PifAutorespondEventRow.test_mode.is_(False),
+        ]
+        if autorespond_type:
+            event_conditions.append(PifAutorespondEventRow.agent_type == autorespond_type)
+        window_days = {"24h": 1, "7d": 7, "30d": 30, "90d": 90}.get(autorespond_window)
+        if window_days is not None:
+            event_conditions.append(
+                PifAutorespondEventRow.event_created_at >= datetime.now(timezone.utc) - timedelta(days=window_days)
+            )
+        has_event = exists(select(PifAutorespondEventRow.id).where(*event_conditions))
+        conditions.append(~has_event if autorespond_window == "never" else has_event)
+    elif autorespond_type:
+        conditions.append(exists(select(PifAutorespondEventRow.id).where(
+            PifAutorespondEventRow.canonical_pif_id == PifFirmRow.id,
+            PifAutorespondEventRow.response_sent.is_(True),
+            PifAutorespondEventRow.test_mode.is_(False),
+            PifAutorespondEventRow.agent_type == autorespond_type,
+        )))
     if first_contacted_from is not None:
         conditions.append(PifFirmRow.first_contacted_precise_at >= datetime.combine(first_contacted_from, time.min, tzinfo=timezone.utc))
     if first_contacted_to is not None:
@@ -1545,6 +1732,7 @@ async def list_mirrored_pif_firms(
         ("website_presence", website_presence),
         ("research_presence", research_presence),
         ("staff_presence", staff_presence),
+        ("job_postings_presence", job_postings_presence),
         ("behavior_presence", behavior_presence),
         ("icp_presence", icp_presence),
     ):
@@ -1566,22 +1754,46 @@ async def list_mirrored_pif_firms(
                 conditions.append(PifFirmRow.source_json["website_status"].astext != "resolved")
         elif field == "research_presence":
             if value == "completed":
-                conditions.append(PifFirmRow.research_status == "completed")
+                conditions.append(PifFirmRow.research_status.in_(list(STATUS_COMPLETED)))
             elif value == "missing":
-                conditions.append(or_(PifFirmRow.research_status.is_(None), ~PifFirmRow.research_status.in_(["completed", *STATUS_RUNNING])))
+                conditions.append(or_(PifFirmRow.research_status.is_(None), ~PifFirmRow.research_status.in_(list({*STATUS_COMPLETED, *STATUS_RUNNING, "failed"}))))
             elif value == "queued_or_running":
                 conditions.append(PifFirmRow.research_status.in_(list(STATUS_RUNNING)))
             elif value == "failed":
                 conditions.append(PifFirmRow.research_status == "failed")
         elif field == "staff_presence":
             if value == "completed":
-                conditions.append(PifFirmRow.staff_research_status == "completed")
+                conditions.append(PifFirmRow.staff_research_status.in_(list(STATUS_COMPLETED)))
             elif value == "missing":
-                conditions.append(or_(PifFirmRow.staff_research_status.is_(None), ~PifFirmRow.staff_research_status.in_(["completed", *STATUS_RUNNING])))
+                conditions.append(or_(PifFirmRow.staff_research_status.is_(None), ~PifFirmRow.staff_research_status.in_(list({*STATUS_COMPLETED, *STATUS_RUNNING, "failed"}))))
             elif value == "queued_or_running":
                 conditions.append(PifFirmRow.staff_research_status.in_(list(STATUS_RUNNING)))
             elif value == "failed":
                 conditions.append(PifFirmRow.staff_research_status == "failed")
+        elif field == "job_postings_presence":
+            status = PifFirmRow.research_data["job_postings_research_status"].astext
+            has_recent = PifFirmRow.research_data["job_postings"]["has_recent_openings"].astext
+            has_postings = func.jsonb_path_exists(
+                PifFirmRow.research_data,
+                cast("$.job_postings.postings[*]", JSONPATH),
+            )
+            if value == "has":
+                conditions.append(or_(has_recent == "true", has_postings))
+            elif value == "none":
+                conditions.append(and_(
+                    status.in_(list(STATUS_COMPLETED)),
+                    func.coalesce(has_recent, "false") != "true",
+                    ~has_postings,
+                ))
+            elif value == "not_researched":
+                conditions.append(or_(
+                    status.is_(None),
+                    ~status.in_(list({*STATUS_COMPLETED, *STATUS_RUNNING, "failed"})),
+                ))
+            elif value == "queued_or_running":
+                conditions.append(status.in_(list(STATUS_RUNNING)))
+            elif value == "failed":
+                conditions.append(status == "failed")
         elif field == "behavior_presence":
             has_value = PifFirmRow.behavioral_data != {}
             conditions.append(has_value if value == "has" else ~has_value)

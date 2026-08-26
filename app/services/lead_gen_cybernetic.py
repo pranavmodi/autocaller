@@ -424,6 +424,8 @@ async def send_batch_item_draft(
     skill_sha256: str | None = None,
     brief_version: int | None = None,
     transport: str | None = None,
+    in_reply_to: str | None = None,
+    references: str | None = None,
 ) -> dict[str, Any]:
     draft_subject = _sanitize_email_copy(subject)
     draft_body = _sanitize_email_copy(body)
@@ -481,6 +483,8 @@ async def send_batch_item_draft(
         pif_id=contact.pif_id,
         recipient_name=contact.full_name,
         transport=transport,
+        in_reply_to=in_reply_to,
+        references=references,
         brief_version=brief_version,
     )
 
@@ -768,6 +772,24 @@ def _enriched_reason_for_item(
     if not action:
         return reason
     draft = dict(reason.get("agent_draft") or {})
+    payload = action.input_json if isinstance(action.input_json, dict) else {}
+    action_subject = payload.get("subject")
+    action_body = payload.get("body")
+    # The durable send action is the exact outbound copy. Older/manual drafts
+    # may exist only there, so surface it through the batch response as well.
+    if isinstance(action_subject, str) and action_subject.strip():
+        draft["subject"] = action_subject
+    if isinstance(action_body, str) and action_body.strip():
+        draft["body"] = action_body
+    for key in (
+        "composer_experiment_key",
+        "composer_variant_key",
+        "skill_path",
+        "skill_sha256",
+    ):
+        value = payload.get(key)
+        if isinstance(value, str) and value.strip():
+            draft[key] = value
     snapshot = _send_action_snapshot(action)
     reason["send_action"] = snapshot
     reason["send_email_action_id"] = action.id

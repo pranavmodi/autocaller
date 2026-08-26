@@ -462,6 +462,17 @@ same service helper syncs `reason_json.agent_draft`, `send_email_action_id`,
 scheduled PT/UTC display fields, `operator_edited=true`, and
 `approval_status=approved`.
 
+The edit path also accepts `lead_gen_action_type` (`first_touch`, `follow_up`,
+`reply_to_inbound`, or `approve_existing_draft`). It stores the classification
+as `input_json.lead_gen_action_type` on the durable action and
+`reason_json.action_type` on the batch item. Send Queue reads those fields and
+only falls back to `first_touch` when both are absent.
+
+If a batch item has `last_sent_at` or `last_sent_message_id` and no live
+editable action, `edit-draft` now refuses to create a second action on that
+item. Operators must create a fresh batch item for a subsequent follow-up,
+preventing the preview from presenting historical sends as the new draft.
+
 Policy checks verify:
 
 - action status allows execution;
@@ -543,6 +554,13 @@ Scheduled sends:
   America/Los_Angeles.
 - `actions send-email --at ...` and `actions send-approved-lead-gen-draft --at ...`
   create approved scheduled actions, run policy check, and do not execute.
+- Both action types store optional `in_reply_to` and `references` RFC
+  Message-ID ancestry. The executor maps these to standard SMTP/Resend headers
+  and Zoho Mail API `inReplyTo` / `refHeader` fields. Approval metadata binds
+  the ancestry values, and policy re-checks them before execution.
+- `lead-gen edit-draft --transport ... --in-reply-to ... [--references ...]`
+  updates an existing scheduled action in place and clears its prior policy
+  result. Provider UUIDs are not accepted as RFC Message-IDs.
 - `app/services/action_scheduler.py` runs from the FastAPI lifespan every 30
   seconds, selecting approved rows where `scheduled_for <= now()`, oldest first.
 - Each due action is executed through `execute_action`, so all normal policy

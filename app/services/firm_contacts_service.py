@@ -419,7 +419,9 @@ async def fetch_pain_quote_for_firm(pif_id: str) -> dict:
     }
 
 
-async def ingest_pif_directory_contacts(*, map_personas_after: bool = True) -> dict:
+async def ingest_pif_directory_contacts(
+    *, map_personas_after: bool = True, pif_ids: set[str] | None = None
+) -> dict:
     """Bulk-populate firm_contacts from the locally-synced PI-firm directory.
 
     Roadmap step 1: emailtag already extracts named, titled contacts +
@@ -437,10 +439,15 @@ async def ingest_pif_directory_contacts(*, map_personas_after: bool = True) -> d
 
     counts = {"firms": 0, "persons": 0, "inserted": 0, "updated": 0, "skipped": 0}
     async with AsyncSessionLocal() as session:
-        firm_rows = (await session.execute(
-            select(PifFirmRow.id, PifFirmRow.leadership, PifFirmRow.contacts)
-        )).all()
-        existing_rows = (await session.execute(select(FirmContactRow))).scalars().all()
+        firm_stmt = select(
+            PifFirmRow.id, PifFirmRow.leadership, PifFirmRow.staff, PifFirmRow.contacts
+        )
+        contact_stmt = select(FirmContactRow)
+        if pif_ids:
+            firm_stmt = firm_stmt.where(PifFirmRow.id.in_(pif_ids))
+            contact_stmt = contact_stmt.where(FirmContactRow.pif_id.in_(pif_ids))
+        firm_rows = (await session.execute(firm_stmt)).all()
+        existing_rows = (await session.execute(contact_stmt)).scalars().all()
         by_email: dict[tuple[str, str], FirmContactRow] = {}
         by_name: dict[tuple[str, str], FirmContactRow] = {}
         for r in existing_rows:
@@ -449,9 +456,10 @@ async def ingest_pif_directory_contacts(*, map_personas_after: bool = True) -> d
             elif r.full_name:
                 by_name[(r.pif_id, r.full_name.strip().lower())] = r
 
-        for pif_id, leadership, contacts in firm_rows:
+        for pif_id, leadership, staff, contacts in firm_rows:
             pid = str(pif_id)
             people = [(p, "pif_leadership") for p in (leadership or [])]
+            people += [(p, "pif_staff") for p in (staff or [])]
             people += [(p, "pif_contacts") for p in (contacts or [])]
             if not people:
                 continue

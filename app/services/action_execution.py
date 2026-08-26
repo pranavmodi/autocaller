@@ -22,7 +22,8 @@ from app.db.models import (
     PifFirmRow,
 )
 from app.services.contact_selection import has_usable_email
-from app.services.email_notification_service import _send_email
+from app.services.email_notification_service import _normalize_thread_headers, _send_email
+from app.services.engagement_campaigns import mark_tracking_links_sent_from_text
 from app.services.lead_email_composer import CONSULT_URL, _has_consult_link, _sanitize_email_copy
 from app.services.lead_gen_cybernetic import (
     daily_send_budget_from_policy,
@@ -67,6 +68,13 @@ CONSULT_LINK_REQUIRED_VARIANTS = frozenset({
     "ai-visibility-report",
     "intake-demo",
     "missed-call-ranking",
+})
+LEAD_GEN_OUTREACH_ACTION_TYPES = frozenset({
+    "first_touch",
+    "follow_up",
+    "reply_to_inbound",
+    "approve_existing_draft",
+    "manual_email",
 })
 
 
@@ -234,6 +242,28 @@ def _sha256(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
+def _clean_threading_fields(
+    in_reply_to: str | None,
+    references: str | None,
+) -> tuple[str | None, str | None]:
+    try:
+        return _normalize_thread_headers(
+            in_reply_to=in_reply_to,
+            references=references,
+        )
+    except RuntimeError as exc:
+        raise ValueError(str(exc)) from exc
+
+
+def _clean_lead_gen_action_type(value: str | None) -> str | None:
+    normalized = str(value or "").strip().lower()
+    if not normalized:
+        return None
+    if normalized not in LEAD_GEN_OUTREACH_ACTION_TYPES:
+        raise ValueError("lead_gen_action_type_invalid")
+    return normalized
+
+
 def _action_subject_body(row: AgentActionRow) -> tuple[str, str]:
     payload = row.input_json if isinstance(row.input_json, dict) else {}
     return (
@@ -267,7 +297,17 @@ async def find_live_scheduled_action_for_item(session, batch_item_id: str) -> di
     return None
 
 
-def _update_action_draft_payload(row: AgentActionRow, *, subject: str, body: str, actor: str) -> dict[str, Any]:
+def _update_action_draft_payload(
+    row: AgentActionRow,
+    *,
+    subject: str,
+    body: str,
+    actor: str,
+    transport: str | None = None,
+    in_reply_to: str | None = None,
+    references: str | None = None,
+    lead_gen_action_type: str | None = None,
+) -> dict[str, Any]:
     draft_subject = _sanitize_email_copy(subject)
     draft_body = _sanitize_email_copy(body)
     if not draft_subject:
@@ -284,12 +324,26 @@ def _update_action_draft_payload(row: AgentActionRow, *, subject: str, body: str
     payload["body"] = draft_body
     payload["subject_sha256"] = subject_hash
     payload["body_sha256"] = body_hash
+    reply_id, reference_ids = _clean_threading_fields(in_reply_to, references)
+    if transport is not None:
+        transport_override = transport.strip().lower() or None
+        if transport_override and transport_override not in {"resend", "zoho_api", "smtp"}:
+            raise ValueError("transport_must_be_resend_zoho_api_or_smtp")
+        payload["transport"] = transport_override
+    if in_reply_to is not None:
+        payload["in_reply_to"] = reply_id
+    if references is not None:
+        payload["references"] = reference_ids
+    if lead_gen_action_type is not None:
+        payload["lead_gen_action_type"] = _clean_lead_gen_action_type(lead_gen_action_type)
     approval = dict(payload.get("approval") or {})
     if approval:
         approval["approved_by"] = str(approval.get("approved_by") or row.approved_by or actor or "operator")
         approval["approved_at"] = _utcnow().isoformat()
         approval["subject_sha256"] = subject_hash
         approval["body_sha256"] = body_hash
+        approval["in_reply_to"] = payload.get("in_reply_to")
+        approval["references"] = payload.get("references")
         if payload.get("to"):
             approval["recipient"] = str(payload.get("to") or "").strip().lower()
         payload["approval"] = approval
@@ -329,6 +383,11 @@ def _sync_lead_gen_scheduled_draft_fields(
     })
     reason["agent_draft"] = existing_draft
     reason["send_email_action_id"] = action.id
+    lead_gen_action_type = _clean_lead_gen_action_type(
+        (action.input_json or {}).get("lead_gen_action_type")
+    )
+    if lead_gen_action_type:
+        reason["action_type"] = lead_gen_action_type
     if action.status == "approved":
         reason["next_operator_action"] = "scheduled_send_queued" if scheduled_for else "approved_send_queued"
         item.approval_status = "approved"
@@ -1176,6 +1235,57 @@ async def load_lead_gen_draft_for_edit(batch_item_id: str) -> dict[str, Any]:
         }
 
 
+async def set_lead_gen_action_type(
+    *,
+    batch_item_id: str,
+    lead_gen_action_type: str,
+    actor: str = "operator",
+) -> dict[str, Any]:
+    """Classify an existing queued lead-gen action without changing its draft."""
+    await ensure_agent_tables()
+    cleaned = _clean_lead_gen_action_type(lead_gen_action_type)
+    if not cleaned:
+        raise ValueError("lead_gen_action_type_required")
+    async with AsyncSessionLocal() as session:
+        item = await session.get(LeadGenBatchItemRow, batch_item_id)
+        if not item:
+            raise ValueError("batch_item_not_found")
+        reason = dict(item.reason_json or {})
+        draft = dict(reason.get("agent_draft") or {})
+        action_id = str(reason.get("send_email_action_id") or draft.get("action_id") or "").strip()
+        action = await session.get(AgentActionRow, action_id) if action_id else None
+        if not action:
+            raise ValueError("lead_gen_action_not_found")
+        if action.status not in {"waiting_for_approval", "approved"}:
+            raise ValueError("lead_gen_action_not_editable")
+        payload = dict(action.input_json or {})
+        previous = str(payload.get("lead_gen_action_type") or reason.get("action_type") or "").strip() or None
+        payload["lead_gen_action_type"] = cleaned
+        action.input_json = payload
+        reason["action_type"] = cleaned
+        reason["agent_draft"] = {**draft, "lead_gen_action_type": cleaned}
+        item.reason_json = reason
+        item.updated_at = _utcnow()
+        action.updated_at = _utcnow()
+        await _record_action_event(
+            session,
+            action_id=action.id,
+            event_type="action_classified",
+            actor=actor or "operator",
+            message=f"Lead-gen action classified as {cleaned}.",
+            input_json={"batch_item_id": batch_item_id, "previous_action_type": previous},
+            output_json={"lead_gen_action_type": cleaned},
+        )
+        await session.commit()
+        return {
+            "batch_item_id": batch_item_id,
+            "action_id": action.id,
+            "lead_gen_action_type": cleaned,
+            "previous_action_type": previous,
+            "action_status": action.status,
+        }
+
+
 async def save_edited_lead_gen_draft(
     *,
     batch_item_id: str,
@@ -1184,6 +1294,10 @@ async def save_edited_lead_gen_draft(
     actor: str = "operator",
     scheduled_for: datetime | None = None,
     execute_now: bool = False,
+    transport: str | None = None,
+    in_reply_to: str | None = None,
+    references: str | None = None,
+    lead_gen_action_type: str | None = None,
 ) -> dict[str, Any]:
     await ensure_agent_tables()
     draft_subject = _sanitize_email_copy(subject)
@@ -1213,6 +1327,10 @@ async def save_edited_lead_gen_draft(
                 subject=draft_subject,
                 body=draft_body,
                 actor=actor or "operator",
+                transport=transport,
+                in_reply_to=in_reply_to,
+                references=references,
+                lead_gen_action_type=lead_gen_action_type,
             )
             if scheduled_for:
                 action.scheduled_for = _as_utc(scheduled_for)
@@ -1287,6 +1405,9 @@ async def save_edited_lead_gen_draft(
                 "scheduled_for_utc": format_utc(action.scheduled_for) if action.scheduled_for else None,
             }
 
+        if reason.get("last_sent_at") or reason.get("last_sent_message_id"):
+            raise ValueError("batch_item_already_sent_use_new_batch_item")
+
     action = await create_send_approved_lead_gen_draft_action(
         batch_item_id=batch_item_id,
         subject=draft_subject,
@@ -1294,6 +1415,10 @@ async def save_edited_lead_gen_draft(
         requested_by=actor or "operator",
         approved_by=actor or "operator",
         scheduled_for=_as_utc(scheduled_for) if scheduled_for else None,
+        transport=transport,
+        in_reply_to=in_reply_to,
+        references=references,
+        lead_gen_action_type=lead_gen_action_type,
     )
     if execute_now:
         execution = await execute_action(action["id"], actor=actor or "operator")
@@ -1433,6 +1558,11 @@ async def create_send_approved_lead_gen_draft_action(
     brief_version: int | None = None,
     scheduled_for: datetime | None = None,
     transport: str | None = None,
+    in_reply_to: str | None = None,
+    references: str | None = None,
+    lead_gen_action_type: str | None = None,
+    sequence_id: str | None = None,
+    sequence_step_num: int | None = None,
 ) -> dict[str, Any]:
     await ensure_agent_tables()
     draft_subject = _sanitize_email_copy(subject)
@@ -1444,6 +1574,7 @@ async def create_send_approved_lead_gen_draft_action(
     transport_override = (transport or "").strip().lower() or None
     if transport_override and transport_override not in {"resend", "zoho_api", "smtp"}:
         raise ValueError("transport_must_be_resend_zoho_api_or_smtp")
+    reply_id, reference_ids = _clean_threading_fields(in_reply_to, references)
     action_id = _new_id("action")
     input_json = {
         "batch_item_id": batch_item_id,
@@ -1457,13 +1588,24 @@ async def create_send_approved_lead_gen_draft_action(
         "skill_sha256": skill_sha256,
         "brief_version": brief_version,
         "transport": transport_override,
+        "in_reply_to": reply_id,
+        "references": reference_ids,
         "approval": {
             "approved_by": approved_by or "operator",
             "approved_at": _utcnow().isoformat(),
             "subject_sha256": _sha256(draft_subject),
             "body_sha256": _sha256(draft_body),
+            "in_reply_to": reply_id,
+            "references": reference_ids,
         },
     }
+    cleaned_action_type = _clean_lead_gen_action_type(lead_gen_action_type)
+    if cleaned_action_type:
+        input_json["lead_gen_action_type"] = cleaned_action_type
+    if sequence_id:
+        input_json["sequence_id"] = str(sequence_id)
+    if sequence_step_num:
+        input_json["sequence_step_num"] = int(sequence_step_num)
     async with AsyncSessionLocal() as session:
         await mark_experiment_scheduled_for_item(session, batch_item_id)
         action = AgentActionRow(
@@ -1562,12 +1704,15 @@ async def create_send_email_action(
     sequence_step_num: int | None = None,
     scheduled_for: datetime | None = None,
     transport: str | None = None,
+    in_reply_to: str | None = None,
+    references: str | None = None,
 ) -> dict[str, Any]:
     await ensure_agent_tables()
     email_mode = (mode or "test").strip().lower()
     transport_override = (transport or "").strip().lower() or None
     if transport_override and transport_override not in {"resend", "zoho_api", "smtp"}:
         raise ValueError("transport_must_be_resend_zoho_api_or_smtp")
+    reply_id, reference_ids = _clean_threading_fields(in_reply_to, references)
     recipient = to.strip().lower()
     draft_subject = _sanitize_email_copy(subject)
     draft_body = _sanitize_email_copy(body)
@@ -1589,6 +1734,8 @@ async def create_send_email_action(
             "recipient": recipient,
             "subject_sha256": _sha256(draft_subject),
             "body_sha256": _sha256(draft_body),
+            "in_reply_to": reply_id,
+            "references": reference_ids,
         }
     input_json = {
         "to": recipient,
@@ -1610,10 +1757,13 @@ async def create_send_email_action(
         "test_email": email_mode == "test",
         "approval": approval_json,
         "transport": transport_override,
+        "in_reply_to": reply_id,
+        "references": reference_ids,
     }
     if email_mode == "lead_gen":
-        if lead_gen_action_type:
-            input_json["lead_gen_action_type"] = str(lead_gen_action_type)
+        cleaned_action_type = _clean_lead_gen_action_type(lead_gen_action_type)
+        if cleaned_action_type:
+            input_json["lead_gen_action_type"] = cleaned_action_type
         if sequence_id:
             input_json["sequence_id"] = str(sequence_id)
         if sequence_step_num:
@@ -1782,6 +1932,8 @@ async def _check_action_policy_in_session(session, action: AgentActionRow) -> di
     add("body_present", bool(body.strip()), "")
     add("subject_hash_matches_approval", _sha256(subject) == approval.get("subject_sha256"), "")
     add("body_hash_matches_approval", _sha256(body) == approval.get("body_sha256"), "")
+    add("in_reply_to_matches_approval", payload.get("in_reply_to") == approval.get("in_reply_to"), "")
+    add("references_match_approval", payload.get("references") == approval.get("references"), "")
     try:
         policy = await ensure_default_policy()
         budget = daily_send_budget_from_policy(policy)
@@ -1864,6 +2016,8 @@ async def _check_send_email_policy_in_session(session, action: AgentActionRow) -
     add("body_present", bool(body.strip()), "")
     add("subject_hash_matches_approval", _sha256(subject) == approval.get("subject_sha256"), "")
     add("body_hash_matches_approval", _sha256(body) == approval.get("body_sha256"), "")
+    add("in_reply_to_matches_approval", payload.get("in_reply_to") == approval.get("in_reply_to"), "")
+    add("references_match_approval", payload.get("references") == approval.get("references"), "")
     add("email_transport_configured", transport_configured, "")
 
     contact = None
@@ -2118,6 +2272,8 @@ async def execute_action(action_id: str, *, actor: str = "operator") -> dict[str
                 skill_sha256=payload.get("skill_sha256"),
                 brief_version=payload.get("brief_version"),
                 transport=payload.get("transport"),
+                in_reply_to=payload.get("in_reply_to"),
+                references=payload.get("references"),
             )
     except Exception as exc:
         failed_action = None
@@ -2154,6 +2310,19 @@ async def execute_action(action_id: str, *, actor: str = "operator") -> dict[str
             error=error_text,
         )
         raise
+
+    try:
+        marked_codes = await mark_tracking_links_sent_from_text(
+            payload.get("body"),
+            sent_at=_parse_sent_at(result.get("sent_at")),
+        )
+        if marked_codes:
+            result["engagement_campaign_link_codes_marked_sent"] = marked_codes
+    except Exception:
+        logger.exception(
+            "failed to mark engagement campaign links sent for action %s",
+            action_id,
+        )
 
     succeeded_action = None
     async with AsyncSessionLocal() as session:
@@ -2314,6 +2483,8 @@ async def _execute_send_email(payload: dict[str, Any]) -> dict[str, Any]:
         recipient_name=recipient_name,
         pif_id=pif_id,
         transport=transport,
+        in_reply_to=str(payload.get("in_reply_to") or "").strip() or None,
+        references=str(payload.get("references") or "").strip() or None,
         brief_version=int(payload["brief_version"]) if payload.get("brief_version") else None,
     )
     email_log: EmailLogRow | None = None

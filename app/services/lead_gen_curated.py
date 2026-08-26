@@ -4,6 +4,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import func, select, update
 
@@ -16,6 +17,11 @@ from app.db.models import (
     PifFirmRow,
 )
 from app.services.lead_gen_cybernetic import ensure_default_policy
+from app.services.action_execution import (
+    cancel_action,
+    check_action_policy,
+    create_send_email_action,
+)
 from app.services.lead_gen_experiments import experiment_card_summary
 from app.services.sequences.registry import DEFAULT_TEMPLATE_KEY, normalize_template_key
 
@@ -227,6 +233,89 @@ async def add_contacts_to_batch(
         "skipped": skipped,
         "item_ids": item_ids,
         "counts": counts,
+    }
+
+
+async def schedule_manual_email(
+    *,
+    contact_id: str,
+    subject: str,
+    body: str,
+    scheduled_for: datetime,
+    transport: str | None = None,
+    actor: str = "operator",
+) -> dict[str, Any]:
+    """Create a traceable one-contact batch and queue exact operator-written copy."""
+    clean_contact_id = str(contact_id or "").strip()
+    if not clean_contact_id:
+        raise ValueError("contact_required")
+    if scheduled_for.tzinfo is None:
+        raise ValueError("scheduled_time_requires_timezone")
+    scheduled_for = scheduled_for.astimezone(timezone.utc)
+    if scheduled_for <= _utcnow():
+        raise ValueError("scheduled_time_is_in_the_past")
+
+    async with AsyncSessionLocal() as session:
+        contact = await session.get(FirmContactRow, clean_contact_id)
+        if not contact:
+            raise ValueError("contact_not_found")
+        if not str(contact.email or "").strip():
+            raise ValueError("contact_email_not_found")
+        firm_name = await _firm_name_for_contact(session, contact)
+        contact_name = str(contact.full_name or contact.email or "Manual recipient").strip()
+        contact_email = str(contact.email or "").strip().lower()
+        contact_title = str(contact.title or "").strip()
+        pif_id = str(contact.pif_id or "").strip()
+
+    send_date = scheduled_for.astimezone(ZoneInfo("America/Los_Angeles")).date().isoformat()
+    batch = await create_curated_batch(
+        name=f"Manual email - {firm_name or contact_name} - {send_date}",
+        created_by=actor,
+    )
+    added = await add_contacts_to_batch(batch["id"], [clean_contact_id], actor=actor)
+    if not added.get("item_ids"):
+        reason = str((added.get("skipped") or [{}])[0].get("reason") or "contact_not_added")
+        raise ValueError(f"manual_email_contact_not_added:{reason}")
+    batch_item_id = str(added["item_ids"][0]["item_id"])
+
+    action = await create_send_email_action(
+        to=contact_email,
+        subject=subject,
+        body=body,
+        mode="lead_gen",
+        requested_by=actor,
+        approved_by=actor,
+        contact_id=clean_contact_id,
+        batch_item_id=batch_item_id,
+        pif_id=pif_id or None,
+        firm_name=firm_name or None,
+        composer_variant_key="manual",
+        lead_gen_action_type="manual_email",
+        scheduled_for=scheduled_for,
+        transport=transport,
+    )
+    policy = await check_action_policy(action["id"], actor=actor)
+    if not policy.get("allowed"):
+        await cancel_action(
+            action["id"],
+            actor=actor,
+            reason=f"Manual composer policy check failed: {policy.get('reason') or 'unknown'}",
+        )
+        raise ValueError(f"manual_email_policy_blocked:{policy.get('reason') or 'unknown'}")
+
+    return {
+        "batch_id": batch["id"],
+        "batch_item_id": batch_item_id,
+        "action": action,
+        "policy": policy,
+        "contact": {
+            "id": clean_contact_id,
+            "name": contact_name,
+            "email": contact_email,
+            "title": contact_title,
+            "firm_name": firm_name,
+            "pif_id": pif_id or None,
+        },
     }
 
 

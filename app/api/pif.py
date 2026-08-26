@@ -37,6 +37,16 @@ from app.services.pif_saved_searches import (
     list_saved_searches,
     update_saved_search,
 )
+from app.services.pif_job_posting_research import (
+    PifResearchUpstreamError,
+    get_research_status,
+    start_job_posting_research,
+)
+from app.services.pif_local_enrichment import (
+    PifLocalEnrichmentError,
+    get_local_enrichment_status,
+    start_local_firm_enrichment,
+)
 
 router = APIRouter(prefix="/api/pif", tags=["pif-directory"])
 
@@ -117,6 +127,16 @@ def _raise_crud_http(exc: PifFirmCrudError) -> None:
             detail["firm_id"] = exc.firm_id
         raise HTTPException(status_code=409, detail=detail) from exc
     raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+def _raise_research_http(exc: PifResearchUpstreamError) -> None:
+    status_code = exc.status_code if exc.status_code in {400, 404, 409, 422, 429} else 502
+    raise HTTPException(status_code=status_code, detail=exc.detail) from exc
+
+
+def _raise_local_enrichment_http(exc: PifLocalEnrichmentError) -> None:
+    status_code = exc.status_code if exc.status_code in {400, 404, 409, 422, 429} else 500
+    raise HTTPException(status_code=status_code, detail=exc.detail) from exc
 
 
 @router.get("/status")
@@ -221,9 +241,16 @@ async def get_pif_firms(
     icp_tier: str | None = Query(None),
     entity_type: str | None = Query(None),
     recently_researched: int | None = Query(None, ge=0),
+    contact_email_min: int | None = Query(None, ge=0),
+    contact_email_max: int | None = Query(None, ge=0),
+    staff_count_min: int | None = Query(None, ge=0),
+    staff_count_max: int | None = Query(None, ge=0),
+    autorespond_window: str | None = Query(None),
+    autorespond_type: str | None = Query(None),
     website_presence: str | None = Query(None),
     research_presence: str | None = Query(None),
     staff_presence: str | None = Query(None),
+    job_postings_presence: str | None = Query(None),
     behavior_presence: str | None = Query(None),
     icp_presence: str | None = Query(None),
     vendor_presence: str | None = Query(None),
@@ -242,9 +269,16 @@ async def get_pif_firms(
         icp_tier=icp_tier,
         entity_type=entity_type,
         recently_researched=recently_researched,
+        contact_email_min=contact_email_min,
+        contact_email_max=contact_email_max,
+        staff_count_min=staff_count_min,
+        staff_count_max=staff_count_max,
+        autorespond_window=autorespond_window,
+        autorespond_type=autorespond_type,
         website_presence=website_presence,
         research_presence=research_presence,
         staff_presence=staff_presence,
+        job_postings_presence=job_postings_presence,
         behavior_presence=behavior_presence,
         icp_presence=icp_presence,
         vendor_presence=vendor_presence,
@@ -262,6 +296,58 @@ async def get_pif_firm(firm_id: str):
     if item:
         return item
     raise HTTPException(status_code=404, detail="firm_not_found")
+
+
+@router.post("/firms/{firm_id}/research-job-postings")
+async def post_job_posting_research(firm_id: str):
+    try:
+        return await start_job_posting_research(firm_id)
+    except PifResearchUpstreamError as exc:
+        _raise_research_http(exc)
+
+
+@router.post("/firms/{firm_id}/research")
+async def post_local_firm_research(firm_id: str):
+    try:
+        return await start_local_firm_enrichment(firm_id)
+    except PifLocalEnrichmentError as exc:
+        _raise_local_enrichment_http(exc)
+
+
+@router.get("/enrichment-status/{task_id}")
+async def get_pif_local_enrichment_status(task_id: str):
+    try:
+        return await get_local_enrichment_status(task_id)
+    except PifLocalEnrichmentError as exc:
+        _raise_local_enrichment_http(exc)
+
+
+@router.post("/firms/{firm_id}/analyze-behavior")
+async def post_local_behavior_analysis(firm_id: str):
+    from app.services.pif_local_derivations import analyze_behavior_locally
+
+    result = await analyze_behavior_locally(firm_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="firm_not_found")
+    return result
+
+
+@router.post("/firms/{firm_id}/score")
+async def post_local_firm_score(firm_id: str):
+    from app.services.pif_local_derivations import score_firm_locally
+
+    result = await score_firm_locally(firm_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="firm_not_found")
+    return result
+
+
+@router.get("/research-status/{task_id}")
+async def get_pif_research_status(task_id: str):
+    try:
+        return await get_research_status(task_id)
+    except PifResearchUpstreamError as exc:
+        _raise_research_http(exc)
 
 
 @router.post("/firms", status_code=201)

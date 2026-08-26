@@ -23,7 +23,7 @@ from sqlalchemy import select, or_, func
 
 from app.db import AsyncSessionLocal
 from app.db.models import (
-    CallLogRow, EmailLogRow, ProductTraceRow, SmsLogRow,
+    CallLogRow, EmailLogRow, PifFirmRow, ProductTraceRow, SmsLogRow,
 )
 
 
@@ -72,7 +72,7 @@ class CommsResponse(BaseModel):
 
 async def _calls_to_items(
     *, pif_id: Optional[str], since: Optional[datetime],
-    until: Optional[datetime], limit: int,
+    until: Optional[datetime], limit: int, q_text: Optional[str] = None,
 ) -> list[CommItem]:
     """Pull rows from call_logs. The pif_id ↔ patient_id mapping is the
     `pif-{pif_id}` convention from `pifstats_sync` — no DB join needed."""
@@ -84,6 +84,15 @@ async def _calls_to_items(
             q = q.where(CallLogRow.started_at >= since)
         if until:
             q = q.where(CallLogRow.started_at <= until)
+        if q_text and q_text.strip():
+            pattern = f"%{q_text.strip()}%"
+            q = q.where(or_(
+                CallLogRow.firm_name.ilike(pattern),
+                CallLogRow.patient_name.ilike(pattern),
+                CallLogRow.phone.ilike(pattern),
+                CallLogRow.call_summary.ilike(pattern),
+                CallLogRow.pain_point_summary.ilike(pattern),
+            ))
         rows = (await session.execute(q)).scalars().all()
 
     items: list[CommItem] = []
@@ -117,7 +126,7 @@ async def _calls_to_items(
 
 async def _emails_to_items(
     *, pif_id: Optional[str], since: Optional[datetime],
-    until: Optional[datetime], limit: int,
+    until: Optional[datetime], limit: int, q_text: Optional[str] = None,
 ) -> list[CommItem]:
     async with AsyncSessionLocal() as session:
         q = select(EmailLogRow).order_by(EmailLogRow.sent_at.desc()).limit(limit)
@@ -127,12 +136,29 @@ async def _emails_to_items(
             q = q.where(EmailLogRow.sent_at >= since)
         if until:
             q = q.where(EmailLogRow.sent_at <= until)
+        if q_text and q_text.strip():
+            pattern = f"%{q_text.strip()}%"
+            matching_firm_ids = select(PifFirmRow.id).where(PifFirmRow.firm_name.ilike(pattern))
+            q = q.where(or_(
+                EmailLogRow.recipient_email.ilike(pattern),
+                EmailLogRow.recipient_name.ilike(pattern),
+                EmailLogRow.subject.ilike(pattern),
+                EmailLogRow.body_excerpt.ilike(pattern),
+                EmailLogRow.pif_id.in_(matching_firm_ids),
+            ))
         rows = (await session.execute(q)).scalars().all()
 
         # If we have call_ids, look up firm_name for those rows so the
         # cross-firm feed has a label even when pif_id is null on the
         # email row (e.g. test sends, follow-ups predating instrumented pif_id).
         firm_map: dict[str, str] = {}
+        pif_firm_map: dict[str, str] = {}
+        pif_ids = [r.pif_id for r in rows if r.pif_id]
+        if pif_ids:
+            pif_rows = (await session.execute(
+                select(PifFirmRow.id, PifFirmRow.firm_name).where(PifFirmRow.id.in_(pif_ids))
+            )).all()
+            pif_firm_map = {firm_id: name for firm_id, name in pif_rows if name}
         call_ids = [r.call_id for r in rows if r.call_id]
         if call_ids:
             firm_rows = (await session.execute(
@@ -172,7 +198,12 @@ async def _emails_to_items(
             channel="email",
             occurred_at=r.sent_at.astimezone(timezone.utc).isoformat(),
             pif_id=r.pif_id,
-            firm_name=(firm_map.get(r.call_id or "") or str(trace_context.get("firm_name") or "") or None),
+            firm_name=(
+                pif_firm_map.get(r.pif_id or "")
+                or firm_map.get(r.call_id or "")
+                or str(trace_context.get("firm_name") or "")
+                or None
+            ),
             contact_name=r.recipient_name,
             recipient=r.recipient_email,
             summary=(r.subject or r.body_excerpt or "")[:300],
@@ -186,7 +217,7 @@ async def _emails_to_items(
 
 async def _sms_to_items(
     *, pif_id: Optional[str], since: Optional[datetime],
-    until: Optional[datetime], limit: int,
+    until: Optional[datetime], limit: int, q_text: Optional[str] = None,
 ) -> list[CommItem]:
     async with AsyncSessionLocal() as session:
         q = select(SmsLogRow).order_by(SmsLogRow.sent_at.desc()).limit(limit)
@@ -196,6 +227,17 @@ async def _sms_to_items(
             q = q.where(SmsLogRow.sent_at >= since)
         if until:
             q = q.where(SmsLogRow.sent_at <= until)
+        if q_text and q_text.strip():
+            pattern = f"%{q_text.strip()}%"
+            matching_firm_ids = select(PifFirmRow.id).where(PifFirmRow.firm_name.ilike(pattern))
+            matching_call_ids = select(CallLogRow.call_id).where(CallLogRow.firm_name.ilike(pattern))
+            q = q.where(or_(
+                SmsLogRow.recipient_phone.ilike(pattern),
+                SmsLogRow.recipient_name.ilike(pattern),
+                SmsLogRow.body.ilike(pattern),
+                SmsLogRow.pif_id.in_(matching_firm_ids),
+                SmsLogRow.call_id.in_(matching_call_ids),
+            ))
         rows = (await session.execute(q)).scalars().all()
 
         firm_map: dict[str, str] = {}
@@ -255,15 +297,15 @@ async def _assemble(
     items: list[CommItem] = []
     if "call" in chans or "voicemail" in chans:
         items.extend(await _calls_to_items(
-            pif_id=pif_id, since=since, until=until, limit=limit,
+            pif_id=pif_id, since=since, until=until, limit=limit, q_text=q_text,
         ))
     if "email" in chans:
         items.extend(await _emails_to_items(
-            pif_id=pif_id, since=since, until=until, limit=limit,
+            pif_id=pif_id, since=since, until=until, limit=limit, q_text=q_text,
         ))
     if "sms" in chans:
         items.extend(await _sms_to_items(
-            pif_id=pif_id, since=since, until=until, limit=limit,
+            pif_id=pif_id, since=since, until=until, limit=limit, q_text=q_text,
         ))
 
     # Channel filter for the call/voicemail split (which both come
