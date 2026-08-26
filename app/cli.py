@@ -7585,6 +7585,50 @@ def campaigns_show(
     console.print(table)
 
 
+@campaigns_app.command("activity")
+def campaigns_activity(
+    days: int = typer.Option(1, "--days", min=0, max=3650, help="Lookback in days; 0 means all time."),
+    quality: str = typer.Option("human", "--quality", help="human | all"),
+    limit: int = typer.Option(100, "--limit", "-n", min=1, max=500),
+    json_output: bool = typer.Option(False, "--json"),
+):
+    """Show newest engagement events across all campaigns."""
+    clean_quality = quality.strip().lower()
+    if clean_quality not in {"human", "all"}:
+        console.print("[red]--quality must be human or all[/red]")
+        raise typer.Exit(code=1)
+    data = _get(
+        "/api/engagement-campaigns/activity/latest",
+        since_days=days,
+        quality=clean_quality,
+        limit=limit,
+    )
+    if json_output:
+        console.print_json(data=data)
+        return
+    rows = data.get("activities") or []
+    if not rows:
+        console.print("[dim]No campaign engagement in this window.[/dim]")
+        return
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("when", no_wrap=True)
+    table.add_column("campaign")
+    table.add_column("person")
+    table.add_column("channel", no_wrap=True)
+    table.add_column("event")
+    table.add_column("signal", no_wrap=True)
+    for row in rows:
+        table.add_row(
+            (row.get("occurred_at") or "")[:19],
+            row.get("campaign_name") or "",
+            row.get("contact_name") or "",
+            row.get("channel") or "",
+            row.get("label") or "",
+            row.get("quality") or "",
+        )
+    console.print(table)
+
+
 @campaigns_app.command("link")
 def campaigns_link(
     campaign_id: str = typer.Argument(...),

@@ -6,6 +6,7 @@ import { Nav } from "@/components/Nav";
 import { ActiveCallOverlay } from "@/components/ActiveCallOverlay";
 import { ConsultBookingPopup } from "@/components/ConsultBookingPopup";
 import { OperatorNotificationPopup } from "@/components/OperatorNotificationPopup";
+import { EngagementNotificationPopup } from "@/components/EngagementNotificationPopup";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -36,6 +37,7 @@ export default function RootLayout({
           </div>
           <ActiveCallOverlay />
           <OperatorNotificationPopup />
+          <EngagementNotificationPopup />
           <ConsultBookingPopup />
         </Providers>
       </body>

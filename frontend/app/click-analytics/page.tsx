@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Activity,
+  BellOff,
+  BellRing,
   CalendarDays,
   CheckCircle2,
   Copy,
@@ -27,6 +29,7 @@ import {
   createEngagementCampaignLink,
   getEngagementAnalytics,
   getEngagementCampaign,
+  getLatestEngagementCampaignActivity,
   listEngagementCampaigns,
   markEngagementCampaignLinkSent,
   searchEngagementCampaignContacts,
@@ -36,7 +39,9 @@ import {
   type EngagementCampaignAnalytics,
   type EngagementCampaignLink,
   type EngagementRecipient,
+  type LatestEngagementCampaignActivity,
 } from "@/lib/api";
+import { ENGAGEMENT_DESKTOP_NOTIFICATIONS_KEY } from "@/components/EngagementNotificationPopup";
 import { cn } from "@/lib/utils";
 
 const WINDOWS = [
@@ -232,6 +237,82 @@ function CampaignActivityRow({ activity }: { activity: EngagementCampaignActivit
       </td>
       <td className="px-3 py-3"><QualityBadge quality={activity.quality} /></td>
     </tr>
+  );
+}
+
+function LatestCampaignActivityRow({ activity }: { activity: LatestEngagementCampaignActivity }) {
+  return (
+    <tr className="border-t border-neutral-100 align-top">
+      <td className="whitespace-nowrap px-3 py-3 text-xs text-neutral-500">{formatDateTime(activity.occurred_at)}</td>
+      <td className="px-3 py-3">
+        <a href={`?campaign=${encodeURIComponent(activity.campaign_id)}#campaigns`} className="text-sm font-semibold text-neutral-950 hover:text-cyan-800">
+          {activity.campaign_name}
+        </a>
+        <div className="mt-0.5 text-xs text-neutral-400">{activity.campaign_date} · {activity.workflow}</div>
+      </td>
+      <td className="px-3 py-3">
+        <div className="text-sm font-medium text-neutral-950">{activity.contact_name}</div>
+        <div className="mt-0.5 text-xs text-neutral-400">{activity.firm_name || activity.contact_email || "Anonymous"}</div>
+      </td>
+      <td className="px-3 py-3"><CampaignChannel channel={activity.channel} /></td>
+      <td className="px-3 py-3">
+        <div className="text-sm font-medium text-neutral-900">{activity.label}</div>
+        <div className="mt-0.5 max-w-xl break-words text-xs text-neutral-500">{activity.detail}</div>
+        <a href={activity.destination_url} target="_blank" rel="noreferrer" className="mt-1 inline-flex items-center gap-1 text-[10px] text-cyan-700 hover:text-cyan-900">
+          /{activity.page} <ExternalLink className="h-3 w-3" />
+        </a>
+      </td>
+      <td className="px-3 py-3"><QualityBadge quality={activity.quality} /></td>
+    </tr>
+  );
+}
+
+function LatestCampaignEngagements() {
+  const [sinceDays, setSinceDays] = useState(1);
+  const [quality, setQuality] = useState<"human" | "all">("human");
+  const latest = useQuery({
+    queryKey: ["engagement-campaign-activity-latest", sinceDays, quality],
+    queryFn: () => getLatestEngagementCampaignActivity({ sinceDays, quality, limit: 150 }),
+    refetchInterval: 10_000,
+    refetchIntervalInBackground: true,
+  });
+
+  return (
+    <section className="border-y border-neutral-200 py-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <div>
+          <h2 className="text-sm font-semibold text-neutral-950">Latest across campaigns</h2>
+          <p className="mt-0.5 text-xs text-neutral-500">Newest engagement first, across email, LinkedIn, and public links</p>
+        </div>
+        <div className="ml-auto flex flex-wrap items-center gap-1">
+          {WINDOWS.map((window) => (
+            <button key={window.label} type="button" onClick={() => setSinceDays(window.days)} className={cn("rounded-md px-2.5 py-1 text-xs font-medium", sinceDays === window.days ? "bg-neutral-900 text-white" : "border border-neutral-200 bg-white text-neutral-600 hover:bg-neutral-100")}>{window.label}</button>
+          ))}
+        </div>
+        <div className="flex rounded-md border border-neutral-200 bg-white p-0.5">
+          <button type="button" onClick={() => setQuality("human")} className={cn("rounded px-2.5 py-1 text-xs font-medium", quality === "human" ? "bg-emerald-700 text-white" : "text-neutral-600 hover:bg-neutral-50")}>Human only</button>
+          <button type="button" onClick={() => setQuality("all")} className={cn("rounded px-2.5 py-1 text-xs font-medium", quality === "all" ? "bg-neutral-700 text-white" : "text-neutral-600 hover:bg-neutral-50")}>All signals</button>
+        </div>
+      </div>
+
+      {latest.isLoading ? (
+        <div className="flex items-center gap-2 py-8 text-sm text-neutral-500"><Loader2 className="h-4 w-4 animate-spin" /> Loading recent engagement...</div>
+      ) : latest.isError ? (
+        <div className="py-8 text-sm text-red-600">Could not load recent campaign engagement.</div>
+      ) : !latest.data?.activities.length ? (
+        <div className="py-8 text-sm text-neutral-500">No {quality === "human" ? "confirmed human " : ""}engagement in this window.</div>
+      ) : (
+        <div className="mt-4 overflow-x-auto border-y border-neutral-100">
+          <table className="min-w-full text-left">
+            <thead className="bg-neutral-50 text-[11px] uppercase text-neutral-500">
+              <tr><th className="px-3 py-2">When</th><th className="px-3 py-2">Campaign</th><th className="px-3 py-2">Person</th><th className="px-3 py-2">Channel</th><th className="px-3 py-2">Engagement</th><th className="px-3 py-2">Signal</th></tr>
+            </thead>
+            <tbody>{latest.data.activities.map((activity) => <LatestCampaignActivityRow key={`${activity.id}:${activity.occurred_at}`} activity={activity} />)}</tbody>
+          </table>
+          {latest.data.has_more ? <div className="border-t border-neutral-100 px-3 py-2 text-xs text-neutral-400">Showing the latest 150 events in this window.</div> : null}
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -549,7 +630,7 @@ function CampaignWorkspace() {
   };
 
   return (
-    <section className="border-y border-neutral-200 py-4">
+    <section id="campaigns" className="border-y border-neutral-200 py-4">
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-2">
           <CalendarDays className="h-4 w-4 text-neutral-600" />
@@ -719,6 +800,7 @@ export default function ClickAnalyticsPage() {
   const [sinceDays, setSinceDays] = useState(1);
   const [workflow, setWorkflow] = useState("all");
   const [channel, setChannel] = useState("all");
+  const [desktopNotifications, setDesktopNotifications] = useState(false);
   const analytics = useQuery({
     queryKey: ["engagement-analytics", sinceDays, workflow, channel],
     queryFn: () => getEngagementAnalytics({ sinceDays, workflow, channel, limit: 250 }),
@@ -730,6 +812,27 @@ export default function ClickAnalyticsPage() {
   const workflows = data?.filters.workflows ?? DEFAULT_WORKFLOWS;
   const channels = data?.filters.channels ?? DEFAULT_CHANNELS;
 
+  useEffect(() => {
+    setDesktopNotifications(
+      "Notification" in window
+      && window.localStorage.getItem(ENGAGEMENT_DESKTOP_NOTIFICATIONS_KEY) === "true"
+      && Notification.permission === "granted",
+    );
+  }, []);
+
+  const toggleDesktopNotifications = async () => {
+    if (desktopNotifications) {
+      window.localStorage.setItem(ENGAGEMENT_DESKTOP_NOTIFICATIONS_KEY, "false");
+      setDesktopNotifications(false);
+      return;
+    }
+    if (!("Notification" in window)) return;
+    const permission = Notification.permission === "granted" ? "granted" : await Notification.requestPermission();
+    const enabled = permission === "granted";
+    window.localStorage.setItem(ENGAGEMENT_DESKTOP_NOTIFICATIONS_KEY, String(enabled));
+    setDesktopNotifications(enabled);
+  };
+
   return (
     <div className="mx-auto max-w-[1600px] space-y-4">
       <div className="flex flex-wrap items-center gap-3">
@@ -740,16 +843,22 @@ export default function ClickAnalyticsPage() {
           <h1 className="text-lg font-semibold text-neutral-950">Engagement</h1>
           <p className="mt-0.5 text-sm text-neutral-500">Recipient activity across outreach workflows</p>
         </div>
+        <button type="button" onClick={toggleDesktopNotifications} title={desktopNotifications ? "Disable desktop engagement notifications" : "Enable desktop engagement notifications"} className="ml-auto inline-flex items-center gap-2 rounded-md border border-neutral-200 px-3 py-1.5 text-xs font-medium text-neutral-700 hover:bg-neutral-50">
+          {desktopNotifications ? <BellRing className="h-3.5 w-3.5 text-emerald-700" /> : <BellOff className="h-3.5 w-3.5" />}
+          {desktopNotifications ? "Alerts on" : "Enable alerts"}
+        </button>
         <button
           type="button"
           onClick={() => analytics.refetch()}
           disabled={analytics.isFetching}
-          className="ml-auto inline-flex items-center gap-2 rounded-md border border-neutral-200 px-3 py-1.5 text-xs font-medium text-neutral-700 hover:bg-neutral-50 disabled:opacity-60"
+          className="inline-flex items-center gap-2 rounded-md border border-neutral-200 px-3 py-1.5 text-xs font-medium text-neutral-700 hover:bg-neutral-50 disabled:opacity-60"
         >
           {analytics.isFetching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
           Refresh
         </button>
       </div>
+
+      <LatestCampaignEngagements />
 
       <CampaignWorkspace />
 

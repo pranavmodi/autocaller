@@ -865,6 +865,22 @@ export type EngagementCampaignActivity = {
   link_code: string;
 };
 
+export type LatestEngagementCampaignActivity = EngagementCampaignActivity & {
+  campaign_id: string;
+  campaign_name: string;
+  campaign_date: string;
+  workflow: string;
+  destination_url: string;
+};
+
+export type LatestEngagementCampaignActivityResponse = {
+  activities: LatestEngagementCampaignActivity[];
+  count: number;
+  has_more: boolean;
+  since_days: number;
+  quality: "human" | "all";
+};
+
 export type EngagementCampaignAnalytics = {
   campaign: EngagementCampaign;
   summary: {
@@ -898,6 +914,21 @@ export const listEngagementCampaigns = (args: { search?: string; limit?: number 
   params.set("limit", String(args.limit ?? 100));
   return get<{ campaigns: EngagementCampaign[] }>(
     `/api/engagement-campaigns?${params.toString()}`,
+  );
+};
+
+export const getLatestEngagementCampaignActivity = (args: {
+  sinceDays?: number;
+  limit?: number;
+  quality?: "human" | "all";
+} = {}) => {
+  const params = new URLSearchParams({
+    since_days: String(args.sinceDays ?? 1),
+    limit: String(args.limit ?? 100),
+    quality: args.quality ?? "human",
+  });
+  return get<LatestEngagementCampaignActivityResponse>(
+    `/api/engagement-campaigns/activity/latest?${params.toString()}`,
   );
 };
 

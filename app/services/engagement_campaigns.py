@@ -5,7 +5,7 @@ import os
 import re
 import secrets
 from collections import defaultdict
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
@@ -422,6 +422,195 @@ async def search_contacts(*, query: str = "", limit: int = 30) -> list[dict[str,
         }
         for contact, firm in rows
     ]
+
+
+def _latest_activity_rows(
+    *,
+    campaigns: list[EngagementCampaignRow],
+    links: list[EngagementCampaignLinkRow],
+    clicks: list[EngagementCampaignClickRow],
+    observations: list[LeadGenObservationRow],
+    contacts: list[FirmContactRow],
+    firms: list[PifFirmRow],
+) -> list[dict[str, Any]]:
+    """Build the cross-campaign stream with the same human/scanner rules as campaign detail."""
+    campaign_map = {row.id: row for row in campaigns}
+    link_map = {row.code: row for row in links}
+    contact_map = {row.id: row for row in contacts}
+    firm_map = {row.id: row for row in firms}
+    activities: list[dict[str, Any]] = []
+
+    def identity(link: EngagementCampaignLinkRow) -> tuple[str, str, str]:
+        contact = contact_map.get(link.contact_id or "")
+        firm = firm_map.get(link.pif_id or "")
+        name = (
+            _clean(contact.full_name if contact else None)
+            or _clean(contact.email if contact else None)
+            or _clean(link.label)
+            or "Anonymous visitor"
+        )
+        return name, _clean(contact.email if contact else None), _clean(firm.firm_name if firm else None)
+
+    def base(link: EngagementCampaignLinkRow) -> dict[str, Any]:
+        campaign = campaign_map[link.campaign_id]
+        name, email, firm_name = identity(link)
+        return {
+            "campaign_id": campaign.id,
+            "campaign_name": campaign.name,
+            "campaign_date": campaign.campaign_date.isoformat(),
+            "workflow": campaign.workflow,
+            "destination_url": link.destination_url,
+            "contact_id": link.contact_id,
+            "contact_name": name,
+            "contact_email": email,
+            "firm_name": firm_name,
+            "channel": link.channel,
+            "link_code": link.code,
+        }
+
+    for click in clicks:
+        link = link_map.get(click.link_code)
+        if link is None or link.campaign_id not in campaign_map:
+            continue
+        quality = "scanner" if _is_scanner_ua(click.user_agent) else "suspect"
+        activities.append({
+            **base(link),
+            "id": click.id,
+            "occurred_at": _iso(click.clicked_at),
+            "event": "redirect_click",
+            "label": "Tracked link opened",
+            "detail": "Redirect fetched; human interest is not confirmed",
+            "quality": quality,
+            "page": "tracked redirect",
+        })
+
+    sessions: dict[tuple[str, str], list[LeadGenObservationRow]] = defaultdict(list)
+    for observation in _dedupe_page_events(observations):
+        raw = observation.raw_event_json or {}
+        code = _clean(raw.get("link_code"), 32)
+        if code not in link_map:
+            continue
+        session_id = _clean(raw.get("session_id"), 64) or observation.id
+        sessions[(code, session_id)].append(observation)
+
+    for (code, session_id), rows in sessions.items():
+        link = link_map[code]
+        if link.campaign_id not in campaign_map:
+            continue
+        quality = _session_quality(rows)
+        newest = max(rows, key=lambda row: row.created_at)
+        raw_newest = newest.raw_event_json or {}
+        max_time = _observed_time_on_page_ms(rows)
+        page = _clean(raw_newest.get("page"), 160).strip("/") or "landing page"
+        activities.append({
+            **base(link),
+            "id": f"session:{code}:{session_id}",
+            "occurred_at": _iso(newest.created_at),
+            "event": "page_visit",
+            "label": "Confirmed page visit" if quality == "human" else "Unconfirmed page visit",
+            "detail": f"{round(max_time / 1000, 1)} seconds maximum observed time",
+            "quality": quality,
+            "page": page,
+        })
+        for observation in rows:
+            raw = observation.raw_event_json or {}
+            event = _clean(raw.get("event"), 64) or "session_ready"
+            if event not in MEANINGFUL_EVENTS and not _is_reveal_event(event):
+                continue
+            if _is_reveal_event(event):
+                label = "Content revealed"
+                detail = "Visitor revealed interactive content"
+            elif event.startswith("scroll_"):
+                percent = event.split("_", 1)[1]
+                label = f"Scrolled {percent}%"
+                detail = f"Visitor reached at least {percent}% of the page"
+            else:
+                label = "Page click"
+                text = _clean(raw.get("click_text"), 180) or "Button or link"
+                href = _clean(raw.get("click_href"), 512)
+                detail = f"{text}{f' -> {href}' if href else ''}"
+            activities.append({
+                **base(link),
+                "id": observation.id,
+                "occurred_at": _iso(observation.created_at),
+                "event": event,
+                "label": label,
+                "detail": detail,
+                "quality": quality,
+                "page": _clean(raw.get("page"), 160).strip("/") or "landing page",
+            })
+
+    activities.sort(key=lambda row: row["occurred_at"] or "", reverse=True)
+    return activities
+
+
+async def latest_campaign_activity(
+    *,
+    since_days: int = 1,
+    limit: int = 100,
+    human_only: bool = True,
+) -> dict[str, Any]:
+    """Return newest-first engagement events across every campaign."""
+    cutoff = datetime.now(timezone.utc) - timedelta(days=since_days) if since_days > 0 else None
+    sample_limit = min(max(limit * 25, 1000), 7500)
+    observation_stmt = (
+        select(LeadGenObservationRow)
+        .where(
+            LeadGenObservationRow.event_type == "page_session",
+            LeadGenObservationRow.raw_event_json["campaign_id"].astext.isnot(None),
+            LeadGenObservationRow.raw_event_json["campaign_id"].astext != "",
+        )
+        .order_by(desc(LeadGenObservationRow.created_at))
+        .limit(sample_limit)
+    )
+    click_stmt = select(EngagementCampaignClickRow).order_by(
+        desc(EngagementCampaignClickRow.clicked_at)
+    ).limit(sample_limit)
+    if cutoff is not None:
+        observation_stmt = observation_stmt.where(LeadGenObservationRow.created_at >= cutoff)
+        click_stmt = click_stmt.where(EngagementCampaignClickRow.clicked_at >= cutoff)
+
+    async with AsyncSessionLocal() as session:
+        observations = list((await session.execute(observation_stmt)).scalars().all())
+        clicks = list((await session.execute(click_stmt)).scalars().all())
+        codes = {
+            _clean((row.raw_event_json or {}).get("link_code"), 32)
+            for row in observations
+        } | {row.link_code for row in clicks}
+        codes.discard("")
+        links = list((await session.execute(
+            select(EngagementCampaignLinkRow).where(EngagementCampaignLinkRow.code.in_(codes))
+        )).scalars().all()) if codes else []
+        campaign_ids = {row.campaign_id for row in links}
+        campaigns = list((await session.execute(
+            select(EngagementCampaignRow).where(EngagementCampaignRow.id.in_(campaign_ids))
+        )).scalars().all()) if campaign_ids else []
+        contact_ids = {row.contact_id for row in links if row.contact_id}
+        contacts = list((await session.execute(
+            select(FirmContactRow).where(FirmContactRow.id.in_(contact_ids))
+        )).scalars().all()) if contact_ids else []
+        pif_ids = {row.pif_id for row in links if row.pif_id}
+        firms = list((await session.execute(
+            select(PifFirmRow).where(PifFirmRow.id.in_(pif_ids))
+        )).scalars().all()) if pif_ids else []
+
+    activities = _latest_activity_rows(
+        campaigns=campaigns,
+        links=links,
+        clicks=clicks,
+        observations=observations,
+        contacts=contacts,
+        firms=firms,
+    )
+    if human_only:
+        activities = [row for row in activities if row["quality"] == "human"]
+    return {
+        "activities": activities[:limit],
+        "count": min(len(activities), limit),
+        "has_more": len(activities) > limit,
+        "since_days": since_days,
+        "quality": "human" if human_only else "all",
+    }
 
 
 async def campaign_analytics(campaign_id: str) -> dict[str, Any]:

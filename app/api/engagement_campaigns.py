@@ -16,6 +16,7 @@ from app.services.engagement_campaigns import (
     campaign_analytics,
     create_campaign,
     create_tracking_link,
+    latest_campaign_activity,
     list_campaigns,
     mark_tracking_link_sent,
     record_campaign_click,
@@ -87,6 +88,19 @@ async def campaign_contact_options(
     limit: int = Query(30, ge=1, le=100),
 ):
     return {"contacts": await search_contacts(query=q, limit=limit)}
+
+
+@router.get("/api/engagement-campaigns/activity/latest")
+async def latest_campaign_activity_endpoint(
+    since_days: int = Query(1, ge=0, le=3650),
+    limit: int = Query(100, ge=1, le=500),
+    quality: Literal["human", "all"] = Query("human"),
+):
+    return await latest_campaign_activity(
+        since_days=since_days,
+        limit=limit,
+        human_only=quality == "human",
+    )
 
 
 @router.get("/api/engagement-campaigns/{campaign_id}")

@@ -59,6 +59,7 @@ Important routes:
 | `GET` | `/v/<code>` | public AI Visibility report redirect; resolves `visibility_links`, writes `audit_link_clicks` with `source=visibility_report_email`, records `link_clicked`, redirects to `AIVIS_REPORT_BASE_URL/r/<scan_id>?c=<click_id>&src=visibility_report_email` |
 | `POST` | `/api/engagement-campaigns` | create one dated, channel-neutral campaign |
 | `GET` | `/api/engagement-campaigns?search=...` | list or look up campaigns by name/workflow |
+| `GET` | `/api/engagement-campaigns/activity/latest?since_days=1&quality=human` | newest-first activity across campaigns, classified with the same human/scanner session rules used by campaign detail |
 | `GET` | `/api/engagement-campaigns/<id>` | campaign summary, channel rollups, links, and classified activity |
 | `POST` | `/api/engagement-campaigns/<id>/links` | create a unique email, LinkedIn, or public `/t/<code>` URL for an allowlisted Possible Minds page |
 | `POST` | `/api/engagement-campaigns/links/<code>/mark-sent` | mark an operator-sent touch without claiming delivery/read status |

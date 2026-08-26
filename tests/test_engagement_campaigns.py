@@ -1,10 +1,12 @@
 from types import SimpleNamespace
+from datetime import date, datetime, timedelta, timezone
 from urllib.parse import parse_qs, urlsplit
 
 import pytest
 
 from app.services.engagement_campaigns import (
     _approved_vendor_stack,
+    _latest_activity_rows,
     _observed_time_on_page_ms,
     _tracking_codes_from_text,
     EngagementCampaignError,
@@ -79,3 +81,36 @@ def test_tracked_destination_preserves_query_and_adds_campaign_attribution():
     assert params["utm_campaign"] == ["cmp_today"]
     assert params["lc"] == ["abc123"]
     assert params["c"] == ["click_1"]
+
+
+def test_latest_activity_rows_are_newest_first_and_classify_human_sessions():
+    now = datetime.now(timezone.utc)
+    campaign = SimpleNamespace(
+        id="cmp_1", name="Daily PI owners", campaign_date=date(2026, 8, 26), workflow="content",
+    )
+    link = SimpleNamespace(
+        code="code_1", campaign_id="cmp_1", contact_id="contact_1", pif_id="firm_1",
+        channel="linkedin", label=None, destination_url="https://getpossibleminds.com/blog/test",
+    )
+    contact = SimpleNamespace(id="contact_1", full_name="Ada Partner", email="ada@example.com")
+    firm = SimpleNamespace(id="firm_1", firm_name="Ada Law")
+    observations = [
+        SimpleNamespace(
+            id="ready", contact_id="contact_1", created_at=now - timedelta(seconds=5),
+            raw_event_json={"campaign_id": "cmp_1", "link_code": "code_1", "session_id": "session_1", "event": "session_ready", "page": "blog/test"},
+        ),
+        SimpleNamespace(
+            id="scroll", contact_id="contact_1", created_at=now,
+            raw_event_json={"campaign_id": "cmp_1", "link_code": "code_1", "session_id": "session_1", "event": "scroll_50", "page": "blog/test", "time_on_page_ms": 12000},
+        ),
+    ]
+
+    rows = _latest_activity_rows(
+        campaigns=[campaign], links=[link], clicks=[], observations=observations,
+        contacts=[contact], firms=[firm],
+    )
+
+    assert rows[0]["campaign_name"] == "Daily PI owners"
+    assert rows[0]["contact_name"] == "Ada Partner"
+    assert rows[0]["quality"] == "human"
+    assert {row["event"] for row in rows} == {"page_visit", "scroll_50"}
