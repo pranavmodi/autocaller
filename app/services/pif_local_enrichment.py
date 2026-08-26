@@ -21,6 +21,15 @@ logger = logging.getLogger(__name__)
 SKILL_PATH = Path(__file__).resolve().parents[1] / "skills/pif-local-enrichment/SKILL.md"
 OPEN_STATUSES = {"queued", "in_progress"}
 LOCAL_PROVIDER = "possibleos_openclaw"
+STAGES = (
+    ("web_research", "Firm, website, people, and vendors"),
+    ("persist_research", "Save researched facts"),
+    ("behavior", "Relationship behavior"),
+    ("contact_intelligence", "Leadership communication and contact profiles"),
+    ("contacts", "Contact directory"),
+    ("job_postings", "Recent job postings"),
+    ("score", "ICP score"),
+)
 
 
 class PifLocalEnrichmentError(Exception):
@@ -50,6 +59,150 @@ def _local_state(firm: PifFirmRow, status: str, **extra: Any) -> dict[str, Any]:
     return data
 
 
+def _stage_list() -> list[dict[str, Any]]:
+    return [
+        {"key": key, "label": label, "status": "pending", "message": None}
+        for key, label in STAGES
+    ]
+
+
+def _progress_summary(
+    firm_name: str,
+    *,
+    current_stage: str | None = None,
+    stages: list[dict[str, Any]] | None = None,
+    message: str | None = None,
+) -> dict[str, Any]:
+    rows = stages or _stage_list()
+    terminal = sum(row.get("status") in {"completed", "failed", "skipped"} for row in rows)
+    active_fraction = 0.5 if any(row.get("status") == "in_progress" for row in rows) else 0
+    return {
+        "firm_name": firm_name,
+        "current_stage": current_stage,
+        "progress_percent": round(((terminal + active_fraction) / len(rows)) * 100) if rows else 100,
+        "stages": rows,
+        "message": message,
+        "warning_count": sum(row.get("status") == "failed" for row in rows),
+    }
+
+
+def _meaningful(value: Any) -> bool:
+    return value not in (None, "", [], {})
+
+
+def _merge_people(existing: Any, researched: Any) -> list[dict[str, Any]]:
+    merged: list[dict[str, Any]] = [dict(row) for row in _as_list(existing) if isinstance(row, dict)]
+    positions: dict[str, int] = {}
+    for index, row in enumerate(merged):
+        email = str(row.get("email") or "").strip().lower()
+        linkedin = str(row.get("linkedin") or "").strip().lower().rstrip("/")
+        name = str(row.get("name") or "").strip().lower()
+        key = email or linkedin or (f"name:{name}" if name else "")
+        if key:
+            positions[key] = index
+    for raw in _as_list(researched):
+        if not isinstance(raw, dict):
+            continue
+        row = dict(raw)
+        email = str(row.get("email") or "").strip().lower()
+        linkedin = str(row.get("linkedin") or "").strip().lower().rstrip("/")
+        name = str(row.get("name") or "").strip().lower()
+        key = email or linkedin or (f"name:{name}" if name else "")
+        if key and key in positions:
+            current = merged[positions[key]]
+            for field, value in row.items():
+                if _meaningful(value) and not _meaningful(current.get(field)):
+                    current[field] = value
+        else:
+            if key:
+                positions[key] = len(merged)
+            merged.append(row)
+    return merged
+
+
+def _merge_vendor_stack(existing: Any, researched: Any) -> dict[str, Any]:
+    merged = _as_dict(existing)
+    incoming = _as_dict(researched)
+    for key, value in incoming.items():
+        if key == "evidence":
+            continue
+        if isinstance(merged.get(key), dict) and isinstance(value, dict):
+            nested = dict(merged[key])
+            for nested_key, nested_value in value.items():
+                if _meaningful(nested_value) and not _meaningful(nested.get(nested_key)):
+                    nested[nested_key] = nested_value
+            merged[key] = nested
+        elif _meaningful(value) and not _meaningful(merged.get(key)):
+            merged[key] = value
+    evidence: list[dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
+    for raw in [*_as_list(merged.get("evidence")), *_as_list(incoming.get("evidence"))]:
+        if not isinstance(raw, dict):
+            continue
+        key = (
+            str(raw.get("vendor") or "").strip().lower(),
+            str(raw.get("source_url") or "").strip().lower().rstrip("/"),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        evidence.append(dict(raw))
+    merged["evidence"] = evidence
+    return merged
+
+
+async def _set_stage(
+    task_id: str,
+    stage_key: str,
+    status: str,
+    *,
+    message: str | None = None,
+    details: dict[str, Any] | None = None,
+) -> None:
+    async with AsyncSessionLocal() as session:
+        task = await session.get(PifEnrichmentTaskRow, task_id)
+        if task is None:
+            return
+        firm = await session.get(PifFirmRow, task.pif_id)
+        summary = _as_dict(task.result_summary)
+        stages = [dict(row) for row in _as_list(summary.get("stages")) if isinstance(row, dict)] or _stage_list()
+        for row in stages:
+            if row.get("key") == stage_key:
+                row["status"] = status
+                row["message"] = message
+                if status == "in_progress":
+                    row["started_at"] = _utcnow().isoformat()
+                if status in {"completed", "failed", "skipped"}:
+                    row["completed_at"] = _utcnow().isoformat()
+                if details:
+                    row["details"] = details
+                break
+        current_stage = stage_key if status == "in_progress" else summary.get("current_stage")
+        next_summary = {
+            **summary,
+            **_progress_summary(
+                str((firm.firm_name if firm else None) or summary.get("firm_name") or task.pif_id),
+                current_stage=current_stage,
+                stages=stages,
+                message=message,
+            ),
+        }
+        task.result_summary = next_summary
+        if firm is not None:
+            firm.research_data = _local_state(
+                firm,
+                task.status,
+                task_id=task_id,
+                current_stage=current_stage,
+                progress_percent=next_summary["progress_percent"],
+                stages=stages,
+                warning_count=next_summary["warning_count"],
+                message=message,
+            )
+            firm.updated_at = _utcnow()
+        await session.commit()
+
+
 def _identity_payload(firm: PifFirmRow) -> dict[str, Any]:
     source = _as_dict(firm.source_json)
     domains: list[str] = []
@@ -76,7 +229,7 @@ def _person(value: Any) -> dict[str, Any] | None:
     source_url = str(value.get("source_url") or "").strip()
     if not name or not source_url.lower().startswith(("http://", "https://")):
         return None
-    return {
+    person = {
         "name": name,
         "title": str(value.get("title") or "").strip() or None,
         "email": str(value.get("email") or "").strip().lower() or None,
@@ -85,6 +238,14 @@ def _person(value: Any) -> dict[str, Any] | None:
         "source_url": source_url,
         "confidence": 0.8,
     }
+    for key in (
+        "role", "extension", "bio", "education", "experience", "skills",
+        "certifications", "publications", "cases_handled", "bar_admissions",
+        "department", "location",
+    ):
+        if _meaningful(value.get(key)):
+            person[key] = value[key]
+    return person
 
 
 def normalize_enrichment(value: dict[str, Any]) -> dict[str, Any]:
@@ -115,6 +276,10 @@ def normalize_enrichment(value: dict[str, Any]) -> dict[str, Any]:
         "firm_size": str(value.get("firm_size") or "").strip() or None,
         "office_locations": _as_list(value.get("office_locations")),
         "social_media": _as_dict(value.get("social_media")),
+        "notable_cases": _as_list(value.get("notable_cases")),
+        "awards_recognition": _as_list(value.get("awards_recognition")),
+        "bar_associations": _as_list(value.get("bar_associations")),
+        "additional_info": str(value.get("additional_info") or "").strip() or None,
         "sources": _as_list(value.get("sources")),
         "leadership": leadership[:15],
         "staff": staff[:30],
@@ -129,7 +294,8 @@ async def research_firm_locally(firm: PifFirmRow) -> dict[str, Any]:
         required_fields=[
             "canonical_website", "website_confidence", "website_sources", "summary",
             "practice_areas", "founded_year", "firm_size", "office_locations",
-            "social_media", "sources", "leadership", "staff", "vendor_stack",
+            "notable_cases", "awards_recognition", "bar_associations",
+            "social_media", "additional_info", "sources", "leadership", "staff", "vendor_stack",
         ],
         model=os.getenv("PIF_LOCAL_ENRICHMENT_MODEL", "openclaw/main"),
         timeout_s=int(os.getenv("PIF_LOCAL_ENRICHMENT_TIMEOUT_S", "300")),
@@ -153,24 +319,41 @@ async def start_local_firm_enrichment(firm_id: str) -> dict[str, Any]:
             .limit(1)
         )).scalar_one_or_none()
         if existing:
+            summary = _as_dict(existing.result_summary)
             return {
                 "task_id": existing.task_id,
                 "pif_id": firm_id,
                 "firm_name": firm.firm_name,
                 "status": existing.status,
                 "message": "Local Possible OS enrichment is already queued or running",
+                **summary,
             }
 
         task_id = f"firm-enrichment-{uuid.uuid4().hex}"
+        summary = _progress_summary(
+            str(firm.firm_name or firm_id),
+            message="Waiting for a local enrichment worker",
+        )
         session.add(PifEnrichmentTaskRow(
             task_id=task_id,
             pif_id=firm_id,
             status="queued",
             requested_at=_utcnow(),
+            result_summary=summary,
         ))
         firm.research_status = "queued"
         firm.staff_research_status = "queued"
-        firm.research_data = _local_state(firm, "queued", error=None)
+        firm.research_data = _local_state(
+            firm,
+            "queued",
+            task_id=task_id,
+            current_stage=None,
+            progress_percent=0,
+            stages=summary["stages"],
+            warning_count=0,
+            message=summary["message"],
+            error=None,
+        )
         firm.updated_at = _utcnow()
         await session.commit()
         return {
@@ -179,6 +362,7 @@ async def start_local_firm_enrichment(firm_id: str) -> dict[str, Any]:
             "firm_name": firm.firm_name,
             "status": "queued",
             "message": "Queued for local Possible OS enrichment",
+            **summary,
         }
 
 
@@ -195,8 +379,8 @@ async def get_local_enrichment_status(task_id: str) -> dict[str, Any]:
             "requested_at": task.requested_at.isoformat() if task.requested_at else None,
             "started_at": task.started_at.isoformat() if task.started_at else None,
             "completed_at": task.completed_at.isoformat() if task.completed_at else None,
-            "message": summary.get("message") or f"Local enrichment is {task.status}",
             **summary,
+            "message": summary.get("message") or f"Local enrichment is {task.status}",
         }
 
 
@@ -217,7 +401,16 @@ async def _claim_next_task() -> tuple[str, str] | None:
         if firm:
             firm.research_status = "in_progress"
             firm.staff_research_status = "in_progress"
-            firm.research_data = _local_state(firm, "in_progress")
+            summary = _as_dict(task.result_summary) or _progress_summary(str(firm.firm_name or task.pif_id))
+            firm.research_data = _local_state(
+                firm,
+                "in_progress",
+                task_id=task.task_id,
+                current_stage=summary.get("current_stage"),
+                progress_percent=summary.get("progress_percent", 0),
+                stages=summary.get("stages") or _stage_list(),
+                warning_count=summary.get("warning_count", 0),
+            )
         await session.commit()
         return task.task_id, task.pif_id
 
@@ -244,109 +437,199 @@ async def _claim_canonical_domain(session, firm: PifFirmRow, domain: str | None,
     return True
 
 
-async def _finish_task(task_id: str, result: dict[str, Any] | None, error: str | None = None) -> None:
+def _merge_values(existing: Any, incoming: Any) -> Any:
+    if isinstance(existing, list) and isinstance(incoming, list):
+        merged = list(existing)
+        seen = {str(value).strip().lower() for value in merged}
+        for value in incoming:
+            key = str(value).strip().lower()
+            if key and key not in seen:
+                seen.add(key)
+                merged.append(value)
+        return merged
+    if isinstance(existing, dict) and isinstance(incoming, dict):
+        merged = dict(existing)
+        for key, value in incoming.items():
+            if _meaningful(value) and not _meaningful(merged.get(key)):
+                merged[key] = value
+        return merged
+    return incoming if _meaningful(incoming) else existing
+
+
+async def _persist_research_result(task_id: str, result: dict[str, Any]) -> dict[str, Any]:
     now = _utcnow()
     async with AsyncSessionLocal() as session:
         task = await session.get(PifEnrichmentTaskRow, task_id)
         if task is None:
-            return
-        pif_id = task.pif_id
-        firm = await session.get(PifFirmRow, pif_id)
+            raise RuntimeError("research_task_not_found")
+        firm = await session.get(PifFirmRow, task.pif_id)
         if firm is None:
-            task.status = "failed"
-            task.completed_at = now
-            task.result_summary = {"message": "firm_not_found"}
-            await session.commit()
-            return
-        if error or result is None:
-            task.status = "failed"
-            task.completed_at = now
-            task.result_summary = {"firm_name": firm.firm_name, "message": error or "research_failed"}
-            firm.research_status = "failed"
-            firm.staff_research_status = "failed"
-            firm.research_data = _local_state(firm, "failed", error=error, failed_at=now.isoformat())
-            await session.commit()
-            return
-
+            raise RuntimeError("firm_not_found")
         domain_claimed = await _claim_canonical_domain(session, firm, result.get("canonical_website"), now)
         data = _as_dict(firm.research_data)
-        data.update({
-            "summary": result.get("summary"),
-            "practice_areas": result.get("practice_areas") or [],
-            "founded_year": result.get("founded_year"),
-            "firm_size": result.get("firm_size"),
-            "office_locations": result.get("office_locations") or [],
-            "social_media": result.get("social_media") or {},
-            "sources": result.get("sources") or [],
-            "website_sources": result.get("website_sources") or [],
-            "website_confidence": result.get("website_confidence"),
-            "research_provider": LOCAL_PROVIDER,
-        })
+        for key in (
+            "summary", "practice_areas", "founded_year", "firm_size",
+            "office_locations", "notable_cases", "awards_recognition",
+            "bar_associations", "social_media", "additional_info", "sources",
+            "website_sources", "website_confidence",
+        ):
+            data[key] = _merge_values(data.get(key), result.get(key))
+        data["research_provider"] = LOCAL_PROVIDER
         state = _as_dict(data.get("local_enrichment"))
-        state.update({
-            "status": "completed",
-            "provider": LOCAL_PROVIDER,
-            "dirty": False,
-            "enriched_source_updated_at": state.get("source_updated_at"),
-            "completed_at": now.isoformat(),
-            "error": None,
-        })
-        if result.get("canonical_website") and not domain_claimed:
+        if result.get("canonical_website") and not domain_claimed and firm.canonical_website != result.get("canonical_website"):
             state["canonical_domain_review"] = {
                 "candidate": result["canonical_website"],
                 "reason": "domain_owned_by_another_firm",
             }
         data["local_enrichment"] = state
         firm.research_data = data
-        firm.leadership = result.get("leadership") or []
-        firm.staff = result.get("staff") or []
-        firm.vendor_stack = result.get("vendor_stack") or {}
-        firm.research_status = "completed"
-        firm.staff_research_status = "completed"
-        firm.last_researched_at = now
+        firm.leadership = _merge_people(firm.leadership, result.get("leadership"))
+        firm.staff = _merge_people(firm.staff, result.get("staff"))
+        firm.vendor_stack = _merge_vendor_stack(firm.vendor_stack, result.get("vendor_stack"))
         firm.updated_at = now
-        task.status = "completed"
-        task.completed_at = now
-        task.result_summary = {
-            "firm_name": firm.firm_name,
+        await session.commit()
+        return {
             "canonical_website": firm.canonical_website,
             "domain_claimed": domain_claimed,
             "leadership_count": len(firm.leadership),
             "staff_count": len(firm.staff),
             "vendor_count": len(_as_list((firm.vendor_stack or {}).get("evidence"))),
         }
+
+
+async def _finalize_task(task_id: str, status: str, *, error: str | None = None) -> None:
+    now = _utcnow()
+    async with AsyncSessionLocal() as session:
+        task = await session.get(PifEnrichmentTaskRow, task_id)
+        if task is None:
+            return
+        firm = await session.get(PifFirmRow, task.pif_id)
+        summary = _as_dict(task.result_summary)
+        stages = _as_list(summary.get("stages")) or _stage_list()
+        warning_count = sum(
+            isinstance(row, dict) and row.get("status") == "failed"
+            for row in stages
+        )
+        message = error or (
+            f"Completed with {warning_count} warning{'s' if warning_count != 1 else ''}"
+            if warning_count else "All enrichment stages completed"
+        )
+        summary.update({
+            "current_stage": None,
+            "progress_percent": 100 if status == "completed" else summary.get("progress_percent", 0),
+            "warning_count": warning_count,
+            "message": message,
+        })
+        task.status = status
+        task.completed_at = now
+        task.result_summary = summary
+        if firm is not None:
+            if status == "completed":
+                firm.research_status = "completed"
+                firm.staff_research_status = "completed"
+                firm.last_researched_at = now
+            else:
+                firm.research_status = "failed"
+                firm.staff_research_status = "failed"
+            state = _as_dict(_as_dict(firm.research_data).get("local_enrichment"))
+            extra = {
+                "task_id": task_id,
+                "current_stage": None,
+                "progress_percent": summary["progress_percent"],
+                "stages": stages,
+                "warning_count": warning_count,
+                "message": message,
+                "error": error,
+                "completed_at" if status == "completed" else "failed_at": now.isoformat(),
+            }
+            if status == "completed":
+                extra.update({
+                    "dirty": False,
+                    "enriched_source_updated_at": state.get("source_updated_at"),
+                })
+            firm.research_data = _local_state(firm, status, **extra)
+            firm.updated_at = now
         await session.commit()
 
-    from app.services.pif_local_derivations import analyze_behavior_locally, score_firm_locally
-    from app.services.firm_contacts_service import ingest_pif_directory_contacts
-    from app.services.pif_job_posting_research import start_job_posting_research
 
-    followups = (
-        ("behavior", lambda: analyze_behavior_locally(pif_id)),
-        ("score", lambda: score_firm_locally(pif_id)),
-        ("contact ingest", lambda: ingest_pif_directory_contacts(pif_ids={pif_id})),
-        ("job research", lambda: start_job_posting_research(pif_id)),
-    )
-    for label, operation in followups:
-        try:
-            await operation()
-        except Exception:
-            logger.exception("Local post-enrichment %s failed for %s", label, pif_id)
+async def _run_optional_stage(task_id: str, key: str, operation) -> Any:
+    await _set_stage(task_id, key, "in_progress", message=f"Running {key.replace('_', ' ')}")
+    try:
+        result = await operation()
+        if result is None:
+            raise RuntimeError(f"{key}_returned_no_result")
+        details = result if isinstance(result, dict) else None
+        await _set_stage(task_id, key, "completed", message=f"Completed {key.replace('_', ' ')}", details=details)
+        return result
+    except Exception as exc:
+        logger.exception("Local enrichment stage %s failed", key)
+        await _set_stage(task_id, key, "failed", message=str(exc)[:300])
+        return None
+
+
+async def _wait_for_job_research(pif_id: str) -> dict[str, Any]:
+    from app.services.pif_job_posting_research import get_research_status, start_job_posting_research
+
+    started = await start_job_posting_research(pif_id)
+    task_id = str(started.get("task_id") or "")
+    deadline = asyncio.get_running_loop().time() + int(os.getenv("PIF_JOB_RESEARCH_WAIT_S", "420"))
+    while asyncio.get_running_loop().time() < deadline:
+        status = await get_research_status(task_id)
+        if status.get("status") == "completed":
+            return status
+        if status.get("status") == "failed":
+            raise RuntimeError(str(status.get("message") or "Job-posting research failed"))
+        await asyncio.sleep(2)
+    raise TimeoutError("Job-posting research did not finish before the local timeout")
 
 
 async def _run_task(task_id: str, pif_id: str) -> None:
+    await _set_stage(task_id, "web_research", "in_progress", message="Researching the official website, people, and vendor evidence")
     async with AsyncSessionLocal() as session:
         firm = await session.get(PifFirmRow, pif_id)
-        if firm is None:
-            await _finish_task(task_id, None, "firm_not_found")
-            return
-        try:
-            result = await research_firm_locally(firm)
-        except Exception as exc:
-            logger.exception("Local firm enrichment failed for %s", pif_id)
-            await _finish_task(task_id, None, str(exc)[:500])
-            return
-    await _finish_task(task_id, result)
+    if firm is None:
+        await _set_stage(task_id, "web_research", "failed", message="Firm record not found")
+        await _finalize_task(task_id, "failed", error="firm_not_found")
+        return
+    try:
+        result = await research_firm_locally(firm)
+    except Exception as exc:
+        logger.exception("Local firm enrichment failed for %s", pif_id)
+        await _set_stage(task_id, "web_research", "failed", message=str(exc)[:300])
+        await _finalize_task(task_id, "failed", error=str(exc)[:500])
+        return
+    await _set_stage(task_id, "web_research", "completed", message="Web research completed")
+
+    await _set_stage(task_id, "persist_research", "in_progress", message="Merging researched facts with existing firm data")
+    try:
+        persisted = await _persist_research_result(task_id, result)
+    except Exception as exc:
+        await _set_stage(task_id, "persist_research", "failed", message=str(exc)[:300])
+        await _finalize_task(task_id, "failed", error=str(exc)[:500])
+        return
+    await _set_stage(task_id, "persist_research", "completed", message="Research saved without replacing existing facts", details=persisted)
+
+    from app.services.firm_contacts_service import ingest_pif_directory_contacts
+    from app.services.pif_local_derivations import (
+        analyze_behavior_locally,
+        score_firm_locally,
+        synthesize_contact_intelligence_locally,
+    )
+
+    await _run_optional_stage(task_id, "behavior", lambda: analyze_behavior_locally(pif_id))
+    await _run_optional_stage(
+        task_id,
+        "contact_intelligence",
+        lambda: synthesize_contact_intelligence_locally(pif_id),
+    )
+    await _run_optional_stage(
+        task_id,
+        "contacts",
+        lambda: ingest_pif_directory_contacts(pif_ids={pif_id}),
+    )
+    await _run_optional_stage(task_id, "job_postings", lambda: _wait_for_job_research(pif_id))
+    await _run_optional_stage(task_id, "score", lambda: score_firm_locally(pif_id))
+    await _finalize_task(task_id, "completed")
 
 
 async def recover_interrupted_local_enrichment() -> int:

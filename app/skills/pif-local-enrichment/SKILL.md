@@ -11,7 +11,10 @@ email domains, phone numbers, and addresses. Do not blend similarly named firms.
 
 Find the official canonical registrable domain, organization summary, practice
 areas, offices, firm size, founding year, leadership, staff, and evidenced legal
-technology vendors. Search the official website first, then reputable public
+technology vendors. Also capture notable cases, awards, bar associations, and
+useful firm context when directly sourced. For leaders, retain public biography,
+education, experience, certifications, publications, representative cases, and
+bar admissions when available. Search the official website first, then reputable public
 profiles, current job postings, and vendor customer pages. Never infer a vendor
 from a generic integration or infer a person, title, date, or domain without a
 supporting source.
@@ -28,7 +31,11 @@ supporting source.
   "founded_year": 2012,
   "firm_size": "15-50",
   "office_locations": ["Los Angeles, CA"],
+  "notable_cases": [],
+  "awards_recognition": [],
+  "bar_associations": [],
   "social_media": {"linkedin": "https://www.linkedin.com/company/example"},
+  "additional_info": null,
   "sources": ["https://examplefirm.com/about"],
   "leadership": [
     {
@@ -37,7 +44,15 @@ supporting source.
       "email": null,
       "phone": null,
       "linkedin": "https://www.linkedin.com/in/avery-owner",
-      "source_url": "https://examplefirm.com/team/avery-owner"
+      "source_url": "https://examplefirm.com/team/avery-owner",
+      "bio": null,
+      "education": [],
+      "experience": [],
+      "skills": [],
+      "certifications": [],
+      "publications": [],
+      "cases_handled": [],
+      "bar_admissions": []
     }
   ],
   "staff": [],
@@ -62,5 +77,5 @@ directory, or URL path. Every person must have a `source_url`. Return no more
 than 15 leadership and 30 staff records. Vendor evidence must name a direct
 source URL. Required top-level keys are `canonical_website`, `website_confidence`,
 `website_sources`, `summary`, `practice_areas`, `founded_year`, `firm_size`,
-`office_locations`, `social_media`, `sources`, `leadership`, `staff`, and
-`vendor_stack`.
+`office_locations`, `notable_cases`, `awards_recognition`, `bar_associations`,
+`social_media`, `additional_info`, `sources`, `leadership`, `staff`, and `vendor_stack`.

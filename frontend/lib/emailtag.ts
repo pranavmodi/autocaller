@@ -99,6 +99,29 @@ export interface ResearchData {
   job_postings?: JobPostingsResearch;
   job_postings_research_status?: string | null;
   last_job_postings_researched_at?: string | null;
+  local_enrichment?: LocalEnrichmentState;
+}
+
+export interface EnrichmentStage {
+  key: string;
+  label: string;
+  status: "pending" | "in_progress" | "completed" | "failed" | "skipped" | string;
+  message?: string | null;
+  started_at?: string | null;
+  completed_at?: string | null;
+  details?: Record<string, unknown> | null;
+}
+
+export interface LocalEnrichmentState {
+  task_id?: string | null;
+  status?: string | null;
+  current_stage?: string | null;
+  progress_percent?: number | null;
+  stages?: EnrichmentStage[];
+  warning_count?: number;
+  message?: string | null;
+  error?: string | null;
+  dirty?: boolean;
 }
 
 export interface BehavioralData {
@@ -205,6 +228,13 @@ export interface FullEnrichmentStatusResponse {
   pif_id?: string | null;
   firm_name?: string | null;
   result?: Record<string, unknown> | null;
+  current_stage?: string | null;
+  progress_percent?: number;
+  stages?: EnrichmentStage[];
+  warning_count?: number;
+  requested_at?: string | null;
+  started_at?: string | null;
+  completed_at?: string | null;
 }
 
 export interface ResearchStatusResponse {
@@ -217,6 +247,10 @@ export interface ResearchStatusResponse {
   staff?: StaffMember[] | null;
   research_data?: ResearchData | null;
   result?: Record<string, unknown> | null;
+  current_stage?: string | null;
+  progress_percent?: number;
+  stages?: EnrichmentStage[];
+  warning_count?: number;
 }
 
 export interface VendorDetectionStartResponse {

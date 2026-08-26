@@ -518,5 +518,13 @@ async def ingest_pif_directory_contacts(
 
     if map_personas_after:
         from app.services.persona_mapper import map_personas
-        counts["personas"] = await map_personas()
+        if pif_ids:
+            persona_counts: dict[str, int] = {}
+            for pif_id in pif_ids:
+                result = await map_personas(pif_id=pif_id)
+                for key, value in result.items():
+                    persona_counts[key] = persona_counts.get(key, 0) + int(value or 0)
+            counts["personas"] = persona_counts
+        else:
+            counts["personas"] = await map_personas()
     return counts

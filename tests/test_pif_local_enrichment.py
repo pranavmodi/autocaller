@@ -106,3 +106,117 @@ def test_normalize_enrichment_rejects_unsourced_people_and_consumer_domain():
     assert normalized["canonical_website"] is None
     assert [person["name"] for person in normalized["leadership"]] == ["Avery Owner"]
     assert normalized["vendor_stack"]["evidence"] == []
+
+
+def test_merge_people_never_replaces_existing_operator_facts_with_empty_values():
+    merged = service._merge_people(
+        [{"name": "Avery Owner", "title": "Managing Partner", "email": "avery@example.com"}],
+        [
+            {
+                "name": "Avery Owner",
+                "title": None,
+                "email": "avery@example.com",
+                "phone": "+13105550100",
+                "source_url": "https://example.com/avery",
+            },
+            {"name": "New Staff", "title": "Case Manager", "source_url": "https://example.com/staff"},
+        ],
+    )
+
+    assert merged[0]["title"] == "Managing Partner"
+    assert merged[0]["phone"] == "+13105550100"
+    assert merged[0]["source_url"] == "https://example.com/avery"
+    assert [person["name"] for person in merged] == ["Avery Owner", "New Staff"]
+
+
+def test_merge_vendor_stack_preserves_existing_values_and_unions_evidence():
+    merged = service._merge_vendor_stack(
+        {
+            "case_mgmt": "filevine",
+            "evidence": [{"vendor": "filevine", "source_url": "https://example.com/jobs"}],
+        },
+        {
+            "case_mgmt": None,
+            "other": {"call_tracking": "callrail"},
+            "evidence": [
+                {"vendor": "filevine", "source_url": "https://example.com/jobs"},
+                {"vendor": "callrail", "source_url": "https://example.com/privacy"},
+            ],
+        },
+    )
+
+    assert merged["case_mgmt"] == "filevine"
+    assert merged["other"] == {"call_tracking": "callrail"}
+    assert len(merged["evidence"]) == 2
+
+
+def test_progress_summary_counts_completed_failed_and_skipped_stages():
+    stages = service._stage_list()
+    stages[0]["status"] = "completed"
+    stages[1]["status"] = "failed"
+    stages[2]["status"] = "skipped"
+
+    summary = service._progress_summary("Example Law", current_stage="behavior", stages=stages)
+
+    assert summary["progress_percent"] == 43
+    assert summary["warning_count"] == 1
+    assert summary["current_stage"] == "behavior"
+
+
+def test_full_pipeline_reports_every_stage_before_finalizing(monkeypatch):
+    firm = PifFirmRow(id="firm-1", firm_name="Example Law")
+    events = []
+
+    class Session:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+        async def get(self, model, key):
+            return firm
+
+    async def fake_set_stage(task_id, key, status, **kwargs):
+        events.append((key, status))
+
+    async def fake_research(_firm):
+        return {"leadership": [], "staff": [], "vendor_stack": {}}
+
+    async def fake_persist(task_id, result):
+        return {"leadership_count": 0}
+
+    async def fake_optional(task_id, key, operation):
+        events.append((key, "in_progress"))
+        events.append((key, "completed"))
+        return {}
+
+    async def fake_finalize(task_id, status, **kwargs):
+        events.append(("final", status))
+
+    monkeypatch.setattr(service, "AsyncSessionLocal", lambda: Session())
+    monkeypatch.setattr(service, "_set_stage", fake_set_stage)
+    monkeypatch.setattr(service, "research_firm_locally", fake_research)
+    monkeypatch.setattr(service, "_persist_research_result", fake_persist)
+    monkeypatch.setattr(service, "_run_optional_stage", fake_optional)
+    monkeypatch.setattr(service, "_finalize_task", fake_finalize)
+
+    asyncio.run(service._run_task("task-1", "firm-1"))
+
+    assert events == [
+        ("web_research", "in_progress"),
+        ("web_research", "completed"),
+        ("persist_research", "in_progress"),
+        ("persist_research", "completed"),
+        ("behavior", "in_progress"),
+        ("behavior", "completed"),
+        ("contact_intelligence", "in_progress"),
+        ("contact_intelligence", "completed"),
+        ("contacts", "in_progress"),
+        ("contacts", "completed"),
+        ("job_postings", "in_progress"),
+        ("job_postings", "completed"),
+        ("score", "in_progress"),
+        ("score", "completed"),
+        ("final", "completed"),
+    ]

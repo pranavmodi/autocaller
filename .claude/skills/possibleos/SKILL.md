@@ -238,6 +238,12 @@ and job-posting research run and persist in Possible OS. Use `pif enrich
 <firm_id> [--poll]` for one firm. Daily deltas queue changed firms; a full crawl
 does not queue every row unless `PIF_ENRICH_ON_FULL_SYNC=true`.
 
+Local enrichment is a durable staged workflow. The task status reports web
+research, persistence, behavior, local communication/contact intelligence,
+contact ingestion, job postings, and scoring with percentage and warnings.
+Every persistence step merges with existing firm facts; empty or failed
+research must never erase leadership, staff, vendors, or prior job results.
+
 Local firm research is operator-triggered outside the daily changed-firm queue
 because it spends web/LLM budget. Use `bin/possibleos research status --tasks` for
 coverage/open tasks, `research firm <domain-or-pif> [--staff/--no-staff]

@@ -453,8 +453,17 @@ function isWorkflowRunning(status: string | null | undefined) {
   return Boolean(status && !TERMINAL_TASK_STATUSES.has(status));
 }
 
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : error ? "Request failed" : undefined;
+}
+
 function getRecord(value: unknown): Record<string, unknown> | null {
   return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : null;
+}
+
+function persistedEnrichmentTaskId(firm: PifInfoResponse) {
+  const state = firm.research_data?.local_enrichment;
+  return typeof state?.task_id === "string" && state.task_id ? state.task_id : null;
 }
 
 function firmContactCount(firm: PifInfoResponse) {
@@ -2181,7 +2190,7 @@ function FirmTableRows({
   onAuthError: () => void;
 }) {
   const queryClient = useQueryClient();
-  const [enrichmentTaskId, setEnrichmentTaskId] = useState<string | null>(null);
+  const [enrichmentTaskId, setEnrichmentTaskId] = useState<string | null>(() => persistedEnrichmentTaskId(firm));
   const [jobPostingTaskId, setJobPostingTaskId] = useState<string | null>(null);
   const websiteUrl = safeWebsiteUrl(firm.canonical_website ?? firm.website);
   const contactCount = firm.contacts?.length ?? 0;
@@ -2213,6 +2222,11 @@ function FirmTableRows({
       return status && TERMINAL_TASK_STATUSES.has(status) ? false : 3_000;
     },
   });
+
+  useEffect(() => {
+    const persisted = persistedEnrichmentTaskId(firm);
+    if (persisted && persisted !== enrichmentTaskId) setEnrichmentTaskId(persisted);
+  }, [firm, enrichmentTaskId]);
 
   const jobPostingStatus = useQuery({
     queryKey: ["emailtag", "job-posting-research-status", jobPostingTaskId],
@@ -2248,7 +2262,9 @@ function FirmTableRows({
     if (isAuthError(jobPostingStatus.error)) onAuthError();
   }, [jobPostingStatus.error, onAuthError]);
 
-  const enrichmentRunning = enrichment.isPending || isWorkflowRunning(enrichmentStatus.data?.status);
+  const enrichmentRunning = enrichment.isPending || isWorkflowRunning(
+    enrichmentStatus.data?.status ?? firm.research_data?.local_enrichment?.status,
+  );
   const jobPostingRunning = jobPostingResearch.isPending
     || isWorkflowRunning(jobPostingStatus.data?.status)
     || (!jobPostingTaskId && isWorkflowRunning(firm.research_data?.job_postings_research_status));
@@ -2353,7 +2369,14 @@ function FirmTableRows({
               <span className="hidden xl:inline">Research job postings</span>
             </ActionButton>
           </div>
-          <TaskStatus label="Enrichment" status={enrichmentStatus.data?.status} message={undefined} compact />
+          <TaskStatus
+            label="Enrichment"
+            status={enrichmentStatus.data?.status ?? firm.research_data?.local_enrichment?.status ?? undefined}
+            message={enrichmentStatus.data?.message ?? firm.research_data?.local_enrichment?.message ?? errorMessage(enrichment.error)}
+            progress={enrichmentStatus.data?.progress_percent ?? firm.research_data?.local_enrichment?.progress_percent ?? undefined}
+            currentStage={enrichmentStatus.data?.current_stage ?? firm.research_data?.local_enrichment?.current_stage ?? undefined}
+            compact
+          />
           <TaskStatus
             label="Job postings"
             status={jobPostingStatus.data?.status ?? firm.research_data?.job_postings_research_status ?? undefined}
@@ -2578,25 +2601,19 @@ function SelectedFirmPanel({
 
 function FirmDetail({ initialFirm, onAuthError }: { initialFirm: PifInfoResponse; onAuthError: () => void }) {
   const queryClient = useQueryClient();
-  const [researchTaskId, setResearchTaskId] = useState<string | null>(null);
-  const [vendorBaseline, setVendorBaseline] = useState<string | null>(null);
-  const [vendorPolling, setVendorPolling] = useState(false);
+  const [researchTaskId, setResearchTaskId] = useState<string | null>(() => persistedEnrichmentTaskId(initialFirm));
 
   const firmQuery = useQuery({
     queryKey: ["emailtag", "firm", initialFirm.id],
     queryFn: () => getMirroredFirm(initialFirm.id),
     initialData: initialFirm,
-    refetchInterval: vendorPolling ? 3_000 : false,
   });
 
   const firm = firmQuery.data ?? initialFirm;
-
   useEffect(() => {
-    if (vendorPolling && vendorBaseline && firm.updated_at !== vendorBaseline) {
-      setVendorPolling(false);
-      setVendorBaseline(null);
-    }
-  }, [firm.updated_at, vendorBaseline, vendorPolling]);
+    const persisted = persistedEnrichmentTaskId(firm);
+    if (persisted && persisted !== researchTaskId) setResearchTaskId(persisted);
+  }, [firm, researchTaskId]);
 
   useEffect(() => {
     if (isAuthError(firmQuery.error)) onAuthError();
@@ -2639,16 +2656,15 @@ function FirmDetail({ initialFirm, onAuthError }: { initialFirm: PifInfoResponse
 
   const vendorDetection = useMutation({
     mutationFn: () => detectVendors(firm.id),
-    onMutate: () => {
-      setVendorBaseline(firm.updated_at);
-      setVendorPolling(true);
-    },
     onError: (error) => {
-      setVendorPolling(false);
       if (isAuthError(error)) onAuthError();
     },
     onSuccess: (response) => setResearchTaskId(response.task_id),
   });
+
+  const fullEnrichmentRunning = research.isPending || vendorDetection.isPending || isWorkflowRunning(
+    researchStatus.data?.status ?? firm.research_data?.local_enrichment?.status,
+  );
 
   const behavior = useMutation({
     mutationFn: () => analyzeBehavior(firm.id),
@@ -2673,7 +2689,10 @@ function FirmDetail({ initialFirm, onAuthError }: { initialFirm: PifInfoResponse
   });
 
   const websiteUrl = safeWebsiteUrl(firm.canonical_website ?? firm.website);
-  const enrichmentSteps = buildEnrichmentSteps(firm);
+  const enrichmentSteps = buildEnrichmentSteps(
+    firm,
+    researchStatus.data?.stages ?? firm.research_data?.local_enrichment?.stages,
+  );
 
   return (
     <div className="space-y-4 rounded-xl border border-neutral-200 bg-white p-4">
@@ -2710,7 +2729,13 @@ function FirmDetail({ initialFirm, onAuthError }: { initialFirm: PifInfoResponse
         </div>
       </div>
 
-      <TaskStatus label="Research" status={researchStatus.data?.status} message={researchStatus.data?.message} />
+      <TaskStatus
+        label="Full enrichment"
+        status={researchStatus.data?.status ?? firm.research_data?.local_enrichment?.status ?? undefined}
+        message={researchStatus.data?.message ?? firm.research_data?.local_enrichment?.message ?? errorMessage(research.error) ?? errorMessage(vendorDetection.error)}
+        progress={researchStatus.data?.progress_percent ?? firm.research_data?.local_enrichment?.progress_percent ?? undefined}
+        currentStage={researchStatus.data?.current_stage ?? firm.research_data?.local_enrichment?.current_stage ?? undefined}
+      />
 
       <InfoBlock title="Full enrichment workflow">
         <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
@@ -2778,8 +2803,12 @@ function FirmDetail({ initialFirm, onAuthError }: { initialFirm: PifInfoResponse
       <InfoBlock
         title="Vendor Stack"
         action={
-          <ActionButton onClick={() => vendorDetection.mutate()} pending={vendorDetection.isPending || vendorPolling} icon={<RefreshCw className={cn("h-3.5 w-3.5", vendorPolling && "animate-spin")} />}>
-            Detect vendors
+          <ActionButton
+            onClick={() => vendorDetection.mutate()}
+            pending={fullEnrichmentRunning}
+            icon={<RefreshCw className={cn("h-3.5 w-3.5", fullEnrichmentRunning && "animate-spin")} />}
+          >
+            Run full enrichment
           </ActionButton>
         }
       >
@@ -2812,11 +2841,8 @@ function FirmDetail({ initialFirm, onAuthError }: { initialFirm: PifInfoResponse
       </div>
 
       <div className="flex flex-wrap gap-2">
-        <ActionButton onClick={() => research.mutate("leadership")} pending={research.isPending} icon={<Play className="h-3.5 w-3.5" />}>
-          Research leadership
-        </ActionButton>
-        <ActionButton onClick={() => research.mutate("staff")} pending={research.isPending} icon={<Users className="h-3.5 w-3.5" />}>
-          Research staff
+        <ActionButton onClick={() => research.mutate("leadership")} pending={fullEnrichmentRunning} icon={<Play className="h-3.5 w-3.5" />}>
+          Run full enrichment
         </ActionButton>
         <ActionButton onClick={() => behavior.mutate()} pending={behavior.isPending} icon={<Sparkles className="h-3.5 w-3.5" />}>
           Analyze behavior
@@ -3370,20 +3396,49 @@ function TaskStatus({
   status,
   message,
   compact,
+  progress,
+  currentStage,
 }: {
   label: string;
   status?: string;
   message?: string;
   compact?: boolean;
+  progress?: number;
+  currentStage?: string;
 }) {
   if (!status && !message) return null;
+  const running = Boolean(status && !TERMINAL_TASK_STATUSES.has(status));
+  const failed = status === "failed" || status === "error";
+  const boundedProgress = Math.max(0, Math.min(100, progress ?? (status === "completed" ? 100 : 0)));
   return (
-    <div className={cn("flex items-start gap-2 rounded-md bg-neutral-50 text-xs text-neutral-600", compact ? "mt-1 px-2 py-1" : "px-3 py-2")}>
-      <Loader2 className={cn("mt-0.5 h-3.5 w-3.5", status && !TERMINAL_TASK_STATUSES.has(status) && "animate-spin")} />
-      <span>
-        <span className="font-medium">{label}:</span> {status ? formatLabel(status) : ""}
-        {message ? ` · ${message}` : ""}
-      </span>
+    <div className={cn(
+      "rounded-md border text-xs",
+      failed ? "border-rose-200 bg-rose-50 text-rose-700" : "border-neutral-200 bg-neutral-50 text-neutral-600",
+      compact ? "mt-1 px-2 py-1.5" : "px-3 py-2.5",
+    )}>
+      <div className="flex items-start gap-2">
+        {running ? (
+          <Loader2 className="mt-0.5 h-3.5 w-3.5 shrink-0 animate-spin" />
+        ) : failed ? (
+          <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+        ) : (
+          <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600" />
+        )}
+        <span className="min-w-0">
+          <span className="font-medium">{label}:</span> {status ? formatLabel(status) : ""}
+          {currentStage ? ` · ${formatLabel(currentStage)}` : ""}
+          {message ? <span className={cn(compact && "block truncate")}> · {message}</span> : null}
+        </span>
+        {typeof progress === "number" && <span className="ml-auto shrink-0 font-mono">{boundedProgress}%</span>}
+      </div>
+      {typeof progress === "number" && (
+        <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-neutral-200" aria-label={`${label} ${boundedProgress}%`}>
+          <div
+            className={cn("h-full transition-all", failed ? "bg-rose-500" : "bg-emerald-600")}
+            style={{ width: `${boundedProgress}%` }}
+          />
+        </div>
+      )}
     </div>
   );
 }
@@ -3428,7 +3483,17 @@ function SignalPill({
   );
 }
 
-function buildEnrichmentSteps(firm: PifInfoResponse): WorkflowStepInfo[] {
+function buildEnrichmentSteps(
+  firm: PifInfoResponse,
+  liveStages?: Array<{ key: string; label: string; status: string; message?: string | null }>,
+): WorkflowStepInfo[] {
+  if (liveStages?.length) {
+    return liveStages.map((stage) => ({
+      label: stage.label,
+      detail: stage.message || formatLabel(stage.status),
+      state: statusToStepState(stage.status),
+    }));
+  }
   const leadershipHistory = firm.research_data?.leadership_email_history;
   const behaviorRecord = getRecord(firm.behavioral_data);
   const contactProfiles = getRecord(behaviorRecord?.contact_profiles);
@@ -3487,7 +3552,7 @@ function buildEnrichmentSteps(firm: PifInfoResponse): WorkflowStepInfo[] {
 }
 
 function statusToStepState(status: string | null): WorkflowStepState {
-  if (status === "completed") return "completed";
+  if (status === "completed" || status === "skipped") return "completed";
   if (status === "failed" || status === "error") return "failed";
   if (status === "queued" || status === "in_progress" || status === "running" || status === "started") return "running";
   return "waiting";
