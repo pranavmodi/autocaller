@@ -1261,6 +1261,8 @@ def _normalized_country_filter(value: str | None) -> str:
         return "US"
     if country in {"UNKNOWN", "UNSET", "NONE"}:
         return "unknown"
+    if country in {"NON_IN", "NON-INDIA", "NON INDIA", "NOT_IN", "EXCLUDE_IN"}:
+        return "non_in"
     if country == "OTHER":
         return "other"
     return country[:8]
@@ -1284,6 +1286,8 @@ def _page_event_conditions(since_days: int, country: str):
         conditions.append(LeadGenObservationRow.created_at >= cutoff)
     if country == "unknown":
         conditions.append(country_value == "")
+    elif country == "non_in":
+        conditions.append(country_value != "IN")
     elif country == "other":
         conditions.append(country_value.notin_(["", "US", "IN"]))
     elif country != "all":
