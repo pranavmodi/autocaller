@@ -1,0 +1,13 @@
+Subject: Quick follow-up on Precise
+
+Hi Shayan,
+
+I know I've sent a couple of notes, so I'll keep this brief.
+
+Since you built Checkmate around consistent client communication, I'm curious whether Precise's imaging-status updates reach the right Filevine matter automatically, or whether someone still has to route them by hand.
+
+If you're open to a quick 15-minute call, I'd genuinely appreciate your perspective. If now isn't a priority, no worries at all.
+
+— Pranav
+Founder, Possible Minds
+https://getpossibleminds.com

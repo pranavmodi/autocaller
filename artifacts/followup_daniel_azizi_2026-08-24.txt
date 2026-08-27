@@ -1,0 +1,14 @@
+Subject: Re: Is Lead Docket at Downtown L.A. Law Group tying marketing spend to signed cases?
+
+Hi Daniel,
+
+Just following up on my note about lead attribution. As a founding partner, do you have a clean view today of which sources become retained matters in Filevine, or does someone still have to reconcile Lead Docket with the case data?
+
+That handoff between systems is the kind of operational gap we worked through when building Precise's automated status replies.
+
+Would you have 15 minutes to compare notes? I'd genuinely appreciate your perspective. This isn't a pitch.
+
+Best,
+Pranav
+Founder, Possible Minds
+https://getpossibleminds.com
