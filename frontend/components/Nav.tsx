@@ -20,6 +20,7 @@ import {
   MessageSquare,
   PhoneCall,
   Radar,
+  Search,
   Send,
   Stethoscope,
 } from "lucide-react";
@@ -53,6 +54,7 @@ const items = [
   { href: "/calls", label: "Calls", icon: PhoneCall },
   { href: "/comms", label: "Comms", icon: MessageSquare },
   { href: "/lead-gen", label: "Lead Gen", icon: BrainCircuit },
+  { href: "/lead-finder", label: "Lead Finder", icon: Search },
   { href: "/knowledge", label: "Knowledge", icon: BookOpen },
   { href: "/click-analytics", label: "Engagement", icon: Activity },
   { href: "/data-returned", label: "Data Returned", icon: Database },

@@ -17,6 +17,8 @@ import shlex
 import subprocess
 import sys
 import tempfile
+import time
+import uuid
 from pathlib import Path
 from typing import Any, Optional
 from urllib.parse import quote
@@ -67,6 +69,7 @@ outreach_app = typer.Typer(help="Blog-post outreach campaigns — LLM-composed, 
 todos_app = typer.Typer(help="Editable project todo backlog.", no_args_is_help=True)
 ideas_app = typer.Typer(help="Simple future product, marketing, and GTM idea capture.", no_args_is_help=True)
 agents_app = typer.Typer(help="Possible OS master-agent heartbeat and subagent tasks.", no_args_is_help=True)
+lead_finder_app = typer.Typer(help="Lead Finder context and one-step OpenClaw/tool debugger.", no_args_is_help=True)
 actions_app = typer.Typer(help="Durable Possible OS action execution queue.", no_args_is_help=True)
 fs_app = typer.Typer(help="Read-only repo filesystem inspection for Possible OS agents.", no_args_is_help=True)
 listening_app = typer.Typer(help="Mission Control listening brief, insights, sources, and prep.", no_args_is_help=True)
@@ -109,6 +112,7 @@ app.add_typer(outreach_app, name="outreach")
 app.add_typer(todos_app, name="todos")
 app.add_typer(ideas_app, name="ideas")
 app.add_typer(agents_app, name="agents")
+app.add_typer(lead_finder_app, name="lead-finder")
 app.add_typer(actions_app, name="actions")
 app.add_typer(fs_app, name="fs")
 app.add_typer(listening_app, name="listening")
@@ -4729,6 +4733,337 @@ def actions_send_email(
         f"sent_to={result.get('sent_to', '—')} "
         f"message_id={result.get('sent_message_id', '—')}"
     )
+
+
+# ---------------------------------------------------------------------------
+# lead-finder — baseline context and one-step OpenClaw debug runner
+# ---------------------------------------------------------------------------
+
+@lead_finder_app.command("context")
+def lead_finder_context(
+    json_output: bool = typer.Option(False, "--json", help="Print the complete context JSON."),
+):
+    """Load the Lead Finder job and four authoritative baseline context files."""
+    data = _get("/api/lead-finder/context")
+    if json_output:
+        console.print_json(data=data)
+        return
+    context = data.get("context") or {}
+    files = ((context.get("baseline_context") or {}).get("files") or {})
+    console.print(f"[bold]{(context.get('job') or {}).get('name', 'Lead Finder Agent')}[/bold]")
+    console.print(f"objective: {(context.get('job') or {}).get('objective', '')}")
+    console.print(f"next_step: {(context.get('agent_state') or {}).get('next_step', '')}")
+    console.print(f"context_files: {', '.join(files.keys()) or '-'}")
+
+
+@lead_finder_app.command("tools")
+def lead_finder_tools(
+    json_output: bool = typer.Option(False, "--json", help="Print complete tool definitions."),
+):
+    """List the bounded tools available to the Lead Finder agent."""
+    data = _get("/api/lead-finder/tools")
+    if json_output:
+        console.print_json(data=data)
+        return
+    for item in data.get("tools") or []:
+        console.print(f"[bold]{item.get('name')}[/bold] — {item.get('description', '')}")
+
+
+@lead_finder_app.command("mission-search")
+def lead_finder_mission_search(
+    query: str = typer.Argument(..., help="Podcast-transcript search query."),
+    mode: str = typer.Option("hybrid", "--mode", help="keyword, semantic, or hybrid."),
+    limit: int = typer.Option(8, "--limit", min=1, max=10),
+    show_id: list[int] = typer.Option([], "--show-id", help="Optional Mission Control show ID; repeatable."),
+    json_output: bool = typer.Option(False, "--json"),
+):
+    """Run the same bounded Mission Control search tool exposed to the agent."""
+    data = _post(
+        "/api/lead-finder/tools/execute",
+        {
+            "tool": "mission_control.search",
+            "arguments": {"query": query, "mode": mode, "limit": limit, "show_ids": show_id},
+        },
+        timeout=130,
+    )
+    if json_output:
+        console.print_json(data=data)
+        return
+    result = data.get("result") or {}
+    items = result.get("results") or result.get("items") or []
+    console.print(f"results: {len(items)}")
+    for item in items:
+        console.print(
+            f"[bold]chunk {item.get('chunk_id') or item.get('id')}[/bold] "
+            f"{item.get('episode_title') or item.get('title') or ''}"
+        )
+        console.print(str(item.get("excerpt") or item.get("text") or "")[:500])
+
+
+@lead_finder_app.command("mission-passages")
+def lead_finder_mission_passages(
+    chunk_ids: list[int] = typer.Argument(..., help="One to ten transcript chunk IDs."),
+    json_output: bool = typer.Option(False, "--json"),
+):
+    """Fetch exact transcript passages through the agent's bounded tool adapter."""
+    data = _post(
+        "/api/lead-finder/tools/execute",
+        {"tool": "mission_control.get_passages", "arguments": {"chunk_ids": chunk_ids}},
+        timeout=130,
+    )
+    if json_output:
+        console.print_json(data=data)
+        return
+    console.print_json(data=data.get("result") or {})
+
+
+@lead_finder_app.command("mission-index-status")
+def lead_finder_mission_index_status(
+    json_output: bool = typer.Option(False, "--json"),
+):
+    """Show Mission Control transcript-index coverage through the agent tool layer."""
+    data = _post(
+        "/api/lead-finder/tools/execute",
+        {"tool": "mission_control.index_status", "arguments": {}},
+        timeout=130,
+    )
+    if json_output:
+        console.print_json(data=data)
+        return
+    console.print_json(data=data.get("result") or {})
+
+
+@lead_finder_app.command("web-research")
+def lead_finder_web_research(
+    person_name: str = typer.Argument(..., help="Named transcript candidate to research."),
+    chunk_id: int = typer.Option(..., "--chunk-id", min=1, help="Supporting Mission Control chunk ID."),
+    organization: Optional[str] = typer.Option(None, "--organization"),
+    role: Optional[str] = typer.Option(None, "--role"),
+    episode_title: str = typer.Option("", "--episode-title"),
+    excerpt: str = typer.Option("", "--excerpt"),
+    focus: str = typer.Option("PI intake workflow and current outreach relevance", "--focus"),
+    json_output: bool = typer.Option(False, "--json"),
+):
+    """Run the same bounded person web-research tool exposed to Lead Finder."""
+    data = _post(
+        "/api/lead-finder/tools/execute",
+        {
+            "tool": "web.research_person",
+            "arguments": {
+                "person_name": person_name,
+                "organization": organization,
+                "role": role,
+                "research_focus": focus,
+                "mission_control_evidence": [{
+                    "chunk_id": chunk_id,
+                    "episode_title": episode_title,
+                    "excerpt": excerpt,
+                }],
+            },
+        },
+        timeout=360,
+    )
+    if json_output:
+        console.print_json(data=data)
+        return
+    console.print_json(data=data.get("result") or {})
+
+
+@lead_finder_app.command("results")
+def lead_finder_results(
+    run_id: str = typer.Argument(..., help="Durable Lead Finder run id."),
+    json_output: bool = typer.Option(False, "--json"),
+):
+    """List researched leads explicitly added to one run's results."""
+    run = (_get(f"/api/lead-finder/runs/{run_id}").get("run") or {})
+    context = run.get("current_context") or {}
+    state = ((context.get("agent_state") or {}).get("working_state") or {})
+    leads = state.get("found_leads") or []
+    if json_output:
+        console.print_json(data={"run_id": run_id, "results": leads})
+        return
+    if not leads:
+        console.print("No researched leads added.")
+        return
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("name")
+    table.add_column("role")
+    table.add_column("organization")
+    table.add_column("angles")
+    table.add_column("sources")
+    for lead in leads:
+        table.add_row(
+            str(lead.get("name") or ""),
+            str(lead.get("role") or ""),
+            str(lead.get("organization") or ""),
+            str(len(lead.get("outreach_angles") or [])),
+            str(len(lead.get("sources") or [])),
+        )
+    console.print(table)
+
+
+@lead_finder_app.command("step")
+def lead_finder_step(
+    run_id: str = typer.Argument(..., help="Durable Lead Finder run id."),
+    direction: Optional[str] = typer.Option(None, "--direction", help="Update the run-specific desired-lead direction."),
+    request_id: Optional[str] = typer.Option(None, "--request-id", help="Idempotency key; generated when omitted."),
+    wait: bool = typer.Option(True, "--wait/--no-wait", help="Poll until the persisted step finishes."),
+    timeout_seconds: int = typer.Option(420, "--timeout-seconds", min=10, max=900),
+    json_output: bool = typer.Option(False, "--json", help="Print the complete persisted step."),
+):
+    """Queue one durable reasoning or bounded tool step and optionally wait."""
+    run = (_get(f"/api/lead-finder/runs/{run_id}").get("run") or {})
+    selected_direction = run.get("user_direction", "") if direction is None else direction
+    data = _post(
+        f"/api/lead-finder/runs/{run_id}/steps",
+        json_body={
+            "request_id": request_id or f"lfreq_{uuid.uuid4().hex}",
+            "user_direction": selected_direction,
+        },
+    )
+    step = data.get("step") or {}
+    if wait:
+        deadline = time.monotonic() + timeout_seconds
+        while step.get("status") not in {"completed", "failed", "interrupted"}:
+            if time.monotonic() >= deadline:
+                console.print(f"[yellow]step still {step.get('status')}; id={step.get('id')}[/yellow]")
+                raise typer.Exit(code=2)
+            time.sleep(1)
+            step = (_get(f"/api/lead-finder/steps/{step.get('id')}").get("step") or {})
+    if json_output:
+        console.print_json(data={"step": step})
+        return
+    response = step.get("response_parsed") or {}
+    console.print(f"step_id: {step.get('id')}")
+    console.print(f"status: {step.get('status')}")
+    console.print(f"step: {response.get('step_name') or step.get('step_number')}")
+    console.print(f"summary: {response.get('summary', '')}")
+    console.print(f"next_step: {response.get('next_step', '')}")
+    console.print(f"model: {step.get('model') or '-'}")
+    cache = step.get("prompt_cache") or {}
+    cache_rate = cache.get("hit_rate_percent")
+    console.print(
+        f"prompt_cache: {cache.get('status') or 'unreported'} "
+        f"cached_tokens={cache.get('cached_tokens')} "
+        f"hit_rate={f'{cache_rate}%' if cache_rate is not None else '-'}"
+    )
+    for tool_call in step.get("tool_calls") or []:
+        console.print(
+            f"tool: {tool_call.get('tool_name')} status={tool_call.get('status')} "
+            f"id={tool_call.get('id')}"
+        )
+
+
+@lead_finder_app.command("start")
+def lead_finder_start(
+    direction: str = typer.Option("", "--direction", help="Run-specific description of desired leads."),
+    json_output: bool = typer.Option(False, "--json"),
+):
+    """Create a durable Lead Finder run immediately before step 1."""
+    run = (_post("/api/lead-finder/runs", {"user_direction": direction}).get("run") or {})
+    if json_output:
+        console.print_json(data={"run": run})
+        return
+    console.print(f"[green]created {run.get('id')}[/green]")
+    console.print(f"status: {run.get('status')}")
+    console.print(f"next_step: {run.get('next_step')}")
+
+
+@lead_finder_app.command("runs")
+def lead_finder_runs(
+    limit: int = typer.Option(25, "--limit", min=1, max=100),
+    json_output: bool = typer.Option(False, "--json"),
+):
+    """List durable Lead Finder runs."""
+    runs = (_get("/api/lead-finder/runs", limit=limit).get("runs") or [])
+    if json_output:
+        console.print_json(data={"runs": runs})
+        return
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("id")
+    table.add_column("status")
+    table.add_column("step")
+    table.add_column("direction")
+    table.add_column("created")
+    for run in runs:
+        table.add_row(
+            run.get("id") or "",
+            run.get("status") or "",
+            str(run.get("current_step") or 0),
+            (run.get("user_direction") or "")[:60],
+            run.get("created_at") or "",
+        )
+    console.print(table)
+
+
+@lead_finder_app.command("show")
+def lead_finder_show(
+    run_id: str = typer.Argument(...),
+    json_output: bool = typer.Option(False, "--json"),
+):
+    """Show one run with persisted steps and gateway attempts."""
+    run = (_get(f"/api/lead-finder/runs/{run_id}").get("run") or {})
+    if json_output:
+        console.print_json(data={"run": run})
+        return
+    console.print(f"[bold]{run.get('id')}[/bold]")
+    console.print(f"status: {run.get('status')}")
+    console.print(f"current_step: {run.get('current_step')}")
+    console.print(f"next_step: {run.get('next_step')}")
+    console.print(f"direction: {run.get('user_direction')}")
+    for step in run.get("steps") or []:
+        cache = step.get("prompt_cache") or {}
+        console.print(
+            f"  step {step.get('step_number')}: {step.get('status')} "
+            f"attempts={len(step.get('attempts') or [])} "
+            f"tools={len(step.get('tool_calls') or [])} "
+            f"cache={cache.get('status') or 'unreported'}:{cache.get('cached_tokens')} "
+            f"id={step.get('id')}"
+        )
+
+
+@lead_finder_app.command("restart")
+def lead_finder_restart(
+    run_id: str = typer.Argument(...),
+    direction: Optional[str] = typer.Option(None, "--direction", help="Override the prior run direction."),
+    json_output: bool = typer.Option(False, "--json"),
+):
+    """Create a fresh run immediately before step 1, linked to the prior run."""
+    body = {} if direction is None else {"user_direction": direction}
+    run = (_post(f"/api/lead-finder/runs/{run_id}/restart", body).get("run") or {})
+    if json_output:
+        console.print_json(data={"run": run})
+        return
+    console.print(f"[green]restarted as {run.get('id')}[/green]")
+    console.print(f"restarted_from: {run.get('restarted_from_run_id')}")
+    console.print("current_step: 0")
+
+
+@lead_finder_app.command("reset-all")
+def lead_finder_reset_all(
+    direction: str = typer.Option("", "--direction", help="Direction for the replacement step-0 run."),
+    yes: bool = typer.Option(False, "--yes", help="Skip the destructive confirmation prompt."),
+    json_output: bool = typer.Option(False, "--json"),
+):
+    """Delete all Lead Finder history and create one fresh step-0 run."""
+    if not yes:
+        typer.confirm(
+            "Delete every Lead Finder run, step, gateway attempt, and tool call? This cannot be undone.",
+            abort=True,
+        )
+    data = _post("/api/lead-finder/runs/reset-all", {"user_direction": direction})
+    if json_output:
+        console.print_json(data=data)
+        return
+    deleted = data.get("deleted") or {}
+    run = data.get("run") or {}
+    console.print(
+        "[red]deleted[/red] "
+        f"runs={deleted.get('runs', 0)} steps={deleted.get('steps', 0)} "
+        f"attempts={deleted.get('attempts', 0)} tool_calls={deleted.get('tool_calls', 0)}"
+    )
+    console.print(f"[green]created {run.get('id')}[/green]")
+    console.print("current_step: 0")
 
 
 # ---------------------------------------------------------------------------

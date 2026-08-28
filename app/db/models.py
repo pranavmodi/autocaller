@@ -572,6 +572,136 @@ class AgentReportRow(Base):
     )
 
 
+class LeadFinderRunRow(Base):
+    """Durable Lead Finder run with one authoritative current context."""
+    __tablename__ = "lead_finder_runs"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="ready")
+    debug_mode: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    user_direction: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    job_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    baseline_context_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    baseline_context_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    current_context_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    current_step: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    next_step: Mapped[str | None] = mapped_column(Text, nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    restarted_from_run_id: Mapped[str | None] = mapped_column(
+        String(64), ForeignKey("lead_finder_runs.id", ondelete="SET NULL"), nullable=True,
+    )
+    completed_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), default=_utcnow, onupdate=_utcnow,
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('ready', 'queued', 'running', 'paused', 'completed', 'failed')",
+            name="ck_lead_finder_runs_status",
+        ),
+        Index("ix_lead_finder_runs_status", "status"),
+        Index("ix_lead_finder_runs_created_at", "created_at"),
+        Index("ix_lead_finder_runs_restarted_from", "restarted_from_run_id"),
+    )
+
+
+class LeadFinderStepRow(Base):
+    """One user-triggered debug step and its complete request/response trace."""
+    __tablename__ = "lead_finder_steps"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    run_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("lead_finder_runs.id", ondelete="CASCADE"), nullable=False,
+    )
+    step_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    request_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="queued")
+    user_direction: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    context_before_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    request_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    response_parsed_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    response_raw: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    context_after_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    context_diff_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    model: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    skill_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    usage_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    started_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow)
+
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('queued', 'running', 'retrying', 'completed', 'failed', 'interrupted')",
+            name="ck_lead_finder_steps_status",
+        ),
+        UniqueConstraint("run_id", "step_number", name="uq_lead_finder_steps_run_number"),
+        UniqueConstraint("request_id", name="uq_lead_finder_steps_request_id"),
+        Index("ix_lead_finder_steps_run_id", "run_id"),
+        Index("ix_lead_finder_steps_status", "status"),
+        Index("ix_lead_finder_steps_created_at", "created_at"),
+    )
+
+
+class LeadFinderAttemptRow(Base):
+    """Every concrete OpenClaw HTTP attempt for a Lead Finder step."""
+    __tablename__ = "lead_finder_attempts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    step_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("lead_finder_steps.id", ondelete="CASCADE"), nullable=False,
+    )
+    attempt_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="running")
+    model: Mapped[str] = mapped_column(String(255), nullable=False)
+    request_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    response_raw: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    response_parsed_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    usage_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    http_status: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    started_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow)
+    completed_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('running', 'completed', 'failed', 'timed_out', 'interrupted')",
+            name="ck_lead_finder_attempts_status",
+        ),
+        UniqueConstraint("step_id", "attempt_number", name="uq_lead_finder_attempts_step_number"),
+        Index("ix_lead_finder_attempts_step_id", "step_id"),
+    )
+
+
+class LeadFinderToolCallRow(Base):
+    """One validated read-only tool execution requested by a Lead Finder step."""
+    __tablename__ = "lead_finder_tool_calls"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    step_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("lead_finder_steps.id", ondelete="CASCADE"), nullable=False,
+    )
+    tool_name: Mapped[str] = mapped_column(String(128), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="running")
+    arguments_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    result_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    started_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow)
+    completed_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('running', 'completed', 'failed', 'interrupted')",
+            name="ck_lead_finder_tool_calls_status",
+        ),
+        Index("ix_lead_finder_tool_calls_step_id", "step_id"),
+        Index("ix_lead_finder_tool_calls_status", "status"),
+    )
+
+
 class AgentActionRow(Base):
     """Durable execution request for a bounded Possible OS action."""
     __tablename__ = "agent_actions"

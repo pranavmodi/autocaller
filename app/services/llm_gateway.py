@@ -8,7 +8,7 @@ import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Awaitable, Callable, Optional
 
 import httpx
 
@@ -22,6 +22,8 @@ _JSON_FENCE_RE = re.compile(r"```(?:json)?\s*([\s\S]*?)```", re.MULTILINE)
 _token_cache: Optional[str] = None
 _skill_cache: dict[str, str] = {}
 
+GatewayAttemptObserver = Callable[[dict[str, Any]], Awaitable[None]]
+
 
 class LLMGatewayError(Exception):
     pass
@@ -33,6 +35,63 @@ class GatewayJSONResult:
     raw_response: str
     model: str
     usage: dict[str, Any] | None = None
+
+
+def prompt_cache_metrics(usage: dict[str, Any] | None) -> dict[str, Any]:
+    """Normalize provider/OpenClaw prompt-cache usage for operator surfaces."""
+    if not isinstance(usage, dict):
+        return {
+            "status": "unreported",
+            "cached_tokens": None,
+            "cache_write_tokens": None,
+            "input_tokens": None,
+            "hit_rate_percent": None,
+        }
+
+    def token_count(*values: Any) -> int | None:
+        for value in values:
+            if isinstance(value, bool):
+                continue
+            if isinstance(value, (int, float)) and value >= 0:
+                return int(value)
+        return None
+
+    prompt_details = usage.get("prompt_tokens_details")
+    input_details = usage.get("input_tokens_details")
+    prompt_details = prompt_details if isinstance(prompt_details, dict) else {}
+    input_details = input_details if isinstance(input_details, dict) else {}
+    cached_tokens = token_count(
+        usage.get("cacheRead"),
+        usage.get("cache_read"),
+        usage.get("cache_read_input_tokens"),
+        usage.get("cached_tokens"),
+        prompt_details.get("cached_tokens"),
+        input_details.get("cached_tokens"),
+    )
+    cache_write_tokens = token_count(
+        usage.get("cacheWrite"),
+        usage.get("cache_write"),
+        usage.get("cache_creation_input_tokens"),
+        prompt_details.get("cache_write_tokens"),
+        input_details.get("cache_write_tokens"),
+    )
+    input_tokens = token_count(usage.get("prompt_tokens"), usage.get("input_tokens"))
+    if cached_tokens is None and input_tokens is not None:
+        cached_tokens = 0
+    hit_rate = None
+    if input_tokens and cached_tokens is not None:
+        hit_rate = round((cached_tokens / input_tokens) * 100, 1)
+    return {
+        "status": (
+            "hit" if cached_tokens and cached_tokens > 0
+            else "miss" if cached_tokens == 0
+            else "unreported"
+        ),
+        "cached_tokens": cached_tokens,
+        "cache_write_tokens": cache_write_tokens,
+        "input_tokens": input_tokens,
+        "hit_rate_percent": hit_rate,
+    }
 
 
 def gateway_token() -> str:
@@ -167,8 +226,10 @@ async def call_skill_json(
     timeout_s: int | None = None,
     max_tokens: int | None = None,
     retries: int | None = None,
+    gateway_user: str | None = None,
     prompt_cache_key: str | None = None,
     prompt_cache_retention: str | None = None,
+    attempt_observer: GatewayAttemptObserver | None = None,
 ) -> GatewayJSONResult:
     """Call OpenClaw gateway with SKILL.md as system prompt and parse JSON."""
     skill = load_skill(skill_path)
@@ -187,6 +248,8 @@ async def call_skill_json(
         ],
         "max_tokens": token_limit,
     }
+    if gateway_user:
+        body["user"] = gateway_user
     if prompt_cache_key:
         body["prompt_cache_key"] = prompt_cache_key
     if prompt_cache_retention:
@@ -194,6 +257,17 @@ async def call_skill_json(
 
     last_error: Exception | None = None
     for attempt in range(1, attempts + 1):
+        if attempt_observer:
+            try:
+                await attempt_observer({
+                    "phase": "started",
+                    "attempt": attempt,
+                    "model": model_id,
+                    "gateway_url": url,
+                    "request": body,
+                })
+            except Exception as observer_error:
+                logger.warning("gateway attempt observer start failed: %s", observer_error)
         try:
             async with httpx.AsyncClient(timeout=timeout, verify=False) as client:
                 resp = await client.post(
@@ -218,10 +292,38 @@ async def call_skill_json(
             parsed = extract_json(content)
             require_fields(parsed, required_fields)
             usage = data.get("usage") if isinstance(data.get("usage"), dict) else None
+            if attempt_observer:
+                try:
+                    await attempt_observer({
+                        "phase": "completed",
+                        "attempt": attempt,
+                        "model": model_id,
+                        "http_status": resp.status_code,
+                        "raw_response": content,
+                        "parsed_response": parsed,
+                        "usage": usage or {},
+                    })
+                except Exception as observer_error:
+                    logger.warning("gateway attempt observer completion failed: %s", observer_error)
             return GatewayJSONResult(parsed=parsed, raw_response=content, model=model_id, usage=usage)
         except (httpx.HTTPStatusError, httpx.ReadTimeout, httpx.ConnectError, httpx.RemoteProtocolError, LLMGatewayError) as e:
             last_error = e
             logger.warning("gateway skill call attempt %d failed: %s", attempt, e)
+            if attempt_observer:
+                try:
+                    response = getattr(e, "response", None)
+                    await attempt_observer({
+                        "phase": "failed",
+                        "attempt": attempt,
+                        "model": model_id,
+                        "status": "timed_out" if isinstance(e, httpx.ReadTimeout) else "failed",
+                        "http_status": getattr(response, "status_code", None),
+                        "raw_response": getattr(response, "text", "")[:20_000] if response is not None else "",
+                        "error": str(e) or e.__class__.__name__,
+                        "will_retry": attempt < attempts,
+                    })
+                except Exception as observer_error:
+                    logger.warning("gateway attempt observer failure failed: %s", observer_error)
             if attempt < attempts:
                 await asyncio.sleep(2 ** (attempt - 1))
     raise LLMGatewayError(f"gateway call failed after {attempts} attempts: {last_error}")

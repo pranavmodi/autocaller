@@ -32,6 +32,7 @@ from .engagement_campaigns import router as engagement_campaigns_router
 from .front_inbox import router as front_inbox_router
 from .call_lab import router as call_lab_router
 from .knowledge import router as knowledge_router
+from .lead_finder import router as lead_finder_router
 
 __all__ = [
     "dashboard_router", "websocket_router", "settings_router",
@@ -47,4 +48,5 @@ __all__ = [
     "front_inbox_router",
     "call_lab_router",
     "knowledge_router",
+    "lead_finder_router",
 ]

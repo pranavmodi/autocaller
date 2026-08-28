@@ -40,6 +40,39 @@ Sense -> Select -> Compose -> Approve -> Send -> Observe -> Classify
 -> Learn -> Propose Change -> Human Approves -> New Policy -> Next Action
 ```
 
+## Lead Finder Debug Loop
+
+Lead discovery begins as a separate recommendation-only loop. Its stable
+context is the company, customer, offer, and voice documents; its volatile
+context includes the user's current description of desired leads and the
+working state produced by prior steps. In debug mode, one explicit user trigger
+runs exactly one LLM reasoning transition or one read-only source-tool request
+and pauses so the operator can inspect the full before/after context.
+
+Mission Control podcast transcripts are the only discovery source for this
+initial slice. Mission
+Control owns chunking, keyword search, local embeddings, and hybrid ranking;
+Possible OS accesses them only through its HTTP API, never its SQLite database.
+The Lead Finder first uses transcript search, exact passage retrieval, and
+index-status inspection. After a named person is supported by an exact passage,
+it may research only that person on the public web for current role, recent
+news/signals, and source-backed outreach angles. Research does not implicitly
+become a result: a later explicit add-result tool references the completed web
+research call and publishes it into the run-local Found Leads list. PossibleOS
+validates arguments, persists each request and complete result/error, updates
+working context, and pauses. No PossibleOS leads database, Reddit, or other
+discovery source is exposed, and this slice intentionally performs no
+deduplication. Runs, individual debug steps, gateway attempts, tool calls,
+exact requests/responses, results, and context evolution are durable server-side
+state so an operator can inspect work while the browser is waiting.
+Each durable run keeps one isolated OpenClaw conversation, allowing later
+debug steps to reuse the stable instructions and growing history through
+provider prompt caching. Cache use is evidence-based: cached-token counts and
+hit rate are shown with the persisted gateway attempt instead of inferred from
+configuration.
+An explicitly confirmed clean-slate control deletes only this Lead Finder
+history and atomically replaces it with one fresh run before step one.
+
 ### Sense
 
 The system gathers available context about firms, contacts, previous

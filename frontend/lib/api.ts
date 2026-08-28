@@ -2979,3 +2979,227 @@ export const editOutreachSend = (
   sendId: number,
   body: { subject?: string; body_html?: string; plaintext?: string; by?: string },
 ) => post<OutreachSend>(`/api/outreach/sends/${sendId}/edit`, body);
+
+export type LeadFinderContextFile = {
+  name: string;
+  path: string;
+  sha256: string;
+  content: string;
+};
+
+export type LeadFinderTransition = {
+  step_name: string;
+  summary: string;
+  reasoning: string;
+  state_updates: Record<string, unknown>;
+  next_step: string;
+  is_complete: boolean;
+  action: {
+    type: "reason" | "tool_call";
+    tool: string | null;
+    arguments: Record<string, unknown>;
+  };
+  tool_execution: LeadFinderToolCall | null;
+  completed_at: string;
+};
+
+export type LeadFinderContext = {
+  kind: "lead_finder_context_v1";
+  job: {
+    name: string;
+    objective: string;
+    success_definition: string;
+    boundaries: string[];
+    available_sources: string[];
+    future_sources: string[];
+  };
+  user_direction: string;
+  baseline_context: {
+    loaded_at: string;
+    files: Record<string, LeadFinderContextFile>;
+  };
+  agent_state: {
+    status: "ready" | "paused" | "completed";
+    completed_steps: number;
+    next_step: string | null;
+    working_state: Record<string, unknown>;
+    last_step: LeadFinderTransition | null;
+  };
+};
+
+export type LeadFinderStepResponse = {
+  context: LeadFinderContext;
+  transition: LeadFinderTransition;
+  gateway: {
+    used_llm: boolean;
+    model: string;
+    skill_path: string;
+    usage: Record<string, unknown>;
+    prompt_cache: LeadFinderPromptCache;
+    raw_response: string;
+  };
+};
+
+export type LeadFinderPromptCache = {
+  status: "hit" | "miss" | "unreported";
+  cached_tokens: number | null;
+  cache_write_tokens: number | null;
+  input_tokens: number | null;
+  hit_rate_percent: number | null;
+  session_scope?: "run" | "stateless";
+};
+
+export type LeadFinderFoundLead = {
+  id: string;
+  status: "researched";
+  name: string;
+  role: string | null;
+  organization: string | null;
+  official_profile_url: string | null;
+  identity_confidence: number | null;
+  profile_summary: string;
+  recent_signals: Array<{
+    date: string | null;
+    title: string;
+    summary: string;
+    relevance: string;
+    source_url: string;
+  }>;
+  outreach_angles: Array<{
+    title: string;
+    why_relevant: string;
+    evidence: string;
+    question: string;
+    source_urls: string[];
+  }>;
+  sources: Array<{
+    url: string;
+    title: string;
+    published_date: string | null;
+    source_type: string;
+    supports: string;
+  }>;
+  contrary_evidence: string[];
+  mission_control_evidence: Array<Record<string, unknown>>;
+  research_tool_call_id: string;
+  notes: string | null;
+  researched_at: string | null;
+  added_at: string;
+};
+
+export const getLeadFinderContext = () =>
+  get<{ context: LeadFinderContext }>("/api/lead-finder/context");
+
+export const runLeadFinderStep = (
+  context: LeadFinderContext,
+  userDirection: string,
+) =>
+  post<LeadFinderStepResponse>("/api/lead-finder/step", {
+    context,
+    user_direction: userDirection,
+  });
+
+export type LeadFinderAttempt = {
+  id: number;
+  step_id: string;
+  attempt_number: number;
+  status: "running" | "completed" | "failed" | "timed_out" | "interrupted";
+  model: string;
+  request: Record<string, unknown>;
+  response_raw: string;
+  response_parsed: Record<string, unknown>;
+  usage: Record<string, unknown>;
+  prompt_cache: LeadFinderPromptCache;
+  http_status: number | null;
+  error: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+};
+
+export type LeadFinderToolCall = {
+  id: string | null;
+  step_id?: string;
+  tool_name: string;
+  status: "running" | "completed" | "failed" | "interrupted";
+  arguments: Record<string, unknown>;
+  result: Record<string, unknown>;
+  error: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+};
+
+export type LeadFinderPersistedStep = {
+  id: string;
+  run_id: string;
+  step_number: number;
+  request_id: string;
+  status: "queued" | "running" | "retrying" | "completed" | "failed" | "interrupted";
+  user_direction: string;
+  context_before: LeadFinderContext;
+  request: Record<string, unknown>;
+  response_parsed: Partial<LeadFinderTransition>;
+  response_raw: string;
+  context_after: LeadFinderContext | Record<string, never>;
+  context_diff: { changed_paths?: string[] };
+  model: string | null;
+  skill_path: string | null;
+  usage: Record<string, unknown>;
+  prompt_cache: LeadFinderPromptCache;
+  error: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  created_at: string | null;
+  attempts: LeadFinderAttempt[];
+  tool_calls: LeadFinderToolCall[];
+};
+
+export type LeadFinderRun = {
+  id: string;
+  status: "ready" | "queued" | "running" | "paused" | "completed" | "failed";
+  debug_mode: boolean;
+  user_direction: string;
+  job: LeadFinderContext["job"];
+  baseline_context: LeadFinderContext["baseline_context"];
+  baseline_context_hash: string;
+  current_context: LeadFinderContext;
+  current_step: number;
+  next_step: string | null;
+  error: string | null;
+  restarted_from_run_id: string | null;
+  completed_at: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  steps?: LeadFinderPersistedStep[];
+};
+
+export const createLeadFinderRun = (userDirection: string) =>
+  post<{ run: LeadFinderRun }>("/api/lead-finder/runs", {
+    user_direction: userDirection,
+  });
+
+export const listLeadFinderRuns = (limit = 25) =>
+  get<{ runs: LeadFinderRun[] }>(`/api/lead-finder/runs?limit=${limit}`);
+
+export const getLeadFinderRun = (runId: string) =>
+  get<{ run: LeadFinderRun }>(`/api/lead-finder/runs/${runId}`);
+
+export const queueLeadFinderStep = (
+  runId: string,
+  requestId: string,
+  userDirection: string,
+) =>
+  post<{ step: LeadFinderPersistedStep }>(`/api/lead-finder/runs/${runId}/steps`, {
+    request_id: requestId,
+    user_direction: userDirection,
+  });
+
+export const restartLeadFinderRun = (runId: string, userDirection?: string) =>
+  post<{ run: LeadFinderRun }>(`/api/lead-finder/runs/${runId}/restart`,
+    userDirection === undefined ? {} : { user_direction: userDirection },
+  );
+
+export const resetAllLeadFinderRuns = (userDirection: string) =>
+  post<{
+    deleted: { runs: number; steps: number; attempts: number; tool_calls: number };
+    run: LeadFinderRun;
+  }>("/api/lead-finder/runs/reset-all", { user_direction: userDirection });

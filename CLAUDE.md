@@ -100,6 +100,17 @@ A reasonable heuristic: if someone three months from now had only the CLI and `d
   single-shot JSON workflow that still defaults to `openclaw/proxy`, verify its
   live model and migrate it deliberately; do not assume the stale default works.
   Direct-OpenAI calls do not use this gateway and are unaffected.
+- **Design agent context for prompt-cache reuse.** For recurring or multi-step
+  LLM workflows, put stable instructions, tool definitions, schemas, and shared
+  reference material at the beginning of the context. Put timestamps,
+  run-specific directions, current state, tool results, and other volatile data
+  afterward, and append new turns instead of rewriting the reusable prefix when
+  the transport supports conversation history. Reuse a stable, appropriately
+  scoped prompt-cache key or OpenClaw session identity for requests that truly
+  share a prefix; isolate unrelated runs so hidden history cannot leak between
+  them. Do not treat a configured cache field as proof that caching works:
+  verify the live gateway accepts or maps it, persist provider usage, and report
+  returned cached-token and cache-write-token metrics where available.
 - **Keep safety rails explicit.** `ALLOW_TWILIO_CALLS`, `allow_live_calls`, `allowed_phones`, `mock_mode`, `system_enabled` — every new risk vector needs a gate of comparable clarity.
 - **Never auto-start the dispatcher on daemon boot.** Restarts must not trigger outbound calls. Explicit operator action only.
 - **Prompt change protocol.** Every prompt change must: (1) bump `PROMPT_VERSION` in `app/prompts/attorney_cold_call.py`, (2) `git commit` with a descriptive message, (3) `git push`, (4) restart the backend. No prompt change ships without all four steps. This ensures every live call's `prompt_version` traces to a committed, pushed revision.

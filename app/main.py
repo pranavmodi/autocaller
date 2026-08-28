@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pathlib import Path
 
-from .api import dashboard_router, websocket_router, settings_router, dispatcher_router, scenarios_router, carrier_router, cadence_router, consults_router, call_lists_router, voice_preview_router, firm_reviews_router, comms_router, sequences_router, outreach_router, lead_gen_router, resend_webhooks_router, inbound_email_router, operator_notifications_router, seo_router, product_traces_router, learning_router, todos_router, composer_variants_router, actions_router, front_router, research_router, aiaudit_router, visibility_links_router, data_returned_router, front_inbox_router, engagement_campaigns_router, call_lab_router, knowledge_router
+from .api import dashboard_router, websocket_router, settings_router, dispatcher_router, scenarios_router, carrier_router, cadence_router, consults_router, call_lists_router, voice_preview_router, firm_reviews_router, comms_router, sequences_router, outreach_router, lead_gen_router, resend_webhooks_router, inbound_email_router, operator_notifications_router, seo_router, product_traces_router, learning_router, todos_router, composer_variants_router, actions_router, front_router, research_router, aiaudit_router, visibility_links_router, data_returned_router, front_inbox_router, engagement_campaigns_router, call_lab_router, knowledge_router, lead_finder_router
 from .api.agents import router as agents_router
 from .api.pif import router as pif_router
 from .api.auth import router as auth_router, SESSION_COOKIE, verify_session_token, auth_configured
@@ -37,6 +37,20 @@ async def lifespan(app: FastAPI):
         await seed_sample_patients(session)
         await session.commit()
     await seed_default_todos()
+    from .services.lead_finder import (
+        execute_lead_finder_step,
+        recover_interrupted_lead_finder_steps,
+    )
+    recovered_lead_finder_step_ids = await recover_interrupted_lead_finder_steps()
+    lead_finder_recovery_tasks = [
+        asyncio.create_task(execute_lead_finder_step(step_id))
+        for step_id in recovered_lead_finder_step_ids
+    ]
+    if recovered_lead_finder_step_ids:
+        logger.info(
+            "Requeued %s interrupted Lead Finder steps",
+            len(recovered_lead_finder_step_ids),
+        )
     # Apply persisted source settings
     settings = await get_settings_provider().get_settings()
     set_queue_source(settings.queue_source)
@@ -156,6 +170,7 @@ async def lifespan(app: FastAPI):
         pif_directory_task,
         *job_research_workers,
         *local_enrichment_workers,
+        *lead_finder_recovery_tasks,
     ]
     tasks_to_cancel.append(master_heartbeat_task)
     if master_subagent_runner_task is not None:
@@ -355,6 +370,7 @@ app.include_router(carrier_router)
 app.include_router(cadence_router)
 app.include_router(call_lab_router)
 app.include_router(knowledge_router)
+app.include_router(lead_finder_router)
 app.include_router(consults_router)
 app.include_router(call_lists_router)
 app.include_router(voice_preview_router)

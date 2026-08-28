@@ -16,6 +16,34 @@ routing action, or implemented capability, update that document in the same
 change set. Keep its `What Exists Today`, feedback sources, degrees of freedom,
 and open gaps accurate.
 
+The recommendation-only Lead Finder debug workspace is `/lead-finder`. Its
+baseline context is loaded from `docs/lead-finder-context/company.md`,
+`customer.md`, `offer.md`, and `voice.md`. Use `bin/possibleos lead-finder
+context --json` to inspect that context, `lead-finder start --direction "..."`
+to create a durable run, `lead-finder step <run_id>` to queue exactly one
+reasoning or bounded tool step through `openclaw/main`, and `lead-finder show
+<run_id>` to see exact requests, raw/parsed responses, context evolution,
+gateway attempts, and tool results. Use `lead-finder tools`, `mission-search`,
+`mission-passages`, and `mission-index-status` for operator parity with the
+agent's Mission Control transcript tools. Discovery is restricted to Mission
+Control. Once exact passages support a named person, `web.research_person`
+may verify that person's current role, recent public evidence, and outreach
+angles. A later explicit `lead_finder.add_researched_lead` call publishes that
+completed research into the run-local Found Leads list; inspect it with
+`lead-finder results <run_id>`. No cross-run or CRM deduplication is performed.
+Each durable run uses its own stable OpenClaw session so later steps can reuse
+the growing prompt prefix. `lead-finder step` and `lead-finder show` report
+`prompt_cache` status, cached tokens, and hit rate; a positive cached-token
+count is the evidence of a real cache hit.
+`lead-finder restart <run_id>` creates a linked step-0 run without deleting the
+prior history. `lead-finder reset-all --yes` is the explicit destructive path:
+it deletes only Lead Finder runs, steps, gateway attempts, and tool calls and
+atomically creates one fresh step-0 run. Mission Control owns transcript indexes;
+Possible OS must use its HTTP search API rather than access Mission Control
+SQLite directly. Each debug click permits at most one validated tool call and
+persists its result before pausing. It never sends outreach or mutates CRM lead
+data; only the explicit add tool may update the run-local results list.
+
 Decision log: record important decisions (architecture, policy, flag flips,
 tooling/transport choices, deferrals, reversals — not routine fixes) by
 appending to `docs/decisions/<YYYY-MM-DD>.md`, append-only, each entry tagged

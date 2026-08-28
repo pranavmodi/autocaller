@@ -1275,12 +1275,109 @@ curl -sS http://127.0.0.1:8099/api/lead-gen/policy/current
 curl -sS -I http://127.0.0.1:3099/login
 ```
 
+## Lead Finder debug shell
+
+`/lead-finder` loads server-authoritative context from
+`docs/lead-finder-context/{company,customer,offer,voice}.md`, displays the fixed
+recommendation-only job, and stores a user-entered lead direction in the active
+context. `POST /api/lead-finder/runs` snapshots the baseline context in
+`lead_finder_runs`. `POST /api/lead-finder/runs/{run_id}/steps` idempotently
+queues one background reasoning or bounded tool step and immediately returns
+its durable id.
+The UI polls `GET /api/lead-finder/runs/{run_id}` rather than holding browser
+state as the source of truth.
+
+Each `lead_finder_steps` row stores the exact user payload, context before,
+raw/parsed response, context after, changed paths, model, usage, timing, and
+error. `lead_finder_attempts` stores every concrete OpenClaw HTTP attempt,
+including retries and interrupted attempts. A row is written before the
+gateway call, so queued/running work remains observable while the HTTP request
+is open. A backend restart marks open attempts interrupted and safely requeues
+their step. `lead_finder_tool_calls` stores the validated tool name, arguments,
+complete result/error, and timing. A backend restart also marks open tool calls
+interrupted. Only one active step and at most one tool call are allowed per
+debug trigger.
+
+Lead Finder uses one gateway attempt with a 420-second default timeout
+(`LEAD_FINDER_GATEWAY_TIMEOUT_S`) because its baseline context is large. It does
+not automatically duplicate a still-running `openclaw/main` request after a
+short read timeout; an operator can explicitly start another run after
+inspecting a terminal failure.
+
+Persisted steps reuse one OpenClaw session per Lead Finder run. Possible OS
+sends a deterministic, hashed run-scoped `user` value; OpenClaw maps it to a
+stable session and downstream `prompt_cache_key`. This preserves the growing
+conversation prefix across debug clicks without sharing hidden session history
+between separate runs. The first request is normally cold; later requests can
+report a hit in `usage.prompt_tokens_details.cached_tokens`. The API derives a
+normalized `prompt_cache` object for every step and attempt (`hit`, `miss`, or
+`unreported`, cached/input token counts, and hit rate). The UI and non-JSON
+`lead-finder step` and `lead-finder show` output expose the same metrics. The
+legacy stateless `POST /api/lead-finder/step` endpoint deliberately does not
+create a shared session.
+
+The discovery adapter is `app/services/mission_control_search.py`. It exposes
+only `mission_control.search`, `mission_control.get_passages`, and
+`mission_control.index_status`. Mission Control owns transcript chunking, FTS,
+local embeddings, and hybrid ranking at `http://127.0.0.1:8001`; Possible OS
+never reads `data/mission.db`. Server-side validation caps search results and
+passage IDs at 10, rejects unknown fields/tools, and does not expose index
+mutation. `GET /api/lead-finder/tools` lists the contract and
+`POST /api/lead-finder/tools/execute` provides operator/CLI parity.
+
+`app/services/lead_finder_tools.py` adds two sequenced tools. The agent may call
+`web.research_person` only with one named candidate and one to five positive
+Mission Control chunk IDs. `app/services/lead_finder_web_research.py` runs the
+source-backed web-research skill through `openclaw/main`, normalizes the current
+identity, recent signals, URLs, contrary evidence, and outreach angles, and
+discards angles without cited URLs. Research remains staged in persisted tool
+history. On a later click, `lead_finder.add_researched_lead` must reference the
+completed web-research tool-call ID; it then appends the selected research to
+`agent_state.working_state.found_leads`. The Found Leads UI tab and
+`lead-finder results` read that durable run context. This is intentionally not
+a CRM write, and no deduplication is performed.
+
+`POST /api/lead-finder/runs/{run_id}/restart` creates a new step-0 run linked by
+`restarted_from_run_id`; it never deletes or rewrites prior history. It inherits
+the prior user direction unless overridden and takes a fresh baseline snapshot.
+
+`POST /api/lead-finder/runs/reset-all` is the explicit destructive reset. In one
+database transaction it counts and deletes all Lead Finder runs, cascade-deletes
+their steps, gateway attempts, and tool calls, and creates one fresh step-0 run using a new
+baseline snapshot and the supplied user direction. It does not touch leads or
+any other Possible OS tables. If a deleted step already has an OpenClaw request
+in flight, its late response is discarded because the persisted step no longer
+exists. The UI requires browser confirmation; the CLI requires confirmation or
+an explicit `--yes`.
+
+Operator parity:
+
+```bash
+bin/possibleos lead-finder context --json
+bin/possibleos lead-finder tools --json
+bin/possibleos lead-finder mission-search "after-hours intake" --mode hybrid --json
+bin/possibleos lead-finder mission-passages <chunk_id> --json
+bin/possibleos lead-finder mission-index-status --json
+bin/possibleos lead-finder web-research "Jane Operator" --chunk-id <chunk_id> --json
+bin/possibleos lead-finder start --direction "California PI firms with after-hours intake pain" --json
+bin/possibleos lead-finder step <run_id> --json
+bin/possibleos lead-finder show <run_id> --json  # raw usage + normalized prompt_cache
+bin/possibleos lead-finder results <run_id> --json
+bin/possibleos lead-finder restart <run_id> --json
+bin/possibleos lead-finder reset-all --direction "California PI firms" --yes --json
+```
+
+The LLM may reason or request one bounded tool per click. Mission Control is the
+only discovery source; public web search is available only for a named,
+transcript-supported person. The PossibleOS lead database, Reddit, and all
+other discovery sources remain unexposed.
+
 ## Tests And Validation
 
 Focused backend tests:
 
 ```bash
-.venv/bin/pytest tests/test_outreach_phi_guard.py tests/test_front_sync.py tests/test_contact_selection.py tests/test_lead_gen_action_planner.py tests/test_sequence_templates.py
+.venv/bin/pytest tests/test_lead_finder.py tests/test_outreach_phi_guard.py tests/test_front_sync.py tests/test_contact_selection.py tests/test_lead_gen_action_planner.py tests/test_sequence_templates.py
 ```
 
 Frontend type check:
