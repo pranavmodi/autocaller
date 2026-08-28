@@ -3172,6 +3172,19 @@ export type LeadFinderRun = {
   steps?: LeadFinderPersistedStep[];
 };
 
+export type LeadFinderLLMSessionRaw = {
+  run_id: string;
+  agent_id: string;
+  gateway_user: string;
+  session_key: string;
+  session_id: string;
+  format: "jsonl";
+  session_file: string;
+  trajectory_file: string;
+  session_jsonl: string;
+  trajectory_jsonl: string;
+};
+
 export const createLeadFinderRun = (userDirection: string) =>
   post<{ run: LeadFinderRun }>("/api/lead-finder/runs", {
     user_direction: userDirection,
@@ -3182,6 +3195,9 @@ export const listLeadFinderRuns = (limit = 25) =>
 
 export const getLeadFinderRun = (runId: string) =>
   get<{ run: LeadFinderRun }>(`/api/lead-finder/runs/${runId}`);
+
+export const getLeadFinderLLMSession = (runId: string) =>
+  get<{ session: LeadFinderLLMSessionRaw }>(`/api/lead-finder/runs/${runId}/llm-session`);
 
 export const queueLeadFinderStep = (
   runId: string,

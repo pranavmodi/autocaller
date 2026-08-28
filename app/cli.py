@@ -5022,6 +5022,28 @@ def lead_finder_show(
         )
 
 
+@lead_finder_app.command("llm-session")
+def lead_finder_llm_session(
+    run_id: str = typer.Argument(..., help="Durable Lead Finder run id."),
+    source: str = typer.Option(
+        "session",
+        "--source",
+        help="Raw OpenClaw file to print: session or trajectory.",
+    ),
+    json_output: bool = typer.Option(False, "--json", help="Wrap raw JSONL and metadata in JSON."),
+):
+    """Print an unredacted OpenClaw session file exactly as stored."""
+    if source not in {"session", "trajectory"}:
+        raise typer.BadParameter("must be session or trajectory", param_hint="--source")
+    data = _get(f"/api/lead-finder/runs/{run_id}/llm-session")
+    session = data.get("session") or {}
+    if json_output:
+        console.print_json(data=data)
+        return
+    raw = session.get(f"{source}_jsonl") or ""
+    typer.echo(raw, nl=False)
+
+
 @lead_finder_app.command("restart")
 def lead_finder_restart(
     run_id: str = typer.Argument(...),

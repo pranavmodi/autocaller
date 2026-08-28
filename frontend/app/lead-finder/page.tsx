@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   ChevronRight,
   Clock3,
+  Code2,
   Copy,
   DatabaseZap,
   ExternalLink,
@@ -21,12 +22,14 @@ import {
 import {
   createLeadFinderRun,
   getLeadFinderContext,
+  getLeadFinderLLMSession,
   getLeadFinderRun,
   listLeadFinderRuns,
   queueLeadFinderStep,
   resetAllLeadFinderRuns,
   type LeadFinderContext,
   type LeadFinderFoundLead,
+  type LeadFinderLLMSessionRaw,
   type LeadFinderPersistedStep,
   type LeadFinderRun,
 } from "@/lib/api";
@@ -69,7 +72,11 @@ export default function LeadFinderPage() {
   const [submitting, setSubmitting] = useState(false);
   const [resettingAll, setResettingAll] = useState(false);
   const [error, setError] = useState("");
-  const [activeView, setActiveView] = useState<"context" | "leads" | "history">("context");
+  const [activeView, setActiveView] = useState<"context" | "session" | "leads" | "history">("context");
+  const [llmSession, setLlmSession] = useState<LeadFinderLLMSessionRaw | null>(null);
+  const [llmSessionSource, setLlmSessionSource] = useState<"session" | "trajectory">("session");
+  const [llmSessionLoading, setLlmSessionLoading] = useState(false);
+  const [llmSessionError, setLlmSessionError] = useState("");
   const submissionLock = useRef(false);
 
   const loadRun = useCallback(async (runId: string) => {
@@ -133,6 +140,32 @@ export default function LeadFinderPage() {
     };
   }, [refreshRuns, resettingAll, run?.id, run?.status]);
 
+  useEffect(() => {
+    if (activeView !== "session" || !run) return;
+    if (run.current_step === 0) {
+      setLlmSession(null);
+      setLlmSessionError("The OpenClaw session is created when step 1 starts.");
+      return;
+    }
+    let cancelled = false;
+    setLlmSessionLoading(true);
+    setLlmSessionError("");
+    void getLeadFinderLLMSession(run.id)
+      .then((response) => {
+        if (!cancelled) setLlmSession(response.session);
+      })
+      .catch((cause) => {
+        if (!cancelled) {
+          setLlmSession(null);
+          setLlmSessionError(cause instanceof Error ? cause.message : "Unable to load the OpenClaw session.");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLlmSessionLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [activeView, run?.current_step, run?.id, run?.status]);
+
   const context = useMemo(() => {
     const source = run?.current_context || baseline;
     return source ? { ...source, user_direction: userDirection } : null;
@@ -146,6 +179,12 @@ export default function LeadFinderPage() {
   }, [context]);
   const files = Object.values(context?.baseline_context.files || {});
   const isActive = Boolean(run && ACTIVE_STATUSES.has(run.status));
+  const rawSessionText = llmSessionSource === "session"
+    ? llmSession?.session_jsonl || ""
+    : llmSession?.trajectory_jsonl || "";
+  const rawSessionFile = llmSessionSource === "session"
+    ? llmSession?.session_file
+    : llmSession?.trajectory_file;
 
   async function startRun() {
     setError("");
@@ -325,6 +364,10 @@ export default function LeadFinderPage() {
               className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium ${activeView === "context" ? "bg-neutral-900 text-white" : "text-neutral-600 hover:bg-neutral-100"}`}>
               <Braces className="h-4 w-4" /> Current context
             </button>
+            <button type="button" onClick={() => setActiveView("session")}
+              className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium ${activeView === "session" ? "bg-neutral-900 text-white" : "text-neutral-600 hover:bg-neutral-100"}`}>
+              <Code2 className="h-4 w-4" /> LLM session (raw)
+            </button>
             <button type="button" onClick={() => setActiveView("history")}
               className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium ${activeView === "history" ? "bg-neutral-900 text-white" : "text-neutral-600 hover:bg-neutral-100"}`}>
               <History className="h-4 w-4" /> Persisted history <span className="rounded-full bg-white/15 px-1.5 text-xs">{steps.length}</span>
@@ -350,6 +393,45 @@ export default function LeadFinderPage() {
                   )}
                 </section>
                 <div><div className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-neutral-500">Full current context</div>{context ? <JsonPanel value={context} /> : <div className="p-8 text-center text-sm text-neutral-500">Loading context…</div>}</div>
+              </div>
+            ) : activeView === "session" ? (
+              <div className="space-y-4">
+                <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-900">
+                  This is OpenClaw&apos;s unredacted on-disk JSONL. Each line is one JSON record. It may include injected workspace instructions, tool definitions, and sensitive configuration.
+                </div>
+                <div className="flex flex-col gap-3 rounded-xl border border-neutral-200 p-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex gap-1 rounded-lg bg-neutral-100 p-1">
+                    <button type="button" onClick={() => setLlmSessionSource("session")}
+                      className={`rounded-md px-3 py-1.5 text-xs font-medium ${llmSessionSource === "session" ? "bg-white text-neutral-950 shadow-sm" : "text-neutral-600"}`}>
+                      Session JSONL
+                    </button>
+                    <button type="button" onClick={() => setLlmSessionSource("trajectory")}
+                      className={`rounded-md px-3 py-1.5 text-xs font-medium ${llmSessionSource === "trajectory" ? "bg-white text-neutral-950 shadow-sm" : "text-neutral-600"}`}>
+                      Trajectory JSONL
+                    </button>
+                  </div>
+                  <button type="button" disabled={!rawSessionText}
+                    onClick={() => void navigator.clipboard.writeText(rawSessionText)}
+                    className="inline-flex items-center gap-1.5 self-start rounded-lg border border-neutral-200 px-3 py-2 text-xs font-medium text-neutral-700 disabled:opacity-40">
+                    <Copy className="h-3.5 w-3.5" /> Copy raw JSONL
+                  </button>
+                </div>
+                {llmSession && (
+                  <div className="grid gap-2 text-xs text-neutral-500 sm:grid-cols-2">
+                    <div className="break-all"><span className="font-medium text-neutral-700">session key</span> {llmSession.session_key}</div>
+                    <div className="break-all"><span className="font-medium text-neutral-700">session id</span> {llmSession.session_id}</div>
+                    <div className="break-all sm:col-span-2"><span className="font-medium text-neutral-700">raw file</span> {rawSessionFile}</div>
+                  </div>
+                )}
+                {llmSessionLoading ? (
+                  <div className="flex min-h-72 items-center justify-center gap-2 text-sm text-neutral-500"><Loader2 className="h-4 w-4 animate-spin" /> Loading raw OpenClaw session…</div>
+                ) : llmSessionError ? (
+                  <div className="flex min-h-72 items-center justify-center text-center text-sm text-neutral-500">{llmSessionError}</div>
+                ) : rawSessionText ? (
+                  <pre className="max-h-[70vh] overflow-auto whitespace-pre rounded-xl bg-neutral-950 p-4 font-mono text-[11px] leading-5 text-neutral-200">{rawSessionText}</pre>
+                ) : (
+                  <div className="flex min-h-72 items-center justify-center text-center text-sm text-neutral-500">This raw OpenClaw file does not exist yet.</div>
+                )}
               </div>
             ) : activeView === "leads" ? (
               foundLeads.length === 0 ? (

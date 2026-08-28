@@ -31,6 +31,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 CONTEXT_DIR = Path(os.getenv("LEAD_FINDER_CONTEXT_DIR", REPO_ROOT / "docs/lead-finder-context"))
 SKILL_PATH = Path(os.getenv("LEAD_FINDER_SKILL_PATH", REPO_ROOT / "app/skills/lead-finder/SKILL.md"))
 MODEL = os.getenv("LEAD_FINDER_MODEL", "openclaw/main")
+OPENCLAW_HOME = Path(os.getenv("OPENCLAW_HOME", "/root/.openclaw"))
 CONTEXT_FILES = ("company.md", "customer.md", "offer.md", "voice.md")
 ACTIVE_STEP_STATUSES = {"queued", "running", "retrying"}
 TERMINAL_STEP_STATUSES = {"completed", "failed", "interrupted"}
@@ -390,6 +391,14 @@ class LeadFinderRunStateError(RuntimeError):
     pass
 
 
+class LeadFinderSessionNotFoundError(LookupError):
+    pass
+
+
+class LeadFinderSessionStateError(RuntimeError):
+    pass
+
+
 def _iso(value: datetime | None) -> str | None:
     return value.isoformat() if value else None
 
@@ -652,6 +661,104 @@ async def get_lead_finder_run(run_id: str) -> dict[str, Any] | None:
         for step in steps
     ]
     return payload
+
+
+def _openclaw_agent_id() -> str:
+    prefix, separator, agent_id = MODEL.partition("/")
+    if prefix == "openclaw" and separator and agent_id:
+        return agent_id
+    return "main"
+
+
+def _openclaw_session_key(run_id: str) -> str:
+    gateway_user = _cache_session_user(run_id)
+    return f"agent:{_openclaw_agent_id()}:openai-user:{gateway_user}"
+
+
+def _validated_session_file(session_dir: Path, value: Any, fallback: Path) -> Path:
+    candidate = Path(value) if isinstance(value, str) and value else fallback
+    resolved_dir = session_dir.resolve()
+    resolved = candidate.resolve()
+    if resolved.parent != resolved_dir:
+        raise LeadFinderSessionStateError("openclaw_session_file_outside_store")
+    return resolved
+
+
+def _load_openclaw_session_raw(run_id: str) -> dict[str, Any]:
+    """Read OpenClaw's canonical session and trajectory JSONL without rewriting it."""
+    agent_id = _openclaw_agent_id()
+    session_dir = OPENCLAW_HOME / "agents" / agent_id / "sessions"
+    registry_path = session_dir / "sessions.json"
+    try:
+        registry = json.loads(registry_path.read_text(encoding="utf-8"))
+    except FileNotFoundError as exc:
+        raise LeadFinderSessionNotFoundError("openclaw_session_store_not_found") from exc
+    except (OSError, json.JSONDecodeError) as exc:
+        raise LeadFinderSessionStateError("openclaw_session_store_unreadable") from exc
+    if not isinstance(registry, dict):
+        raise LeadFinderSessionStateError("openclaw_session_store_invalid")
+
+    session_key = _openclaw_session_key(run_id)
+    entry = registry.get(session_key)
+    if not isinstance(entry, dict):
+        gateway_user = _cache_session_user(run_id)
+        matches = [
+            (key, value)
+            for key, value in registry.items()
+            if isinstance(key, str)
+            and key.endswith(f":openai-user:{gateway_user}")
+            and isinstance(value, dict)
+        ]
+        if len(matches) != 1:
+            raise LeadFinderSessionNotFoundError("openclaw_session_not_created")
+        session_key, entry = matches[0]
+
+    session_id = str(entry.get("sessionId") or "")
+    if not session_id:
+        raise LeadFinderSessionStateError("openclaw_session_id_missing")
+    session_path = _validated_session_file(
+        session_dir,
+        entry.get("sessionFile"),
+        session_dir / f"{session_id}.jsonl",
+    )
+    trajectory_path = _validated_session_file(
+        session_dir,
+        session_dir / f"{session_id}.trajectory.jsonl",
+        session_dir / f"{session_id}.trajectory.jsonl",
+    )
+    try:
+        session_jsonl = session_path.read_text(encoding="utf-8")
+    except FileNotFoundError as exc:
+        raise LeadFinderSessionNotFoundError("openclaw_session_transcript_not_found") from exc
+    except OSError as exc:
+        raise LeadFinderSessionStateError("openclaw_session_transcript_unreadable") from exc
+    try:
+        trajectory_jsonl = trajectory_path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        trajectory_jsonl = ""
+    except OSError as exc:
+        raise LeadFinderSessionStateError("openclaw_session_trajectory_unreadable") from exc
+
+    return {
+        "run_id": run_id,
+        "agent_id": agent_id,
+        "gateway_user": _cache_session_user(run_id),
+        "session_key": session_key,
+        "session_id": session_id,
+        "format": "jsonl",
+        "session_file": str(session_path),
+        "trajectory_file": str(trajectory_path),
+        "session_jsonl": session_jsonl,
+        "trajectory_jsonl": trajectory_jsonl,
+    }
+
+
+async def get_lead_finder_llm_session(run_id: str) -> dict[str, Any]:
+    await ensure_lead_finder_tables()
+    async with AsyncSessionLocal() as session:
+        if not await session.get(LeadFinderRunRow, run_id):
+            raise LeadFinderNotFoundError("lead_finder_run_not_found")
+    return _load_openclaw_session_raw(run_id)
 
 
 async def queue_lead_finder_step(

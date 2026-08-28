@@ -10,8 +10,11 @@ from app.services.lead_finder import (
     LeadFinderNotFoundError,
     LeadFinderRunBusyError,
     LeadFinderRunStateError,
+    LeadFinderSessionNotFoundError,
+    LeadFinderSessionStateError,
     create_lead_finder_run,
     execute_lead_finder_step,
+    get_lead_finder_llm_session,
     get_lead_finder_run,
     get_lead_finder_step,
     list_lead_finder_runs,
@@ -114,6 +117,16 @@ async def get_run(run_id: str):
     if not run:
         raise HTTPException(status_code=404, detail="lead_finder_run_not_found")
     return {"run": run}
+
+
+@router.get("/runs/{run_id}/llm-session")
+async def get_llm_session(run_id: str):
+    try:
+        return {"session": await get_lead_finder_llm_session(run_id)}
+    except (LeadFinderNotFoundError, LeadFinderSessionNotFoundError) as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except LeadFinderSessionStateError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
 @router.post("/runs/{run_id}/steps", status_code=status.HTTP_202_ACCEPTED)

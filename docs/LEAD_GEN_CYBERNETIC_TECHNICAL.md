@@ -1325,6 +1325,16 @@ normalized `prompt_cache` object for every step and attempt (`hit`, `miss`, or
 legacy stateless `POST /api/lead-finder/step` endpoint deliberately does not
 create a shared session.
 
+`GET /api/lead-finder/runs/{run_id}/llm-session` resolves that run's hashed
+gateway identity through OpenClaw's own `sessions.json` registry and returns
+the two on-disk files without parsing or rewriting their records. The canonical
+`session_jsonl` is the ordered conversation store. `trajectory_jsonl` is the
+runtime trace and includes compiled system prompts, tool definitions, submitted
+prompts, model snapshots, and usage. The `/lead-finder` **LLM session (raw)**
+view renders either exact JSONL string. These are newline-delimited JSON records,
+not one JSON document, and they are deliberately unredacted; the endpoint and
+CLI must remain operator-authenticated and their output treated as sensitive.
+
 The discovery adapter is `app/services/mission_control_search.py`. It exposes
 only `mission_control.search`, `mission_control.get_passages`, and
 `mission_control.index_status`. Mission Control owns transcript chunking, FTS,
@@ -1371,6 +1381,8 @@ bin/possibleos lead-finder web-research "Jane Operator" --chunk-id <chunk_id> --
 bin/possibleos lead-finder start --direction "California PI firms with after-hours intake pain" --json
 bin/possibleos lead-finder step <run_id> --json
 bin/possibleos lead-finder show <run_id> --json  # raw usage + normalized prompt_cache
+bin/possibleos lead-finder llm-session <run_id> --source session
+bin/possibleos lead-finder llm-session <run_id> --source trajectory
 bin/possibleos lead-finder results <run_id> --json
 bin/possibleos lead-finder restart <run_id> --json
 bin/possibleos lead-finder reset-all --direction "California PI firms" --yes --json

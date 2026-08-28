@@ -39,6 +39,11 @@ not re-add the baseline to continuation payloads. `lead-finder step` and
 `lead-finder show` report
 `prompt_cache` status, cached tokens, and hit rate; a positive cached-token
 count is the evidence of a real cache hit.
+Use `lead-finder llm-session <run_id> --source session` to print OpenClaw's
+canonical conversation JSONL exactly as stored, or `--source trajectory` to
+inspect the raw compiled system prompt, tool definitions, submitted prompts,
+model snapshots, and usage. Both outputs are unredacted and may contain
+sensitive workspace context; do not paste or transmit them casually.
 `lead-finder restart <run_id>` creates a linked step-0 run without deleting the
 prior history. `lead-finder reset-all --yes` is the explicit destructive path:
 it deletes only Lead Finder runs, steps, gateway attempts, and tool calls and

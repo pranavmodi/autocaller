@@ -86,6 +86,37 @@ def test_lead_finder_cache_session_is_stable_per_run_and_scoped_between_runs():
     assert len(first or "") <= 64
 
 
+def test_raw_openclaw_session_view_preserves_jsonl_exactly(monkeypatch, tmp_path):
+    run_id = "lfr_raw_session"
+    session_id = "session-123"
+    session_dir = tmp_path / "agents" / "main" / "sessions"
+    session_dir.mkdir(parents=True)
+    session_jsonl = '{"type":"session","id":"session-123"}\n{"type":"message","message":{"role":"user"}}\n'
+    trajectory_jsonl = '{"type":"context.compiled","data":{"systemPrompt":"raw"}}\n'
+    session_path = session_dir / f"{session_id}.jsonl"
+    trajectory_path = session_dir / f"{session_id}.trajectory.jsonl"
+    session_path.write_text(session_jsonl, encoding="utf-8")
+    trajectory_path.write_text(trajectory_jsonl, encoding="utf-8")
+    session_key = lead_finder._openclaw_session_key(run_id)
+    (session_dir / "sessions.json").write_text(
+        json.dumps({
+            session_key: {
+                "sessionId": session_id,
+                "sessionFile": str(session_path),
+            },
+        }),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(lead_finder, "OPENCLAW_HOME", tmp_path)
+
+    result = lead_finder._load_openclaw_session_raw(run_id)
+
+    assert result["format"] == "jsonl"
+    assert result["session_key"] == session_key
+    assert result["session_jsonl"] == session_jsonl
+    assert result["trajectory_jsonl"] == trajectory_jsonl
+
+
 def test_initial_gateway_layout_puts_stable_baseline_before_mutable_state():
     context = lead_finder.load_lead_finder_context()
     payload = lead_finder._gateway_payload(context)
