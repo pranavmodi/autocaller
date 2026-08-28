@@ -1334,6 +1334,11 @@ prompts, model snapshots, and usage. The `/lead-finder` **LLM session (raw)**
 view renders either exact JSONL string. These are newline-delimited JSON records,
 not one JSON document, and they are deliberately unredacted; the endpoint and
 CLI must remain operator-authenticated and their output treated as sensitive.
+For readability, the browser splits the selected string by line, parses each
+record client-side, labels it by event type/role/sequence/timestamp, and renders
+an expandable syntax-highlighted JSON tree. Expand/collapse operations affect
+only the DOM presentation. The raw toggle, copy action, API, and CLI continue to
+use the byte-identical JSONL supplied by OpenClaw.
 
 The discovery adapter is `app/services/mission_control_search.py`. It exposes
 only `mission_control.search`, `mission_control.get_passages`, and

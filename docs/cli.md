@@ -1174,6 +1174,11 @@ same graph data is fully available to agents and scripts through
 `bin/possibleos front competitors graph --json` and
 `GET /api/front/competitors/graph`.
 
+The expandable, syntax-highlighted JSON tree in `/lead-finder` is UI-only
+presentation. It parses the exact OpenClaw JSONL in the browser without changing
+it; agents and scripts receive the same underlying records through
+`bin/possibleos lead-finder llm-session <run_id> --source session|trajectory`.
+
 Relevant endpoints:
 
 | method | path | notes |

@@ -51,6 +51,88 @@ function JsonPanel({ value }: { value: unknown }) {
   );
 }
 
+type JsonlRecord = {
+  line: number;
+  raw: string;
+  value: unknown;
+  error: string | null;
+};
+
+function objectValue(value: unknown): Record<string, unknown> | null {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+function parseJsonl(raw: string): JsonlRecord[] {
+  return raw.split(/\r?\n/).reduce<JsonlRecord[]>((records, line, index) => {
+    if (!line.trim()) return records;
+    try {
+      records.push({ line: index + 1, raw: line, value: JSON.parse(line) as unknown, error: null });
+    } catch (cause) {
+      records.push({
+        line: index + 1,
+        raw: line,
+        value: line,
+        error: cause instanceof Error ? cause.message : "Invalid JSON record",
+      });
+    }
+    return records;
+  }, []);
+}
+
+function JsonScalar({ label, value }: { label?: string; value: unknown }) {
+  const prefix = label === undefined ? null : <span className="text-sky-300">{label}: </span>;
+  if (value === null) return <div>{prefix}<span className="text-rose-300">null</span></div>;
+  if (typeof value === "boolean") return <div>{prefix}<span className="text-amber-300">{String(value)}</span></div>;
+  if (typeof value === "number") return <div>{prefix}<span className="text-cyan-300">{String(value)}</span></div>;
+  const text = String(value);
+  if (text.includes("\n") || text.length > 180) {
+    return (
+      <div className="min-w-0">
+        <div>{prefix}<span className="text-emerald-300">string · {text.length.toLocaleString()} chars</span></div>
+        <pre className="mt-1 max-h-96 overflow-auto whitespace-pre-wrap break-words rounded-md bg-black/25 p-2 text-emerald-200">{text}</pre>
+      </div>
+    );
+  }
+  return <div className="break-words">{prefix}<span className="text-emerald-300">{JSON.stringify(text)}</span></div>;
+}
+
+function JsonTreeNode({ label, value, depth = 0 }: { label?: string; value: unknown; depth?: number }) {
+  const isArray = Array.isArray(value);
+  const object = objectValue(value);
+  if (!isArray && !object) return <JsonScalar label={label} value={value} />;
+  const entries = isArray
+    ? value.map((item, index) => [String(index), item] as const)
+    : Object.entries(object || {});
+  const kind = isArray ? `Array(${entries.length})` : `Object(${entries.length})`;
+  return (
+    <details open={depth === 0} className="group/json min-w-0">
+      <summary className="cursor-pointer select-none list-none py-0.5 text-neutral-300 marker:hidden">
+        <span className="mr-1 inline-block w-3 text-neutral-500 transition-transform group-open/json:rotate-90">▶</span>
+        {label !== undefined && <span className="text-sky-300">{label}: </span>}
+        <span className="text-violet-300">{kind}</span>
+      </summary>
+      <div className="ml-2 space-y-0.5 border-l border-neutral-700 pl-3">
+        {entries.map(([key, item]) => (
+          <JsonTreeNode key={key} label={key} value={item} depth={depth + 1} />
+        ))}
+      </div>
+    </details>
+  );
+}
+
+function jsonlRecordLabel(record: JsonlRecord): string {
+  const root = objectValue(record.value);
+  if (!root) return record.error ? "Invalid JSON" : "JSON value";
+  const message = objectValue(root.message);
+  const parts = [String(root.type || "record")];
+  if (message?.role) parts.push(String(message.role));
+  if (root.seq !== undefined) parts.push(`seq ${String(root.seq)}`);
+  if (root.ts || root.timestamp) parts.push(String(root.ts || root.timestamp));
+  return parts.join(" · ");
+}
+
 function shortDate(value: string | null | undefined) {
   if (!value) return "-";
   return new Date(value).toLocaleString();
@@ -75,9 +157,11 @@ export default function LeadFinderPage() {
   const [activeView, setActiveView] = useState<"context" | "session" | "leads" | "history">("context");
   const [llmSession, setLlmSession] = useState<LeadFinderLLMSessionRaw | null>(null);
   const [llmSessionSource, setLlmSessionSource] = useState<"session" | "trajectory">("session");
+  const [llmSessionDisplay, setLlmSessionDisplay] = useState<"readable" | "raw">("readable");
   const [llmSessionLoading, setLlmSessionLoading] = useState(false);
   const [llmSessionError, setLlmSessionError] = useState("");
   const submissionLock = useRef(false);
+  const llmSessionTree = useRef<HTMLDivElement>(null);
 
   const loadRun = useCallback(async (runId: string) => {
     const response = await getLeadFinderRun(runId);
@@ -185,6 +269,13 @@ export default function LeadFinderPage() {
   const rawSessionFile = llmSessionSource === "session"
     ? llmSession?.session_file
     : llmSession?.trajectory_file;
+  const jsonlRecords = useMemo(() => parseJsonl(rawSessionText), [rawSessionText]);
+
+  function setAllSessionNodes(open: boolean) {
+    llmSessionTree.current?.querySelectorAll("details").forEach((node) => {
+      node.open = open;
+    });
+  }
 
   async function startRun() {
     setError("");
@@ -399,7 +490,7 @@ export default function LeadFinderPage() {
                 <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-900">
                   This is OpenClaw&apos;s unredacted on-disk JSONL. Each line is one JSON record. It may include injected workspace instructions, tool definitions, and sensitive configuration.
                 </div>
-                <div className="flex flex-col gap-3 rounded-xl border border-neutral-200 p-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex flex-wrap items-center gap-2 rounded-xl border border-neutral-200 p-3">
                   <div className="flex gap-1 rounded-lg bg-neutral-100 p-1">
                     <button type="button" onClick={() => setLlmSessionSource("session")}
                       className={`rounded-md px-3 py-1.5 text-xs font-medium ${llmSessionSource === "session" ? "bg-white text-neutral-950 shadow-sm" : "text-neutral-600"}`}>
@@ -410,9 +501,25 @@ export default function LeadFinderPage() {
                       Trajectory JSONL
                     </button>
                   </div>
+                  <div className="flex gap-1 rounded-lg bg-neutral-100 p-1">
+                    <button type="button" onClick={() => setLlmSessionDisplay("readable")}
+                      className={`rounded-md px-3 py-1.5 text-xs font-medium ${llmSessionDisplay === "readable" ? "bg-white text-neutral-950 shadow-sm" : "text-neutral-600"}`}>
+                      Readable JSON
+                    </button>
+                    <button type="button" onClick={() => setLlmSessionDisplay("raw")}
+                      className={`rounded-md px-3 py-1.5 text-xs font-medium ${llmSessionDisplay === "raw" ? "bg-white text-neutral-950 shadow-sm" : "text-neutral-600"}`}>
+                      Raw JSONL
+                    </button>
+                  </div>
+                  {llmSessionDisplay === "readable" && rawSessionText && (
+                    <div className="flex gap-1">
+                      <button type="button" onClick={() => setAllSessionNodes(true)} className="rounded-lg border border-neutral-200 px-2.5 py-2 text-xs font-medium text-neutral-600 hover:bg-neutral-50">Expand all</button>
+                      <button type="button" onClick={() => setAllSessionNodes(false)} className="rounded-lg border border-neutral-200 px-2.5 py-2 text-xs font-medium text-neutral-600 hover:bg-neutral-50">Collapse all</button>
+                    </div>
+                  )}
                   <button type="button" disabled={!rawSessionText}
                     onClick={() => void navigator.clipboard.writeText(rawSessionText)}
-                    className="inline-flex items-center gap-1.5 self-start rounded-lg border border-neutral-200 px-3 py-2 text-xs font-medium text-neutral-700 disabled:opacity-40">
+                    className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-neutral-200 px-3 py-2 text-xs font-medium text-neutral-700 disabled:opacity-40">
                     <Copy className="h-3.5 w-3.5" /> Copy raw JSONL
                   </button>
                 </div>
@@ -427,6 +534,26 @@ export default function LeadFinderPage() {
                   <div className="flex min-h-72 items-center justify-center gap-2 text-sm text-neutral-500"><Loader2 className="h-4 w-4 animate-spin" /> Loading raw OpenClaw session…</div>
                 ) : llmSessionError ? (
                   <div className="flex min-h-72 items-center justify-center text-center text-sm text-neutral-500">{llmSessionError}</div>
+                ) : rawSessionText && llmSessionDisplay === "readable" ? (
+                  <div ref={llmSessionTree} className="max-h-[70vh] space-y-2 overflow-auto rounded-xl bg-neutral-950 p-3 font-mono text-[11px] leading-5">
+                    <div className="sticky top-0 z-10 mb-2 flex items-center justify-between rounded-lg border border-neutral-700 bg-neutral-900/95 px-3 py-2 text-neutral-300 backdrop-blur">
+                      <span>{jsonlRecords.length.toLocaleString()} JSON record{jsonlRecords.length === 1 ? "" : "s"}</span>
+                      <span className="text-neutral-500">Click any row or nested object to expand</span>
+                    </div>
+                    {jsonlRecords.map((record) => (
+                      <details key={record.line} className="group/record rounded-lg border border-neutral-800 bg-neutral-900/70">
+                        <summary className="cursor-pointer list-none px-3 py-2 text-neutral-200 marker:hidden">
+                          <span className="mr-2 inline-block text-neutral-500 transition-transform group-open/record:rotate-90">▶</span>
+                          <span className="mr-2 rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] text-neutral-400">line {record.line}</span>
+                          <span className={record.error ? "text-rose-300" : "text-violet-300"}>{jsonlRecordLabel(record)}</span>
+                        </summary>
+                        <div className="border-t border-neutral-800 p-3">
+                          {record.error && <div className="mb-2 rounded bg-rose-950/50 p-2 text-rose-300">{record.error}</div>}
+                          <JsonTreeNode value={record.value} />
+                        </div>
+                      </details>
+                    ))}
+                  </div>
                 ) : rawSessionText ? (
                   <pre className="max-h-[70vh] overflow-auto whitespace-pre rounded-xl bg-neutral-950 p-4 font-mono text-[11px] leading-5 text-neutral-200">{rawSessionText}</pre>
                 ) : (
