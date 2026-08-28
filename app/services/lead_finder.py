@@ -122,16 +122,86 @@ def _context_for_persisted_run(context: dict[str, Any], user_direction: str) -> 
     return current
 
 
-def _gateway_payload(context: dict[str, Any]) -> dict[str, Any]:
+def _stable_gateway_context(context: dict[str, Any]) -> dict[str, Any]:
+    """Build a deterministic immutable prefix for the first run turn."""
+    raw_job = context.get("job") if isinstance(context.get("job"), dict) else {}
+    ordered_job = {key: deepcopy(raw_job.get(key)) for key in JOB if key in raw_job}
+    for key in sorted(set(raw_job) - set(ordered_job)):
+        ordered_job[key] = deepcopy(raw_job[key])
+    raw_baseline = (
+        context.get("baseline_context")
+        if isinstance(context.get("baseline_context"), dict)
+        else {}
+    )
+    raw_files = raw_baseline.get("files") if isinstance(raw_baseline, dict) else {}
+    raw_files = raw_files if isinstance(raw_files, dict) else {}
+    ordered_files: dict[str, Any] = {}
+    for name in CONTEXT_FILES:
+        raw = raw_files.get(name)
+        if not isinstance(raw, dict):
+            continue
+        ordered_files[name] = {
+            "name": raw.get("name"),
+            "path": raw.get("path"),
+            "sha256": raw.get("sha256"),
+            "content": raw.get("content"),
+        }
     return {
-        "instruction": (
-            "Perform exactly one debug step. Either reason or request exactly one available "
-            "tool; never claim a requested tool has already run. Only add a result after its "
-            "completed web-research tool call is present in context. Return the required "
-            "JSON and stop."
+        "kind": context.get("kind"),
+        "job": ordered_job,
+        # loaded_at is snapshot metadata, not reasoning context. Excluding it keeps
+        # identical baseline files byte-stable across otherwise unrelated runs.
+        "baseline_context": {"files": ordered_files},
+    }
+
+
+def _gateway_run_state(context: dict[str, Any]) -> dict[str, Any]:
+    """Keep all run-specific and evolving fields after the immutable prefix."""
+    return {
+        "user_direction": str(context.get("user_direction") or ""),
+        "agent_state": deepcopy(
+            context.get("agent_state") if isinstance(context.get("agent_state"), dict) else {}
         ),
+    }
+
+
+def _is_gateway_continuation(context: dict[str, Any], run_id: str | None) -> bool:
+    if not run_id:
+        return False
+    state = context.get("agent_state") if isinstance(context.get("agent_state"), dict) else {}
+    try:
+        return int(state.get("completed_steps") or 0) > 0
+    except (TypeError, ValueError):
+        return False
+
+
+def _gateway_payload(
+    context: dict[str, Any],
+    *,
+    continuation: bool = False,
+) -> dict[str, Any]:
+    instruction = (
+        "Perform exactly one debug step. Either reason or request exactly one available "
+        "tool; never claim a requested tool has already run. Only add a result after its "
+        "completed web-research tool call is present in context. Return the required "
+        "JSON and stop."
+    )
+    if continuation:
+        return {
+            "context_layout": "continuation_v2",
+            "instruction": (
+                f"{instruction} The immutable stable_context and available_tools were supplied "
+                "in the first turn of this same OpenClaw session; continue to apply them."
+            ),
+            "run_state": _gateway_run_state(context),
+        }
+    return {
+        "context_layout": "initial_v2",
+        "instruction": instruction,
         "available_tools": lead_finder_tool_catalog(),
-        "context": context,
+        "stable_context": _stable_gateway_context(context),
+        # This must remain last: everything above it is reusable prompt prefix.
+        "run_state": _gateway_run_state(context),
     }
 
 
@@ -178,7 +248,10 @@ async def run_lead_finder_step(
     result = await call_skill_json(
         skill_path=SKILL_PATH,
         model=MODEL,
-        payload=_gateway_payload(current),
+        payload=_gateway_payload(
+            current,
+            continuation=_is_gateway_continuation(current, run_id),
+        ),
         required_fields=[
             "step_name",
             "summary",
@@ -633,7 +706,10 @@ async def queue_lead_finder_step(
             status="queued",
             user_direction=direction,
             context_before_json=before,
-            request_json=_gateway_payload(before),
+            request_json=_gateway_payload(
+                before,
+                continuation=_is_gateway_continuation(before, run_id),
+            ),
         )
         session.add(step)
         run.status = "queued"

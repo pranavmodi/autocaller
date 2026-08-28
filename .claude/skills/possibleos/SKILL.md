@@ -32,7 +32,11 @@ angles. A later explicit `lead_finder.add_researched_lead` call publishes that
 completed research into the run-local Found Leads list; inspect it with
 `lead-finder results <run_id>`. No cross-run or CRM deduplication is performed.
 Each durable run uses its own stable OpenClaw session so later steps can reuse
-the growing prompt prefix. `lead-finder step` and `lead-finder show` report
+the growing prompt prefix. The first turn sends `initial_v2`, with deterministic
+job, tools, and baseline files before mutable run state; later `continuation_v2`
+turns rely on that session prefix and send only current mutable run state. Do
+not re-add the baseline to continuation payloads. `lead-finder step` and
+`lead-finder show` report
 `prompt_cache` status, cached tokens, and hit rate; a positive cached-token
 count is the evidence of a real cache hit.
 `lead-finder restart <run_id>` creates a linked step-0 run without deleting the

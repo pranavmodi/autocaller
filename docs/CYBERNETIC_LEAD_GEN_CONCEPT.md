@@ -67,9 +67,12 @@ exact requests/responses, results, and context evolution are durable server-side
 state so an operator can inspect work while the browser is waiting.
 Each durable run keeps one isolated OpenClaw conversation, allowing later
 debug steps to reuse the stable instructions and growing history through
-provider prompt caching. Cache use is evidence-based: cached-token counts and
-hit rate are shown with the persisted gateway attempt instead of inferred from
-configuration.
+provider prompt caching. The initial turn places deterministic job, tool, and
+baseline context before all run-specific state. Continuation turns do not resend
+that large immutable block; they rely on the isolated OpenClaw session and append
+only current mutable run state. Cache use is evidence-based: cached-token counts
+and hit rate are shown with the persisted gateway attempt instead of inferred
+from configuration.
 An explicitly confirmed clean-slate control deletes only this Lead Finder
 history and atomically replaces it with one fresh run before step one.
 

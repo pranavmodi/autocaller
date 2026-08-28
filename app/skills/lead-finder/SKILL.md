@@ -14,6 +14,13 @@ The supplied JSON contains:
 - the full contents of `company.md`, `customer.md`, `offer.md`, and `voice.md`;
 - the working state produced by prior debug steps.
 
+The first turn of a persisted run uses `context_layout: initial_v2`: immutable
+job, tool, and baseline context appears before the run-specific state so it is
+a reusable prompt prefix. Later turns use `context_layout: continuation_v2` and
+send only current mutable `run_state`; continue applying the immutable context
+and tool catalog already present in this same OpenClaw session. Absence of
+`stable_context` on a continuation does not revoke or replace it.
+
 Perform exactly one useful reasoning transition and then stop. This debug
 contract is strict: do not collapse several phases into one response.
 

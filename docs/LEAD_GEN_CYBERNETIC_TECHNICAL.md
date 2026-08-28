@@ -1308,8 +1308,17 @@ Persisted steps reuse one OpenClaw session per Lead Finder run. Possible OS
 sends a deterministic, hashed run-scoped `user` value; OpenClaw maps it to a
 stable session and downstream `prompt_cache_key`. This preserves the growing
 conversation prefix across debug clicks without sharing hidden session history
-between separate runs. The first request is normally cold; later requests can
-report a hit in `usage.prompt_tokens_details.cached_tokens`. The API derives a
+between separate runs. The first request uses `context_layout: initial_v2` and
+serializes `instruction`, `available_tools`, and deterministic
+`stable_context` (job plus baseline files) before `run_state`. Volatile snapshot
+timestamps are excluded from the stable block. Later requests use
+`context_layout: continuation_v2`; because they target the same OpenClaw
+session, they omit the already-present stable block and tool catalog and append
+only current `run_state`. Stateless calls always use the complete initial
+layout. This prevents the large baseline from being repeatedly appended after
+changing state while preserving server-authoritative mutable context. The first
+request is normally cold; later requests can report a hit in
+`usage.prompt_tokens_details.cached_tokens`. The API derives a
 normalized `prompt_cache` object for every step and attempt (`hit`, `miss`, or
 `unreported`, cached/input token counts, and hit rate). The UI and non-JSON
 `lead-finder step` and `lead-finder show` output expose the same metrics. The

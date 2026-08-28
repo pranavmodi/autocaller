@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 
 from app.services import lead_finder
 from app.services import lead_finder_tools
@@ -83,6 +84,44 @@ def test_lead_finder_cache_session_is_stable_per_run_and_scoped_between_runs():
     assert first == lead_finder._cache_session_user("lfr_one")
     assert first != lead_finder._cache_session_user("lfr_two")
     assert len(first or "") <= 64
+
+
+def test_initial_gateway_layout_puts_stable_baseline_before_mutable_state():
+    context = lead_finder.load_lead_finder_context()
+    payload = lead_finder._gateway_payload(context)
+    encoded = json.dumps(payload, ensure_ascii=False)
+
+    assert list(payload) == [
+        "context_layout",
+        "instruction",
+        "available_tools",
+        "stable_context",
+        "run_state",
+    ]
+    assert payload["context_layout"] == "initial_v2"
+    assert "loaded_at" not in payload["stable_context"]["baseline_context"]
+    assert list(payload["stable_context"]["baseline_context"]["files"]) == [
+        "company.md",
+        "customer.md",
+        "offer.md",
+        "voice.md",
+    ]
+    assert encoded.index('"baseline_context"') < encoded.index('"user_direction"')
+    assert encoded.index('"baseline_context"') < encoded.index('"agent_state"')
+
+
+def test_continuation_gateway_layout_relies_on_session_prefix_and_sends_run_state_only():
+    context = lead_finder.load_lead_finder_context()
+    context["agent_state"]["completed_steps"] = 1
+    payload = lead_finder._gateway_payload(context, continuation=True)
+
+    assert list(payload) == ["context_layout", "instruction", "run_state"]
+    assert payload["context_layout"] == "continuation_v2"
+    assert "stable_context" not in payload
+    assert "available_tools" not in payload
+    assert payload["run_state"]["agent_state"]["completed_steps"] == 1
+    assert lead_finder._is_gateway_continuation(context, "lfr_test") is True
+    assert lead_finder._is_gateway_continuation(context, None) is False
 
 
 def test_prompt_cache_metrics_normalizes_openclaw_chat_usage():
