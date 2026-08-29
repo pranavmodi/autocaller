@@ -63,6 +63,9 @@ That command applies only while the run is OpenClaw-selected. Direct OpenAI
 turns have no local OpenClaw JSONL; use `lead-finder show <run_id> --json` or the
 browser's LLM trace view for persisted exact request, full Responses API object,
 parsed transition, response ID, and usage.
+Use the browser's Runs tab for the newest-first persisted-run list, or
+`lead-finder runs` for the same headless inventory; opening a row loads that
+run's overview without creating or changing it.
 The browser adds an expandable, syntax-highlighted tree over those same raw
 records and retains a raw-text toggle; this is presentation only and does not
 normalize or replace OpenClaw's stored JSONL. The same viewer covers persisted

@@ -13,6 +13,7 @@ import {
   ExternalLink,
   FileText,
   History,
+  List,
   Loader2,
   Pause,
   Play,
@@ -239,7 +240,7 @@ export default function LeadFinderPage() {
   const [providerChanging, setProviderChanging] = useState(false);
   const [resettingAll, setResettingAll] = useState(false);
   const [error, setError] = useState("");
-  const [activeView, setActiveView] = useState<"overview" | "context" | "session" | "leads" | "history">("overview");
+  const [activeView, setActiveView] = useState<"runs" | "overview" | "context" | "session" | "leads" | "history">("overview");
   const [llmSession, setLlmSession] = useState<LeadFinderLLMSessionRaw | null>(null);
   const [llmSessionSource, setLlmSessionSource] = useState<"session" | "trajectory">("session");
   const [llmSessionDisplay, setLlmSessionDisplay] = useState<"readable" | "raw">("readable");
@@ -509,6 +510,11 @@ export default function LeadFinderPage() {
     }
   }
 
+  async function openRun(runId: string) {
+    await selectRun(runId);
+    setActiveView("overview");
+  }
+
   return (
     <main className="mx-auto w-full max-w-7xl space-y-6 px-4 py-6 sm:px-6 lg:px-8">
       <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm sm:p-6">
@@ -656,6 +662,10 @@ export default function LeadFinderPage() {
 
         <div className="min-w-0 rounded-2xl border border-neutral-200 bg-white shadow-sm">
           <div className="flex flex-wrap items-center gap-1 border-b border-neutral-200 p-2">
+            <button type="button" onClick={() => setActiveView("runs")}
+              className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium ${activeView === "runs" ? "bg-neutral-900 text-white" : "text-neutral-600 hover:bg-neutral-100"}`}>
+              <List className="h-4 w-4" /> Runs <span className="rounded-full bg-white/15 px-1.5 text-xs">{runs.length}</span>
+            </button>
             <button type="button" onClick={() => setActiveView("overview")}
               className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium ${activeView === "overview" ? "bg-neutral-900 text-white" : "text-neutral-600 hover:bg-neutral-100"}`}>
               <Activity className="h-4 w-4" /> Run overview
@@ -679,7 +689,70 @@ export default function LeadFinderPage() {
           </div>
 
           <div className="p-4 sm:p-5">
-            {activeView === "overview" ? (
+            {activeView === "runs" ? (
+              runs.length === 0 ? (
+                <div className="flex min-h-72 flex-col items-center justify-center text-center">
+                  <List className="h-8 w-8 text-neutral-300" />
+                  <div className="mt-3 text-sm font-medium text-neutral-800">No persisted runs yet</div>
+                  <p className="mt-1 max-w-md text-xs leading-5 text-neutral-500">Start a new run to create the first persisted Lead Finder session.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                    <div>
+                      <h2 className="text-base font-semibold text-neutral-950">Persisted runs</h2>
+                      <p className="mt-1 text-xs leading-5 text-neutral-500">Newest first. Open a run to inspect its timeline, context, LLM trace, and found leads.</p>
+                    </div>
+                    <div className="text-xs text-neutral-400">Showing {runs.length} run{runs.length === 1 ? "" : "s"}</div>
+                  </div>
+                  <div className="overflow-hidden rounded-xl border border-neutral-200">
+                    <div className="hidden grid-cols-[minmax(0,1.5fr)_7rem_9rem_5rem_8rem] gap-3 border-b border-neutral-200 bg-neutral-50 px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-neutral-500 lg:grid">
+                      <div>Run</div><div>Status</div><div>Provider</div><div>Steps</div><div>Updated</div>
+                    </div>
+                    <div className="divide-y divide-neutral-200">
+                      {runs.map((item) => {
+                        const isSelected = item.id === run?.id;
+                        const itemLeads = item.current_context?.agent_state?.working_state?.found_leads;
+                        const leadCount = Array.isArray(itemLeads) ? itemLeads.length : 0;
+                        return (
+                          <button
+                            key={item.id}
+                            type="button"
+                            onClick={() => void openRun(item.id)}
+                            className={`grid w-full gap-3 px-4 py-4 text-left transition-colors hover:bg-neutral-50 lg:grid-cols-[minmax(0,1.5fr)_7rem_9rem_5rem_8rem] lg:items-center ${isSelected ? "bg-violet-50/60" : "bg-white"}`}
+                          >
+                            <div className="min-w-0">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="truncate font-mono text-xs font-medium text-neutral-900">{item.id}</span>
+                                {isSelected && <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-medium text-violet-700">selected</span>}
+                                {item.auto_run_enabled && <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-medium text-violet-700">auto</span>}
+                              </div>
+                              <div className="mt-1 line-clamp-2 text-xs leading-5 text-neutral-600">{item.user_direction || "No run-specific lead direction"}</div>
+                              <div className="mt-1 line-clamp-1 text-[10px] text-neutral-400">{item.next_step || (item.status === "completed" ? "Run complete" : "Ready to begin")}</div>
+                            </div>
+                            <div>
+                              <span className={`inline-flex rounded-full border px-2 py-1 text-xs ${stepTone(item.status)}`}>{item.status}</span>
+                            </div>
+                            <div className="min-w-0">
+                              <div className="truncate text-xs font-medium text-neutral-800">{item.llm_provider === "openai" ? "Direct OpenAI" : "OpenClaw"}</div>
+                              <div className="mt-0.5 truncate text-[10px] text-neutral-400">{item.llm_model}</div>
+                            </div>
+                            <div className="text-xs text-neutral-600">
+                              <div>{item.current_step}</div>
+                              <div className="mt-0.5 text-[10px] text-neutral-400">{leadCount} lead{leadCount === 1 ? "" : "s"}</div>
+                            </div>
+                            <div className="text-xs text-neutral-500">
+                              <div>{shortDate(item.updated_at || item.created_at)}</div>
+                              <div className="mt-1 text-[10px] font-medium text-violet-600">Open run →</div>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              )
+            ) : activeView === "overview" ? (
               <div className="space-y-5">
                 <section className="rounded-xl border border-neutral-200 bg-neutral-50 p-4">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">

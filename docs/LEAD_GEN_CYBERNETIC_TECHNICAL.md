@@ -1383,6 +1383,12 @@ The **Run overview** tab is a high-level projection of the same durable records:
 it shows each step's summary and reasoning, requested tool and compact result,
 next transition, found-lead count, and unattended safety-budget progress. It
 does not create a second trace or ask an LLM to summarize the run.
+The **Runs** tab projects `GET /api/lead-finder/runs` as a newest-first operator
+list with status, selected LLM provider/model, completed-step and found-lead
+counts, current direction, next position, and timestamps. Selecting a row loads
+the existing run and opens its overview; it does not create or mutate a run.
+The equivalent headless surfaces remain `lead-finder runs` and
+`lead-finder show <run_id>`.
 
 The discovery adapter is `app/services/mission_control_search.py`. It exposes
 only `mission_control.search`, `mission_control.get_passages`, and
