@@ -9,13 +9,17 @@ from typing import Any
 
 from openai import AsyncOpenAI
 
+from app.services.lead_finder_provider import (
+    OPENAI_MODEL,
+    OPENCLAW_MODEL,
+    normalize_lead_finder_provider,
+)
 from app.services.llm_gateway import LLMGatewayError, call_skill_json
 
 
 SKILL_PATH = Path(__file__).resolve().parents[1] / "skills/lead-finder-web-research/SKILL.md"
-OPENAI_WEB_RESEARCH_MODEL = os.getenv("LEAD_FINDER_OPENAI_MODEL", "gpt-5.6-luna")
-OPENCLAW_WEB_RESEARCH_MODEL = os.getenv("LEAD_FINDER_WEB_RESEARCH_MODEL", "openclaw/main")
-WEB_RESEARCH_PROVIDERS = {"openai", "openclaw"}
+OPENAI_WEB_RESEARCH_MODEL = OPENAI_MODEL
+OPENCLAW_WEB_RESEARCH_MODEL = OPENCLAW_MODEL
 
 
 OPENAI_RESEARCH_SCHEMA = {
@@ -204,32 +208,6 @@ def normalize_person_research(raw: Any, *, request: dict[str, Any]) -> dict[str,
     }
 
 
-def normalize_web_research_provider(value: str | None) -> str:
-    provider = str(value or "openai").strip().lower()
-    if provider not in WEB_RESEARCH_PROVIDERS:
-        raise ValueError("web_research_provider_must_be_openai_or_openclaw")
-    return provider
-
-
-def web_research_model(provider: str) -> str:
-    return (
-        OPENAI_WEB_RESEARCH_MODEL
-        if normalize_web_research_provider(provider) == "openai"
-        else OPENCLAW_WEB_RESEARCH_MODEL
-    )
-
-
-def web_research_provider_status(provider: str) -> dict[str, Any]:
-    selected = normalize_web_research_provider(provider)
-    return {
-        "provider": selected,
-        "model": web_research_model(selected),
-        "configured": selected != "openai" or bool(
-            os.getenv("LEAD_FINDER_OPENAI_API_KEY", "").strip()
-        ),
-    }
-
-
 async def _research_person_openclaw(payload: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
     response = await call_skill_json(
         skill_path=SKILL_PATH,
@@ -309,7 +287,7 @@ async def research_person(
         **arguments,
         "as_of_date": datetime.now(timezone.utc).date().isoformat(),
     }
-    selected = normalize_web_research_provider(provider)
+    selected = normalize_lead_finder_provider(provider)
     try:
         if selected == "openai":
             raw, metadata = await _research_person_openai(payload)

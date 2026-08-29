@@ -57,9 +57,10 @@ The Lead Finder first uses transcript search, exact passage retrieval, and
 index-status inspection. After a named person is supported by an exact passage,
 it may research only that person on the public web for current role, recent
 news/signals, and source-backed outreach angles. Each run explicitly selects
-direct OpenAI web research (the default) or the OpenClaw gateway fallback; the
-choice affects only the research tool and not the agent's OpenClaw reasoning
-session. The persisted result records which provider and model actually ran.
+direct OpenAI (the default) or the OpenClaw gateway for every LLM call in that
+run, including reasoning and person research. Mission Control search and
+passage retrieval remain local non-LLM tool calls. The persisted attempts and
+tool results record which provider and model actually ran.
 Research does not implicitly become a result: a later explicit add-result tool
 references the completed web research call and publishes it into the run-local
 Found Leads list. PossibleOS

@@ -21,14 +21,15 @@ from app.db.models import (
     LeadFinderToolCallRow,
 )
 from app.services.llm_gateway import call_skill_json, prompt_cache_metrics
+from app.services.lead_finder_provider import (
+    call_openai_reasoning,
+    lead_finder_provider_model,
+    lead_finder_provider_status,
+    normalize_lead_finder_provider,
+)
 from app.services.lead_finder_tools import (
     execute_lead_finder_tool,
     lead_finder_tool_catalog,
-)
-from app.services.lead_finder_web_research import (
-    normalize_web_research_provider,
-    web_research_model,
-    web_research_provider_status,
 )
 
 
@@ -42,8 +43,11 @@ ACTIVE_STEP_STATUSES = {"queued", "running", "retrying"}
 TERMINAL_STEP_STATUSES = {"completed", "failed", "interrupted"}
 AUTO_RUN_DEFAULT_MAX_STEPS = 25
 AUTO_RUN_MAX_STEPS = 100
-DEFAULT_WEB_RESEARCH_PROVIDER = normalize_web_research_provider(
-    os.getenv("LEAD_FINDER_DEFAULT_WEB_RESEARCH_PROVIDER", "openai")
+DEFAULT_LLM_PROVIDER = normalize_lead_finder_provider(
+    os.getenv(
+        "LEAD_FINDER_DEFAULT_LLM_PROVIDER",
+        os.getenv("LEAD_FINDER_DEFAULT_WEB_RESEARCH_PROVIDER", "openai"),
+    )
 )
 _tables_checked = False
 
@@ -202,7 +206,7 @@ def _gateway_payload(
             "context_layout": "continuation_v2",
             "instruction": (
                 f"{instruction} The immutable stable_context and available_tools were supplied "
-                "in the first turn of this same OpenClaw session; continue to apply them."
+                "in the first turn of this same provider conversation; continue to apply them."
             ),
             "run_state": _gateway_run_state(context),
         }
@@ -226,6 +230,14 @@ def _cache_session_user(run_id: str | None) -> str | None:
     return f"{prefix or 'lead-finder'}:{digest}"
 
 
+def _direct_prompt_cache_key() -> str:
+    """Share the deterministic Lead Finder prefix across direct API runs."""
+    return os.getenv(
+        "LEAD_FINDER_PROMPT_CACHE_KEY",
+        "possible-os-lead-finder-v1",
+    )[:64]
+
+
 def _normalized_action(value: Any) -> dict[str, Any]:
     if not isinstance(value, dict):
         return {"type": "reason", "tool": None, "arguments": {}}
@@ -247,37 +259,54 @@ async def run_lead_finder_step(
     user_direction: str,
     reload_baseline: bool = True,
     run_id: str | None = None,
+    llm_provider: str = "openclaw",
+    previous_response_id: str | None = None,
+    provider_session_started: bool | None = None,
     attempt_observer: Callable[[dict[str, Any]], Awaitable[None]] | None = None,
     tool_executor: Callable[[str, dict[str, Any]], Awaitable[dict[str, Any]]] | None = None,
 ) -> dict[str, Any]:
-    """Run one Lead Finder reasoning or tool-request transition through OpenClaw."""
+    """Run one Lead Finder reasoning or tool-request transition."""
     current = (
         _authoritative_context(context, user_direction)
         if reload_baseline
         else _context_for_persisted_run(context, user_direction)
     )
-    result = await call_skill_json(
-        skill_path=SKILL_PATH,
-        model=MODEL,
-        payload=_gateway_payload(
-            current,
-            continuation=_is_gateway_continuation(current, run_id),
-        ),
-        required_fields=[
-            "step_name",
-            "summary",
-            "reasoning",
-            "state_updates",
-            "next_step",
-            "is_complete",
-            "action",
-        ],
-        max_tokens=int(os.getenv("LEAD_FINDER_MAX_TOKENS", "2000")),
-        timeout_s=int(os.getenv("LEAD_FINDER_GATEWAY_TIMEOUT_S", "420")),
-        retries=int(os.getenv("LEAD_FINDER_GATEWAY_RETRIES", "1")),
-        gateway_user=_cache_session_user(run_id),
-        attempt_observer=attempt_observer,
+    selected_provider = normalize_lead_finder_provider(llm_provider)
+    continuation = (
+        bool(provider_session_started)
+        if provider_session_started is not None
+        else _is_gateway_continuation(current, run_id)
     )
+    payload = _gateway_payload(current, continuation=continuation)
+    if selected_provider == "openai":
+        result = await call_openai_reasoning(
+            skill_path=SKILL_PATH,
+            payload=payload,
+            run_id=run_id,
+            previous_response_id=previous_response_id,
+            prompt_cache_key=_direct_prompt_cache_key(),
+            attempt_observer=attempt_observer,
+        )
+    else:
+        result = await call_skill_json(
+            skill_path=SKILL_PATH,
+            model=MODEL,
+            payload=payload,
+            required_fields=[
+                "step_name",
+                "summary",
+                "reasoning",
+                "state_updates",
+                "next_step",
+                "is_complete",
+                "action",
+            ],
+            max_tokens=int(os.getenv("LEAD_FINDER_MAX_TOKENS", "2000")),
+            timeout_s=int(os.getenv("LEAD_FINDER_GATEWAY_TIMEOUT_S", "420")),
+            retries=int(os.getenv("LEAD_FINDER_GATEWAY_RETRIES", "1")),
+            gateway_user=_cache_session_user(run_id),
+            attempt_observer=attempt_observer,
+        )
 
     parsed = result.parsed
     updates = parsed.get("state_updates")
@@ -377,6 +406,7 @@ async def run_lead_finder_step(
         "transition": transition,
         "gateway": {
             "used_llm": True,
+            "provider": selected_provider,
             "model": result.model,
             "skill_path": str(SKILL_PATH.relative_to(REPO_ROOT)),
             "usage": result.usage or {},
@@ -385,6 +415,7 @@ async def run_lead_finder_step(
                 "session_scope": "run" if run_id else "stateless",
             },
             "raw_response": result.raw_response,
+            "response_id": getattr(result, "response_id", None),
         },
     }
 
@@ -454,7 +485,7 @@ async def ensure_lead_finder_tables() -> None:
 
 
 def _run_dict(row: LeadFinderRunRow) -> dict[str, Any]:
-    research = web_research_provider_status(row.web_research_provider)
+    provider = lead_finder_provider_status(row.llm_provider)
     return {
         "id": row.id,
         "status": row.status,
@@ -471,9 +502,11 @@ def _run_dict(row: LeadFinderRunRow) -> dict[str, Any]:
         "auto_run_started_step": row.auto_run_started_step,
         "auto_run_steps_used": _auto_run_steps_used(row),
         "auto_run_stop_reason": row.auto_run_stop_reason,
-        "web_research_provider": research["provider"],
-        "web_research_model": research["model"],
-        "web_research_configured": research["configured"],
+        "llm_provider": provider["provider"],
+        "llm_model": provider["model"],
+        "llm_configured": provider["configured"],
+        "openai_previous_response_id": row.openai_previous_response_id,
+        "openclaw_session_started": row.openclaw_session_started,
         "error": row.error,
         "restarted_from_run_id": row.restarted_from_run_id,
         "completed_at": _iso(row.completed_at),
@@ -550,7 +583,7 @@ def _build_lead_finder_run_row(
     *,
     user_direction: str = "",
     restarted_from_run_id: str | None = None,
-    web_research_provider: str = DEFAULT_WEB_RESEARCH_PROVIDER,
+    llm_provider: str = DEFAULT_LLM_PROVIDER,
 ) -> LeadFinderRunRow:
     baseline = load_lead_finder_context()
     baseline["user_direction"] = user_direction.strip()
@@ -570,7 +603,8 @@ def _build_lead_finder_run_row(
         next_step=baseline["agent_state"]["next_step"],
         auto_run_enabled=False,
         auto_run_max_steps=AUTO_RUN_DEFAULT_MAX_STEPS,
-        web_research_provider=normalize_web_research_provider(web_research_provider),
+        llm_provider=normalize_lead_finder_provider(llm_provider),
+        openclaw_session_started=False,
         restarted_from_run_id=restarted_from_run_id,
     )
 
@@ -579,13 +613,13 @@ async def create_lead_finder_run(
     *,
     user_direction: str = "",
     restarted_from_run_id: str | None = None,
-    web_research_provider: str = DEFAULT_WEB_RESEARCH_PROVIDER,
+    llm_provider: str = DEFAULT_LLM_PROVIDER,
 ) -> dict[str, Any]:
     await ensure_lead_finder_tables()
     row = _build_lead_finder_run_row(
         user_direction=user_direction,
         restarted_from_run_id=restarted_from_run_id,
-        web_research_provider=web_research_provider,
+        llm_provider=llm_provider,
     )
     async with AsyncSessionLocal() as session:
         session.add(row)
@@ -597,13 +631,13 @@ async def create_lead_finder_run(
 async def reset_all_lead_finder_runs(
     *,
     user_direction: str = "",
-    web_research_provider: str = DEFAULT_WEB_RESEARCH_PROVIDER,
+    llm_provider: str = DEFAULT_LLM_PROVIDER,
 ) -> dict[str, Any]:
     """Delete all Lead Finder history and atomically create one fresh step-0 run."""
     await ensure_lead_finder_tables()
     row = _build_lead_finder_run_row(
         user_direction=user_direction,
-        web_research_provider=web_research_provider,
+        llm_provider=llm_provider,
     )
     async with AsyncSessionLocal() as session:
         async with session.begin():
@@ -638,13 +672,13 @@ async def list_lead_finder_runs(*, limit: int = 25) -> list[dict[str, Any]]:
     return [_run_dict(row) for row in rows]
 
 
-async def update_lead_finder_web_research_provider(
+async def update_lead_finder_llm_provider(
     *,
     run_id: str,
     provider: str,
 ) -> dict[str, Any]:
-    """Persist the provider used by future web.research_person calls in a run."""
-    selected = normalize_web_research_provider(provider)
+    """Persist the provider used by future reasoning and research calls."""
+    selected = normalize_lead_finder_provider(provider)
     await ensure_lead_finder_tables()
     async with AsyncSessionLocal() as session:
         async with session.begin():
@@ -657,7 +691,7 @@ async def update_lead_finder_web_research_provider(
             ).scalar_one_or_none()
             if not run:
                 raise LeadFinderNotFoundError("lead_finder_run_not_found")
-            run.web_research_provider = selected
+            run.llm_provider = selected
             run.updated_at = datetime.now(timezone.utc)
         await session.refresh(run)
         return _run_dict(run)
@@ -824,8 +858,13 @@ def _load_openclaw_session_raw(run_id: str) -> dict[str, Any]:
 async def get_lead_finder_llm_session(run_id: str) -> dict[str, Any]:
     await ensure_lead_finder_tables()
     async with AsyncSessionLocal() as session:
-        if not await session.get(LeadFinderRunRow, run_id):
+        run = await session.get(LeadFinderRunRow, run_id)
+        if not run:
             raise LeadFinderNotFoundError("lead_finder_run_not_found")
+        if normalize_lead_finder_provider(run.llm_provider) != "openclaw":
+            raise LeadFinderSessionStateError(
+                "direct_openai_run_uses_persisted_response_attempts"
+            )
     return _load_openclaw_session_raw(run_id)
 
 
@@ -837,6 +876,12 @@ def _build_queued_step(
 ) -> LeadFinderStepRow:
     direction = user_direction.strip()
     before = _context_for_persisted_run(run.current_context_json or {}, direction)
+    selected_provider = normalize_lead_finder_provider(run.llm_provider)
+    continuation = (
+        bool(run.openai_previous_response_id)
+        if selected_provider == "openai"
+        else bool(run.openclaw_session_started)
+    )
     return LeadFinderStepRow(
         id=f"lfs_{uuid.uuid4().hex}",
         run_id=run.id,
@@ -847,7 +892,7 @@ def _build_queued_step(
         context_before_json=before,
         request_json=_gateway_payload(
             before,
-            continuation=_is_gateway_continuation(before, run.id),
+            continuation=continuation,
         ),
     )
 
@@ -1083,6 +1128,15 @@ async def _attempt_observer(step_id: str, base_attempt: int, event: dict[str, An
                 attempt.http_status = event.get("http_status") if isinstance(event.get("http_status"), int) else None
                 attempt.error = str(event.get("error") or "") or None
                 attempt.completed_at = now
+                if (
+                    phase == "completed"
+                    and event.get("provider") == "openai"
+                    and event.get("response_id")
+                ):
+                    run = await session.get(LeadFinderRunRow, step.run_id)
+                    if run:
+                        run.openai_previous_response_id = str(event["response_id"])
+                        run.updated_at = now
                 if phase == "failed" and event.get("will_retry"):
                     step.status = "retrying"
 
@@ -1093,12 +1147,12 @@ async def _execute_persisted_tool_call(
     arguments: dict[str, Any],
     *,
     tool_history: list[dict[str, Any]] | None = None,
-    web_research_provider: str = DEFAULT_WEB_RESEARCH_PROVIDER,
+    llm_provider: str = DEFAULT_LLM_PROVIDER,
 ) -> dict[str, Any]:
     """Persist a tool call before execution and its complete result afterward."""
     execution_metadata = {
-        "provider": normalize_web_research_provider(web_research_provider),
-        "model": web_research_model(web_research_provider),
+        "provider": normalize_lead_finder_provider(llm_provider),
+        "model": lead_finder_provider_model(llm_provider),
     } if tool_name == "web.research_person" else None
     row = LeadFinderToolCallRow(
         id=f"lft_{uuid.uuid4().hex}",
@@ -1117,7 +1171,7 @@ async def _execute_persisted_tool_call(
             tool_name,
             arguments,
             tool_history=tool_history,
-            web_research_provider=web_research_provider,
+            llm_provider=llm_provider,
         )
         status = "completed"
         error = None
@@ -1151,7 +1205,9 @@ async def _execute_persisted_tool_call(
 async def execute_lead_finder_step(step_id: str) -> None:
     await ensure_lead_finder_tables()
     run_id: str | None = None
-    selected_web_research_provider = DEFAULT_WEB_RESEARCH_PROVIDER
+    selected_llm_provider = DEFAULT_LLM_PROVIDER
+    previous_response_id: str | None = None
+    provider_session_started = False
     async with AsyncSessionLocal() as session:
         async with session.begin():
             step = (
@@ -1167,8 +1223,12 @@ async def execute_lead_finder_step(step_id: str) -> None:
             if not run:
                 return
             run_id = run.id
-            selected_web_research_provider = normalize_web_research_provider(
-                run.web_research_provider
+            selected_llm_provider = normalize_lead_finder_provider(run.llm_provider)
+            previous_response_id = run.openai_previous_response_id
+            provider_session_started = (
+                bool(previous_response_id)
+                if selected_llm_provider == "openai"
+                else bool(run.openclaw_session_started)
             )
             step.status = "running"
             step.started_at = datetime.now(timezone.utc)
@@ -1191,7 +1251,7 @@ async def execute_lead_finder_step(step_id: str) -> None:
             tool_name,
             arguments,
             tool_history=list(history) if isinstance(history, list) else [],
-            web_research_provider=selected_web_research_provider,
+            llm_provider=selected_llm_provider,
         )
 
     try:
@@ -1200,6 +1260,9 @@ async def execute_lead_finder_step(step_id: str) -> None:
             user_direction=direction,
             reload_baseline=False,
             run_id=step.run_id,
+            llm_provider=selected_llm_provider,
+            previous_response_id=previous_response_id,
+            provider_session_started=provider_session_started,
             attempt_observer=observe,
             tool_executor=execute_tool,
         )
@@ -1255,6 +1318,10 @@ async def execute_lead_finder_step(step_id: str) -> None:
                 run.auto_run_enabled = False
                 run.auto_run_stop_reason = "completed"
             run.error = None
+            if gateway.get("provider") == "openai" and gateway.get("response_id"):
+                run.openai_previous_response_id = str(gateway["response_id"])
+            elif gateway.get("provider") == "openclaw":
+                run.openclaw_session_started = True
             run.updated_at = datetime.now(timezone.utc)
 
     if run_id:
@@ -1274,11 +1341,11 @@ async def restart_lead_finder_run(
         if not prior:
             raise LeadFinderNotFoundError("lead_finder_run_not_found")
         direction = prior.user_direction if user_direction is None else user_direction.strip()
-        web_research_provider = prior.web_research_provider
+        llm_provider = prior.llm_provider
     return await create_lead_finder_run(
         user_direction=direction,
         restarted_from_run_id=run_id,
-        web_research_provider=web_research_provider,
+        llm_provider=llm_provider,
     )
 
 

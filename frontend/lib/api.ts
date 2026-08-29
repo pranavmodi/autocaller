@@ -3169,9 +3169,11 @@ export type LeadFinderRun = {
   auto_run_started_step: number | null;
   auto_run_steps_used: number;
   auto_run_stop_reason: string | null;
-  web_research_provider: "openai" | "openclaw";
-  web_research_model: string;
-  web_research_configured: boolean;
+  llm_provider: "openai" | "openclaw";
+  llm_model: string;
+  llm_configured: boolean;
+  openai_previous_response_id: string | null;
+  openclaw_session_started: boolean;
   error: string | null;
   restarted_from_run_id: string | null;
   completed_at: string | null;
@@ -3195,11 +3197,11 @@ export type LeadFinderLLMSessionRaw = {
 
 export const createLeadFinderRun = (
   userDirection: string,
-  webResearchProvider: "openai" | "openclaw" = "openai",
+  llmProvider: "openai" | "openclaw" = "openai",
 ) =>
   post<{ run: LeadFinderRun }>("/api/lead-finder/runs", {
     user_direction: userDirection,
-    web_research_provider: webResearchProvider,
+    llm_provider: llmProvider,
   });
 
 export const listLeadFinderRuns = (limit = 25) =>
@@ -3234,12 +3236,12 @@ export const startLeadFinderAutoRun = (
 export const stopLeadFinderAutoRun = (runId: string) =>
   post<{ run: LeadFinderRun }>(`/api/lead-finder/runs/${runId}/auto-run/stop`, {});
 
-export const updateLeadFinderWebResearchProvider = (
+export const updateLeadFinderLLMProvider = (
   runId: string,
   provider: "openai" | "openclaw",
 ) =>
   put<{ run: LeadFinderRun }>(
-    `/api/lead-finder/runs/${runId}/web-research-provider`,
+    `/api/lead-finder/runs/${runId}/llm-provider`,
     { provider },
   );
 
@@ -3250,12 +3252,12 @@ export const restartLeadFinderRun = (runId: string, userDirection?: string) =>
 
 export const resetAllLeadFinderRuns = (
   userDirection: string,
-  webResearchProvider: "openai" | "openclaw" = "openai",
+  llmProvider: "openai" | "openclaw" = "openai",
 ) =>
   post<{
     deleted: { runs: number; steps: number; attempts: number; tool_calls: number };
     run: LeadFinderRun;
   }>("/api/lead-finder/runs/reset-all", {
     user_direction: userDirection,
-    web_research_provider: webResearchProvider,
+    llm_provider: llmProvider,
   });

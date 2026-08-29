@@ -31,7 +31,7 @@ import {
   resetAllLeadFinderRuns,
   startLeadFinderAutoRun,
   stopLeadFinderAutoRun,
-  updateLeadFinderWebResearchProvider,
+  updateLeadFinderLLMProvider,
   type LeadFinderContext,
   type LeadFinderFoundLead,
   type LeadFinderLLMSessionRaw,
@@ -311,6 +311,12 @@ export default function LeadFinderPage() {
 
   useEffect(() => {
     if (activeView !== "session" || !run) return;
+    if (run.llm_provider === "openai") {
+      setLlmSession(null);
+      setLlmSessionError("");
+      setLlmSessionLoading(false);
+      return;
+    }
     if (run.current_step === 0) {
       setLlmSession(null);
       setLlmSessionError("The OpenClaw session is created when step 1 starts.");
@@ -333,7 +339,7 @@ export default function LeadFinderPage() {
         if (!cancelled) setLlmSessionLoading(false);
       });
     return () => { cancelled = true; };
-  }, [activeView, run?.current_step, run?.id, run?.status]);
+  }, [activeView, run?.current_step, run?.id, run?.llm_provider, run?.status]);
 
   const context = useMemo(() => {
     const source = run?.current_context || baseline;
@@ -355,6 +361,23 @@ export default function LeadFinderPage() {
     ? llmSession?.session_file
     : llmSession?.trajectory_file;
   const jsonlRecords = useMemo(() => parseJsonl(rawSessionText), [rawSessionText]);
+  const directResponseTrace = useMemo(() => steps.flatMap((step) =>
+    (step.attempts || [])
+      .filter((attempt) => !attempt.model.startsWith("openclaw/"))
+      .map((attempt) => ({
+        step_number: step.step_number,
+        attempt_number: attempt.attempt_number,
+        status: attempt.status,
+        model: attempt.model,
+        request: attempt.request,
+        provider_response: attempt.response_raw,
+        parsed_response: attempt.response_parsed,
+        usage: attempt.usage,
+        started_at: attempt.started_at,
+        completed_at: attempt.completed_at,
+        error: attempt.error,
+      })),
+  ), [steps]);
 
   function setAllSessionNodes(open: boolean) {
     llmSessionTree.current?.querySelectorAll("details").forEach((node) => {
@@ -368,7 +391,7 @@ export default function LeadFinderPage() {
     try {
       const response = await createLeadFinderRun(
         userDirection,
-        run?.web_research_provider || "openai",
+        run?.llm_provider || "openai",
       );
       await loadRun(response.run.id);
       await refreshRuns();
@@ -431,18 +454,18 @@ export default function LeadFinderPage() {
     }
   }
 
-  async function changeWebResearchProvider(provider: "openai" | "openclaw") {
-    if (!run || providerChanging || run.web_research_provider === provider) return;
+  async function changeLLMProvider(provider: "openai" | "openclaw") {
+    if (!run || providerChanging || run.llm_provider === provider) return;
     setProviderChanging(true);
     setError("");
     try {
-      const response = await updateLeadFinderWebResearchProvider(run.id, provider);
+      const response = await updateLeadFinderLLMProvider(run.id, provider);
       setRun((current) => current
         ? { ...current, ...response.run, steps: current.steps }
         : response.run);
       void refreshRuns();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to change the web research provider.");
+      setError(cause instanceof Error ? cause.message : "Unable to change the run-wide LLM provider.");
     } finally {
       setProviderChanging(false);
     }
@@ -459,7 +482,7 @@ export default function LeadFinderPage() {
     try {
       const response = await resetAllLeadFinderRuns(
         userDirection,
-        run?.web_research_provider || "openai",
+        run?.llm_provider || "openai",
       );
       submissionLock.current = false;
       setSubmitting(false);
@@ -542,7 +565,7 @@ export default function LeadFinderPage() {
 
         {error && <div className="mt-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
 
-        <div className="mt-6 grid gap-4 border-t border-neutral-100 pt-5 sm:grid-cols-2 lg:grid-cols-7">
+        <div className="mt-6 grid gap-4 border-t border-neutral-100 pt-5 sm:grid-cols-2 lg:grid-cols-6">
           <div>
             <div className="text-xs text-neutral-500">Persisted run</div>
             <select value={run?.id || ""} onChange={(event) => void selectRun(event.target.value)}
@@ -569,25 +592,24 @@ export default function LeadFinderPage() {
             </div>
           </div>
           <div><div className="text-xs text-neutral-500">Completed step</div><div className="mt-1 text-sm font-medium text-neutral-900">{run?.current_step || 0}</div></div>
-          <div><div className="text-xs text-neutral-500">Agent reasoning</div><div className="mt-1 text-sm font-medium text-neutral-900">openclaw/main</div></div>
           <div>
-            <label htmlFor="web-research-provider" className="text-xs text-neutral-500">Web research</label>
+            <label htmlFor="llm-provider" className="text-xs text-neutral-500">LLM provider</label>
             <select
-              id="web-research-provider"
-              value={run?.web_research_provider || "openai"}
-              onChange={(event) => void changeWebResearchProvider(event.target.value as "openai" | "openclaw")}
+              id="llm-provider"
+              value={run?.llm_provider || "openai"}
+              onChange={(event) => void changeLLMProvider(event.target.value as "openai" | "openclaw")}
               disabled={!run || providerChanging}
               className="mt-1 w-full rounded-lg border border-neutral-200 bg-white px-2 py-1.5 text-xs font-medium text-neutral-900 disabled:opacity-50"
             >
               <option value="openai">Direct OpenAI</option>
               <option value="openclaw">OpenClaw gateway</option>
             </select>
-            <div className={`mt-1 truncate text-[10px] ${run?.web_research_configured ? "text-neutral-400" : "text-red-600"}`}>
+            <div className={`mt-1 truncate text-[10px] ${run?.llm_configured ? "text-neutral-400" : "text-red-600"}`}>
               {providerChanging
                 ? "Saving…"
-                : run?.web_research_configured
-                  ? run.web_research_model
-                  : `${run?.web_research_model || "provider"} not configured`}
+                : run?.llm_configured
+                  ? `${run.llm_model} · reasoning + web research`
+                  : `${run?.llm_model || "provider"} not configured`}
             </div>
           </div>
           <div>
@@ -644,7 +666,7 @@ export default function LeadFinderPage() {
             </button>
             <button type="button" onClick={() => setActiveView("session")}
               className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium ${activeView === "session" ? "bg-neutral-900 text-white" : "text-neutral-600 hover:bg-neutral-100"}`}>
-              <Code2 className="h-4 w-4" /> LLM session (raw)
+              <Code2 className="h-4 w-4" /> LLM trace / session
             </button>
             <button type="button" onClick={() => setActiveView("history")}
               className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium ${activeView === "history" ? "bg-neutral-900 text-white" : "text-neutral-600 hover:bg-neutral-100"}`}>
@@ -766,6 +788,24 @@ export default function LeadFinderPage() {
               </div>
             ) : activeView === "session" ? (
               <div className="space-y-4">
+                {run?.llm_provider === "openai" ? (
+                  <>
+                    <div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-xs leading-5 text-sky-900">
+                      Direct mode uses the OpenAI Responses API. Possible OS persists each exact request, full provider response, parsed transition, and usage record below; no local OpenClaw JSONL is created for these turns.
+                    </div>
+                    <div className="grid gap-2 rounded-xl border border-neutral-200 p-3 text-xs text-neutral-500 sm:grid-cols-2">
+                      <div><span className="font-medium text-neutral-700">provider</span> Direct OpenAI</div>
+                      <div><span className="font-medium text-neutral-700">model</span> {run.llm_model}</div>
+                      <div className="break-all sm:col-span-2"><span className="font-medium text-neutral-700">latest response id</span> {run.openai_previous_response_id || "created after the first direct reasoning step"}</div>
+                    </div>
+                    {directResponseTrace.length > 0 ? (
+                      <JsonPanel value={directResponseTrace} />
+                    ) : (
+                      <div className="flex min-h-72 items-center justify-center text-center text-sm text-neutral-500">The direct Responses trace will appear after the first reasoning step completes.</div>
+                    )}
+                  </>
+                ) : (
+                  <>
                 <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-900">
                   This is OpenClaw&apos;s unredacted on-disk JSONL. Each line is one JSON record. It may include injected workspace instructions, tool definitions, and sensitive configuration.
                 </div>
@@ -845,6 +885,8 @@ export default function LeadFinderPage() {
                       <div className="flex min-h-72 items-center justify-center text-center text-sm text-neutral-500">This raw OpenClaw file does not exist yet.</div>
                     )}
                   </div>
+                )}
+                  </>
                 )}
               </div>
             ) : activeView === "leads" ? (

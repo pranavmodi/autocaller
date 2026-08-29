@@ -6,6 +6,7 @@ import json
 from app.services import lead_finder
 from app.services import lead_finder_tools
 from app.services import lead_finder_web_research
+from app.services.lead_finder_provider import DirectReasoningResult
 from app.services.lead_finder_web_research import normalize_person_research
 from app.db.models import (
     LeadFinderAttemptRow,
@@ -78,6 +79,54 @@ def test_step_uses_main_gateway_and_adds_direction_to_context(monkeypatch):
     assert result["context"]["agent_state"]["completed_steps"] == 1
     assert result["context"]["agent_state"]["status"] == "paused"
     assert result["context"]["agent_state"]["working_state"]["targeting_criteria"]["state"] == "California"
+
+
+def test_step_uses_direct_responses_api_when_openai_is_selected(monkeypatch):
+    captured = {}
+
+    async def fake_call_openai_reasoning(**kwargs):
+        captured.update(kwargs)
+        return DirectReasoningResult(
+            parsed={
+                "step_name": "Define target",
+                "summary": "Defined the targeting frame.",
+                "reasoning": "The user requested PI marketing leaders.",
+                "state_updates": {"targeting_criteria": {"market": "PI firms"}},
+                "action": {"type": "reason", "tool": None, "arguments": {}},
+                "next_step": "Search Mission Control.",
+                "is_complete": False,
+            },
+            raw_response='{"step_name":"Define target"}',
+            raw_provider_response='{"id":"resp_test"}',
+            model="gpt-5.6-luna",
+            usage={
+                "input_tokens": 5000,
+                "input_tokens_details": {"cached_tokens": 4096},
+            },
+            response_id="resp_test",
+        )
+
+    async def fail_openclaw(**kwargs):
+        raise AssertionError("OpenClaw should not be called in direct mode")
+
+    monkeypatch.setattr(lead_finder, "call_openai_reasoning", fake_call_openai_reasoning)
+    monkeypatch.setattr(lead_finder, "call_skill_json", fail_openclaw)
+    result = asyncio.run(lead_finder.run_lead_finder_step(
+        context=lead_finder.load_lead_finder_context(),
+        user_direction="PI firm leaders with marketing pain",
+        run_id="lfr_direct",
+        llm_provider="openai",
+        previous_response_id="resp_prior",
+        provider_session_started=True,
+    ))
+
+    assert captured["previous_response_id"] == "resp_prior"
+    assert captured["payload"]["context_layout"] == "continuation_v2"
+    assert captured["prompt_cache_key"] == "possible-os-lead-finder-v1"
+    assert result["gateway"]["provider"] == "openai"
+    assert result["gateway"]["model"] == "gpt-5.6-luna"
+    assert result["gateway"]["response_id"] == "resp_test"
+    assert result["gateway"]["prompt_cache"]["status"] == "hit"
 
 
 def test_lead_finder_cache_session_is_stable_per_run_and_scoped_between_runs():
@@ -188,7 +237,9 @@ def test_persistence_models_cover_runs_steps_and_every_gateway_attempt():
         "auto_run_max_steps",
         "auto_run_started_step",
         "auto_run_stop_reason",
-        "web_research_provider",
+        "llm_provider",
+        "openai_previous_response_id",
+        "openclaw_session_started",
     }.issubset(LeadFinderRunRow.__table__.columns.keys())
     step_run_fk = next(iter(LeadFinderStepRow.__table__.c.run_id.foreign_keys))
     attempt_step_fk = next(iter(LeadFinderAttemptRow.__table__.c.step_id.foreign_keys))
@@ -218,16 +269,18 @@ def test_fresh_run_row_starts_before_step_one_with_requested_direction():
     assert row.next_step == "Assess the baseline context and the user's lead direction."
     assert row.auto_run_enabled is False
     assert row.auto_run_max_steps == 25
-    assert row.web_research_provider == "openai"
+    assert row.llm_provider == "openai"
+    assert row.openai_previous_response_id is None
+    assert row.openclaw_session_started is False
 
 
-def test_fresh_run_can_select_openclaw_for_web_research():
+def test_fresh_run_can_select_openclaw_for_all_llm_calls():
     row = lead_finder._build_lead_finder_run_row(
         user_direction="PI intake leaders",
-        web_research_provider="openclaw",
+        llm_provider="openclaw",
     )
 
-    assert row.web_research_provider == "openclaw"
+    assert row.llm_provider == "openclaw"
 
 
 def test_auto_run_budget_counts_only_steps_after_auto_start():
@@ -392,7 +445,7 @@ def test_web_research_tool_routes_to_selected_provider(monkeypatch):
             "person_name": "Jane Operator",
             "mission_control_evidence": [{"chunk_id": 42, "excerpt": "Intake"}],
         },
-        web_research_provider="openclaw",
+        llm_provider="openclaw",
     ))
 
     assert captured["provider"] == "openclaw"

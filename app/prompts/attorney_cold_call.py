@@ -18,7 +18,7 @@ from app.models import Patient  # Patient is aliased as Lead in models/patient.p
 
 # Bump this when you change the template or tool list in a way that materially
 # affects calling behavior. Used by the judge + Phase B A/B tests to compare.
-PROMPT_VERSION = "v1.63"  # v1.63: repository prompt-change trace bump for Lead Finder cache-first initial/continuation context layouts; attorney call template unchanged.
+PROMPT_VERSION = "v1.64"  # v1.64: repository prompt-change trace bump for run-wide Lead Finder provider wording; attorney call template unchanged.
 
 
 SYSTEM_PROMPT_TEMPLATE = """\

@@ -4843,7 +4843,7 @@ def lead_finder_web_research(
     excerpt: str = typer.Option("", "--excerpt"),
     focus: str = typer.Option("PI intake workflow and current outreach relevance", "--focus"),
     provider: str = typer.Option(
-        "openai", "--provider", help="Web research provider: openai or openclaw."
+        "openai", "--provider", help="LLM provider: openai or openclaw."
     ),
     json_output: bool = typer.Option(False, "--json"),
 ):
@@ -4852,7 +4852,7 @@ def lead_finder_web_research(
         "/api/lead-finder/tools/execute",
         {
             "tool": "web.research_person",
-            "web_research_provider": provider,
+            "llm_provider": provider,
             "arguments": {
                 "person_name": person_name,
                 "organization": organization,
@@ -4879,22 +4879,22 @@ def lead_finder_provider(
     provider: str = typer.Argument(..., help="openai or openclaw"),
     json_output: bool = typer.Option(False, "--json"),
 ):
-    """Select the provider for future web.research_person calls in one run."""
+    """Select the provider for all future LLM calls in one run."""
     selected = provider.strip().lower()
     if selected not in {"openai", "openclaw"}:
         raise typer.BadParameter("must be openai or openclaw", param_hint="provider")
     data = _put(
-        f"/api/lead-finder/runs/{run_id}/web-research-provider",
+        f"/api/lead-finder/runs/{run_id}/llm-provider",
         {"provider": selected},
     )
     run = data.get("run") or {}
     if json_output:
         console.print_json(data=data)
         return
-    console.print(f"[green]web research provider updated[/green] {run_id}")
-    console.print(f"provider: {run.get('web_research_provider')}")
-    console.print(f"model: {run.get('web_research_model')}")
-    console.print(f"configured: {run.get('web_research_configured')}")
+    console.print(f"[green]run-wide LLM provider updated[/green] {run_id}")
+    console.print(f"provider: {run.get('llm_provider')}")
+    console.print(f"model: {run.get('llm_model')}")
+    console.print(f"configured: {run.get('llm_configured')}")
 
 
 @lead_finder_app.command("results")
@@ -5024,13 +5024,13 @@ def lead_finder_auto_stop(
 @lead_finder_app.command("start")
 def lead_finder_start(
     direction: str = typer.Option("", "--direction", help="Run-specific description of desired leads."),
-    provider: str = typer.Option("openai", "--provider", help="Web research provider: openai or openclaw."),
+    provider: str = typer.Option("openai", "--provider", help="Run-wide LLM provider: openai or openclaw."),
     json_output: bool = typer.Option(False, "--json"),
 ):
     """Create a durable Lead Finder run immediately before step 1."""
     run = (_post("/api/lead-finder/runs", {
         "user_direction": direction,
-        "web_research_provider": provider,
+        "llm_provider": provider,
     }).get("run") or {})
     if json_output:
         console.print_json(data={"run": run})
@@ -5054,6 +5054,7 @@ def lead_finder_runs(
     table.add_column("id")
     table.add_column("status")
     table.add_column("step")
+    table.add_column("provider")
     table.add_column("direction")
     table.add_column("created")
     for run in runs:
@@ -5061,6 +5062,7 @@ def lead_finder_runs(
             run.get("id") or "",
             f"{run.get('status') or ''}{' · auto' if run.get('auto_run_enabled') else ''}",
             str(run.get("current_step") or 0),
+            str(run.get("llm_provider") or ""),
             (run.get("user_direction") or "")[:60],
             run.get("created_at") or "",
         )
@@ -5082,10 +5084,12 @@ def lead_finder_show(
     console.print(f"current_step: {run.get('current_step')}")
     console.print(f"auto_run_enabled: {run.get('auto_run_enabled')}")
     console.print(
-        f"web_research: {run.get('web_research_provider')} "
-        f"model={run.get('web_research_model')} "
-        f"configured={run.get('web_research_configured')}"
+        f"llm_provider: {run.get('llm_provider')} "
+        f"model={run.get('llm_model')} "
+        f"configured={run.get('llm_configured')}"
     )
+    if run.get("openai_previous_response_id"):
+        console.print(f"openai_previous_response_id: {run.get('openai_previous_response_id')}")
     if run.get("auto_run_started_step") is not None:
         console.print(
             f"auto_run_progress: {run.get('auto_run_steps_used')}/{run.get('auto_run_max_steps')} "
@@ -5114,7 +5118,7 @@ def lead_finder_llm_session(
     ),
     json_output: bool = typer.Option(False, "--json", help="Wrap raw JSONL and metadata in JSON."),
 ):
-    """Print an unredacted OpenClaw session file exactly as stored."""
+    """Print an OpenClaw run's unredacted session file exactly as stored."""
     if source not in {"session", "trajectory"}:
         raise typer.BadParameter("must be session or trajectory", param_hint="--source")
     data = _get(f"/api/lead-finder/runs/{run_id}/llm-session")
@@ -5146,7 +5150,7 @@ def lead_finder_restart(
 @lead_finder_app.command("reset-all")
 def lead_finder_reset_all(
     direction: str = typer.Option("", "--direction", help="Direction for the replacement step-0 run."),
-    provider: str = typer.Option("openai", "--provider", help="Web research provider for the replacement run."),
+    provider: str = typer.Option("openai", "--provider", help="Run-wide LLM provider for the replacement run."),
     yes: bool = typer.Option(False, "--yes", help="Skip the destructive confirmation prompt."),
     json_output: bool = typer.Option(False, "--json"),
 ):
@@ -5158,7 +5162,7 @@ def lead_finder_reset_all(
         )
     data = _post("/api/lead-finder/runs/reset-all", {
         "user_direction": direction,
-        "web_research_provider": provider,
+        "llm_provider": provider,
     })
     if json_output:
         console.print_json(data=data)

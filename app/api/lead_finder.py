@@ -25,7 +25,7 @@ from app.services.lead_finder import (
     run_lead_finder_step,
     start_lead_finder_auto_run,
     stop_lead_finder_auto_run,
-    update_lead_finder_web_research_provider,
+    update_lead_finder_llm_provider,
 )
 from app.services.llm_gateway import LLMGatewayError
 from app.services.lead_finder_tools import (
@@ -45,7 +45,11 @@ class LeadFinderStepRequest(BaseModel):
 
 class LeadFinderRunCreateRequest(BaseModel):
     user_direction: str = Field(default="", max_length=10_000)
-    web_research_provider: Literal["openai", "openclaw"] = "openai"
+    llm_provider: Literal["openai", "openclaw"] | None = None
+    web_research_provider: Literal["openai", "openclaw"] | None = None
+
+    def selected_provider(self) -> str:
+        return self.llm_provider or self.web_research_provider or "openai"
 
 
 class LeadFinderRunStepRequest(BaseModel):
@@ -65,10 +69,14 @@ class LeadFinderAutoRunRequest(BaseModel):
 class LeadFinderToolExecuteRequest(BaseModel):
     tool: str = Field(..., min_length=1, max_length=128)
     arguments: dict[str, Any] = Field(default_factory=dict)
-    web_research_provider: Literal["openai", "openclaw"] = "openai"
+    llm_provider: Literal["openai", "openclaw"] | None = None
+    web_research_provider: Literal["openai", "openclaw"] | None = None
+
+    def selected_provider(self) -> str:
+        return self.llm_provider or self.web_research_provider or "openai"
 
 
-class LeadFinderWebResearchProviderRequest(BaseModel):
+class LeadFinderProviderRequest(BaseModel):
     provider: Literal["openai", "openclaw"]
 
 
@@ -91,7 +99,7 @@ async def execute_tool(req: LeadFinderToolExecuteRequest):
         result = await execute_lead_finder_tool(
             req.tool,
             req.arguments,
-            web_research_provider=req.web_research_provider,
+            llm_provider=req.selected_provider(),
         )
     except LeadFinderToolError as exc:
         detail = str(exc)
@@ -125,7 +133,7 @@ async def lead_finder_runs(limit: int = Query(25, ge=1, le=100)):
 async def create_run(req: LeadFinderRunCreateRequest):
     return {"run": await create_lead_finder_run(
         user_direction=req.user_direction,
-        web_research_provider=req.web_research_provider,
+        llm_provider=req.selected_provider(),
     )}
 
 
@@ -133,7 +141,7 @@ async def create_run(req: LeadFinderRunCreateRequest):
 async def reset_all_runs(req: LeadFinderRunCreateRequest):
     return await reset_all_lead_finder_runs(
         user_direction=req.user_direction,
-        web_research_provider=req.web_research_provider,
+        llm_provider=req.selected_provider(),
     )
 
 
@@ -145,13 +153,14 @@ async def get_run(run_id: str):
     return {"run": run}
 
 
-@router.put("/runs/{run_id}/web-research-provider")
-async def set_web_research_provider(
+@router.put("/runs/{run_id}/web-research-provider", include_in_schema=False)
+@router.put("/runs/{run_id}/llm-provider")
+async def set_llm_provider(
     run_id: str,
-    req: LeadFinderWebResearchProviderRequest,
+    req: LeadFinderProviderRequest,
 ):
     try:
-        run = await update_lead_finder_web_research_provider(
+        run = await update_lead_finder_llm_provider(
             run_id=run_id,
             provider=req.provider,
         )
@@ -199,7 +208,9 @@ async def get_llm_session(run_id: str):
     except (LeadFinderNotFoundError, LeadFinderSessionNotFoundError) as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except LeadFinderSessionStateError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+        detail = str(exc)
+        status_code = 409 if detail.startswith("direct_openai_") else 502
+        raise HTTPException(status_code=status_code, detail=detail) from exc
 
 
 @router.post("/runs/{run_id}/steps", status_code=status.HTTP_202_ACCEPTED)

@@ -28,12 +28,15 @@ gateway attempts, and tool results. Use `lead-finder tools`, `mission-search`,
 agent's Mission Control transcript tools. Discovery is restricted to Mission
 Control. Once exact passages support a named person, `web.research_person`
 may verify that person's current role, recent public evidence, and outreach
-angles. Direct OpenAI web research with `gpt-5.6-luna` is the default; use
+angles. Direct OpenAI with `gpt-5.6-luna` is the default for every LLM call in
+the run, including reasoning and web research; use
 `lead-finder provider <run_id> openclaw` to select the OpenClaw fallback, or
 `lead-finder provider <run_id> openai` to switch back. This per-run setting
-affects future `web.research_person` calls only; reasoning remains on
-`openclaw/main`, and completed research persists actual provider/model/usage
-metadata. A later explicit `lead_finder.add_researched_lead` call publishes that
+affects future LLM calls; Mission Control tools remain local. Direct reasoning
+uses the Responses API and a persisted `previous_response_id`; OpenClaw uses
+its isolated run session. Persisted attempts and completed research expose the
+actual provider/model/usage metadata. A later explicit
+`lead_finder.add_researched_lead` call publishes that
 completed research into the run-local Found Leads list; inspect it with
 `lead-finder results <run_id>`. No cross-run or CRM deduplication is performed.
 Use `lead-finder auto-start <run_id> --max-steps 25` to let the server continue
@@ -56,6 +59,10 @@ canonical conversation JSONL exactly as stored, or `--source trajectory` to
 inspect the raw compiled system prompt, tool definitions, submitted prompts,
 model snapshots, and usage. Both outputs are unredacted and may contain
 sensitive workspace context; do not paste or transmit them casually.
+That command applies only while the run is OpenClaw-selected. Direct OpenAI
+turns have no local OpenClaw JSONL; use `lead-finder show <run_id> --json` or the
+browser's LLM trace view for persisted exact request, full Responses API object,
+parsed transition, response ID, and usage.
 The browser adds an expandable, syntax-highlighted tree over those same raw
 records and retains a raw-text toggle; this is presentation only and does not
 normalize or replace OpenClaw's stored JSONL. The same viewer covers persisted

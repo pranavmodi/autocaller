@@ -1295,15 +1295,15 @@ next step only when auto-run remains enabled and its budget remains. Completion,
 failure, an operator stop, or the bounded step cap ends chaining. The default
 cap is 25 additional steps and the API maximum is 100. `POST
 /api/lead-finder/runs/{run_id}/auto-run/stop` disables chaining without
-interrupting the active OpenClaw or tool call; that step finishes and persists.
+interrupting the active LLM-provider or tool call; that step finishes and persists.
 Startup recovery requeues both interrupted steps and enabled auto-runs stranded
 between two steps, so a browser connection is not required.
 
 Each `lead_finder_steps` row stores the exact user payload, context before,
 raw/parsed response, context after, changed paths, model, usage, timing, and
-error. `lead_finder_attempts` stores every concrete OpenClaw HTTP attempt,
-including retries and interrupted attempts. A row is written before the
-gateway call, so queued/running work remains observable while the HTTP request
+error. `lead_finder_attempts` stores every concrete OpenClaw or direct Responses
+API attempt, including retries and interrupted attempts. A row is written before
+the provider call, so queued/running work remains observable while the request
 is open. A backend restart marks open attempts interrupted and safely requeues
 their step. `lead_finder_tool_calls` stores the validated tool name, arguments,
 complete result/error, and timing. A backend restart also marks open tool calls
@@ -1311,25 +1311,39 @@ interrupted. Only one active step and at most one tool call are allowed per
 transition. Manual debug steps are rejected while auto-run is enabled, so the
 manual and unattended paths cannot race for the same next step.
 
-Lead Finder uses one gateway attempt with a 420-second default timeout
-(`LEAD_FINDER_GATEWAY_TIMEOUT_S`) because its baseline context is large. It does
-not automatically duplicate a still-running `openclaw/main` request after a
-short read timeout; an operator can explicitly start another run after
-inspecting a terminal failure.
+OpenClaw reasoning uses one gateway attempt with a 420-second default timeout
+(`LEAD_FINDER_GATEWAY_TIMEOUT_S`) because its baseline context is large. Direct
+reasoning uses `LEAD_FINDER_OPENAI_TIMEOUT_S` (300 seconds by default) and one
+application-level attempt by default. Neither path duplicates a still-running
+request merely because browser polling continues.
 
-Persisted steps reuse one OpenClaw session per Lead Finder run. Possible OS
-sends a deterministic, hashed run-scoped `user` value; OpenClaw maps it to a
-stable session and downstream `prompt_cache_key`. This preserves the growing
-conversation prefix across debug clicks without sharing hidden session history
-between separate runs. The first request uses `context_layout: initial_v2` and
+The `lead_finder_runs.llm_provider` field selects every future LLM call in the
+run. With `openai`, reasoning and web research call the OpenAI Responses API
+directly with `gpt-5.6-luna`; with `openclaw`, both use `openclaw/main` through
+the loopback gateway. Mission Control search and passage retrieval remain local
+non-LLM HTTP tools. Provider changes do not interrupt an active step and apply
+when the next step begins.
+
+Each transport maintains independent run continuity. OpenClaw receives a
+deterministic, hashed run-scoped `user` value and keeps its local session. Direct
+reasoning stores the latest Responses API ID in
+`lead_finder_runs.openai_previous_response_id` and passes it as
+`previous_response_id` on the next direct reasoning turn. Possible OS persists
+the exact request, full provider response JSON, parsed transition, and usage in
+`lead_finder_attempts`. Switching away and back resumes that provider's prior
+lineage while current run state carries intervening tool evidence.
+
+The first request on either provider uses `context_layout: initial_v2` and
 serializes `instruction`, `available_tools`, and deterministic
 `stable_context` (job plus baseline files) before `run_state`. Volatile snapshot
 timestamps are excluded from the stable block. Later requests use
-`context_layout: continuation_v2`; because they target the same OpenClaw
-session, they omit the already-present stable block and tool catalog and append
+`context_layout: continuation_v2`; because they target the same provider
+conversation, they omit the already-present stable block and tool catalog and append
 only current `run_state`. Stateless calls always use the complete initial
-layout. This prevents the large baseline from being repeatedly appended after
-changing state while preserving server-authoritative mutable context. The first
+layout. Direct requests resend stable Lead Finder instructions because
+Responses API instructions are not inherited through `previous_response_id`.
+This prevents the large baseline from being repeatedly appended after changing
+state while preserving server-authoritative mutable context. The first
 request is normally cold; later requests can report a hit in
 `usage.prompt_tokens_details.cached_tokens`. The API derives a
 normalized `prompt_cache` object for every step and attempt (`hit`, `miss`, or
@@ -1338,7 +1352,8 @@ normalized `prompt_cache` object for every step and attempt (`hit`, `miss`, or
 legacy stateless `POST /api/lead-finder/step` endpoint deliberately does not
 create a shared session.
 
-`GET /api/lead-finder/runs/{run_id}/llm-session` resolves that run's hashed
+For an OpenClaw-selected run,
+`GET /api/lead-finder/runs/{run_id}/llm-session` resolves the run's hashed
 gateway identity through OpenClaw's own `sessions.json` registry and returns
 the two on-disk files without parsing or rewriting their records. The canonical
 `session_jsonl` is the ordered conversation store. `trajectory_jsonl` is the
@@ -1351,7 +1366,9 @@ For readability, the browser splits the selected string by line, parses each
 record client-side, labels it by event type/role/sequence/timestamp, and renders
 an expandable syntax-highlighted JSON tree. Expand/collapse operations affect
 only the DOM presentation. The raw toggle, copy action, API, and CLI continue to
-use the byte-identical JSONL supplied by OpenClaw.
+use the byte-identical JSONL supplied by OpenClaw. Direct runs have no local
+OpenClaw JSONL; the same UI tab instead renders the persisted Responses API
+attempt trace, including the full provider response and latest response ID.
 The shared tree also renders Possible OS current context, exact step requests,
 before/after snapshots, tool arguments/results, and JSON LLM responses. When a
 string field itself contains a valid JSON object or array (for example a gateway
@@ -1378,14 +1395,13 @@ mutation. `GET /api/lead-finder/tools` lists the contract and
 
 `app/services/lead_finder_tools.py` adds two sequenced tools. The agent may call
 `web.research_person` only with one named candidate and one to five positive
-Mission Control chunk IDs. `app/services/lead_finder_web_research.py` can run
+Mission Control chunk IDs. `app/services/lead_finder_web_research.py` runs
 the source-backed web-research skill either directly through the OpenAI
-Responses API or through `openclaw/main`. The run's
-`web_research_provider` column selects the path; direct OpenAI is the default
-and uses `gpt-5.6-luna` plus the built-in `web_search` tool, while OpenClaw is a
-per-run fallback. `PUT
-/api/lead-finder/runs/{run_id}/web-research-provider` changes the provider for
-future research calls without changing the `openclaw/main` reasoning session.
+Responses API or through `openclaw/main`, following the same run-wide provider
+as reasoning. Direct OpenAI is the default and uses `gpt-5.6-luna` plus the
+built-in `web_search` tool. `PUT
+/api/lead-finder/runs/{run_id}/llm-provider` changes the provider for all future
+LLM calls in the run.
 The direct path uses a strict JSON Schema, `store=false`, a stable
 `prompt_cache_key`, and 24-hour prompt-cache retention. The API key is read
 only from `LEAD_FINDER_OPENAI_API_KEY`; it is never stored on the run or in a
@@ -1402,15 +1418,15 @@ a CRM write, and no deduplication is performed.
 
 `POST /api/lead-finder/runs/{run_id}/restart` creates a new step-0 run linked by
 `restarted_from_run_id`; it never deletes or rewrites prior history. It inherits
-the prior user direction unless overridden, inherits the web-research provider,
+the prior user direction unless overridden, inherits the run-wide LLM provider,
 and takes a fresh baseline snapshot.
 
 `POST /api/lead-finder/runs/reset-all` is the explicit destructive reset. In one
 database transaction it counts and deletes all Lead Finder runs, cascade-deletes
-their steps, gateway attempts, and tool calls, and creates one fresh step-0 run using a new
-baseline snapshot, supplied user direction, and selected web-research provider.
+their steps, provider attempts, and tool calls, and creates one fresh step-0 run using a new
+baseline snapshot, supplied user direction, and selected run-wide LLM provider.
 It does not touch leads or
-any other Possible OS tables. If a deleted step already has an OpenClaw request
+any other Possible OS tables. If a deleted step already has a provider request
 in flight, its late response is discarded because the persisted step no longer
 exists. The UI requires browser confirmation; the CLI requires confirmation or
 an explicit `--yes`.
