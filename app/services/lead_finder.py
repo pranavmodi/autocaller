@@ -35,6 +35,8 @@ OPENCLAW_HOME = Path(os.getenv("OPENCLAW_HOME", "/root/.openclaw"))
 CONTEXT_FILES = ("company.md", "customer.md", "offer.md", "voice.md")
 ACTIVE_STEP_STATUSES = {"queued", "running", "retrying"}
 TERMINAL_STEP_STATUSES = {"completed", "failed", "interrupted"}
+AUTO_RUN_DEFAULT_MAX_STEPS = 25
+AUTO_RUN_MAX_STEPS = 100
 _tables_checked = False
 
 JOB = {
@@ -420,6 +422,17 @@ def _changed_paths(before: Any, after: Any, prefix: str = "") -> list[str]:
     return paths
 
 
+def _auto_run_steps_used(run: LeadFinderRunRow) -> int:
+    started = run.auto_run_started_step
+    if started is None:
+        return 0
+    return max(0, int(run.current_step or 0) - int(started))
+
+
+def _auto_run_has_budget(run: LeadFinderRunRow) -> bool:
+    return _auto_run_steps_used(run) < int(run.auto_run_max_steps or AUTO_RUN_DEFAULT_MAX_STEPS)
+
+
 async def ensure_lead_finder_tables() -> None:
     global _tables_checked
     if _tables_checked:
@@ -444,6 +457,11 @@ def _run_dict(row: LeadFinderRunRow) -> dict[str, Any]:
         "current_context": row.current_context_json or {},
         "current_step": row.current_step,
         "next_step": row.next_step,
+        "auto_run_enabled": row.auto_run_enabled,
+        "auto_run_max_steps": row.auto_run_max_steps,
+        "auto_run_started_step": row.auto_run_started_step,
+        "auto_run_steps_used": _auto_run_steps_used(row),
+        "auto_run_stop_reason": row.auto_run_stop_reason,
         "error": row.error,
         "restarted_from_run_id": row.restarted_from_run_id,
         "completed_at": _iso(row.completed_at),
@@ -537,6 +555,8 @@ def _build_lead_finder_run_row(
         current_context_json=baseline,
         current_step=0,
         next_step=baseline["agent_state"]["next_step"],
+        auto_run_enabled=False,
+        auto_run_max_steps=AUTO_RUN_DEFAULT_MAX_STEPS,
         restarted_from_run_id=restarted_from_run_id,
     )
 
@@ -761,11 +781,35 @@ async def get_lead_finder_llm_session(run_id: str) -> dict[str, Any]:
     return _load_openclaw_session_raw(run_id)
 
 
+def _build_queued_step(
+    run: LeadFinderRunRow,
+    *,
+    request_id: str,
+    user_direction: str,
+) -> LeadFinderStepRow:
+    direction = user_direction.strip()
+    before = _context_for_persisted_run(run.current_context_json or {}, direction)
+    return LeadFinderStepRow(
+        id=f"lfs_{uuid.uuid4().hex}",
+        run_id=run.id,
+        step_number=run.current_step + 1,
+        request_id=request_id,
+        status="queued",
+        user_direction=direction,
+        context_before_json=before,
+        request_json=_gateway_payload(
+            before,
+            continuation=_is_gateway_continuation(before, run.id),
+        ),
+    )
+
+
 async def queue_lead_finder_step(
     *,
     run_id: str,
     request_id: str,
     user_direction: str,
+    allow_auto_run: bool = False,
 ) -> dict[str, Any]:
     await ensure_lead_finder_tables()
     async with AsyncSessionLocal() as session:
@@ -802,26 +846,19 @@ async def queue_lead_finder_step(
             raise LeadFinderRunBusyError(active.id)
         if run.status in {"completed", "failed"}:
             raise LeadFinderRunStateError(f"run_is_{run.status}; restart_from_step_1")
+        if run.auto_run_enabled and not allow_auto_run:
+            raise LeadFinderRunStateError("run_is_in_auto_mode; stop_auto_run_first")
 
         direction = user_direction.strip()
-        before = _context_for_persisted_run(run.current_context_json or {}, direction)
-        step = LeadFinderStepRow(
-            id=f"lfs_{uuid.uuid4().hex}",
-            run_id=run_id,
-            step_number=run.current_step + 1,
+        step = _build_queued_step(
+            run,
             request_id=request_id,
-            status="queued",
             user_direction=direction,
-            context_before_json=before,
-            request_json=_gateway_payload(
-                before,
-                continuation=_is_gateway_continuation(before, run_id),
-            ),
         )
         session.add(step)
         run.status = "queued"
         run.user_direction = direction
-        run.current_context_json = before
+        run.current_context_json = step.context_before_json
         run.error = None
         run.updated_at = datetime.now(timezone.utc)
         try:
@@ -832,6 +869,132 @@ async def queue_lead_finder_step(
     payload = _step_dict(step)
     payload["_created"] = True
     return payload
+
+
+async def start_lead_finder_auto_run(
+    *,
+    run_id: str,
+    user_direction: str | None = None,
+    max_steps: int = AUTO_RUN_DEFAULT_MAX_STEPS,
+) -> dict[str, Any]:
+    """Enable bounded unattended execution and queue the next step atomically."""
+    await ensure_lead_finder_tables()
+    bounded_max = max(1, min(AUTO_RUN_MAX_STEPS, int(max_steps)))
+    async with AsyncSessionLocal() as session:
+        async with session.begin():
+            run = (
+                await session.execute(
+                    select(LeadFinderRunRow)
+                    .where(LeadFinderRunRow.id == run_id)
+                    .with_for_update()
+                )
+            ).scalar_one_or_none()
+            if not run:
+                raise LeadFinderNotFoundError("lead_finder_run_not_found")
+            if run.status in {"completed", "failed"}:
+                raise LeadFinderRunStateError(f"run_is_{run.status}; start_a_new_run")
+
+            direction = run.user_direction if user_direction is None else user_direction.strip()
+            active = (
+                await session.execute(
+                    select(LeadFinderStepRow).where(
+                        LeadFinderStepRow.run_id == run_id,
+                        LeadFinderStepRow.status.in_(ACTIVE_STEP_STATUSES),
+                    )
+                )
+            ).scalar_one_or_none()
+            run.auto_run_enabled = True
+            run.auto_run_max_steps = bounded_max
+            run.auto_run_started_step = run.current_step
+            run.auto_run_stop_reason = None
+            run.user_direction = direction
+            run.error = None
+            run.updated_at = datetime.now(timezone.utc)
+            created = active is None
+            step = active
+            if created:
+                step = _build_queued_step(
+                    run,
+                    request_id=f"lfauto_{uuid.uuid4().hex}",
+                    user_direction=direction,
+                )
+                session.add(step)
+                run.status = "queued"
+                run.current_context_json = step.context_before_json
+        await session.refresh(run)
+        if step is not None:
+            await session.refresh(step)
+        return {
+            "run": _run_dict(run),
+            "step": _step_dict(step) if step is not None else None,
+            "_created": created,
+        }
+
+
+async def stop_lead_finder_auto_run(*, run_id: str) -> dict[str, Any]:
+    """Stop chaining after the currently active step finishes."""
+    await ensure_lead_finder_tables()
+    async with AsyncSessionLocal() as session:
+        async with session.begin():
+            run = (
+                await session.execute(
+                    select(LeadFinderRunRow)
+                    .where(LeadFinderRunRow.id == run_id)
+                    .with_for_update()
+                )
+            ).scalar_one_or_none()
+            if not run:
+                raise LeadFinderNotFoundError("lead_finder_run_not_found")
+            run.auto_run_enabled = False
+            run.auto_run_stop_reason = "operator_stopped"
+            run.updated_at = datetime.now(timezone.utc)
+        await session.refresh(run)
+        return _run_dict(run)
+
+
+async def _queue_auto_run_continuation(run_id: str) -> str | None:
+    """Queue one more unattended step when the persisted run still allows it."""
+    async with AsyncSessionLocal() as session:
+        async with session.begin():
+            run = (
+                await session.execute(
+                    select(LeadFinderRunRow)
+                    .where(LeadFinderRunRow.id == run_id)
+                    .with_for_update()
+                )
+            ).scalar_one_or_none()
+            if not run or not run.auto_run_enabled:
+                return None
+            if run.status in {"completed", "failed"}:
+                run.auto_run_enabled = False
+                run.auto_run_stop_reason = run.status
+                return None
+            if not _auto_run_has_budget(run):
+                run.auto_run_enabled = False
+                run.auto_run_stop_reason = "step_limit_reached"
+                run.updated_at = datetime.now(timezone.utc)
+                return None
+            active = (
+                await session.execute(
+                    select(LeadFinderStepRow).where(
+                        LeadFinderStepRow.run_id == run_id,
+                        LeadFinderStepRow.status.in_(ACTIVE_STEP_STATUSES),
+                    )
+                )
+            ).scalar_one_or_none()
+            if active:
+                return None
+            step = _build_queued_step(
+                run,
+                request_id=f"lfauto_{uuid.uuid4().hex}",
+                user_direction=run.user_direction,
+            )
+            session.add(step)
+            run.status = "queued"
+            run.current_context_json = step.context_before_json
+            run.error = None
+            run.updated_at = datetime.now(timezone.utc)
+        return step.id
 
 
 async def _attempt_observer(step_id: str, base_attempt: int, event: dict[str, Any]) -> None:
@@ -933,6 +1096,7 @@ async def _execute_persisted_tool_call(
 
 async def execute_lead_finder_step(step_id: str) -> None:
     await ensure_lead_finder_tables()
+    run_id: str | None = None
     async with AsyncSessionLocal() as session:
         async with session.begin():
             step = (
@@ -947,6 +1111,7 @@ async def execute_lead_finder_step(step_id: str) -> None:
             run = await session.get(LeadFinderRunRow, step.run_id)
             if not run:
                 return
+            run_id = run.id
             step.status = "running"
             step.started_at = datetime.now(timezone.utc)
             run.status = "running"
@@ -992,6 +1157,8 @@ async def execute_lead_finder_step(step_id: str) -> None:
                 if run:
                     run.status = "failed"
                     run.error = str(exc)
+                    run.auto_run_enabled = False
+                    run.auto_run_stop_reason = "step_failed"
                     run.updated_at = datetime.now(timezone.utc)
         return
 
@@ -1025,8 +1192,16 @@ async def execute_lead_finder_step(step_id: str) -> None:
             run.next_step = after.get("agent_state", {}).get("next_step")
             run.status = "completed" if transition.get("is_complete") else "paused"
             run.completed_at = datetime.now(timezone.utc) if transition.get("is_complete") else None
+            if transition.get("is_complete"):
+                run.auto_run_enabled = False
+                run.auto_run_stop_reason = "completed"
             run.error = None
             run.updated_at = datetime.now(timezone.utc)
+
+    if run_id:
+        next_step_id = await _queue_auto_run_continuation(run_id)
+        if next_step_id:
+            await execute_lead_finder_step(next_step_id)
 
 
 async def restart_lead_finder_run(
@@ -1092,5 +1267,33 @@ async def recover_interrupted_lead_finder_steps() -> list[str]:
                     run.status = "queued"
                     run.error = None
                     run.updated_at = now
+                recovered.append(step.id)
+
+            stranded_auto_runs = (
+                await session.execute(
+                    select(LeadFinderRunRow)
+                    .where(
+                        LeadFinderRunRow.auto_run_enabled.is_(True),
+                        LeadFinderRunRow.status.in_({"ready", "paused"}),
+                    )
+                    .with_for_update()
+                )
+            ).scalars().all()
+            for run in stranded_auto_runs:
+                if not _auto_run_has_budget(run):
+                    run.auto_run_enabled = False
+                    run.auto_run_stop_reason = "step_limit_reached"
+                    run.updated_at = now
+                    continue
+                step = _build_queued_step(
+                    run,
+                    request_id=f"lfauto_{uuid.uuid4().hex}",
+                    user_direction=run.user_direction,
+                )
+                session.add(step)
+                run.status = "queued"
+                run.current_context_json = step.context_before_json
+                run.error = None
+                run.updated_at = now
                 recovered.append(step.id)
     return recovered

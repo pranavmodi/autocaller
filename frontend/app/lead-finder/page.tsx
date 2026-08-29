@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  Activity,
   Braces,
   CheckCircle2,
   ChevronRight,
@@ -18,6 +19,7 @@ import {
   Search,
   Sparkles,
   Users,
+  Wrench,
 } from "lucide-react";
 import {
   createLeadFinderRun,
@@ -27,6 +29,8 @@ import {
   listLeadFinderRuns,
   queueLeadFinderStep,
   resetAllLeadFinderRuns,
+  startLeadFinderAutoRun,
+  stopLeadFinderAutoRun,
   type LeadFinderContext,
   type LeadFinderFoundLead,
   type LeadFinderLLMSessionRaw,
@@ -191,6 +195,23 @@ function stepTone(status: string) {
   return "border-neutral-200 bg-neutral-50 text-neutral-600";
 }
 
+function toolResultSummary(toolCall: LeadFinderPersistedStep["tool_calls"][number]) {
+  if (toolCall.error) return toolCall.error;
+  const result = objectValue(toolCall.result) || {};
+  const lead = objectValue(result.lead);
+  const person = objectValue(result.person);
+  if (lead) return `Added ${String(lead.name || "researched lead")} to Found Leads.`;
+  if (person) {
+    const confidence = Number(person.identity_confidence);
+    const suffix = Number.isFinite(confidence) ? ` · ${Math.round(confidence * 100)}% identity confidence` : "";
+    return `Verified ${String(person.name || "candidate")}${suffix}.`;
+  }
+  if (Array.isArray(result.results)) return `Returned ${result.results.length} search result${result.results.length === 1 ? "" : "s"}.`;
+  if (Array.isArray(result.passages)) return `Retrieved ${result.passages.length} transcript passage${result.passages.length === 1 ? "" : "s"}.`;
+  if (toolCall.status === "running") return "Tool is running…";
+  return toolCall.status === "completed" ? "Result persisted." : `Tool ${toolCall.status}.`;
+}
+
 export default function LeadFinderPage() {
   const [baseline, setBaseline] = useState<LeadFinderContext | null>(null);
   const [runs, setRuns] = useState<LeadFinderRun[]>([]);
@@ -198,9 +219,10 @@ export default function LeadFinderPage() {
   const [userDirection, setUserDirection] = useState("");
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [autoChanging, setAutoChanging] = useState(false);
   const [resettingAll, setResettingAll] = useState(false);
   const [error, setError] = useState("");
-  const [activeView, setActiveView] = useState<"context" | "session" | "leads" | "history">("context");
+  const [activeView, setActiveView] = useState<"overview" | "context" | "session" | "leads" | "history">("overview");
   const [llmSession, setLlmSession] = useState<LeadFinderLLMSessionRaw | null>(null);
   const [llmSessionSource, setLlmSessionSource] = useState<"session" | "trajectory">("session");
   const [llmSessionDisplay, setLlmSessionDisplay] = useState<"readable" | "raw">("readable");
@@ -246,7 +268,7 @@ export default function LeadFinderPage() {
   }, [loadRun, refreshRuns]);
 
   useEffect(() => {
-    if (!run || resettingAll || !ACTIVE_STATUSES.has(run.status)) return;
+    if (!run || resettingAll || (!ACTIVE_STATUSES.has(run.status) && !run.auto_run_enabled)) return;
     let cancelled = false;
     const poll = async () => {
       try {
@@ -268,7 +290,7 @@ export default function LeadFinderPage() {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [refreshRuns, resettingAll, run?.id, run?.status]);
+  }, [refreshRuns, resettingAll, run?.auto_run_enabled, run?.id, run?.status]);
 
   useEffect(() => {
     if (activeView !== "session" || !run) return;
@@ -330,7 +352,7 @@ export default function LeadFinderPage() {
       const response = await createLeadFinderRun(userDirection);
       await loadRun(response.run.id);
       await refreshRuns();
-      setActiveView("context");
+      setActiveView("overview");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unable to create run.");
     } finally {
@@ -339,7 +361,7 @@ export default function LeadFinderPage() {
   }
 
   async function doNextStep() {
-    if (!run || submissionLock.current || isActive) return;
+    if (!run || run.auto_run_enabled || submissionLock.current || isActive) return;
     submissionLock.current = true;
     setSubmitting(true);
     setError("");
@@ -350,11 +372,42 @@ export default function LeadFinderPage() {
         submissionLock.current = false;
         setSubmitting(false);
       }
-      setActiveView("history");
+      setActiveView("overview");
     } catch (cause) {
       submissionLock.current = false;
       setSubmitting(false);
       setError(cause instanceof Error ? cause.message : "Unable to queue the next step.");
+    }
+  }
+
+  async function startAutoRun() {
+    if (!run || run.auto_run_enabled || isActive || autoChanging) return;
+    setAutoChanging(true);
+    setError("");
+    try {
+      const response = await startLeadFinderAutoRun(run.id, userDirection, 25);
+      setRun({ ...response.run, steps: run.steps });
+      setActiveView("overview");
+      void refreshRuns();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Unable to start automatic execution.");
+    } finally {
+      setAutoChanging(false);
+    }
+  }
+
+  async function stopAutoRun() {
+    if (!run || !run.auto_run_enabled || autoChanging) return;
+    setAutoChanging(true);
+    setError("");
+    try {
+      const response = await stopLeadFinderAutoRun(run.id);
+      setRun((current) => current ? { ...current, ...response.run, steps: current.steps } : response.run);
+      void refreshRuns();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Unable to stop automatic execution.");
+    } finally {
+      setAutoChanging(false);
     }
   }
 
@@ -373,7 +426,7 @@ export default function LeadFinderPage() {
       setRun({ ...response.run, steps: [] });
       setRuns([response.run]);
       setUserDirection(response.run.user_direction || "");
-      setActiveView("context");
+      setActiveView("overview");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unable to delete Lead Finder runs.");
     } finally {
@@ -402,7 +455,7 @@ export default function LeadFinderPage() {
             <h1 className="text-2xl font-semibold tracking-tight text-neutral-950">Debug workspace</h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-neutral-600">
               Runs, requests, gateway attempts, raw responses, and context evolution are persisted in Postgres.
-              Each trigger executes one reasoning step or one bounded tool and pauses.
+              Step manually for inspection, or run continuously through the same persisted transitions.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -413,19 +466,33 @@ export default function LeadFinderPage() {
               </button>
             ) : (
               <button type="button" onClick={doNextStep}
-                disabled={submitting || isActive || run.status === "completed" || run.status === "failed"}
+                disabled={submitting || isActive || run.auto_run_enabled || run.status === "completed" || run.status === "failed"}
                 className="inline-flex items-center gap-2 rounded-lg bg-neutral-950 px-4 py-2.5 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-neutral-300">
                 {isActive || submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <ChevronRight className="h-4 w-4" />}
                 {isActive ? "OpenClaw in progress…" : "Do next step"}
               </button>
             )}
+            {run && run.auto_run_enabled ? (
+              <button type="button" onClick={stopAutoRun} disabled={autoChanging}
+                className="inline-flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-4 py-2.5 text-sm font-medium text-amber-800 hover:bg-amber-100 disabled:opacity-50">
+                {autoChanging ? <Loader2 className="h-4 w-4 animate-spin" /> : <Pause className="h-4 w-4" />}
+                Stop after this step
+              </button>
+            ) : run && (
+              <button type="button" onClick={startAutoRun}
+                disabled={autoChanging || isActive || run.status === "completed" || run.status === "failed"}
+                className="inline-flex items-center gap-2 rounded-lg bg-violet-700 px-4 py-2.5 text-sm font-medium text-white hover:bg-violet-800 disabled:cursor-not-allowed disabled:bg-neutral-300">
+                {autoChanging ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+                Run without pauses
+              </button>
+            )}
             {run && (
-              <button type="button" onClick={startRun} disabled={loading || submitting || isActive}
+              <button type="button" onClick={startRun} disabled={loading || submitting || isActive || run.auto_run_enabled}
                 className="inline-flex items-center gap-2 rounded-lg border border-neutral-200 bg-white px-3 py-2.5 text-sm font-medium text-neutral-700 hover:bg-neutral-50 disabled:opacity-50">
                 <Play className="h-4 w-4" /> New run
               </button>
             )}
-            <button type="button" onClick={deleteAllAndRestart} disabled={loading || resettingAll}
+            <button type="button" onClick={deleteAllAndRestart} disabled={loading || resettingAll || isActive || Boolean(run?.auto_run_enabled)}
               className="inline-flex items-center gap-2 rounded-lg border border-red-300 bg-white px-3 py-2.5 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-50">
               {resettingAll ? <Loader2 className="h-4 w-4 animate-spin" /> : <DatabaseZap className="h-4 w-4" />}
               Delete all &amp; restart
@@ -435,7 +502,7 @@ export default function LeadFinderPage() {
 
         {error && <div className="mt-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
 
-        <div className="mt-6 grid gap-4 border-t border-neutral-100 pt-5 sm:grid-cols-5">
+        <div className="mt-6 grid gap-4 border-t border-neutral-100 pt-5 sm:grid-cols-2 lg:grid-cols-6">
           <div>
             <div className="text-xs text-neutral-500">Persisted run</div>
             <select value={run?.id || ""} onChange={(event) => void selectRun(event.target.value)}
@@ -449,6 +516,16 @@ export default function LeadFinderPage() {
             <div className="mt-1 flex items-center gap-2 text-sm font-medium text-neutral-900">
               {isActive ? <Loader2 className="h-4 w-4 animate-spin text-sky-600" /> : <Pause className="h-4 w-4 text-amber-600" />}
               {run?.status || "ready"}
+            </div>
+          </div>
+          <div>
+            <div className="text-xs text-neutral-500">Execution mode</div>
+            <div className="mt-1 text-sm font-medium text-neutral-900">
+              {run?.auto_run_enabled
+                ? `automatic · ${run.auto_run_steps_used}/${run.auto_run_max_steps}`
+                : run?.auto_run_stop_reason === "step_limit_reached"
+                  ? "paused · safety limit reached"
+                  : "manual debug"}
             </div>
           </div>
           <div><div className="text-xs text-neutral-500">Completed step</div><div className="mt-1 text-sm font-medium text-neutral-900">{run?.current_step || 0}</div></div>
@@ -496,7 +573,11 @@ export default function LeadFinderPage() {
         </aside>
 
         <div className="min-w-0 rounded-2xl border border-neutral-200 bg-white shadow-sm">
-          <div className="flex items-center gap-1 border-b border-neutral-200 p-2">
+          <div className="flex flex-wrap items-center gap-1 border-b border-neutral-200 p-2">
+            <button type="button" onClick={() => setActiveView("overview")}
+              className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium ${activeView === "overview" ? "bg-neutral-900 text-white" : "text-neutral-600 hover:bg-neutral-100"}`}>
+              <Activity className="h-4 w-4" /> Run overview
+            </button>
             <button type="button" onClick={() => setActiveView("context")}
               className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium ${activeView === "context" ? "bg-neutral-900 text-white" : "text-neutral-600 hover:bg-neutral-100"}`}>
               <Braces className="h-4 w-4" /> Current context
@@ -516,7 +597,92 @@ export default function LeadFinderPage() {
           </div>
 
           <div className="p-4 sm:p-5">
-            {activeView === "context" ? (
+            {activeView === "overview" ? (
+              <div className="space-y-5">
+                <section className="rounded-xl border border-neutral-200 bg-neutral-50 p-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <div className="text-xs font-semibold uppercase tracking-[0.14em] text-neutral-500">Current position</div>
+                      <div className="mt-1 text-base font-semibold text-neutral-950">
+                        {run?.status === "completed" ? "Run complete" : run?.next_step || "Ready to begin"}
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2 text-xs">
+                      <span className="rounded-full border border-neutral-200 bg-white px-2.5 py-1 text-neutral-700">{steps.length} step{steps.length === 1 ? "" : "s"}</span>
+                      <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-emerald-700">{foundLeads.length} found lead{foundLeads.length === 1 ? "" : "s"}</span>
+                      {run?.auto_run_enabled && <span className="rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-violet-700">Auto-running</span>}
+                    </div>
+                  </div>
+                  {run?.auto_run_enabled && (
+                    <div className="mt-3">
+                      <div className="mb-1 flex justify-between text-[10px] font-medium text-violet-700">
+                        <span>Unattended safety budget</span>
+                        <span>{run.auto_run_steps_used} / {run.auto_run_max_steps}</span>
+                      </div>
+                      <div className="h-1.5 overflow-hidden rounded-full bg-violet-100">
+                        <div className="h-full rounded-full bg-violet-600 transition-all" style={{ width: `${Math.min(100, (run.auto_run_steps_used / Math.max(1, run.auto_run_max_steps)) * 100)}%` }} />
+                      </div>
+                    </div>
+                  )}
+                </section>
+
+                {steps.length === 0 ? (
+                  <div className="flex min-h-72 flex-col items-center justify-center text-center">
+                    <Activity className="h-8 w-8 text-neutral-300" />
+                    <div className="mt-3 text-sm font-medium text-neutral-800">The run has not taken its first step</div>
+                    <p className="mt-1 max-w-md text-xs leading-5 text-neutral-500">Use Do next step for manual inspection or Run without pauses for bounded unattended execution.</p>
+                  </div>
+                ) : (
+                  <div className="relative space-y-4 before:absolute before:bottom-6 before:left-[1.05rem] before:top-6 before:w-px before:bg-neutral-200">
+                    {steps.map((step) => {
+                      const response = step.response_parsed;
+                      const waiting = ACTIVE_STATUSES.has(step.status);
+                      return (
+                        <article key={step.id} className="relative pl-11">
+                          <div className={`absolute left-0 top-4 z-10 flex h-9 w-9 items-center justify-center rounded-full border-4 border-white ${waiting ? "bg-sky-100 text-sky-700" : step.status === "completed" ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}`}>
+                            {waiting ? <Loader2 className="h-4 w-4 animate-spin" /> : response.action?.type === "tool_call" ? <Wrench className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}
+                          </div>
+                          <div className="rounded-xl border border-neutral-200 bg-white p-4 shadow-sm">
+                            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                              <div>
+                                <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-violet-600">Step {step.step_number}</div>
+                                <h2 className="mt-1 text-sm font-semibold text-neutral-950">{response.step_name || (waiting ? "OpenClaw is reasoning" : "Persisted transition")}</h2>
+                                <p className="mt-1 text-sm leading-6 text-neutral-600">{response.summary || step.error || "Waiting for the model response."}</p>
+                              </div>
+                              <span className={`shrink-0 rounded-full border px-2 py-1 text-xs ${stepTone(step.status)}`}>{step.status}</span>
+                            </div>
+
+                            {response.reasoning && (
+                              <div className="mt-3 rounded-lg bg-violet-50/70 p-3">
+                                <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-violet-600">Reasoning</div>
+                                <p className="mt-1 text-xs leading-5 text-violet-950">{response.reasoning}</p>
+                              </div>
+                            )}
+
+                            {(step.tool_calls || []).map((toolCall) => (
+                              <div key={toolCall.id || `${step.id}-${toolCall.tool_name}`} className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50/50 p-3">
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                  <div className="flex items-center gap-2 text-xs font-semibold text-emerald-900"><Wrench className="h-3.5 w-3.5" /> {toolCall.tool_name}</div>
+                                  <span className={`rounded-full border px-2 py-0.5 text-[10px] ${stepTone(toolCall.status)}`}>{toolCall.status}</span>
+                                </div>
+                                <p className="mt-1 text-xs leading-5 text-emerald-800">{toolResultSummary(toolCall)}</p>
+                              </div>
+                            ))}
+
+                            {response.next_step && (
+                              <div className="mt-3 flex items-start gap-2 border-t border-neutral-100 pt-3 text-xs leading-5 text-neutral-500">
+                                <ChevronRight className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                                <span><strong className="font-medium text-neutral-700">Next:</strong> {response.next_step}</span>
+                              </div>
+                            )}
+                          </div>
+                        </article>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            ) : activeView === "context" ? (
               <div className="space-y-5">
                 <section className="rounded-xl border border-violet-200 bg-violet-50/50">
                   <div className="flex items-center justify-between gap-3 border-b border-violet-200 px-4 py-3">

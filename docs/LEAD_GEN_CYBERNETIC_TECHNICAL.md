@@ -1287,6 +1287,18 @@ its durable id.
 The UI polls `GET /api/lead-finder/runs/{run_id}` rather than holding browser
 state as the source of truth.
 
+`POST /api/lead-finder/runs/{run_id}/auto-run` enables persisted unattended
+execution and queues the next step. The run row stores the enabled flag,
+starting step, maximum additional steps, and eventual stop reason. After each
+normal persisted transition, the worker locks the run and queues exactly one
+next step only when auto-run remains enabled and its budget remains. Completion,
+failure, an operator stop, or the bounded step cap ends chaining. The default
+cap is 25 additional steps and the API maximum is 100. `POST
+/api/lead-finder/runs/{run_id}/auto-run/stop` disables chaining without
+interrupting the active OpenClaw or tool call; that step finishes and persists.
+Startup recovery requeues both interrupted steps and enabled auto-runs stranded
+between two steps, so a browser connection is not required.
+
 Each `lead_finder_steps` row stores the exact user payload, context before,
 raw/parsed response, context after, changed paths, model, usage, timing, and
 error. `lead_finder_attempts` stores every concrete OpenClaw HTTP attempt,
@@ -1296,7 +1308,8 @@ is open. A backend restart marks open attempts interrupted and safely requeues
 their step. `lead_finder_tool_calls` stores the validated tool name, arguments,
 complete result/error, and timing. A backend restart also marks open tool calls
 interrupted. Only one active step and at most one tool call are allowed per
-debug trigger.
+transition. Manual debug steps are rejected while auto-run is enabled, so the
+manual and unattended paths cannot race for the same next step.
 
 Lead Finder uses one gateway attempt with a 420-second default timeout
 (`LEAD_FINDER_GATEWAY_TIMEOUT_S`) because its baseline context is large. It does
@@ -1349,6 +1362,10 @@ open state, so user toggles survive React rerenders and run-status polling;
 arrow rotation is derived from that same node state rather than a shared nested
 CSS group selector. The readable/raw mode and expand/collapse controls live in
 the sticky header inside the JSON viewer so their scope is visually explicit.
+The **Run overview** tab is a high-level projection of the same durable records:
+it shows each step's summary and reasoning, requested tool and compact result,
+next transition, found-lead count, and unattended safety-budget progress. It
+does not create a second trace or ask an LLM to summarize the run.
 
 The discovery adapter is `app/services/mission_control_search.py`. It exposes
 only `mission_control.search`, `mission_control.get_passages`, and

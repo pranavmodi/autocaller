@@ -182,6 +182,12 @@ def test_persistence_models_cover_runs_steps_and_every_gateway_attempt():
     assert {"context_before_json", "context_after_json", "context_diff_json"}.issubset(
         LeadFinderStepRow.__table__.columns.keys()
     )
+    assert {
+        "auto_run_enabled",
+        "auto_run_max_steps",
+        "auto_run_started_step",
+        "auto_run_stop_reason",
+    }.issubset(LeadFinderRunRow.__table__.columns.keys())
     step_run_fk = next(iter(LeadFinderStepRow.__table__.c.run_id.foreign_keys))
     attempt_step_fk = next(iter(LeadFinderAttemptRow.__table__.c.step_id.foreign_keys))
     tool_step_fk = next(iter(LeadFinderToolCallRow.__table__.c.step_id.foreign_keys))
@@ -208,6 +214,23 @@ def test_fresh_run_row_starts_before_step_one_with_requested_direction():
     assert row.user_direction == "California intake teams"
     assert row.current_context_json["user_direction"] == "California intake teams"
     assert row.next_step == "Assess the baseline context and the user's lead direction."
+    assert row.auto_run_enabled is False
+    assert row.auto_run_max_steps == 25
+
+
+def test_auto_run_budget_counts_only_steps_after_auto_start():
+    row = lead_finder._build_lead_finder_run_row(user_direction="PI intake experts")
+    row.auto_run_enabled = True
+    row.auto_run_started_step = 6
+    row.auto_run_max_steps = 3
+
+    row.current_step = 8
+    assert lead_finder._auto_run_steps_used(row) == 2
+    assert lead_finder._auto_run_has_budget(row) is True
+
+    row.current_step = 9
+    assert lead_finder._auto_run_steps_used(row) == 3
+    assert lead_finder._auto_run_has_budget(row) is False
 
 
 def test_mission_control_search_tool_validation_is_bounded():

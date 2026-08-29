@@ -3164,6 +3164,11 @@ export type LeadFinderRun = {
   current_context: LeadFinderContext;
   current_step: number;
   next_step: string | null;
+  auto_run_enabled: boolean;
+  auto_run_max_steps: number;
+  auto_run_started_step: number | null;
+  auto_run_steps_used: number;
+  auto_run_stop_reason: string | null;
   error: string | null;
   restarted_from_run_id: string | null;
   completed_at: string | null;
@@ -3208,6 +3213,19 @@ export const queueLeadFinderStep = (
     request_id: requestId,
     user_direction: userDirection,
   });
+
+export const startLeadFinderAutoRun = (
+  runId: string,
+  userDirection: string,
+  maxSteps = 25,
+) =>
+  post<{ run: LeadFinderRun; step: LeadFinderPersistedStep | null }>(
+    `/api/lead-finder/runs/${runId}/auto-run`,
+    { user_direction: userDirection, max_steps: maxSteps },
+  );
+
+export const stopLeadFinderAutoRun = (runId: string) =>
+  post<{ run: LeadFinderRun }>(`/api/lead-finder/runs/${runId}/auto-run/stop`, {});
 
 export const restartLeadFinderRun = (runId: string, userDirection?: string) =>
   post<{ run: LeadFinderRun }>(`/api/lead-finder/runs/${runId}/restart`,

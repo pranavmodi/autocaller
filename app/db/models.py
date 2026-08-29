@@ -586,6 +586,10 @@ class LeadFinderRunRow(Base):
     current_context_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     current_step: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     next_step: Mapped[str | None] = mapped_column(Text, nullable=True)
+    auto_run_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    auto_run_max_steps: Mapped[int] = mapped_column(Integer, nullable=False, default=25)
+    auto_run_started_step: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    auto_run_stop_reason: Mapped[str | None] = mapped_column(String(64), nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     restarted_from_run_id: Mapped[str | None] = mapped_column(
         String(64), ForeignKey("lead_finder_runs.id", ondelete="SET NULL"), nullable=True,
@@ -600,6 +604,10 @@ class LeadFinderRunRow(Base):
         CheckConstraint(
             "status IN ('ready', 'queued', 'running', 'paused', 'completed', 'failed')",
             name="ck_lead_finder_runs_status",
+        ),
+        CheckConstraint(
+            "auto_run_max_steps BETWEEN 1 AND 100",
+            name="ck_lead_finder_runs_auto_max_steps",
         ),
         Index("ix_lead_finder_runs_status", "status"),
         Index("ix_lead_finder_runs_created_at", "created_at"),

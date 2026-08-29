@@ -260,6 +260,7 @@ Every command accepts `--help`. Exit code is `0` on success, `1` on any error
 | `lead-finder runs [--limit N] [--json]` / `lead-finder show <run_id> [--json]` | List runs or inspect one run with every persisted step, exact request, raw/parsed response, context before/after, diff, timing, gateway attempt, and normalized prompt-cache metrics. |
 | `lead-finder llm-session <run_id> [--source session\|trajectory] [--json]` | Print the selected unredacted OpenClaw JSONL file exactly as stored. `session` is the canonical ordered conversation; `trajectory` includes compiled system prompts, tool definitions, submitted prompts, model snapshots, and usage. Treat output as sensitive. |
 | `lead-finder step <run_id> [--direction "..."] [--request-id ID] [--wait/--no-wait] [--timeout-seconds N] [--json]` | Queue exactly one durable reasoning or bounded tool transition through `openclaw/main`. The request ID is idempotent, one active step per run is enforced, every tool call/result is persisted, and the default CLI behavior polls to a terminal state. The run-scoped OpenClaw session enables prompt-cache reuse; output includes cache status and cached-token counts. Only the explicit add-result tool mutates the run-local result list; no CRM or outreach mutation occurs. |
+| `lead-finder auto-start <run_id> [--direction "..."] [--max-steps N] [--json]` / `lead-finder auto-stop <run_id> [--json]` | Start durable unattended step chaining or request that it stop after the active step. Auto-run uses the same one-transition/one-tool persisted steps, stops on completion or failure, and has a 25-step default safety cap (maximum 100). |
 | `lead-finder restart <run_id> [--direction "..."] [--json]` | Create a new step-0 run linked to the prior run. The prior history remains immutable; the user direction is inherited unless overridden and the baseline files are freshly snapshotted. |
 | `lead-finder reset-all [--direction "..."] [--yes] [--json]` | Destructively delete every Lead Finder run, step, gateway attempt, and tool call, then atomically create one fresh step-0 run. Requires interactive confirmation unless `--yes` is supplied. It never deletes other Possible OS data. |
 | `agents status [--json]` | Show the Possible OS master-agent heartbeat configuration, objective status, and last heartbeat result in the current backend process. |
@@ -1174,12 +1175,15 @@ same graph data is fully available to agents and scripts through
 `bin/possibleos front competitors graph --json` and
 `GET /api/front/competitors/graph`.
 
-The expandable, syntax-highlighted JSON tree in `/lead-finder` is UI-only
-presentation. It parses the exact OpenClaw JSONL in the browser without changing
-it. The same tree is reused for persisted context, requests, tool arguments and
-results, and it recursively detects object/array JSON encoded inside string
-fields. Agents and scripts receive the same underlying records through
-`bin/possibleos lead-finder llm-session <run_id> --source session|trajectory`.
+The expandable, syntax-highlighted JSON tree and high-level run timeline in
+`/lead-finder` are UI-only presentation. The JSON viewer parses the exact
+OpenClaw JSONL in the browser without changing it. The same tree is reused for
+persisted context, requests, tool arguments and results, and it recursively
+detects object/array JSON encoded inside string fields. The timeline summarizes
+the already-persisted step reasoning, tool status/result, and next transition.
+Agents and scripts receive the same underlying records through `lead-finder
+show <run_id> --json` and `lead-finder llm-session <run_id> --source
+session|trajectory`.
 
 Relevant endpoints:
 

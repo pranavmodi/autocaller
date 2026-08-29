@@ -4954,6 +4954,45 @@ def lead_finder_step(
         )
 
 
+@lead_finder_app.command("auto-start")
+def lead_finder_auto_start(
+    run_id: str = typer.Argument(..., help="Durable Lead Finder run id."),
+    direction: Optional[str] = typer.Option(None, "--direction", help="Update the run-specific desired-lead direction."),
+    max_steps: int = typer.Option(25, "--max-steps", min=1, max=100, help="Safety cap on unattended steps for this auto-run."),
+    json_output: bool = typer.Option(False, "--json"),
+):
+    """Run Lead Finder steps continuously until completion, failure, stop, or cap."""
+    body: dict[str, Any] = {"max_steps": max_steps}
+    if direction is not None:
+        body["user_direction"] = direction
+    data = _post(f"/api/lead-finder/runs/{run_id}/auto-run", body)
+    run = data.get("run") or {}
+    step = data.get("step") or {}
+    if json_output:
+        console.print_json(data=data)
+        return
+    console.print(f"[green]auto-run started[/green] {run_id}")
+    console.print(f"max_steps: {run.get('auto_run_max_steps')}")
+    console.print(f"starting_step: {step.get('step_number') or '-'}")
+    console.print("Use `lead-finder auto-stop <run_id>` to stop after the active step.")
+
+
+@lead_finder_app.command("auto-stop")
+def lead_finder_auto_stop(
+    run_id: str = typer.Argument(..., help="Durable Lead Finder run id."),
+    json_output: bool = typer.Option(False, "--json"),
+):
+    """Stop unattended chaining after the currently active step."""
+    data = _post(f"/api/lead-finder/runs/{run_id}/auto-run/stop", {})
+    run = data.get("run") or {}
+    if json_output:
+        console.print_json(data=data)
+        return
+    console.print(f"[yellow]auto-run stop requested[/yellow] {run_id}")
+    console.print(f"status: {run.get('status')}")
+    console.print("An active step, if any, will finish and persist before stopping.")
+
+
 @lead_finder_app.command("start")
 def lead_finder_start(
     direction: str = typer.Option("", "--direction", help="Run-specific description of desired leads."),
@@ -4988,7 +5027,7 @@ def lead_finder_runs(
     for run in runs:
         table.add_row(
             run.get("id") or "",
-            run.get("status") or "",
+            f"{run.get('status') or ''}{' · auto' if run.get('auto_run_enabled') else ''}",
             str(run.get("current_step") or 0),
             (run.get("user_direction") or "")[:60],
             run.get("created_at") or "",
@@ -5009,6 +5048,12 @@ def lead_finder_show(
     console.print(f"[bold]{run.get('id')}[/bold]")
     console.print(f"status: {run.get('status')}")
     console.print(f"current_step: {run.get('current_step')}")
+    console.print(f"auto_run_enabled: {run.get('auto_run_enabled')}")
+    if run.get("auto_run_started_step") is not None:
+        console.print(
+            f"auto_run_progress: {run.get('auto_run_steps_used')}/{run.get('auto_run_max_steps')} "
+            f"stop_reason={run.get('auto_run_stop_reason') or '-'}"
+        )
     console.print(f"next_step: {run.get('next_step')}")
     console.print(f"direction: {run.get('user_direction')}")
     for step in run.get("steps") or []:

@@ -23,6 +23,8 @@ from app.services.lead_finder import (
     reset_all_lead_finder_runs,
     restart_lead_finder_run,
     run_lead_finder_step,
+    start_lead_finder_auto_run,
+    stop_lead_finder_auto_run,
 )
 from app.services.llm_gateway import LLMGatewayError
 from app.services.lead_finder_tools import (
@@ -51,6 +53,11 @@ class LeadFinderRunStepRequest(BaseModel):
 
 class LeadFinderRestartRequest(BaseModel):
     user_direction: str | None = Field(default=None, max_length=10_000)
+
+
+class LeadFinderAutoRunRequest(BaseModel):
+    user_direction: str | None = Field(default=None, max_length=10_000)
+    max_steps: int = Field(default=25, ge=1, le=100)
 
 
 class LeadFinderToolExecuteRequest(BaseModel):
@@ -116,6 +123,38 @@ async def get_run(run_id: str):
     run = await get_lead_finder_run(run_id)
     if not run:
         raise HTTPException(status_code=404, detail="lead_finder_run_not_found")
+    return {"run": run}
+
+
+@router.post("/runs/{run_id}/auto-run", status_code=status.HTTP_202_ACCEPTED)
+async def start_auto_run(
+    run_id: str,
+    req: LeadFinderAutoRunRequest,
+    background_tasks: BackgroundTasks,
+):
+    try:
+        result = await start_lead_finder_auto_run(
+            run_id=run_id,
+            user_direction=req.user_direction,
+            max_steps=req.max_steps,
+        )
+    except LeadFinderNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except LeadFinderRunStateError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    created = bool(result.pop("_created", False))
+    step = result.get("step") or {}
+    if created and step.get("id"):
+        background_tasks.add_task(execute_lead_finder_step, step["id"])
+    return result
+
+
+@router.post("/runs/{run_id}/auto-run/stop")
+async def stop_auto_run(run_id: str):
+    try:
+        run = await stop_lead_finder_auto_run(run_id=run_id)
+    except LeadFinderNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
     return {"run": run}
 
 

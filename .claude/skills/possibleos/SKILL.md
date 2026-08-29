@@ -31,6 +31,13 @@ may verify that person's current role, recent public evidence, and outreach
 angles. A later explicit `lead_finder.add_researched_lead` call publishes that
 completed research into the run-local Found Leads list; inspect it with
 `lead-finder results <run_id>`. No cross-run or CRM deduplication is performed.
+Use `lead-finder auto-start <run_id> --max-steps 25` to let the server continue
+through the same persisted one-transition steps without manual clicks. It ends
+on model completion, failure, operator stop, or the bounded step cap and resumes
+stranded enabled runs after a backend restart. Use `lead-finder auto-stop
+<run_id>` to stop chaining after the active step; it does not interrupt an
+in-flight OpenClaw or tool call. Manual `lead-finder step` requests are rejected
+while auto-run is enabled.
 Each durable run uses its own stable OpenClaw session so later steps can reuse
 the growing prompt prefix. The first turn sends `initial_v2`, with deterministic
 job, tools, and baseline files before mutable run state; later `continuation_v2`
@@ -54,9 +61,13 @@ prior history. `lead-finder reset-all --yes` is the explicit destructive path:
 it deletes only Lead Finder runs, steps, gateway attempts, and tool calls and
 atomically creates one fresh step-0 run. Mission Control owns transcript indexes;
 Possible OS must use its HTTP search API rather than access Mission Control
-SQLite directly. Each debug click permits at most one validated tool call and
-persists its result before pausing. It never sends outreach or mutates CRM lead
+SQLite directly. Each transition permits at most one validated tool call and
+persists its result before either pausing or queuing the next enabled auto-run
+step. It never sends outreach or mutates CRM lead
 data; only the explicit add tool may update the run-local results list.
+The browser's Run overview timeline is presentation over `lead-finder show`
+data: step reasoning, tool status/result, and next transition remain available
+to headless operators through the CLI JSON output.
 
 Decision log: record important decisions (architecture, policy, flag flips,
 tooling/transport choices, deferrals, reversals — not routine fixes) by
