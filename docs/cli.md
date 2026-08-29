@@ -1176,7 +1176,9 @@ same graph data is fully available to agents and scripts through
 
 The expandable, syntax-highlighted JSON tree in `/lead-finder` is UI-only
 presentation. It parses the exact OpenClaw JSONL in the browser without changing
-it; agents and scripts receive the same underlying records through
+it. The same tree is reused for persisted context, requests, tool arguments and
+results, and it recursively detects object/array JSON encoded inside string
+fields. Agents and scripts receive the same underlying records through
 `bin/possibleos lead-finder llm-session <run_id> --source session|trajectory`.
 
 Relevant endpoints:

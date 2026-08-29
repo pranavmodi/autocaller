@@ -1339,6 +1339,12 @@ record client-side, labels it by event type/role/sequence/timestamp, and renders
 an expandable syntax-highlighted JSON tree. Expand/collapse operations affect
 only the DOM presentation. The raw toggle, copy action, API, and CLI continue to
 use the byte-identical JSONL supplied by OpenClaw.
+The shared tree also renders Possible OS current context, exact step requests,
+before/after snapshots, tool arguments/results, and JSON LLM responses. When a
+string field itself contains a valid JSON object or array (for example a gateway
+message `content` or assistant `text` field), the browser labels it as a JSON
+string and recursively exposes the decoded value as another expandable tree.
+The stored string remains unchanged.
 
 The discovery adapter is `app/services/mission_control_search.py`. It exposes
 only `mission_control.search`, `mission_control.get_passages`, and

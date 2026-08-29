@@ -46,7 +46,9 @@ model snapshots, and usage. Both outputs are unredacted and may contain
 sensitive workspace context; do not paste or transmit them casually.
 The browser adds an expandable, syntax-highlighted tree over those same raw
 records and retains a raw-text toggle; this is presentation only and does not
-normalize or replace OpenClaw's stored JSONL.
+normalize or replace OpenClaw's stored JSONL. The same viewer covers persisted
+context, requests, and tool payloads and recursively exposes object/array JSON
+encoded inside string fields while leaving the stored strings unchanged.
 `lead-finder restart <run_id>` creates a linked step-0 run without deleting the
 prior history. `lead-finder reset-all --yes` is the explicit destructive path:
 it deletes only Lead Finder runs, steps, gateway attempts, and tool calls and

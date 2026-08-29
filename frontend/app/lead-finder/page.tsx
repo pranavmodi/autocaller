@@ -45,9 +45,9 @@ function newRequestId() {
 
 function JsonPanel({ value }: { value: unknown }) {
   return (
-    <pre className="max-h-[38rem] overflow-auto rounded-xl bg-neutral-950 p-4 text-xs leading-5 text-neutral-200">
-      {JSON.stringify(value, null, 2)}
-    </pre>
+    <div className="max-h-[38rem] overflow-auto rounded-xl bg-neutral-950 p-4 font-mono text-xs leading-5 text-neutral-200">
+      <JsonTreeNode value={value} />
+    </div>
   );
 }
 
@@ -62,6 +62,27 @@ function objectValue(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === "object" && !Array.isArray(value)
     ? value as Record<string, unknown>
     : null;
+}
+
+function parseEmbeddedJson(value: string): unknown | null {
+  const trimmed = value.trim();
+  let candidate = trimmed;
+  if (trimmed.startsWith("```") && trimmed.endsWith("```")) {
+    candidate = trimmed.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+  }
+  if (!(candidate.startsWith("{") || candidate.startsWith("["))) return null;
+  try {
+    const parsed = JSON.parse(candidate) as unknown;
+    return parsed !== null && typeof parsed === "object" ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function JsonTextPanel({ text, className = "" }: { text: string; className?: string }) {
+  const parsed = parseEmbeddedJson(text);
+  if (parsed !== null) return <JsonPanel value={parsed} />;
+  return <pre className={`max-h-80 overflow-auto whitespace-pre-wrap p-4 text-xs leading-5 ${className}`}>{text}</pre>;
 }
 
 function parseJsonl(raw: string): JsonlRecord[] {
@@ -99,6 +120,29 @@ function JsonScalar({ label, value }: { label?: string; value: unknown }) {
 }
 
 function JsonTreeNode({ label, value, depth = 0 }: { label?: string; value: unknown; depth?: number }) {
+  const embeddedJson = typeof value === "string" ? parseEmbeddedJson(value) : null;
+  if (embeddedJson !== null) {
+    const embeddedEntries = Array.isArray(embeddedJson)
+      ? embeddedJson.length
+      : Object.keys(objectValue(embeddedJson) || {}).length;
+    const embeddedKind = Array.isArray(embeddedJson)
+      ? `Array(${embeddedEntries})`
+      : `Object(${embeddedEntries})`;
+    return (
+      <details className="group/json min-w-0">
+        <summary className="cursor-pointer select-none list-none py-0.5 text-neutral-300 marker:hidden">
+          <span className="mr-1 inline-block w-3 text-neutral-500 transition-transform group-open/json:rotate-90">▶</span>
+          {label !== undefined && <span className="text-sky-300">{label}: </span>}
+          <span className="text-amber-300">JSON string</span>
+          <span className="text-neutral-500"> → </span>
+          <span className="text-violet-300">{embeddedKind}</span>
+        </summary>
+        <div className="ml-2 border-l border-amber-900/60 pl-3">
+          <JsonTreeNode value={embeddedJson} depth={0} />
+        </div>
+      </details>
+    );
+  }
   const isArray = Array.isArray(value);
   const object = objectValue(value);
   if (!isArray && !object) return <JsonScalar label={label} value={value} />;
@@ -478,7 +522,7 @@ export default function LeadFinderPage() {
                     {latestResponse && <span className="text-xs text-violet-600">{latestResponse.model}</span>}
                   </div>
                   {latestResponse ? (
-                    <pre className="max-h-80 overflow-auto whitespace-pre-wrap p-4 text-xs leading-5 text-violet-950">{latestResponse.response_raw}</pre>
+                    <div className="p-3"><JsonTextPanel text={latestResponse.response_raw} className="text-violet-950" /></div>
                   ) : (
                     <div className="p-6 text-center text-sm text-violet-700">The exact response will appear here after a persisted step completes.</div>
                   )}
@@ -651,7 +695,7 @@ export default function LeadFinderPage() {
                       <div>{step.model || "openclaw/main"}</div>
                       <div>{step.attempts.length} gateway attempt{step.attempts.length === 1 ? "" : "s"}</div>
                     </div>
-                    {step.response_raw && <pre className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap rounded-lg bg-violet-50 p-3 text-xs leading-5 text-violet-950">{step.response_raw}</pre>}
+                    {step.response_raw && <div className="mt-3"><JsonTextPanel text={step.response_raw} className="rounded-lg bg-violet-50 text-violet-950" /></div>}
                     {(step.tool_calls || []).length > 0 && (
                       <div className="mt-3 space-y-2">
                         {(step.tool_calls || []).map((toolCall) => (
