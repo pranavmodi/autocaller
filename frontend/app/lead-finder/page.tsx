@@ -229,6 +229,15 @@ function toolProviderSummary(
   return model ? `${label} · ${model}` : label;
 }
 
+function stepProviderLabel(
+  step: LeadFinderPersistedStep,
+  runProvider: LeadFinderRun["llm_provider"] | undefined,
+) {
+  if (step.model?.startsWith("openclaw/")) return "OpenClaw";
+  if (step.model) return "Direct OpenAI";
+  return runProvider === "openclaw" ? "OpenClaw" : "Direct OpenAI";
+}
+
 export default function LeadFinderPage() {
   const [baseline, setBaseline] = useState<LeadFinderContext | null>(null);
   const [runs, setRuns] = useState<LeadFinderRun[]>([]);
@@ -801,7 +810,7 @@ export default function LeadFinderPage() {
                             <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                               <div>
                                 <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-violet-600">Step {step.step_number}</div>
-                                <h2 className="mt-1 text-sm font-semibold text-neutral-950">{response.step_name || (waiting ? "OpenClaw is reasoning" : "Persisted transition")}</h2>
+                                <h2 className="mt-1 text-sm font-semibold text-neutral-950">{response.step_name || (waiting ? `${stepProviderLabel(step, run?.llm_provider)} is reasoning` : "Persisted transition")}</h2>
                                 <p className="mt-1 text-sm leading-6 text-neutral-600">{response.summary || step.error || "Waiting for the model response."}</p>
                               </div>
                               <span className={`shrink-0 rounded-full border px-2 py-1 text-xs ${stepTone(step.status)}`}>{step.status}</span>
@@ -1043,7 +1052,7 @@ export default function LeadFinderPage() {
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                       <div>
                         <div className="flex items-center gap-2 text-xs font-medium text-violet-600"><Sparkles className="h-3.5 w-3.5" /> STEP {step.step_number}</div>
-                        <h2 className="mt-1 text-sm font-semibold text-neutral-900">{step.response_parsed.step_name || "OpenClaw request"}</h2>
+                        <h2 className="mt-1 text-sm font-semibold text-neutral-900">{step.response_parsed.step_name || `${stepProviderLabel(step, run?.llm_provider)} request`}</h2>
                         <p className="mt-1 text-sm text-neutral-600">{step.response_parsed.summary || step.error || "Waiting for a response."}</p>
                       </div>
                       <span className={`rounded-full border px-2 py-1 text-xs ${stepTone(step.status)}`}>{step.status}</span>
