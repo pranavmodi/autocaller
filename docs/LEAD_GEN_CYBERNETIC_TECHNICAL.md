@@ -1344,7 +1344,10 @@ before/after snapshots, tool arguments/results, and JSON LLM responses. When a
 string field itself contains a valid JSON object or array (for example a gateway
 message `content` or assistant `text` field), the browser labels it as a JSON
 string and recursively exposes the decoded value as another expandable tree.
-The stored string remains unchanged.
+The stored string remains unchanged. Every object/array disclosure owns its
+open state, so user toggles survive React rerenders and run-status polling;
+arrow rotation is derived from that same node state rather than a shared nested
+CSS group selector.
 
 The discovery adapter is `app/services/mission_control_search.py`. It exposes
 only `mission_control.search`, `mission_control.get_passages`, and

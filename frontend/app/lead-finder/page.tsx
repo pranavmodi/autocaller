@@ -121,6 +121,8 @@ function JsonScalar({ label, value }: { label?: string; value: unknown }) {
 
 function JsonTreeNode({ label, value, depth = 0 }: { label?: string; value: unknown; depth?: number }) {
   const embeddedJson = typeof value === "string" ? parseEmbeddedJson(value) : null;
+  const isContainer = Array.isArray(value) || objectValue(value) !== null;
+  const [isOpen, setIsOpen] = useState(embeddedJson === null && isContainer && depth === 0);
   if (embeddedJson !== null) {
     const embeddedEntries = Array.isArray(embeddedJson)
       ? embeddedJson.length
@@ -129,9 +131,9 @@ function JsonTreeNode({ label, value, depth = 0 }: { label?: string; value: unkn
       ? `Array(${embeddedEntries})`
       : `Object(${embeddedEntries})`;
     return (
-      <details className="group/json min-w-0">
+      <details open={isOpen} onToggle={(event) => setIsOpen(event.currentTarget.open)} className="min-w-0">
         <summary className="cursor-pointer select-none list-none py-0.5 text-neutral-300 marker:hidden">
-          <span className="mr-1 inline-block w-3 text-neutral-500 transition-transform group-open/json:rotate-90">▶</span>
+          <span className={`mr-1 inline-block w-3 text-neutral-500 transition-transform ${isOpen ? "rotate-90" : ""}`}>▶</span>
           {label !== undefined && <span className="text-sky-300">{label}: </span>}
           <span className="text-amber-300">JSON string</span>
           <span className="text-neutral-500"> → </span>
@@ -151,9 +153,9 @@ function JsonTreeNode({ label, value, depth = 0 }: { label?: string; value: unkn
     : Object.entries(object || {});
   const kind = isArray ? `Array(${entries.length})` : `Object(${entries.length})`;
   return (
-    <details open={depth === 0} className="group/json min-w-0">
+    <details open={isOpen} onToggle={(event) => setIsOpen(event.currentTarget.open)} className="min-w-0">
       <summary className="cursor-pointer select-none list-none py-0.5 text-neutral-300 marker:hidden">
-        <span className="mr-1 inline-block w-3 text-neutral-500 transition-transform group-open/json:rotate-90">▶</span>
+        <span className={`mr-1 inline-block w-3 text-neutral-500 transition-transform ${isOpen ? "rotate-90" : ""}`}>▶</span>
         {label !== undefined && <span className="text-sky-300">{label}: </span>}
         <span className="text-violet-300">{kind}</span>
       </summary>
