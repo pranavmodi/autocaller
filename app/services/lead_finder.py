@@ -315,6 +315,11 @@ async def run_lead_finder_step(
     updates = parsed.get("state_updates")
     if not isinstance(updates, dict):
         updates = {}
+    else:
+        updates = deepcopy(updates)
+        # The model may propose leads in its narrative state, but only the
+        # validated add_researched_lead tool may publish run-local results.
+        updates.pop("found_leads", None)
     action = _normalized_action(parsed.get("action"))
     prior_working_state = (
         current.get("agent_state", {}).get("working_state")

@@ -1428,7 +1428,11 @@ ran. Research remains staged in persisted tool history. On a later click,
 tool-call ID; it then appends the selected research to
 `agent_state.working_state.found_leads`. The Found Leads UI tab and
 `lead-finder results` read that durable run context. This is intentionally not
-a CRM write, and no deduplication is performed.
+a CRM write, and no deduplication is performed. Model-authored
+`state_updates.found_leads` is discarded server-side, so only the validated add
+tool can publish results. The browser additionally filters noncanonical legacy
+entries before rendering, preventing one malformed historical object from
+crashing the Found Leads tab.
 
 `POST /api/lead-finder/runs/{run_id}/restart` creates a new step-0 run linked by
 `restarted_from_run_id`; it never deletes or rewrites prior history. It inherits

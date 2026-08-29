@@ -360,7 +360,19 @@ export default function LeadFinderPage() {
   const latestCache = [...steps].reverse().find((step) => step.prompt_cache)?.prompt_cache;
   const foundLeads = useMemo(() => {
     const value = context?.agent_state.working_state.found_leads;
-    return Array.isArray(value) ? value as LeadFinderFoundLead[] : [];
+    if (!Array.isArray(value)) return [];
+    return value.filter((item): item is LeadFinderFoundLead => {
+      const lead = objectValue(item);
+      return Boolean(
+        lead
+        && typeof lead.id === "string"
+        && typeof lead.name === "string"
+        && Array.isArray(lead.recent_signals)
+        && Array.isArray(lead.outreach_angles)
+        && Array.isArray(lead.sources)
+        && Array.isArray(lead.contrary_evidence)
+      );
+    });
   }, [context]);
   const files = Object.values(context?.baseline_context.files || {});
   const isActive = Boolean(run && ACTIVE_STATUSES.has(run.status));

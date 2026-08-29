@@ -548,7 +548,12 @@ def test_step_appends_explicitly_added_researched_lead_to_found_leads(monkeypatc
                 "step_name": "Publish researched lead",
                 "summary": "Added the verified candidate.",
                 "reasoning": "Research is complete and source-backed.",
-                "state_updates": {},
+                "state_updates": {
+                    "found_leads": [{
+                        "name": "Unvalidated model proposal",
+                        "contrary_evidence": "Not the canonical lead schema.",
+                    }],
+                },
                 "action": {
                     "type": "tool_call",
                     "tool": "lead_finder.add_researched_lead",
@@ -590,3 +595,4 @@ def test_step_appends_explicitly_added_researched_lead_to_found_leads(monkeypatc
 
     found = result["context"]["agent_state"]["working_state"]["found_leads"]
     assert found == [lead]
+    assert "found_leads" not in result["transition"]["state_updates"]
