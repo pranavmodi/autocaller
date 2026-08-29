@@ -72,6 +72,7 @@ def test_step_uses_main_gateway_and_adds_direction_to_context(monkeypatch):
 
     assert captured["model"] == "openclaw/main"
     assert captured["gateway_user"] == lead_finder._cache_session_user("lfr_test_run")
+    assert captured["schema_repair_retries"] == 1
     assert "attempt_observer" in captured
     assert result["gateway"]["used_llm"] is True
     assert result["gateway"]["raw_response"] == "{}"

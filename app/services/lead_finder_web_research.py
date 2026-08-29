@@ -225,6 +225,9 @@ async def _research_person_openclaw(payload: dict[str, Any]) -> tuple[dict[str, 
         timeout_s=int(os.getenv("LEAD_FINDER_WEB_RESEARCH_TIMEOUT_S", "300")),
         max_tokens=int(os.getenv("LEAD_FINDER_WEB_RESEARCH_MAX_TOKENS", "5000")),
         retries=int(os.getenv("LEAD_FINDER_WEB_RESEARCH_RETRIES", "1")),
+        schema_repair_retries=int(
+            os.getenv("LEAD_FINDER_GATEWAY_SCHEMA_REPAIR_RETRIES", "1")
+        ),
     )
     return response.parsed, {
         "provider": "openclaw",

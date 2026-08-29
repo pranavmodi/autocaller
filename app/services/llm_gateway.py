@@ -29,6 +29,21 @@ class LLMGatewayError(Exception):
     pass
 
 
+class LLMGatewayResponseError(LLMGatewayError):
+    """A gateway response that arrived but failed structured-output validation."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        raw_response: str,
+        parsed_response: dict[str, Any] | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.raw_response = raw_response
+        self.parsed_response = parsed_response or {}
+
+
 @dataclass
 class GatewayJSONResult:
     parsed: dict[str, Any]
@@ -216,6 +231,40 @@ def require_fields(parsed: dict[str, Any], required: list[str]) -> None:
         raise LLMGatewayError(f"gateway JSON missing required fields: {missing}")
 
 
+def _schema_repair_body(
+    original_body: dict[str, Any],
+    *,
+    raw_response: str,
+    validation_error: str,
+    required_fields: list[str],
+) -> dict[str, Any]:
+    """Build a bounded follow-up that repairs syntax/shape without re-reasoning."""
+    repair_payload = {
+        "kind": "gateway_schema_repair_v1",
+        "instruction": (
+            "Repair the previous assistant response only. Return exactly one complete valid "
+            "JSON object with every required top-level field. Preserve the prior response's "
+            "meaning and intended action. Do not claim a tool ran and do not perform a new "
+            "reasoning step. Return JSON only."
+        ),
+        "required_top_level_fields": required_fields,
+        "validation_error": validation_error,
+        "invalid_response": raw_response[:20_000],
+    }
+    repaired = dict(original_body)
+    original_messages = original_body.get("messages")
+    system_message = (
+        original_messages[0]
+        if isinstance(original_messages, list) and original_messages
+        else {"role": "system", "content": "Return valid JSON only."}
+    )
+    repaired["messages"] = [
+        system_message,
+        {"role": "user", "content": json.dumps(repair_payload, indent=2, ensure_ascii=False)},
+    ]
+    return repaired
+
+
 async def call_skill_json(
     *,
     skill_path: str | Path,
@@ -229,6 +278,7 @@ async def call_skill_json(
     gateway_user: str | None = None,
     prompt_cache_key: str | None = None,
     prompt_cache_retention: str | None = None,
+    schema_repair_retries: int = 0,
     attempt_observer: GatewayAttemptObserver | None = None,
 ) -> GatewayJSONResult:
     """Call OpenClaw gateway with SKILL.md as system prompt and parse JSON."""
@@ -255,16 +305,23 @@ async def call_skill_json(
     if prompt_cache_retention:
         body["prompt_cache_retention"] = prompt_cache_retention
 
+    repair_limit = max(0, int(schema_repair_retries))
+    repairs_used = 0
+    request_attempt = 0
+    total_attempts = 0
+    request_body = body
     last_error: Exception | None = None
-    for attempt in range(1, attempts + 1):
+    while True:
+        request_attempt += 1
+        total_attempts += 1
         if attempt_observer:
             try:
                 await attempt_observer({
                     "phase": "started",
-                    "attempt": attempt,
+                    "attempt": total_attempts,
                     "model": model_id,
                     "gateway_url": url,
-                    "request": body,
+                    "request": request_body,
                 })
             except Exception as observer_error:
                 logger.warning("gateway attempt observer start failed: %s", observer_error)
@@ -276,7 +333,7 @@ async def call_skill_json(
                         "Authorization": f"Bearer {gateway_token()}",
                         "Content-Type": "application/json",
                     },
-                    json=body,
+                    json=request_body,
                 )
             if resp.status_code in (502, 503, 504):
                 raise httpx.HTTPStatusError(
@@ -288,15 +345,26 @@ async def call_skill_json(
             data = resp.json()
             content = data["choices"][0]["message"]["content"].strip()
             if not content:
-                raise LLMGatewayError("gateway returned empty content")
-            parsed = extract_json(content)
-            require_fields(parsed, required_fields)
+                raise LLMGatewayResponseError(
+                    "gateway returned empty content",
+                    raw_response=content,
+                )
+            parsed: dict[str, Any] | None = None
+            try:
+                parsed = extract_json(content)
+                require_fields(parsed, required_fields)
+            except LLMGatewayError as validation_error:
+                raise LLMGatewayResponseError(
+                    str(validation_error),
+                    raw_response=content,
+                    parsed_response=parsed,
+                ) from validation_error
             usage = data.get("usage") if isinstance(data.get("usage"), dict) else None
             if attempt_observer:
                 try:
                     await attempt_observer({
                         "phase": "completed",
-                        "attempt": attempt,
+                        "attempt": total_attempts,
                         "model": model_id,
                         "http_status": resp.status_code,
                         "raw_response": content,
@@ -306,24 +374,67 @@ async def call_skill_json(
                 except Exception as observer_error:
                     logger.warning("gateway attempt observer completion failed: %s", observer_error)
             return GatewayJSONResult(parsed=parsed, raw_response=content, model=model_id, usage=usage)
-        except (httpx.HTTPStatusError, httpx.ReadTimeout, httpx.ConnectError, httpx.RemoteProtocolError, LLMGatewayError) as e:
+        except LLMGatewayResponseError as e:
             last_error = e
-            logger.warning("gateway skill call attempt %d failed: %s", attempt, e)
+            can_repair = repairs_used < repair_limit
+            logger.warning(
+                "gateway structured response attempt %d failed: %s",
+                total_attempts,
+                e,
+            )
+            if attempt_observer:
+                try:
+                    await attempt_observer({
+                        "phase": "failed",
+                        "attempt": total_attempts,
+                        "model": model_id,
+                        "status": "failed",
+                        "http_status": resp.status_code,
+                        "raw_response": e.raw_response,
+                        "parsed_response": e.parsed_response,
+                        "error": str(e) or e.__class__.__name__,
+                        "will_retry": can_repair,
+                    })
+                except Exception as observer_error:
+                    logger.warning("gateway attempt observer failure failed: %s", observer_error)
+            if not can_repair:
+                break
+            repairs_used += 1
+            request_body = _schema_repair_body(
+                body,
+                raw_response=e.raw_response,
+                validation_error=str(e),
+                required_fields=required_fields,
+            )
+            request_attempt = 0
+        except (
+            httpx.HTTPStatusError,
+            httpx.ReadTimeout,
+            httpx.ConnectError,
+            httpx.RemoteProtocolError,
+            LLMGatewayError,
+        ) as e:
+            last_error = e
+            can_retry = request_attempt < attempts
+            logger.warning("gateway skill call attempt %d failed: %s", total_attempts, e)
             if attempt_observer:
                 try:
                     response = getattr(e, "response", None)
                     await attempt_observer({
                         "phase": "failed",
-                        "attempt": attempt,
+                        "attempt": total_attempts,
                         "model": model_id,
                         "status": "timed_out" if isinstance(e, httpx.ReadTimeout) else "failed",
                         "http_status": getattr(response, "status_code", None),
                         "raw_response": getattr(response, "text", "")[:20_000] if response is not None else "",
                         "error": str(e) or e.__class__.__name__,
-                        "will_retry": attempt < attempts,
+                        "will_retry": can_retry,
                     })
                 except Exception as observer_error:
                     logger.warning("gateway attempt observer failure failed: %s", observer_error)
-            if attempt < attempts:
-                await asyncio.sleep(2 ** (attempt - 1))
-    raise LLMGatewayError(f"gateway call failed after {attempts} attempts: {last_error}")
+            if not can_retry:
+                break
+            await asyncio.sleep(2 ** (request_attempt - 1))
+    raise LLMGatewayError(
+        f"gateway call failed after {total_attempts} attempts: {last_error}"
+    )

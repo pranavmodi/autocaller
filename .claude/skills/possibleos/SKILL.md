@@ -35,7 +35,10 @@ the run, including reasoning and web research; use
 affects future LLM calls; Mission Control tools remain local. Direct reasoning
 uses the Responses API and a persisted `previous_response_id`; OpenClaw uses
 its isolated run session. Persisted attempts and completed research expose the
-actual provider/model/usage metadata. A later explicit
+actual provider/model/usage metadata. OpenClaw structured-output failures
+retain the exact malformed assistant text
+and receive one bounded JSON/schema repair attempt before the run fails; both
+attempts remain visible in persisted history. A later explicit
 `lead_finder.add_researched_lead` call publishes that
 completed research into the run-local Found Leads list; inspect it with
 `lead-finder results <run_id>`. No cross-run or CRM deduplication is performed.

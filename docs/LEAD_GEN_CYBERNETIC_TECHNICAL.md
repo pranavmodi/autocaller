@@ -1311,8 +1311,16 @@ interrupted. Only one active step and at most one tool call are allowed per
 transition. Manual debug steps are rejected while auto-run is enabled, so the
 manual and unattended paths cannot race for the same next step.
 
-OpenClaw reasoning uses one gateway attempt with a 420-second default timeout
-(`LEAD_FINDER_GATEWAY_TIMEOUT_S`) because its baseline context is large. Direct
+OpenClaw reasoning uses one normal gateway attempt with a 420-second default
+timeout (`LEAD_FINDER_GATEWAY_TIMEOUT_S`) because its baseline context is
+large. If assistant content arrives but is malformed JSON or lacks required
+top-level fields, the gateway persists that exact invalid content and partial
+parse as a failed attempt, then makes one bounded schema-repair request by
+default (`LEAD_FINDER_GATEWAY_SCHEMA_REPAIR_RETRIES=1`). The repair request
+contains the invalid response and contract, preserves the intended transition,
+and cannot claim that a tool already ran. A repaired response is persisted as a
+second attempt before normal tool execution continues. Transport failures do
+not consume or trigger this semantic repair budget. Direct
 reasoning uses `LEAD_FINDER_OPENAI_TIMEOUT_S` (300 seconds by default) and one
 application-level attempt by default. Neither path duplicates a still-running
 request merely because browser polling continues.

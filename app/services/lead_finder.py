@@ -304,6 +304,9 @@ async def run_lead_finder_step(
             max_tokens=int(os.getenv("LEAD_FINDER_MAX_TOKENS", "2000")),
             timeout_s=int(os.getenv("LEAD_FINDER_GATEWAY_TIMEOUT_S", "420")),
             retries=int(os.getenv("LEAD_FINDER_GATEWAY_RETRIES", "1")),
+            schema_repair_retries=int(
+                os.getenv("LEAD_FINDER_GATEWAY_SCHEMA_REPAIR_RETRIES", "1")
+            ),
             gateway_user=_cache_session_user(run_id),
             attempt_observer=attempt_observer,
         )
