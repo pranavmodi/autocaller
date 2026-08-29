@@ -590,6 +590,9 @@ class LeadFinderRunRow(Base):
     auto_run_max_steps: Mapped[int] = mapped_column(Integer, nullable=False, default=25)
     auto_run_started_step: Mapped[int | None] = mapped_column(Integer, nullable=True)
     auto_run_stop_reason: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    web_research_provider: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="openai"
+    )
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     restarted_from_run_id: Mapped[str | None] = mapped_column(
         String(64), ForeignKey("lead_finder_runs.id", ondelete="SET NULL"), nullable=True,
@@ -608,6 +611,10 @@ class LeadFinderRunRow(Base):
         CheckConstraint(
             "auto_run_max_steps BETWEEN 1 AND 100",
             name="ck_lead_finder_runs_auto_max_steps",
+        ),
+        CheckConstraint(
+            "web_research_provider IN ('openai', 'openclaw')",
+            name="ck_lead_finder_runs_web_research_provider",
         ),
         Index("ix_lead_finder_runs_status", "status"),
         Index("ix_lead_finder_runs_created_at", "created_at"),

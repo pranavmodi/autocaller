@@ -25,6 +25,11 @@ from app.services.lead_finder_tools import (
     execute_lead_finder_tool,
     lead_finder_tool_catalog,
 )
+from app.services.lead_finder_web_research import (
+    normalize_web_research_provider,
+    web_research_model,
+    web_research_provider_status,
+)
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -37,6 +42,9 @@ ACTIVE_STEP_STATUSES = {"queued", "running", "retrying"}
 TERMINAL_STEP_STATUSES = {"completed", "failed", "interrupted"}
 AUTO_RUN_DEFAULT_MAX_STEPS = 25
 AUTO_RUN_MAX_STEPS = 100
+DEFAULT_WEB_RESEARCH_PROVIDER = normalize_web_research_provider(
+    os.getenv("LEAD_FINDER_DEFAULT_WEB_RESEARCH_PROVIDER", "openai")
+)
 _tables_checked = False
 
 JOB = {
@@ -446,6 +454,7 @@ async def ensure_lead_finder_tables() -> None:
 
 
 def _run_dict(row: LeadFinderRunRow) -> dict[str, Any]:
+    research = web_research_provider_status(row.web_research_provider)
     return {
         "id": row.id,
         "status": row.status,
@@ -462,6 +471,9 @@ def _run_dict(row: LeadFinderRunRow) -> dict[str, Any]:
         "auto_run_started_step": row.auto_run_started_step,
         "auto_run_steps_used": _auto_run_steps_used(row),
         "auto_run_stop_reason": row.auto_run_stop_reason,
+        "web_research_provider": research["provider"],
+        "web_research_model": research["model"],
+        "web_research_configured": research["configured"],
         "error": row.error,
         "restarted_from_run_id": row.restarted_from_run_id,
         "completed_at": _iso(row.completed_at),
@@ -538,6 +550,7 @@ def _build_lead_finder_run_row(
     *,
     user_direction: str = "",
     restarted_from_run_id: str | None = None,
+    web_research_provider: str = DEFAULT_WEB_RESEARCH_PROVIDER,
 ) -> LeadFinderRunRow:
     baseline = load_lead_finder_context()
     baseline["user_direction"] = user_direction.strip()
@@ -557,6 +570,7 @@ def _build_lead_finder_run_row(
         next_step=baseline["agent_state"]["next_step"],
         auto_run_enabled=False,
         auto_run_max_steps=AUTO_RUN_DEFAULT_MAX_STEPS,
+        web_research_provider=normalize_web_research_provider(web_research_provider),
         restarted_from_run_id=restarted_from_run_id,
     )
 
@@ -565,11 +579,13 @@ async def create_lead_finder_run(
     *,
     user_direction: str = "",
     restarted_from_run_id: str | None = None,
+    web_research_provider: str = DEFAULT_WEB_RESEARCH_PROVIDER,
 ) -> dict[str, Any]:
     await ensure_lead_finder_tables()
     row = _build_lead_finder_run_row(
         user_direction=user_direction,
         restarted_from_run_id=restarted_from_run_id,
+        web_research_provider=web_research_provider,
     )
     async with AsyncSessionLocal() as session:
         session.add(row)
@@ -578,10 +594,17 @@ async def create_lead_finder_run(
     return _run_dict(row)
 
 
-async def reset_all_lead_finder_runs(*, user_direction: str = "") -> dict[str, Any]:
+async def reset_all_lead_finder_runs(
+    *,
+    user_direction: str = "",
+    web_research_provider: str = DEFAULT_WEB_RESEARCH_PROVIDER,
+) -> dict[str, Any]:
     """Delete all Lead Finder history and atomically create one fresh step-0 run."""
     await ensure_lead_finder_tables()
-    row = _build_lead_finder_run_row(user_direction=user_direction)
+    row = _build_lead_finder_run_row(
+        user_direction=user_direction,
+        web_research_provider=web_research_provider,
+    )
     async with AsyncSessionLocal() as session:
         async with session.begin():
             deleted = {
@@ -613,6 +636,31 @@ async def list_lead_finder_runs(*, limit: int = 25) -> list[dict[str, Any]]:
             )
         ).scalars().all()
     return [_run_dict(row) for row in rows]
+
+
+async def update_lead_finder_web_research_provider(
+    *,
+    run_id: str,
+    provider: str,
+) -> dict[str, Any]:
+    """Persist the provider used by future web.research_person calls in a run."""
+    selected = normalize_web_research_provider(provider)
+    await ensure_lead_finder_tables()
+    async with AsyncSessionLocal() as session:
+        async with session.begin():
+            run = (
+                await session.execute(
+                    select(LeadFinderRunRow)
+                    .where(LeadFinderRunRow.id == run_id)
+                    .with_for_update()
+                )
+            ).scalar_one_or_none()
+            if not run:
+                raise LeadFinderNotFoundError("lead_finder_run_not_found")
+            run.web_research_provider = selected
+            run.updated_at = datetime.now(timezone.utc)
+        await session.refresh(run)
+        return _run_dict(run)
 
 
 async def get_lead_finder_step(step_id: str) -> dict[str, Any] | None:
@@ -1045,15 +1093,20 @@ async def _execute_persisted_tool_call(
     arguments: dict[str, Any],
     *,
     tool_history: list[dict[str, Any]] | None = None,
+    web_research_provider: str = DEFAULT_WEB_RESEARCH_PROVIDER,
 ) -> dict[str, Any]:
     """Persist a tool call before execution and its complete result afterward."""
+    execution_metadata = {
+        "provider": normalize_web_research_provider(web_research_provider),
+        "model": web_research_model(web_research_provider),
+    } if tool_name == "web.research_person" else None
     row = LeadFinderToolCallRow(
         id=f"lft_{uuid.uuid4().hex}",
         step_id=step_id,
         tool_name=tool_name[:128],
         status="running",
         arguments_json=deepcopy(arguments),
-        result_json={},
+        result_json={"_meta": execution_metadata} if execution_metadata else {},
     )
     async with AsyncSessionLocal() as session:
         session.add(row)
@@ -1064,11 +1117,12 @@ async def _execute_persisted_tool_call(
             tool_name,
             arguments,
             tool_history=tool_history,
+            web_research_provider=web_research_provider,
         )
         status = "completed"
         error = None
     except Exception as exc:
-        result = {}
+        result = {"_meta": execution_metadata} if execution_metadata else {}
         status = "failed"
         error = str(exc)[:4000]
     async with AsyncSessionLocal() as session:
@@ -1097,6 +1151,7 @@ async def _execute_persisted_tool_call(
 async def execute_lead_finder_step(step_id: str) -> None:
     await ensure_lead_finder_tables()
     run_id: str | None = None
+    selected_web_research_provider = DEFAULT_WEB_RESEARCH_PROVIDER
     async with AsyncSessionLocal() as session:
         async with session.begin():
             step = (
@@ -1112,6 +1167,9 @@ async def execute_lead_finder_step(step_id: str) -> None:
             if not run:
                 return
             run_id = run.id
+            selected_web_research_provider = normalize_web_research_provider(
+                run.web_research_provider
+            )
             step.status = "running"
             step.started_at = datetime.now(timezone.utc)
             run.status = "running"
@@ -1133,6 +1191,7 @@ async def execute_lead_finder_step(step_id: str) -> None:
             tool_name,
             arguments,
             tool_history=list(history) if isinstance(history, list) else [],
+            web_research_provider=selected_web_research_provider,
         )
 
     try:
@@ -1215,9 +1274,11 @@ async def restart_lead_finder_run(
         if not prior:
             raise LeadFinderNotFoundError("lead_finder_run_not_found")
         direction = prior.user_direction if user_direction is None else user_direction.strip()
+        web_research_provider = prior.web_research_provider
     return await create_lead_finder_run(
         user_direction=direction,
         restarted_from_run_id=run_id,
+        web_research_provider=web_research_provider,
     )
 
 

@@ -1378,24 +1378,38 @@ mutation. `GET /api/lead-finder/tools` lists the contract and
 
 `app/services/lead_finder_tools.py` adds two sequenced tools. The agent may call
 `web.research_person` only with one named candidate and one to five positive
-Mission Control chunk IDs. `app/services/lead_finder_web_research.py` runs the
-source-backed web-research skill through `openclaw/main`, normalizes the current
-identity, recent signals, URLs, contrary evidence, and outreach angles, and
-discards angles without cited URLs. Research remains staged in persisted tool
-history. On a later click, `lead_finder.add_researched_lead` must reference the
-completed web-research tool-call ID; it then appends the selected research to
+Mission Control chunk IDs. `app/services/lead_finder_web_research.py` can run
+the source-backed web-research skill either directly through the OpenAI
+Responses API or through `openclaw/main`. The run's
+`web_research_provider` column selects the path; direct OpenAI is the default
+and uses `gpt-5.6-luna` plus the built-in `web_search` tool, while OpenClaw is a
+per-run fallback. `PUT
+/api/lead-finder/runs/{run_id}/web-research-provider` changes the provider for
+future research calls without changing the `openclaw/main` reasoning session.
+The direct path uses a strict JSON Schema, `store=false`, a stable
+`prompt_cache_key`, and 24-hour prompt-cache retention. The API key is read
+only from `LEAD_FINDER_OPENAI_API_KEY`; it is never stored on the run or in a
+tool result. Both paths normalize the current identity, recent signals, URLs,
+contrary evidence, and outreach angles and discard angles without cited URLs.
+Each completed tool result persists `_meta` with the actual provider, model,
+usage, and provider trace identifiers so the UI and CLI can audit which route
+ran. Research remains staged in persisted tool history. On a later click,
+`lead_finder.add_researched_lead` must reference the completed web-research
+tool-call ID; it then appends the selected research to
 `agent_state.working_state.found_leads`. The Found Leads UI tab and
 `lead-finder results` read that durable run context. This is intentionally not
 a CRM write, and no deduplication is performed.
 
 `POST /api/lead-finder/runs/{run_id}/restart` creates a new step-0 run linked by
 `restarted_from_run_id`; it never deletes or rewrites prior history. It inherits
-the prior user direction unless overridden and takes a fresh baseline snapshot.
+the prior user direction unless overridden, inherits the web-research provider,
+and takes a fresh baseline snapshot.
 
 `POST /api/lead-finder/runs/reset-all` is the explicit destructive reset. In one
 database transaction it counts and deletes all Lead Finder runs, cascade-deletes
 their steps, gateway attempts, and tool calls, and creates one fresh step-0 run using a new
-baseline snapshot and the supplied user direction. It does not touch leads or
+baseline snapshot, supplied user direction, and selected web-research provider.
+It does not touch leads or
 any other Possible OS tables. If a deleted step already has an OpenClaw request
 in flight, its late response is discarded because the persisted step no longer
 exists. The UI requires browser confirmation; the CLI requires confirmation or
@@ -1409,15 +1423,17 @@ bin/possibleos lead-finder tools --json
 bin/possibleos lead-finder mission-search "after-hours intake" --mode hybrid --json
 bin/possibleos lead-finder mission-passages <chunk_id> --json
 bin/possibleos lead-finder mission-index-status --json
-bin/possibleos lead-finder web-research "Jane Operator" --chunk-id <chunk_id> --json
-bin/possibleos lead-finder start --direction "California PI firms with after-hours intake pain" --json
+bin/possibleos lead-finder web-research "Jane Operator" --chunk-id <chunk_id> --provider openai --json
+bin/possibleos lead-finder start --direction "California PI firms with after-hours intake pain" --provider openai --json
+bin/possibleos lead-finder provider <run_id> openclaw
+bin/possibleos lead-finder provider <run_id> openai
 bin/possibleos lead-finder step <run_id> --json
 bin/possibleos lead-finder show <run_id> --json  # raw usage + normalized prompt_cache
 bin/possibleos lead-finder llm-session <run_id> --source session
 bin/possibleos lead-finder llm-session <run_id> --source trajectory
 bin/possibleos lead-finder results <run_id> --json
 bin/possibleos lead-finder restart <run_id> --json
-bin/possibleos lead-finder reset-all --direction "California PI firms" --yes --json
+bin/possibleos lead-finder reset-all --direction "California PI firms" --provider openai --yes --json
 ```
 
 The LLM may reason or request one bounded tool per click. Mission Control is the

@@ -28,7 +28,12 @@ gateway attempts, and tool results. Use `lead-finder tools`, `mission-search`,
 agent's Mission Control transcript tools. Discovery is restricted to Mission
 Control. Once exact passages support a named person, `web.research_person`
 may verify that person's current role, recent public evidence, and outreach
-angles. A later explicit `lead_finder.add_researched_lead` call publishes that
+angles. Direct OpenAI web research with `gpt-5.6-luna` is the default; use
+`lead-finder provider <run_id> openclaw` to select the OpenClaw fallback, or
+`lead-finder provider <run_id> openai` to switch back. This per-run setting
+affects future `web.research_person` calls only; reasoning remains on
+`openclaw/main`, and completed research persists actual provider/model/usage
+metadata. A later explicit `lead_finder.add_researched_lead` call publishes that
 completed research into the run-local Found Leads list; inspect it with
 `lead-finder results <run_id>`. No cross-run or CRM deduplication is performed.
 Use `lead-finder auto-start <run_id> --max-steps 25` to let the server continue

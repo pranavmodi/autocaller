@@ -56,9 +56,13 @@ Possible OS accesses them only through its HTTP API, never its SQLite database.
 The Lead Finder first uses transcript search, exact passage retrieval, and
 index-status inspection. After a named person is supported by an exact passage,
 it may research only that person on the public web for current role, recent
-news/signals, and source-backed outreach angles. Research does not implicitly
-become a result: a later explicit add-result tool references the completed web
-research call and publishes it into the run-local Found Leads list. PossibleOS
+news/signals, and source-backed outreach angles. Each run explicitly selects
+direct OpenAI web research (the default) or the OpenClaw gateway fallback; the
+choice affects only the research tool and not the agent's OpenClaw reasoning
+session. The persisted result records which provider and model actually ran.
+Research does not implicitly become a result: a later explicit add-result tool
+references the completed web research call and publishes it into the run-local
+Found Leads list. PossibleOS
 validates arguments, persists each request and complete result/error, updates
 working context, and pauses. No PossibleOS leads database, Reddit, or other
 discovery source is exposed, and this slice intentionally performs no

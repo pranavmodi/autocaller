@@ -195,11 +195,12 @@ async def execute_lead_finder_tool(
     arguments: Any,
     *,
     tool_history: list[dict[str, Any]] | None = None,
+    web_research_provider: str = "openai",
 ) -> dict[str, Any]:
     normalized = validate_lead_finder_tool_call(tool_name, arguments)
     if tool_name == WEB_RESEARCH_TOOL["name"]:
         try:
-            return await research_person(normalized)
+            return await research_person(normalized, provider=web_research_provider)
         except Exception as exc:
             detail = str(exc)
             if detail.startswith("web_research_"):

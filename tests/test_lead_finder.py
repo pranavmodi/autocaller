@@ -5,6 +5,7 @@ import json
 
 from app.services import lead_finder
 from app.services import lead_finder_tools
+from app.services import lead_finder_web_research
 from app.services.lead_finder_web_research import normalize_person_research
 from app.db.models import (
     LeadFinderAttemptRow,
@@ -187,6 +188,7 @@ def test_persistence_models_cover_runs_steps_and_every_gateway_attempt():
         "auto_run_max_steps",
         "auto_run_started_step",
         "auto_run_stop_reason",
+        "web_research_provider",
     }.issubset(LeadFinderRunRow.__table__.columns.keys())
     step_run_fk = next(iter(LeadFinderStepRow.__table__.c.run_id.foreign_keys))
     attempt_step_fk = next(iter(LeadFinderAttemptRow.__table__.c.step_id.foreign_keys))
@@ -216,6 +218,16 @@ def test_fresh_run_row_starts_before_step_one_with_requested_direction():
     assert row.next_step == "Assess the baseline context and the user's lead direction."
     assert row.auto_run_enabled is False
     assert row.auto_run_max_steps == 25
+    assert row.web_research_provider == "openai"
+
+
+def test_fresh_run_can_select_openclaw_for_web_research():
+    row = lead_finder._build_lead_finder_run_row(
+        user_direction="PI intake leaders",
+        web_research_provider="openclaw",
+    )
+
+    assert row.web_research_provider == "openclaw"
 
 
 def test_auto_run_budget_counts_only_steps_after_auto_start():
@@ -363,6 +375,72 @@ def test_web_research_normalization_keeps_only_source_backed_angles():
     assert normalized["person"]["identity_confidence"] == 1.0
     assert [item["title"] for item in normalized["outreach_angles"]] == ["Supported"]
     assert normalized["mission_control_evidence"][0]["chunk_id"] == 42
+
+
+def test_web_research_tool_routes_to_selected_provider(monkeypatch):
+    captured = {}
+
+    async def fake_research_person(arguments, *, provider):
+        captured["arguments"] = arguments
+        captured["provider"] = provider
+        return {"person": {"name": arguments["person_name"]}}
+
+    monkeypatch.setattr(lead_finder_tools, "research_person", fake_research_person)
+    result = asyncio.run(lead_finder_tools.execute_lead_finder_tool(
+        "web.research_person",
+        {
+            "person_name": "Jane Operator",
+            "mission_control_evidence": [{"chunk_id": 42, "excerpt": "Intake"}],
+        },
+        web_research_provider="openclaw",
+    ))
+
+    assert captured["provider"] == "openclaw"
+    assert captured["arguments"]["mission_control_evidence"][0]["chunk_id"] == 42
+    assert result["person"]["name"] == "Jane Operator"
+
+
+def test_direct_web_research_persists_provider_model_and_usage(monkeypatch):
+    async def fake_direct(payload):
+        return ({
+            "person": {
+                "name": "Jane Operator",
+                "current_role": "COO",
+                "organization": "Intake Co",
+                "official_profile_url": "https://example.com/jane",
+                "identity_confidence": 0.95,
+            },
+            "profile_summary": "Runs intake operations.",
+            "recent_signals": [],
+            "outreach_angles": [],
+            "sources": [],
+            "contrary_evidence": [],
+            "researched_at": "2026-08-29T00:00:00+00:00",
+        }, {
+            "provider": "openai",
+            "model": "gpt-5.6-luna",
+            "response_id": "resp_test",
+            "search_calls": 1,
+            "usage": {"input_tokens": 100, "input_tokens_details": {"cached_tokens": 80}},
+        })
+
+    monkeypatch.setattr(
+        lead_finder_web_research,
+        "_research_person_openai",
+        fake_direct,
+    )
+    result = asyncio.run(lead_finder_web_research.research_person(
+        {
+            "person_name": "Jane Operator",
+            "mission_control_evidence": [{"chunk_id": 42}],
+        },
+        provider="openai",
+    ))
+
+    assert result["_meta"]["provider"] == "openai"
+    assert result["_meta"]["model"] == "gpt-5.6-luna"
+    assert result["_meta"]["response_id"] == "resp_test"
+    assert result["_meta"]["usage"]["input_tokens_details"]["cached_tokens"] == 80
 
 
 def test_add_researched_lead_requires_completed_research_and_selects_angles():

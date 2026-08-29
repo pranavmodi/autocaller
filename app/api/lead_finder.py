@@ -1,7 +1,7 @@
 """Lead Finder debug-context and single-step LLM endpoints."""
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, status
 from pydantic import BaseModel, Field
@@ -25,6 +25,7 @@ from app.services.lead_finder import (
     run_lead_finder_step,
     start_lead_finder_auto_run,
     stop_lead_finder_auto_run,
+    update_lead_finder_web_research_provider,
 )
 from app.services.llm_gateway import LLMGatewayError
 from app.services.lead_finder_tools import (
@@ -44,6 +45,7 @@ class LeadFinderStepRequest(BaseModel):
 
 class LeadFinderRunCreateRequest(BaseModel):
     user_direction: str = Field(default="", max_length=10_000)
+    web_research_provider: Literal["openai", "openclaw"] = "openai"
 
 
 class LeadFinderRunStepRequest(BaseModel):
@@ -63,6 +65,11 @@ class LeadFinderAutoRunRequest(BaseModel):
 class LeadFinderToolExecuteRequest(BaseModel):
     tool: str = Field(..., min_length=1, max_length=128)
     arguments: dict[str, Any] = Field(default_factory=dict)
+    web_research_provider: Literal["openai", "openclaw"] = "openai"
+
+
+class LeadFinderWebResearchProviderRequest(BaseModel):
+    provider: Literal["openai", "openclaw"]
 
 
 @router.get("/context")
@@ -81,10 +88,16 @@ async def lead_finder_tools():
 @router.post("/tools/execute")
 async def execute_tool(req: LeadFinderToolExecuteRequest):
     try:
-        result = await execute_lead_finder_tool(req.tool, req.arguments)
+        result = await execute_lead_finder_tool(
+            req.tool,
+            req.arguments,
+            web_research_provider=req.web_research_provider,
+        )
     except LeadFinderToolError as exc:
         detail = str(exc)
-        upstream_failure = detail.startswith(("mission_control_", "web_research_"))
+        upstream_failure = detail.startswith(
+            ("mission_control_", "web_research_", "direct_openai_")
+        )
         status_code = 502 if upstream_failure else 422
         raise HTTPException(status_code=status_code, detail=detail) from exc
     return {"tool": req.tool, "arguments": req.arguments, "result": result}
@@ -110,12 +123,18 @@ async def lead_finder_runs(limit: int = Query(25, ge=1, le=100)):
 
 @router.post("/runs", status_code=status.HTTP_201_CREATED)
 async def create_run(req: LeadFinderRunCreateRequest):
-    return {"run": await create_lead_finder_run(user_direction=req.user_direction)}
+    return {"run": await create_lead_finder_run(
+        user_direction=req.user_direction,
+        web_research_provider=req.web_research_provider,
+    )}
 
 
 @router.post("/runs/reset-all", status_code=status.HTTP_201_CREATED)
 async def reset_all_runs(req: LeadFinderRunCreateRequest):
-    return await reset_all_lead_finder_runs(user_direction=req.user_direction)
+    return await reset_all_lead_finder_runs(
+        user_direction=req.user_direction,
+        web_research_provider=req.web_research_provider,
+    )
 
 
 @router.get("/runs/{run_id}")
@@ -123,6 +142,21 @@ async def get_run(run_id: str):
     run = await get_lead_finder_run(run_id)
     if not run:
         raise HTTPException(status_code=404, detail="lead_finder_run_not_found")
+    return {"run": run}
+
+
+@router.put("/runs/{run_id}/web-research-provider")
+async def set_web_research_provider(
+    run_id: str,
+    req: LeadFinderWebResearchProviderRequest,
+):
+    try:
+        run = await update_lead_finder_web_research_provider(
+            run_id=run_id,
+            provider=req.provider,
+        )
+    except LeadFinderNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
     return {"run": run}
 
 
