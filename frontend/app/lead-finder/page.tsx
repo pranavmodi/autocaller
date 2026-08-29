@@ -547,22 +547,6 @@ export default function LeadFinderPage() {
                       Trajectory JSONL
                     </button>
                   </div>
-                  <div className="flex gap-1 rounded-lg bg-neutral-100 p-1">
-                    <button type="button" onClick={() => setLlmSessionDisplay("readable")}
-                      className={`rounded-md px-3 py-1.5 text-xs font-medium ${llmSessionDisplay === "readable" ? "bg-white text-neutral-950 shadow-sm" : "text-neutral-600"}`}>
-                      Readable JSON
-                    </button>
-                    <button type="button" onClick={() => setLlmSessionDisplay("raw")}
-                      className={`rounded-md px-3 py-1.5 text-xs font-medium ${llmSessionDisplay === "raw" ? "bg-white text-neutral-950 shadow-sm" : "text-neutral-600"}`}>
-                      Raw JSONL
-                    </button>
-                  </div>
-                  {llmSessionDisplay === "readable" && rawSessionText && (
-                    <div className="flex gap-1">
-                      <button type="button" onClick={() => setAllSessionNodes(true)} className="rounded-lg border border-neutral-200 px-2.5 py-2 text-xs font-medium text-neutral-600 hover:bg-neutral-50">Expand all</button>
-                      <button type="button" onClick={() => setAllSessionNodes(false)} className="rounded-lg border border-neutral-200 px-2.5 py-2 text-xs font-medium text-neutral-600 hover:bg-neutral-50">Collapse all</button>
-                    </div>
-                  )}
                   <button type="button" disabled={!rawSessionText}
                     onClick={() => void navigator.clipboard.writeText(rawSessionText)}
                     className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-neutral-200 px-3 py-2 text-xs font-medium text-neutral-700 disabled:opacity-40">
@@ -580,30 +564,54 @@ export default function LeadFinderPage() {
                   <div className="flex min-h-72 items-center justify-center gap-2 text-sm text-neutral-500"><Loader2 className="h-4 w-4 animate-spin" /> Loading raw OpenClaw session…</div>
                 ) : llmSessionError ? (
                   <div className="flex min-h-72 items-center justify-center text-center text-sm text-neutral-500">{llmSessionError}</div>
-                ) : rawSessionText && llmSessionDisplay === "readable" ? (
-                  <div ref={llmSessionTree} className="max-h-[70vh] space-y-2 overflow-auto rounded-xl bg-neutral-950 p-3 font-mono text-[11px] leading-5">
-                    <div className="sticky top-0 z-10 mb-2 flex items-center justify-between rounded-lg border border-neutral-700 bg-neutral-900/95 px-3 py-2 text-neutral-300 backdrop-blur">
-                      <span>{jsonlRecords.length.toLocaleString()} JSON record{jsonlRecords.length === 1 ? "" : "s"}</span>
-                      <span className="text-neutral-500">Click any row or nested object to expand</span>
-                    </div>
-                    {jsonlRecords.map((record) => (
-                      <details key={record.line} className="group/record rounded-lg border border-neutral-800 bg-neutral-900/70">
-                        <summary className="cursor-pointer list-none px-3 py-2 text-neutral-200 marker:hidden">
-                          <span className="mr-2 inline-block text-neutral-500 transition-transform group-open/record:rotate-90">▶</span>
-                          <span className="mr-2 rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] text-neutral-400">line {record.line}</span>
-                          <span className={record.error ? "text-rose-300" : "text-violet-300"}>{jsonlRecordLabel(record)}</span>
-                        </summary>
-                        <div className="border-t border-neutral-800 p-3">
-                          {record.error && <div className="mb-2 rounded bg-rose-950/50 p-2 text-rose-300">{record.error}</div>}
-                          <JsonTreeNode value={record.value} />
-                        </div>
-                      </details>
-                    ))}
-                  </div>
-                ) : rawSessionText ? (
-                  <pre className="max-h-[70vh] overflow-auto whitespace-pre rounded-xl bg-neutral-950 p-4 font-mono text-[11px] leading-5 text-neutral-200">{rawSessionText}</pre>
                 ) : (
-                  <div className="flex min-h-72 items-center justify-center text-center text-sm text-neutral-500">This raw OpenClaw file does not exist yet.</div>
+                  <div ref={llmSessionTree} className="max-h-[70vh] overflow-auto rounded-xl bg-neutral-950 font-mono text-[11px] leading-5">
+                    <div className="sticky top-0 z-10 flex flex-wrap items-center gap-2 border-b border-neutral-800 bg-neutral-900/95 px-3 py-2 backdrop-blur">
+                      <div className="flex gap-1 rounded-lg bg-neutral-800 p-1">
+                        <button type="button" onClick={() => setLlmSessionDisplay("readable")}
+                          className={`rounded-md px-3 py-1.5 text-xs font-medium ${llmSessionDisplay === "readable" ? "bg-neutral-100 text-neutral-950 shadow-sm" : "text-neutral-400 hover:text-neutral-200"}`}>
+                          Readable JSON
+                        </button>
+                        <button type="button" onClick={() => setLlmSessionDisplay("raw")}
+                          className={`rounded-md px-3 py-1.5 text-xs font-medium ${llmSessionDisplay === "raw" ? "bg-neutral-100 text-neutral-950 shadow-sm" : "text-neutral-400 hover:text-neutral-200"}`}>
+                          Raw JSONL
+                        </button>
+                      </div>
+                      {llmSessionDisplay === "readable" && rawSessionText && (
+                        <div className="flex gap-1">
+                          <button type="button" onClick={() => setAllSessionNodes(true)} className="rounded-md border border-neutral-700 px-2.5 py-2 text-xs font-medium text-neutral-300 hover:bg-neutral-800">Expand all</button>
+                          <button type="button" onClick={() => setAllSessionNodes(false)} className="rounded-md border border-neutral-700 px-2.5 py-2 text-xs font-medium text-neutral-300 hover:bg-neutral-800">Collapse all</button>
+                        </div>
+                      )}
+                      {rawSessionText && llmSessionDisplay === "readable" && (
+                        <div className="ml-auto flex flex-wrap items-center gap-x-3 text-neutral-500">
+                          <span>{jsonlRecords.length.toLocaleString()} JSON record{jsonlRecords.length === 1 ? "" : "s"}</span>
+                          <span>Click any row or nested object to expand</span>
+                        </div>
+                      )}
+                    </div>
+                    {rawSessionText && llmSessionDisplay === "readable" ? (
+                      <div className="space-y-2 p-3">
+                        {jsonlRecords.map((record) => (
+                          <details key={record.line} className="group/record rounded-lg border border-neutral-800 bg-neutral-900/70">
+                            <summary className="cursor-pointer list-none px-3 py-2 text-neutral-200 marker:hidden">
+                              <span className="mr-2 inline-block text-neutral-500 transition-transform group-open/record:rotate-90">▶</span>
+                              <span className="mr-2 rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] text-neutral-400">line {record.line}</span>
+                              <span className={record.error ? "text-rose-300" : "text-violet-300"}>{jsonlRecordLabel(record)}</span>
+                            </summary>
+                            <div className="border-t border-neutral-800 p-3">
+                              {record.error && <div className="mb-2 rounded bg-rose-950/50 p-2 text-rose-300">{record.error}</div>}
+                              <JsonTreeNode value={record.value} />
+                            </div>
+                          </details>
+                        ))}
+                      </div>
+                    ) : rawSessionText ? (
+                      <pre className="whitespace-pre p-4 text-neutral-200">{rawSessionText}</pre>
+                    ) : (
+                      <div className="flex min-h-72 items-center justify-center text-center text-sm text-neutral-500">This raw OpenClaw file does not exist yet.</div>
+                    )}
+                  </div>
                 )}
               </div>
             ) : activeView === "leads" ? (

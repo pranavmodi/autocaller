@@ -1347,7 +1347,8 @@ string and recursively exposes the decoded value as another expandable tree.
 The stored string remains unchanged. Every object/array disclosure owns its
 open state, so user toggles survive React rerenders and run-status polling;
 arrow rotation is derived from that same node state rather than a shared nested
-CSS group selector.
+CSS group selector. The readable/raw mode and expand/collapse controls live in
+the sticky header inside the JSON viewer so their scope is visually explicit.
 
 The discovery adapter is `app/services/mission_control_search.py`. It exposes
 only `mission_control.search`, `mission_control.get_passages`, and
