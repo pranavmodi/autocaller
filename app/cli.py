@@ -9019,6 +9019,17 @@ def reviews_extract_all(
     console.print_json(data=_asyncio.run(extract_all_pending(limit=limit, force=force)))
 
 
+@reviews_app.command("classify")
+def reviews_classify(
+    force: bool = typer.Option(False, "--force", help="Reclassify reviews already on the current schema version."),
+):
+    """Classify every source-backed review for journey, operational, and quality analysis."""
+    import asyncio as _asyncio
+    from app.services.firm_review_classification import backfill_review_classifications
+
+    console.print_json(data=_asyncio.run(backfill_review_classifications(force=force)))
+
+
 _DECISION_AREAS = {"lead-gen", "deliverability", "data-arch", "website", "infra", "process", "product"}
 
 

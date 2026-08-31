@@ -262,6 +262,16 @@ async def _run_task(task_id: str, pif_id: str) -> None:
         logger.exception("Public review research failed for %s", pif_id)
         await _finish_task(task_id, error=str(exc)[:500])
         return
+    try:
+        from app.services.firm_review_classification import classify_reviews_json
+
+        result = await classify_reviews_json(firm_name, result)
+    except Exception as exc:
+        logger.exception("Public review classification failed for %s", pif_id)
+        result.update({
+            "classification_status": "failed",
+            "classification_error": str(exc)[:500],
+        })
     await _finish_task(task_id, result=result)
 
 
