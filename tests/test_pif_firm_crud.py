@@ -349,6 +349,36 @@ def test_api_forwards_job_trigger_filters(monkeypatch):
     assert captured["job_posted_within_days"] == 30
 
 
+def test_api_lists_job_postings_with_posting_level_filters(monkeypatch):
+    captured = {}
+
+    async def fake_list(**kwargs):
+        captured.update(kwargs)
+        return {"items": [], "total": 0, "page": 1, "page_size": 25, "total_pages": 0}
+
+    monkeypatch.setattr(pif_api, "list_mirrored_pif_job_postings", fake_list)
+    app = FastAPI()
+    app.include_router(pif_api.router)
+    client = TestClient(app)
+
+    response = client.get(
+        "/api/pif/job-postings?search=intake&role_category=intake_conversion"
+        "&trigger_tag=lead_conversion&technology=Filevine&gtm_relevance=high&posted_within_days=30"
+    )
+
+    assert response.status_code == 200
+    assert captured == {
+        "search": "intake",
+        "role_category": "intake_conversion",
+        "trigger_tag": "lead_conversion",
+        "technology": "Filevine",
+        "gtm_relevance": "high",
+        "posted_within_days": 30,
+        "page": 1,
+        "page_size": 25,
+    }
+
+
 def test_api_forwards_autorespond_filters(monkeypatch):
     captured = {}
 

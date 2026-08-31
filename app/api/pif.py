@@ -17,6 +17,7 @@ from app.services.firm_intel_sync import (
     list_extracted_vendors,
     list_mirrored_pif_people_filter_options,
     list_mirrored_pif_people,
+    list_mirrored_pif_job_postings,
     list_mirrored_pif_firms,
     sync_firm_intel,
 )
@@ -183,6 +184,32 @@ async def get_pif_people(
             source=source,
             leader=leader,
             email_presence=email_presence,
+            page=page,
+            page_size=page_size,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get("/job-postings")
+async def get_pif_job_postings(
+    search: str | None = Query(None, max_length=255),
+    role_category: str | None = Query(None, max_length=64),
+    trigger_tag: str | None = Query(None, max_length=64),
+    technology: str | None = Query(None, max_length=128),
+    gtm_relevance: str | None = Query(None, max_length=16),
+    posted_within_days: int | None = Query(None, ge=0, le=3650),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(25, ge=1, le=100),
+):
+    try:
+        return await list_mirrored_pif_job_postings(
+            search=search,
+            role_category=role_category,
+            trigger_tag=trigger_tag,
+            technology=technology,
+            gtm_relevance=gtm_relevance,
+            posted_within_days=posted_within_days,
             page=page,
             page_size=page_size,
         )

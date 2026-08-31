@@ -95,6 +95,45 @@ export interface JobPostingsResearch {
   classified_at?: string;
 }
 
+export interface PifJobPostingResult {
+  firm_id: string;
+  firm_name: string;
+  entity_type: string | null;
+  website: string | null;
+  updated_at: string | null;
+  title: string;
+  location: string | null;
+  employment_type: string | null;
+  posted_date: string | null;
+  description_summary: string;
+  source_name: string;
+  source_url: string;
+  role_category: string | null;
+  trigger_tags: string[];
+  technology_mentions: string[];
+  gtm_relevance: "high" | "medium" | "low" | null;
+  classification_confidence: number | null;
+}
+
+export interface PifJobPostingsListParams {
+  search?: string;
+  role_category?: string;
+  trigger_tag?: string;
+  technology?: string;
+  gtm_relevance?: "high" | "medium" | "low";
+  posted_within_days?: number;
+  page?: number;
+  page_size?: number;
+}
+
+export interface PifJobPostingsListResponse {
+  items: PifJobPostingResult[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+}
+
 export interface ResearchData {
   practice_areas: string[];
   founded_year: string | null;
@@ -695,6 +734,23 @@ export function listMirroredPifInfo(params: PifInfoListParams = {}): Promise<Pif
       first_contacted_from: params.first_contacted_from,
       first_contacted_to: params.first_contacted_to,
       active_only: params.active_only,
+    }),
+  );
+}
+
+export function listMirroredPifJobPostings(
+  params: PifJobPostingsListParams = {},
+): Promise<PifJobPostingsListResponse> {
+  return possibleFetch<PifJobPostingsListResponse>(
+    appendParams("/api/pif/job-postings", {
+      search: params.search,
+      role_category: params.role_category,
+      trigger_tag: params.trigger_tag,
+      technology: params.technology,
+      gtm_relevance: params.gtm_relevance,
+      posted_within_days: params.posted_within_days,
+      page: params.page ?? 1,
+      page_size: params.page_size ?? 25,
     }),
   );
 }

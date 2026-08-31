@@ -1575,6 +1575,111 @@ async def list_mirrored_pif_people(
     }
 
 
+async def list_mirrored_pif_job_postings(
+    *,
+    search: str | None = None,
+    role_category: str | None = None,
+    trigger_tag: str | None = None,
+    technology: str | None = None,
+    gtm_relevance: str | None = None,
+    posted_within_days: int | None = None,
+    page: int = 1,
+    page_size: int = 25,
+) -> dict[str, Any]:
+    """List individual, locally stored job postings without firm-detail payloads."""
+    await ensure_firm_intel_tables()
+    page = max(1, int(page))
+    page_size = max(1, min(100, int(page_size)))
+    relevance = (gtm_relevance or "").strip().lower()
+    if relevance and relevance not in {"high", "medium", "low"}:
+        raise ValueError(f"unsupported_gtm_relevance:{relevance}")
+
+    sql = """
+        SELECT
+            f.id AS firm_id,
+            f.firm_name,
+            f.entity_type,
+            COALESCE(f.canonical_website, f.website) AS website,
+            f.updated_at,
+            posting.value AS posting
+        FROM pif_directory_firms f
+        CROSS JOIN LATERAL jsonb_array_elements(
+            COALESCE(f.research_data->'job_postings'->'postings', '[]'::jsonb)
+        ) posting(value)
+        WHERE COALESCE(f.source_json->>'merged_into', '') = ''
+    """
+    params: dict[str, Any] = {}
+    if search and search.strip():
+        params["search"] = f"%{search.strip()}%"
+        sql += """
+            AND (
+                f.firm_name ILIKE :search
+                OR COALESCE(posting.value->>'title', '') ILIKE :search
+                OR COALESCE(posting.value->>'description_summary', '') ILIKE :search
+            )
+        """
+    if role_category and role_category.strip():
+        params["role_category"] = role_category.strip().lower()
+        sql += " AND COALESCE(posting.value->>'role_category', '') = :role_category"
+    if trigger_tag and trigger_tag.strip():
+        params["trigger_tag"] = trigger_tag.strip().lower()
+        sql += " AND COALESCE(posting.value->'trigger_tags', '[]'::jsonb) ? :trigger_tag"
+    if technology and technology.strip():
+        params["technology"] = f"%{technology.strip().lower()}%"
+        sql += " AND LOWER(COALESCE(posting.value->'technology_mentions', '[]'::jsonb)::text) LIKE :technology"
+    if relevance:
+        params["gtm_relevance"] = relevance
+        sql += " AND COALESCE(posting.value->>'gtm_relevance', '') = :gtm_relevance"
+    if posted_within_days is not None:
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=max(0, posted_within_days))).date().isoformat()
+        params["posted_after"] = cutoff
+        sql += " AND NULLIF(posting.value->>'posted_date', '') >= :posted_after"
+
+    count_sql = f"SELECT COUNT(*) FROM ({sql}) job_postings"
+    list_sql = f"""
+        {sql}
+        ORDER BY NULLIF(posting.value->>'posted_date', '') DESC NULLS LAST, f.firm_name ASC, posting.value->>'title' ASC
+        LIMIT :limit OFFSET :offset
+    """
+    async with AsyncSessionLocal() as session:
+        total = int((await session.execute(text(count_sql), params)).scalar_one() or 0)
+        rows = (await session.execute(text(list_sql), {
+            **params,
+            "limit": page_size,
+            "offset": (page - 1) * page_size,
+        })).all()
+
+    items = []
+    for row in rows:
+        posting = row.posting if isinstance(row.posting, dict) else {}
+        items.append({
+            "firm_id": row.firm_id,
+            "firm_name": row.firm_name,
+            "entity_type": row.entity_type,
+            "website": row.website,
+            "updated_at": _dt_iso(row.updated_at),
+            "title": str(posting.get("title") or ""),
+            "location": posting.get("location"),
+            "employment_type": posting.get("employment_type"),
+            "posted_date": posting.get("posted_date"),
+            "description_summary": str(posting.get("description_summary") or ""),
+            "source_name": str(posting.get("source_name") or "Web source"),
+            "source_url": str(posting.get("source_url") or ""),
+            "role_category": posting.get("role_category"),
+            "trigger_tags": posting.get("trigger_tags") if isinstance(posting.get("trigger_tags"), list) else [],
+            "technology_mentions": posting.get("technology_mentions") if isinstance(posting.get("technology_mentions"), list) else [],
+            "gtm_relevance": posting.get("gtm_relevance"),
+            "classification_confidence": posting.get("classification_confidence"),
+        })
+    return {
+        "items": items,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": (total + page_size - 1) // page_size if total else 0,
+    }
+
+
 def _row_matches_presence(row: PifFirmRow, field: str, value: str | None) -> bool:
     if value in (None, "", "any"):
         return True

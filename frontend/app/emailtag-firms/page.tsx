@@ -65,6 +65,7 @@ import {
   getResearchStatus,
   getProxiedResearchStatus,
   listMirroredPifInfo,
+  listMirroredPifJobPostings,
   listPifPeople,
   listPifVendors,
   listSavedFirmTriggerSearches,
@@ -81,6 +82,8 @@ import {
   type PifInfoListParams,
   type PifInfoListResponse,
   type PifInfoResponse,
+  type PifJobPostingResult,
+  type PifJobPostingsListParams,
   type JobPostingsResearch,
   type PifAddress,
   type PifPeopleListParams,
@@ -109,7 +112,7 @@ type StatusPresence = NonNullable<PifInfoListParams["research_presence"]>;
 type SimplePresence = NonNullable<PifInfoListParams["behavior_presence"]>;
 type PeopleSource = NonNullable<PifPeopleListParams["source"]>;
 type LeaderFilter = NonNullable<PifPeopleListParams["leader"]>;
-type LeadsView = "firms" | "contacts";
+type LeadsView = "firms" | "contacts" | "job_listings";
 type FirstContactPeriod = "any" | "last_1_month" | "last_6_months" | "custom";
 type RecordOrigin = "any" | "manual" | "synced";
 type WorkflowStepState = "completed" | "running" | "failed" | "waiting" | "skipped";
@@ -684,9 +687,10 @@ function EmailtagFirmsContent() {
   const [filters, setFilters] = useState<FiltersState>(DEFAULT_FILTERS);
   const [page, setPage] = useState(1);
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [view, setView] = useState<LeadsView>(
-    searchParams.get("view") === "contacts" ? "contacts" : "firms",
-  );
+  const [view, setView] = useState<LeadsView>(() => {
+    const requestedView = searchParams.get("view");
+    return requestedView === "contacts" || requestedView === "job_listings" ? requestedView : "firms";
+  });
   const [activeTriggerSearchId, setActiveTriggerSearchId] = useState("");
   const [activeSavedSearchId, setActiveSavedSearchId] = useState(searchParams.get("saved") ?? "");
   const [peopleFiltersState, setPeopleFiltersState] = useState<PifPeopleListParams>(() =>
@@ -712,6 +716,10 @@ function EmailtagFirmsContent() {
       writePeopleFilters(params, peopleFilters);
       if (activeSavedSearchId) params.set("saved", activeSavedSearchId);
       else params.delete("saved");
+    } else if (view === "job_listings") {
+      params.set("view", "job_listings");
+      params.delete("saved");
+      CONTACT_QUERY_KEYS.forEach((key) => params.delete(key));
     } else {
       params.delete("view");
       params.delete("saved");
@@ -1097,6 +1105,12 @@ function EmailtagFirmsContent() {
     missingWebsite: firms.filter((firm) => !(firm.canonical_website ?? firm.website)).length,
     scored: firms.filter((firm) => firm.icp_score != null).length,
   };
+  const refreshLeads = () => {
+    if (view === "contacts") return peopleQuery.refetch();
+    if (view === "job_listings") return queryClient.invalidateQueries({ queryKey: ["pif", "job-postings"] });
+    return firmsQuery.refetch();
+  };
+  const refreshing = view === "contacts" ? peopleQuery.isFetching : view === "firms" ? firmsQuery.isFetching : false;
 
   return (
     <div className="space-y-5">
@@ -1106,17 +1120,19 @@ function EmailtagFirmsContent() {
           <p className="text-sm text-neutral-500">
             {view === "contacts"
               ? `${peopleData?.total?.toLocaleString() ?? "—"} contacts from the local EmailTag mirror.`
-              : `${data?.total?.toLocaleString() ?? "—"} firms from the local EmailTag mirror.`}
+              : view === "job_listings"
+                ? "Job listings from the local EmailTag mirror."
+                : `${data?.total?.toLocaleString() ?? "—"} firms from the local EmailTag mirror.`}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
-            onClick={() => void (view === "contacts" ? peopleQuery.refetch() : firmsQuery.refetch())}
-            disabled={view === "contacts" ? peopleQuery.isFetching : firmsQuery.isFetching}
+            onClick={() => void refreshLeads()}
+            disabled={refreshing}
             className="inline-flex items-center gap-1.5 rounded-md border border-neutral-200 bg-white px-3 py-1.5 text-xs font-medium text-neutral-700 hover:bg-neutral-50 disabled:opacity-40"
           >
-            {(view === "contacts" ? peopleQuery.isFetching : firmsQuery.isFetching) ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+            {refreshing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
             Refresh
           </button>
           <button
@@ -1140,12 +1156,14 @@ function EmailtagFirmsContent() {
         </div>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricTile icon={<Database className="h-4 w-4" />} label="Matching firms" value={data?.total ?? 0} />
-        <MetricTile icon={<SlidersHorizontal className="h-4 w-4" />} label="Showing" value={visibleRange(data)} />
-        <MetricTile icon={<Globe className="h-4 w-4" />} label="Missing websites on page" value={pageSummary.missingWebsite} />
-        <MetricTile icon={<BarChart3 className="h-4 w-4" />} label="Scored on page" value={pageSummary.scored} />
-      </div>
+      {view === "firms" && (
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <MetricTile icon={<Database className="h-4 w-4" />} label="Matching firms" value={data?.total ?? 0} />
+          <MetricTile icon={<SlidersHorizontal className="h-4 w-4" />} label="Showing" value={visibleRange(data)} />
+          <MetricTile icon={<Globe className="h-4 w-4" />} label="Missing websites on page" value={pageSummary.missingWebsite} />
+          <MetricTile icon={<BarChart3 className="h-4 w-4" />} label="Scored on page" value={pageSummary.scored} />
+        </div>
+      )}
 
       <SyncStatusPanel status={syncStatusQuery.data} loading={syncStatusQuery.isLoading} />
 
@@ -1297,7 +1315,7 @@ function EmailtagFirmsContent() {
             </div>
           </div>
         </>
-      ) : (
+      ) : view === "contacts" ? (
         <ContactsView
           filters={peopleFilters}
           setFilters={setPeopleFilters}
@@ -1333,6 +1351,8 @@ function EmailtagFirmsContent() {
             || deleteSavedSearchMutation.error
           }
         />
+      ) : (
+        <JobListingsView />
       )}
     </div>
   );
@@ -2099,7 +2119,167 @@ function LeadsViewTabs({
         <Users className="h-3.5 w-3.5" />
         Contacts
       </button>
+      <button
+        type="button"
+        onClick={() => onChange("job_listings")}
+        className={cn(
+          "inline-flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2 text-xs font-semibold sm:flex-none",
+          value === "job_listings" ? "bg-neutral-900 text-white" : "text-neutral-600 hover:bg-neutral-50",
+        )}
+      >
+        <Briefcase className="h-3.5 w-3.5" />
+        Job listings
+      </button>
     </div>
+  );
+}
+
+const JOB_LISTING_CATEGORIES = [
+  "intake_conversion",
+  "marketing_growth",
+  "case_operations",
+  "attorney_legal",
+  "client_communication",
+  "firm_operations",
+  "technology_data",
+  "finance_billing",
+  "executive_leadership",
+  "other",
+] as const;
+
+function JobListingsView() {
+  const [filters, setFilters] = useState<PifJobPostingsListParams>({ page: 1, page_size: 25 });
+  const debouncedSearch = useDebouncedValue(filters.search ?? "", 250);
+  const queryParams = useMemo(() => ({ ...filters, search: debouncedSearch || undefined }), [debouncedSearch, filters]);
+  const query = useQuery({
+    queryKey: ["pif", "job-postings", queryParams],
+    queryFn: () => listMirroredPifJobPostings(queryParams),
+  });
+  const items = query.data?.items ?? [];
+  const page = query.data?.page ?? filters.page ?? 1;
+  const totalPages = query.data?.total_pages ?? 0;
+  const update = <K extends keyof PifJobPostingsListParams>(key: K, value: PifJobPostingsListParams[K]) => {
+    setFilters((current) => ({ ...current, [key]: value, page: 1 }));
+  };
+  const setPage = (nextPage: number) => setFilters((current) => ({ ...current, page: Math.max(1, nextPage) }));
+
+  return (
+    <section className="space-y-3">
+      <div className="rounded-xl border border-neutral-200 bg-white p-3">
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+          <InputField
+            label="Search"
+            value={filters.search ?? ""}
+            onChange={(value) => update("search", value || undefined)}
+            placeholder="Firm, title, description..."
+          />
+          <SelectField label="Category" value={filters.role_category ?? ""} onChange={(value) => update("role_category", value || undefined)}>
+            <option value="">Any category</option>
+            {JOB_LISTING_CATEGORIES.map((value) => <option key={value} value={value}>{formatLabel(value)}</option>)}
+          </SelectField>
+          <SelectField label="Signal" value={filters.trigger_tag ?? ""} onChange={(value) => update("trigger_tag", value || undefined)}>
+            <option value="">Any signal</option>
+            {JOB_TRIGGER_TAGS.map((value) => <option key={value} value={value}>{formatLabel(value)}</option>)}
+          </SelectField>
+          <InputField
+            label="Technology"
+            value={filters.technology ?? ""}
+            onChange={(value) => update("technology", value || undefined)}
+            placeholder="Filevine, Lead Docket..."
+          />
+          <SelectField label="GTM relevance" value={filters.gtm_relevance ?? ""} onChange={(value) => update("gtm_relevance", value as PifJobPostingsListParams["gtm_relevance"])}>
+            <option value="">Any relevance</option>
+            <option value="high">High</option>
+            <option value="medium">Medium</option>
+            <option value="low">Low</option>
+          </SelectField>
+          <SelectField label="Posted" value={filters.posted_within_days ? String(filters.posted_within_days) : ""} onChange={(value) => update("posted_within_days", value ? Number(value) : undefined)}>
+            <option value="">Any date</option>
+            <option value="7">Last 7 days</option>
+            <option value="14">Last 14 days</option>
+            <option value="30">Last 30 days</option>
+            <option value="90">Last 90 days</option>
+          </SelectField>
+        </div>
+        <div className="mt-3 flex items-center justify-between text-xs text-neutral-500">
+          <span>{query.data?.total.toLocaleString() ?? "—"} job listings</span>
+          <button
+            type="button"
+            onClick={() => setFilters({ page: 1, page_size: 25 })}
+            className="inline-flex items-center gap-1.5 rounded-md border border-neutral-200 px-3 py-1.5 text-xs font-medium text-neutral-600 hover:bg-neutral-50"
+          >
+            <Filter className="h-3.5 w-3.5" />
+            Clear filters
+          </button>
+        </div>
+      </div>
+
+      <div className="overflow-hidden rounded-xl border border-neutral-200 bg-white">
+        {query.isLoading && <div className="px-5 py-8 text-center text-xs text-neutral-400">Loading job listings...</div>}
+        {query.isError && !query.isLoading && (
+          <div className="px-5 py-8 text-center text-xs text-rose-600">
+            {query.error instanceof Error ? query.error.message : "Job listing query failed"}
+          </div>
+        )}
+        {!query.isLoading && !query.isError && items.length === 0 && (
+          <div className="px-5 py-8 text-center text-xs text-neutral-400">No job listings match the filters.</div>
+        )}
+        {items.length > 0 && (
+          <div className="mobile-table-card overflow-hidden">
+            <table className="w-full table-fixed divide-y divide-neutral-100 text-sm">
+              <thead className="bg-neutral-50 text-left text-[11px] uppercase text-neutral-500">
+                <tr>
+                  <th className="w-[20%] px-3 py-2 font-medium">Role</th>
+                  <th className="w-[17%] px-3 py-2 font-medium">Firm</th>
+                  <th className="w-[12%] px-3 py-2 font-medium">Posted</th>
+                  <th className="w-[15%] px-3 py-2 font-medium">Category</th>
+                  <th className="w-[20%] px-3 py-2 font-medium">Signals</th>
+                  <th className="w-[10%] px-3 py-2 font-medium">Technology</th>
+                  <th className="w-[6%] px-3 py-2 font-medium">Source</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-neutral-100">
+                {items.map((posting, index) => <JobListingRow key={`${posting.firm_id}-${posting.source_url}-${posting.title}-${index}`} posting={posting} />)}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <div className="flex items-center justify-between text-xs text-neutral-500">
+        <span>Page {page} of {totalPages || 1} ({query.data?.total.toLocaleString() ?? 0} listings)</span>
+        <div className="flex items-center gap-2">
+          <button type="button" onClick={() => setPage(page - 1)} disabled={page <= 1} className="inline-flex items-center gap-1 rounded-md border border-neutral-300 px-2.5 py-1 text-xs font-medium disabled:opacity-30">
+            <ChevronLeft className="h-3 w-3" />
+            Prev
+          </button>
+          <button type="button" onClick={() => setPage(Math.min(totalPages || 1, page + 1))} disabled={page >= (totalPages || 1)} className="inline-flex items-center gap-1 rounded-md border border-neutral-300 px-2.5 py-1 text-xs font-medium disabled:opacity-30">
+            Next
+            <ChevronRight className="h-3 w-3" />
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function JobListingRow({ posting }: { posting: PifJobPostingResult }) {
+  return (
+    <tr className="hover:bg-neutral-50">
+      <td data-label="Role" className="min-w-0 px-3 py-3">
+        <div className="line-clamp-2 font-medium text-neutral-900">{display(posting.title)}</div>
+        <div className="mt-0.5 truncate text-[11px] text-neutral-500">{[posting.location, posting.employment_type].filter(Boolean).join(" · ") || "—"}</div>
+      </td>
+      <td data-label="Firm" className="min-w-0 px-3 py-3">
+        <Link href={`/firms/${encodeURIComponent(posting.firm_id)}`} className="block truncate text-blue-600 hover:underline">{display(posting.firm_name)}</Link>
+        <div className="truncate text-[11px] text-neutral-400">{formatLabel(posting.entity_type ?? "unknown")}</div>
+      </td>
+      <td data-label="Posted" className="px-3 py-3 text-xs text-neutral-600">{formatDateOnly(posting.posted_date)}</td>
+      <td data-label="Category" className="px-3 py-3"><div className="flex flex-wrap gap-1"><JobTag value={formatLabel(posting.role_category ?? "other")} />{posting.gtm_relevance && <JobTag value={`${formatLabel(posting.gtm_relevance)} GTM`} emphasis={posting.gtm_relevance === "high"} />}</div></td>
+      <td data-label="Signals" className="min-w-0 px-3 py-3"><div className="flex flex-wrap gap-1">{posting.trigger_tags.length ? posting.trigger_tags.map((tag) => <JobTag key={tag} value={formatLabel(tag)} />) : <span className="text-xs text-neutral-400">—</span>}</div></td>
+      <td data-label="Technology" className="min-w-0 px-3 py-3"><div className="flex flex-wrap gap-1">{posting.technology_mentions.length ? posting.technology_mentions.map((technology) => <JobTag key={technology} value={technology} emphasis />) : <span className="text-xs text-neutral-400">—</span>}</div></td>
+      <td data-label="Source" className="px-3 py-3">{posting.source_url ? <a href={posting.source_url} target="_blank" rel="noreferrer" title={posting.source_name} aria-label={`Open source for ${posting.title}`} className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-neutral-200 text-blue-600 hover:bg-blue-50"><ExternalLink className="h-3.5 w-3.5" /></a> : <span className="text-xs text-neutral-400">—</span>}</td>
+    </tr>
   );
 }
 
