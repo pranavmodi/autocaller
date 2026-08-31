@@ -1,9 +1,169 @@
 import asyncio
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
-from app.db.models import PifFirmRow
+from app.db.models import FirmAliasRow, PifEnrichmentTaskRow, PifFirmRow
 from app.services import pif_local_enrichment as service
 from app.services.firm_intel_sync import _apply_extraction
+
+
+def test_local_research_is_due_after_30_days():
+    now = datetime(2026, 8, 31, tzinfo=timezone.utc)
+
+    assert service._research_is_due(None, now=now, refresh_days=30) is True
+    assert service._research_is_due(now - timedelta(days=29), now=now, refresh_days=30) is False
+    assert service._research_is_due(now - timedelta(days=30), now=now, refresh_days=30) is True
+
+
+def test_local_research_due_accepts_legacy_naive_timestamp():
+    now = datetime(2026, 8, 31, tzinfo=timezone.utc)
+
+    assert service._research_is_due(
+        datetime(2026, 8, 1),
+        now=now,
+        refresh_days=30,
+    ) is True
+
+
+def test_attach_extraction_to_recent_canonical_firm_preserves_research(monkeypatch):
+    now = datetime(2026, 8, 31, tzinfo=timezone.utc)
+    canonical = PifFirmRow(
+        id="canonical-1",
+        firm_name="Canonical Law Group",
+        canonical_website="canonical.example",
+        website="canonical.example",
+        emails=["owner@canonical.example"],
+        phones=[],
+        addresses=[],
+        contacts=[],
+        conversation_ids=["cnv_old"],
+        research_data={"summary": "Existing researched summary"},
+        source_json={},
+        last_researched_at=now - timedelta(days=5),
+    )
+    source = PifFirmRow(
+        id="raw-1",
+        firm_name="Canonical Law",
+        emails=["intake@canonical.example"],
+        phones=["+13105550100"],
+        addresses=["Los Angeles, CA"],
+        contacts=[{"name": "Intake", "email": "intake@canonical.example"}],
+        conversation_ids=["cnv_new"],
+        research_data={},
+        source_json={"extraction_id": "raw-1", "merge_status": "active"},
+        source_updated_at=now,
+    )
+    aliases = {}
+
+    class Session:
+        async def get(self, model, key):
+            assert model is FirmAliasRow
+            return aliases.get((key["alias_type"], key["alias_value"]))
+
+        def add(self, row):
+            aliases[(row.alias_type, row.alias_value)] = row
+
+    asyncio.run(service._attach_extraction_to_canonical(
+        Session(),
+        source,
+        canonical,
+        now=now,
+        reuse_recent_research=True,
+    ))
+
+    assert canonical.research_data["summary"] == "Existing researched summary"
+    assert canonical.research_data["local_enrichment"]["dirty"] is False
+    assert canonical.emails == ["owner@canonical.example", "intake@canonical.example"]
+    assert canonical.conversation_ids == ["cnv_old", "cnv_new"]
+    assert source.source_json["merged_into"] == canonical.id
+    assert aliases[("legacy_pif_id", "raw-1")].firm_id == canonical.id
+
+
+def test_persist_reconciles_domain_owner_without_review_conflict(monkeypatch):
+    now = datetime.now(timezone.utc)
+    canonical = PifFirmRow(
+        id="canonical-1",
+        firm_name="Canonical Law Group",
+        canonical_website="canonical.example",
+        website="canonical.example",
+        emails=[],
+        phones=[],
+        addresses=[],
+        contacts=[],
+        conversation_ids=[],
+        research_data={"summary": "Recent canonical research"},
+        source_json={},
+        last_researched_at=now - timedelta(days=5),
+    )
+    source = PifFirmRow(
+        id="raw-1",
+        firm_name="Canonical Law",
+        emails=["intake@canonical.example"],
+        phones=[],
+        addresses=[],
+        contacts=[],
+        conversation_ids=["cnv_new"],
+        research_data={"local_enrichment": {"dirty": True}},
+        source_json={"extraction_id": "raw-1"},
+    )
+    task = PifEnrichmentTaskRow(
+        task_id="task-1",
+        pif_id=source.id,
+        status="in_progress",
+        requested_at=now,
+        result_summary={},
+    )
+    aliases = {
+        ("domain", "canonical.example"): FirmAliasRow(
+            alias_type="domain",
+            alias_value="canonical.example",
+            firm_id=canonical.id,
+            synced_at=now,
+        ),
+    }
+
+    class Result:
+        def scalar_one_or_none(self):
+            return canonical.id
+
+    class Session:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+        async def execute(self, _stmt):
+            return Result()
+
+        async def get(self, model, key):
+            if model is PifEnrichmentTaskRow:
+                return task
+            if model is PifFirmRow:
+                return {source.id: source, canonical.id: canonical}.get(str(key))
+            if model is FirmAliasRow:
+                return aliases.get((key["alias_type"], key["alias_value"]))
+            raise AssertionError(model)
+
+        def add(self, row):
+            aliases[(row.alias_type, row.alias_value)] = row
+
+        async def commit(self):
+            return None
+
+    monkeypatch.setattr(service, "AsyncSessionLocal", lambda: Session())
+
+    result = asyncio.run(service._persist_research_result("task-1", {
+        "canonical_website": "canonical.example",
+        "summary": "New duplicate research",
+    }))
+
+    assert result["pif_id"] == canonical.id
+    assert result["reused_recent_research"] is True
+    assert canonical.research_data["summary"] == "Recent canonical research"
+    assert "canonical_domain_review" not in source.research_data.get("local_enrichment", {})
+    assert source.source_json["merged_into"] == canonical.id
+    assert aliases[("legacy_pif_id", source.id)].firm_id == canonical.id
 
 
 def test_raw_extraction_preserves_local_derived_fields_and_marks_dirty():

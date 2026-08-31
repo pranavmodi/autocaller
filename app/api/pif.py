@@ -105,8 +105,8 @@ class SavedLeadSearchCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: str = Field(..., min_length=1, max_length=255)
-    view: Literal["contacts"] = "contacts"
-    criteria: ContactSearchCriteria
+    view: Literal["contacts", "firms"] = "contacts"
+    criteria: dict[str, Any]
     actor: str = Field("operator", max_length=128)
 
 
@@ -114,7 +114,7 @@ class SavedLeadSearchUpdateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: str | None = Field(None, min_length=1, max_length=255)
-    criteria: ContactSearchCriteria | None = None
+    criteria: dict[str, Any] | None = None
     actor: str = Field("operator", max_length=128)
 
 
@@ -190,7 +190,7 @@ async def get_pif_people(
 
 
 @router.get("/saved-searches")
-async def get_saved_lead_searches(view: Literal["contacts"] = Query("contacts")):
+async def get_saved_lead_searches(view: Literal["contacts", "firms"] = Query("contacts")):
     return {"saved_searches": await list_saved_searches(view=view)}
 
 
@@ -200,7 +200,7 @@ async def post_saved_lead_search(req: SavedLeadSearchCreateRequest):
         search = await create_saved_search(
             name=req.name,
             view=req.view,
-            criteria=req.criteria.model_dump(),
+            criteria=req.criteria,
             actor=req.actor,
         )
     except ValueError as exc:
@@ -214,7 +214,7 @@ async def patch_saved_lead_search(search_id: str, req: SavedLeadSearchUpdateRequ
         search = await update_saved_search(
             search_id,
             name=req.name,
-            criteria=req.criteria.model_dump() if req.criteria else None,
+            criteria=req.criteria,
             actor=req.actor,
         )
     except ValueError as exc:
@@ -251,6 +251,9 @@ async def get_pif_firms(
     research_presence: str | None = Query(None),
     staff_presence: str | None = Query(None),
     job_postings_presence: str | None = Query(None),
+    job_posting_role: str | None = Query(None),
+    job_posting_query: str | None = Query(None, max_length=255),
+    job_posted_within_days: int | None = Query(None, ge=0, le=3650),
     behavior_presence: str | None = Query(None),
     icp_presence: str | None = Query(None),
     vendor_presence: str | None = Query(None),
@@ -279,6 +282,9 @@ async def get_pif_firms(
         research_presence=research_presence,
         staff_presence=staff_presence,
         job_postings_presence=job_postings_presence,
+        job_posting_role=job_posting_role,
+        job_posting_query=job_posting_query,
+        job_posted_within_days=job_posted_within_days,
         behavior_presence=behavior_presence,
         icp_presence=icp_presence,
         vendor_presence=vendor_presence,

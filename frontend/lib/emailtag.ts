@@ -314,6 +314,9 @@ export interface PifInfoListParams {
   research_presence?: "any" | "completed" | "missing" | "queued_or_running" | "failed";
   staff_presence?: "any" | "completed" | "missing" | "queued_or_running" | "failed";
   job_postings_presence?: "any" | "has" | "none" | "not_researched" | "queued_or_running" | "failed";
+  job_posting_role?: "intake" | "marketing" | "case_operations" | "firm_operations" | "technology";
+  job_posting_query?: string;
+  job_posted_within_days?: number;
   behavior_presence?: "any" | "has" | "missing";
   icp_presence?: "any" | "has" | "missing";
   vendor_presence?: "any" | "has" | "missing";
@@ -406,6 +409,46 @@ export interface SavedLeadSearch {
   name: string;
   view: "contacts";
   criteria: SavedLeadSearchCriteria;
+  schema_version: number;
+  created_by: string;
+  updated_by: string;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface SavedFirmTriggerSearchCriteria {
+  search?: string;
+  sort_by: PifSortBy;
+  icp_tier?: PifTier | "";
+  entity_type?: string;
+  recently_researched?: string;
+  contact_email_range?: string;
+  staff_count_range?: string;
+  autorespond_window: string;
+  autorespond_type?: string;
+  website_presence: NonNullable<PifInfoListParams["website_presence"]>;
+  research_presence: NonNullable<PifInfoListParams["research_presence"]>;
+  staff_presence: NonNullable<PifInfoListParams["staff_presence"]>;
+  job_postings_presence: NonNullable<PifInfoListParams["job_postings_presence"]>;
+  job_posting_role?: string;
+  job_posting_query?: string;
+  job_posted_within_days?: string;
+  behavior_presence: NonNullable<PifInfoListParams["behavior_presence"]>;
+  icp_presence: NonNullable<PifInfoListParams["icp_presence"]>;
+  vendor_presence: NonNullable<PifInfoListParams["vendor_presence"]>;
+  vendor?: string;
+  record_origin: "any" | "manual" | "synced";
+  first_contact_period: "any" | "last_1_month" | "last_6_months" | "custom";
+  first_contacted_from?: string;
+  first_contacted_to?: string;
+  active_only: boolean;
+}
+
+export interface SavedFirmTriggerSearch {
+  id: string;
+  name: string;
+  view: "firms";
+  criteria: SavedFirmTriggerSearchCriteria;
   schema_version: number;
   created_by: string;
   updated_by: string;
@@ -627,6 +670,9 @@ export function listMirroredPifInfo(params: PifInfoListParams = {}): Promise<Pif
       research_presence: params.research_presence,
       staff_presence: params.staff_presence,
       job_postings_presence: params.job_postings_presence,
+      job_posting_role: params.job_posting_role,
+      job_posting_query: params.job_posting_query,
+      job_posted_within_days: params.job_posted_within_days,
       behavior_presence: params.behavior_presence,
       icp_presence: params.icp_presence,
       vendor_presence: params.vendor_presence,
@@ -703,6 +749,36 @@ export function deleteSavedLeadSearch(id: string): Promise<{ deleted: boolean; i
     `/api/pif/saved-searches/${encodeURIComponent(id)}`,
     { method: "DELETE" },
   );
+}
+
+export function listSavedFirmTriggerSearches(): Promise<{ saved_searches: SavedFirmTriggerSearch[] }> {
+  return possibleFetch<{ saved_searches: SavedFirmTriggerSearch[] }>(
+    "/api/pif/saved-searches?view=firms",
+  );
+}
+
+export function createSavedFirmTriggerSearch(input: {
+  name: string;
+  criteria: SavedFirmTriggerSearchCriteria;
+}): Promise<{ saved_search: SavedFirmTriggerSearch }> {
+  return possibleFetch<{ saved_search: SavedFirmTriggerSearch }>("/api/pif/saved-searches", {
+    method: "POST",
+    body: JSON.stringify({ ...input, view: "firms" }),
+  });
+}
+
+export function updateSavedFirmTriggerSearch(
+  id: string,
+  input: { name?: string; criteria?: SavedFirmTriggerSearchCriteria },
+): Promise<{ saved_search: SavedFirmTriggerSearch }> {
+  return possibleFetch<{ saved_search: SavedFirmTriggerSearch }>(
+    `/api/pif/saved-searches/${encodeURIComponent(id)}`,
+    { method: "PATCH", body: JSON.stringify(input) },
+  );
+}
+
+export function deleteSavedFirmTriggerSearch(id: string): Promise<{ deleted: boolean; id: string }> {
+  return deleteSavedLeadSearch(id);
 }
 
 export function getPifPeopleFilterOptions(): Promise<PifPeopleFilterOptionsResponse> {

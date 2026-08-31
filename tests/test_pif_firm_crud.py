@@ -324,6 +324,30 @@ def test_api_forwards_contact_email_and_staff_count_ranges(monkeypatch):
     assert captured["staff_count_max"] == 50
 
 
+def test_api_forwards_job_trigger_filters(monkeypatch):
+    captured = {}
+
+    async def fake_list(**kwargs):
+        captured.update(kwargs)
+        return {"items": [], "total": 0, "page": 1, "page_size": 25, "total_pages": 0}
+
+    monkeypatch.setattr(pif_api, "list_mirrored_pif_firms", fake_list)
+    app = FastAPI()
+    app.include_router(pif_api.router)
+    client = TestClient(app)
+
+    response = client.get(
+        "/api/pif/firms?job_postings_presence=has&job_posting_role=intake"
+        "&job_posting_query=lead%20conversion&job_posted_within_days=30"
+    )
+
+    assert response.status_code == 200
+    assert captured["job_postings_presence"] == "has"
+    assert captured["job_posting_role"] == "intake"
+    assert captured["job_posting_query"] == "lead conversion"
+    assert captured["job_posted_within_days"] == 30
+
+
 def test_api_forwards_autorespond_filters(monkeypatch):
     captured = {}
 

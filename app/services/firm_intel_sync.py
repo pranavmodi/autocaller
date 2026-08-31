@@ -141,6 +141,34 @@ def _distinct(values: list[Any], *, lower: bool = False) -> list[str]:
     return out
 
 
+def _merge_contact_values(existing: list[Any], incoming: list[Any]) -> list[Any]:
+    merged: list[Any] = []
+    positions: dict[str, int] = {}
+    for value in [*existing, *incoming]:
+        if not isinstance(value, dict):
+            if value not in merged:
+                merged.append(value)
+            continue
+        email = str(value.get("email") or "").strip().lower()
+        name = str(value.get("name") or "").strip().lower()
+        title = str(value.get("title") or "").strip().lower()
+        key = email or f"{name}|{title}"
+        if not key.strip("|"):
+            if value not in merged:
+                merged.append(dict(value))
+            continue
+        if key not in positions:
+            positions[key] = len(merged)
+            merged.append(dict(value))
+            continue
+        current = dict(merged[positions[key]])
+        for field, field_value in value.items():
+            if field_value not in (None, "", [], {}) and current.get(field) in (None, "", [], {}):
+                current[field] = field_value
+        merged[positions[key]] = current
+    return merged
+
+
 def _as_int(value: Any) -> int | None:
     if value is None or value == "":
         return None
@@ -404,9 +432,17 @@ def _apply_extraction(row: PifFirmRow, extraction: dict[str, Any], *, now: datet
     """Apply source facts without replacing Possible OS-owned derived fields."""
     existing_source = row.source_json if isinstance(row.source_json, dict) else {}
     manual_overrides = existing_source.get("_possibleos_manual_overrides")
+    extraction_id = str(extraction.get("extraction_id") or "").strip()
+    linked_to_canonical = bool(extraction_id and extraction_id != row.id)
     source = dict(extraction)
     if isinstance(manual_overrides, dict):
         source["_possibleos_manual_overrides"] = deepcopy(manual_overrides)
+    linked_ids = _distinct([
+        *_as_list(existing_source.get("_linked_extraction_ids")),
+        *([extraction_id] if linked_to_canonical else []),
+    ])
+    if linked_ids:
+        source["_linked_extraction_ids"] = linked_ids
 
     source_updated = _parse_dt(extraction.get("updated_at"))
     source_version = _dt_iso(source_updated)
@@ -416,27 +452,49 @@ def _apply_extraction(row: PifFirmRow, extraction: dict[str, Any], *, now: datet
     local_state["dirty"] = local_state.get("enriched_source_updated_at") != source_version
     research_data["local_enrichment"] = local_state
 
-    row.firm_name = extraction.get("firm_name") or row.firm_name
+    if not linked_to_canonical or not row.firm_name:
+        row.firm_name = extraction.get("firm_name") or row.firm_name
     row.entity_type = extraction.get("entity_type") or row.entity_type
     observed_website = normalize_domain(extraction.get("observed_website"))
     if observed_website and not row.canonical_website:
         row.website = observed_website
     row.emails = _distinct([
+        *(_as_list(row.emails) if linked_to_canonical else []),
         *_as_list(extraction.get("emails")),
         *[p.get("email") for p in [*(_as_list(row.leadership)), *(_as_list(row.staff))] if isinstance(p, dict)],
     ], lower=True)
     row.phones = _distinct([
+        *(_as_list(row.phones) if linked_to_canonical else []),
         *_as_list(extraction.get("phones")),
         *[p.get("phone") for p in [*(_as_list(row.leadership)), *(_as_list(row.staff))] if isinstance(p, dict)],
     ])
     row.fax = extraction.get("fax") or row.fax
-    row.addresses = _as_list(extraction.get("addresses"))
-    row.contacts = _as_list(extraction.get("contacts"))
-    row.conversation_ids = _as_list(extraction.get("conversation_ids"))
-    row.extraction_notes = extraction.get("extraction_notes")
-    row.first_contacted_precise_at = _parse_dt(extraction.get("first_contacted_precise_at"))
-    row.source_created_at = _parse_dt(extraction.get("created_at"))
-    row.source_updated_at = source_updated
+    row.addresses = _distinct([
+        *(_as_list(row.addresses) if linked_to_canonical else []),
+        *_as_list(extraction.get("addresses")),
+    ])
+    row.contacts = _merge_contact_values(
+        _as_list(row.contacts) if linked_to_canonical else [],
+        _as_list(extraction.get("contacts")),
+    )
+    row.conversation_ids = _distinct([
+        *(_as_list(row.conversation_ids) if linked_to_canonical else []),
+        *_as_list(extraction.get("conversation_ids")),
+    ])
+    row.extraction_notes = extraction.get("extraction_notes") or row.extraction_notes
+    first_contacted = _parse_dt(extraction.get("first_contacted_precise_at"))
+    source_created = _parse_dt(extraction.get("created_at"))
+    if linked_to_canonical:
+        first_values = [value for value in (row.first_contacted_precise_at, first_contacted) if value]
+        created_values = [value for value in (row.source_created_at, source_created) if value]
+        updated_values = [value for value in (row.source_updated_at, source_updated) if value]
+        row.first_contacted_precise_at = min(first_values) if first_values else None
+        row.source_created_at = min(created_values) if created_values else None
+        row.source_updated_at = max(updated_values) if updated_values else None
+    else:
+        row.first_contacted_precise_at = first_contacted
+        row.source_created_at = source_created
+        row.source_updated_at = source_updated
     row.source_json = source
     row.research_data = research_data
     row.profile_source = "raw"
@@ -574,7 +632,8 @@ async def _upsert_profile(session, profile: dict[str, Any], *, now: datetime) ->
     firm_id = str(profile.get("extraction_id") or profile.get("firm_id") or "").strip()
     if not firm_id:
         return "skipped", 0, None
-    row = await session.get(PifFirmRow, firm_id)
+    linked_firm_id = await _firm_id_by_local_alias(session, firm_id) if is_extraction else None
+    row = await session.get(PifFirmRow, linked_firm_id or firm_id)
     status = "updated"
     if row is None:
         canonical = _profile_website(profile)
@@ -1637,6 +1696,9 @@ async def list_mirrored_pif_firms(
     research_presence: str | None = None,
     staff_presence: str | None = None,
     job_postings_presence: str | None = None,
+    job_posting_role: str | None = None,
+    job_posting_query: str | None = None,
+    job_posted_within_days: int | None = None,
     behavior_presence: str | None = None,
     icp_presence: str | None = None,
     vendor_presence: str | None = None,
@@ -1727,6 +1789,27 @@ async def list_mirrored_pif_firms(
         conditions.append(PifFirmRow.first_contacted_precise_at >= datetime.combine(first_contacted_from, time.min, tzinfo=timezone.utc))
     if first_contacted_to is not None:
         conditions.append(PifFirmRow.first_contacted_precise_at < datetime.combine(first_contacted_to + timedelta(days=1), time.min, tzinfo=timezone.utc))
+
+    postings_text = func.lower(cast(PifFirmRow.research_data["job_postings"]["postings"], String))
+    role_terms = {
+        "intake": ("intake", "receptionist", "call center", "client relations"),
+        "marketing": ("marketing", "seo", "ppc", "growth", "social media", "business development"),
+        "case_operations": ("case manager", "paralegal", "legal assistant", "litigation assistant"),
+        "firm_operations": ("operations", "office manager", "administrator", "chief operating officer"),
+        "technology": ("technology", "systems", "automation", "crm", "information technology", "data analyst"),
+    }
+    selected_role_terms = role_terms.get(str(job_posting_role or "").strip().lower())
+    if selected_role_terms:
+        conditions.append(or_(*(postings_text.like(f"%{term}%") for term in selected_role_terms)))
+    if job_posting_query and job_posting_query.strip():
+        terms = list(dict.fromkeys(
+            term.lower() for term in re.split(r"[\s,]+", job_posting_query.strip()) if term
+        ))
+        conditions.extend(postings_text.like(f"%{term}%") for term in terms)
+    if job_posted_within_days is not None:
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=max(0, job_posted_within_days))).date()
+        path = f'$.job_postings.postings[*] ? (@.posted_date >= "{cutoff.isoformat()}")'
+        conditions.append(func.jsonb_path_exists(PifFirmRow.research_data, cast(path, JSONPATH)))
 
     for field, value in (
         ("website_presence", website_presence),

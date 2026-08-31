@@ -302,6 +302,47 @@ def test_raw_extraction_sync_queues_local_enrichment(monkeypatch):
     assert result["local_enrichment"]["queued"] == ["raw-1"]
 
 
+def test_linked_extraction_updates_existing_canonical_firm(monkeypatch):
+    store, _calls = install_fakes(monkeypatch, [])
+    canonical = PifFirmRow(
+        id="canonical-1",
+        firm_name="Canonical Law Group",
+        canonical_website="canonical.example",
+        website="canonical.example",
+        emails=["owner@canonical.example"],
+        phones=[],
+        addresses=[],
+        contacts=[],
+        leadership=[],
+        staff=[],
+        conversation_ids=[],
+        research_data={},
+        source_json={},
+    )
+    store.firms[canonical.id] = canonical
+    store.aliases[("legacy_pif_id", "raw-1")] = FirmAliasRow(
+        alias_type="legacy_pif_id",
+        alias_value="raw-1",
+        firm_id=canonical.id,
+        synced_at=datetime(2026, 8, 30, tzinfo=timezone.utc),
+    )
+
+    status, _aliases, local_id = asyncio.run(svc._upsert_profile(
+        FakeSession(store),
+        extraction(),
+        now=datetime(2026, 8, 31, tzinfo=timezone.utc),
+    ))
+
+    assert status == "updated"
+    assert local_id == canonical.id
+    assert canonical.firm_name == "Canonical Law Group"
+    assert canonical.canonical_website == "canonical.example"
+    assert canonical.emails == ["owner@canonical.example", "intake@rawexample.com"]
+    assert canonical.conversation_ids == ["cnv_1"]
+    assert canonical.source_json["_linked_extraction_ids"] == ["raw-1"]
+    assert "raw-1" not in store.firms
+
+
 def test_delta_sync_two_pages_upserts_and_advances_watermark(monkeypatch):
     p1 = profile("firm-1", refined_at="2026-07-01T12:00:00Z")
     p2 = profile("firm-2", canonical="joneslaw.com", domains=["joneslaw.com"], legacy_ids=["legacy-2"], refined_at="2026-07-02T12:00:00Z", decision_email="owner@joneslaw.com")

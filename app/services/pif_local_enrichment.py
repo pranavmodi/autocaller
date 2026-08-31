@@ -5,7 +5,7 @@ import asyncio
 import logging
 import os
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 SKILL_PATH = Path(__file__).resolve().parents[1] / "skills/pif-local-enrichment/SKILL.md"
 OPEN_STATUSES = {"queued", "in_progress"}
 LOCAL_PROVIDER = "possibleos_openclaw"
+DEFAULT_REFRESH_DAYS = 30
 STAGES = (
     ("web_research", "Firm, website, people, and vendors"),
     ("persist_research", "Save researched facts"),
@@ -41,6 +42,24 @@ class PifLocalEnrichmentError(Exception):
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _refresh_days() -> int:
+    try:
+        return max(1, int(os.getenv("PIF_LOCAL_ENRICHMENT_REFRESH_DAYS", str(DEFAULT_REFRESH_DAYS))))
+    except (TypeError, ValueError):
+        return DEFAULT_REFRESH_DAYS
+
+
+def _research_is_due(last_researched_at: datetime | None, *, now: datetime, refresh_days: int) -> bool:
+    if last_researched_at is None:
+        return True
+    researched_at = (
+        last_researched_at
+        if last_researched_at.tzinfo is not None
+        else last_researched_at.replace(tzinfo=timezone.utc)
+    )
+    return researched_at <= now - timedelta(days=refresh_days)
 
 
 def _as_dict(value: Any) -> dict[str, Any]:
@@ -415,17 +434,27 @@ async def _claim_next_task() -> tuple[str, str] | None:
         return task.task_id, task.pif_id
 
 
-async def _claim_canonical_domain(session, firm: PifFirmRow, domain: str | None, now: datetime) -> bool:
+async def _canonical_domain_owner(session, firm: PifFirmRow, domain: str | None) -> PifFirmRow | None:
     if not domain:
-        return False
-    owner = (await session.execute(
+        return None
+    owner_id = (await session.execute(
         select(PifFirmRow.id).where(
             PifFirmRow.id != firm.id,
             or_(PifFirmRow.canonical_website == domain, PifFirmRow.website == domain),
         ).limit(1)
     )).scalar_one_or_none()
     alias = await session.get(FirmAliasRow, {"alias_type": "domain", "alias_value": domain})
-    if owner or (alias and alias.firm_id != firm.id):
+    if owner_id:
+        return await session.get(PifFirmRow, owner_id)
+    if alias and alias.firm_id != firm.id:
+        return await session.get(PifFirmRow, alias.firm_id)
+    return None
+
+
+async def _claim_canonical_domain(session, firm: PifFirmRow, domain: str | None, now: datetime) -> bool:
+    if not domain:
+        return False
+    if await _canonical_domain_owner(session, firm, domain):
         return False
     firm.canonical_website = domain
     firm.website = domain
@@ -435,6 +464,91 @@ async def _claim_canonical_domain(session, firm: PifFirmRow, domain: str | None,
         alias.firm_id = firm.id
         alias.synced_at = now
     return True
+
+
+def _earliest(*values: datetime | None) -> datetime | None:
+    present = [value for value in values if value is not None]
+    return min(present) if present else None
+
+
+def _latest(*values: datetime | None) -> datetime | None:
+    present = [value for value in values if value is not None]
+    return max(present) if present else None
+
+
+async def _attach_extraction_to_canonical(
+    session,
+    source: PifFirmRow,
+    canonical: PifFirmRow,
+    *,
+    now: datetime,
+    reuse_recent_research: bool,
+) -> str:
+    source_json = _as_dict(source.source_json)
+    extraction_id = str(source_json.get("extraction_id") or source.id).strip()
+
+    canonical.emails = _merge_values(canonical.emails, source.emails)
+    canonical.phones = _merge_values(canonical.phones, source.phones)
+    canonical.addresses = _merge_values(canonical.addresses, source.addresses)
+    canonical.contacts = _merge_values(canonical.contacts, source.contacts)
+    canonical.conversation_ids = _merge_values(canonical.conversation_ids, source.conversation_ids)
+    canonical.fax = canonical.fax or source.fax
+    canonical.first_contacted_precise_at = _earliest(
+        canonical.first_contacted_precise_at,
+        source.first_contacted_precise_at,
+    )
+    canonical.source_created_at = _earliest(canonical.source_created_at, source.source_created_at)
+    canonical.source_updated_at = _latest(canonical.source_updated_at, source.source_updated_at)
+    canonical.synced_at = _latest(canonical.synced_at, source.synced_at) or now
+    canonical.updated_at = now
+
+    canonical_data = _as_dict(canonical.research_data)
+    canonical_state = _as_dict(canonical_data.get("local_enrichment"))
+    linked_ids = list(dict.fromkeys([
+        *_as_list(canonical_state.get("linked_extraction_ids")),
+        extraction_id,
+    ]))
+    canonical_state.update({
+        "linked_extraction_ids": linked_ids,
+        "identity_reconciled_at": now.isoformat(),
+    })
+    if reuse_recent_research:
+        canonical_state.update({
+            "dirty": False,
+            "enriched_source_updated_at": (
+                canonical.source_updated_at.isoformat() if canonical.source_updated_at else None
+            ),
+        })
+    canonical_data["local_enrichment"] = canonical_state
+    canonical.research_data = canonical_data
+
+    source_json.update({"merge_status": "merged", "merged_into": canonical.id})
+    source.source_json = source_json
+    source.research_data = _local_state(
+        source,
+        "completed",
+        dirty=False,
+        reconciled_into=canonical.id,
+        identity_reconciled_at=now.isoformat(),
+        message=f"Attached to canonical firm {canonical.firm_name or canonical.id}",
+    )
+    source.research_status = "completed"
+    source.staff_research_status = "completed"
+    source.updated_at = now
+
+    alias_key = {"alias_type": "legacy_pif_id", "alias_value": extraction_id.lower()}
+    alias = await session.get(FirmAliasRow, alias_key)
+    if alias is None:
+        session.add(FirmAliasRow(
+            alias_type="legacy_pif_id",
+            alias_value=extraction_id.lower(),
+            firm_id=canonical.id,
+            synced_at=now,
+        ))
+    else:
+        alias.firm_id = canonical.id
+        alias.synced_at = now
+    return extraction_id
 
 
 def _merge_values(existing: Any, incoming: Any) -> Any:
@@ -465,7 +579,40 @@ async def _persist_research_result(task_id: str, result: dict[str, Any]) -> dict
         firm = await session.get(PifFirmRow, task.pif_id)
         if firm is None:
             raise RuntimeError("firm_not_found")
-        domain_claimed = await _claim_canonical_domain(session, firm, result.get("canonical_website"), now)
+        domain = result.get("canonical_website")
+        canonical_owner = await _canonical_domain_owner(session, firm, domain)
+        reused_recent_research = False
+        reconciled_from_firm_id = None
+        if canonical_owner is not None:
+            reused_recent_research = not _research_is_due(
+                canonical_owner.last_researched_at,
+                now=now,
+                refresh_days=_refresh_days(),
+            )
+            reconciled_from_firm_id = firm.id
+            await _attach_extraction_to_canonical(
+                session,
+                firm,
+                canonical_owner,
+                now=now,
+                reuse_recent_research=reused_recent_research,
+            )
+            if reused_recent_research:
+                await session.commit()
+                return {
+                    "pif_id": canonical_owner.id,
+                    "canonical_website": canonical_owner.canonical_website or canonical_owner.website,
+                    "domain_claimed": False,
+                    "reconciled_from_firm_id": reconciled_from_firm_id,
+                    "reused_recent_research": True,
+                    "last_researched_at": (
+                        canonical_owner.last_researched_at.isoformat()
+                        if canonical_owner.last_researched_at else None
+                    ),
+                }
+            task.pif_id = canonical_owner.id
+            firm = canonical_owner
+        domain_claimed = canonical_owner is None and await _claim_canonical_domain(session, firm, domain, now)
         data = _as_dict(firm.research_data)
         for key in (
             "summary", "practice_areas", "founded_year", "firm_size",
@@ -476,11 +623,7 @@ async def _persist_research_result(task_id: str, result: dict[str, Any]) -> dict
             data[key] = _merge_values(data.get(key), result.get(key))
         data["research_provider"] = LOCAL_PROVIDER
         state = _as_dict(data.get("local_enrichment"))
-        if result.get("canonical_website") and not domain_claimed and firm.canonical_website != result.get("canonical_website"):
-            state["canonical_domain_review"] = {
-                "candidate": result["canonical_website"],
-                "reason": "domain_owned_by_another_firm",
-            }
+        state.pop("canonical_domain_review", None)
         data["local_enrichment"] = state
         firm.research_data = data
         firm.leadership = _merge_people(firm.leadership, result.get("leadership"))
@@ -489,8 +632,11 @@ async def _persist_research_result(task_id: str, result: dict[str, Any]) -> dict
         firm.updated_at = now
         await session.commit()
         return {
+            "pif_id": firm.id,
             "canonical_website": firm.canonical_website,
             "domain_claimed": domain_claimed,
+            "reconciled_from_firm_id": reconciled_from_firm_id,
+            "reused_recent_research": reused_recent_research,
             "leadership_count": len(firm.leadership),
             "staff_count": len(firm.staff),
             "vendor_count": len(_as_list((firm.vendor_stack or {}).get("evidence"))),
@@ -609,6 +755,14 @@ async def _run_task(task_id: str, pif_id: str) -> None:
         return
     await _set_stage(task_id, "persist_research", "completed", message="Research saved without replacing existing facts", details=persisted)
 
+    target_pif_id = str(persisted.get("pif_id") or pif_id)
+    if persisted.get("reused_recent_research"):
+        message = "Canonical firm was researched within the last 30 days; reused existing research"
+        for stage_key in ("behavior", "contact_intelligence", "contacts", "job_postings", "score"):
+            await _set_stage(task_id, stage_key, "skipped", message=message)
+        await _finalize_task(task_id, "completed")
+        return
+
     from app.services.firm_contacts_service import ingest_pif_directory_contacts
     from app.services.pif_local_derivations import (
         analyze_behavior_locally,
@@ -616,19 +770,19 @@ async def _run_task(task_id: str, pif_id: str) -> None:
         synthesize_contact_intelligence_locally,
     )
 
-    await _run_optional_stage(task_id, "behavior", lambda: analyze_behavior_locally(pif_id))
+    await _run_optional_stage(task_id, "behavior", lambda: analyze_behavior_locally(target_pif_id))
     await _run_optional_stage(
         task_id,
         "contact_intelligence",
-        lambda: synthesize_contact_intelligence_locally(pif_id),
+        lambda: synthesize_contact_intelligence_locally(target_pif_id),
     )
     await _run_optional_stage(
         task_id,
         "contacts",
-        lambda: ingest_pif_directory_contacts(pif_ids={pif_id}),
+        lambda: ingest_pif_directory_contacts(pif_ids={target_pif_id}),
     )
-    await _run_optional_stage(task_id, "job_postings", lambda: _wait_for_job_research(pif_id))
-    await _run_optional_stage(task_id, "score", lambda: score_firm_locally(pif_id))
+    await _run_optional_stage(task_id, "job_postings", lambda: _wait_for_job_research(target_pif_id))
+    await _run_optional_stage(task_id, "score", lambda: score_firm_locally(target_pif_id))
     await _finalize_task(task_id, "completed")
 
 
@@ -643,22 +797,58 @@ async def recover_interrupted_local_enrichment() -> int:
         return int(result.rowcount or 0)
 
 
+async def _due_dirty_firm_ids(*, now: datetime, refresh_days: int, exclude: set[str]) -> list[str]:
+    cutoff = now - timedelta(days=refresh_days)
+    async with AsyncSessionLocal() as session:
+        firms = (await session.execute(
+            select(PifFirmRow)
+            .where(or_(PifFirmRow.last_researched_at.is_(None), PifFirmRow.last_researched_at <= cutoff))
+            .order_by(PifFirmRow.last_researched_at.asc().nullsfirst(), PifFirmRow.source_updated_at.desc().nullslast())
+        )).scalars().all()
+    return [
+        firm.id
+        for firm in firms
+        if firm.id not in exclude
+        and _as_dict(_as_dict(firm.research_data).get("local_enrichment")).get("dirty")
+    ]
+
+
 async def queue_dirty_firm_enrichment(firm_ids: list[str], *, limit: int = 100) -> dict[str, Any]:
+    """Queue dirty firms whose last successful local research is no longer fresh."""
+    now = _utcnow()
+    refresh_days = _refresh_days()
+    candidate_ids = list(dict.fromkeys(firm_ids))
+    candidate_ids.extend(await _due_dirty_firm_ids(
+        now=now,
+        refresh_days=refresh_days,
+        exclude=set(candidate_ids),
+    ))
     queued: list[str] = []
     skipped: list[str] = []
-    for firm_id in firm_ids[:max(0, limit)]:
+    deferred: list[str] = []
+    for firm_id in candidate_ids:
+        if len(queued) >= max(0, limit):
+            break
         async with AsyncSessionLocal() as session:
             firm = await session.get(PifFirmRow, firm_id)
             state = _as_dict(_as_dict(firm.research_data).get("local_enrichment")) if firm else {}
         if not firm or not state.get("dirty"):
             skipped.append(firm_id)
             continue
+        if not _research_is_due(firm.last_researched_at, now=now, refresh_days=refresh_days):
+            deferred.append(firm_id)
+            continue
         result = await start_local_firm_enrichment(firm_id)
         if result.get("status") in OPEN_STATUSES:
             queued.append(firm_id)
         else:
             skipped.append(firm_id)
-    return {"queued": queued, "skipped": skipped}
+    return {
+        "queued": queued,
+        "skipped": skipped,
+        "deferred": deferred,
+        "refresh_days": refresh_days,
+    }
 
 
 async def local_enrichment_loop(*, poll_seconds: float = 2.0) -> None:

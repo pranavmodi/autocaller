@@ -1971,7 +1971,7 @@ class SavedLeadSearchRow(Base):
     )
 
     __table_args__ = (
-        CheckConstraint("view IN ('contacts')", name="ck_saved_lead_searches_view"),
+        CheckConstraint("view IN ('contacts', 'firms')", name="ck_saved_lead_searches_view"),
         UniqueConstraint("view", "name", name="uq_saved_lead_searches_view_name"),
         Index("ix_saved_lead_searches_view_updated", "view", "updated_at"),
     )

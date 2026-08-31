@@ -26,6 +26,28 @@ CONTACT_SEARCH_KEYS = {
     "leader",
     "email_presence",
 }
+FIRM_TRIGGER_SEARCH_DEFAULTS = {
+    "sort_by": "updated_at",
+    "autorespond_window": "any",
+    "website_presence": "any",
+    "research_presence": "any",
+    "staff_presence": "any",
+    "job_postings_presence": "any",
+    "behavior_presence": "any",
+    "icp_presence": "any",
+    "vendor_presence": "any",
+    "record_origin": "any",
+    "first_contact_period": "any",
+    "active_only": True,
+}
+FIRM_TRIGGER_SEARCH_KEYS = {
+    "search", "sort_by", "icp_tier", "entity_type", "recently_researched",
+    "contact_email_range", "staff_count_range", "autorespond_window", "autorespond_type",
+    "website_presence", "research_presence", "staff_presence", "job_postings_presence",
+    "job_posting_role", "job_posting_query", "job_posted_within_days",
+    "behavior_presence", "icp_presence", "vendor_presence", "vendor", "record_origin",
+    "first_contact_period", "first_contacted_from", "first_contacted_to", "active_only",
+}
 _table_checked = False
 
 
@@ -60,6 +82,61 @@ def normalize_contact_search_criteria(criteria: dict[str, Any]) -> dict[str, Any
         "email_presence": email_presence,
     })
     return normalized
+
+
+def normalize_firm_trigger_search_criteria(criteria: dict[str, Any]) -> dict[str, Any]:
+    unknown = set(criteria) - FIRM_TRIGGER_SEARCH_KEYS
+    if unknown:
+        raise ValueError(f"unsupported_search_criteria:{','.join(sorted(unknown))}")
+
+    normalized: dict[str, Any] = dict(FIRM_TRIGGER_SEARCH_DEFAULTS)
+    for key in (
+        "search", "icp_tier", "entity_type", "contact_email_range", "staff_count_range",
+        "autorespond_type", "vendor", "first_contacted_from", "first_contacted_to",
+        "job_posting_query",
+    ):
+        value = str(criteria.get(key) or "").strip()
+        if value:
+            normalized[key] = value.lower() if key == "vendor" else value
+
+    enum_values = {
+        "sort_by": {"updated_at", "first_contacted_precise_at", "firm_name", "conversation_count"},
+        "autorespond_window": {"any", "24h", "7d", "30d", "90d", "ever", "never"},
+        "website_presence": {"any", "has", "missing", "resolved", "unresolved"},
+        "research_presence": {"any", "completed", "missing", "queued_or_running", "failed"},
+        "staff_presence": {"any", "completed", "missing", "queued_or_running", "failed"},
+        "job_postings_presence": {"any", "has", "none", "not_researched", "queued_or_running", "failed"},
+        "job_posting_role": {"", "intake", "marketing", "case_operations", "firm_operations", "technology"},
+        "behavior_presence": {"any", "has", "missing"},
+        "icp_presence": {"any", "has", "missing"},
+        "vendor_presence": {"any", "has", "missing"},
+        "record_origin": {"any", "manual", "synced"},
+        "first_contact_period": {"any", "last_1_month", "last_6_months", "custom"},
+    }
+    for key, allowed in enum_values.items():
+        value = str(criteria.get(key) or FIRM_TRIGGER_SEARCH_DEFAULTS.get(key) or "").strip()
+        if value not in allowed:
+            raise ValueError(f"unsupported_{key}:{value}")
+        if value:
+            normalized[key] = value
+
+    for key in ("recently_researched", "job_posted_within_days"):
+        raw = criteria.get(key)
+        if raw not in (None, ""):
+            value = int(raw)
+            if value < 0 or value > 3650:
+                raise ValueError(f"unsupported_{key}:{value}")
+            normalized[key] = str(value)
+    normalized["active_only"] = bool(criteria.get("active_only", True))
+    return normalized
+
+
+def normalize_saved_search_criteria(view: str, criteria: dict[str, Any]) -> dict[str, Any]:
+    if view == "contacts":
+        return normalize_contact_search_criteria(criteria)
+    if view == "firms":
+        return normalize_firm_trigger_search_criteria(criteria)
+    raise ValueError(f"unsupported_saved_search_view:{view}")
 
 
 def saved_search_to_dict(row: SavedLeadSearchRow) -> dict[str, Any]:
@@ -103,14 +180,14 @@ async def create_saved_search(
     view: str = "contacts",
     actor: str = "operator",
 ) -> dict[str, Any]:
-    if view != "contacts":
+    if view not in {"contacts", "firms"}:
         raise ValueError(f"unsupported_saved_search_view:{view}")
     await ensure_saved_searches_table()
     row = SavedLeadSearchRow(
         id=uuid4().hex,
         name=name.strip(),
         view=view,
-        criteria_json=normalize_contact_search_criteria(criteria),
+        criteria_json=normalize_saved_search_criteria(view, criteria),
         schema_version=1,
         created_by=actor,
         updated_by=actor,
@@ -141,7 +218,7 @@ async def update_saved_search(
         if name is not None:
             row.name = name.strip()
         if criteria is not None:
-            row.criteria_json = normalize_contact_search_criteria(criteria)
+            row.criteria_json = normalize_saved_search_criteria(row.view, criteria)
         row.updated_by = actor
         try:
             await session.commit()

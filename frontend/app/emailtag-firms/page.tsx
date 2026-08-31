@@ -52,7 +52,9 @@ import {
   ENTITY_TYPE_LABELS,
   EmailtagAuthError,
   analyzeBehavior,
+  createSavedFirmTriggerSearch,
   createSavedLeadSearch,
+  deleteSavedFirmTriggerSearch,
   deleteSavedLeadSearch,
   detectVendors,
   downloadEmailtagExport,
@@ -65,6 +67,7 @@ import {
   listMirroredPifInfo,
   listPifPeople,
   listPifVendors,
+  listSavedFirmTriggerSearches,
   listSavedLeadSearches,
   scoreFirm,
   startFullEnrichment,
@@ -72,6 +75,7 @@ import {
   startResearch,
   startStaffResearch,
   updateSavedLeadSearch,
+  updateSavedFirmTriggerSearch,
   type EmailPresence,
   type ExportFormat,
   type PifInfoListParams,
@@ -88,6 +92,8 @@ import {
   type PifVendorOption,
   type SavedLeadSearch,
   type SavedLeadSearchCriteria,
+  type SavedFirmTriggerSearch,
+  type SavedFirmTriggerSearchCriteria,
 } from "@/lib/emailtag";
 
 const PAGE_SIZE = 25;
@@ -162,6 +168,9 @@ interface FiltersState {
   research_presence: StatusPresence;
   staff_presence: StatusPresence;
   job_postings_presence: "any" | "has" | "none" | "not_researched" | "queued_or_running" | "failed";
+  job_posting_role: "" | "intake" | "marketing" | "case_operations" | "firm_operations" | "technology";
+  job_posting_query: string;
+  job_posted_within_days: string;
   behavior_presence: SimplePresence;
   icp_presence: SimplePresence;
   vendor_presence: SimplePresence;
@@ -187,6 +196,9 @@ const DEFAULT_FILTERS: FiltersState = {
   research_presence: "any",
   staff_presence: "any",
   job_postings_presence: "any",
+  job_posting_role: "",
+  job_posting_query: "",
+  job_posted_within_days: "",
   behavior_presence: "any",
   icp_presence: "any",
   vendor_presence: "any",
@@ -546,6 +558,12 @@ function filtersToParams(filters: FiltersState, page: number): PifInfoListParams
     research_presence: filters.research_presence,
     staff_presence: filters.staff_presence,
     job_postings_presence: filters.job_postings_presence,
+    job_posting_role: filters.job_posting_role || undefined,
+    job_posting_query: filters.job_posting_query.trim() || undefined,
+    job_posted_within_days:
+      filters.job_posted_within_days && Number.isFinite(Number(filters.job_posted_within_days))
+        ? Number(filters.job_posted_within_days)
+        : undefined,
     behavior_presence: filters.behavior_presence,
     icp_presence: filters.icp_presence,
     vendor_presence: filters.vendor === "__missing" ? "missing" : filters.vendor.trim() ? "has" : filters.vendor_presence,
@@ -555,6 +573,19 @@ function filtersToParams(filters: FiltersState, page: number): PifInfoListParams
     first_contacted_from: firstContact.from,
     first_contacted_to: firstContact.to,
     active_only: filters.active_only,
+  };
+}
+
+function criteriaFromFirmFilters(filters: FiltersState): SavedFirmTriggerSearchCriteria {
+  return { ...filters };
+}
+
+function firmFiltersFromSavedTrigger(search: SavedFirmTriggerSearch): FiltersState {
+  return {
+    ...DEFAULT_FILTERS,
+    ...search.criteria,
+    icp_tier: (search.criteria.icp_tier ?? "") as FiltersState["icp_tier"],
+    job_posting_role: (search.criteria.job_posting_role ?? "") as FiltersState["job_posting_role"],
   };
 }
 
@@ -636,6 +667,7 @@ function EmailtagFirmsContent() {
   const [view, setView] = useState<LeadsView>(
     searchParams.get("view") === "contacts" ? "contacts" : "firms",
   );
+  const [activeTriggerSearchId, setActiveTriggerSearchId] = useState("");
   const [activeSavedSearchId, setActiveSavedSearchId] = useState(searchParams.get("saved") ?? "");
   const [peopleFiltersState, setPeopleFiltersState] = useState<PifPeopleListParams>(() =>
     peopleFiltersFromParams(new URLSearchParams(searchParams.toString())),
@@ -718,6 +750,39 @@ function EmailtagFirmsContent() {
   const savedSearchesQuery = useQuery({
     queryKey: ["pif", "saved-lead-searches", "contacts"],
     queryFn: listSavedLeadSearches,
+  });
+
+  const triggerSearchesQuery = useQuery({
+    queryKey: ["pif", "saved-lead-searches", "firms"],
+    queryFn: listSavedFirmTriggerSearches,
+  });
+
+  const createTriggerSearchMutation = useMutation({
+    mutationFn: (name: string) => createSavedFirmTriggerSearch({
+      name,
+      criteria: criteriaFromFirmFilters(filters),
+    }),
+    onSuccess: async ({ saved_search: savedSearch }) => {
+      setActiveTriggerSearchId(savedSearch.id);
+      await queryClient.invalidateQueries({ queryKey: ["pif", "saved-lead-searches", "firms"] });
+    },
+  });
+
+  const updateTriggerSearchMutation = useMutation({
+    mutationFn: (searchId: string) => updateSavedFirmTriggerSearch(searchId, {
+      criteria: criteriaFromFirmFilters(filters),
+    }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["pif", "saved-lead-searches", "firms"] });
+    },
+  });
+
+  const deleteTriggerSearchMutation = useMutation({
+    mutationFn: deleteSavedFirmTriggerSearch,
+    onSuccess: async () => {
+      setActiveTriggerSearchId("");
+      await queryClient.invalidateQueries({ queryKey: ["pif", "saved-lead-searches", "firms"] });
+    },
   });
 
   const createSavedSearchMutation = useMutation({
@@ -972,6 +1037,7 @@ function EmailtagFirmsContent() {
   }, [jobPostingStatusQuery.data, queryClient]);
 
   function updateFilter<K extends keyof FiltersState>(key: K, value: FiltersState[K]) {
+    setActiveTriggerSearchId("");
     setFilters((current) => ({ ...current, [key]: value }));
     setPage(1);
   }
@@ -992,6 +1058,13 @@ function EmailtagFirmsContent() {
     setPeopleFiltersState(peopleFiltersFromSavedSearch(search, peopleFilters.page_size ?? 25));
     setActiveSavedSearchId(search.id);
     setView("contacts");
+  }
+
+  function applyTriggerSearch(search: SavedFirmTriggerSearch) {
+    setFilters(firmFiltersFromSavedTrigger(search));
+    setPage(1);
+    setActiveTriggerSearchId(search.id);
+    setView("firms");
   }
 
   const data = firmsQuery.data;
@@ -1074,8 +1147,35 @@ function EmailtagFirmsContent() {
             polling={batchStatusQuery.isFetching}
           />
 
+          <TriggerSearchBar
+            savedSearches={triggerSearchesQuery.data?.saved_searches ?? []}
+            activeSearchId={activeTriggerSearchId}
+            qualifyingCount={data?.total ?? 0}
+            onApply={applyTriggerSearch}
+            onCreate={(name) => createTriggerSearchMutation.mutate(name)}
+            onUpdate={() => {
+              if (activeTriggerSearchId) updateTriggerSearchMutation.mutate(activeTriggerSearchId);
+            }}
+            onDelete={() => {
+              if (activeTriggerSearchId) deleteTriggerSearchMutation.mutate(activeTriggerSearchId);
+            }}
+            pending={
+              triggerSearchesQuery.isLoading
+              || createTriggerSearchMutation.isPending
+              || updateTriggerSearchMutation.isPending
+              || deleteTriggerSearchMutation.isPending
+            }
+            error={
+              triggerSearchesQuery.error
+              || createTriggerSearchMutation.error
+              || updateTriggerSearchMutation.error
+              || deleteTriggerSearchMutation.error
+            }
+          />
+
           <FilterBar filters={filters} updateFilter={updateFilter} clearFilters={() => {
             setFilters(DEFAULT_FILTERS);
+            setActiveTriggerSearchId("");
             setPage(1);
           }} vendorOptions={vendorOptionsQuery.data?.vendors ?? []} />
 
@@ -1365,6 +1465,108 @@ function SyncStat({ label, value }: { label: string; value: number }) {
   );
 }
 
+function TriggerSearchBar({
+  savedSearches,
+  activeSearchId,
+  qualifyingCount,
+  onApply,
+  onCreate,
+  onUpdate,
+  onDelete,
+  pending,
+  error,
+}: {
+  savedSearches: SavedFirmTriggerSearch[];
+  activeSearchId: string;
+  qualifyingCount: number;
+  onApply: (search: SavedFirmTriggerSearch) => void;
+  onCreate: (name: string) => void;
+  onUpdate: () => void;
+  onDelete: () => void;
+  pending: boolean;
+  error: unknown;
+}) {
+  const [name, setName] = useState("");
+
+  return (
+    <section className="rounded-lg border border-neutral-200 bg-white p-3">
+      <div className="flex flex-wrap items-end gap-2">
+        <label className="min-w-64 flex-1 text-[11px] font-medium uppercase tracking-wide text-neutral-400">
+          Trigger search
+          <select
+            value={activeSearchId}
+            onChange={(event) => {
+              const search = savedSearches.find((item) => item.id === event.target.value);
+              if (search) onApply(search);
+            }}
+            disabled={pending}
+            className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-2 py-1.5 text-sm normal-case tracking-normal text-neutral-800 focus:border-neutral-400 focus:outline-none focus:ring-1 focus:ring-neutral-400"
+          >
+            <option value="">Select saved trigger search</option>
+            {savedSearches.map((search) => (
+              <option key={search.id} value={search.id}>{search.name}</option>
+            ))}
+          </select>
+        </label>
+        <label className="min-w-64 flex-1 text-[11px] font-medium uppercase tracking-wide text-neutral-400">
+          New search name
+          <input
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            placeholder="Intake hiring, Filevine firms..."
+            className="mt-1 w-full rounded-md border border-neutral-200 px-2 py-1.5 text-sm normal-case tracking-normal text-neutral-800 placeholder:text-neutral-400 focus:border-neutral-400 focus:outline-none focus:ring-1 focus:ring-neutral-400"
+          />
+        </label>
+        <div className="flex h-8 items-center gap-1.5 rounded-md border border-neutral-200 bg-neutral-50 px-3 text-xs text-neutral-600">
+          <Briefcase className="h-3.5 w-3.5" />
+          <strong className="font-semibold text-neutral-900">{qualifyingCount.toLocaleString()}</strong>
+          qualifying
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            const nextName = name.trim();
+            if (!nextName) return;
+            onCreate(nextName);
+            setName("");
+          }}
+          disabled={!name.trim() || pending}
+          className="inline-flex h-8 items-center gap-1.5 rounded-md bg-neutral-900 px-3 text-xs font-medium text-white hover:bg-neutral-800 disabled:opacity-40"
+        >
+          <Bookmark className="h-3.5 w-3.5" />
+          Save new
+        </button>
+        {activeSearchId ? (
+          <>
+            <button
+              type="button"
+              onClick={onUpdate}
+              disabled={pending}
+              className="inline-flex h-8 items-center gap-1.5 rounded-md border border-neutral-200 px-3 text-xs font-medium text-neutral-700 hover:bg-neutral-50 disabled:opacity-40"
+            >
+              <Save className="h-3.5 w-3.5" />
+              Update
+            </button>
+            <button
+              type="button"
+              onClick={onDelete}
+              disabled={pending}
+              title="Delete trigger search"
+              aria-label="Delete trigger search"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-neutral-200 text-neutral-500 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-700 disabled:opacity-40"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          </>
+        ) : null}
+      </div>
+      {error ? (
+        <div className="mt-2 text-xs text-rose-600">{errorMessage(error) ?? "Trigger search request failed"}</div>
+      ) : null}
+    </section>
+  );
+}
+
 function FilterBar({
   filters,
   updateFilter,
@@ -1461,6 +1663,27 @@ function FilterBar({
           <option value="not_researched">Not researched</option>
           <option value="queued_or_running">Queued or running</option>
           <option value="failed">Failed</option>
+        </SelectField>
+        <SelectField label="Job trigger" value={filters.job_posting_role} onChange={(value) => updateFilter("job_posting_role", value as FiltersState["job_posting_role"])}>
+          <option value="">Any role</option>
+          <option value="intake">Intake and reception</option>
+          <option value="marketing">Marketing and growth</option>
+          <option value="case_operations">Case operations</option>
+          <option value="firm_operations">Firm operations</option>
+          <option value="technology">Technology and systems</option>
+        </SelectField>
+        <InputField
+          label="Job text"
+          value={filters.job_posting_query}
+          onChange={(value) => updateFilter("job_posting_query", value)}
+          placeholder="CRM, conversion, 24/7..."
+        />
+        <SelectField label="Job posted" value={filters.job_posted_within_days} onChange={(value) => updateFilter("job_posted_within_days", value)}>
+          <option value="">Any date</option>
+          <option value="7">Last 7 days</option>
+          <option value="14">Last 14 days</option>
+          <option value="30">Last 30 days</option>
+          <option value="90">Last 90 days</option>
         </SelectField>
         <SelectField label="Behavior" value={filters.behavior_presence} onChange={(value) => updateFilter("behavior_presence", value as SimplePresence)}>
           {PRESENCE.map((value) => <option key={value} value={value}>{formatLabel(value)}</option>)}
