@@ -15,7 +15,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Any, Optional
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
@@ -25,6 +25,11 @@ from app.db import AsyncSessionLocal
 from app.db.models import FirmReviewRow
 from app.services.pifstats_sync import sync_pifstats_to_patients
 from app.services.review_extraction import auto_extract_enabled, ensure_review_extracted
+from app.services.firm_review_research import (
+    FirmReviewResearchError,
+    get_firm_review_research_status,
+    start_firm_review_research,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +70,11 @@ class ReviewsResponse(BaseModel):
     google: str
     yelp: str
     updated_at: str | None
+    reviews: dict[str, Any] = Field(default_factory=dict)
+    research_status: str | None = None
+    research_provider: str | None = None
+    last_researched_at: str | None = None
+    research_error: str | None = None
 
 
 def _row_to_response(pif_id: str, row: FirmReviewRow | None) -> ReviewsResponse:
@@ -75,6 +85,11 @@ def _row_to_response(pif_id: str, row: FirmReviewRow | None) -> ReviewsResponse:
         google=row.google_content or "",
         yelp=row.yelp_content or "",
         updated_at=row.updated_at.isoformat() if row.updated_at else None,
+        reviews=row.reviews_json if isinstance(row.reviews_json, dict) else {},
+        research_status=row.review_research_status,
+        research_provider=row.review_research_provider,
+        last_researched_at=row.last_review_researched_at.isoformat() if row.last_review_researched_at else None,
+        research_error=row.review_research_error,
     )
 
 
@@ -367,6 +382,24 @@ async def get_reviews(pif_id: str) -> ReviewsResponse:
             )
         ).scalar_one_or_none()
     return _row_to_response(pif_id, row)
+
+
+@router.post("/{pif_id}/reviews/research")
+async def research_public_reviews(pif_id: str) -> dict[str, Any]:
+    try:
+        return await start_firm_review_research(pif_id)
+    except FirmReviewResearchError as exc:
+        status_code = exc.status_code if exc.status_code in {404, 409, 422, 429} else 502
+        raise HTTPException(status_code=status_code, detail=exc.detail) from exc
+
+
+@router.get("/review-research-status/{task_id}")
+async def review_research_status(task_id: str) -> dict[str, Any]:
+    try:
+        return await get_firm_review_research_status(task_id)
+    except FirmReviewResearchError as exc:
+        status_code = exc.status_code if exc.status_code == 404 else 502
+        raise HTTPException(status_code=status_code, detail=exc.detail) from exc
 
 
 @router.put("/{pif_id}/reviews", response_model=ReviewsResponse)

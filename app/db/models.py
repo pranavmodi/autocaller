@@ -948,11 +948,42 @@ class FirmReviewRow(Base):
     content: Mapped[str] = mapped_column(Text, nullable=False, default="")
     google_content: Mapped[str] = mapped_column(Text, nullable=False, default="")
     yelp_content: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    # Source-backed review records collected by local web research. Manual
+    # Google/Yelp notes above remain intact for existing workflows.
+    reviews_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    review_research_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    review_research_provider: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    last_review_researched_at: Mapped[datetime | None] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=True,
+    )
+    review_research_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), default=_utcnow,
     )
     updated_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), default=_utcnow, onupdate=_utcnow,
+    )
+
+
+class FirmReviewResearchTaskRow(Base):
+    """Durable local queue for source-backed public review research."""
+    __tablename__ = "firm_review_research_tasks"
+
+    task_id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    pif_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="queued")
+    requested_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow)
+    started_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    result_summary: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('queued', 'in_progress', 'completed', 'failed')",
+            name="ck_firm_review_research_tasks_status",
+        ),
+        Index("ix_firm_review_research_tasks_pif_status", "pif_id", "status"),
+        Index("ix_firm_review_research_tasks_status_requested", "status", "requested_at"),
     )
 
 

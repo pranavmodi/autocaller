@@ -44,9 +44,12 @@ import {
   deleteFirm,
   getFirmCalls,
   getFirmReviews,
+  getFirmReviewResearchStatus,
   listFirmCommunications,
   putFirmReviews,
+  startFirmReviewResearch,
   type DeleteFirmResult,
+  type FirmReviews,
 } from "@/lib/api";
 import {
   ENTITY_TYPE_LABELS,
@@ -3415,10 +3418,31 @@ function FirmReviewsPanel({
   firmName: string;
   address: string | PifAddress | null;
 }) {
+  const queryClient = useQueryClient();
+  const [researchTaskId, setResearchTaskId] = useState<string | null>(null);
   const { data, isLoading } = useQuery({
     queryKey: ["firm-reviews", pifId],
     queryFn: () => getFirmReviews(pifId),
   });
+  const reviewResearch = useMutation({
+    mutationFn: () => startFirmReviewResearch(pifId),
+    onSuccess: (result) => setResearchTaskId(result.task_id),
+  });
+  const reviewResearchStatus = useQuery({
+    queryKey: ["firm-review-research-status", researchTaskId],
+    queryFn: () => getFirmReviewResearchStatus(researchTaskId ?? ""),
+    enabled: Boolean(researchTaskId),
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      return status && TERMINAL_TASK_STATUSES.has(status) ? false : 3_000;
+    },
+  });
+  const reviewStatus = reviewResearchStatus.data?.status ?? data?.research_status ?? null;
+
+  useEffect(() => {
+    if (!reviewStatus || !TERMINAL_TASK_STATUSES.has(reviewStatus)) return;
+    void queryClient.invalidateQueries({ queryKey: ["firm-reviews", pifId] });
+  }, [pifId, queryClient, reviewStatus]);
 
   const state = extractState(address);
   const firmType = "personal injury law firm";
@@ -3446,6 +3470,35 @@ function FirmReviewsPanel({
         </span>
       </div>
 
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-y border-neutral-100 py-2">
+        <div className="text-xs text-neutral-500">
+          {reviewStatus && !TERMINAL_TASK_STATUSES.has(reviewStatus)
+            ? "Researching public review sources..."
+            : data?.reviews?.review_count
+              ? `${data.reviews.review_count.toLocaleString()} source-backed reviews from ${data.reviews.source_count?.toLocaleString() ?? 0} sources`
+              : "No source-backed review research yet."}
+          {reviewStatus === "failed" && data?.research_error ? ` ${data.research_error}` : ""}
+        </div>
+        <button
+          type="button"
+          onClick={() => reviewResearch.mutate()}
+          disabled={reviewResearch.isPending || Boolean(reviewStatus && !TERMINAL_TASK_STATUSES.has(reviewStatus))}
+          className="inline-flex items-center gap-1.5 rounded-md border border-neutral-200 bg-white px-2.5 py-1.5 text-xs font-medium text-neutral-700 hover:bg-neutral-50 disabled:opacity-40"
+        >
+          {reviewResearch.isPending || (reviewStatus && !TERMINAL_TASK_STATUSES.has(reviewStatus))
+            ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            : <RefreshCw className="h-3.5 w-3.5" />}
+          Research public reviews
+        </button>
+      </div>
+      {reviewResearch.error && (
+        <div className="mt-2 text-xs text-rose-600">
+          {reviewResearch.error instanceof Error ? reviewResearch.error.message : "Could not queue public review research"}
+        </div>
+      )}
+
+      <SourceBackedReviews research={data?.reviews} />
+
       <ExtractedQuotesSection google={data?.google ?? ""} yelp={data?.yelp ?? ""} />
 
       <div className="mt-3 grid gap-3 lg:grid-cols-2">
@@ -3469,6 +3522,41 @@ function FirmReviewsPanel({
         />
       </div>
     </section>
+  );
+}
+
+function SourceBackedReviews({ research }: { research: FirmReviews["reviews"] | undefined }) {
+  const sources = research?.sources ?? [];
+  if (sources.length === 0) return null;
+  return (
+    <div className="mt-3 space-y-3">
+      {research?.coverage_note && <div className="text-xs text-neutral-500">{research.coverage_note}</div>}
+      {sources.map((source, sourceIndex) => (
+        <div key={`${source.source}-${source.listing_url}-${sourceIndex}`} className="rounded-md border border-neutral-200 bg-neutral-50 p-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="text-xs font-semibold text-neutral-800">{formatLabel(source.source)} · {source.reviews.length} reviews</div>
+            <a href={source.listing_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:underline">
+              Listing
+              <ExternalLink className="h-3 w-3" />
+            </a>
+          </div>
+          {source.coverage_note && <div className="mt-1 text-[11px] text-neutral-500">{source.coverage_note}</div>}
+          <div className="mt-2 space-y-2">
+            {source.reviews.map((review, index) => (
+              <article key={`${review.reviewer_name ?? "reviewer"}-${review.review_date ?? "date"}-${index}`} className="rounded border border-neutral-200 bg-white px-3 py-2 text-xs text-neutral-700">
+                <div className="flex flex-wrap items-center gap-x-2 text-[11px] text-neutral-500">
+                  {review.reviewer_name && <span className="font-medium text-neutral-700">{review.reviewer_name}</span>}
+                  {typeof review.rating === "number" && <span>{review.rating}/5</span>}
+                  {review.review_date && <span>{formatDateOnly(review.review_date)}</span>}
+                  {review.review_url && <a href={review.review_url} target="_blank" rel="noreferrer" className="ml-auto text-blue-600 hover:underline">Review</a>}
+                </div>
+                <p className="mt-1 whitespace-pre-wrap leading-5">{review.text}</p>
+              </article>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }
 

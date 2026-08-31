@@ -143,6 +143,17 @@ async def lifespan(app: FastAPI):
         asyncio.create_task(job_posting_research_loop())
         for _ in range(max(1, int(os.getenv("PIF_JOB_RESEARCH_WORKERS", "2"))))
     ]
+    from .services.firm_review_research import (
+        firm_review_research_loop,
+        recover_interrupted_firm_review_research,
+    )
+    recovered_review_tasks = await recover_interrupted_firm_review_research()
+    if recovered_review_tasks:
+        logger.info("Requeued %s interrupted public-review research tasks", recovered_review_tasks)
+    review_research_workers = [
+        asyncio.create_task(firm_review_research_loop())
+        for _ in range(max(1, int(os.getenv("FIRM_REVIEW_RESEARCH_WORKERS", "1"))))
+    ]
     from .services.pif_local_enrichment import (
         local_enrichment_loop,
         recover_interrupted_local_enrichment,
@@ -169,6 +180,7 @@ async def lifespan(app: FastAPI):
         reconciler_task,
         pif_directory_task,
         *job_research_workers,
+        *review_research_workers,
         *local_enrichment_workers,
         *lead_finder_recovery_tasks,
     ]

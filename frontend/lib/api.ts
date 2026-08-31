@@ -1622,6 +1622,37 @@ export type FirmReviews = {
   google: string;
   yelp: string;
   updated_at: string | null;
+  reviews: {
+    sources?: Array<{
+      source: string;
+      listing_url: string;
+      coverage_note?: string | null;
+      reviews: Array<{
+        reviewer_name?: string | null;
+        rating?: number | null;
+        review_date?: string | null;
+        text: string;
+        review_url?: string | null;
+      }>;
+    }>;
+    review_count?: number;
+    source_count?: number;
+    coverage_note?: string | null;
+    researched_at?: string;
+  };
+  research_status: string | null;
+  research_provider: string | null;
+  last_researched_at: string | null;
+  research_error: string | null;
+};
+
+export type FirmReviewResearchStatus = {
+  task_id: string;
+  pif_id: string;
+  status: string;
+  message?: string;
+  review_count?: number;
+  source_count?: number;
 };
 
 export const getFirmReviews = (pifId: string) =>
@@ -1634,6 +1665,12 @@ export const putFirmReviews = (
   patch: { google?: string; yelp?: string },
 ) =>
   put<FirmReviews>(`/api/firms/${encodeURIComponent(pifId)}/reviews`, patch);
+
+export const startFirmReviewResearch = (pifId: string) =>
+  post<FirmReviewResearchStatus>(`/api/firms/${encodeURIComponent(pifId)}/reviews/research`, {});
+
+export const getFirmReviewResearchStatus = (taskId: string) =>
+  get<FirmReviewResearchStatus>(`/api/firms/review-research-status/${encodeURIComponent(taskId)}`);
 
 
 // Force-pull researched firms from PIF Stats into the local patients
