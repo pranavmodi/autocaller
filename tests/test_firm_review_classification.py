@@ -99,3 +99,15 @@ def test_classify_reviews_json_attaches_versioned_classification(monkeypatch):
     assert review["review_id"].startswith("review_")
     assert review["classification"]["classification_version"] == service.CLASSIFICATION_VERSION
     assert review["classification"]["failure_modes"] == ["no_callback", "status_silence"]
+
+
+def test_classify_reviews_locally_produces_complete_baseline_tags():
+    result = service.classify_reviews_locally(sample_reviews())
+    classification = result["sources"][0]["reviews"][0]["classification"]
+
+    assert result["classification_status"] == "completed"
+    assert result["classified_count"] == 1
+    assert classification["classification_method"] == "local_rules_v1"
+    assert classification["overall_sentiment"] == "negative"
+    assert classification["failure_modes"] == ["no_callback", "status_silence"]
+    assert any(theme["theme"] == "proactive_updates" for theme in classification["themes"])

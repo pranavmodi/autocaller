@@ -2,13 +2,20 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import html
+import json
 import logging
 import os
+import re
 import uuid
 from datetime import date, datetime, timezone
+from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote, urljoin, urlparse
 
+import httpx
 from sqlalchemy import select, update
 
 from app.db import AsyncSessionLocal
@@ -22,6 +29,14 @@ SKILL_PATH = Path(__file__).resolve().parents[1] / "skills/firm-review-research/
 OPEN_STATUSES = {"queued", "in_progress"}
 LOCAL_RESEARCH_PROVIDER = "possibleos_openclaw"
 MAX_REVIEWS_PER_SOURCE = 1_000
+GOOGLE_MAPS_BASE_URL = "https://www.google.com"
+GOOGLE_MAPS_HEADERS = {
+    "Accept-Language": "en-US,en;q=0.9",
+    "User-Agent": (
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+    ),
+}
 
 
 class FirmReviewResearchError(Exception):
@@ -46,6 +61,185 @@ def _valid_date(value: Any) -> str | None:
         return date.fromisoformat(candidate).isoformat()
     except ValueError:
         return None
+
+
+class _FirstLinkParser(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self.href: str | None = None
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if self.href is not None or tag.lower() != "link":
+            return
+        values = dict(attrs)
+        href = html.unescape(str(values.get("href") or ""))
+        if href.startswith(("/search?tbm=map", "/maps/preview/place")):
+            self.href = href
+
+
+def _first_link_href(document: str) -> str | None:
+    parser = _FirstLinkParser()
+    parser.feed(document)
+    return parser.href
+
+
+def _google_json(response_text: str) -> Any:
+    payload = response_text.lstrip()
+    if payload.startswith(")]}'"):
+        payload = payload[4:].lstrip()
+    return json.loads(payload)
+
+
+def _domain(value: str | None) -> str | None:
+    candidate = str(value or "").strip().lower()
+    if not candidate:
+        return None
+    if "://" not in candidate:
+        candidate = f"https://{candidate}"
+    hostname = (urlparse(candidate).hostname or "").lower()
+    return hostname.removeprefix("www.") or None
+
+
+def _domains_match(expected: str | None, actual: str | None) -> bool:
+    if not expected or not actual:
+        return True
+    if expected == actual:
+        return True
+    return re.sub(r"[^a-z0-9]", "", expected) == re.sub(r"[^a-z0-9]", "", actual)
+
+
+def _listing_from_search_payload(payload: Any) -> dict[str, Any] | None:
+    try:
+        rows = payload[0][1]
+    except (IndexError, KeyError, TypeError):
+        return None
+    for row in rows if isinstance(rows, list) else []:
+        try:
+            listing = row[14]
+            identity = str(listing[10])
+            firm_name = str(listing[11])
+        except (IndexError, TypeError):
+            continue
+        match = re.search(r"0x[0-9a-f]+:0x([0-9a-f]+)", identity, re.IGNORECASE)
+        if not match:
+            continue
+        website = None
+        try:
+            website = str(listing[7][1] or "").strip() or None
+        except (IndexError, TypeError):
+            pass
+        return {
+            "cid": str(int(match.group(1), 16)),
+            "firm_name": firm_name,
+            "website": website,
+        }
+    return None
+
+
+def _reviews_from_profile_payload(payload: Any, listing_url: str) -> list[dict[str, Any]]:
+    try:
+        rows = payload[6][175][9][0][0]
+    except (IndexError, KeyError, TypeError):
+        return []
+    reviews: list[dict[str, Any]] = []
+    for row in rows if isinstance(rows, list) else []:
+        try:
+            record = row[0]
+            reviewer_name = str(record[1][4][5][0] or "").strip() or None
+            rating = float(record[2][0][0])
+            text = str(record[2][15][0][0] or "").strip()
+        except (IndexError, TypeError, ValueError):
+            continue
+        if not text:
+            continue
+        review_date = None
+        try:
+            timestamp_us = float(record[1][2])
+            review_date = datetime.fromtimestamp(timestamp_us / 1_000_000, tz=timezone.utc).date().isoformat()
+        except (IndexError, TypeError, ValueError, OSError):
+            pass
+        review_url = None
+        try:
+            review_url = _valid_url(record[4][3][0])
+        except (IndexError, TypeError):
+            pass
+        reviews.append({
+            "reviewer_name": reviewer_name,
+            "rating": rating,
+            "review_date": review_date,
+            "text": text,
+            "review_url": review_url or listing_url,
+        })
+    return reviews
+
+
+async def research_google_maps_reviews(
+    firm_name: str,
+    website: str | None,
+    address: str | None = None,
+) -> dict[str, Any] | None:
+    """Collect the public review records exposed by an exact Google Maps listing."""
+    expected_domain = _domain(website)
+    clean_name = re.sub(r"[^a-zA-Z0-9&'. -]+", " ", firm_name)
+    clean_name = re.sub(r"\s+", " ", clean_name).strip()
+    location = ""
+    address_parts = [part.strip() for part in str(address or "").split(",") if part.strip()]
+    if len(address_parts) >= 2:
+        location = " ".join(address_parts[-2:])
+        location = re.sub(r"\b\d{5}(?:-\d{4})?\b", "", location).strip()
+    query = " ".join(part for part in (clean_name, location) if part)
+    timeout = float(os.getenv("FIRM_REVIEW_GOOGLE_TIMEOUT_S", "30"))
+    async with httpx.AsyncClient(
+        timeout=timeout,
+        headers=GOOGLE_MAPS_HEADERS,
+        follow_redirects=True,
+    ) as client:
+        search_url = f"{GOOGLE_MAPS_BASE_URL}/maps/search/{quote(query)}?hl=en"
+        search_page = await client.get(search_url)
+        search_page.raise_for_status()
+        search_href = _first_link_href(search_page.text)
+        if not search_href:
+            return None
+        search_data = await client.get(urljoin(GOOGLE_MAPS_BASE_URL, search_href))
+        search_data.raise_for_status()
+        listing = _listing_from_search_payload(_google_json(search_data.text))
+        if not listing:
+            return None
+        listing_domain = _domain(listing.get("website"))
+        if not _domains_match(expected_domain, listing_domain):
+            logger.warning(
+                "Rejected Google Maps listing domain mismatch for %s: expected=%s actual=%s",
+                firm_name,
+                expected_domain,
+                listing_domain,
+            )
+            return None
+        listing_url = f"{GOOGLE_MAPS_BASE_URL}/maps?cid={listing['cid']}&hl=en"
+        profile_page = await client.get(listing_url)
+        profile_page.raise_for_status()
+        profile_href = _first_link_href(profile_page.text)
+        if not profile_href:
+            return None
+        profile_data = await client.get(urljoin(GOOGLE_MAPS_BASE_URL, profile_href))
+        profile_data.raise_for_status()
+        reviews = _reviews_from_profile_payload(_google_json(profile_data.text), listing_url)
+    if not reviews:
+        return None
+    return {
+        "sources": [{
+            "source": "google",
+            "listing_url": listing_url,
+            "coverage_note": (
+                f"Collected {len(reviews)} complete public reviews exposed by the live Google Maps profile payload."
+            ),
+            "reviews": reviews,
+        }],
+        "review_count": len(reviews),
+        "source_count": 1,
+        "coverage_note": "Google Maps was checked directly; its public profile payload exposes a bounded review sample.",
+        "researched_at": _utcnow().isoformat(),
+        "provider": "google_maps_public_payload",
+    }
 
 
 def normalize_review_sources(raw_sources: Any) -> list[dict[str, Any]]:
@@ -103,6 +297,26 @@ async def research_public_reviews(
     website: str | None,
     address: str | None,
 ) -> dict[str, Any]:
+    try:
+        google_result = await research_google_maps_reviews(firm_name, website, address)
+        if google_result is not None:
+            return google_result
+    except Exception:
+        logger.exception("Direct Google Maps review research failed for %s", firm_name)
+
+    if os.getenv("FIRM_REVIEW_OPENCLAW_FALLBACK", "false").strip().lower() not in {"1", "true", "yes", "on"}:
+        return {
+            "sources": [],
+            "review_count": 0,
+            "source_count": 0,
+            "coverage_note": "No exact Google Maps listing with public review text was verified.",
+            "researched_at": _utcnow().isoformat(),
+            "provider": "google_maps_public_payload",
+        }
+
+    session_key = hashlib.sha256(
+        f"{firm_name}|{website or ''}|{address or ''}".encode("utf-8")
+    ).hexdigest()[:16]
     result = await call_skill_json(
         skill_path=SKILL_PATH,
         payload={
@@ -114,6 +328,8 @@ async def research_public_reviews(
         model=os.getenv("FIRM_REVIEW_RESEARCH_MODEL", "openclaw/main"),
         timeout_s=int(os.getenv("FIRM_REVIEW_RESEARCH_TIMEOUT_S", "600")),
         max_tokens=int(os.getenv("FIRM_REVIEW_RESEARCH_MAX_TOKENS", "20000")),
+        retries=1,
+        gateway_user=f"firm-review-research:{session_key}:{uuid.uuid4().hex[:8]}",
     )
     sources = normalize_review_sources(result.parsed.get("sources"))
     return {
@@ -229,7 +445,7 @@ async def _finish_task(task_id: str, *, result: dict[str, Any] | None = None, er
             if review_row is not None:
                 review_row.reviews_json = result
                 review_row.review_research_status = "completed"
-                review_row.review_research_provider = LOCAL_RESEARCH_PROVIDER
+                review_row.review_research_provider = str(result.get("provider") or LOCAL_RESEARCH_PROVIDER)
                 review_row.last_review_researched_at = now
                 review_row.review_research_error = None
                 review_row.updated_at = now
@@ -263,9 +479,12 @@ async def _run_task(task_id: str, pif_id: str) -> None:
         await _finish_task(task_id, error=str(exc)[:500])
         return
     try:
-        from app.services.firm_review_classification import classify_reviews_json
+        from app.services.firm_review_classification import classify_reviews_json, classify_reviews_locally
 
-        result = await classify_reviews_json(firm_name, result)
+        if result.get("provider") == "google_maps_public_payload":
+            result = classify_reviews_locally(result)
+        else:
+            result = await classify_reviews_json(firm_name, result)
     except Exception as exc:
         logger.exception("Public review classification failed for %s", pif_id)
         result.update({

@@ -85,6 +85,29 @@ THEMES = {
     "referral_willingness",
 }
 
+LOCAL_THEME_TERMS: dict[str, tuple[str, ...]] = {
+    "response_speed": ("quick", "quickly", "fast", "immediately", "prompt"),
+    "returned_calls": ("call back", "callback", "returned my call", "phone call"),
+    "proactive_updates": ("update", "informed", "communication", "kept me posted"),
+    "attorney_accessibility": ("attorney", "lawyer"),
+    "case_manager_accessibility": ("case manager", "paralegal"),
+    "explanation": ("explain", "question", "understand", "walked me through"),
+    "expectation_setting": ("expectation", "what to expect"),
+    "empathy_and_respect": ("care", "caring", "compassion", "respect", "kind", "patient"),
+    "professionalism": ("professional", "knowledgeable", "experienced"),
+    "staff_ownership": ("team", "staff", "went above", "went beyond"),
+    "medical_coordination": ("medical", "doctor", "therapy", "treatment", "chiropr"),
+    "paperwork": ("paperwork", "document", "form"),
+    "case_duration": ("month", "year", "delay", "long time"),
+    "settlement_process": ("settlement", "settled", "negotiat"),
+    "settlement_amount": ("compensation", "payout", "amount", "money"),
+    "fees_and_deductions": ("fee", "deduction", "cost"),
+    "payment_delivery": ("check", "payment", "disbursement"),
+    "language_accessibility": ("spanish", "bilingual", "language"),
+    "technology_experience": ("portal", "app", "text message", "online"),
+    "referral_willingness": ("recommend", "referral", "friends and family"),
+}
+
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
@@ -114,6 +137,136 @@ def ensure_review_ids(reviews_json: dict[str, Any]) -> dict[str, Any]:
         for review in source.get("reviews") or []:
             if isinstance(review, dict):
                 review["review_id"] = review_id(source, review)
+    return data
+
+
+def classify_reviews_locally(reviews_json: dict[str, Any]) -> dict[str, Any]:
+    """Apply deterministic baseline tags without blocking review collection on an LLM."""
+    data = ensure_review_ids(reviews_json)
+    classified_at = _utcnow().isoformat()
+    classified_count = 0
+    for source in data.get("sources") or []:
+        if not isinstance(source, dict):
+            continue
+        for review in source.get("reviews") or []:
+            if not isinstance(review, dict):
+                continue
+            text = _clean(review.get("text"), 20_000)
+            lowered = text.lower()
+            try:
+                rating = float(review.get("rating"))
+            except (TypeError, ValueError):
+                rating = 0
+            sentiment = "positive" if rating >= 4 else "negative" if 0 < rating <= 2 else "neutral"
+            score = 0.8 if sentiment == "positive" else -0.8 if sentiment == "negative" else 0.0
+            themes = [
+                {
+                    "theme": theme,
+                    "sentiment": sentiment,
+                    "intensity": 2,
+                    "evidence": next((term for term in terms if term in lowered), None),
+                    "explicit_or_inferred": "explicit",
+                }
+                for theme, terms in LOCAL_THEME_TERMS.items()
+                if any(term in lowered for term in terms)
+            ]
+            journey_stages = []
+            for stage, terms in {
+                "initial_contact": ("initial", "first call", "consultation"),
+                "intake": ("intake", "signed", "hired"),
+                "medical_treatment": ("medical", "doctor", "therapy", "treatment"),
+                "case_management": ("case manager", "update", "paperwork"),
+                "negotiation": ("negotiat", "insurance"),
+                "litigation": ("court", "trial", "lawsuit"),
+                "settlement": ("settlement", "settled", "compensation"),
+                "disbursement": ("check", "payment", "disbursement"),
+            }.items():
+                if any(term in lowered for term in terms):
+                    journey_stages.append(stage)
+            praise_drivers = []
+            if sentiment == "positive":
+                if any(theme["theme"] == "proactive_updates" for theme in themes):
+                    praise_drivers.append("frequent_updates")
+                if any(theme["theme"] == "empathy_and_respect" for theme in themes):
+                    praise_drivers.append("felt_cared_for")
+                if any(theme["theme"] == "medical_coordination" for theme in themes):
+                    praise_drivers.append("effective_medical_coordination")
+                if any(term in lowered for term in ("result", "settlement", "compensation", "outcome")):
+                    praise_drivers.append("strong_outcome")
+            failure_modes = []
+            for failure, terms in {
+                "no_callback": ("no callback", "never called", "wouldn't call", "did not call", "nobody returned my calls"),
+                "status_silence": ("no update", "never updated", "never received an update", "no communication"),
+                "attorney_unreachable": ("couldn't reach the attorney", "attorney unreachable"),
+                "unexpected_delay": ("too long", "unexpected delay", "years"),
+                "unexpected_fee_or_deduction": ("unexpected fee", "hidden fee", "deduction"),
+                "rude_or_dismissive_treatment": ("rude", "dismissive", "disrespect"),
+            }.items():
+                if any(term in lowered for term in terms):
+                    failure_modes.append(failure)
+            staff_roles = [
+                role for role, terms in {
+                    "attorney": ("attorney", "lawyer"),
+                    "case_manager": ("case manager",),
+                    "paralegal": ("paralegal",),
+                    "intake_specialist": ("intake",),
+                    "receptionist": ("receptionist", "front desk"),
+                    "medical_coordinator": ("medical coordinator",),
+                    "settlement_team": ("settlement team",),
+                    "firm_generally": ("firm", "team", "staff"),
+                }.items() if any(term in lowered for term in terms)
+            ]
+            outcome_status = (
+                "settled" if any(term in lowered for term in ("settled", "settlement"))
+                else "went_to_trial" if "trial" in lowered
+                else "outcome_not_mentioned"
+            )
+            owners = []
+            if any(stage in journey_stages for stage in ("initial_contact", "intake")):
+                owners.append("intake")
+            if "case_management" in journey_stages:
+                owners.append("case_management")
+            if "medical_treatment" in journey_stages:
+                owners.append("medical_coordination")
+            if "settlement" in journey_stages:
+                owners.append("settlement")
+            if themes:
+                owners.append("marketing_reputation")
+            review["classification"] = {
+                "classification_version": CLASSIFICATION_VERSION,
+                "classification_method": "local_rules_v1",
+                "classified_at": classified_at,
+                "overall_sentiment": sentiment,
+                "sentiment_score": score,
+                "language": "en",
+                "source_quality": "independent_review",
+                "journey_stages": journey_stages or ["unknown"],
+                "case_types": ["motor_vehicle_accident"] if any(term in lowered for term in ("car accident", "auto accident", "vehicle accident")) else [],
+                "themes": themes,
+                "praise_drivers": praise_drivers,
+                "failure_modes": failure_modes,
+                "staff_roles_mentioned": staff_roles or ["unknown"],
+                "named_people": [],
+                "process_satisfaction": sentiment,
+                "outcome_status": outcome_status,
+                "outcome_satisfaction": sentiment if outcome_status != "outcome_not_mentioned" else "unknown",
+                "actionability": ["directly_controllable"] if themes or failure_modes else ["unclear"],
+                "operational_owners": list(dict.fromkeys(owners)),
+                "referral_intent": "positive" if any(term in lowered for term in ("recommend", "referral")) else "none",
+                "information_density": "high" if len(text) >= 400 else "medium" if len(text) >= 120 else "low",
+                "firsthand_signal": "firsthand" if any(term in lowered for term in (" i ", " my ", " me ")) else "unclear",
+                "quality_flags": ["rule_based_baseline"],
+                "summary": text[:300] or None,
+                "confidence": 0.65 if rating else 0.5,
+            }
+            classified_count += 1
+    data.update({
+        "classification_version": CLASSIFICATION_VERSION,
+        "classification_status": "completed",
+        "classified_at": classified_at,
+        "classified_count": classified_count,
+        "unclassified_count": 0,
+    })
     return data
 
 
