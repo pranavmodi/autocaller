@@ -1697,6 +1697,7 @@ async def list_mirrored_pif_firms(
     staff_presence: str | None = None,
     job_postings_presence: str | None = None,
     job_posting_role: str | None = None,
+    job_posting_tag: str | None = None,
     job_posting_query: str | None = None,
     job_posted_within_days: int | None = None,
     behavior_presence: str | None = None,
@@ -1791,16 +1792,30 @@ async def list_mirrored_pif_firms(
         conditions.append(PifFirmRow.first_contacted_precise_at < datetime.combine(first_contacted_to + timedelta(days=1), time.min, tzinfo=timezone.utc))
 
     postings_text = func.lower(cast(PifFirmRow.research_data["job_postings"]["postings"], String))
-    role_terms = {
-        "intake": ("intake", "receptionist", "call center", "client relations"),
-        "marketing": ("marketing", "seo", "ppc", "growth", "social media", "business development"),
-        "case_operations": ("case manager", "paralegal", "legal assistant", "litigation assistant"),
-        "firm_operations": ("operations", "office manager", "administrator", "chief operating officer"),
-        "technology": ("technology", "systems", "automation", "crm", "information technology", "data analyst"),
+    role_categories = {
+        "intake": ("intake_conversion",),
+        "marketing": ("marketing_growth",),
+        "case_operations": ("case_operations", "attorney_legal", "client_communication"),
+        "firm_operations": ("firm_operations", "finance_billing", "executive_leadership"),
+        "technology": ("technology_data",),
     }
-    selected_role_terms = role_terms.get(str(job_posting_role or "").strip().lower())
-    if selected_role_terms:
-        conditions.append(or_(*(postings_text.like(f"%{term}%") for term in selected_role_terms)))
+    selected_categories = role_categories.get(str(job_posting_role or "").strip().lower())
+    if selected_categories:
+        category_path = "$.job_postings.postings[*].role_category"
+        conditions.append(or_(*(
+            func.jsonb_path_exists(
+                PifFirmRow.research_data,
+                cast(f'{category_path} ? (@ == "{category}")', JSONPATH),
+            )
+            for category in selected_categories
+        )))
+    if job_posting_tag and job_posting_tag.strip():
+        safe_tag = re.sub(r"[^a-z0-9_]", "", job_posting_tag.strip().lower())
+        if safe_tag:
+            conditions.append(func.jsonb_path_exists(
+                PifFirmRow.research_data,
+                cast(f'$.job_postings.postings[*].trigger_tags[*] ? (@ == "{safe_tag}")', JSONPATH),
+            ))
     if job_posting_query and job_posting_query.strip():
         terms = list(dict.fromkeys(
             term.lower() for term in re.split(r"[\s,]+", job_posting_query.strip()) if term

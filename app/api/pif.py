@@ -40,6 +40,7 @@ from app.services.pif_saved_searches import (
 from app.services.pif_job_posting_research import (
     PifResearchUpstreamError,
     get_research_status,
+    queue_job_posting_classification_backfill,
     start_job_posting_research,
 )
 from app.services.pif_local_enrichment import (
@@ -252,6 +253,7 @@ async def get_pif_firms(
     staff_presence: str | None = Query(None),
     job_postings_presence: str | None = Query(None),
     job_posting_role: str | None = Query(None),
+    job_posting_tag: str | None = Query(None, max_length=64),
     job_posting_query: str | None = Query(None, max_length=255),
     job_posted_within_days: int | None = Query(None, ge=0, le=3650),
     behavior_presence: str | None = Query(None),
@@ -283,6 +285,7 @@ async def get_pif_firms(
         staff_presence=staff_presence,
         job_postings_presence=job_postings_presence,
         job_posting_role=job_posting_role,
+        job_posting_tag=job_posting_tag,
         job_posting_query=job_posting_query,
         job_posted_within_days=job_posted_within_days,
         behavior_presence=behavior_presence,
@@ -310,6 +313,11 @@ async def post_job_posting_research(firm_id: str):
         return await start_job_posting_research(firm_id)
     except PifResearchUpstreamError as exc:
         _raise_research_http(exc)
+
+
+@router.post("/job-postings/classify")
+async def post_job_posting_classification_backfill(force: bool = Query(False)):
+    return await queue_job_posting_classification_backfill(force=force)
 
 
 @router.post("/firms/{firm_id}/research")

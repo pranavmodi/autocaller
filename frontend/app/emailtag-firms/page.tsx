@@ -169,6 +169,7 @@ interface FiltersState {
   staff_presence: StatusPresence;
   job_postings_presence: "any" | "has" | "none" | "not_researched" | "queued_or_running" | "failed";
   job_posting_role: "" | "intake" | "marketing" | "case_operations" | "firm_operations" | "technology";
+  job_posting_tag: string;
   job_posting_query: string;
   job_posted_within_days: string;
   behavior_presence: SimplePresence;
@@ -197,6 +198,7 @@ const DEFAULT_FILTERS: FiltersState = {
   staff_presence: "any",
   job_postings_presence: "any",
   job_posting_role: "",
+  job_posting_tag: "",
   job_posting_query: "",
   job_posted_within_days: "",
   behavior_presence: "any",
@@ -559,6 +561,7 @@ function filtersToParams(filters: FiltersState, page: number): PifInfoListParams
     staff_presence: filters.staff_presence,
     job_postings_presence: filters.job_postings_presence,
     job_posting_role: filters.job_posting_role || undefined,
+    job_posting_tag: filters.job_posting_tag || undefined,
     job_posting_query: filters.job_posting_query.trim() || undefined,
     job_posted_within_days:
       filters.job_posted_within_days && Number.isFinite(Number(filters.job_posted_within_days))
@@ -597,6 +600,23 @@ function countRange(value: string): { min?: number; max?: number } {
 }
 
 const COUNT_RANGES = ["0-0", "1-5", "6-10", "11-25", "26-50", "51-100", "101+"] as const;
+const JOB_TRIGGER_TAGS = [
+  "rapid_lead_followup",
+  "lead_conversion",
+  "high_volume",
+  "after_hours_or_24_7",
+  "crm_management",
+  "case_management_system",
+  "call_tracking",
+  "marketing_attribution",
+  "kpi_reporting",
+  "workflow_automation",
+  "ai_adoption",
+  "client_status_updates",
+  "new_office_or_market",
+  "spanish_language_capacity",
+  "team_expansion",
+] as const;
 const ENTITY_TYPES = [
   "pi_law_firm",
   "law_firm",
@@ -1671,6 +1691,10 @@ function FilterBar({
           <option value="case_operations">Case operations</option>
           <option value="firm_operations">Firm operations</option>
           <option value="technology">Technology and systems</option>
+        </SelectField>
+        <SelectField label="Job signal" value={filters.job_posting_tag} onChange={(value) => updateFilter("job_posting_tag", value)}>
+          <option value="">Any signal</option>
+          {JOB_TRIGGER_TAGS.map((value) => <option key={value} value={value}>{formatLabel(value)}</option>)}
         </SelectField>
         <InputField
           label="Job text"
@@ -3136,6 +3160,12 @@ function JobPostingsPanel({
                     {posting.location && <span>{posting.location}</span>}
                     {posting.employment_type && <span>{posting.employment_type}</span>}
                   </div>
+                  {(posting.role_category || posting.gtm_relevance) && (
+                    <div className="mt-1.5 flex flex-wrap gap-1.5">
+                      {posting.role_category && <JobTag value={formatLabel(posting.role_category)} />}
+                      {posting.gtm_relevance && <JobTag value={`${formatLabel(posting.gtm_relevance)} GTM`} emphasis={posting.gtm_relevance === "high"} />}
+                    </div>
+                  )}
                 </div>
                 <a
                   href={posting.source_url}
@@ -3149,6 +3179,12 @@ function JobPostingsPanel({
               </div>
               {posting.description_summary && (
                 <p className="mt-2 text-xs leading-5 text-neutral-700">{posting.description_summary}</p>
+              )}
+              {Boolean(posting.trigger_tags?.length || posting.technology_mentions?.length) && (
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {posting.trigger_tags?.map((tag) => <JobTag key={tag} value={formatLabel(tag)} />)}
+                  {posting.technology_mentions?.map((technology) => <JobTag key={technology} value={technology} emphasis />)}
+                </div>
               )}
               {(posting.responsibilities.length > 0 || posting.qualifications.length > 0) && (
                 <div className="mt-2 grid gap-3 md:grid-cols-2">
@@ -3165,6 +3201,17 @@ function JobPostingsPanel({
         </div>
       )}
     </InfoBlock>
+  );
+}
+
+function JobTag({ value, emphasis = false }: { value: string; emphasis?: boolean }) {
+  return (
+    <span className={cn(
+      "inline-flex rounded border px-1.5 py-0.5 text-[10px] font-medium",
+      emphasis ? "border-blue-200 bg-blue-50 text-blue-700" : "border-neutral-200 bg-neutral-50 text-neutral-600",
+    )}>
+      {value}
+    </span>
   );
 }
 

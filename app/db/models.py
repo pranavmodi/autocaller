@@ -1184,11 +1184,14 @@ class ResearchTaskRow(Base):
 
 
 class PifJobResearchTaskRow(Base):
-    """Durable local OpenClaw job-opening research queue."""
+    """Durable local job-opening research and classification queue."""
     __tablename__ = "pif_job_research_tasks"
 
     task_id: Mapped[str] = mapped_column(String(128), primary_key=True)
     pif_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    kind: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="research", server_default="research",
+    )
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="queued")
     requested_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow)
     started_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
@@ -1196,6 +1199,10 @@ class PifJobResearchTaskRow(Base):
     result_summary: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
     __table_args__ = (
+        CheckConstraint(
+            "kind IN ('research', 'classify')",
+            name="ck_pif_job_research_tasks_kind",
+        ),
         CheckConstraint(
             "status IN ('queued', 'in_progress', 'completed', 'failed')",
             name="ck_pif_job_research_tasks_status",

@@ -49,6 +49,7 @@ def test_normalize_firm_trigger_search_criteria_keeps_trigger_filters():
         "vendor": "Filevine",
         "job_postings_presence": "has",
         "job_posting_role": "intake",
+        "job_posting_tag": "lead_conversion",
         "job_posting_query": "lead conversion CRM",
         "job_posted_within_days": "30",
         "active_only": True,
@@ -57,6 +58,7 @@ def test_normalize_firm_trigger_search_criteria_keeps_trigger_filters():
     assert normalized["entity_type"] == "pi_law_firm"
     assert normalized["vendor"] == "filevine"
     assert normalized["job_posting_role"] == "intake"
+    assert normalized["job_posting_tag"] == "lead_conversion"
     assert normalized["job_posting_query"] == "lead conversion CRM"
     assert normalized["job_posted_within_days"] == "30"
     assert normalized["active_only"] is True

@@ -45,6 +45,54 @@ def test_normalize_job_postings_filters_dates_sources_and_duplicates():
     assert [posting["title"] for posting in result] == ["Intake Specialist"]
     assert result[0]["posted_date"] == "2026-08-15"
     assert result[0]["source_url"] == "https://example.com/jobs/intake"
+    assert result[0]["role_category"] == "intake_conversion"
+    assert result[0]["classification_version"] == service.CLASSIFIER_VERSION
+
+
+def test_classify_job_posting_adds_gtm_tags_and_technology_mentions():
+    posting = {
+        "title": "Intake Manager",
+        "description_summary": "Own lead conversion and rapid follow-up for a high volume PI firm.",
+        "responsibilities": ["Manage Lead Docket CRM KPIs and after-hours workflows"],
+        "qualifications": ["Filevine experience preferred", "Spanish bilingual"],
+        "source_url": "https://example.com/jobs/intake-manager",
+    }
+
+    result = service.classify_job_posting(posting)
+
+    assert result["role_category"] == "intake_conversion"
+    assert result["gtm_relevance"] == "high"
+    assert set(result["technology_mentions"]) == {"Filevine", "Lead Docket"}
+    assert {
+        "rapid_lead_followup",
+        "lead_conversion",
+        "high_volume",
+        "after_hours_or_24_7",
+        "crm_management",
+        "case_management_system",
+        "kpi_reporting",
+        "workflow_automation",
+        "spanish_language_capacity",
+    } <= set(result["trigger_tags"])
+    assert result["classification_confidence"] == 0.95
+
+
+def test_classify_job_posting_preserves_existing_source_fields():
+    posting = {
+        "title": "Bookkeeper",
+        "posted_date": "2026-08-30",
+        "source_url": "https://example.com/jobs/bookkeeper",
+        "description_summary": "Manage accounting.",
+        "responsibilities": [],
+        "qualifications": [],
+    }
+
+    result = service.classify_job_posting(posting)
+
+    assert result["title"] == posting["title"]
+    assert result["source_url"] == posting["source_url"]
+    assert result["posted_date"] == posting["posted_date"]
+    assert result["role_category"] == "finance_billing"
 
 
 def test_gateway_research_uses_main_agent_and_emailtag_result_shape(monkeypatch):

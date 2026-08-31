@@ -73,6 +73,14 @@ export interface JobPosting {
   qualifications: string[];
   source_name: string;
   source_url: string;
+  role_category?: string;
+  trigger_tags?: string[];
+  technology_mentions?: string[];
+  gtm_relevance?: "high" | "medium" | "low";
+  classification_confidence?: number;
+  classification_provider?: string;
+  classification_version?: string;
+  classified_at?: string;
 }
 
 export interface JobPostingsResearch {
@@ -82,6 +90,9 @@ export interface JobPostingsResearch {
   window_end: string;
   researched_at: string;
   postings: JobPosting[];
+  classification_status?: string;
+  classification_version?: string;
+  classified_at?: string;
 }
 
 export interface ResearchData {
@@ -315,6 +326,7 @@ export interface PifInfoListParams {
   staff_presence?: "any" | "completed" | "missing" | "queued_or_running" | "failed";
   job_postings_presence?: "any" | "has" | "none" | "not_researched" | "queued_or_running" | "failed";
   job_posting_role?: "intake" | "marketing" | "case_operations" | "firm_operations" | "technology";
+  job_posting_tag?: string;
   job_posting_query?: string;
   job_posted_within_days?: number;
   behavior_presence?: "any" | "has" | "missing";
@@ -431,6 +443,7 @@ export interface SavedFirmTriggerSearchCriteria {
   staff_presence: NonNullable<PifInfoListParams["staff_presence"]>;
   job_postings_presence: NonNullable<PifInfoListParams["job_postings_presence"]>;
   job_posting_role?: string;
+  job_posting_tag?: string;
   job_posting_query?: string;
   job_posted_within_days?: string;
   behavior_presence: NonNullable<PifInfoListParams["behavior_presence"]>;
@@ -671,6 +684,7 @@ export function listMirroredPifInfo(params: PifInfoListParams = {}): Promise<Pif
       staff_presence: params.staff_presence,
       job_postings_presence: params.job_postings_presence,
       job_posting_role: params.job_posting_role,
+      job_posting_tag: params.job_posting_tag,
       job_posting_query: params.job_posting_query,
       job_posted_within_days: params.job_posted_within_days,
       behavior_presence: params.behavior_presence,

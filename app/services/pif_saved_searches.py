@@ -44,7 +44,7 @@ FIRM_TRIGGER_SEARCH_KEYS = {
     "search", "sort_by", "icp_tier", "entity_type", "recently_researched",
     "contact_email_range", "staff_count_range", "autorespond_window", "autorespond_type",
     "website_presence", "research_presence", "staff_presence", "job_postings_presence",
-    "job_posting_role", "job_posting_query", "job_posted_within_days",
+    "job_posting_role", "job_posting_tag", "job_posting_query", "job_posted_within_days",
     "behavior_presence", "icp_presence", "vendor_presence", "vendor", "record_origin",
     "first_contact_period", "first_contacted_from", "first_contacted_to", "active_only",
 }
@@ -93,7 +93,7 @@ def normalize_firm_trigger_search_criteria(criteria: dict[str, Any]) -> dict[str
     for key in (
         "search", "icp_tier", "entity_type", "contact_email_range", "staff_count_range",
         "autorespond_type", "vendor", "first_contacted_from", "first_contacted_to",
-        "job_posting_query",
+        "job_posting_query", "job_posting_tag",
     ):
         value = str(criteria.get(key) or "").strip()
         if value:

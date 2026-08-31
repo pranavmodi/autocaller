@@ -337,13 +337,14 @@ def test_api_forwards_job_trigger_filters(monkeypatch):
     client = TestClient(app)
 
     response = client.get(
-        "/api/pif/firms?job_postings_presence=has&job_posting_role=intake"
+        "/api/pif/firms?job_postings_presence=has&job_posting_role=intake&job_posting_tag=lead_conversion"
         "&job_posting_query=lead%20conversion&job_posted_within_days=30"
     )
 
     assert response.status_code == 200
     assert captured["job_postings_presence"] == "has"
     assert captured["job_posting_role"] == "intake"
+    assert captured["job_posting_tag"] == "lead_conversion"
     assert captured["job_posting_query"] == "lead conversion"
     assert captured["job_posted_within_days"] == 30
 

@@ -8867,6 +8867,19 @@ def pif_research_job_postings(
     raise typer.Exit(1)
 
 
+@pif_app.command("classify-job-postings")
+def pif_classify_job_postings(
+    force: bool = typer.Option(False, "--force", help="Reclassify postings already on the current taxonomy."),
+):
+    """Queue local tagging for every firm with stored job postings."""
+    result = _post(
+        f"/api/pif/job-postings/classify?force={'true' if force else 'false'}",
+        json_body=None,
+        timeout=90.0,
+    )
+    console.print_json(data=result)
+
+
 @pif_app.command("enrich")
 def pif_enrich_locally(
     firm_id: str = typer.Argument(..., help="Local mirrored firm UUID."),
