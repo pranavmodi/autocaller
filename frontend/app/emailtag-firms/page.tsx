@@ -3013,7 +3013,7 @@ function FirmDetail({ initialFirm, onAuthError }: { initialFirm: PifInfoResponse
       </InfoBlock>
 
       <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
-        <InfoBlock title="Contact data">
+        <CollapsibleInfoBlock title="Contact data" defaultOpen={false}>
           <KeyValue label="Emails" value={firm.emails?.join(", ") || "—"} />
           <KeyValue label="Phones" value={firm.phones?.join(", ") || "—"} />
           <KeyValue label="Fax" value={firm.fax ?? "—"} />
@@ -3022,9 +3022,9 @@ function FirmDetail({ initialFirm, onAuthError }: { initialFirm: PifInfoResponse
             value={firm.addresses?.map(formatAddress).filter(Boolean).join(" · ") || "—"}
           />
           <KeyValue label="Extraction notes" value={firm.extraction_notes ?? "—"} />
-        </InfoBlock>
+        </CollapsibleInfoBlock>
 
-        <CollapsibleInfoBlock title="Front conversation IDs" count={firm.conversation_ids?.length ?? 0}>
+        <CollapsibleInfoBlock title="Front conversation IDs" count={firm.conversation_ids?.length ?? 0} defaultOpen={false}>
           {firm.conversation_ids?.length ? (
             <div className="flex flex-wrap gap-1.5">
               {firm.conversation_ids.map((id) => (
