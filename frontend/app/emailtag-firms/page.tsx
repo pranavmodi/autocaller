@@ -3024,7 +3024,7 @@ function FirmDetail({ initialFirm, onAuthError }: { initialFirm: PifInfoResponse
           <KeyValue label="Extraction notes" value={firm.extraction_notes ?? "—"} />
         </InfoBlock>
 
-        <InfoBlock title="Front conversation IDs">
+        <CollapsibleInfoBlock title="Front conversation IDs" count={firm.conversation_ids?.length ?? 0}>
           {firm.conversation_ids?.length ? (
             <div className="flex flex-wrap gap-1.5">
               {firm.conversation_ids.map((id) => (
@@ -3044,7 +3044,7 @@ function FirmDetail({ initialFirm, onAuthError }: { initialFirm: PifInfoResponse
           ) : (
             <div className="text-xs text-neutral-400">No conversation IDs.</div>
           )}
-        </InfoBlock>
+        </CollapsibleInfoBlock>
       </div>
 
       <InfoBlock
@@ -3861,6 +3861,45 @@ function InfoBlock({ title, children, action }: { title: string; children: React
         {action}
       </div>
       {children}
+    </section>
+  );
+}
+
+function CollapsibleInfoBlock({
+  title,
+  children,
+  count,
+  defaultOpen = true,
+}: {
+  title: string;
+  children: React.ReactNode;
+  count?: number;
+  defaultOpen?: boolean;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+
+  return (
+    <section className="rounded-md border border-neutral-200">
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((current) => !current)}
+        className={cn(
+          "flex w-full items-center justify-between gap-2 px-3 py-3 text-left hover:bg-neutral-50",
+          open && "border-b border-neutral-100",
+        )}
+      >
+        <span className="flex min-w-0 items-center gap-2">
+          <span className="truncate text-sm font-semibold text-neutral-900">{title}</span>
+          {typeof count === "number" && (
+            <span className="rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] font-medium text-neutral-500">
+              {count}
+            </span>
+          )}
+        </span>
+        <ChevronDown className={cn("h-4 w-4 shrink-0 text-neutral-400 transition", open && "rotate-180")} />
+      </button>
+      {open && <div className="p-3">{children}</div>}
     </section>
   );
 }
