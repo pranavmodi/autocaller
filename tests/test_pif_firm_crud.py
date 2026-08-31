@@ -379,6 +379,25 @@ def test_api_lists_job_postings_with_posting_level_filters(monkeypatch):
     }
 
 
+def test_api_lists_sitemap_history(monkeypatch):
+    captured = {}
+
+    async def fake_history(pif_id, *, limit):
+        captured.update({"pif_id": pif_id, "limit": limit})
+        return {"pif_id": pif_id, "items": []}
+
+    monkeypatch.setattr(pif_api, "list_firm_sitemap_history", fake_history)
+    app = FastAPI()
+    app.include_router(pif_api.router)
+    client = TestClient(app)
+
+    response = client.get("/api/pif/firms/firm-1/sitemap-history?limit=7")
+
+    assert response.status_code == 200
+    assert response.json() == {"pif_id": "firm-1", "items": []}
+    assert captured == {"pif_id": "firm-1", "limit": 7}
+
+
 def test_api_forwards_autorespond_filters(monkeypatch):
     captured = {}
 

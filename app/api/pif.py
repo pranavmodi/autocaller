@@ -49,6 +49,7 @@ from app.services.pif_local_enrichment import (
     get_local_enrichment_status,
     start_local_firm_enrichment,
 )
+from app.services.pif_sitemap_monitor import list_firm_sitemap_history
 
 router = APIRouter(prefix="/api/pif", tags=["pif-directory"])
 
@@ -332,6 +333,14 @@ async def get_pif_firm(firm_id: str):
     if item:
         return item
     raise HTTPException(status_code=404, detail="firm_not_found")
+
+
+@router.get("/firms/{firm_id}/sitemap-history")
+async def get_pif_firm_sitemap_history(firm_id: str, limit: int = Query(20, ge=1, le=100)):
+    try:
+        return await list_firm_sitemap_history(firm_id, limit=limit)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @router.post("/firms/{firm_id}/research-job-postings")

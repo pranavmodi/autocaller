@@ -340,15 +340,23 @@ _LOCAL_JOB_RESEARCH_KEYS = (
     "last_job_postings_researched_at",
 )
 
+_LOCAL_RESEARCH_KEYS = (
+    "sitemap_monitor",
+)
+
 
 def _preserve_local_job_research(existing: Any, incoming: dict[str, Any]) -> dict[str, Any]:
-    """Keep Possible OS-owned job research across EmailTag mirror refreshes."""
+    """Keep Possible OS-owned research across EmailTag mirror refreshes."""
     prior = existing if isinstance(existing, dict) else {}
     merged = dict(incoming)
     if prior.get("job_postings_research_provider") == "possibleos_openclaw":
         for key in _LOCAL_JOB_RESEARCH_KEYS:
             if key in prior:
                 merged[key] = prior[key]
+    for key in _LOCAL_RESEARCH_KEYS:
+        value = prior.get(key)
+        if isinstance(value, dict) and str(value.get("provider") or "").startswith("possibleos_"):
+            merged[key] = value
     return merged
 
 

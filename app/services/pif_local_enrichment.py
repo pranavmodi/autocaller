@@ -25,6 +25,7 @@ DEFAULT_REFRESH_DAYS = 30
 STAGES = (
     ("web_research", "Firm, website, people, and vendors"),
     ("persist_research", "Save researched facts"),
+    ("sitemap", "Sitemap changes"),
     ("behavior", "Relationship behavior"),
     ("contact_intelligence", "Leadership communication and contact profiles"),
     ("contacts", "Contact directory"),
@@ -758,7 +759,7 @@ async def _run_task(task_id: str, pif_id: str) -> None:
     target_pif_id = str(persisted.get("pif_id") or pif_id)
     if persisted.get("reused_recent_research"):
         message = "Canonical firm was researched within the last 30 days; reused existing research"
-        for stage_key in ("behavior", "contact_intelligence", "contacts", "job_postings", "score"):
+        for stage_key in ("sitemap", "behavior", "contact_intelligence", "contacts", "job_postings", "score"):
             await _set_stage(task_id, stage_key, "skipped", message=message)
         await _finalize_task(task_id, "completed")
         return
@@ -769,7 +770,9 @@ async def _run_task(task_id: str, pif_id: str) -> None:
         score_firm_locally,
         synthesize_contact_intelligence_locally,
     )
+    from app.services.pif_sitemap_monitor import monitor_firm_sitemap
 
+    await _run_optional_stage(task_id, "sitemap", lambda: monitor_firm_sitemap(target_pif_id))
     await _run_optional_stage(task_id, "behavior", lambda: analyze_behavior_locally(target_pif_id))
     await _run_optional_stage(
         task_id,

@@ -862,3 +862,18 @@ def test_limited_run_preserves_saved_resume_point(monkeypatch):
     asyncio.run(svc.sync_firm_intel(full=True, restart=True))
     assert calls3[0]["params"].get("cursor") is None
     assert "resume_cursor" not in store3.states[1].last_result
+
+
+def test_emailtag_sync_preserves_possibleos_sitemap_summary():
+    local = {
+        "sitemap_monitor": {
+            "provider": "possibleos_sitemap_monitor",
+            "status": "completed",
+            "url_count": 42,
+        },
+    }
+
+    merged = svc._preserve_local_job_research(local, {"summary": "Incoming research"})
+
+    assert merged["summary"] == "Incoming research"
+    assert merged["sitemap_monitor"] == local["sitemap_monitor"]

@@ -1992,6 +1992,32 @@ class PifFirmRow(Base):
     )
 
 
+class FirmSitemapSnapshotRow(Base):
+    """A point-in-time sitemap URL inventory used to detect firm-site changes."""
+    __tablename__ = "firm_sitemap_snapshots"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    pif_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    website: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False)
+    sitemap_urls: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    urls: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    url_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    added_urls: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    removed_urls: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    truncated: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    fetched_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow)
+
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('completed', 'missing', 'failed')",
+            name="ck_firm_sitemap_snapshots_status",
+        ),
+        Index("ix_firm_sitemap_snapshots_pif_fetched", "pif_id", "fetched_at"),
+    )
+
+
 class SavedLeadSearchRow(Base):
     """Reusable server-persisted criteria for the Leads workspace."""
     __tablename__ = "saved_lead_searches"

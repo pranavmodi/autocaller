@@ -318,7 +318,7 @@ def test_progress_summary_counts_completed_failed_and_skipped_stages():
 
     summary = service._progress_summary("Example Law", current_stage="behavior", stages=stages)
 
-    assert summary["progress_percent"] == 43
+    assert summary["progress_percent"] == 38
     assert summary["warning_count"] == 1
     assert summary["current_stage"] == "behavior"
 
@@ -368,6 +368,8 @@ def test_full_pipeline_reports_every_stage_before_finalizing(monkeypatch):
         ("web_research", "completed"),
         ("persist_research", "in_progress"),
         ("persist_research", "completed"),
+        ("sitemap", "in_progress"),
+        ("sitemap", "completed"),
         ("behavior", "in_progress"),
         ("behavior", "completed"),
         ("contact_intelligence", "in_progress"),

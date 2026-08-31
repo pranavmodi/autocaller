@@ -62,6 +62,7 @@ import {
   detectVendors,
   downloadEmailtagExport,
   getFullEnrichmentStatus,
+  getFirmSitemapHistory,
   getMirroredFirm,
   getPifPeopleFilterOptions,
   getPifSyncStatus,
@@ -85,6 +86,7 @@ import {
   type PifInfoListParams,
   type PifInfoListResponse,
   type PifInfoResponse,
+  type SitemapMonitorSummary,
   type PifJobPostingResult,
   type PifJobPostingsListParams,
   type JobPostingsResearch,
@@ -3195,6 +3197,8 @@ function FirmDetail({ initialFirm, onAuthError }: { initialFirm: PifInfoResponse
         </div>
       </InfoBlock>
 
+      <SitemapMonitorPanel pifId={firm.id} monitor={firm.research_data?.sitemap_monitor} />
+
       <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
         <CollapsibleInfoBlock title="Contact data" defaultOpen={false}>
           <KeyValue label="Emails" value={firm.emails?.join(", ") || "—"} />
@@ -3297,6 +3301,108 @@ function FirmDetail({ initialFirm, onAuthError }: { initialFirm: PifInfoResponse
       </div>
 
       <FirmDangerZone pifId={firm.id} firmName={firm.firm_name} />
+    </div>
+  );
+}
+
+function SitemapMonitorPanel({ pifId, monitor }: { pifId: string; monitor: SitemapMonitorSummary | undefined }) {
+  const history = useQuery({
+    queryKey: ["firm-sitemap-history", pifId],
+    queryFn: () => getFirmSitemapHistory(pifId),
+  });
+  if (!monitor) {
+    return (
+      <InfoBlock title="Sitemap changes">
+        <div className="text-xs text-neutral-400">No sitemap snapshot yet. It will be checked during full enrichment.</div>
+      </InfoBlock>
+    );
+  }
+
+  const changeLabel = monitor.changed == null
+    ? "Baseline snapshot"
+    : monitor.changed
+      ? `${monitor.added_count ?? 0} added, ${monitor.removed_count ?? 0} removed`
+      : "No URL changes";
+
+  return (
+    <InfoBlock title="Sitemap changes">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-neutral-500">
+        <span className="inline-flex items-center gap-1.5 font-medium text-neutral-700">
+          <Globe className="h-3.5 w-3.5" />
+          {(monitor.url_count ?? 0).toLocaleString()} indexed URLs
+        </span>
+        <span>{formatLabel(monitor.status)}</span>
+        <span>{changeLabel}</span>
+        {monitor.checked_at && <span>Checked {formatDateTime(monitor.checked_at)}</span>}
+        {monitor.truncated && <span className="font-medium text-amber-700">Snapshot capped</span>}
+      </div>
+
+      {monitor.sitemap_urls?.length ? (
+        <div className="mt-2 flex flex-wrap gap-2 border-t border-neutral-100 pt-2">
+          {monitor.sitemap_urls.map((url) => (
+            <a
+              key={url}
+              href={url}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex min-w-0 items-center gap-1 text-xs font-medium text-blue-600 hover:underline"
+            >
+              <span className="max-w-80 truncate">{url}</span>
+              <ExternalLink className="h-3 w-3 shrink-0" />
+            </a>
+          ))}
+        </div>
+      ) : null}
+
+      {monitor.error && (
+        <div className="mt-2 border-t border-neutral-100 pt-2 text-xs text-neutral-500">{monitor.error}</div>
+      )}
+
+      {Boolean(monitor.added_urls?.length || monitor.removed_urls?.length) && (
+        <div className="mt-3 grid gap-3 border-t border-neutral-100 pt-3 lg:grid-cols-2">
+          <SitemapChangeList label="Added URLs" urls={monitor.added_urls ?? []} tone="added" />
+          <SitemapChangeList label="Removed URLs" urls={monitor.removed_urls ?? []} tone="removed" />
+        </div>
+      )}
+
+      {history.data?.items.length ? (
+        <div className="mt-3 border-t border-neutral-100 pt-3">
+          <div className="text-[10px] font-semibold uppercase text-neutral-400">Snapshot history</div>
+          <div className="mt-1 divide-y divide-neutral-100">
+            {history.data.items.map((snapshot) => (
+              <div key={snapshot.id} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 py-2 text-xs">
+                <span className="text-neutral-500">{formatDateTime(snapshot.fetched_at)}</span>
+                <span className="font-medium text-neutral-700">{snapshot.url_count.toLocaleString()} URLs</span>
+                <span className="text-neutral-500">
+                  {snapshot.added_count || snapshot.removed_count
+                    ? `${snapshot.added_count} added, ${snapshot.removed_count} removed`
+                    : snapshot.status === "completed" ? "Baseline" : formatLabel(snapshot.status)}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+    </InfoBlock>
+  );
+}
+
+function SitemapChangeList({ label, urls, tone }: { label: string; urls: string[]; tone: "added" | "removed" }) {
+  return (
+    <div>
+      <div className={cn(
+        "text-[10px] font-semibold uppercase",
+        tone === "added" ? "text-emerald-700" : "text-red-700",
+      )}>
+        {label} ({urls.length})
+      </div>
+      <div className="mt-1 max-h-40 space-y-1 overflow-y-auto">
+        {urls.map((url) => (
+          <a key={url} href={url} target="_blank" rel="noreferrer" className="block truncate text-xs text-neutral-600 hover:text-blue-600 hover:underline" title={url}>
+            {url}
+          </a>
+        ))}
+      </div>
     </div>
   );
 }

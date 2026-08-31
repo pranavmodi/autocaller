@@ -149,7 +149,45 @@ export interface ResearchData {
   job_postings?: JobPostingsResearch;
   job_postings_research_status?: string | null;
   last_job_postings_researched_at?: string | null;
+  sitemap_monitor?: SitemapMonitorSummary;
   local_enrichment?: LocalEnrichmentState;
+}
+
+export interface SitemapMonitorSummary {
+  status: "completed" | "missing" | "failed" | string;
+  provider?: string;
+  checked_at?: string | null;
+  website?: string | null;
+  sitemap_urls?: string[];
+  url_count?: number;
+  changed?: boolean | null;
+  added_count?: number;
+  removed_count?: number;
+  added_urls?: string[];
+  removed_urls?: string[];
+  truncated?: boolean;
+  snapshot_id?: string;
+  error?: string | null;
+}
+
+export interface SitemapSnapshot {
+  id: string;
+  website?: string | null;
+  status: string;
+  sitemap_urls: string[];
+  url_count: number;
+  added_count: number;
+  removed_count: number;
+  added_urls: string[];
+  removed_urls: string[];
+  truncated: boolean;
+  error?: string | null;
+  fetched_at: string;
+}
+
+export interface SitemapHistoryResponse {
+  pif_id: string;
+  items: SitemapSnapshot[];
 }
 
 export interface EnrichmentStage {
@@ -769,6 +807,12 @@ export function getFirm(pifId: string): Promise<PifInfoResponse> {
 
 export function getMirroredFirm(pifId: string): Promise<PifInfoResponse> {
   return possibleFetch<PifInfoResponse>(`/api/pif/firms/${encodeURIComponent(pifId)}`);
+}
+
+export function getFirmSitemapHistory(pifId: string): Promise<SitemapHistoryResponse> {
+  return possibleFetch<SitemapHistoryResponse>(
+    `/api/pif/firms/${encodeURIComponent(pifId)}/sitemap-history`,
+  );
 }
 
 export async function listPifPeople(params: PifPeopleListParams = {}): Promise<PifPeopleListResponse> {
