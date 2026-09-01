@@ -1,5 +1,5 @@
 import asyncio
-from datetime import date
+from datetime import date, datetime, timezone
 from types import SimpleNamespace
 
 from app.services import pif_job_posting_research as service
@@ -146,3 +146,44 @@ def test_emailtag_sync_does_not_overwrite_possibleos_job_research():
     assert merged["identity"] == {"state": "CA"}
     assert merged["job_postings"] == local["job_postings"]
     assert merged["job_postings_research_status"] == "completed"
+
+
+def test_daily_stats_deduplicate_firm_and_use_latest_result():
+    rows = [
+        SimpleNamespace(
+            pif_id="firm-1",
+            status="completed",
+            completed_at=datetime(2026, 9, 1, 8, 0, tzinfo=timezone.utc),
+            result_summary={"has_recent_openings": True, "posting_count": 2},
+        ),
+        SimpleNamespace(
+            pif_id="firm-1",
+            status="completed",
+            completed_at=datetime(2026, 9, 1, 9, 0, tzinfo=timezone.utc),
+            result_summary={"has_recent_openings": True, "posting_count": 3},
+        ),
+        SimpleNamespace(
+            pif_id="firm-2",
+            status="failed",
+            completed_at=datetime(2026, 9, 1, 10, 0, tzinfo=timezone.utc),
+            result_summary={"message": "timeout"},
+        ),
+    ]
+
+    result = service._aggregate_job_research_daily_stats(
+        rows,
+        days=2,
+        now=datetime(2026, 9, 1, 12, 0, tzinfo=timezone.utc),
+        open_counts={"queued": 7, "in_progress": 2},
+    )
+
+    assert result["today"] == {
+        "date": "2026-09-01",
+        "firms_processed": 2,
+        "firms_completed": 1,
+        "firms_failed": 1,
+        "firms_with_openings": 1,
+        "job_postings_found": 3,
+        "research_attempts": 3,
+    }
+    assert result["queue"] == {"queued": 7, "in_progress": 2}

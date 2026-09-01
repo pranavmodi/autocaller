@@ -398,6 +398,24 @@ def test_api_lists_sitemap_history(monkeypatch):
     assert captured == {"pif_id": "firm-1", "limit": 7}
 
 
+def test_api_returns_daily_job_research_stats(monkeypatch):
+    async def fake_stats(*, days):
+        return {"days": days, "today": {"firms_processed": 4, "job_postings_found": 6}}
+
+    monkeypatch.setattr(pif_api, "get_job_research_daily_stats", fake_stats)
+    app = FastAPI()
+    app.include_router(pif_api.router)
+    client = TestClient(app)
+
+    response = client.get("/api/pif/job-postings/daily-stats?days=7")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "days": 7,
+        "today": {"firms_processed": 4, "job_postings_found": 6},
+    }
+
+
 def test_api_queues_sitemap_research(monkeypatch):
     async def fake_start(firm_id):
         return {"task_id": "sitemap-1", "pif_id": firm_id, "status": "queued"}

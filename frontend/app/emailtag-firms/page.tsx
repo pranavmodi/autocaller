@@ -66,6 +66,7 @@ import {
   getFullEnrichmentStatus,
   getFirmSitemapHistory,
   getMirroredFirm,
+  getPifJobResearchDailyStats,
   getPifPeopleFilterOptions,
   getPifSyncStatus,
   getResearchStatus,
@@ -91,6 +92,7 @@ import {
   type SitemapMonitorSummary,
   type PifJobPostingResult,
   type PifJobPostingsListParams,
+  type PifJobResearchDailyStat,
   type JobPostingsResearch,
   type PifAddress,
   type PifPeopleListParams,
@@ -2183,6 +2185,11 @@ function JobListingsView() {
     queryKey: ["pif", "job-postings", queryParams],
     queryFn: () => listMirroredPifJobPostings(queryParams),
   });
+  const dailyStatsQuery = useQuery({
+    queryKey: ["pif", "job-postings", "daily-stats", 14],
+    queryFn: () => getPifJobResearchDailyStats(14),
+    refetchInterval: 30_000,
+  });
   const items = query.data?.items ?? [];
   const page = query.data?.page ?? filters.page ?? 1;
   const totalPages = query.data?.total_pages ?? 0;
@@ -2193,6 +2200,11 @@ function JobListingsView() {
 
   return (
     <section className="space-y-3">
+      <JobResearchDailyDashboard
+        data={dailyStatsQuery.data}
+        loading={dailyStatsQuery.isLoading}
+        error={dailyStatsQuery.error}
+      />
       <div className="rounded-xl border border-neutral-200 bg-white p-3">
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
           <InputField
@@ -2289,6 +2301,95 @@ function JobListingsView() {
       </div>
     </section>
   );
+}
+
+function JobResearchDailyDashboard({
+  data,
+  loading,
+  error,
+}: {
+  data: Awaited<ReturnType<typeof getPifJobResearchDailyStats>> | undefined;
+  loading: boolean;
+  error: Error | null;
+}) {
+  const today = data?.today;
+  const recent = data?.daily.slice(0, 7) ?? [];
+  const maxJobs = Math.max(1, ...recent.map((day) => day.job_postings_found));
+
+  return (
+    <section aria-label="Daily job research" className="border-y border-neutral-200 py-4">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <h2 className="text-sm font-semibold text-neutral-900">Today&apos;s job research</h2>
+          <p className="mt-0.5 text-xs text-neutral-500">
+            Firms processed and job postings found on each UTC research day.
+          </p>
+        </div>
+        {data && (
+          <div className="text-xs text-neutral-500">
+            {data.queue.in_progress.toLocaleString()} running · {data.queue.queued.toLocaleString()} queued
+          </div>
+        )}
+      </div>
+
+      {loading && <div className="py-6 text-center text-xs text-neutral-400">Loading daily research totals...</div>}
+      {error && <div className="py-6 text-center text-xs text-rose-600">{error.message}</div>}
+      {today && (
+        <>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <MetricTile icon={<CheckCircle2 className="h-4 w-4" />} label="Firms processed today" value={today.firms_processed} />
+            <MetricTile icon={<Users className="h-4 w-4" />} label="Firms with openings" value={today.firms_with_openings} />
+            <MetricTile icon={<Briefcase className="h-4 w-4" />} label="Job postings found" value={today.job_postings_found} />
+            <MetricTile icon={<AlertTriangle className="h-4 w-4" />} label="Failed today" value={today.firms_failed} />
+          </div>
+
+          <div className="mt-4 overflow-x-auto">
+            <table className="w-full min-w-[620px] text-xs">
+              <thead className="border-b border-neutral-200 text-left text-[11px] uppercase text-neutral-500">
+                <tr>
+                  <th className="py-2 pr-3 font-medium">Research day</th>
+                  <th className="px-3 py-2 text-right font-medium">Processed</th>
+                  <th className="px-3 py-2 text-right font-medium">With openings</th>
+                  <th className="px-3 py-2 text-right font-medium">Postings</th>
+                  <th className="w-[34%] py-2 pl-4 font-medium">Postings found</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-neutral-100">
+                {recent.map((day) => (
+                  <JobResearchDailyRow key={day.date} day={day} maxJobs={maxJobs} />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
+function JobResearchDailyRow({ day, maxJobs }: { day: PifJobResearchDailyStat; maxJobs: number }) {
+  const width = day.job_postings_found ? Math.max(4, (day.job_postings_found / maxJobs) * 100) : 0;
+  return (
+    <tr>
+      <td className="py-2.5 pr-3 font-medium text-neutral-700">{formatDailyStatDate(day.date)}</td>
+      <td className="px-3 py-2.5 text-right text-neutral-600">{day.firms_processed.toLocaleString()}</td>
+      <td className="px-3 py-2.5 text-right text-neutral-600">{day.firms_with_openings.toLocaleString()}</td>
+      <td className="px-3 py-2.5 text-right font-medium text-neutral-800">{day.job_postings_found.toLocaleString()}</td>
+      <td className="py-2.5 pl-4">
+        <div className="h-2 w-full overflow-hidden rounded-sm bg-neutral-100" aria-label={`${day.job_postings_found} postings found`}>
+          <div className="h-full bg-emerald-600" style={{ width: `${width}%` }} />
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+function formatDailyStatDate(value: string) {
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(`${value}T00:00:00Z`));
 }
 
 function JobListingRow({ posting }: { posting: PifJobPostingResult }) {

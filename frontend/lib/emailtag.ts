@@ -134,6 +134,28 @@ export interface PifJobPostingsListResponse {
   total_pages: number;
 }
 
+export interface PifJobResearchDailyStat {
+  date: string;
+  firms_processed: number;
+  firms_completed: number;
+  firms_failed: number;
+  firms_with_openings: number;
+  job_postings_found: number;
+  research_attempts: number;
+}
+
+export interface PifJobResearchDailyStatsResponse {
+  timezone: string;
+  days: number;
+  today: PifJobResearchDailyStat;
+  daily: PifJobResearchDailyStat[];
+  queue: {
+    queued: number;
+    in_progress: number;
+  };
+  generated_at: string;
+}
+
 export interface ResearchData {
   practice_areas: string[];
   founded_year: string | null;
@@ -790,6 +812,12 @@ export function listMirroredPifJobPostings(
       page: params.page ?? 1,
       page_size: params.page_size ?? 25,
     }),
+  );
+}
+
+export function getPifJobResearchDailyStats(days = 14): Promise<PifJobResearchDailyStatsResponse> {
+  return possibleFetch<PifJobResearchDailyStatsResponse>(
+    appendParams("/api/pif/job-postings/daily-stats", { days }),
   );
 }
 

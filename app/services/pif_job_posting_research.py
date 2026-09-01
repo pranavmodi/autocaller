@@ -420,6 +420,95 @@ async def get_research_status(task_id: str) -> dict[str, Any]:
         }
 
 
+def _aggregate_job_research_daily_stats(
+    rows: list[Any],
+    *,
+    days: int,
+    now: datetime,
+    open_counts: dict[str, int] | None = None,
+) -> dict[str, Any]:
+    """Summarize the latest terminal job-research result per firm and UTC day."""
+    normalized_now = now.astimezone(timezone.utc)
+    first_day = normalized_now.date() - timedelta(days=days - 1)
+    latest_by_firm_day: dict[tuple[date, str], Any] = {}
+    attempts_by_day: dict[date, int] = {}
+    for row in rows:
+        completed_at = row.completed_at
+        if completed_at is None:
+            continue
+        completed_at = completed_at if completed_at.tzinfo else completed_at.replace(tzinfo=timezone.utc)
+        day = completed_at.astimezone(timezone.utc).date()
+        if day < first_day:
+            continue
+        attempts_by_day[day] = attempts_by_day.get(day, 0) + 1
+        key = (day, str(row.pif_id))
+        current = latest_by_firm_day.get(key)
+        if current is None or (current.completed_at or datetime.min.replace(tzinfo=timezone.utc)) < completed_at:
+            latest_by_firm_day[key] = row
+
+    daily: list[dict[str, Any]] = []
+    for offset in range(days):
+        day = first_day + timedelta(days=offset)
+        firm_rows = [row for (row_day, _), row in latest_by_firm_day.items() if row_day == day]
+        completed = [row for row in firm_rows if row.status == "completed"]
+        failed = [row for row in firm_rows if row.status == "failed"]
+        summaries = [row.result_summary if isinstance(row.result_summary, dict) else {} for row in completed]
+        daily.append({
+            "date": day.isoformat(),
+            "firms_processed": len(firm_rows),
+            "firms_completed": len(completed),
+            "firms_failed": len(failed),
+            "firms_with_openings": sum(bool(summary.get("has_recent_openings")) for summary in summaries),
+            "job_postings_found": sum(int(summary.get("posting_count") or 0) for summary in summaries),
+            "research_attempts": attempts_by_day.get(day, 0),
+        })
+    counts = open_counts or {}
+    return {
+        "timezone": "UTC",
+        "days": days,
+        "today": daily[-1],
+        "daily": list(reversed(daily)),
+        "queue": {
+            "queued": int(counts.get("queued") or 0),
+            "in_progress": int(counts.get("in_progress") or 0),
+        },
+        "generated_at": normalized_now.isoformat(),
+    }
+
+
+async def get_job_research_daily_stats(*, days: int = 14) -> dict[str, Any]:
+    days = max(1, min(90, int(days)))
+    now = _utcnow()
+    first_day = now.date() - timedelta(days=days - 1)
+    start = datetime.combine(first_day, datetime.min.time(), tzinfo=timezone.utc)
+    async with AsyncSessionLocal() as session:
+        rows = (await session.execute(
+            select(
+                PifJobResearchTaskRow.pif_id,
+                PifJobResearchTaskRow.status,
+                PifJobResearchTaskRow.completed_at,
+                PifJobResearchTaskRow.result_summary,
+            ).where(
+                PifJobResearchTaskRow.kind == "research",
+                PifJobResearchTaskRow.status.in_(("completed", "failed")),
+                PifJobResearchTaskRow.completed_at >= start,
+            )
+        )).all()
+        open_rows = (await session.execute(
+            select(PifJobResearchTaskRow.status).where(
+                PifJobResearchTaskRow.kind == "research",
+                PifJobResearchTaskRow.status.in_(OPEN_STATUSES),
+            )
+        )).scalars().all()
+    open_counts = {status: open_rows.count(status) for status in OPEN_STATUSES}
+    return _aggregate_job_research_daily_stats(
+        list(rows),
+        days=days,
+        now=now,
+        open_counts=open_counts,
+    )
+
+
 async def _claim_next_task() -> tuple[str, str, str] | None:
     async with AsyncSessionLocal() as session:
         task = (await session.execute(

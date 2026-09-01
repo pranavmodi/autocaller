@@ -40,6 +40,7 @@ from app.services.pif_saved_searches import (
 )
 from app.services.pif_job_posting_research import (
     PifResearchUpstreamError,
+    get_job_research_daily_stats,
     get_research_status,
     queue_job_posting_classification_backfill,
     start_job_posting_research,
@@ -221,6 +222,11 @@ async def get_pif_job_postings(
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get("/job-postings/daily-stats")
+async def get_pif_job_posting_daily_stats(days: int = Query(14, ge=1, le=90)):
+    return await get_job_research_daily_stats(days=days)
 
 
 @router.get("/saved-searches")
