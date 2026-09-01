@@ -1,0 +1,28 @@
+type,key,label,count,percent
+praise,felt_cared_for,Felt Cared For,3316,47.92
+praise,strong_outcome,Strong Outcome,2477,35.79
+praise,frequent_updates,Frequent Updates,2176,31.45
+praise,effective_medical_coordination,Effective Medical Coordination,865,12.5
+praise,smooth_process,Smooth Process,40,0.58
+praise,specific_employee_excellence,Specific Employee Excellence,38,0.55
+praise,clear_explanations,Clear Explanations,34,0.49
+praise,easy_to_reach,Easy To Reach,25,0.36
+praise,staff_went_beyond_role,Staff Went Beyond Role,20,0.29
+praise,fast_initial_response,Fast Initial Response,12,0.17
+praise,faster_than_expected,Faster Than Expected,5,0.07
+praise,transparent_fees,Transparent Fees,4,0.06
+failure,unexpected_delay,Unexpected Delay,64,16.71
+failure,rude_or_dismissive_treatment,Rude Or Dismissive Treatment,50,13.05
+failure,status_silence,Status Silence,23,6.01
+failure,no_callback,No Callback,13,3.39
+failure,unexpected_fee_or_deduction,Unexpected Fee Or Deduction,12,3.13
+failure,medical_coordination_failure,Medical Coordination Failure,10,2.61
+failure,settlement_expectation_mismatch,Settlement Expectation Mismatch,8,2.09
+failure,poor_handoff_after_signing,Poor Handoff After Signing,6,1.57
+failure,attorney_unreachable,Attorney Unreachable,6,1.57
+failure,client_did_not_understand_process,Client Did Not Understand Process,6,1.57
+failure,staff_turnover,Staff Turnover,5,1.31
+failure,case_dropped_or_rejected,Case Dropped Or Rejected,5,1.31
+failure,unclear_case_owner,Unclear Case Owner,4,1.04
+failure,promised_action_not_completed,Promised Action Not Completed,4,1.04
+failure,payment_delay,Payment Delay,1,0.26

@@ -844,6 +844,8 @@ hostname than `OUTREACH_PUBLIC_BASE_URL`.
   counts; `bin/possibleos reviews queue --limit N` incrementally queues
   canonical firms, and `--include-researched` revisits low-coverage firms.
   `bin/possibleos reviews classify` backfills the versioned operational labels.
+  After both gates pass, `bin/possibleos reviews analyze --snapshot-at <UTC-ISO>`
+  freezes denominators and writes the rerunnable aggregate plus eight chart CSVs.
   Extraction emits the **v2 review-intelligence** schema: a list of typed
   evidence items (`kind` ∈ complaint/praise/fact/request/outcome, open `theme`,
   verbatim `quote`, `sentiment`, `confidence`, `outreach_usable`) + a

@@ -1,0 +1,13 @@
+key,label,count,percent
+unknown,Unknown,3844,52.51
+settlement,Settlement,1455,19.88
+case_management,Case Management,1120,15.3
+medical_treatment,Medical Treatment,886,12.1
+negotiation,Negotiation,784,10.71
+litigation,Litigation,418,5.71
+initial_contact,Initial Contact,397,5.42
+disbursement,Disbursement,312,4.26
+intake,Intake,239,3.27
+case_evaluation,Case Evaluation,18,0.25
+signing_and_handoff,Signing And Handoff,10,0.14
+post_case,Post Case,5,0.07

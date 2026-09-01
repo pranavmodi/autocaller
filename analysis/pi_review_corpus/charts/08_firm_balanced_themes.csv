@@ -1,0 +1,39 @@
+type,key,label,firm_balanced_percent
+praise_drivers,clear_explanations,Clear Explanations,0.25
+praise_drivers,easy_to_reach,Easy To Reach,0.17
+praise_drivers,effective_medical_coordination,Effective Medical Coordination,12.05
+praise_drivers,fast_initial_response,Fast Initial Response,0.08
+praise_drivers,faster_than_expected,Faster Than Expected,0.05
+praise_drivers,felt_cared_for,Felt Cared For,45.98
+praise_drivers,frequent_updates,Frequent Updates,29.54
+praise_drivers,smooth_process,Smooth Process,0.3
+praise_drivers,specific_employee_excellence,Specific Employee Excellence,0.47
+praise_drivers,staff_went_beyond_role,Staff Went Beyond Role,0.2
+praise_drivers,strong_outcome,Strong Outcome,34.64
+praise_drivers,transparent_fees,Transparent Fees,0.01
+failure_modes,attorney_unreachable,Attorney Unreachable,0.83
+failure_modes,case_dropped_or_rejected,Case Dropped Or Rejected,0.68
+failure_modes,client_did_not_understand_process,Client Did Not Understand Process,0.77
+failure_modes,medical_coordination_failure,Medical Coordination Failure,1.42
+failure_modes,no_callback,No Callback,2.26
+failure_modes,payment_delay,Payment Delay,0.09
+failure_modes,poor_handoff_after_signing,Poor Handoff After Signing,0.66
+failure_modes,promised_action_not_completed,Promised Action Not Completed,0.4
+failure_modes,rude_or_dismissive_treatment,Rude Or Dismissive Treatment,11.83
+failure_modes,settlement_expectation_mismatch,Settlement Expectation Mismatch,0.75
+failure_modes,staff_turnover,Staff Turnover,0.57
+failure_modes,status_silence,Status Silence,4.91
+failure_modes,unclear_case_owner,Unclear Case Owner,0.42
+failure_modes,unexpected_delay,Unexpected Delay,15.68
+failure_modes,unexpected_fee_or_deduction,Unexpected Fee Or Deduction,1.9
+journey_stages,case_evaluation,Case Evaluation,0.12
+journey_stages,case_management,Case Management,14.02
+journey_stages,disbursement,Disbursement,4.09
+journey_stages,initial_contact,Initial Contact,4.91
+journey_stages,intake,Intake,3.15
+journey_stages,litigation,Litigation,5.78
+journey_stages,medical_treatment,Medical Treatment,11.82
+journey_stages,negotiation,Negotiation,10.37
+journey_stages,post_case,Post Case,0.05
+journey_stages,settlement,Settlement,18.93
+journey_stages,signing_and_handoff,Signing And Handoff,0.08

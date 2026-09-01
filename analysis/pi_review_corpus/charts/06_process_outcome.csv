@@ -1,0 +1,10 @@
+process_satisfaction,outcome_satisfaction,count,percent
+mixed,positive,1,0.01
+mixed,unknown,1,0.01
+negative,negative,76,1.04
+negative,unknown,305,4.17
+neutral,neutral,2,0.03
+neutral,unknown,14,0.19
+positive,positive,1231,16.82
+positive,unknown,5687,77.69
+unknown,unknown,3,0.04

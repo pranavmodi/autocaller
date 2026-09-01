@@ -9086,6 +9086,20 @@ def reviews_queue(
     )))
 
 
+@reviews_app.command("analyze")
+def reviews_analyze(
+    snapshot_at: str = typer.Option(..., "--snapshot-at", help="UTC ISO timestamp that freezes the corpus."),
+    output_dir: str = typer.Option("analysis/pi_review_corpus", "--output-dir", help="Aggregate export directory."),
+):
+    """Generate the versioned aggregate and eight chart datasets after both corpus gates pass."""
+    script = Path(__file__).resolve().parents[1] / "scripts" / "analyze_pi_review_corpus.py"
+    completed = subprocess.run(
+        [sys.executable, str(script), "--snapshot-at", snapshot_at, "--output-dir", output_dir],
+        check=False,
+    )
+    raise typer.Exit(completed.returncode)
+
+
 _DECISION_AREAS = {"lead-gen", "deliverability", "data-arch", "website", "infra", "process", "product"}
 
 

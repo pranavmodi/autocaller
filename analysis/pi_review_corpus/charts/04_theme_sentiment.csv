@@ -1,0 +1,44 @@
+sentiment,key,label,count,percent
+positive,referral_willingness,Referral Willingness,4354,62.92
+positive,empathy_and_respect,Empathy And Respect,3303,47.73
+positive,professionalism,Professionalism,3300,47.69
+positive,attorney_accessibility,Attorney Accessibility,2927,42.3
+positive,staff_ownership,Staff Ownership,2856,41.27
+positive,explanation,Explanation,2542,36.73
+positive,proactive_updates,Proactive Updates,2181,31.52
+positive,technology_experience,Technology Experience,1928,27.86
+positive,paperwork,Paperwork,1421,20.53
+positive,fees_and_deductions,Fees And Deductions,1218,17.6
+positive,settlement_process,Settlement Process,1197,17.3
+positive,response_speed,Response Speed,1113,16.08
+positive,medical_coordination,Medical Coordination,866,12.51
+positive,case_duration,Case Duration,796,11.5
+positive,settlement_amount,Settlement Amount,588,8.5
+positive,expectation_setting,Expectation Setting,456,6.59
+positive,case_manager_accessibility,Case Manager Accessibility,264,3.82
+positive,payment_delivery,Payment Delivery,255,3.68
+positive,returned_calls,Returned Calls,164,2.37
+positive,language_accessibility,Language Accessibility,39,0.56
+positive,staff_continuity,Staff Continuity,2,0.03
+negative,attorney_accessibility,Attorney Accessibility,172,44.91
+negative,case_duration,Case Duration,154,40.21
+negative,technology_experience,Technology Experience,129,33.68
+negative,proactive_updates,Proactive Updates,120,31.33
+negative,paperwork,Paperwork,106,27.68
+negative,empathy_and_respect,Empathy And Respect,104,27.15
+negative,settlement_amount,Settlement Amount,103,26.89
+negative,referral_willingness,Referral Willingness,97,25.33
+negative,professionalism,Professionalism,90,23.5
+negative,fees_and_deductions,Fees And Deductions,83,21.67
+negative,explanation,Explanation,83,21.67
+negative,medical_coordination,Medical Coordination,73,19.06
+negative,settlement_process,Settlement Process,61,15.93
+negative,payment_delivery,Payment Delivery,48,12.53
+negative,returned_calls,Returned Calls,42,10.97
+negative,staff_ownership,Staff Ownership,39,10.18
+negative,response_speed,Response Speed,34,8.88
+negative,case_manager_accessibility,Case Manager Accessibility,34,8.88
+negative,expectation_setting,Expectation Setting,15,3.92
+negative,internal_handoffs,Internal Handoffs,8,2.09
+negative,language_accessibility,Language Accessibility,6,1.57
+negative,staff_continuity,Staff Continuity,4,1.04

@@ -1,0 +1,813 @@
+{
+  "analysis_version": "pi_review_analysis_v1",
+  "classification_version": "pi_reviews_v1",
+  "snapshot_at": "2026-09-01T07:28:42+00:00",
+  "generated_at": "2026-09-01T08:30:17.198265+00:00",
+  "target_distinct_reviews": 5000,
+  "gate_met": true,
+  "corpus": {
+    "raw_rows_examined": 7383,
+    "deduplicated_records": 0,
+    "excluded_after_snapshot": 0,
+    "distinct_before_republication_exclusion": 7383,
+    "cross_source_republications_excluded": 0,
+    "included_distinct_reviews": 7383,
+    "included_firms": 1002,
+    "independent_reviews": 7320,
+    "independent_firms": 1002,
+    "classified_reviews": 7383,
+    "unclassified_reviews": 0,
+    "source_groups": {
+      "independent": 7320,
+      "curated_testimonial": 30,
+      "aggregator": 33
+    },
+    "source_distribution": {
+      "google": 7197,
+      "avvo": 27,
+      "official_testimonials": 23,
+      "bbb": 47,
+      "lawyers.com": 1,
+      "birdeye": 19,
+      "official_website": 7,
+      "bestprosintown": 2,
+      "facebook": 12,
+      "findlaw": 1,
+      "reviews.io": 25,
+      "trustpilot": 2,
+      "martindale": 1,
+      "yelp": 7,
+      "lawyer_com": 5,
+      "attorneyatlaw": 2,
+      "revdex": 2,
+      "trustanalytica": 2,
+      "legaldirectorate": 1
+    }
+  },
+  "primary_denominator": {
+    "description": "Distinct independent-source reviews with pi_reviews_v1 classifications",
+    "reviews": 7320,
+    "firms": 1002
+  },
+  "sentiment_band_denominators": {
+    "positive_reviews": 6920,
+    "negative_or_mixed_reviews": 383
+  },
+  "sentiment_distribution": {
+    "positive": 6920,
+    "negative": 381,
+    "neutral": 17,
+    "mixed": 2
+  },
+  "rating_distribution": {
+    "5": 6784,
+    "1": 337,
+    "2": 29,
+    "missing": 109,
+    "4": 43,
+    "3": 18
+  },
+  "praise_drivers": [
+    {
+      "key": "felt_cared_for",
+      "label": "Felt Cared For",
+      "count": 3316,
+      "percent": 47.92
+    },
+    {
+      "key": "strong_outcome",
+      "label": "Strong Outcome",
+      "count": 2477,
+      "percent": 35.79
+    },
+    {
+      "key": "frequent_updates",
+      "label": "Frequent Updates",
+      "count": 2176,
+      "percent": 31.45
+    },
+    {
+      "key": "effective_medical_coordination",
+      "label": "Effective Medical Coordination",
+      "count": 865,
+      "percent": 12.5
+    },
+    {
+      "key": "smooth_process",
+      "label": "Smooth Process",
+      "count": 40,
+      "percent": 0.58
+    },
+    {
+      "key": "specific_employee_excellence",
+      "label": "Specific Employee Excellence",
+      "count": 38,
+      "percent": 0.55
+    },
+    {
+      "key": "clear_explanations",
+      "label": "Clear Explanations",
+      "count": 34,
+      "percent": 0.49
+    },
+    {
+      "key": "easy_to_reach",
+      "label": "Easy To Reach",
+      "count": 25,
+      "percent": 0.36
+    },
+    {
+      "key": "staff_went_beyond_role",
+      "label": "Staff Went Beyond Role",
+      "count": 20,
+      "percent": 0.29
+    },
+    {
+      "key": "fast_initial_response",
+      "label": "Fast Initial Response",
+      "count": 12,
+      "percent": 0.17
+    },
+    {
+      "key": "faster_than_expected",
+      "label": "Faster Than Expected",
+      "count": 5,
+      "percent": 0.07
+    },
+    {
+      "key": "transparent_fees",
+      "label": "Transparent Fees",
+      "count": 4,
+      "percent": 0.06
+    }
+  ],
+  "failure_modes": [
+    {
+      "key": "unexpected_delay",
+      "label": "Unexpected Delay",
+      "count": 64,
+      "percent": 16.71
+    },
+    {
+      "key": "rude_or_dismissive_treatment",
+      "label": "Rude Or Dismissive Treatment",
+      "count": 50,
+      "percent": 13.05
+    },
+    {
+      "key": "status_silence",
+      "label": "Status Silence",
+      "count": 23,
+      "percent": 6.01
+    },
+    {
+      "key": "no_callback",
+      "label": "No Callback",
+      "count": 13,
+      "percent": 3.39
+    },
+    {
+      "key": "unexpected_fee_or_deduction",
+      "label": "Unexpected Fee Or Deduction",
+      "count": 12,
+      "percent": 3.13
+    },
+    {
+      "key": "medical_coordination_failure",
+      "label": "Medical Coordination Failure",
+      "count": 10,
+      "percent": 2.61
+    },
+    {
+      "key": "settlement_expectation_mismatch",
+      "label": "Settlement Expectation Mismatch",
+      "count": 8,
+      "percent": 2.09
+    },
+    {
+      "key": "poor_handoff_after_signing",
+      "label": "Poor Handoff After Signing",
+      "count": 6,
+      "percent": 1.57
+    },
+    {
+      "key": "attorney_unreachable",
+      "label": "Attorney Unreachable",
+      "count": 6,
+      "percent": 1.57
+    },
+    {
+      "key": "client_did_not_understand_process",
+      "label": "Client Did Not Understand Process",
+      "count": 6,
+      "percent": 1.57
+    },
+    {
+      "key": "staff_turnover",
+      "label": "Staff Turnover",
+      "count": 5,
+      "percent": 1.31
+    },
+    {
+      "key": "case_dropped_or_rejected",
+      "label": "Case Dropped Or Rejected",
+      "count": 5,
+      "percent": 1.31
+    },
+    {
+      "key": "unclear_case_owner",
+      "label": "Unclear Case Owner",
+      "count": 4,
+      "percent": 1.04
+    },
+    {
+      "key": "promised_action_not_completed",
+      "label": "Promised Action Not Completed",
+      "count": 4,
+      "percent": 1.04
+    },
+    {
+      "key": "payment_delay",
+      "label": "Payment Delay",
+      "count": 1,
+      "percent": 0.26
+    }
+  ],
+  "positive_themes": [
+    {
+      "key": "referral_willingness",
+      "label": "Referral Willingness",
+      "count": 4354,
+      "percent": 62.92
+    },
+    {
+      "key": "empathy_and_respect",
+      "label": "Empathy And Respect",
+      "count": 3303,
+      "percent": 47.73
+    },
+    {
+      "key": "professionalism",
+      "label": "Professionalism",
+      "count": 3300,
+      "percent": 47.69
+    },
+    {
+      "key": "attorney_accessibility",
+      "label": "Attorney Accessibility",
+      "count": 2927,
+      "percent": 42.3
+    },
+    {
+      "key": "staff_ownership",
+      "label": "Staff Ownership",
+      "count": 2856,
+      "percent": 41.27
+    },
+    {
+      "key": "explanation",
+      "label": "Explanation",
+      "count": 2542,
+      "percent": 36.73
+    },
+    {
+      "key": "proactive_updates",
+      "label": "Proactive Updates",
+      "count": 2181,
+      "percent": 31.52
+    },
+    {
+      "key": "technology_experience",
+      "label": "Technology Experience",
+      "count": 1928,
+      "percent": 27.86
+    },
+    {
+      "key": "paperwork",
+      "label": "Paperwork",
+      "count": 1421,
+      "percent": 20.53
+    },
+    {
+      "key": "fees_and_deductions",
+      "label": "Fees And Deductions",
+      "count": 1218,
+      "percent": 17.6
+    },
+    {
+      "key": "settlement_process",
+      "label": "Settlement Process",
+      "count": 1197,
+      "percent": 17.3
+    },
+    {
+      "key": "response_speed",
+      "label": "Response Speed",
+      "count": 1113,
+      "percent": 16.08
+    },
+    {
+      "key": "medical_coordination",
+      "label": "Medical Coordination",
+      "count": 866,
+      "percent": 12.51
+    },
+    {
+      "key": "case_duration",
+      "label": "Case Duration",
+      "count": 796,
+      "percent": 11.5
+    },
+    {
+      "key": "settlement_amount",
+      "label": "Settlement Amount",
+      "count": 588,
+      "percent": 8.5
+    },
+    {
+      "key": "expectation_setting",
+      "label": "Expectation Setting",
+      "count": 456,
+      "percent": 6.59
+    },
+    {
+      "key": "case_manager_accessibility",
+      "label": "Case Manager Accessibility",
+      "count": 264,
+      "percent": 3.82
+    },
+    {
+      "key": "payment_delivery",
+      "label": "Payment Delivery",
+      "count": 255,
+      "percent": 3.68
+    },
+    {
+      "key": "returned_calls",
+      "label": "Returned Calls",
+      "count": 164,
+      "percent": 2.37
+    },
+    {
+      "key": "language_accessibility",
+      "label": "Language Accessibility",
+      "count": 39,
+      "percent": 0.56
+    },
+    {
+      "key": "staff_continuity",
+      "label": "Staff Continuity",
+      "count": 2,
+      "percent": 0.03
+    }
+  ],
+  "negative_themes": [
+    {
+      "key": "attorney_accessibility",
+      "label": "Attorney Accessibility",
+      "count": 172,
+      "percent": 44.91
+    },
+    {
+      "key": "case_duration",
+      "label": "Case Duration",
+      "count": 154,
+      "percent": 40.21
+    },
+    {
+      "key": "technology_experience",
+      "label": "Technology Experience",
+      "count": 129,
+      "percent": 33.68
+    },
+    {
+      "key": "proactive_updates",
+      "label": "Proactive Updates",
+      "count": 120,
+      "percent": 31.33
+    },
+    {
+      "key": "paperwork",
+      "label": "Paperwork",
+      "count": 106,
+      "percent": 27.68
+    },
+    {
+      "key": "empathy_and_respect",
+      "label": "Empathy And Respect",
+      "count": 104,
+      "percent": 27.15
+    },
+    {
+      "key": "settlement_amount",
+      "label": "Settlement Amount",
+      "count": 103,
+      "percent": 26.89
+    },
+    {
+      "key": "referral_willingness",
+      "label": "Referral Willingness",
+      "count": 97,
+      "percent": 25.33
+    },
+    {
+      "key": "professionalism",
+      "label": "Professionalism",
+      "count": 90,
+      "percent": 23.5
+    },
+    {
+      "key": "fees_and_deductions",
+      "label": "Fees And Deductions",
+      "count": 83,
+      "percent": 21.67
+    },
+    {
+      "key": "explanation",
+      "label": "Explanation",
+      "count": 83,
+      "percent": 21.67
+    },
+    {
+      "key": "medical_coordination",
+      "label": "Medical Coordination",
+      "count": 73,
+      "percent": 19.06
+    },
+    {
+      "key": "settlement_process",
+      "label": "Settlement Process",
+      "count": 61,
+      "percent": 15.93
+    },
+    {
+      "key": "payment_delivery",
+      "label": "Payment Delivery",
+      "count": 48,
+      "percent": 12.53
+    },
+    {
+      "key": "returned_calls",
+      "label": "Returned Calls",
+      "count": 42,
+      "percent": 10.97
+    },
+    {
+      "key": "staff_ownership",
+      "label": "Staff Ownership",
+      "count": 39,
+      "percent": 10.18
+    },
+    {
+      "key": "response_speed",
+      "label": "Response Speed",
+      "count": 34,
+      "percent": 8.88
+    },
+    {
+      "key": "case_manager_accessibility",
+      "label": "Case Manager Accessibility",
+      "count": 34,
+      "percent": 8.88
+    },
+    {
+      "key": "expectation_setting",
+      "label": "Expectation Setting",
+      "count": 15,
+      "percent": 3.92
+    },
+    {
+      "key": "internal_handoffs",
+      "label": "Internal Handoffs",
+      "count": 8,
+      "percent": 2.09
+    },
+    {
+      "key": "language_accessibility",
+      "label": "Language Accessibility",
+      "count": 6,
+      "percent": 1.57
+    },
+    {
+      "key": "staff_continuity",
+      "label": "Staff Continuity",
+      "count": 4,
+      "percent": 1.04
+    }
+  ],
+  "journey_stages": [
+    {
+      "key": "unknown",
+      "label": "Unknown",
+      "count": 3844,
+      "percent": 52.51
+    },
+    {
+      "key": "settlement",
+      "label": "Settlement",
+      "count": 1455,
+      "percent": 19.88
+    },
+    {
+      "key": "case_management",
+      "label": "Case Management",
+      "count": 1120,
+      "percent": 15.3
+    },
+    {
+      "key": "medical_treatment",
+      "label": "Medical Treatment",
+      "count": 886,
+      "percent": 12.1
+    },
+    {
+      "key": "negotiation",
+      "label": "Negotiation",
+      "count": 784,
+      "percent": 10.71
+    },
+    {
+      "key": "litigation",
+      "label": "Litigation",
+      "count": 418,
+      "percent": 5.71
+    },
+    {
+      "key": "initial_contact",
+      "label": "Initial Contact",
+      "count": 397,
+      "percent": 5.42
+    },
+    {
+      "key": "disbursement",
+      "label": "Disbursement",
+      "count": 312,
+      "percent": 4.26
+    },
+    {
+      "key": "intake",
+      "label": "Intake",
+      "count": 239,
+      "percent": 3.27
+    },
+    {
+      "key": "case_evaluation",
+      "label": "Case Evaluation",
+      "count": 18,
+      "percent": 0.25
+    },
+    {
+      "key": "signing_and_handoff",
+      "label": "Signing And Handoff",
+      "count": 10,
+      "percent": 0.14
+    },
+    {
+      "key": "post_case",
+      "label": "Post Case",
+      "count": 5,
+      "percent": 0.07
+    }
+  ],
+  "staff_roles": [
+    {
+      "key": "firm_generally",
+      "label": "Firm Generally",
+      "count": 4039,
+      "percent": 55.18
+    },
+    {
+      "key": "attorney",
+      "label": "Attorney",
+      "count": 3123,
+      "percent": 42.66
+    },
+    {
+      "key": "unknown",
+      "label": "Unknown",
+      "count": 1691,
+      "percent": 23.1
+    },
+    {
+      "key": "case_manager",
+      "label": "Case Manager",
+      "count": 212,
+      "percent": 2.9
+    },
+    {
+      "key": "paralegal",
+      "label": "Paralegal",
+      "count": 103,
+      "percent": 1.41
+    },
+    {
+      "key": "receptionist",
+      "label": "Receptionist",
+      "count": 68,
+      "percent": 0.93
+    },
+    {
+      "key": "intake_specialist",
+      "label": "Intake Specialist",
+      "count": 40,
+      "percent": 0.55
+    },
+    {
+      "key": "medical_coordinator",
+      "label": "Medical Coordinator",
+      "count": 3,
+      "percent": 0.04
+    },
+    {
+      "key": "settlement_team",
+      "label": "Settlement Team",
+      "count": 2,
+      "percent": 0.03
+    }
+  ],
+  "actionability": [
+    {
+      "key": "directly_controllable",
+      "label": "Directly Controllable",
+      "count": 7085,
+      "percent": 96.79
+    },
+    {
+      "key": "unclear",
+      "label": "Unclear",
+      "count": 212,
+      "percent": 2.9
+    },
+    {
+      "key": "outcome_dependent",
+      "label": "Outcome Dependent",
+      "count": 51,
+      "percent": 0.7
+    },
+    {
+      "key": "partially_controllable",
+      "label": "Partially Controllable",
+      "count": 23,
+      "percent": 0.31
+    }
+  ],
+  "operational_owners": [
+    {
+      "key": "marketing_reputation",
+      "label": "Marketing Reputation",
+      "count": 6972,
+      "percent": 95.25
+    },
+    {
+      "key": "settlement",
+      "label": "Settlement",
+      "count": 1448,
+      "percent": 19.78
+    },
+    {
+      "key": "case_management",
+      "label": "Case Management",
+      "count": 1115,
+      "percent": 15.23
+    },
+    {
+      "key": "medical_coordination",
+      "label": "Medical Coordination",
+      "count": 882,
+      "percent": 12.05
+    },
+    {
+      "key": "intake",
+      "label": "Intake",
+      "count": 569,
+      "percent": 7.77
+    },
+    {
+      "key": "legal",
+      "label": "Legal",
+      "count": 73,
+      "percent": 1.0
+    },
+    {
+      "key": "leadership",
+      "label": "Leadership",
+      "count": 46,
+      "percent": 0.63
+    },
+    {
+      "key": "finance",
+      "label": "Finance",
+      "count": 18,
+      "percent": 0.25
+    }
+  ],
+  "process_outcome_matrix": [
+    {
+      "process_satisfaction": "mixed",
+      "outcome_satisfaction": "positive",
+      "count": 1,
+      "percent": 0.01
+    },
+    {
+      "process_satisfaction": "mixed",
+      "outcome_satisfaction": "unknown",
+      "count": 1,
+      "percent": 0.01
+    },
+    {
+      "process_satisfaction": "negative",
+      "outcome_satisfaction": "negative",
+      "count": 76,
+      "percent": 1.04
+    },
+    {
+      "process_satisfaction": "negative",
+      "outcome_satisfaction": "unknown",
+      "count": 305,
+      "percent": 4.17
+    },
+    {
+      "process_satisfaction": "neutral",
+      "outcome_satisfaction": "neutral",
+      "count": 2,
+      "percent": 0.03
+    },
+    {
+      "process_satisfaction": "neutral",
+      "outcome_satisfaction": "unknown",
+      "count": 14,
+      "percent": 0.19
+    },
+    {
+      "process_satisfaction": "positive",
+      "outcome_satisfaction": "positive",
+      "count": 1231,
+      "percent": 16.82
+    },
+    {
+      "process_satisfaction": "positive",
+      "outcome_satisfaction": "unknown",
+      "count": 5687,
+      "percent": 77.69
+    },
+    {
+      "process_satisfaction": "unknown",
+      "outcome_satisfaction": "unknown",
+      "count": 3,
+      "percent": 0.04
+    }
+  ],
+  "firm_balanced": {
+    "praise_drivers": {
+      "clear_explanations": 0.25,
+      "easy_to_reach": 0.17,
+      "effective_medical_coordination": 12.05,
+      "fast_initial_response": 0.08,
+      "faster_than_expected": 0.05,
+      "felt_cared_for": 45.98,
+      "frequent_updates": 29.54,
+      "smooth_process": 0.3,
+      "specific_employee_excellence": 0.47,
+      "staff_went_beyond_role": 0.2,
+      "strong_outcome": 34.64,
+      "transparent_fees": 0.01
+    },
+    "failure_modes": {
+      "attorney_unreachable": 0.83,
+      "case_dropped_or_rejected": 0.68,
+      "client_did_not_understand_process": 0.77,
+      "medical_coordination_failure": 1.42,
+      "no_callback": 2.26,
+      "payment_delay": 0.09,
+      "poor_handoff_after_signing": 0.66,
+      "promised_action_not_completed": 0.4,
+      "rude_or_dismissive_treatment": 11.83,
+      "settlement_expectation_mismatch": 0.75,
+      "staff_turnover": 0.57,
+      "status_silence": 4.91,
+      "unclear_case_owner": 0.42,
+      "unexpected_delay": 15.68,
+      "unexpected_fee_or_deduction": 1.9
+    },
+    "journey_stages": {
+      "case_evaluation": 0.12,
+      "case_management": 14.02,
+      "disbursement": 4.09,
+      "initial_contact": 4.91,
+      "intake": 3.15,
+      "litigation": 5.78,
+      "medical_treatment": 11.82,
+      "negotiation": 10.37,
+      "post_case": 0.05,
+      "settlement": 18.93,
+      "signing_and_handoff": 0.08
+    }
+  },
+  "limitations": [
+    "Public reviews are self-selected and do not represent every client experience.",
+    "Google supplies most records; Yelp and several other sources are underrepresented.",
+    "The current classification version is primarily a deterministic rules baseline and may miss implicit themes.",
+    "Associations describe what reviewers mention; they do not establish causation.",
+    "Firm size, case outcome, staff role, and journey stage are reported only when the review or classification explicitly supports them."
+  ]
+}
