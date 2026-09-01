@@ -27,7 +27,9 @@ from app.services.pifstats_sync import sync_pifstats_to_patients
 from app.services.review_extraction import auto_extract_enabled, ensure_review_extracted
 from app.services.firm_review_research import (
     FirmReviewResearchError,
+    get_review_corpus_progress,
     get_firm_review_research_status,
+    queue_firm_review_campaign,
     start_firm_review_research,
 )
 
@@ -400,6 +402,22 @@ async def review_research_status(task_id: str) -> dict[str, Any]:
     except FirmReviewResearchError as exc:
         status_code = exc.status_code if exc.status_code == 404 else 502
         raise HTTPException(status_code=status_code, detail=exc.detail) from exc
+
+
+@router.get("/review-corpus/progress")
+async def review_corpus_progress() -> dict[str, Any]:
+    return await get_review_corpus_progress()
+
+
+@router.post("/review-corpus/queue")
+async def queue_review_corpus_campaign(
+    limit: int = 500,
+    include_researched: bool = False,
+) -> dict[str, Any]:
+    return await queue_firm_review_campaign(
+        limit=limit,
+        include_researched=include_researched,
+    )
 
 
 @router.put("/{pif_id}/reviews", response_model=ReviewsResponse)

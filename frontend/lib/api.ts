@@ -1672,6 +1672,23 @@ export const startFirmReviewResearch = (pifId: string) =>
 export const getFirmReviewResearchStatus = (taskId: string) =>
   get<FirmReviewResearchStatus>(`/api/firms/review-research-status/${encodeURIComponent(taskId)}`);
 
+export type ReviewCorpusProgress = {
+  target_distinct_reviews: number;
+  raw_reviews: number;
+  distinct_reviews: number;
+  independent_distinct_reviews: number;
+  classified_reviews: number;
+  unclassified_reviews: number;
+  firms_with_reviews: number;
+  source_distribution: Record<string, number>;
+  task_counts: Record<string, number>;
+  progress_percent: number;
+  gate_met: boolean;
+};
+
+export const getReviewCorpusProgress = () =>
+  get<ReviewCorpusProgress>("/api/firms/review-corpus/progress");
+
 
 // Force-pull researched firms from PIF Stats into the local patients
 // table. Returns counts; the same op the background loop runs every

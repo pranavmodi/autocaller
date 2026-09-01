@@ -48,7 +48,7 @@ carrier_app = typer.Typer(help="Inspect the active telephony carrier account (Tw
 prompts_app = typer.Typer(help="Prompt-style selector (current | minimal). Parallel prompt versions.", no_args_is_help=True)
 email_app = typer.Typer(help="Outbound email — config check + manual sends (test, one-pager, VM follow-up, consult).", no_args_is_help=True)
 pif_app = typer.Typer(help="Native PI-firm directory — pull EmailTag firm-intel v2 into possibleos.", no_args_is_help=True)
-reviews_app = typer.Typer(help="Yelp-review extraction — turn pasted raw reviews into citable pain-point quotes.", no_args_is_help=True)
+reviews_app = typer.Typer(help="Collect, classify, and analyze source-backed public firm reviews.", no_args_is_help=True)
 decisions_app = typer.Typer(help="Append/read the repo decision log (docs/decisions/<UTC-date>.md). Format: docs/decisions/README.md.", no_args_is_help=True)
 comms_app = typer.Typer(help="Outbound communications dashboard — calls, voicemails, SMS, emails (read-only).", no_args_is_help=True)
 contacts_app = typer.Typer(help="Per-firm contact roster (backfill from PIF Stats + patients).", no_args_is_help=True)
@@ -9060,6 +9060,30 @@ def reviews_classify(
     from app.services.firm_review_classification import backfill_review_classifications
 
     console.print_json(data=_asyncio.run(backfill_review_classifications(force=force)))
+
+
+@reviews_app.command("progress")
+def reviews_progress():
+    """Show live corpus counts, source mix, queue state, and progress to 5,000."""
+    import asyncio as _asyncio
+    from app.services.firm_review_research import get_review_corpus_progress
+
+    console.print_json(data=_asyncio.run(get_review_corpus_progress()))
+
+
+@reviews_app.command("queue")
+def reviews_queue(
+    limit: int = typer.Option(500, min=1, max=5_000, help="Maximum firms to queue."),
+    include_researched: bool = typer.Option(False, help="Also revisit completed firms, prioritizing low review counts."),
+):
+    """Bulk-queue canonical PI firms for incremental public-review collection."""
+    import asyncio as _asyncio
+    from app.services.firm_review_research import queue_firm_review_campaign
+
+    console.print_json(data=_asyncio.run(queue_firm_review_campaign(
+        limit=limit,
+        include_researched=include_researched,
+    )))
 
 
 _DECISION_AREAS = {"lead-gen", "deliverability", "data-arch", "website", "infra", "process", "product"}

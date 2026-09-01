@@ -29,6 +29,10 @@ SKILL_PATH = Path(__file__).resolve().parents[1] / "skills/firm-review-research/
 OPEN_STATUSES = {"queued", "in_progress"}
 LOCAL_RESEARCH_PROVIDER = "possibleos_openclaw"
 MAX_REVIEWS_PER_SOURCE = 1_000
+INDEPENDENT_REVIEW_SOURCES = {
+    "google", "yelp", "avvo", "bbb", "facebook", "reviews.io",
+    "trustpilot", "martindale", "lawyers.com",
+}
 GOOGLE_MAPS_BASE_URL = "https://www.google.com"
 GOOGLE_MAPS_HEADERS = {
     "Accept-Language": "en-US,en;q=0.9",
@@ -88,6 +92,25 @@ def _google_json(response_text: str) -> Any:
     if payload.startswith(")]}'"):
         payload = payload[4:].lstrip()
     return json.loads(payload)
+
+
+async def _get_with_backoff(client: httpx.AsyncClient, url: str) -> httpx.Response:
+    retries = max(1, min(5, int(os.getenv("FIRM_REVIEW_HTTP_RETRIES", "3"))))
+    delay = max(0.0, float(os.getenv("FIRM_REVIEW_REQUEST_DELAY_S", "0.15")))
+    last_response: httpx.Response | None = None
+    for attempt in range(retries):
+        if delay:
+            await asyncio.sleep(delay)
+        response = await client.get(url)
+        last_response = response
+        if response.status_code not in {408, 425, 429, 500, 502, 503, 504}:
+            response.raise_for_status()
+            return response
+        if attempt + 1 < retries:
+            await asyncio.sleep(min(8.0, 0.5 * (2 ** attempt)))
+    assert last_response is not None
+    last_response.raise_for_status()
+    return last_response
 
 
 def _domain(value: str | None) -> str | None:
@@ -195,13 +218,11 @@ async def research_google_maps_reviews(
         follow_redirects=True,
     ) as client:
         search_url = f"{GOOGLE_MAPS_BASE_URL}/maps/search/{quote(query)}?hl=en"
-        search_page = await client.get(search_url)
-        search_page.raise_for_status()
+        search_page = await _get_with_backoff(client, search_url)
         search_href = _first_link_href(search_page.text)
         if not search_href:
             return None
-        search_data = await client.get(urljoin(GOOGLE_MAPS_BASE_URL, search_href))
-        search_data.raise_for_status()
+        search_data = await _get_with_backoff(client, urljoin(GOOGLE_MAPS_BASE_URL, search_href))
         listing = _listing_from_search_payload(_google_json(search_data.text))
         if not listing:
             return None
@@ -215,25 +236,24 @@ async def research_google_maps_reviews(
             )
             return None
         listing_url = f"{GOOGLE_MAPS_BASE_URL}/maps?cid={listing['cid']}&hl=en"
-        profile_page = await client.get(listing_url)
-        profile_page.raise_for_status()
+        profile_page = await _get_with_backoff(client, listing_url)
         profile_href = _first_link_href(profile_page.text)
         if not profile_href:
             return None
-        profile_data = await client.get(urljoin(GOOGLE_MAPS_BASE_URL, profile_href))
-        profile_data.raise_for_status()
+        profile_data = await _get_with_backoff(client, urljoin(GOOGLE_MAPS_BASE_URL, profile_href))
         reviews = _reviews_from_profile_payload(_google_json(profile_data.text), listing_url)
     if not reviews:
         return None
-    return {
-        "sources": [{
+    normalized_sources = normalize_review_sources([{
             "source": "google",
             "listing_url": listing_url,
             "coverage_note": (
                 f"Collected {len(reviews)} complete public reviews exposed by the live Google Maps profile payload."
             ),
             "reviews": reviews,
-        }],
+        }])
+    return {
+        "sources": normalized_sources,
         "review_count": len(reviews),
         "source_count": 1,
         "coverage_note": "Google Maps was checked directly; its public profile payload exposes a bounded review sample.",
@@ -242,11 +262,34 @@ async def research_google_maps_reviews(
     }
 
 
-def normalize_review_sources(raw_sources: Any) -> list[dict[str, Any]]:
+def _normalized_text(value: Any) -> str:
+    return re.sub(r"\s+", " ", str(value or "")).strip().casefold()
+
+
+def _review_text_hash(text: Any) -> str:
+    return hashlib.sha256(_normalized_text(text).encode("utf-8")).hexdigest()
+
+
+def _review_key(source: str, listing_url: str, review: dict[str, Any]) -> tuple[str, ...]:
+    return (
+        source.casefold(),
+        listing_url.lower().rstrip("/"),
+        _normalized_text(review.get("reviewer_name")),
+        str(review.get("review_date") or ""),
+        str(review.get("text_hash") or _review_text_hash(review.get("text"))),
+    )
+
+
+def normalize_review_sources(
+    raw_sources: Any,
+    *,
+    collected_at: str | None = None,
+) -> list[dict[str, Any]]:
     """Keep only public, source-backed, verbatim review records."""
     if not isinstance(raw_sources, list):
         return []
     sources: list[dict[str, Any]] = []
+    collected_at = collected_at or _utcnow().isoformat()
     seen_reviews: set[tuple[str, str, str]] = set()
     for raw_source in raw_sources:
         if not isinstance(raw_source, dict):
@@ -282,6 +325,8 @@ def normalize_review_sources(raw_sources: Any) -> list[dict[str, Any]]:
                 "review_date": _valid_date(raw_review.get("review_date")),
                 "text": text[:20_000],
                 "review_url": review_url,
+                "text_hash": _review_text_hash(text[:20_000]),
+                "collected_at": str(raw_review.get("collected_at") or collected_at),
             })
         sources.append({
             "source": source,
@@ -292,20 +337,107 @@ def normalize_review_sources(raw_sources: Any) -> list[dict[str, Any]]:
     return sources
 
 
+def merge_review_payloads(
+    existing: dict[str, Any] | None,
+    incoming: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, int]]:
+    """Merge a research result without deleting previously collected evidence."""
+    prior = existing if isinstance(existing, dict) else {}
+    merged_sources: list[dict[str, Any]] = []
+    source_index: dict[tuple[str, str], dict[str, Any]] = {}
+    review_index: dict[tuple[str, ...], dict[str, Any]] = {}
+
+    def absorb(raw_sources: Any, *, preserve_fields: bool) -> None:
+        for raw_source in raw_sources if isinstance(raw_sources, list) else []:
+            if not isinstance(raw_source, dict):
+                continue
+            source = str(raw_source.get("source") or "other").strip().lower()[:64]
+            listing_url = _valid_url(raw_source.get("listing_url"))
+            if not source or not listing_url:
+                continue
+            source_key = (source, listing_url.lower().rstrip("/"))
+            target_source = source_index.get(source_key)
+            if target_source is None:
+                target_source = {
+                    "source": source,
+                    "listing_url": listing_url,
+                    "coverage_note": raw_source.get("coverage_note"),
+                    "reviews": [],
+                }
+                source_index[source_key] = target_source
+                merged_sources.append(target_source)
+            elif raw_source.get("coverage_note"):
+                target_source["coverage_note"] = raw_source.get("coverage_note")
+
+            for raw_review in raw_source.get("reviews") or []:
+                if not isinstance(raw_review, dict) or not str(raw_review.get("text") or "").strip():
+                    continue
+                review = dict(raw_review) if preserve_fields else dict(raw_review)
+                review.setdefault("text_hash", _review_text_hash(review.get("text")))
+                review.setdefault("collected_at", _utcnow().isoformat())
+                key = _review_key(source, listing_url, review)
+                current = review_index.get(key)
+                if current is None:
+                    review_index[key] = review
+                    target_source["reviews"].append(review)
+                else:
+                    for field, value in review.items():
+                        if value is not None and (current.get(field) in (None, "") or field == "classification"):
+                            current[field] = value
+
+    absorb(prior.get("sources"), preserve_fields=True)
+    before = len(review_index)
+    absorb(incoming.get("sources"), preserve_fields=True)
+    after = len(review_index)
+
+    merged = dict(prior)
+    for key, value in incoming.items():
+        if key not in {"sources", "review_count", "source_count"} and value is not None:
+            merged[key] = value
+    merged["sources"] = merged_sources
+    merged["review_count"] = after
+    merged["source_count"] = len(merged_sources)
+    merged["last_merged_at"] = _utcnow().isoformat()
+    classified = sum(
+        1 for source in merged_sources for review in source["reviews"]
+        if isinstance(review.get("classification"), dict)
+    )
+    merged["classified_count"] = classified
+    merged["unclassified_count"] = after - classified
+    if after and classified == after:
+        merged["classification_status"] = "completed"
+    elif after:
+        merged["classification_status"] = "partial"
+    return merged, {
+        "existing_reviews": before,
+        "incoming_reviews": sum(
+            len(source.get("reviews") or [])
+            for source in incoming.get("sources") or []
+            if isinstance(source, dict)
+        ),
+        "reviews_added": after - before,
+        "deduplicated": max(0, before + sum(
+            len(source.get("reviews") or [])
+            for source in incoming.get("sources") or []
+            if isinstance(source, dict)
+        ) - after),
+        "total_reviews": after,
+    }
+
+
 async def research_public_reviews(
     firm_name: str,
     website: str | None,
     address: str | None,
 ) -> dict[str, Any]:
+    google_result: dict[str, Any] | None = None
     try:
         google_result = await research_google_maps_reviews(firm_name, website, address)
-        if google_result is not None:
-            return google_result
     except Exception:
         logger.exception("Direct Google Maps review research failed for %s", firm_name)
 
     if os.getenv("FIRM_REVIEW_OPENCLAW_FALLBACK", "false").strip().lower() not in {"1", "true", "yes", "on"}:
-        return {
+        return google_result or {
             "sources": [],
             "review_count": 0,
             "source_count": 0,
@@ -332,7 +464,7 @@ async def research_public_reviews(
         gateway_user=f"firm-review-research:{session_key}:{uuid.uuid4().hex[:8]}",
     )
     sources = normalize_review_sources(result.parsed.get("sources"))
-    return {
+    supplemental = {
         "sources": sources,
         "review_count": sum(len(source["reviews"]) for source in sources),
         "source_count": len(sources),
@@ -340,6 +472,15 @@ async def research_public_reviews(
         "researched_at": _utcnow().isoformat(),
         "provider": LOCAL_RESEARCH_PROVIDER,
     }
+    if google_result is None:
+        return supplemental
+    merged, _ = merge_review_payloads(google_result, supplemental)
+    merged["provider"] = f"google_maps_public_payload+{LOCAL_RESEARCH_PROVIDER}"
+    merged["coverage_note"] = " ".join(filter(None, [
+        google_result.get("coverage_note"),
+        supplemental.get("coverage_note"),
+    ]))[:4_000]
+    return merged
 
 
 async def start_firm_review_research(pif_id: str) -> dict[str, Any]:
@@ -386,6 +527,173 @@ async def start_firm_review_research(pif_id: str) -> dict[str, Any]:
         "firm_name": firm.firm_name,
         "status": "queued",
         "message": "Queued for local public-review research",
+    }
+
+
+def _payload_review_count(payload: Any) -> int:
+    if not isinstance(payload, dict):
+        return 0
+    return sum(
+        len(source.get("reviews") or [])
+        for source in payload.get("sources") or []
+        if isinstance(source, dict)
+    )
+
+
+def _is_canonical_firm_id(value: Any) -> bool:
+    try:
+        uuid.UUID(str(value))
+        return True
+    except (TypeError, ValueError, AttributeError):
+        return False
+
+
+async def queue_firm_review_campaign(
+    *,
+    limit: int = 500,
+    include_researched: bool = False,
+) -> dict[str, Any]:
+    """Queue canonical firms in the order most likely to expand the corpus."""
+    limit = max(1, min(5_000, int(limit)))
+    async with AsyncSessionLocal() as session:
+        firms = list((await session.execute(
+            select(
+                PifFirmRow.id,
+                PifFirmRow.firm_name,
+                PifFirmRow.website,
+                PifFirmRow.canonical_website,
+                PifFirmRow.entity_type,
+                PifFirmRow.icp_score,
+            )
+        )).all())
+        review_rows = {
+            row.pif_id: row
+            for row in (await session.execute(select(FirmReviewRow))).scalars().all()
+        }
+        task_rows = list(
+            (await session.execute(select(FirmReviewResearchTaskRow))).scalars().all()
+        )
+        active_ids = {row.pif_id for row in task_rows if row.status in OPEN_STATUSES}
+        researched_ids = {row.pif_id for row in task_rows if row.status == "completed"}
+
+        candidates: list[tuple[int, int, int, str, str]] = []
+        for firm_id, raw_firm_name, raw_website, raw_canonical_website, entity_type, icp_score in firms:
+            website = str(raw_canonical_website or raw_website or "").strip()
+            firm_name = str(raw_firm_name or "").strip()
+            if (
+                entity_type not in {"pi_law_firm", "personal_injury_law_firm"}
+                or not _is_canonical_firm_id(firm_id)
+                or not website
+                or not firm_name
+                or firm_id in active_ids
+            ):
+                continue
+            was_researched = firm_id in researched_ids
+            if was_researched and not include_researched:
+                continue
+            review_count = _payload_review_count(
+                review_rows.get(firm_id).reviews_json if review_rows.get(firm_id) else {}
+            )
+            candidates.append((
+                1 if was_researched else 0,
+                review_count,
+                -int(icp_score or 0),
+                firm_name.casefold(),
+                firm_id,
+            ))
+
+        candidates.sort(key=lambda item: item[:3])
+        queued_ids: list[str] = []
+        now = _utcnow()
+        for _, _, _, _, firm_id in candidates[:limit]:
+            review_row = review_rows.get(firm_id)
+            if review_row is None:
+                review_row = FirmReviewRow(pif_id=firm_id)
+                session.add(review_row)
+                review_rows[firm_id] = review_row
+            task_id = f"firm-reviews-{uuid.uuid4().hex}"
+            session.add(FirmReviewResearchTaskRow(
+                task_id=task_id,
+                pif_id=firm_id,
+                status="queued",
+                requested_at=now,
+            ))
+            review_row.review_research_status = "queued"
+            review_row.review_research_provider = LOCAL_RESEARCH_PROVIDER
+            review_row.review_research_error = None
+            review_row.updated_at = now
+            queued_ids.append(firm_id)
+        await session.commit()
+    return {
+        "queued": len(queued_ids),
+        "eligible": len(candidates),
+        "include_researched": include_researched,
+        "sample_pif_ids": queued_ids[:10],
+    }
+
+
+async def get_review_corpus_progress() -> dict[str, Any]:
+    async with AsyncSessionLocal() as session:
+        review_rows = list((await session.execute(select(FirmReviewRow))).scalars().all())
+        tasks = list((await session.execute(select(FirmReviewResearchTaskRow))).scalars().all())
+
+    raw_count = 0
+    distinct_keys: set[tuple[str, ...]] = set()
+    independent_keys: set[tuple[str, ...]] = set()
+    classified_keys: set[tuple[str, ...]] = set()
+    source_counts: dict[str, int] = {}
+    firms_with_reviews: set[str] = set()
+    cross_source_text: dict[tuple[str, str], set[str]] = {}
+    for row in review_rows:
+        payload = row.reviews_json if isinstance(row.reviews_json, dict) else {}
+        for source_block in payload.get("sources") or []:
+            if not isinstance(source_block, dict):
+                continue
+            source = str(source_block.get("source") or "other").strip().lower()
+            listing_url = str(source_block.get("listing_url") or "").strip()
+            for review in source_block.get("reviews") or []:
+                if not isinstance(review, dict) or not str(review.get("text") or "").strip():
+                    continue
+                raw_count += 1
+                text_hash = str(review.get("text_hash") or _review_text_hash(review.get("text")))
+                key = _review_key(source, listing_url, review)
+                distinct_keys.add((row.pif_id, *key))
+                firms_with_reviews.add(row.pif_id)
+                source_counts[source] = source_counts.get(source, 0) + 1
+                cross_source_text.setdefault((row.pif_id, text_hash), set()).add(source)
+                if source in INDEPENDENT_REVIEW_SOURCES:
+                    independent_keys.add((row.pif_id, *key))
+                classification = review.get("classification")
+                if (
+                    isinstance(classification, dict)
+                    and classification.get("classification_version") == "pi_reviews_v1"
+                ):
+                    classified_keys.add((row.pif_id, *key))
+
+    task_counts: dict[str, int] = {}
+    reviews_added = 0
+    for task in tasks:
+        task_counts[task.status] = task_counts.get(task.status, 0) + 1
+        if isinstance(task.result_summary, dict):
+            reviews_added += int(task.result_summary.get("reviews_added") or 0)
+    distinct_count = len(distinct_keys)
+    return {
+        "target_distinct_reviews": 5_000,
+        "raw_reviews": raw_count,
+        "distinct_reviews": distinct_count,
+        "deduplicated_reviews": raw_count - distinct_count,
+        "independent_distinct_reviews": len(independent_keys),
+        "cross_source_republications": sum(1 for sources in cross_source_text.values() if len(sources) > 1),
+        "firms_with_reviews": len(firms_with_reviews),
+        "source_distribution": dict(sorted(source_counts.items(), key=lambda item: (-item[1], item[0]))),
+        "classified_reviews": len(classified_keys),
+        "unclassified_reviews": distinct_count - len(classified_keys),
+        "classification_version": "pi_reviews_v1",
+        "task_counts": task_counts,
+        "reviews_added_by_campaign_tasks": reviews_added,
+        "progress_percent": round(min(100.0, distinct_count / 5_000 * 100), 2),
+        "gate_met": distinct_count >= 5_000,
+        "generated_at": _utcnow().isoformat(),
     }
 
 
@@ -443,12 +751,14 @@ async def _finish_task(task_id: str, *, result: dict[str, Any] | None = None, er
                 "coverage_note": result.get("coverage_note"),
             }
             if review_row is not None:
-                review_row.reviews_json = result
+                merged, merge_summary = merge_review_payloads(review_row.reviews_json, result)
+                review_row.reviews_json = merged
                 review_row.review_research_status = "completed"
                 review_row.review_research_provider = str(result.get("provider") or LOCAL_RESEARCH_PROVIDER)
                 review_row.last_review_researched_at = now
                 review_row.review_research_error = None
                 review_row.updated_at = now
+                task.result_summary.update(merge_summary)
         else:
             task.status = "failed"
             task.result_summary = {"firm_name": firm.firm_name if firm else None, "message": error or "Public review research failed"}

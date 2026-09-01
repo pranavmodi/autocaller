@@ -839,6 +839,11 @@ hostname than `OUTREACH_PUBLIC_BASE_URL`.
   Idempotent (re-extracts only when raw text changes, via `content_hash`).
   Manual: `bin/possibleos reviews extract <pif_id> [--force]` /
   `reviews extract-all-pending`; REST `POST /api/firms/{pif_id}/extract`.
+  Source-backed corpus operations: `bin/possibleos reviews progress` reports
+  raw, distinct, independent, classified, source-mix, queue, and 5,000-gate
+  counts; `bin/possibleos reviews queue --limit N` incrementally queues
+  canonical firms, and `--include-researched` revisits low-coverage firms.
+  `bin/possibleos reviews classify` backfills the versioned operational labels.
   Extraction emits the **v2 review-intelligence** schema: a list of typed
   evidence items (`kind` ∈ complaint/praise/fact/request/outcome, open `theme`,
   verbatim `quote`, `sentiment`, `confidence`, `outreach_usable`) + a

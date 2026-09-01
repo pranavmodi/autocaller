@@ -6,6 +6,7 @@ from app.services.firm_review_research import (
     _domains_match,
     _listing_from_search_payload,
     _reviews_from_profile_payload,
+    merge_review_payloads,
     normalize_review_sources,
 )
 
@@ -47,13 +48,16 @@ def test_normalize_review_sources_preserves_verbatim_text_and_deduplicates():
     assert len(result) == 1
     assert result[0]["source"] == "google"
     assert result[0]["coverage_note"] == "Two public reviews were accessible."
-    assert result[0]["reviews"] == [{
+    review = result[0]["reviews"][0]
+    assert {key: review[key] for key in ("reviewer_name", "rating", "review_date", "text", "review_url")} == {
         "reviewer_name": "Jane D.",
         "rating": 5.0,
         "review_date": "2026-08-30",
         "text": "They kept me informed throughout the case.",
         "review_url": "https://maps.google.com/example/review/1",
-    }]
+    }
+    assert len(review["text_hash"]) == 64
+    assert review["collected_at"]
 
 
 def test_normalize_review_sources_rejects_invalid_rating_and_date():
@@ -134,3 +138,32 @@ def test_review_research_endpoint_queues_local_task(monkeypatch):
 
     assert response.status_code == 200
     assert response.json()["task_id"] == "firm-reviews-task-1"
+
+
+def test_merge_review_payloads_never_erases_prior_reviews():
+    existing = {
+        "sources": [{
+            "source": "google",
+            "listing_url": "https://maps.google.com/example",
+            "coverage_note": "Earlier collection",
+            "reviews": [
+                {"reviewer_name": "A", "review_date": "2026-01-01", "text": "First review"},
+                {"reviewer_name": "B", "review_date": "2026-01-02", "text": "Second review"},
+            ],
+        }],
+    }
+    incoming = {
+        "sources": [{
+            "source": "google",
+            "listing_url": "https://maps.google.com/example",
+            "coverage_note": "Smaller later sample",
+            "reviews": [{"reviewer_name": "A", "review_date": "2026-01-01", "text": "First review"}],
+        }],
+    }
+
+    merged, summary = merge_review_payloads(existing, incoming)
+
+    assert merged["review_count"] == 2
+    assert [review["text"] for review in merged["sources"][0]["reviews"]] == ["First review", "Second review"]
+    assert summary["reviews_added"] == 0
+    assert summary["deduplicated"] == 1

@@ -45,11 +45,13 @@ import {
   getFirmCalls,
   getFirmReviews,
   getFirmReviewResearchStatus,
+  getReviewCorpusProgress,
   listFirmCommunications,
   putFirmReviews,
   startFirmReviewResearch,
   type DeleteFirmResult,
   type FirmReviews,
+  type ReviewCorpusProgress,
 } from "@/lib/api";
 import {
   ENTITY_TYPE_LABELS,
@@ -755,6 +757,12 @@ function EmailtagFirmsContent() {
     refetchInterval: 60_000,
   });
 
+  const reviewCorpusQuery = useQuery<ReviewCorpusProgress>({
+    queryKey: ["firm-review-corpus-progress"],
+    queryFn: getReviewCorpusProgress,
+    refetchInterval: 15_000,
+  });
+
   const syncStatusQuery = useQuery({
     queryKey: ["pif", "sync-status"],
     queryFn: getPifSyncStatus,
@@ -1160,6 +1168,21 @@ function EmailtagFirmsContent() {
           </button>
         </div>
       </div>
+      {reviewCorpusQuery.data && (
+        <section aria-label="Review corpus progress" className="border-y border-neutral-200 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+            <div className="font-medium text-neutral-800">
+              Review corpus: {reviewCorpusQuery.data.distinct_reviews.toLocaleString()} / {reviewCorpusQuery.data.target_distinct_reviews.toLocaleString()} distinct
+            </div>
+            <div className="text-neutral-500">
+              {reviewCorpusQuery.data.firms_with_reviews.toLocaleString()} firms · {reviewCorpusQuery.data.classified_reviews.toLocaleString()} classified · {(reviewCorpusQuery.data.task_counts.queued ?? 0).toLocaleString()} queued · {(reviewCorpusQuery.data.task_counts.in_progress ?? 0).toLocaleString()} running
+            </div>
+          </div>
+          <div className="mt-2 h-2 overflow-hidden rounded-full bg-neutral-100" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={reviewCorpusQuery.data.progress_percent}>
+            <div className="h-full bg-emerald-600 transition-[width]" style={{ width: `${reviewCorpusQuery.data.progress_percent}%` }} />
+          </div>
+        </section>
+      )}
 
       {view === "firms" && (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
