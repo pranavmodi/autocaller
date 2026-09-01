@@ -107,6 +107,7 @@ export interface PifJobPostingResult {
   entity_type: string | null;
   website: string | null;
   updated_at: string | null;
+  found_at: string | null;
   title: string;
   location: string | null;
   employment_type: string | null;
@@ -135,6 +136,7 @@ export interface PifJobPostingsListParams {
   gtm_relevance?: "high" | "medium" | "low";
   global_remote?: boolean;
   posted_within_days?: number;
+  order?: "posted_desc" | "found_desc";
   page?: number;
   page_size?: number;
 }
@@ -823,6 +825,7 @@ export function listMirroredPifJobPostings(
       gtm_relevance: params.gtm_relevance,
       global_remote: params.global_remote,
       posted_within_days: params.posted_within_days,
+      order: params.order,
       page: params.page ?? 1,
       page_size: params.page_size ?? 25,
     }),

@@ -207,6 +207,7 @@ async def get_pif_job_postings(
     gtm_relevance: str | None = Query(None, max_length=16),
     global_remote: bool | None = Query(None),
     posted_within_days: int | None = Query(None, ge=0, le=3650),
+    order: str = Query("posted_desc", max_length=32),
     page: int = Query(1, ge=1),
     page_size: int = Query(25, ge=1, le=100),
 ):
@@ -219,6 +220,7 @@ async def get_pif_job_postings(
             gtm_relevance=gtm_relevance,
             global_remote=global_remote,
             posted_within_days=posted_within_days,
+            order=order,
             page=page,
             page_size=page_size,
         )

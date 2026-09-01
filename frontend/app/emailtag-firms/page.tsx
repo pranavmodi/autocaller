@@ -2206,7 +2206,7 @@ function JobListingsView() {
         error={dailyStatsQuery.error}
       />
       <div className="rounded-xl border border-neutral-200 bg-white p-3">
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-7">
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-8">
           <InputField
             label="Search"
             value={filters.search ?? ""}
@@ -2248,6 +2248,14 @@ function JobListingsView() {
             <option value="14">Last 14 days</option>
             <option value="30">Last 30 days</option>
             <option value="90">Last 90 days</option>
+          </SelectField>
+          <SelectField
+            label="Order"
+            value={filters.order ?? "posted_desc"}
+            onChange={(value) => update("order", value as PifJobPostingsListParams["order"])}
+          >
+            <option value="posted_desc">Latest posted</option>
+            <option value="found_desc">Latest found</option>
           </SelectField>
         </div>
         <div className="mt-3 flex items-center justify-between text-xs text-neutral-500">
@@ -2412,7 +2420,10 @@ function JobListingRow({ posting }: { posting: PifJobPostingResult }) {
         <Link href={`/firms/${encodeURIComponent(posting.firm_id)}`} className="block truncate text-blue-600 hover:underline">{display(posting.firm_name)}</Link>
         <div className="truncate text-[11px] text-neutral-400">{formatLabel(posting.entity_type ?? "unknown")}</div>
       </td>
-      <td data-label="Posted" className="px-3 py-3 text-xs text-neutral-600">{formatDateOnly(posting.posted_date)}</td>
+      <td data-label="Posted" className="px-3 py-3 text-xs text-neutral-600">
+        <div>{formatDateOnly(posting.posted_date)}</div>
+        <div className="mt-0.5 text-[11px] text-neutral-400">Found {formatDateOnly(posting.found_at)}</div>
+      </td>
       <td data-label="Category" className="px-3 py-3"><div className="flex flex-wrap gap-1"><JobTag value={formatLabel(posting.role_category ?? "other")} />{posting.global_remote && <JobTag value="Global remote" emphasis />}{posting.gtm_relevance && <JobTag value={`${formatLabel(posting.gtm_relevance)} GTM`} emphasis={posting.gtm_relevance === "high"} />}</div></td>
       <td data-label="Signals" className="min-w-0 px-3 py-3"><div className="flex flex-wrap gap-1">{posting.trigger_tags.length ? posting.trigger_tags.map((tag) => <JobTag key={tag} value={formatLabel(tag)} />) : <span className="text-xs text-neutral-400">—</span>}</div></td>
       <td data-label="Technology" className="min-w-0 px-3 py-3"><div className="flex flex-wrap gap-1">{posting.technology_mentions.length ? posting.technology_mentions.map((technology) => <JobTag key={technology} value={technology} emphasis />) : <span className="text-xs text-neutral-400">—</span>}</div></td>

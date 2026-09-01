@@ -364,7 +364,7 @@ def test_api_lists_job_postings_with_posting_level_filters(monkeypatch):
     response = client.get(
         "/api/pif/job-postings?search=intake&role_category=intake_conversion"
         "&trigger_tag=lead_conversion&technology=Filevine&gtm_relevance=high"
-        "&global_remote=true&posted_within_days=30"
+        "&global_remote=true&posted_within_days=30&order=found_desc"
     )
 
     assert response.status_code == 200
@@ -376,6 +376,7 @@ def test_api_lists_job_postings_with_posting_level_filters(monkeypatch):
         "gtm_relevance": "high",
         "global_remote": True,
         "posted_within_days": 30,
+        "order": "found_desc",
         "page": 1,
         "page_size": 25,
     }

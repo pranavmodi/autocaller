@@ -1592,6 +1592,7 @@ async def list_mirrored_pif_job_postings(
     gtm_relevance: str | None = None,
     global_remote: bool | None = None,
     posted_within_days: int | None = None,
+    order: str = "posted_desc",
     page: int = 1,
     page_size: int = 25,
 ) -> dict[str, Any]:
@@ -1600,8 +1601,11 @@ async def list_mirrored_pif_job_postings(
     page = max(1, int(page))
     page_size = max(1, min(100, int(page_size)))
     relevance = (gtm_relevance or "").strip().lower()
+    ordering = (order or "posted_desc").strip().lower()
     if relevance and relevance not in {"high", "medium", "low"}:
         raise ValueError(f"unsupported_gtm_relevance:{relevance}")
+    if ordering not in {"posted_desc", "found_desc"}:
+        raise ValueError(f"unsupported_job_posting_order:{ordering}")
 
     sql = """
         SELECT
@@ -1610,6 +1614,10 @@ async def list_mirrored_pif_job_postings(
             f.entity_type,
             COALESCE(f.canonical_website, f.website) AS website,
             f.updated_at,
+            COALESCE(
+                NULLIF(f.research_data->'job_postings'->>'researched_at', '')::timestamptz,
+                NULLIF(f.research_data->>'last_job_postings_researched_at', '')::timestamptz
+            ) AS found_at,
             posting.value AS posting
         FROM pif_directory_firms f
         CROSS JOIN LATERAL jsonb_array_elements(
@@ -1648,9 +1656,14 @@ async def list_mirrored_pif_job_postings(
         sql += " AND NULLIF(posting.value->>'posted_date', '') >= :posted_after"
 
     count_sql = f"SELECT COUNT(*) FROM ({sql}) job_postings"
+    order_sql = (
+        "found_at DESC NULLS LAST, NULLIF(posting.value->>'posted_date', '') DESC NULLS LAST"
+        if ordering == "found_desc"
+        else "NULLIF(posting.value->>'posted_date', '') DESC NULLS LAST, found_at DESC NULLS LAST"
+    )
     list_sql = f"""
         {sql}
-        ORDER BY NULLIF(posting.value->>'posted_date', '') DESC NULLS LAST, f.firm_name ASC, posting.value->>'title' ASC
+        ORDER BY {order_sql}, f.firm_name ASC, posting.value->>'title' ASC
         LIMIT :limit OFFSET :offset
     """
     async with AsyncSessionLocal() as session:
@@ -1670,6 +1683,7 @@ async def list_mirrored_pif_job_postings(
             "entity_type": row.entity_type,
             "website": row.website,
             "updated_at": _dt_iso(row.updated_at),
+            "found_at": _dt_iso(row.found_at),
             "title": str(posting.get("title") or ""),
             "location": posting.get("location"),
             "employment_type": posting.get("employment_type"),
