@@ -26,6 +26,12 @@ Indeed, Glassdoor, ZipRecruiter, and legal-industry job boards. Confirm that eac
 opening belongs to the exact firm. Use the official domain, location, and firm
 identity to reject similarly named employers.
 
+Specifically look for remote roles that accept applicants worldwide. Search for
+phrases such as "work from anywhere", "anywhere in the world", "worldwide",
+"globally remote", and "international applicants". Also capture explicit
+country, state, region, residency, and time-zone restrictions. Do not treat the
+word "remote" by itself as evidence that a role is open globally.
+
 Include only postings with a publication date visibly supported by a source and
 inside the inclusive input date window. Exclude undated listings, inferred
 dates, expired listings without an in-window publication date, generic careers
@@ -41,6 +47,7 @@ Never infer missing facts. Prefer a direct posting URL over a search-results URL
       "title": "Intake Specialist",
       "location": "Los Angeles, CA",
       "employment_type": "Full-time",
+      "remote_eligibility": "Remote within the United States only",
       "posted_date": "2026-08-15",
       "description_summary": "Handles prospective-client intake and follow-up.",
       "responsibilities": ["Answer prospective-client calls"],
@@ -52,7 +59,9 @@ Never infer missing facts. Prefer a direct posting URL over a search-results URL
 }
 ```
 
-`posted_date` must be `YYYY-MM-DD`. Use JSON `null` for an unknown location or
-employment type. All other fields are required. Return `{"postings":[]}` when
-no qualifying posting is found. Do not pad a negative result with unsupported
-openings.
+`posted_date` must be `YYYY-MM-DD`. `remote_eligibility` must reproduce the
+shortest source-backed phrase that describes remote eligibility or its location
+restriction. Use JSON `null` when location, employment type, or remote
+eligibility is unknown. All other fields are required. Return
+`{"postings":[]}` when no qualifying posting is found. Do not pad a negative
+result with unsupported openings.

@@ -4,12 +4,13 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import re
 import uuid
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import select, update
+from sqlalchemy import case, select, update
 
 from app.db import AsyncSessionLocal
 from app.db.models import PifFirmRow, PifJobResearchTaskRow
@@ -22,7 +23,7 @@ SKILL_PATH = Path(__file__).resolve().parents[1] / "skills/job-opening-research/
 OPEN_STATUSES = {"queued", "in_progress"}
 WINDOW_DAYS = 30
 LOCAL_RESEARCH_PROVIDER = "possibleos_openclaw"
-CLASSIFIER_VERSION = "job-taxonomy-v1"
+CLASSIFIER_VERSION = "job-taxonomy-v2"
 CLASSIFIER_PROVIDER = "possibleos_local_rules"
 
 ROLE_CATEGORIES = (
@@ -111,6 +112,96 @@ _TECHNOLOGY_NAMES = {
     "Zapier": ("zapier",),
 }
 
+_GLOBAL_REMOTE_PATTERNS = (
+    r"\bwork from anywhere\b",
+    r"\banywhere in (?:the )?world\b",
+    r"\bworldwide\b",
+    r"\bglobally remote\b",
+    r"\bremote worldwide\b",
+    r"\bremote (?:from )?anywhere\b",
+    r"\bopen to (?:candidates|applicants) (?:globally|worldwide)\b",
+    r"\binternational (?:candidates|applicants)\b",
+)
+_COUNTRY_REMOTE_PATTERNS = (
+    r"\b(?:u\.?s\.?|united states|canada|united kingdom|u\.?k\.?|australia|mexico|india)\s+(?:only|based|residents?)\b",
+    r"\bremote (?:within|in|from) (?:the )?(?:u\.?s\.?|united states|canada|united kingdom|u\.?k\.?|australia|mexico|india)\b",
+)
+_LOCATION_REMOTE_PATTERNS = (
+    r"\bmust (?:reside|live|be located|be based) in\b",
+    r"\bremote (?:within|in|from) [a-z][a-z .'-]+(?:state|province|region|time zone|timezone)\b",
+    r"\b(?:state|province|region) residents? only\b",
+)
+
+
+def _matched_phrases(patterns: tuple[str, ...], text_value: str) -> list[str]:
+    matches: list[str] = []
+    for pattern in patterns:
+        match = re.search(pattern, text_value, flags=re.IGNORECASE)
+        if match:
+            phrase = match.group(0).strip()
+            if phrase not in matches:
+                matches.append(phrase)
+    return matches
+
+
+def classify_remote_eligibility(posting: dict[str, Any]) -> dict[str, Any]:
+    """Classify remote scope conservatively from source-backed posting text."""
+    values = [
+        posting.get("title"),
+        posting.get("location"),
+        posting.get("employment_type"),
+        posting.get("remote_eligibility"),
+        posting.get("description_summary"),
+        *(posting.get("responsibilities") or []),
+        *(posting.get("qualifications") or []),
+    ]
+    text_value = " ".join(str(value) for value in values if value)
+    lowered = f" {text_value.lower()} "
+    global_evidence = _matched_phrases(_GLOBAL_REMOTE_PATTERNS, text_value)
+    country_evidence = _matched_phrases(_COUNTRY_REMOTE_PATTERNS, text_value)
+    location_evidence = _matched_phrases(_LOCATION_REMOTE_PATTERNS, text_value)
+    has_remote = bool(re.search(r"\b(remote|work from home|distributed)\b", lowered)) or bool(global_evidence)
+    has_hybrid = bool(re.search(r"\bhybrid\b", lowered))
+    has_onsite = bool(re.search(r"\b(on[- ]?site|in[- ]?office)\b", lowered))
+
+    if has_remote:
+        work_arrangement = "remote"
+    elif has_hybrid:
+        work_arrangement = "hybrid"
+    elif has_onsite:
+        work_arrangement = "onsite"
+    else:
+        work_arrangement = "unclear"
+
+    if not has_remote:
+        remote_scope = "not_remote" if work_arrangement in {"hybrid", "onsite"} else "unclear"
+        evidence: list[str] = []
+        confidence = 0.9 if remote_scope == "not_remote" else 0.4
+    elif country_evidence:
+        remote_scope = "country_restricted"
+        evidence = country_evidence
+        confidence = 0.95
+    elif location_evidence:
+        remote_scope = "location_restricted"
+        evidence = location_evidence
+        confidence = 0.95
+    elif global_evidence:
+        remote_scope = "global"
+        evidence = global_evidence
+        confidence = 0.98
+    else:
+        remote_scope = "unclear"
+        evidence = ["remote"]
+        confidence = 0.6
+
+    return {
+        "work_arrangement": work_arrangement,
+        "remote_scope": remote_scope,
+        "global_remote": remote_scope == "global",
+        "global_remote_evidence": evidence,
+        "global_remote_confidence": confidence,
+    }
+
 
 class PifResearchUpstreamError(Exception):
     """Compatibility error used by the existing PIF API handlers."""
@@ -161,6 +252,7 @@ def classify_job_posting(posting: dict[str, Any], *, classified_at: datetime | N
     technology_mentions = [
         label for label, terms in _TECHNOLOGY_NAMES.items() if any(term in combined for term in terms)
     ]
+    remote_eligibility = classify_remote_eligibility(posting)
 
     return {
         **posting,
@@ -169,6 +261,7 @@ def classify_job_posting(posting: dict[str, Any], *, classified_at: datetime | N
         "technology_mentions": technology_mentions,
         "gtm_relevance": relevance,
         "classification_confidence": confidence,
+        **remote_eligibility,
         "classification_provider": CLASSIFIER_PROVIDER,
         "classification_version": CLASSIFIER_VERSION,
         "classified_at": (classified_at or _utcnow()).isoformat(),
@@ -256,6 +349,9 @@ def normalize_job_postings(
             "location": str(raw["location"]).strip() if raw.get("location") else None,
             "employment_type": (
                 str(raw["employment_type"]).strip() if raw.get("employment_type") else None
+            ),
+            "remote_eligibility": (
+                str(raw["remote_eligibility"]).strip() if raw.get("remote_eligibility") else None
             ),
             "posted_date": posted_date.isoformat(),
             "description_summary": str(raw.get("description_summary") or "").strip(),
@@ -514,7 +610,10 @@ async def _claim_next_task() -> tuple[str, str, str] | None:
         task = (await session.execute(
             select(PifJobResearchTaskRow)
             .where(PifJobResearchTaskRow.status == "queued")
-            .order_by(PifJobResearchTaskRow.requested_at.asc())
+            .order_by(
+                case((PifJobResearchTaskRow.kind == "classify", 0), else_=1),
+                PifJobResearchTaskRow.requested_at.asc(),
+            )
             .with_for_update(skip_locked=True)
             .limit(1)
         )).scalar_one_or_none()

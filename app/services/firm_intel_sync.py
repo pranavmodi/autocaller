@@ -1590,6 +1590,7 @@ async def list_mirrored_pif_job_postings(
     trigger_tag: str | None = None,
     technology: str | None = None,
     gtm_relevance: str | None = None,
+    global_remote: bool | None = None,
     posted_within_days: int | None = None,
     page: int = 1,
     page_size: int = 25,
@@ -1638,6 +1639,9 @@ async def list_mirrored_pif_job_postings(
     if relevance:
         params["gtm_relevance"] = relevance
         sql += " AND COALESCE(posting.value->>'gtm_relevance', '') = :gtm_relevance"
+    if global_remote is not None:
+        params["global_remote"] = "true" if global_remote else "false"
+        sql += " AND COALESCE(posting.value->>'global_remote', 'false') = :global_remote"
     if posted_within_days is not None:
         cutoff = (datetime.now(timezone.utc) - timedelta(days=max(0, posted_within_days))).date().isoformat()
         params["posted_after"] = cutoff
@@ -1669,6 +1673,7 @@ async def list_mirrored_pif_job_postings(
             "title": str(posting.get("title") or ""),
             "location": posting.get("location"),
             "employment_type": posting.get("employment_type"),
+            "remote_eligibility": posting.get("remote_eligibility"),
             "posted_date": posting.get("posted_date"),
             "description_summary": str(posting.get("description_summary") or ""),
             "source_name": str(posting.get("source_name") or "Web source"),
@@ -1678,6 +1683,11 @@ async def list_mirrored_pif_job_postings(
             "technology_mentions": posting.get("technology_mentions") if isinstance(posting.get("technology_mentions"), list) else [],
             "gtm_relevance": posting.get("gtm_relevance"),
             "classification_confidence": posting.get("classification_confidence"),
+            "work_arrangement": posting.get("work_arrangement"),
+            "remote_scope": posting.get("remote_scope"),
+            "global_remote": bool(posting.get("global_remote")),
+            "global_remote_evidence": posting.get("global_remote_evidence") if isinstance(posting.get("global_remote_evidence"), list) else [],
+            "global_remote_confidence": posting.get("global_remote_confidence"),
         })
     return {
         "items": items,

@@ -67,6 +67,7 @@ export interface JobPosting {
   title: string;
   location: string | null;
   employment_type: string | null;
+  remote_eligibility?: string | null;
   posted_date: string;
   description_summary: string;
   responsibilities: string[];
@@ -78,6 +79,11 @@ export interface JobPosting {
   technology_mentions?: string[];
   gtm_relevance?: "high" | "medium" | "low";
   classification_confidence?: number;
+  work_arrangement?: "remote" | "hybrid" | "onsite" | "unclear";
+  remote_scope?: "global" | "country_restricted" | "location_restricted" | "unclear" | "not_remote";
+  global_remote?: boolean;
+  global_remote_evidence?: string[];
+  global_remote_confidence?: number;
   classification_provider?: string;
   classification_version?: string;
   classified_at?: string;
@@ -104,6 +110,7 @@ export interface PifJobPostingResult {
   title: string;
   location: string | null;
   employment_type: string | null;
+  remote_eligibility: string | null;
   posted_date: string | null;
   description_summary: string;
   source_name: string;
@@ -113,6 +120,11 @@ export interface PifJobPostingResult {
   technology_mentions: string[];
   gtm_relevance: "high" | "medium" | "low" | null;
   classification_confidence: number | null;
+  work_arrangement: "remote" | "hybrid" | "onsite" | "unclear" | null;
+  remote_scope: "global" | "country_restricted" | "location_restricted" | "unclear" | "not_remote" | null;
+  global_remote: boolean;
+  global_remote_evidence: string[];
+  global_remote_confidence: number | null;
 }
 
 export interface PifJobPostingsListParams {
@@ -121,6 +133,7 @@ export interface PifJobPostingsListParams {
   trigger_tag?: string;
   technology?: string;
   gtm_relevance?: "high" | "medium" | "low";
+  global_remote?: boolean;
   posted_within_days?: number;
   page?: number;
   page_size?: number;
@@ -808,6 +821,7 @@ export function listMirroredPifJobPostings(
       trigger_tag: params.trigger_tag,
       technology: params.technology,
       gtm_relevance: params.gtm_relevance,
+      global_remote: params.global_remote,
       posted_within_days: params.posted_within_days,
       page: params.page ?? 1,
       page_size: params.page_size ?? 25,

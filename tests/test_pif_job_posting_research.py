@@ -95,6 +95,43 @@ def test_classify_job_posting_preserves_existing_source_fields():
     assert result["role_category"] == "finance_billing"
 
 
+def test_classify_job_posting_marks_explicit_worldwide_remote_role():
+    result = service.classify_job_posting({
+        "title": "Remote Intake Specialist",
+        "location": "Worldwide",
+        "remote_eligibility": "Work from anywhere in the world",
+        "description_summary": "Support prospective clients remotely.",
+    })
+
+    assert result["work_arrangement"] == "remote"
+    assert result["remote_scope"] == "global"
+    assert result["global_remote"] is True
+    assert "anywhere in the world" in result["global_remote_evidence"]
+
+
+def test_classify_job_posting_does_not_mark_country_restricted_remote_as_global():
+    result = service.classify_job_posting({
+        "title": "Remote Case Manager",
+        "remote_eligibility": "Remote within the United States",
+        "description_summary": "Must reside in California.",
+    })
+
+    assert result["work_arrangement"] == "remote"
+    assert result["remote_scope"] == "country_restricted"
+    assert result["global_remote"] is False
+
+
+def test_classify_job_posting_treats_plain_remote_scope_as_unclear():
+    result = service.classify_job_posting({
+        "title": "Remote Marketing Manager",
+        "description_summary": "This is a fully remote role.",
+    })
+
+    assert result["work_arrangement"] == "remote"
+    assert result["remote_scope"] == "unclear"
+    assert result["global_remote"] is False
+
+
 def test_gateway_research_uses_main_agent_and_emailtag_result_shape(monkeypatch):
     captured = {}
 
