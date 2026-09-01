@@ -31,7 +31,7 @@ LOCAL_RESEARCH_PROVIDER = "possibleos_openclaw"
 MAX_REVIEWS_PER_SOURCE = 1_000
 INDEPENDENT_REVIEW_SOURCES = {
     "google", "yelp", "avvo", "bbb", "facebook", "reviews.io",
-    "trustpilot", "martindale", "lawyers.com",
+    "trustpilot", "martindale", "lawyers.com", "findlaw",
 }
 GOOGLE_MAPS_BASE_URL = "https://www.google.com"
 GOOGLE_MAPS_HEADERS = {

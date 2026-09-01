@@ -3,12 +3,17 @@ from fastapi.testclient import TestClient
 
 from app.api import firm_reviews
 from app.services.firm_review_research import (
+    INDEPENDENT_REVIEW_SOURCES,
     _domains_match,
     _listing_from_search_payload,
     _reviews_from_profile_payload,
     merge_review_payloads,
     normalize_review_sources,
 )
+
+
+def test_findlaw_is_counted_as_an_independent_review_source():
+    assert "findlaw" in INDEPENDENT_REVIEW_SOURCES
 
 
 def test_google_listing_domain_allows_punctuation_only_variants():
