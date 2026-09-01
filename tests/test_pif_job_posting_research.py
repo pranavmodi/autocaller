@@ -1,5 +1,5 @@
 import asyncio
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from types import SimpleNamespace
 
 from app.services import pif_job_posting_research as service
@@ -149,6 +149,9 @@ def test_gateway_research_uses_main_agent_and_emailtag_result_shape(monkeypatch)
 
     assert captured["model"] == "openclaw/main"
     assert captured["required_fields"] == ["postings"]
+    assert captured["timeout_s"] == 420
+    assert captured["retries"] == 1
+    assert captured["schema_repair_retries"] == 1
     assert captured["payload"] == {
         "firm_name": "Example Injury Law",
         "official_website": "example.com",
@@ -160,6 +163,81 @@ def test_gateway_research_uses_main_agent_and_emailtag_result_shape(monkeypatch)
     assert result["postings"] == []
 
 
+def test_retry_plan_uses_exponential_backoff_and_stops_at_budget(monkeypatch):
+    monkeypatch.setenv("PIF_JOB_RESEARCH_BACKOFF_SECONDS", "60")
+    monkeypatch.setenv("PIF_JOB_RESEARCH_MAX_BACKOFF_SECONDS", "600")
+    now = datetime(2026, 9, 1, 12, 0, tzinfo=timezone.utc)
+
+    first = service._retry_plan(
+        "job-1",
+        {"attempt_count": 1, "max_attempts": 4},
+        now=now,
+    )
+    second = service._retry_plan(
+        "job-1",
+        {"attempt_count": 2, "max_attempts": 4},
+        now=now,
+    )
+
+    assert first is not None
+    assert second is not None
+    assert 60 <= first["retry_delay_seconds"] <= 72
+    assert 120 <= second["retry_delay_seconds"] <= 144
+    assert first["retry_at"] == now + timedelta(seconds=first["retry_delay_seconds"])
+    assert service._retry_plan(
+        "job-1",
+        {"attempt_count": 4, "max_attempts": 4},
+        now=now,
+    ) is None
+
+
+def test_gateway_failure_is_requeued_with_persisted_retry_state(monkeypatch):
+    now = datetime(2026, 9, 1, 12, 0, tzinfo=timezone.utc)
+    task = SimpleNamespace(
+        task_id="job-1",
+        pif_id="firm-1",
+        kind="research",
+        status="in_progress",
+        requested_at=now,
+        started_at=now,
+        completed_at=None,
+        result_summary={"attempt_count": 1, "max_attempts": 4},
+    )
+    firm = SimpleNamespace(research_data={}, updated_at=now)
+
+    class Session:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+        async def get(self, model, key):
+            return task if model is service.PifJobResearchTaskRow else firm
+
+        async def commit(self):
+            return None
+
+    monkeypatch.setattr(service, "AsyncSessionLocal", lambda: Session())
+    monkeypatch.setattr(service, "_utcnow", lambda: now)
+    monkeypatch.setenv("PIF_JOB_RESEARCH_BACKOFF_SECONDS", "60")
+    monkeypatch.setenv("PIF_JOB_RESEARCH_MAX_BACKOFF_SECONDS", "600")
+
+    retried = asyncio.run(service._schedule_job_research_retry(
+        task.task_id,
+        TimeoutError(),
+    ))
+
+    assert retried is True
+    assert task.status == "queued"
+    assert task.started_at is None
+    assert task.requested_at > now
+    assert task.result_summary["last_error"] == "TimeoutError"
+    assert task.result_summary["attempt_count"] == 1
+    assert firm.research_data["job_postings_research_status"] == "queued"
+    assert firm.research_data["job_postings_research_retry"]["retry_at"] == task.requested_at.isoformat()
+
+
 def test_local_job_research_status_marks_possibleos_as_owner():
     firm = SimpleNamespace(research_data={"identity": {"state": "CA"}})
 
@@ -168,6 +246,23 @@ def test_local_job_research_status_marks_possibleos_as_owner():
     assert updated["identity"] == {"state": "CA"}
     assert updated["job_postings_research_status"] == "queued"
     assert updated["job_postings_research_provider"] == "possibleos_openclaw"
+
+
+def test_terminal_job_research_status_clears_retry_metadata():
+    firm = SimpleNamespace(research_data={
+        "job_postings_research_retry": {
+            "attempt_count": 2,
+            "retry_at": "2026-09-01T12:10:00+00:00",
+        },
+    })
+
+    updated = service._research_data_with_status(
+        firm,
+        "completed",
+        checked_at=datetime(2026, 9, 1, 12, 0, tzinfo=timezone.utc),
+    )
+
+    assert "job_postings_research_retry" not in updated
 
 
 def test_emailtag_sync_does_not_overwrite_possibleos_job_research():

@@ -435,6 +435,9 @@ async def call_skill_json(
             if not can_retry:
                 break
             await asyncio.sleep(2 ** (request_attempt - 1))
+    error_text = str(last_error).strip() if last_error is not None else ""
+    if not error_text and last_error is not None:
+        error_text = last_error.__class__.__name__
     raise LLMGatewayError(
-        f"gateway call failed after {total_attempts} attempts: {last_error}"
+        f"gateway call failed after {total_attempts} attempts: {error_text or 'unknown error'}"
     )

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
 import os
 import re
@@ -25,6 +26,9 @@ WINDOW_DAYS = 30
 LOCAL_RESEARCH_PROVIDER = "possibleos_openclaw"
 CLASSIFIER_VERSION = "job-taxonomy-v2"
 CLASSIFIER_PROVIDER = "possibleos_local_rules"
+JOB_RESEARCH_DEFAULT_MAX_ATTEMPTS = 4
+JOB_RESEARCH_DEFAULT_BACKOFF_SECONDS = 300
+JOB_RESEARCH_DEFAULT_MAX_BACKOFF_SECONDS = 3600
 
 ROLE_CATEGORIES = (
     "intake_conversion",
@@ -216,6 +220,47 @@ def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _job_research_max_attempts() -> int:
+    return max(1, int(os.getenv("PIF_JOB_RESEARCH_TASK_ATTEMPTS", JOB_RESEARCH_DEFAULT_MAX_ATTEMPTS)))
+
+
+def _retry_delay_seconds(task_id: str, attempt_count: int) -> int:
+    """Return capped exponential backoff with stable per-task jitter."""
+    base = max(1, int(os.getenv(
+        "PIF_JOB_RESEARCH_BACKOFF_SECONDS",
+        JOB_RESEARCH_DEFAULT_BACKOFF_SECONDS,
+    )))
+    maximum = max(base, int(os.getenv(
+        "PIF_JOB_RESEARCH_MAX_BACKOFF_SECONDS",
+        JOB_RESEARCH_DEFAULT_MAX_BACKOFF_SECONDS,
+    )))
+    exponential = min(maximum, base * (2 ** max(0, attempt_count - 1)))
+    digest = hashlib.sha256(f"{task_id}:{attempt_count}".encode("utf-8")).digest()
+    jitter = int(exponential * 0.2 * (int.from_bytes(digest[:2], "big") / 65535))
+    return min(maximum, exponential + jitter)
+
+
+def _retry_plan(
+    task_id: str,
+    summary: dict[str, Any] | None,
+    *,
+    now: datetime,
+) -> dict[str, Any] | None:
+    current = dict(summary) if isinstance(summary, dict) else {}
+    attempt_count = max(1, int(current.get("attempt_count") or 1))
+    max_attempts = max(1, int(current.get("max_attempts") or _job_research_max_attempts()))
+    if attempt_count >= max_attempts:
+        return None
+    delay_seconds = _retry_delay_seconds(task_id, attempt_count)
+    retry_at = now + timedelta(seconds=delay_seconds)
+    return {
+        "attempt_count": attempt_count,
+        "max_attempts": max_attempts,
+        "retry_delay_seconds": delay_seconds,
+        "retry_at": retry_at,
+    }
+
+
 def _firm_website(firm: PifFirmRow) -> str | None:
     return firm.canonical_website or firm.website or None
 
@@ -292,6 +337,8 @@ def _research_data_with_status(
         data["job_postings"] = result
     if checked_at is not None:
         data["last_job_postings_researched_at"] = checked_at.isoformat()
+    if status in {"completed", "failed"}:
+        data.pop("job_postings_research_retry", None)
     return data
 
 
@@ -389,8 +436,10 @@ async def research_recent_job_postings(
         },
         required_fields=["postings"],
         model=os.getenv("PIF_JOB_RESEARCH_MODEL", "openclaw/main"),
-        timeout_s=int(os.getenv("PIF_JOB_RESEARCH_TIMEOUT_S", "240")),
+        timeout_s=int(os.getenv("PIF_JOB_RESEARCH_TIMEOUT_S", "420")),
         max_tokens=int(os.getenv("PIF_JOB_RESEARCH_MAX_TOKENS", "4000")),
+        retries=1,
+        schema_repair_retries=1,
     )
     postings = normalize_job_postings(
         result.parsed.get("postings"),
@@ -606,10 +655,14 @@ async def get_job_research_daily_stats(*, days: int = 14) -> dict[str, Any]:
 
 
 async def _claim_next_task() -> tuple[str, str, str] | None:
+    now = _utcnow()
     async with AsyncSessionLocal() as session:
         task = (await session.execute(
             select(PifJobResearchTaskRow)
-            .where(PifJobResearchTaskRow.status == "queued")
+            .where(
+                PifJobResearchTaskRow.status == "queued",
+                PifJobResearchTaskRow.requested_at <= now,
+            )
             .order_by(
                 case((PifJobResearchTaskRow.kind == "classify", 0), else_=1),
                 PifJobResearchTaskRow.requested_at.asc(),
@@ -620,11 +673,28 @@ async def _claim_next_task() -> tuple[str, str, str] | None:
         if task is None:
             return None
         task.status = "in_progress"
-        task.started_at = _utcnow()
+        task.started_at = now
+        if task.kind == "research":
+            summary = dict(task.result_summary) if isinstance(task.result_summary, dict) else {}
+            attempt_count = max(0, int(summary.get("attempt_count") or 0)) + 1
+            summary.update({
+                "attempt_count": attempt_count,
+                "max_attempts": max(1, int(summary.get("max_attempts") or _job_research_max_attempts())),
+                "attempt_started_at": now.isoformat(),
+                "message": f"Research attempt {attempt_count} started",
+            })
+            summary.pop("retry_at", None)
+            summary.pop("retry_delay_seconds", None)
+            task.result_summary = summary
         firm = await session.get(PifFirmRow, task.pif_id)
         if firm is not None:
             if task.kind == "research":
-                firm.research_data = _research_data_with_status(firm, "in_progress")
+                research_data = _research_data_with_status(firm, "in_progress")
+                research_data["job_postings_research_retry"] = {
+                    "attempt_count": task.result_summary.get("attempt_count"),
+                    "max_attempts": task.result_summary.get("max_attempts"),
+                }
+                firm.research_data = research_data
             elif task.kind == "sitemap":
                 firm.research_data = _research_data_with_sitemap_status(firm, "in_progress")
             firm.updated_at = _utcnow()
@@ -646,10 +716,17 @@ async def _finish_task(
         if task is None:
             return
         firm = await session.get(PifFirmRow, task.pif_id)
+        previous_summary = dict(task.result_summary) if isinstance(task.result_summary, dict) else {}
+        attempt_metadata = {
+            key: previous_summary[key]
+            for key in ("attempt_count", "max_attempts", "attempt_started_at")
+            if key in previous_summary
+        }
         task.status = status
         task.completed_at = checked_at
         if status == "completed" and result is not None and kind == "sitemap":
             task.result_summary = {
+                **attempt_metadata,
                 "firm_name": firm.firm_name if firm else None,
                 "sitemap_status": result.get("status"),
                 "url_count": int(result.get("url_count") or 0),
@@ -660,6 +737,7 @@ async def _finish_task(
         elif status == "completed" and result is not None:
             posting_count = len(result.get("postings") or [])
             task.result_summary = {
+                **attempt_metadata,
                 "firm_name": firm.firm_name if firm else None,
                 "has_recent_openings": bool(result.get("has_recent_openings")),
                 "posting_count": posting_count,
@@ -684,10 +762,12 @@ async def _finish_task(
                 firm.research_data = research_data
         else:
             task.result_summary = {
+                **attempt_metadata,
                 "firm_name": firm.firm_name if firm else None,
                 "message": error or (
                     "Sitemap research failed" if kind == "sitemap" else "Job-posting research failed"
                 ),
+                "retries_exhausted": kind == "research",
             }
             if firm is not None and kind == "research":
                 firm.research_data = _research_data_with_status(
@@ -712,6 +792,56 @@ async def _finish_task(
         if firm is not None:
             firm.updated_at = checked_at
         await session.commit()
+
+
+async def _schedule_job_research_retry(task_id: str, error: Exception) -> bool:
+    """Requeue a transient job-research failure without losing attempt state."""
+    now = _utcnow()
+    async with AsyncSessionLocal() as session:
+        task = await session.get(PifJobResearchTaskRow, task_id)
+        if task is None or task.kind != "research":
+            return False
+        summary = dict(task.result_summary) if isinstance(task.result_summary, dict) else {}
+        plan = _retry_plan(task.task_id, summary, now=now)
+        if plan is None:
+            return False
+        retry_at = plan["retry_at"]
+        error_text = str(error).strip() or error.__class__.__name__
+        task.status = "queued"
+        task.requested_at = retry_at
+        task.started_at = None
+        task.completed_at = None
+        task.result_summary = {
+            **summary,
+            "attempt_count": plan["attempt_count"],
+            "max_attempts": plan["max_attempts"],
+            "retry_delay_seconds": plan["retry_delay_seconds"],
+            "retry_at": retry_at.isoformat(),
+            "last_error": error_text[:500],
+            "message": (
+                f"Attempt {plan['attempt_count']} failed; retrying at "
+                f"{retry_at.isoformat()}"
+            ),
+        }
+        firm = await session.get(PifFirmRow, task.pif_id)
+        if firm is not None:
+            research_data = _research_data_with_status(firm, "queued")
+            research_data["job_postings_research_retry"] = {
+                "attempt_count": plan["attempt_count"],
+                "max_attempts": plan["max_attempts"],
+                "retry_at": retry_at.isoformat(),
+                "last_error": error_text[:500],
+            }
+            firm.research_data = research_data
+            firm.updated_at = now
+        await session.commit()
+    logger.warning(
+        "Retrying job-opening research task %s after attempt %s at %s",
+        task_id,
+        plan["attempt_count"],
+        retry_at.isoformat(),
+    )
+    return True
 
 
 async def _run_task(task_id: str, pif_id: str, kind: str = "research") -> None:
@@ -754,7 +884,10 @@ async def _run_task(task_id: str, pif_id: str, kind: str = "research") -> None:
         result = await research_recent_job_postings(firm_name, website)
     except Exception as exc:
         logger.exception("Local job-opening research failed for %s", pif_id)
-        await _finish_task(task_id, status="failed", error=str(exc)[:500], kind=kind)
+        if await _schedule_job_research_retry(task_id, exc):
+            return
+        error_text = str(exc).strip() or exc.__class__.__name__
+        await _finish_task(task_id, status="failed", error=error_text[:500], kind=kind)
         return
     await _finish_task(task_id, status="completed", result=result, kind=kind)
 
