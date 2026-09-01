@@ -108,8 +108,15 @@ async def _maintenance_candidates(*, now: datetime) -> dict[str, Any]:
     day_start = now.astimezone(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
     async with AsyncSessionLocal() as session:
         firms = (await session.execute(
-            select(PifFirmRow).order_by(PifFirmRow.created_at.asc(), PifFirmRow.id.asc())
-        )).scalars().all()
+            select(
+                PifFirmRow.id,
+                PifFirmRow.firm_name,
+                PifFirmRow.website,
+                PifFirmRow.canonical_website,
+                PifFirmRow.research_data,
+                PifFirmRow.created_at,
+            ).order_by(PifFirmRow.created_at.asc(), PifFirmRow.id.asc())
+        )).all()
         open_rows = (await session.execute(
             select(PifJobResearchTaskRow.pif_id, PifJobResearchTaskRow.kind).where(
                 PifJobResearchTaskRow.status.in_(OPEN_STATUSES),
