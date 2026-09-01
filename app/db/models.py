@@ -1215,7 +1215,7 @@ class ResearchTaskRow(Base):
 
 
 class PifJobResearchTaskRow(Base):
-    """Durable local job-opening research and classification queue."""
+    """Durable local job-opening, classification, and sitemap queue."""
     __tablename__ = "pif_job_research_tasks"
 
     task_id: Mapped[str] = mapped_column(String(128), primary_key=True)
@@ -1231,7 +1231,7 @@ class PifJobResearchTaskRow(Base):
 
     __table_args__ = (
         CheckConstraint(
-            "kind IN ('research', 'classify')",
+            "kind IN ('research', 'classify', 'sitemap')",
             name="ck_pif_job_research_tasks_kind",
         ),
         CheckConstraint(

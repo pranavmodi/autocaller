@@ -398,6 +398,40 @@ def test_api_lists_sitemap_history(monkeypatch):
     assert captured == {"pif_id": "firm-1", "limit": 7}
 
 
+def test_api_queues_sitemap_research(monkeypatch):
+    async def fake_start(firm_id):
+        return {"task_id": "sitemap-1", "pif_id": firm_id, "status": "queued"}
+
+    monkeypatch.setattr(pif_api, "start_sitemap_research", fake_start)
+    app = FastAPI()
+    app.include_router(pif_api.router)
+    client = TestClient(app)
+
+    response = client.post("/api/pif/firms/firm-1/research-sitemap")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "task_id": "sitemap-1",
+        "pif_id": "firm-1",
+        "status": "queued",
+    }
+
+
+def test_api_queues_research_maintenance(monkeypatch):
+    async def fake_queue(*, limit):
+        return {"limit_per_kind": limit, "queued_job_postings": 25, "queued_sitemaps": 25}
+
+    monkeypatch.setattr(pif_api, "queue_due_firm_maintenance", fake_queue)
+    app = FastAPI()
+    app.include_router(pif_api.router)
+    client = TestClient(app)
+
+    response = client.post("/api/pif/research-maintenance/queue?limit=25")
+
+    assert response.status_code == 200
+    assert response.json()["limit_per_kind"] == 25
+
+
 def test_api_forwards_autorespond_filters(monkeypatch):
     captured = {}
 

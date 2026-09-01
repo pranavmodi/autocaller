@@ -43,11 +43,16 @@ from app.services.pif_job_posting_research import (
     get_research_status,
     queue_job_posting_classification_backfill,
     start_job_posting_research,
+    start_sitemap_research,
 )
 from app.services.pif_local_enrichment import (
     PifLocalEnrichmentError,
     get_local_enrichment_status,
     start_local_firm_enrichment,
+)
+from app.services.pif_research_maintenance import (
+    queue_due_firm_maintenance,
+    research_maintenance_status,
 )
 from app.services.pif_sitemap_monitor import list_firm_sitemap_history
 
@@ -349,6 +354,24 @@ async def post_job_posting_research(firm_id: str):
         return await start_job_posting_research(firm_id)
     except PifResearchUpstreamError as exc:
         _raise_research_http(exc)
+
+
+@router.post("/firms/{firm_id}/research-sitemap")
+async def post_sitemap_research(firm_id: str):
+    try:
+        return await start_sitemap_research(firm_id)
+    except PifResearchUpstreamError as exc:
+        _raise_research_http(exc)
+
+
+@router.get("/research-maintenance/status")
+async def get_research_maintenance_status():
+    return await research_maintenance_status()
+
+
+@router.post("/research-maintenance/queue")
+async def post_research_maintenance_queue(limit: int = Query(175, ge=1, le=1000)):
+    return await queue_due_firm_maintenance(limit=limit)
 
 
 @router.post("/job-postings/classify")

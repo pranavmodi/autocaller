@@ -8867,6 +8867,38 @@ def pif_research_job_postings(
     raise typer.Exit(1)
 
 
+@pif_app.command("research-sitemap")
+def pif_research_sitemap(
+    firm_id: str = typer.Argument(..., help="Mirrored firm UUID."),
+):
+    """Queue a durable sitemap snapshot and change check for one firm."""
+    result = _post(
+        f"/api/pif/firms/{quote(firm_id, safe='')}/research-sitemap",
+        json_body=None,
+        timeout=90.0,
+    )
+    console.print_json(data=result)
+
+
+@pif_app.command("maintenance-status")
+def pif_maintenance_status():
+    """Show due and queued 30-day job-posting and sitemap maintenance."""
+    console.print_json(data=_get("/api/pif/research-maintenance/status"))
+
+
+@pif_app.command("maintenance-queue")
+def pif_maintenance_queue(
+    limit: int = typer.Option(175, "--limit", min=1, max=1000, help="Firms per research kind."),
+):
+    """Queue today's due job-posting and sitemap maintenance cohorts."""
+    result = _post(
+        f"/api/pif/research-maintenance/queue?limit={limit}",
+        json_body=None,
+        timeout=300.0,
+    )
+    console.print_json(data=result)
+
+
 @pif_app.command("classify-job-postings")
 def pif_classify_job_postings(
     force: bool = typer.Option(False, "--force", help="Reclassify postings already on the current taxonomy."),

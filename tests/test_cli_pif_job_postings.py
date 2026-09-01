@@ -59,3 +59,35 @@ def test_research_job_postings_can_poll_until_complete(monkeypatch):
 
     assert result.exit_code == 0
     assert '"status": "completed"' in result.stdout
+
+
+def test_research_sitemap_queues_through_local_api(monkeypatch):
+    calls = []
+
+    def fake_post(path, json_body=None, timeout=30.0):
+        calls.append((path, json_body, timeout))
+        return {"task_id": "sitemap-1", "status": "queued"}
+
+    monkeypatch.setattr(cli, "_post", fake_post)
+
+    result = runner.invoke(cli.app, ["pif", "research-sitemap", "firm/1"])
+
+    assert result.exit_code == 0
+    assert '"task_id": "sitemap-1"' in result.stdout
+    assert calls == [("/api/pif/firms/firm%2F1/research-sitemap", None, 90.0)]
+
+
+def test_maintenance_queue_uses_requested_daily_limit(monkeypatch):
+    calls = []
+
+    def fake_post(path, json_body=None, timeout=30.0):
+        calls.append((path, json_body, timeout))
+        return {"queued_job_postings": 25, "queued_sitemaps": 25}
+
+    monkeypatch.setattr(cli, "_post", fake_post)
+
+    result = runner.invoke(cli.app, ["pif", "maintenance-queue", "--limit", "25"])
+
+    assert result.exit_code == 0
+    assert '"queued_sitemaps": 25' in result.stdout
+    assert calls == [("/api/pif/research-maintenance/queue?limit=25", None, 300.0)]

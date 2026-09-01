@@ -202,6 +202,27 @@ def _research_data_with_status(
     return data
 
 
+def _research_data_with_sitemap_status(
+    firm: PifFirmRow,
+    status: str,
+    *,
+    checked_at: datetime | None = None,
+    error: str | None = None,
+) -> dict[str, Any]:
+    data = dict(firm.research_data) if isinstance(firm.research_data, dict) else {}
+    current = data.get("sitemap_monitor")
+    monitor = dict(current) if isinstance(current, dict) else {}
+    monitor.update({"status": status, "provider": "possibleos_sitemap_monitor"})
+    if checked_at is not None:
+        monitor["checked_at"] = checked_at.isoformat()
+    if error is not None:
+        monitor["error"] = error
+    elif status in OPEN_STATUSES:
+        monitor.pop("error", None)
+    data["sitemap_monitor"] = monitor
+    return data
+
+
 def normalize_job_postings(
     raw_postings: Any,
     *,
@@ -335,6 +356,52 @@ async def start_job_posting_research(firm_id: str) -> dict[str, Any]:
         }
 
 
+async def start_sitemap_research(firm_id: str) -> dict[str, Any]:
+    async with AsyncSessionLocal() as session:
+        firm = await session.get(PifFirmRow, firm_id)
+        if firm is None:
+            raise PifResearchUpstreamError(404, "firm_not_found")
+        if not _firm_website(firm):
+            raise PifResearchUpstreamError(400, "firm_website_required")
+        existing = (await session.execute(
+            select(PifJobResearchTaskRow)
+            .where(
+                PifJobResearchTaskRow.pif_id == firm_id,
+                PifJobResearchTaskRow.kind == "sitemap",
+                PifJobResearchTaskRow.status.in_(OPEN_STATUSES),
+            )
+            .order_by(PifJobResearchTaskRow.requested_at.desc())
+            .limit(1)
+        )).scalar_one_or_none()
+        if existing:
+            return {
+                "task_id": existing.task_id,
+                "pif_id": firm_id,
+                "firm_name": firm.firm_name,
+                "status": existing.status,
+                "message": "Sitemap research is already queued or running",
+            }
+
+        task_id = f"sitemap-{uuid.uuid4().hex}"
+        session.add(PifJobResearchTaskRow(
+            task_id=task_id,
+            pif_id=firm_id,
+            kind="sitemap",
+            status="queued",
+            requested_at=_utcnow(),
+        ))
+        firm.research_data = _research_data_with_sitemap_status(firm, "queued")
+        firm.updated_at = _utcnow()
+        await session.commit()
+        return {
+            "task_id": task_id,
+            "pif_id": firm_id,
+            "firm_name": firm.firm_name,
+            "status": "queued",
+            "message": "Queued for local sitemap research",
+        }
+
+
 async def get_research_status(task_id: str) -> dict[str, Any]:
     async with AsyncSessionLocal() as session:
         task = await session.get(PifJobResearchTaskRow, task_id)
@@ -367,8 +434,11 @@ async def _claim_next_task() -> tuple[str, str, str] | None:
         task.status = "in_progress"
         task.started_at = _utcnow()
         firm = await session.get(PifFirmRow, task.pif_id)
-        if firm is not None and task.kind == "research":
-            firm.research_data = _research_data_with_status(firm, "in_progress")
+        if firm is not None:
+            if task.kind == "research":
+                firm.research_data = _research_data_with_status(firm, "in_progress")
+            elif task.kind == "sitemap":
+                firm.research_data = _research_data_with_sitemap_status(firm, "in_progress")
             firm.updated_at = _utcnow()
         await session.commit()
         return task.task_id, task.pif_id, task.kind
@@ -390,7 +460,16 @@ async def _finish_task(
         firm = await session.get(PifFirmRow, task.pif_id)
         task.status = status
         task.completed_at = checked_at
-        if status == "completed" and result is not None:
+        if status == "completed" and result is not None and kind == "sitemap":
+            task.result_summary = {
+                "firm_name": firm.firm_name if firm else None,
+                "sitemap_status": result.get("status"),
+                "url_count": int(result.get("url_count") or 0),
+                "changed": result.get("changed"),
+                "added_count": int(result.get("added_count") or 0),
+                "removed_count": int(result.get("removed_count") or 0),
+            }
+        elif status == "completed" and result is not None:
             posting_count = len(result.get("postings") or [])
             task.result_summary = {
                 "firm_name": firm.firm_name if firm else None,
@@ -418,7 +497,9 @@ async def _finish_task(
         else:
             task.result_summary = {
                 "firm_name": firm.firm_name if firm else None,
-                "message": error or "Job-posting research failed",
+                "message": error or (
+                    "Sitemap research failed" if kind == "sitemap" else "Job-posting research failed"
+                ),
             }
             if firm is not None and kind == "research":
                 firm.research_data = _research_data_with_status(
@@ -433,6 +514,13 @@ async def _finish_task(
                 job_data["classification_error"] = error or "Job-posting classification failed"
                 research_data["job_postings"] = job_data
                 firm.research_data = research_data
+            elif firm is not None and kind == "sitemap":
+                firm.research_data = _research_data_with_sitemap_status(
+                    firm,
+                    "failed",
+                    checked_at=checked_at,
+                    error=error or "Sitemap research failed",
+                )
         if firm is not None:
             firm.updated_at = checked_at
         await session.commit()
@@ -443,8 +531,11 @@ async def _run_task(task_id: str, pif_id: str, kind: str = "research") -> None:
         firm = await session.get(PifFirmRow, pif_id)
         firm_name = str(firm.firm_name or "").strip() if firm else ""
         website = _firm_website(firm) if firm else None
-    if not firm or not firm_name:
+    if not firm or (kind != "sitemap" and not firm_name):
         await _finish_task(task_id, status="failed", error="Firm record or name is missing", kind=kind)
+        return
+    if kind == "sitemap" and not website:
+        await _finish_task(task_id, status="failed", error="Firm website is missing", kind=kind)
         return
     if kind == "classify":
         try:
@@ -459,6 +550,16 @@ async def _run_task(task_id: str, pif_id: str, kind: str = "research") -> None:
             )
         except Exception as exc:
             logger.exception("Local job-opening classification failed for %s", pif_id)
+            await _finish_task(task_id, status="failed", error=str(exc)[:500], kind=kind)
+        return
+    if kind == "sitemap":
+        try:
+            from app.services.pif_sitemap_monitor import monitor_firm_sitemap
+
+            result = await monitor_firm_sitemap(pif_id)
+            await _finish_task(task_id, status="completed", result=result, kind=kind)
+        except Exception as exc:
+            logger.exception("Local sitemap research failed for %s", pif_id)
             await _finish_task(task_id, status="failed", error=str(exc)[:500], kind=kind)
         return
     try:

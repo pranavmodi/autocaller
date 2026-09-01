@@ -165,6 +165,8 @@ async def lifespan(app: FastAPI):
         asyncio.create_task(local_enrichment_loop())
         for _ in range(max(1, int(os.getenv("PIF_LOCAL_ENRICHMENT_WORKERS", "2"))))
     ]
+    from .services.pif_research_maintenance import research_maintenance_loop
+    pif_research_maintenance_task = asyncio.create_task(research_maintenance_loop())
     yield
     # Shutdown: stop the dispatcher, cancel background tasks, dispose engine
     get_dispatcher().stop()
@@ -179,6 +181,7 @@ async def lifespan(app: FastAPI):
         lead_gen_daily_task,
         reconciler_task,
         pif_directory_task,
+        pif_research_maintenance_task,
         *job_research_workers,
         *review_research_workers,
         *local_enrichment_workers,
