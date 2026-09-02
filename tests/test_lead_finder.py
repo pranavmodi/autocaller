@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from datetime import datetime, timezone
 
 from app.services import lead_finder
 from app.services import lead_finder_tools
@@ -248,6 +249,57 @@ def test_persistence_models_cover_runs_steps_and_every_gateway_attempt():
     assert step_run_fk.ondelete == "CASCADE"
     assert attempt_step_fk.ondelete == "CASCADE"
     assert tool_step_fk.ondelete == "CASCADE"
+
+
+def test_published_lead_record_keeps_provenance_and_rejects_malformed_results():
+    published_at = datetime(2026, 9, 2, 12, 0, tzinfo=timezone.utc)
+    run = LeadFinderRunRow(
+        id="lfr_catalog",
+        status="completed",
+        user_direction="Find PI intake leaders",
+        baseline_context_hash="a" * 64,
+        created_at=published_at,
+    )
+    step = LeadFinderStepRow(
+        id="lfs_catalog",
+        run_id=run.id,
+        step_number=7,
+        request_id="lfreq_catalog",
+    )
+    lead = {
+        "id": "lflead_catalog",
+        "name": "Jane Operator",
+        "recent_signals": [],
+        "outreach_angles": [],
+        "sources": [],
+        "contrary_evidence": [],
+    }
+    tool_call = LeadFinderToolCallRow(
+        id="lft_catalog",
+        step_id=step.id,
+        tool_name="lead_finder.add_researched_lead",
+        status="completed",
+        result_json={"lead": lead},
+        started_at=published_at,
+        completed_at=published_at,
+    )
+
+    record = lead_finder._published_lead_record(tool_call, step, run)
+
+    assert record == {
+        "lead": lead,
+        "run": {
+            "id": "lfr_catalog",
+            "status": "completed",
+            "user_direction": "Find PI intake leaders",
+            "created_at": published_at.isoformat(),
+        },
+        "step": {"id": "lfs_catalog", "step_number": 7},
+        "published_at": published_at.isoformat(),
+    }
+
+    tool_call.result_json = {"lead": {"id": "bad", "name": "Missing arrays"}}
+    assert lead_finder._published_lead_record(tool_call, step, run) is None
 
 
 def test_changed_paths_identifies_nested_context_evolution():

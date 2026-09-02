@@ -260,6 +260,7 @@ Every command accepts `--help`. Exit code is `0` on success, `1` on any error
 | `lead-finder mission-passages <chunk_id>... [--json]` / `lead-finder mission-index-status [--json]` | Fetch exact indexed transcript passages or inspect current index coverage through the read-only adapter. |
 | `lead-finder web-research "<person>" --chunk-id ID [--provider openai\|openclaw --organization ORG --role ROLE --episode-title TITLE --excerpt TEXT --focus TEXT --json]` | Verify one transcript-supported person through live public-web research and return source-backed current-role, recent-signal, and outreach-angle evidence using the selected provider. It does not add the candidate to results. |
 | `lead-finder results <run_id> [--json]` | Show candidates explicitly published into the run-local Found Leads list by `lead_finder.add_researched_lead`. No CRM write or deduplication occurs. |
+| `lead-finder all-results [--limit N --json]` | List canonical researched-lead publications newest-first across every Lead Finder run, including originating run, step, direction, and publication time. Repeated people remain separate publications; no cross-run deduplication occurs. |
 | `lead-finder start [--direction "..."] [--provider openai\|openclaw] [--json]` | Create a durable debug run immediately before step 1. The run snapshots the fixed job, all four baseline context files, and the run-wide LLM provider in Postgres. Direct OpenAI with `gpt-5.6-luna` is the default. |
 | `lead-finder provider <run_id> <openai\|openclaw> [--json]` | Persist the provider used by every future LLM call in one run: reasoning and web research. Mission Control tools remain local, and an active step is not interrupted. |
 | `lead-finder runs [--limit N] [--json]` / `lead-finder show <run_id> [--json]` | List runs or inspect one run with every persisted step, exact request, raw/parsed response, context before/after, diff, timing, gateway attempt, and normalized prompt-cache metrics. |
@@ -1188,7 +1189,9 @@ detects object/array JSON encoded inside string fields. The timeline summarizes
 the already-persisted step reasoning, tool status/result, and next transition.
 Agents and scripts receive the same underlying records through `lead-finder
 show <run_id> --json` and `lead-finder llm-session <run_id> --source
-session|trajectory`.
+session|trajectory`. The browser's consolidated All leads list and click-through
+detail panel use `GET /api/lead-finder/results`; headless operators receive the
+same cross-run publications through `lead-finder all-results --json`.
 
 Relevant endpoints:
 

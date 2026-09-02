@@ -4903,10 +4903,8 @@ def lead_finder_results(
     json_output: bool = typer.Option(False, "--json"),
 ):
     """List researched leads explicitly added to one run's results."""
-    run = (_get(f"/api/lead-finder/runs/{run_id}").get("run") or {})
-    context = run.get("current_context") or {}
-    state = ((context.get("agent_state") or {}).get("working_state") or {})
-    leads = state.get("found_leads") or []
+    records = (_get("/api/lead-finder/results", run_id=run_id, limit=1000).get("results") or [])
+    leads = [record.get("lead") or {} for record in records]
     if json_output:
         console.print_json(data={"run_id": run_id, "results": leads})
         return
@@ -4926,6 +4924,42 @@ def lead_finder_results(
             str(lead.get("organization") or ""),
             str(len(lead.get("outreach_angles") or [])),
             str(len(lead.get("sources") or [])),
+        )
+    console.print(table)
+
+
+@lead_finder_app.command("all-results")
+def lead_finder_all_results(
+    limit: int = typer.Option(500, "--limit", min=1, max=1000),
+    json_output: bool = typer.Option(False, "--json"),
+):
+    """List researched leads published across every Lead Finder run."""
+    data = _get("/api/lead-finder/results", limit=limit)
+    records = data.get("results") or []
+    if json_output:
+        console.print_json(data={"results": records, "total": len(records)})
+        return
+    if not records:
+        console.print("No researched leads added across runs.")
+        return
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("name")
+    table.add_column("role")
+    table.add_column("organization")
+    table.add_column("run")
+    table.add_column("step")
+    table.add_column("published")
+    for record in records:
+        lead = record.get("lead") or {}
+        run = record.get("run") or {}
+        step = record.get("step") or {}
+        table.add_row(
+            str(lead.get("name") or ""),
+            str(lead.get("role") or ""),
+            str(lead.get("organization") or ""),
+            str(run.get("id") or ""),
+            str(step.get("step_number") or ""),
+            str(record.get("published_at") or ""),
         )
     console.print(table)
 

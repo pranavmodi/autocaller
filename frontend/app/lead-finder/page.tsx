@@ -27,6 +27,7 @@ import {
   getLeadFinderContext,
   getLeadFinderLLMSession,
   getLeadFinderRun,
+  listLeadFinderResults,
   listLeadFinderRuns,
   queueLeadFinderStep,
   resetAllLeadFinderRuns,
@@ -37,6 +38,7 @@ import {
   type LeadFinderFoundLead,
   type LeadFinderLLMSessionRaw,
   type LeadFinderPersistedStep,
+  type LeadFinderPublishedResult,
   type LeadFinderRun,
 } from "@/lib/api";
 
@@ -238,9 +240,92 @@ function stepProviderLabel(
   return runProvider === "openclaw" ? "OpenClaw" : "Direct OpenAI";
 }
 
+function publishedResultKey(result: LeadFinderPublishedResult) {
+  return `${result.run.id}:${result.step.id}:${result.lead.id}`;
+}
+
+function LeadDetails({
+  lead,
+  publication,
+}: {
+  lead: LeadFinderFoundLead;
+  publication?: LeadFinderPublishedResult;
+}) {
+  return (
+    <article className="rounded-xl border border-neutral-200 p-4 sm:p-5">
+      {publication && (
+        <div className="mb-4 grid gap-2 rounded-lg bg-neutral-50 p-3 text-xs text-neutral-600 sm:grid-cols-2">
+          <div><span className="font-medium text-neutral-800">Run</span> <span className="font-mono">{publication.run.id}</span></div>
+          <div><span className="font-medium text-neutral-800">Published</span> {shortDate(publication.published_at)}</div>
+          <div><span className="font-medium text-neutral-800">Step</span> {publication.step.step_number}</div>
+          <div><span className="font-medium text-neutral-800">Run status</span> {publication.run.status}</div>
+          <div className="sm:col-span-2"><span className="font-medium text-neutral-800">Direction</span> {publication.run.user_direction || "No run-specific direction"}</div>
+        </div>
+      )}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-base font-semibold text-neutral-950">{lead.name}</h2>
+            <span className="rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-medium uppercase tracking-wide text-emerald-700">{lead.status}</span>
+          </div>
+          <p className="mt-1 text-sm text-neutral-600">{[lead.role, lead.organization].filter(Boolean).join(" · ") || "Current role unverified"}</p>
+        </div>
+        {lead.official_profile_url && (
+          <a href={lead.official_profile_url} target="_blank" rel="noreferrer"
+            className="inline-flex items-center gap-1 text-xs font-medium text-violet-700 hover:underline">
+            Public profile <ExternalLink className="h-3 w-3" />
+          </a>
+        )}
+      </div>
+      <p className="mt-4 text-sm leading-6 text-neutral-700">{lead.profile_summary}</p>
+
+      <div className="mt-5 grid gap-4 lg:grid-cols-2">
+        <section>
+          <h3 className="text-xs font-semibold uppercase tracking-[0.12em] text-neutral-500">Recent signals</h3>
+          <div className="mt-2 space-y-2">
+            {lead.recent_signals.map((signal, index) => (
+              <div key={`${lead.id}-signal-${index}`} className="rounded-lg bg-neutral-50 p-3">
+                <a href={signal.source_url} target="_blank" rel="noreferrer" className="text-sm font-medium text-neutral-900 hover:underline">{signal.title}</a>
+                <div className="mt-1 text-[10px] text-neutral-400">{signal.date || "Date not published"}</div>
+                <p className="mt-1 text-xs leading-5 text-neutral-600">{signal.summary}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+        <section>
+          <h3 className="text-xs font-semibold uppercase tracking-[0.12em] text-neutral-500">Possible outreach angles</h3>
+          <div className="mt-2 space-y-2">
+            {lead.outreach_angles.map((angle, index) => (
+              <div key={`${lead.id}-angle-${index}`} className="rounded-lg border border-violet-100 bg-violet-50/60 p-3">
+                <div className="text-sm font-medium text-violet-950">{angle.title}</div>
+                <p className="mt-1 text-xs leading-5 text-violet-900">{angle.why_relevant}</p>
+                <p className="mt-2 text-xs font-medium text-violet-950">Question: {angle.question}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+      </div>
+
+      <details className="mt-4 rounded-lg border border-neutral-200">
+        <summary className="cursor-pointer list-none px-3 py-2 text-xs font-medium text-neutral-600">Sources and contrary evidence</summary>
+        <div className="space-y-3 border-t border-neutral-200 p-3 text-xs">
+          <div className="flex flex-wrap gap-2">
+            {lead.sources.map((source, index) => (
+              <a key={`${lead.id}-source-${index}`} href={source.url} target="_blank" rel="noreferrer" className="rounded bg-neutral-100 px-2 py-1 text-neutral-700 hover:underline">{source.title || source.url}</a>
+            ))}
+          </div>
+          {lead.contrary_evidence.length > 0 && <JsonPanel value={{ contrary_evidence: lead.contrary_evidence }} />}
+        </div>
+      </details>
+    </article>
+  );
+}
+
 export default function LeadFinderPage() {
   const [baseline, setBaseline] = useState<LeadFinderContext | null>(null);
   const [runs, setRuns] = useState<LeadFinderRun[]>([]);
+  const [publishedResults, setPublishedResults] = useState<LeadFinderPublishedResult[]>([]);
+  const [selectedPublishedKey, setSelectedPublishedKey] = useState("");
   const [run, setRun] = useState<LeadFinderRun | null>(null);
   const [userDirection, setUserDirection] = useState("");
   const [loading, setLoading] = useState(true);
@@ -249,7 +334,7 @@ export default function LeadFinderPage() {
   const [providerChanging, setProviderChanging] = useState(false);
   const [resettingAll, setResettingAll] = useState(false);
   const [error, setError] = useState("");
-  const [activeView, setActiveView] = useState<"runs" | "overview" | "context" | "session" | "leads" | "history">("overview");
+  const [activeView, setActiveView] = useState<"runs" | "overview" | "context" | "session" | "all-leads" | "leads" | "history">("overview");
   const [llmSession, setLlmSession] = useState<LeadFinderLLMSessionRaw | null>(null);
   const [llmSessionSource, setLlmSessionSource] = useState<"session" | "trajectory">("session");
   const [llmSessionDisplay, setLlmSessionDisplay] = useState<"readable" | "raw">("readable");
@@ -271,6 +356,12 @@ export default function LeadFinderPage() {
     return response.runs;
   }, []);
 
+  const refreshPublishedResults = useCallback(async () => {
+    const response = await listLeadFinderResults();
+    setPublishedResults(response.results);
+    return response.results;
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     async function bootstrap() {
@@ -280,6 +371,7 @@ export default function LeadFinderPage() {
         const [contextResponse, existingRuns] = await Promise.all([
           getLeadFinderContext(),
           refreshRuns(),
+          refreshPublishedResults(),
         ]);
         if (cancelled) return;
         setBaseline(contextResponse.context);
@@ -292,7 +384,7 @@ export default function LeadFinderPage() {
     }
     void bootstrap();
     return () => { cancelled = true; };
-  }, [loadRun, refreshRuns]);
+  }, [loadRun, refreshPublishedResults, refreshRuns]);
 
   useEffect(() => {
     if (!run || resettingAll || (!ACTIVE_STATUSES.has(run.status) && !run.auto_run_enabled)) return;
@@ -306,6 +398,7 @@ export default function LeadFinderPage() {
           setSubmitting(false);
           submissionLock.current = false;
           void refreshRuns();
+          void refreshPublishedResults();
         }
       } catch (cause) {
         if (!cancelled) setError(cause instanceof Error ? cause.message : "Unable to refresh run status.");
@@ -317,7 +410,7 @@ export default function LeadFinderPage() {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [refreshRuns, resettingAll, run?.auto_run_enabled, run?.id, run?.status]);
+  }, [refreshPublishedResults, refreshRuns, resettingAll, run?.auto_run_enabled, run?.id, run?.status]);
 
   useEffect(() => {
     if (activeView !== "session" || !run) return;
@@ -374,6 +467,11 @@ export default function LeadFinderPage() {
       );
     });
   }, [context]);
+  const selectedPublishedResult = useMemo(() => (
+    publishedResults.find((result) => publishedResultKey(result) === selectedPublishedKey)
+    || publishedResults[0]
+    || null
+  ), [publishedResults, selectedPublishedKey]);
   const files = Object.values(context?.baseline_context.files || {});
   const isActive = Boolean(run && ACTIVE_STATUSES.has(run.status));
   const rawSessionText = llmSessionSource === "session"
@@ -510,6 +608,8 @@ export default function LeadFinderPage() {
       setSubmitting(false);
       setRun({ ...response.run, steps: [] });
       setRuns([response.run]);
+      setPublishedResults([]);
+      setSelectedPublishedKey("");
       setUserDirection(response.run.user_direction || "");
       setActiveView("overview");
     } catch (cause) {
@@ -703,9 +803,13 @@ export default function LeadFinderPage() {
               className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium ${activeView === "history" ? "bg-neutral-900 text-white" : "text-neutral-600 hover:bg-neutral-100"}`}>
               <History className="h-4 w-4" /> Persisted history <span className="rounded-full bg-white/15 px-1.5 text-xs">{steps.length}</span>
             </button>
+            <button type="button" onClick={() => setActiveView("all-leads")}
+              className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium ${activeView === "all-leads" ? "bg-neutral-900 text-white" : "text-neutral-600 hover:bg-neutral-100"}`}>
+              <Users className="h-4 w-4" /> All leads <span className="rounded-full bg-white/15 px-1.5 text-xs">{publishedResults.length}</span>
+            </button>
             <button type="button" onClick={() => setActiveView("leads")}
               className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium ${activeView === "leads" ? "bg-neutral-900 text-white" : "text-neutral-600 hover:bg-neutral-100"}`}>
-              <Users className="h-4 w-4" /> Found leads <span className="rounded-full bg-white/15 px-1.5 text-xs">{foundLeads.length}</span>
+              <Users className="h-4 w-4" /> This run <span className="rounded-full bg-white/15 px-1.5 text-xs">{foundLeads.length}</span>
             </button>
           </div>
 
@@ -983,6 +1087,66 @@ export default function LeadFinderPage() {
                   </>
                 )}
               </div>
+            ) : activeView === "all-leads" ? (
+              publishedResults.length === 0 ? (
+                <div className="flex min-h-72 flex-col items-center justify-center text-center">
+                  <Users className="h-8 w-8 text-neutral-300" />
+                  <div className="mt-3 text-sm font-medium text-neutral-800">No researched leads across runs</div>
+                  <p className="mt-1 max-w-md text-xs leading-5 text-neutral-500">
+                    Leads appear here after a run explicitly publishes verified web research.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                    <div>
+                      <h2 className="text-base font-semibold text-neutral-950">All researched leads</h2>
+                      <p className="mt-1 text-xs leading-5 text-neutral-500">Newest first across every persisted run. Select a lead to inspect its evidence, angles, sources, and origin.</p>
+                    </div>
+                    <div className="text-xs text-neutral-400">{publishedResults.length} publication{publishedResults.length === 1 ? "" : "s"}</div>
+                  </div>
+                  <div className="grid gap-4 xl:grid-cols-[17rem_minmax(0,1fr)]">
+                    <div className="max-h-[48rem] overflow-auto rounded-xl border border-neutral-200">
+                      <div className="divide-y divide-neutral-200">
+                        {publishedResults.map((result) => {
+                          const key = publishedResultKey(result);
+                          const selected = selectedPublishedResult
+                            ? key === publishedResultKey(selectedPublishedResult)
+                            : false;
+                          return (
+                            <button
+                              key={key}
+                              type="button"
+                              onClick={() => setSelectedPublishedKey(key)}
+                              className={`w-full px-3 py-3 text-left transition-colors hover:bg-neutral-50 ${selected ? "bg-violet-50 ring-1 ring-inset ring-violet-200" : "bg-white"}`}
+                            >
+                              <div className="text-sm font-semibold text-neutral-950">{result.lead.name}</div>
+                              <div className="mt-1 line-clamp-2 text-xs leading-5 text-neutral-600">{[result.lead.role, result.lead.organization].filter(Boolean).join(" · ") || "Current role unverified"}</div>
+                              <div className="mt-2 flex flex-wrap gap-x-2 gap-y-1 text-[10px] text-neutral-400">
+                                <span>{shortDate(result.published_at)}</span>
+                                <span>step {result.step.step_number}</span>
+                                <span>{result.lead.sources.length} sources</span>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    <div className="min-w-0">
+                      {selectedPublishedResult && (
+                        <>
+                          <div className="mb-2 flex justify-end">
+                            <button type="button" onClick={() => void openRun(selectedPublishedResult.run.id)} className="text-xs font-medium text-violet-700 hover:underline">
+                              Open originating run →
+                            </button>
+                          </div>
+                          <LeadDetails lead={selectedPublishedResult.lead} publication={selectedPublishedResult} />
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )
             ) : activeView === "leads" ? (
               foundLeads.length === 0 ? (
                 <div className="flex min-h-72 flex-col items-center justify-center text-center">
@@ -995,63 +1159,7 @@ export default function LeadFinderPage() {
               ) : (
                 <div className="space-y-4">
                   {[...foundLeads].reverse().map((lead) => (
-                    <article key={lead.id} className="rounded-xl border border-neutral-200 p-4 sm:p-5">
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                        <div>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <h2 className="text-base font-semibold text-neutral-950">{lead.name}</h2>
-                            <span className="rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-medium uppercase tracking-wide text-emerald-700">{lead.status}</span>
-                          </div>
-                          <p className="mt-1 text-sm text-neutral-600">{[lead.role, lead.organization].filter(Boolean).join(" · ") || "Current role unverified"}</p>
-                        </div>
-                        {lead.official_profile_url && (
-                          <a href={lead.official_profile_url} target="_blank" rel="noreferrer"
-                            className="inline-flex items-center gap-1 text-xs font-medium text-violet-700 hover:underline">
-                            Public profile <ExternalLink className="h-3 w-3" />
-                          </a>
-                        )}
-                      </div>
-                      <p className="mt-4 text-sm leading-6 text-neutral-700">{lead.profile_summary}</p>
-
-                      <div className="mt-5 grid gap-4 lg:grid-cols-2">
-                        <section>
-                          <h3 className="text-xs font-semibold uppercase tracking-[0.12em] text-neutral-500">Recent signals</h3>
-                          <div className="mt-2 space-y-2">
-                            {lead.recent_signals.map((signal, index) => (
-                              <div key={`${lead.id}-signal-${index}`} className="rounded-lg bg-neutral-50 p-3">
-                                <a href={signal.source_url} target="_blank" rel="noreferrer" className="text-sm font-medium text-neutral-900 hover:underline">{signal.title}</a>
-                                <div className="mt-1 text-[10px] text-neutral-400">{signal.date || "Date not published"}</div>
-                                <p className="mt-1 text-xs leading-5 text-neutral-600">{signal.summary}</p>
-                              </div>
-                            ))}
-                          </div>
-                        </section>
-                        <section>
-                          <h3 className="text-xs font-semibold uppercase tracking-[0.12em] text-neutral-500">Possible outreach angles</h3>
-                          <div className="mt-2 space-y-2">
-                            {lead.outreach_angles.map((angle, index) => (
-                              <div key={`${lead.id}-angle-${index}`} className="rounded-lg border border-violet-100 bg-violet-50/60 p-3">
-                                <div className="text-sm font-medium text-violet-950">{angle.title}</div>
-                                <p className="mt-1 text-xs leading-5 text-violet-900">{angle.why_relevant}</p>
-                                <p className="mt-2 text-xs font-medium text-violet-950">Question: {angle.question}</p>
-                              </div>
-                            ))}
-                          </div>
-                        </section>
-                      </div>
-
-                      <details className="mt-4 rounded-lg border border-neutral-200">
-                        <summary className="cursor-pointer list-none px-3 py-2 text-xs font-medium text-neutral-600">Sources and contrary evidence</summary>
-                        <div className="space-y-3 border-t border-neutral-200 p-3 text-xs">
-                          <div className="flex flex-wrap gap-2">
-                            {lead.sources.map((source, index) => (
-                              <a key={`${lead.id}-source-${index}`} href={source.url} target="_blank" rel="noreferrer" className="rounded bg-neutral-100 px-2 py-1 text-neutral-700 hover:underline">{source.title || source.url}</a>
-                            ))}
-                          </div>
-                          {lead.contrary_evidence.length > 0 && <JsonPanel value={{ contrary_evidence: lead.contrary_evidence }} />}
-                        </div>
-                      </details>
-                    </article>
+                    <LeadDetails key={lead.id} lead={lead} />
                   ))}
                 </div>
               )

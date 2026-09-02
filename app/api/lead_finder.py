@@ -17,6 +17,7 @@ from app.services.lead_finder import (
     get_lead_finder_llm_session,
     get_lead_finder_run,
     get_lead_finder_step,
+    list_lead_finder_results,
     list_lead_finder_runs,
     load_lead_finder_context,
     queue_lead_finder_step,
@@ -127,6 +128,15 @@ async def lead_finder_step(req: LeadFinderStepRequest):
 @router.get("/runs")
 async def lead_finder_runs(limit: int = Query(25, ge=1, le=100)):
     return {"runs": await list_lead_finder_runs(limit=limit)}
+
+
+@router.get("/results")
+async def lead_finder_results(
+    limit: int = Query(500, ge=1, le=1000),
+    run_id: str | None = Query(default=None, min_length=1, max_length=64),
+):
+    results = await list_lead_finder_results(limit=limit, run_id=run_id)
+    return {"results": results, "total": len(results)}
 
 
 @router.post("/runs", status_code=status.HTTP_201_CREATED)

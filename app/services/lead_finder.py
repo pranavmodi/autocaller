@@ -556,6 +556,38 @@ def _tool_call_dict(row: LeadFinderToolCallRow) -> dict[str, Any]:
     }
 
 
+def _published_lead_record(
+    tool_call: LeadFinderToolCallRow,
+    step: LeadFinderStepRow,
+    run: LeadFinderRunRow,
+) -> dict[str, Any] | None:
+    """Build one canonical cross-run catalog record from an explicit add tool."""
+    result = tool_call.result_json if isinstance(tool_call.result_json, dict) else {}
+    lead = result.get("lead")
+    if not isinstance(lead, dict):
+        return None
+    required_strings = ("id", "name")
+    required_lists = ("recent_signals", "outreach_angles", "sources", "contrary_evidence")
+    if any(not isinstance(lead.get(field), str) or not lead[field] for field in required_strings):
+        return None
+    if any(not isinstance(lead.get(field), list) for field in required_lists):
+        return None
+    return {
+        "lead": deepcopy(lead),
+        "run": {
+            "id": run.id,
+            "status": run.status,
+            "user_direction": run.user_direction,
+            "created_at": _iso(run.created_at),
+        },
+        "step": {
+            "id": step.id,
+            "step_number": step.step_number,
+        },
+        "published_at": _iso(tool_call.completed_at or tool_call.started_at),
+    }
+
+
 def _step_dict(
     row: LeadFinderStepRow,
     attempts: list[LeadFinderAttemptRow] | None = None,
@@ -678,6 +710,39 @@ async def list_lead_finder_runs(*, limit: int = 25) -> list[dict[str, Any]]:
             )
         ).scalars().all()
     return [_run_dict(row) for row in rows]
+
+
+async def list_lead_finder_results(
+    *,
+    limit: int = 500,
+    run_id: str | None = None,
+) -> list[dict[str, Any]]:
+    """List canonical leads published by the explicit add tool, newest first."""
+    await ensure_lead_finder_tables()
+    query = (
+        select(LeadFinderToolCallRow, LeadFinderStepRow, LeadFinderRunRow)
+        .join(LeadFinderStepRow, LeadFinderStepRow.id == LeadFinderToolCallRow.step_id)
+        .join(LeadFinderRunRow, LeadFinderRunRow.id == LeadFinderStepRow.run_id)
+        .where(
+            LeadFinderToolCallRow.tool_name == "lead_finder.add_researched_lead",
+            LeadFinderToolCallRow.status == "completed",
+        )
+        .order_by(
+            desc(LeadFinderToolCallRow.completed_at).nulls_last(),
+            desc(LeadFinderToolCallRow.started_at),
+        )
+        .limit(limit)
+    )
+    if run_id:
+        query = query.where(LeadFinderRunRow.id == run_id)
+    async with AsyncSessionLocal() as session:
+        rows = (await session.execute(query)).all()
+    records = [
+        record
+        for tool_call, step, run in rows
+        if (record := _published_lead_record(tool_call, step, run)) is not None
+    ]
+    return records
 
 
 async def update_lead_finder_llm_provider(

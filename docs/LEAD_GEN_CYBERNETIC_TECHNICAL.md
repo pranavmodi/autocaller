@@ -1434,6 +1434,16 @@ tool can publish results. The browser additionally filters noncanonical legacy
 entries before rendering, preventing one malformed historical object from
 crashing the Found Leads tab.
 
+`GET /api/lead-finder/results` builds the consolidated cross-run lead catalog
+from completed `lead_finder.add_researched_lead` tool calls joined to their
+persisted step and run. It returns canonical lead details plus the originating
+run ID, run direction, step number, and publication time, newest first. This
+event-derived view excludes malformed model-authored context entries by
+construction. The browser's All leads tab presents the catalog as a selectable
+list with a full evidence/detail panel; `lead-finder all-results` exposes the
+same records to headless operators. Repeated people remain separate
+publications because cross-run deduplication is still intentionally absent.
+
 `POST /api/lead-finder/runs/{run_id}/restart` creates a new step-0 run linked by
 `restarted_from_run_id`; it never deletes or rewrites prior history. It inherits
 the prior user direction unless overridden, inherits the run-wide LLM provider,
@@ -1466,6 +1476,7 @@ bin/possibleos lead-finder show <run_id> --json  # raw usage + normalized prompt
 bin/possibleos lead-finder llm-session <run_id> --source session
 bin/possibleos lead-finder llm-session <run_id> --source trajectory
 bin/possibleos lead-finder results <run_id> --json
+bin/possibleos lead-finder all-results --json
 bin/possibleos lead-finder restart <run_id> --json
 bin/possibleos lead-finder reset-all --direction "California PI firms" --provider openai --yes --json
 ```

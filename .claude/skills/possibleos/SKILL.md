@@ -41,7 +41,11 @@ and receive one bounded JSON/schema repair attempt before the run fails; both
 attempts remain visible in persisted history. A later explicit
 `lead_finder.add_researched_lead` call publishes that
 completed research into the run-local Found Leads list; inspect it with
-`lead-finder results <run_id>`. No cross-run or CRM deduplication is performed.
+`lead-finder results <run_id>`. Use `lead-finder all-results --json` or the
+browser's All leads tab for the newest-first consolidated catalog across every
+run; each publication retains its originating run, step, direction, and time,
+and selecting it opens the full evidence and outreach-angle detail. No
+cross-run or CRM deduplication is performed.
 Use `lead-finder auto-start <run_id> --max-steps 25` to let the server continue
 through the same persisted one-transition steps without manual clicks. It ends
 on model completion, failure, operator stop, or the bounded step cap and resumes

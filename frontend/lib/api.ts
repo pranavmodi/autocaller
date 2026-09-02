@@ -3141,6 +3141,21 @@ export type LeadFinderFoundLead = {
   added_at: string;
 };
 
+export type LeadFinderPublishedResult = {
+  lead: LeadFinderFoundLead;
+  run: {
+    id: string;
+    status: string;
+    user_direction: string;
+    created_at: string | null;
+  };
+  step: {
+    id: string;
+    step_number: number;
+  };
+  published_at: string | null;
+};
+
 export const getLeadFinderContext = () =>
   get<{ context: LeadFinderContext }>("/api/lead-finder/context");
 
@@ -3260,6 +3275,11 @@ export const createLeadFinderRun = (
 
 export const listLeadFinderRuns = (limit = 25) =>
   get<{ runs: LeadFinderRun[] }>(`/api/lead-finder/runs?limit=${limit}`);
+
+export const listLeadFinderResults = (limit = 500) =>
+  get<{ results: LeadFinderPublishedResult[]; total: number }>(
+    `/api/lead-finder/results?limit=${limit}`,
+  );
 
 export const getLeadFinderRun = (runId: string) =>
   get<{ run: LeadFinderRun }>(`/api/lead-finder/runs/${runId}`);
