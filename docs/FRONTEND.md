@@ -138,6 +138,22 @@ The `doctor` command as a page. Visible whether the plumbing is OK.
 - Shows prompt reveals, 50% scrolls, and the exact button/link text and target
   captured by the landing-page beacon, with a per-contact activity feed.
 
+### 8. `/research-leads` — Researched lead catalog
+
+- First-class global-navigation destination for every canonical lead published
+  by the Lead Finder across runs; the debug workspace retains only its
+  run-local result view.
+- Headline counts summarize publications, represented organizations, research
+  runs, and recency.
+- Search spans people, firms, profile evidence, recent signals, and outreach
+  angles; organization/run filters and newest/oldest/name sorting support
+  scanning without changing persisted data.
+- A mobile-safe master-detail flow opens identity, research notes, recent
+  signals, transcript evidence, outreach angles, sources, contrary evidence,
+  and exact run/step provenance when a result is selected.
+- The originating-run link opens `/lead-finder?run=<run_id>` for a direct audit
+  path. The equivalent headless view remains `lead-finder all-results --json`.
+
 ---
 
 ## What explicitly does NOT exist in v1

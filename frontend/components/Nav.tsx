@@ -23,6 +23,7 @@ import {
   Search,
   Send,
   Stethoscope,
+  Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ConnectionBadge } from "@/components/ConnectionBadge";
@@ -54,6 +55,7 @@ const items = [
   { href: "/calls", label: "Calls", icon: PhoneCall },
   { href: "/comms", label: "Comms", icon: MessageSquare },
   { href: "/lead-gen", label: "Lead Gen", icon: BrainCircuit },
+  { href: "/research-leads", label: "Research Leads", icon: Users },
   { href: "/lead-finder", label: "Lead Finder", icon: Search },
   { href: "/knowledge", label: "Knowledge", icon: BookOpen },
   { href: "/click-analytics", label: "Engagement", icon: Activity },
@@ -100,7 +102,7 @@ export function Nav() {
             <ConnectionBadge />
           </span>
         </div>
-        <nav className="flex-1 space-y-1 px-3 py-4">
+        <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
           {items.map(({ href, label, icon: Icon }) => (
             <Link
               key={href}

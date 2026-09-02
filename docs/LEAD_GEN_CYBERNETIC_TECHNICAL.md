@@ -1439,9 +1439,11 @@ from completed `lead_finder.add_researched_lead` tool calls joined to their
 persisted step and run. It returns canonical lead details plus the originating
 run ID, run direction, step number, and publication time, newest first. This
 event-derived view excludes malformed model-authored context entries by
-construction. The browser's All leads tab presents the catalog as a selectable
-list with a full evidence/detail panel; `lead-finder all-results` exposes the
-same records to headless operators. Repeated people remain separate
+construction. The top-level `/research-leads` workspace presents the catalog
+as a searchable and filterable master-detail view with headline coverage
+counts, full evidence, transcript passages, outreach angles, source caveats,
+and an origin link back to the exact Lead Finder run. `lead-finder all-results`
+exposes the same records to headless operators. Repeated people remain separate
 publications because cross-run deduplication is still intentionally absent.
 
 `POST /api/lead-finder/runs/{run_id}/restart` creates a new step-0 run linked by

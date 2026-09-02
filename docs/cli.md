@@ -1189,9 +1189,10 @@ detects object/array JSON encoded inside string fields. The timeline summarizes
 the already-persisted step reasoning, tool status/result, and next transition.
 Agents and scripts receive the same underlying records through `lead-finder
 show <run_id> --json` and `lead-finder llm-session <run_id> --source
-session|trajectory`. The browser's consolidated All leads list and click-through
-detail panel use `GET /api/lead-finder/results`; headless operators receive the
-same cross-run publications through `lead-finder all-results --json`.
+session|trajectory`. The top-level `/research-leads` workspace provides the
+browser's searchable, filterable consolidated list and click-through detail
+panel using `GET /api/lead-finder/results`; headless operators receive the same
+cross-run publications through `lead-finder all-results --json`.
 
 Relevant endpoints:
 
