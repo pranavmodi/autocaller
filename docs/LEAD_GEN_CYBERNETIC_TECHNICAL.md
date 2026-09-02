@@ -1292,12 +1292,24 @@ execution and queues the next step. The run row stores the enabled flag,
 starting step, maximum additional steps, and eventual stop reason. After each
 normal persisted transition, the worker locks the run and queues exactly one
 next step only when auto-run remains enabled and its budget remains. Completion,
-failure, an operator stop, or the bounded step cap ends chaining. The default
+a non-retryable failure, an operator stop, or the bounded step cap ends chaining. The default
 cap is 25 additional steps and the API maximum is 100. `POST
 /api/lead-finder/runs/{run_id}/auto-run/stop` disables chaining without
 interrupting the active LLM-provider or tool call; that step finishes and persists.
 Startup recovery requeues both interrupted steps and enabled auto-runs stranded
 between two steps, so a browser connection is not required.
+
+Provider timeouts, rate limits, temporary 502/503/504 responses, and connection
+capacity failures are retryable operational conditions rather than terminal
+agent failures. A reasoning-side occurrence persists the step as failed for
+audit, retains its pre-step context, consumes that step ordinal, and leaves the
+run `paused`. A transient failed tool execution remains part of its completed
+reasoning transition but also pauses the run. Both paths disable auto-run with
+`auto_run_stop_reason=gateway_temporarily_unavailable`, preserve the exact
+error, and queue no continuation. `POST /api/lead-finder/runs/{run_id}/resume`
+reopens such a run without executing anything; a later manual step or auto-run
+continues with a new persisted ordinal. Malformed output, invalid tool calls,
+and other semantic errors remain terminal failures.
 
 Each `lead_finder_steps` row stores the exact user payload, context before,
 raw/parsed response, context after, changed paths, model, usage, timing, and
@@ -1479,6 +1491,7 @@ bin/possibleos lead-finder llm-session <run_id> --source session
 bin/possibleos lead-finder llm-session <run_id> --source trajectory
 bin/possibleos lead-finder results <run_id> --json
 bin/possibleos lead-finder all-results --json
+bin/possibleos lead-finder resume <run_id> --json
 bin/possibleos lead-finder restart <run_id> --json
 bin/possibleos lead-finder reset-all --direction "California PI firms" --provider openai --yes --json
 ```

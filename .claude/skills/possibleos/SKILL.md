@@ -49,11 +49,18 @@ outreach-angle detail. No
 cross-run or CRM deduplication is performed.
 Use `lead-finder auto-start <run_id> --max-steps 25` to let the server continue
 through the same persisted one-transition steps without manual clicks. It ends
-on model completion, failure, operator stop, or the bounded step cap and resumes
+on model completion, non-retryable failure, operator stop, or the bounded step cap and resumes
 stranded enabled runs after a backend restart. Use `lead-finder auto-stop
 <run_id>` to stop chaining after the active step; it does not interrupt an
 in-flight OpenClaw or tool call. Manual `lead-finder step` requests are rejected
 while auto-run is enabled.
+Transient provider timeouts, rate limits, temporary 502/503/504 responses, and
+connection-capacity failures pause the run instead of terminating it. The exact
+failed attempt and unchanged context remain persisted, auto-run stops, and no
+continuation is queued. Use `lead-finder resume <run_id>` to reopen a legacy or
+terminal-looking transient failure without executing it, then use
+`lead-finder step` or `lead-finder auto-start` when capacity is available.
+Malformed output and other non-retryable errors still fail normally.
 Each durable run uses its own stable OpenClaw session so later steps can reuse
 the growing prompt prefix. The first turn sends `initial_v2`, with deterministic
 job, tools, and baseline files before mutable run state; later `continuation_v2`

@@ -5181,6 +5181,22 @@ def lead_finder_restart(
     console.print("current_step: 0")
 
 
+@lead_finder_app.command("resume")
+def lead_finder_resume(
+    run_id: str = typer.Argument(...),
+    json_output: bool = typer.Option(False, "--json"),
+):
+    """Reopen a run paused by transient gateway pressure without executing it."""
+    run = (_post(f"/api/lead-finder/runs/{run_id}/resume", {}).get("run") or {})
+    if json_output:
+        console.print_json(data={"run": run})
+        return
+    console.print(f"[green]resumed {run.get('id')}[/green]")
+    console.print(f"status: {run.get('status')}")
+    console.print(f"current_step: {run.get('current_step')}")
+    console.print("No step was queued; use lead-finder step or auto-start when ready.")
+
+
 @lead_finder_app.command("reset-all")
 def lead_finder_reset_all(
     direction: str = typer.Option("", "--direction", help="Direction for the replacement step-0 run."),

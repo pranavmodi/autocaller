@@ -22,6 +22,7 @@ from app.services.lead_finder import (
     load_lead_finder_context,
     queue_lead_finder_step,
     reset_all_lead_finder_runs,
+    resume_lead_finder_run,
     restart_lead_finder_run,
     run_lead_finder_step,
     start_lead_finder_auto_run,
@@ -208,6 +209,22 @@ async def stop_auto_run(run_id: str):
         run = await stop_lead_finder_auto_run(run_id=run_id)
     except LeadFinderNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"run": run}
+
+
+@router.post("/runs/{run_id}/resume")
+async def resume_run(run_id: str):
+    try:
+        run = await resume_lead_finder_run(run_id=run_id)
+    except LeadFinderNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except LeadFinderRunBusyError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "lead_finder_run_busy", "active_step_id": str(exc)},
+        ) from exc
+    except LeadFinderRunStateError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     return {"run": run}
 
 

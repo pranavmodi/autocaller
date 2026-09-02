@@ -3238,6 +3238,7 @@ export type LeadFinderRun = {
   auto_run_started_step: number | null;
   auto_run_steps_used: number;
   auto_run_stop_reason: string | null;
+  resume_available: boolean;
   llm_provider: "openai" | "openclaw";
   llm_model: string;
   llm_configured: boolean;
@@ -3309,6 +3310,9 @@ export const startLeadFinderAutoRun = (
 
 export const stopLeadFinderAutoRun = (runId: string) =>
   post<{ run: LeadFinderRun }>(`/api/lead-finder/runs/${runId}/auto-run/stop`, {});
+
+export const resumeLeadFinderRun = (runId: string) =>
+  post<{ run: LeadFinderRun }>(`/api/lead-finder/runs/${runId}/resume`, {});
 
 export const updateLeadFinderLLMProvider = (
   runId: string,

@@ -43,6 +43,7 @@ ACTIVE_STEP_STATUSES = {"queued", "running", "retrying"}
 TERMINAL_STEP_STATUSES = {"completed", "failed", "interrupted"}
 AUTO_RUN_DEFAULT_MAX_STEPS = 25
 AUTO_RUN_MAX_STEPS = 100
+GATEWAY_PAUSE_REASON = "gateway_temporarily_unavailable"
 DEFAULT_LLM_PROVIDER = normalize_lead_finder_provider(
     os.getenv(
         "LEAD_FINDER_DEFAULT_LLM_PROVIDER",
@@ -480,6 +481,52 @@ def _auto_run_has_budget(run: LeadFinderRunRow) -> bool:
     return _auto_run_steps_used(run) < int(run.auto_run_max_steps or AUTO_RUN_DEFAULT_MAX_STEPS)
 
 
+def _is_transient_gateway_error(error: BaseException | str | None) -> bool:
+    """Return true only for transport/capacity failures that are useful to retry later."""
+    if error is None:
+        return False
+    name = type(error).__name__.lower() if isinstance(error, BaseException) else ""
+    message = str(error).lower()
+    transient_names = {
+        "timeouterror",
+        "readtimeout",
+        "connecttimeout",
+        "writetimeout",
+        "pooltimeout",
+        "connectionerror",
+    }
+    transient_markers = (
+        "readtimeout",
+        "connecttimeout",
+        "writetimeout",
+        "pooltimeout",
+        "timed out",
+        "timeout",
+        "too many requests",
+        "rate limit",
+        "http 429",
+        "status 429",
+        "http 502",
+        "status 502",
+        "http 503",
+        "status 503",
+        "http 504",
+        "status 504",
+        "temporarily unavailable",
+        "connection reset",
+        "connection refused",
+    )
+    return name in transient_names or any(marker in message for marker in transient_markers)
+
+
+def _transient_tool_failure(transition: dict[str, Any]) -> str | None:
+    execution = transition.get("tool_execution")
+    if not isinstance(execution, dict) or execution.get("status") != "failed":
+        return None
+    error = execution.get("error")
+    return str(error) if _is_transient_gateway_error(error) else None
+
+
 async def ensure_lead_finder_tables() -> None:
     global _tables_checked
     if _tables_checked:
@@ -510,6 +557,10 @@ def _run_dict(row: LeadFinderRunRow) -> dict[str, Any]:
         "auto_run_started_step": row.auto_run_started_step,
         "auto_run_steps_used": _auto_run_steps_used(row),
         "auto_run_stop_reason": row.auto_run_stop_reason,
+        "resume_available": (
+            row.auto_run_stop_reason == GATEWAY_PAUSE_REASON
+            or _is_transient_gateway_error(row.error)
+        ),
         "llm_provider": provider["provider"],
         "llm_model": provider["model"],
         "llm_configured": provider["configured"],
@@ -1026,6 +1077,7 @@ async def queue_lead_finder_step(
         run.user_direction = direction
         run.current_context_json = step.context_before_json
         run.error = None
+        run.auto_run_stop_reason = None
         run.updated_at = datetime.now(timezone.utc)
         try:
             await session.commit()
@@ -1113,6 +1165,58 @@ async def stop_lead_finder_auto_run(*, run_id: str) -> dict[str, Any]:
                 raise LeadFinderNotFoundError("lead_finder_run_not_found")
             run.auto_run_enabled = False
             run.auto_run_stop_reason = "operator_stopped"
+            run.updated_at = datetime.now(timezone.utc)
+        await session.refresh(run)
+        return _run_dict(run)
+
+
+async def resume_lead_finder_run(*, run_id: str) -> dict[str, Any]:
+    """Reopen a run stopped by transient gateway pressure without executing a step."""
+    await ensure_lead_finder_tables()
+    async with AsyncSessionLocal() as session:
+        async with session.begin():
+            run = (
+                await session.execute(
+                    select(LeadFinderRunRow)
+                    .where(LeadFinderRunRow.id == run_id)
+                    .with_for_update()
+                )
+            ).scalar_one_or_none()
+            if not run:
+                raise LeadFinderNotFoundError("lead_finder_run_not_found")
+            if run.status == "completed":
+                raise LeadFinderRunStateError("run_is_completed; start_a_new_run")
+            active = (
+                await session.execute(
+                    select(LeadFinderStepRow).where(
+                        LeadFinderStepRow.run_id == run_id,
+                        LeadFinderStepRow.status.in_(ACTIVE_STEP_STATUSES),
+                    )
+                )
+            ).scalar_one_or_none()
+            if active:
+                raise LeadFinderRunBusyError(active.id)
+            latest_step = (
+                await session.execute(
+                    select(LeadFinderStepRow)
+                    .where(LeadFinderStepRow.run_id == run_id)
+                    .order_by(desc(LeadFinderStepRow.step_number))
+                    .limit(1)
+                )
+            ).scalar_one_or_none()
+            transient = (
+                run.auto_run_stop_reason == GATEWAY_PAUSE_REASON
+                or _is_transient_gateway_error(run.error)
+                or bool(latest_step and _is_transient_gateway_error(latest_step.error))
+            )
+            if not transient:
+                raise LeadFinderRunStateError("run_did_not_pause_for_transient_gateway_pressure")
+            if latest_step:
+                run.current_step = max(int(run.current_step or 0), latest_step.step_number)
+            run.status = "paused"
+            run.auto_run_enabled = False
+            run.auto_run_stop_reason = "operator_resumed"
+            run.error = None
             run.updated_at = datetime.now(timezone.utc)
         await session.refresh(run)
         return _run_dict(run)
@@ -1340,6 +1444,7 @@ async def execute_lead_finder_step(step_id: str) -> None:
             tool_executor=execute_tool,
         )
     except Exception as exc:
+        transient_gateway_failure = _is_transient_gateway_error(exc)
         async with AsyncSessionLocal() as session:
             async with session.begin():
                 step = await session.get(LeadFinderStepRow, step_id)
@@ -1350,16 +1455,23 @@ async def execute_lead_finder_step(step_id: str) -> None:
                 step.error = str(exc)
                 step.completed_at = datetime.now(timezone.utc)
                 if run:
-                    run.status = "failed"
+                    run.status = "paused" if transient_gateway_failure else "failed"
+                    if transient_gateway_failure:
+                        # Consume the persisted ordinal while retaining the unchanged
+                        # pre-step context, so a later retry gets a new audit row.
+                        run.current_step = max(int(run.current_step or 0), step.step_number)
                     run.error = str(exc)
                     run.auto_run_enabled = False
-                    run.auto_run_stop_reason = "step_failed"
+                    run.auto_run_stop_reason = (
+                        GATEWAY_PAUSE_REASON if transient_gateway_failure else "step_failed"
+                    )
                     run.updated_at = datetime.now(timezone.utc)
         return
 
     after = result["context"]
     transition = result["transition"]
     gateway = result["gateway"]
+    transient_tool_error = _transient_tool_failure(transition)
     async with AsyncSessionLocal() as session:
         async with session.begin():
             step = await session.get(LeadFinderStepRow, step_id)
@@ -1390,14 +1502,17 @@ async def execute_lead_finder_step(step_id: str) -> None:
             if transition.get("is_complete"):
                 run.auto_run_enabled = False
                 run.auto_run_stop_reason = "completed"
-            run.error = None
+            elif transient_tool_error:
+                run.auto_run_enabled = False
+                run.auto_run_stop_reason = GATEWAY_PAUSE_REASON
+            run.error = transient_tool_error
             if gateway.get("provider") == "openai" and gateway.get("response_id"):
                 run.openai_previous_response_id = str(gateway["response_id"])
             elif gateway.get("provider") == "openclaw":
                 run.openclaw_session_started = True
             run.updated_at = datetime.now(timezone.utc)
 
-    if run_id:
+    if run_id and not transient_tool_error:
         next_step_id = await _queue_auto_run_continuation(run_id)
         if next_step_id:
             await execute_lead_finder_step(next_step_id)

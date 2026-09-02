@@ -309,6 +309,34 @@ def test_changed_paths_identifies_nested_context_evolution():
     ) == ["agent_state.completed_steps", "agent_state.next_step"]
 
 
+def test_gateway_timeout_is_pauseable_but_schema_failure_is_not():
+    assert lead_finder._is_transient_gateway_error(
+        "gateway call failed after 1 attempts: ReadTimeout"
+    ) is True
+    assert lead_finder._is_transient_gateway_error(
+        "gateway call failed after 1 attempts: HTTP 503 Service Unavailable"
+    ) is True
+    assert lead_finder._is_transient_gateway_error(
+        "gateway JSON missing required fields: ['next_step', 'action']"
+    ) is False
+
+
+def test_failed_gateway_tool_transition_requests_a_durable_pause():
+    transition = {
+        "tool_execution": {
+            "tool_name": "web.research_person",
+            "status": "failed",
+            "error": "web_research_gateway_failed: ReadTimeout",
+        }
+    }
+    assert lead_finder._transient_tool_failure(transition) == (
+        "web_research_gateway_failed: ReadTimeout"
+    )
+
+    transition["tool_execution"]["error"] = "invalid_person_query"
+    assert lead_finder._transient_tool_failure(transition) is None
+
+
 def test_fresh_run_row_starts_before_step_one_with_requested_direction():
     row = lead_finder._build_lead_finder_run_row(
         user_direction="  California intake teams  ",

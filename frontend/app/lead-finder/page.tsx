@@ -30,6 +30,7 @@ import {
   listLeadFinderRuns,
   queueLeadFinderStep,
   resetAllLeadFinderRuns,
+  resumeLeadFinderRun,
   startLeadFinderAutoRun,
   stopLeadFinderAutoRun,
   updateLeadFinderLLMProvider,
@@ -540,6 +541,23 @@ export default function LeadFinderPage() {
     }
   }
 
+  async function resumeRun() {
+    if (!run || run.status !== "failed" || autoChanging) return;
+    setAutoChanging(true);
+    setError("");
+    try {
+      const response = await resumeLeadFinderRun(run.id);
+      setRun((current) => current
+        ? { ...current, ...response.run, steps: current.steps }
+        : response.run);
+      void refreshRuns();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Unable to resume the paused run.");
+    } finally {
+      setAutoChanging(false);
+    }
+  }
+
   async function changeLLMProvider(provider: "openai" | "openclaw") {
     if (!run || providerChanging || run.llm_provider === provider) return;
     setProviderChanging(true);
@@ -626,6 +644,13 @@ export default function LeadFinderPage() {
                 {isActive ? "Agent step in progress…" : "Do next step"}
               </button>
             )}
+            {run?.status === "failed" && run.resume_available && (
+              <button type="button" onClick={resumeRun} disabled={autoChanging}
+                className="inline-flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-4 py-2.5 text-sm font-medium text-amber-800 hover:bg-amber-100 disabled:opacity-50">
+                {autoChanging ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+                Resume run
+              </button>
+            )}
             {run && run.auto_run_enabled ? (
               <button type="button" onClick={stopAutoRun} disabled={autoChanging}
                 className="inline-flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-4 py-2.5 text-sm font-medium text-amber-800 hover:bg-amber-100 disabled:opacity-50">
@@ -637,7 +662,9 @@ export default function LeadFinderPage() {
                 disabled={autoChanging || isActive || run.status === "completed" || run.status === "failed"}
                 className="inline-flex items-center gap-2 rounded-lg bg-violet-700 px-4 py-2.5 text-sm font-medium text-white hover:bg-violet-800 disabled:cursor-not-allowed disabled:bg-neutral-300">
                 {autoChanging ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-                Run without pauses
+                {run.auto_run_stop_reason === "gateway_temporarily_unavailable"
+                  ? "Retry without pauses"
+                  : "Run without pauses"}
               </button>
             )}
             {run && (
@@ -655,6 +682,11 @@ export default function LeadFinderPage() {
         </div>
 
         {error && <div className="mt-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
+        {run?.status === "paused" && run.auto_run_stop_reason === "gateway_temporarily_unavailable" && (
+          <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            Gateway capacity was temporarily unavailable. The run, context, and failed attempt are saved. Retry one step now or resume automatic execution later.
+          </div>
+        )}
 
         <div className="mt-6 grid gap-4 border-t border-neutral-100 pt-5 sm:grid-cols-2 lg:grid-cols-6">
           <div>
