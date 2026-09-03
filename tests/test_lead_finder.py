@@ -317,6 +317,9 @@ def test_gateway_timeout_is_pauseable_but_schema_failure_is_not():
         "gateway call failed after 1 attempts: HTTP 503 Service Unavailable"
     ) is True
     assert lead_finder._is_transient_gateway_error(
+        "gateway call failed after 1 attempts: gateway transient 504"
+    ) is True
+    assert lead_finder._is_transient_gateway_error(
         "gateway JSON missing required fields: ['next_step', 'action']"
     ) is False
 
@@ -335,6 +338,14 @@ def test_failed_gateway_tool_transition_requests_a_durable_pause():
 
     transition["tool_execution"]["error"] = "invalid_person_query"
     assert lead_finder._transient_tool_failure(transition) is None
+
+
+def test_pause_action_is_preserved_as_a_control_signal():
+    assert lead_finder._normalized_action({
+        "type": "pause",
+        "tool": "ignored",
+        "arguments": {"ignored": True},
+    }) == {"type": "pause", "tool": None, "arguments": {}}
 
 
 def test_fresh_run_row_starts_before_step_one_with_requested_direction():

@@ -656,7 +656,7 @@ class LeadFinderStepRow(Base):
 
     __table_args__ = (
         CheckConstraint(
-            "status IN ('queued', 'running', 'retrying', 'completed', 'failed', 'interrupted')",
+            "status IN ('queued', 'running', 'retrying', 'completed', 'paused', 'failed', 'interrupted')",
             name="ck_lead_finder_steps_status",
         ),
         UniqueConstraint("run_id", "step_number", name="uq_lead_finder_steps_run_number"),

@@ -40,7 +40,7 @@ REASONING_SCHEMA = {
         "action": {
             "type": "object",
             "properties": {
-                "type": {"type": "string", "enum": ["reason", "tool_call"]},
+                "type": {"type": "string", "enum": ["reason", "pause", "tool_call"]},
                 "tool": {"type": ["string", "null"]},
                 "arguments": {"type": "object", "additionalProperties": True},
             },

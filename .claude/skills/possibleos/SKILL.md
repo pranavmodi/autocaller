@@ -55,12 +55,16 @@ stranded enabled runs after a backend restart. Use `lead-finder auto-stop
 in-flight OpenClaw or tool call. Manual `lead-finder step` requests are rejected
 while auto-run is enabled.
 Transient provider timeouts, rate limits, temporary 502/503/504 responses, and
-connection-capacity failures pause the run instead of terminating it. The exact
-failed attempt and unchanged context remain persisted, auto-run stops, and no
+connection-capacity failures pause the step and run instead of terminating them.
+The exact failed provider attempt and unchanged context remain persisted,
+auto-run stops, and no
 continuation is queued. Use `lead-finder resume <run_id>` to reopen a legacy or
 terminal-looking transient failure without executing it, then use
 `lead-finder step` or `lead-finder auto-start` when capacity is available.
 Malformed output and other non-retryable errors still fail normally.
+The agent can also return `action.type=pause` when its saved context proves that
+no useful in-scope work can continue until an external dependency recovers;
+this stops automatic chaining instead of spending steps restating the block.
 Each durable run uses its own stable OpenClaw session so later steps can reuse
 the growing prompt prefix. The first turn sends `initial_v2`, with deterministic
 job, tools, and baseline files before mutable run state; later `continuation_v2`

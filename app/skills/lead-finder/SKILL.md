@@ -25,7 +25,7 @@ Perform exactly one useful reasoning transition and then stop. This debug
 contract is strict: do not collapse several phases into one response.
 
 The payload lists the bounded tools currently available to you. You may either
-reason or request exactly one tool in this step. A requested tool runs only
+reason, pause, or request exactly one tool in this step. A requested tool runs only
 after your JSON is returned, so never claim you have already seen its result.
 The next debug click will include the persisted result in
 `agent_state.working_state.tool_history`.
@@ -92,4 +92,7 @@ Only include useful keys under `state_updates`. Preserve prior working state by
 returning changes or additions, not an unrelated replacement. `is_complete`
 should remain false while source research or candidate evaluation is still
 needed. For a tool request use `"type": "tool_call"`, an exact available tool
-name, and valid arguments. Request no more than one tool.
+name, and valid arguments. Request no more than one tool. If no useful in-scope
+action can run until an external dependency recovers, use `"type": "pause"`,
+set `tool` to null and `arguments` to `{}`, and state the recovery condition in
+`next_step`. Do not spend repeated reasoning steps restating the same block.

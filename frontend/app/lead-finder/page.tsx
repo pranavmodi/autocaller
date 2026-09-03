@@ -193,6 +193,7 @@ function shortDate(value: string | null | undefined) {
 
 function stepTone(status: string) {
   if (status === "completed") return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  if (status === "paused") return "border-amber-200 bg-amber-50 text-amber-700";
   if (status === "failed" || status === "interrupted") return "border-red-200 bg-red-50 text-red-700";
   if (status === "running" || status === "retrying" || status === "queued") return "border-sky-200 bg-sky-50 text-sky-700";
   return "border-neutral-200 bg-neutral-50 text-neutral-600";
@@ -911,7 +912,7 @@ export default function LeadFinderPage() {
                       const waiting = ACTIVE_STATUSES.has(step.status);
                       return (
                         <article key={step.id} className="relative pl-11">
-                          <div className={`absolute left-0 top-4 z-10 flex h-9 w-9 items-center justify-center rounded-full border-4 border-white ${waiting ? "bg-sky-100 text-sky-700" : step.status === "completed" ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}`}>
+                          <div className={`absolute left-0 top-4 z-10 flex h-9 w-9 items-center justify-center rounded-full border-4 border-white ${waiting ? "bg-sky-100 text-sky-700" : step.status === "completed" ? "bg-emerald-100 text-emerald-700" : step.status === "paused" ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-700"}`}>
                             {waiting ? <Loader2 className="h-4 w-4 animate-spin" /> : response.action?.type === "tool_call" ? <Wrench className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}
                           </div>
                           <div className="rounded-xl border border-neutral-200 bg-white p-4 shadow-sm">

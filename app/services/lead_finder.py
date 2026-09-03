@@ -40,7 +40,7 @@ MODEL = os.getenv("LEAD_FINDER_MODEL", "openclaw/main")
 OPENCLAW_HOME = Path(os.getenv("OPENCLAW_HOME", "/root/.openclaw"))
 CONTEXT_FILES = ("company.md", "customer.md", "offer.md", "voice.md")
 ACTIVE_STEP_STATUSES = {"queued", "running", "retrying"}
-TERMINAL_STEP_STATUSES = {"completed", "failed", "interrupted"}
+TERMINAL_STEP_STATUSES = {"completed", "paused", "failed", "interrupted"}
 AUTO_RUN_DEFAULT_MAX_STEPS = 25
 AUTO_RUN_MAX_STEPS = 100
 GATEWAY_PAUSE_REASON = "gateway_temporarily_unavailable"
@@ -197,9 +197,10 @@ def _gateway_payload(
     continuation: bool = False,
 ) -> dict[str, Any]:
     instruction = (
-        "Perform exactly one debug step. Either reason or request exactly one available "
+        "Perform exactly one debug step. Either reason, pause, or request exactly one available "
         "tool; never claim a requested tool has already run. Only add a result after its "
-        "completed web-research tool call is present in context. Return the required "
+        "completed web-research tool call is present in context. Pause when no useful in-scope "
+        "action is possible until an external dependency recovers. Return the required "
         "JSON and stop."
     )
     if continuation:
@@ -243,6 +244,8 @@ def _normalized_action(value: Any) -> dict[str, Any]:
     if not isinstance(value, dict):
         return {"type": "reason", "tool": None, "arguments": {}}
     action_type = str(value.get("type") or "reason")
+    if action_type == "pause":
+        return {"type": "pause", "tool": None, "arguments": {}}
     if action_type != "tool_call":
         return {"type": "reason", "tool": None, "arguments": {}}
     tool = value.get("tool")
@@ -513,6 +516,7 @@ def _is_transient_gateway_error(error: BaseException | str | None) -> bool:
         "http 504",
         "status 504",
         "temporarily unavailable",
+        "gateway transient",
         "connection reset",
         "connection refused",
     )
@@ -1211,6 +1215,17 @@ async def resume_lead_finder_run(*, run_id: str) -> dict[str, Any]:
             )
             if not transient:
                 raise LeadFinderRunStateError("run_did_not_pause_for_transient_gateway_pressure")
+            failed_steps = (
+                await session.execute(
+                    select(LeadFinderStepRow).where(
+                        LeadFinderStepRow.run_id == run_id,
+                        LeadFinderStepRow.status == "failed",
+                    )
+                )
+            ).scalars().all()
+            for failed_step in failed_steps:
+                if _is_transient_gateway_error(failed_step.error):
+                    failed_step.status = "paused"
             if latest_step:
                 run.current_step = max(int(run.current_step or 0), latest_step.step_number)
             run.status = "paused"
@@ -1451,7 +1466,7 @@ async def execute_lead_finder_step(step_id: str) -> None:
                 if not step:
                     return
                 run = await session.get(LeadFinderRunRow, step.run_id)
-                step.status = "failed"
+                step.status = "paused" if transient_gateway_failure else "failed"
                 step.error = str(exc)
                 step.completed_at = datetime.now(timezone.utc)
                 if run:
@@ -1472,6 +1487,7 @@ async def execute_lead_finder_step(step_id: str) -> None:
     transition = result["transition"]
     gateway = result["gateway"]
     transient_tool_error = _transient_tool_failure(transition)
+    agent_requested_pause = transition.get("action", {}).get("type") == "pause"
     async with AsyncSessionLocal() as session:
         async with session.begin():
             step = await session.get(LeadFinderStepRow, step_id)
@@ -1505,6 +1521,9 @@ async def execute_lead_finder_step(step_id: str) -> None:
             elif transient_tool_error:
                 run.auto_run_enabled = False
                 run.auto_run_stop_reason = GATEWAY_PAUSE_REASON
+            elif agent_requested_pause:
+                run.auto_run_enabled = False
+                run.auto_run_stop_reason = "agent_requested_pause"
             run.error = transient_tool_error
             if gateway.get("provider") == "openai" and gateway.get("response_id"):
                 run.openai_previous_response_id = str(gateway["response_id"])
@@ -1512,7 +1531,7 @@ async def execute_lead_finder_step(step_id: str) -> None:
                 run.openclaw_session_started = True
             run.updated_at = datetime.now(timezone.utc)
 
-    if run_id and not transient_tool_error:
+    if run_id and not transient_tool_error and not agent_requested_pause:
         next_step_id = await _queue_auto_run_continuation(run_id)
         if next_step_id:
             await execute_lead_finder_step(next_step_id)

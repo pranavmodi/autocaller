@@ -1301,8 +1301,9 @@ between two steps, so a browser connection is not required.
 
 Provider timeouts, rate limits, temporary 502/503/504 responses, and connection
 capacity failures are retryable operational conditions rather than terminal
-agent failures. A reasoning-side occurrence persists the step as failed for
-audit, retains its pre-step context, consumes that step ordinal, and leaves the
+agent failures. A reasoning-side occurrence persists the provider attempt as
+timed out/failed for audit, labels the enclosing step `paused`, retains its
+pre-step context, consumes that step ordinal, and leaves the
 run `paused`. A transient failed tool execution remains part of its completed
 reasoning transition but also pauses the run. Both paths disable auto-run with
 `auto_run_stop_reason=gateway_temporarily_unavailable`, preserve the exact
@@ -1310,6 +1311,14 @@ error, and queue no continuation. `POST /api/lead-finder/runs/{run_id}/resume`
 reopens such a run without executing anything; a later manual step or auto-run
 continues with a new persisted ordinal. Malformed output, invalid tool calls,
 and other semantic errors remain terminal failures.
+
+The reasoning action contract also supports `action.type=pause`. The agent uses
+it when its context already proves that no useful in-scope action can proceed
+until an external dependency recovers. This completes the reasoning step,
+pauses the run with `agent_requested_pause`, disables auto-run, and prevents
+repeated no-op transitions that merely restate the same verification block.
+The step status constraint explicitly permits `paused`; migration
+`o5p6q7r8s9t0` adds that value.
 
 Each `lead_finder_steps` row stores the exact user payload, context before,
 raw/parsed response, context after, changed paths, model, usage, timing, and

@@ -4986,7 +4986,7 @@ def lead_finder_step(
     step = data.get("step") or {}
     if wait:
         deadline = time.monotonic() + timeout_seconds
-        while step.get("status") not in {"completed", "failed", "interrupted"}:
+        while step.get("status") not in {"completed", "paused", "failed", "interrupted"}:
             if time.monotonic() >= deadline:
                 console.print(f"[yellow]step still {step.get('status')}; id={step.get('id')}[/yellow]")
                 raise typer.Exit(code=2)

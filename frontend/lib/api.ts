@@ -3202,7 +3202,7 @@ export type LeadFinderPersistedStep = {
   run_id: string;
   step_number: number;
   request_id: string;
-  status: "queued" | "running" | "retrying" | "completed" | "failed" | "interrupted";
+  status: "queued" | "running" | "retrying" | "completed" | "paused" | "failed" | "interrupted";
   user_direction: string;
   context_before: LeadFinderContext;
   request: Record<string, unknown>;
