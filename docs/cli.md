@@ -254,22 +254,24 @@ Every command accepts `--help`. Exit code is `0` on success, `1` on any error
 | `listening quotes --cluster <cluster> [--limit 5]` | Show direct quotes for one listening insight cluster. |
 | `listening sources` | Show listening source name, kind, last poll time, and computed stale flag. |
 | `listening prep <firm-or-name>` | Combine local `patients`/`firm_contacts` context, top matched insights, and one gateway call into a pre-call persona, objections, and vocabulary one-pager. |
+| `codex-gateway status [--json]` / `codex-gateway models [--json]` | Check the localhost-only Possible OS Codex app-server or list the live models and reasoning efforts available through its connected Codex account. Neither command makes an OpenClaw call. |
+| `codex-gateway turn "<prompt>" [--agent-id NAME --thread-id ID --instructions TEXT --model MODEL --effort low --web-search disabled\|cached\|indexed\|live --timeout-seconds N --json]` | Run one reusable read-only Codex app-server turn. Omit `--thread-id` to create an agent thread; pass the returned ID to continue it. Output includes first-token, queue, turn, and total latency plus raw streamed events in JSON mode. |
 | `lead-finder context [--json]` | Load the Lead Finder's fixed job plus the authoritative `company.md`, `customer.md`, `offer.md`, and `voice.md` baseline context. Read-only. |
 | `lead-finder tools [--json]` | List the validated bounded tools available to the Lead Finder. |
 | `lead-finder mission-search "<query>" [--mode keyword\|semantic\|hybrid --limit N --show-id ID --json]` | Search Mission Control podcast transcripts through the same bounded API adapter used by the agent. No direct SQLite access. |
 | `lead-finder mission-passages <chunk_id>... [--json]` / `lead-finder mission-index-status [--json]` | Fetch exact indexed transcript passages or inspect current index coverage through the read-only adapter. |
-| `lead-finder web-research "<person>" --chunk-id ID [--provider openai\|openclaw --organization ORG --role ROLE --episode-title TITLE --excerpt TEXT --focus TEXT --json]` | Verify one transcript-supported person through live public-web research and return source-backed current-role, recent-signal, and outreach-angle evidence using the selected provider. It does not add the candidate to results. |
+| `lead-finder web-research "<person>" --chunk-id ID [--provider openai\|codex\|openclaw --organization ORG --role ROLE --episode-title TITLE --excerpt TEXT --focus TEXT --json]` | Verify one transcript-supported person through live public-web research and return source-backed current-role, recent-signal, and outreach-angle evidence using the selected provider. It does not add the candidate to results. |
 | `lead-finder results <run_id> [--json]` | Show candidates explicitly published into the run-local Found Leads list by `lead_finder.add_researched_lead`. No CRM write or deduplication occurs. |
 | `lead-finder all-results [--limit N --json]` | List canonical researched-lead publications newest-first across every Lead Finder run, including originating run, step, direction, and publication time. Repeated people remain separate publications; no cross-run deduplication occurs. |
-| `lead-finder start [--direction "..."] [--provider openai\|openclaw] [--json]` | Create a durable debug run immediately before step 1. The run snapshots the fixed job, all four baseline context files, and the run-wide LLM provider in Postgres. Direct OpenAI with `gpt-5.6-luna` is the default. |
-| `lead-finder provider <run_id> <openai\|openclaw> [--json]` | Persist the provider used by every future LLM call in one run: reasoning and web research. Mission Control tools remain local, and an active step is not interrupted. |
+| `lead-finder start [--direction "..."] [--provider openai\|codex\|openclaw] [--json]` | Create a durable debug run immediately before step 1. The run snapshots the fixed job, all four baseline context files, and the run-wide LLM provider in Postgres. Direct OpenAI with `gpt-5.6-luna` is the default. |
+| `lead-finder provider <run_id> <openai\|codex\|openclaw> [--json]` | Persist the provider used by every future LLM call in one run: reasoning and web research. `codex` uses the dedicated Possible OS app-server and never traverses OpenClaw. Mission Control tools remain local, and an active step is not interrupted. |
 | `lead-finder runs [--limit N] [--json]` / `lead-finder show <run_id> [--json]` | List runs or inspect one run with every persisted step, exact request, raw/parsed response, context before/after, diff, timing, gateway attempt, and normalized prompt-cache metrics. |
 | `lead-finder llm-session <run_id> [--source session\|trajectory] [--json]` | For an OpenClaw-selected run, print the selected unredacted OpenClaw JSONL file exactly as stored. Direct OpenAI request/response traces are already returned by `lead-finder show <run_id> --json`. Treat either trace as sensitive. |
 | `lead-finder step <run_id> [--direction "..."] [--request-id ID] [--wait/--no-wait] [--timeout-seconds N] [--json]` | Queue exactly one durable reasoning, pause, or bounded tool transition. The request ID is idempotent, one active step per run is enforced, every provider attempt and tool result is persisted, and the default CLI behavior polls through `paused` as a terminal step state. The run-scoped OpenClaw session enables prompt-cache reuse; output includes cache status and cached-token counts. Only the explicit add-result tool mutates the run-local result list; no CRM or outreach mutation occurs. |
 | `lead-finder auto-start <run_id> [--direction "..."] [--max-steps N] [--json]` / `lead-finder auto-stop <run_id> [--json]` | Start durable unattended step chaining or request that it stop after the active step. Auto-run uses the same one-transition/one-tool persisted steps, pauses on transient provider/gateway pressure, stops on completion or non-retryable failure, and has a 25-step default safety cap (maximum 100). |
 | `lead-finder resume <run_id> [--json]` | Reopen a run that was stopped by a retryable gateway timeout/capacity error. This preserves the failed attempt and context, advances past its audit ordinal, and queues nothing; use `step` or `auto-start` when the gateway has capacity. |
 | `lead-finder restart <run_id> [--direction "..."] [--json]` | Create a new step-0 run linked to the prior run. The prior history remains immutable; the user direction and run-wide LLM provider are inherited, while the direction may be overridden and the baseline files are freshly snapshotted. |
-| `lead-finder reset-all [--direction "..."] [--provider openai\|openclaw] [--yes] [--json]` | Destructively delete every Lead Finder run, step, provider attempt, and tool call, then atomically create one fresh step-0 run with the selected run-wide LLM provider. Requires interactive confirmation unless `--yes` is supplied. It never deletes other Possible OS data. |
+| `lead-finder reset-all [--direction "..."] [--provider openai\|codex\|openclaw] [--yes] [--json]` | Destructively delete every Lead Finder run, step, provider attempt, and tool call, then atomically create one fresh step-0 run with the selected run-wide LLM provider. Requires interactive confirmation unless `--yes` is supplied. It never deletes other Possible OS data. |
 | `agents status [--json]` | Show the Possible OS master-agent heartbeat configuration, objective status, and last heartbeat result in the current backend process. |
 | `agents config [--interval-seconds=300] [--enabled/--disabled] [--auto-send-approved-lead-gen\|--no-auto-send-approved-lead-gen --auto-send-limit=1 --json]` | Update persisted master-agent heartbeat settings. The approved-send toggle lets heartbeat execute exact approved lead-gen email actions through the policy gate. |
 | `agents heartbeat [--json]` | Run one master-agent heartbeat tick immediately. V1 reads `soul.md` as protected read-only context, records traces, checks active subagent tasks, marks stale workers, and, only when enabled, executes already-approved lead-gen email actions. |
@@ -1170,6 +1172,27 @@ to a public hostname before composing.
 AI Visibility report emails also require `AIVIS_REPORT_BASE_URL` for the report
 destination. Set `VISIBILITY_LINK_BASE_URL` only when `/v/<code>` short links
 should use a different public hostname than `OUTREACH_PUBLIC_BASE_URL`.
+
+---
+
+### Recipe: "run or continue a Possible OS agent on the dedicated Codex server"
+```bash
+# Confirm that the independent localhost service is ready and inspect its models.
+bin/possibleos codex-gateway status
+bin/possibleos codex-gateway models
+
+# Start a named agent. Save the returned thread ID for its next turn.
+bin/possibleos codex-gateway turn "Assess the supplied account evidence." \
+    --agent-id account-researcher --model gpt-5.6-luna --json
+
+# Continue the same Codex thread without involving OpenClaw.
+bin/possibleos codex-gateway turn "Now rank the strongest three signals." \
+    --agent-id account-researcher --thread-id '<returned-thread-id>' --json
+```
+Each future agent should use a stable `--agent-id` for trace attribution and
+persist its returned thread ID if it needs conversation continuity. Calls are
+currently serialized on this two-core host; `latency.queue_wait_ms` makes
+contention visible instead of hiding it inside model time.
 
 ---
 

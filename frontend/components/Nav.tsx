@@ -50,7 +50,6 @@ async function signOut() {
 
 const items = [
   { href: "/", label: "Now", icon: Activity },
-  { href: "/actions", label: "Actions", icon: Inbox },
   { href: "/cadence", label: "Call Lab", icon: Headset },
   { href: "/calls", label: "Calls", icon: PhoneCall },
   { href: "/comms", label: "Comms", icon: MessageSquare },
@@ -70,7 +69,7 @@ const items = [
   { href: "/system", label: "Health", icon: Stethoscope },
 ];
 
-const mobilePrimaryHrefs = ["/", "/actions", "/calls"];
+const mobilePrimaryHrefs = ["/", "/calls"];
 
 export function Nav() {
   const pathname = usePathname();

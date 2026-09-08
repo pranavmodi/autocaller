@@ -227,7 +227,9 @@ function toolProviderSummary(
   if (!provider && !model) return "";
   const label = provider === "openai"
     ? "Direct OpenAI"
-    : provider === "openclaw" ? "OpenClaw gateway" : "Web research";
+    : provider === "codex"
+      ? "Dedicated Codex"
+      : provider === "openclaw" ? "OpenClaw gateway" : "Web research";
   return model ? `${label} · ${model}` : label;
 }
 
@@ -236,6 +238,7 @@ function stepProviderLabel(
   runProvider: LeadFinderRun["llm_provider"] | undefined,
 ) {
   if (step.model?.startsWith("openclaw/")) return "OpenClaw";
+  if (runProvider === "codex") return "Dedicated Codex";
   if (step.model) return "Direct OpenAI";
   return runProvider === "openclaw" ? "OpenClaw" : "Direct OpenAI";
 }
@@ -387,7 +390,7 @@ export default function LeadFinderPage() {
 
   useEffect(() => {
     if (activeView !== "session" || !run) return;
-    if (run.llm_provider === "openai") {
+    if (run.llm_provider !== "openclaw") {
       setLlmSession(null);
       setLlmSessionError("");
       setLlmSessionLoading(false);
@@ -559,7 +562,7 @@ export default function LeadFinderPage() {
     }
   }
 
-  async function changeLLMProvider(provider: "openai" | "openclaw") {
+  async function changeLLMProvider(provider: "openai" | "openclaw" | "codex") {
     if (!run || providerChanging || run.llm_provider === provider) return;
     setProviderChanging(true);
     setError("");
@@ -721,11 +724,12 @@ export default function LeadFinderPage() {
             <select
               id="llm-provider"
               value={run?.llm_provider || "openai"}
-              onChange={(event) => void changeLLMProvider(event.target.value as "openai" | "openclaw")}
+              onChange={(event) => void changeLLMProvider(event.target.value as "openai" | "openclaw" | "codex")}
               disabled={!run || providerChanging}
               className="mt-1 w-full rounded-lg border border-neutral-200 bg-white px-2 py-1.5 text-xs font-medium text-neutral-900 disabled:opacity-50"
             >
               <option value="openai">Direct OpenAI</option>
+              <option value="codex">Dedicated Codex app-server</option>
               <option value="openclaw">OpenClaw gateway</option>
             </select>
             <div className={`mt-1 truncate text-[10px] ${run?.llm_configured ? "text-neutral-400" : "text-red-600"}`}>
@@ -852,7 +856,7 @@ export default function LeadFinderPage() {
                               <span className={`inline-flex rounded-full border px-2 py-1 text-xs ${stepTone(item.status)}`}>{item.status}</span>
                             </div>
                             <div className="min-w-0">
-                              <div className="truncate text-xs font-medium text-neutral-800">{item.llm_provider === "openai" ? "Direct OpenAI" : "OpenClaw"}</div>
+                              <div className="truncate text-xs font-medium text-neutral-800">{item.llm_provider === "openai" ? "Direct OpenAI" : item.llm_provider === "codex" ? "Dedicated Codex" : "OpenClaw"}</div>
                               <div className="mt-0.5 truncate text-[10px] text-neutral-400">{item.llm_model}</div>
                             </div>
                             <div className="text-xs text-neutral-600">
@@ -979,20 +983,22 @@ export default function LeadFinderPage() {
               </div>
             ) : activeView === "session" ? (
               <div className="space-y-4">
-                {run?.llm_provider === "openai" ? (
+                {run?.llm_provider !== "openclaw" ? (
                   <>
                     <div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-xs leading-5 text-sky-900">
-                      Direct mode uses the OpenAI Responses API. Possible OS persists each exact request, full provider response, parsed transition, and usage record below; no local OpenClaw JSONL is created for these turns.
+                      {run?.llm_provider === "codex"
+                        ? "This run uses Possible OS's dedicated Codex app-server, independently of OpenClaw. Possible OS persists each request, raw streamed event trace, parsed transition, token usage, and latency below."
+                        : "Direct mode uses the OpenAI Responses API. Possible OS persists each exact request, full provider response, parsed transition, and usage record below; no local OpenClaw JSONL is created for these turns."}
                     </div>
                     <div className="grid gap-2 rounded-xl border border-neutral-200 p-3 text-xs text-neutral-500 sm:grid-cols-2">
-                      <div><span className="font-medium text-neutral-700">provider</span> Direct OpenAI</div>
-                      <div><span className="font-medium text-neutral-700">model</span> {run.llm_model}</div>
-                      <div className="break-all sm:col-span-2"><span className="font-medium text-neutral-700">latest response id</span> {run.openai_previous_response_id || "created after the first direct reasoning step"}</div>
+                      <div><span className="font-medium text-neutral-700">provider</span> {run?.llm_provider === "codex" ? "Dedicated Codex app-server" : "Direct OpenAI"}</div>
+                      <div><span className="font-medium text-neutral-700">model</span> {run?.llm_model || "waiting for run"}</div>
+                      <div className="break-all sm:col-span-2"><span className="font-medium text-neutral-700">{run?.llm_provider === "codex" ? "Codex thread id" : "latest response id"}</span> {run?.llm_provider === "codex" ? (run?.codex_thread_id || "created after the first Codex step") : (run?.openai_previous_response_id || "created after the first direct reasoning step")}</div>
                     </div>
                     {directResponseTrace.length > 0 ? (
                       <JsonPanel value={directResponseTrace} />
                     ) : (
-                      <div className="flex min-h-72 items-center justify-center text-center text-sm text-neutral-500">The direct Responses trace will appear after the first reasoning step completes.</div>
+                      <div className="flex min-h-72 items-center justify-center text-center text-sm text-neutral-500">The provider trace will appear after the first reasoning step completes.</div>
                     )}
                   </>
                 ) : (

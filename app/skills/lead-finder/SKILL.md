@@ -96,3 +96,7 @@ name, and valid arguments. Request no more than one tool. If no useful in-scope
 action can run until an external dependency recovers, use `"type": "pause"`,
 set `tool` to null and `arguments` to `{}`, and state the recovery condition in
 `next_step`. Do not spend repeated reasoning steps restating the same block.
+When the provider supplies a stricter versioned output schema, that schema is
+authoritative: include every required field, use null for unchanged state
+sections or unused scalar arguments, and use empty arrays for unused array
+arguments.

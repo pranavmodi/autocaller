@@ -1,11 +1,13 @@
 """Email notifications for call outcome issues."""
 import logging
+import mimetypes
 import os
 import smtplib
 import time
 from datetime import datetime, timezone
 from email.message import EmailMessage
 from email.utils import make_msgid, parseaddr
+from pathlib import Path
 from typing import Any, Optional
 
 import httpx
@@ -333,6 +335,40 @@ def _zoho_request(method: str, path: str, *, json_body: dict[str, Any] | None = 
     return resp.json() if resp.content else {}
 
 
+def _zoho_upload_attachment(account_id: str, attachment_path: str) -> dict[str, str]:
+    path = Path(attachment_path).expanduser().resolve()
+    if not path.is_file():
+        raise RuntimeError(f"Zoho attachment file not found: {path}")
+    resp = httpx.post(
+        f"{_zoho_mail_base_url()}/api/accounts/{account_id}/messages/attachments",
+        params={"uploadType": "multipart", "isInline": "false"},
+        headers={
+            "Accept": "application/json",
+            **_zoho_access_header(),
+        },
+        files={
+            "attach": (
+                path.name,
+                path.read_bytes(),
+                mimetypes.guess_type(path.name)[0] or "application/octet-stream",
+            )
+        },
+        timeout=60.0,
+    )
+    if resp.status_code >= 300:
+        raise RuntimeError(f"Zoho attachment upload HTTP {resp.status_code}: {resp.text[:300]}")
+    data = resp.json() if resp.content else {}
+    result = data.get("data") if isinstance(data, dict) else None
+    if isinstance(result, list):
+        result = result[0] if result else None
+    if not isinstance(result, dict):
+        raise RuntimeError(f"Zoho attachment upload returned no attachment metadata: {str(data)[:300]}")
+    required = {key: str(result.get(key) or "") for key in ("storeName", "attachmentName", "attachmentPath")}
+    if not all(required.values()):
+        raise RuntimeError(f"Zoho attachment upload omitted attachment metadata: {str(data)[:300]}")
+    return required
+
+
 def _zoho_account_id() -> str:
     configured = os.getenv("ZOHO_MAIL_ACCOUNT_ID", "").strip()
     if configured:
@@ -377,6 +413,7 @@ def _send_via_zoho_api(
     to: str,
     in_reply_to: str | None = None,
     references: str | None = None,
+    attachments: list[str] | None = None,
 ) -> str:
     account_id = _zoho_account_id()
     from_address = _sender_email_key(os.getenv("ZOHO_MAIL_FROM_ADDRESS", "").strip() or from_addr)
@@ -400,6 +437,11 @@ def _send_via_zoho_api(
         payload["refHeader"] = reference_ids
     if bcc and bcc.lower() != to.lower():
         payload["bccAddress"] = bcc
+    if attachments:
+        payload["attachments"] = [
+            _zoho_upload_attachment(account_id, attachment_path)
+            for attachment_path in attachments
+        ]
     data = _zoho_request("POST", f"/api/accounts/{account_id}/messages", json_body=payload)
     response_data = data.get("data")
     if isinstance(response_data, dict):
@@ -441,6 +483,7 @@ def _send_email(
     in_reply_to: str | None = None,
     references: str | None = None,
     brief_version: int | None = None,
+    attachments: list[str] | None = None,
 ) -> str:
     """Send an email. Prefers the Zoho Mail HTTPS API when configured, then
     SMTP, and only uses Resend when explicitly selected or SMTP/API is
@@ -460,11 +503,14 @@ def _send_email(
     resolved_from_addr = _resolve_sender_address(from_addr)
 
     transport = _choose_email_transport(transport)
+    if attachments and transport != "zoho_api":
+        raise RuntimeError("attachments_require_zoho_api_transport")
     try:
         if transport == "zoho_api":
             msg_id = _send_via_zoho_api(
                 subject=subject, body=body, from_addr=resolved_from_addr, to=recipient,
                 in_reply_to=in_reply_to, references=references,
+                attachments=attachments,
             )
         elif transport == "resend":
             try:

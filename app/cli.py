@@ -20,7 +20,7 @@ import tempfile
 import time
 import uuid
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, List, Optional
 from urllib.parse import quote
 
 import httpx
@@ -70,6 +70,7 @@ todos_app = typer.Typer(help="Editable project todo backlog.", no_args_is_help=T
 ideas_app = typer.Typer(help="Simple future product, marketing, and GTM idea capture.", no_args_is_help=True)
 agents_app = typer.Typer(help="Possible OS master-agent heartbeat and subagent tasks.", no_args_is_help=True)
 lead_finder_app = typer.Typer(help="Lead Finder context and one-step OpenClaw/tool debugger.", no_args_is_help=True)
+codex_gateway_app = typer.Typer(help="Dedicated Possible OS Codex app-server gateway.", no_args_is_help=True)
 actions_app = typer.Typer(help="Durable Possible OS action execution queue.", no_args_is_help=True)
 fs_app = typer.Typer(help="Read-only repo filesystem inspection for Possible OS agents.", no_args_is_help=True)
 listening_app = typer.Typer(help="Mission Control listening brief, insights, sources, and prep.", no_args_is_help=True)
@@ -113,6 +114,7 @@ app.add_typer(todos_app, name="todos")
 app.add_typer(ideas_app, name="ideas")
 app.add_typer(agents_app, name="agents")
 app.add_typer(lead_finder_app, name="lead-finder")
+app.add_typer(codex_gateway_app, name="codex-gateway")
 app.add_typer(actions_app, name="actions")
 app.add_typer(fs_app, name="fs")
 app.add_typer(listening_app, name="listening")
@@ -172,10 +174,14 @@ def _http_error_detail(exc: httpx.HTTPError) -> str:
     return str(exc)
 
 
-def _get(path: str, **params) -> dict:
+def _get(path: str, request_timeout: float = 60.0, **params) -> dict:
     query_params = {key: value for key, value in params.items() if value is not None}
     try:
-        resp = httpx.get(f"{_api_base()}{path}", params=query_params or None, timeout=60.0)
+        resp = httpx.get(
+            f"{_api_base()}{path}",
+            params=query_params or None,
+            timeout=request_timeout,
+        )
         resp.raise_for_status()
     except httpx.HTTPError as e:
         console.print(f"[red]API request failed: {_http_error_detail(e)}[/red]")
@@ -4663,6 +4669,7 @@ def actions_send_email(
     body: str = typer.Option(..., "--body", help="Approved body."),
     in_reply_to: str = typer.Option("", "--in-reply-to", help="RFC Message-ID of the message being answered."),
     references: str = typer.Option("", "--references", help="Space-separated RFC Message-ID ancestry; defaults to --in-reply-to."),
+    attachments: List[str] = typer.Option([], "--attachment", help="Local file to attach; repeat for multiple files."),
     action_type: str = typer.Option("", "--action-type", help="For --mode=lead_gen: first_touch, follow_up, or manual_email."),
     mode: str = typer.Option("test", "--mode", help="Email mode: test or lead_gen."),
     transport: str = typer.Option(
@@ -4709,6 +4716,7 @@ def actions_send_email(
             "transport": transport,
             "in_reply_to": in_reply_to or None,
             "references": references or in_reply_to or None,
+            "attachments": attachments,
             "lead_gen_action_type": action_type or None,
         },
         timeout=120.0,
@@ -4736,7 +4744,99 @@ def actions_send_email(
 
 
 # ---------------------------------------------------------------------------
-# lead-finder — baseline context and one-step OpenClaw debug runner
+# codex-gateway — dedicated app-server shared by Possible OS agents
+# ---------------------------------------------------------------------------
+
+@codex_gateway_app.command("status")
+def codex_gateway_status(
+    json_output: bool = typer.Option(False, "--json"),
+):
+    """Check the dedicated Codex app-server without making an LLM call."""
+    data = _get("/api/codex-gateway/status")
+    if json_output:
+        console.print_json(data=data)
+        return
+    console.print(f"ready: {data.get('ready')}")
+    console.print(f"url: {data.get('url')}")
+    console.print(f"model: {data.get('model')}")
+    console.print(f"latency_ms: {data.get('latency_ms')}")
+    console.print(f"independent_of_openclaw: {data.get('independent_of_openclaw')}")
+    if data.get("error"):
+        console.print(f"error: {data.get('error')}")
+
+
+@codex_gateway_app.command("models")
+def codex_gateway_models(
+    json_output: bool = typer.Option(False, "--json"),
+):
+    """List models exposed by the connected Codex account."""
+    data = _get("/api/codex-gateway/models")
+    if json_output:
+        console.print_json(data=data)
+        return
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("id")
+    table.add_column("name")
+    table.add_column("default")
+    table.add_column("efforts")
+    for model in data.get("models") or []:
+        efforts = [
+            item.get("reasoningEffort")
+            for item in model.get("supportedReasoningEfforts") or []
+            if isinstance(item, dict)
+        ]
+        table.add_row(
+            str(model.get("id") or ""),
+            str(model.get("displayName") or ""),
+            str(bool(model.get("isDefault"))),
+            ", ".join(str(item) for item in efforts if item),
+        )
+    console.print(table)
+    console.print(f"latency_ms: {data.get('latency_ms')}")
+
+
+@codex_gateway_app.command("turn")
+def codex_gateway_turn(
+    prompt: str = typer.Argument(..., help="Prompt for one read-only Codex turn."),
+    agent_id: str = typer.Option("operator", "--agent-id", help="Stable Possible OS consumer name."),
+    thread_id: Optional[str] = typer.Option(None, "--thread-id", help="Continue an existing Codex thread."),
+    instructions: Optional[str] = typer.Option(None, "--instructions", help="Base instructions for a new thread."),
+    model: Optional[str] = typer.Option(None, "--model"),
+    effort: str = typer.Option("low", "--effort"),
+    web_search: str = typer.Option("disabled", "--web-search"),
+    timeout_seconds: int = typer.Option(300, "--timeout-seconds", min=10, max=900),
+    json_output: bool = typer.Option(False, "--json"),
+):
+    """Run one reusable, read-only Codex app-server turn and report latency."""
+    data = _post(
+        "/api/codex-gateway/turn",
+        {
+            "agent_id": agent_id,
+            "prompt": prompt,
+            "instructions": instructions,
+            "thread_id": thread_id,
+            "model": model,
+            "effort": effort,
+            "web_search": web_search,
+            "timeout_seconds": timeout_seconds,
+        },
+        timeout=timeout_seconds + 10,
+    )
+    if json_output:
+        console.print_json(data=data)
+        return
+    console.print(data.get("text") or "")
+    console.print(f"thread_id: {data.get('thread_id')}")
+    console.print(f"turn_id: {data.get('turn_id')}")
+    latency = data.get("latency") or {}
+    console.print(
+        f"latency_ms: total={latency.get('total_ms')} "
+        f"queue={latency.get('queue_wait_ms')} first_token={latency.get('first_token_ms')}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# lead-finder — baseline context and one-step LLM/tool debugger
 # ---------------------------------------------------------------------------
 
 @lead_finder_app.command("context")
@@ -4843,7 +4943,7 @@ def lead_finder_web_research(
     excerpt: str = typer.Option("", "--excerpt"),
     focus: str = typer.Option("PI intake workflow and current outreach relevance", "--focus"),
     provider: str = typer.Option(
-        "openai", "--provider", help="LLM provider: openai or openclaw."
+        "openai", "--provider", help="LLM provider: openai, codex, or openclaw."
     ),
     json_output: bool = typer.Option(False, "--json"),
 ):
@@ -4876,13 +4976,13 @@ def lead_finder_web_research(
 @lead_finder_app.command("provider")
 def lead_finder_provider(
     run_id: str = typer.Argument(..., help="Durable Lead Finder run id."),
-    provider: str = typer.Argument(..., help="openai or openclaw"),
+    provider: str = typer.Argument(..., help="openai, codex, or openclaw"),
     json_output: bool = typer.Option(False, "--json"),
 ):
     """Select the provider for all future LLM calls in one run."""
     selected = provider.strip().lower()
-    if selected not in {"openai", "openclaw"}:
-        raise typer.BadParameter("must be openai or openclaw", param_hint="provider")
+    if selected not in {"openai", "openclaw", "codex"}:
+        raise typer.BadParameter("must be openai, codex, or openclaw", param_hint="provider")
     data = _put(
         f"/api/lead-finder/runs/{run_id}/llm-provider",
         {"provider": selected},
@@ -4982,6 +5082,7 @@ def lead_finder_step(
             "request_id": request_id or f"lfreq_{uuid.uuid4().hex}",
             "user_direction": selected_direction,
         },
+        timeout=max(30.0, float(timeout_seconds)),
     )
     step = data.get("step") or {}
     if wait:
@@ -4991,7 +5092,10 @@ def lead_finder_step(
                 console.print(f"[yellow]step still {step.get('status')}; id={step.get('id')}[/yellow]")
                 raise typer.Exit(code=2)
             time.sleep(1)
-            step = (_get(f"/api/lead-finder/steps/{step.get('id')}").get("step") or {})
+            step = (_get(
+                f"/api/lead-finder/steps/{step.get('id')}",
+                request_timeout=max(60.0, float(timeout_seconds)),
+            ).get("step") or {})
     if json_output:
         console.print_json(data={"step": step})
         return
@@ -5058,7 +5162,7 @@ def lead_finder_auto_stop(
 @lead_finder_app.command("start")
 def lead_finder_start(
     direction: str = typer.Option("", "--direction", help="Run-specific description of desired leads."),
-    provider: str = typer.Option("openai", "--provider", help="Run-wide LLM provider: openai or openclaw."),
+    provider: str = typer.Option("openai", "--provider", help="Run-wide LLM provider: openai, codex, or openclaw."),
     json_output: bool = typer.Option(False, "--json"),
 ):
     """Create a durable Lead Finder run immediately before step 1."""

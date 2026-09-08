@@ -10,10 +10,12 @@ from typing import Any
 from openai import AsyncOpenAI
 
 from app.services.lead_finder_provider import (
+    CODEX_APP_SERVER_MODEL,
     OPENAI_MODEL,
     OPENCLAW_MODEL,
     normalize_lead_finder_provider,
 )
+from app.services.codex_app_server import run_codex_turn
 from app.services.llm_gateway import LLMGatewayError, call_skill_json
 
 
@@ -281,6 +283,41 @@ async def _research_person_openai(payload: dict[str, Any]) -> tuple[dict[str, An
     }
 
 
+async def _research_person_codex(payload: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+    result = await run_codex_turn(
+        agent_id="lead-finder-web-research",
+        prompt=json.dumps(payload, indent=2, ensure_ascii=False),
+        instructions=SKILL_PATH.read_text(encoding="utf-8"),
+        model=CODEX_APP_SERVER_MODEL,
+        effort=os.getenv("LEAD_FINDER_CODEX_WEB_EFFORT", "low"),
+        output_schema=OPENAI_RESEARCH_SCHEMA,
+        web_search="live",
+        timeout_s=int(os.getenv("LEAD_FINDER_WEB_RESEARCH_TIMEOUT_S", "300")),
+    )
+    try:
+        parsed = json.loads(result.text)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError("codex_app_server_web_research_invalid_json") from exc
+    search_calls = sum(
+        1
+        for event in result.events
+        if isinstance(event, dict)
+        and event.get("method") == "item/completed"
+        and isinstance(event.get("params"), dict)
+        and isinstance(event["params"].get("item"), dict)
+        and event["params"]["item"].get("type") == "webSearch"
+    )
+    return parsed, {
+        "provider": "codex",
+        "model": result.model,
+        "thread_id": result.thread_id,
+        "turn_id": result.turn_id,
+        "search_calls": search_calls,
+        "usage": result.usage,
+        "latency": result.latency,
+    }
+
+
 async def research_person(
     arguments: dict[str, Any],
     *,
@@ -294,6 +331,8 @@ async def research_person(
     try:
         if selected == "openai":
             raw, metadata = await _research_person_openai(payload)
+        elif selected == "codex":
+            raw, metadata = await _research_person_codex(payload)
         else:
             raw, metadata = await _research_person_openclaw(payload)
     except LLMGatewayError as exc:

@@ -599,6 +599,7 @@ class LeadFinderRunRow(Base):
     openclaw_session_started: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False
     )
+    codex_thread_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     restarted_from_run_id: Mapped[str | None] = mapped_column(
         String(64), ForeignKey("lead_finder_runs.id", ondelete="SET NULL"), nullable=True,
@@ -619,7 +620,7 @@ class LeadFinderRunRow(Base):
             name="ck_lead_finder_runs_auto_max_steps",
         ),
         CheckConstraint(
-            "llm_provider IN ('openai', 'openclaw')",
+            "llm_provider IN ('openai', 'openclaw', 'codex')",
             name="ck_lead_finder_runs_llm_provider",
         ),
         Index("ix_lead_finder_runs_status", "status"),

@@ -21,6 +21,13 @@ OPENCLAW_CONFIG_PATH = Path(os.getenv("OPENCLAW_CONFIG_PATH", "/root/.openclaw/o
 _JSON_FENCE_RE = re.compile(r"```(?:json)?\s*([\s\S]*?)```", re.MULTILINE)
 _token_cache: Optional[str] = None
 _skill_cache: dict[str, str] = {}
+# OpenClaw's main agent is a single shared execution lane. Letting several
+# Possible OS workers enter it concurrently starts each caller's HTTP timeout
+# while the request is still queued inside OpenClaw. Timed-out callers then
+# leave server-side work behind, creating an orphan/backlog spiral. Keep that
+# queue on our side so the per-request timeout begins only when the gateway can
+# actually accept the next unit of work.
+_openclaw_request_gate = asyncio.Semaphore(1)
 
 GatewayAttemptObserver = Callable[[dict[str, Any]], Awaitable[None]]
 
@@ -326,15 +333,16 @@ async def call_skill_json(
             except Exception as observer_error:
                 logger.warning("gateway attempt observer start failed: %s", observer_error)
         try:
-            async with httpx.AsyncClient(timeout=timeout, verify=False) as client:
-                resp = await client.post(
-                    url,
-                    headers={
-                        "Authorization": f"Bearer {gateway_token()}",
-                        "Content-Type": "application/json",
-                    },
-                    json=request_body,
-                )
+            async with _openclaw_request_gate:
+                async with httpx.AsyncClient(timeout=timeout, verify=False) as client:
+                    resp = await client.post(
+                        url,
+                        headers={
+                            "Authorization": f"Bearer {gateway_token()}",
+                            "Content-Type": "application/json",
+                        },
+                        json=request_body,
+                    )
             if resp.status_code in (502, 503, 504):
                 raise httpx.HTTPStatusError(
                     f"gateway transient {resp.status_code}",

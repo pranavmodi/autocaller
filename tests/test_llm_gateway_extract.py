@@ -1,4 +1,5 @@
 """Structured gateway parsing, persistence, and repair behavior."""
+import asyncio
 import json
 
 import pytest
@@ -67,6 +68,51 @@ class _FakeGatewayClient:
     async def post(self, url, *, headers, json):
         self._requests.append({"url": url, "headers": headers, "json": json})
         return self._responses.pop(0)
+
+
+class _ConcurrencyTrackingClient:
+    def __init__(self, tracker):
+        self._tracker = tracker
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, traceback):
+        return None
+
+    async def post(self, url, *, headers, json):
+        self._tracker["active"] += 1
+        self._tracker["max_active"] = max(
+            self._tracker["max_active"], self._tracker["active"]
+        )
+        await asyncio.sleep(0.02)
+        self._tracker["active"] -= 1
+        return _FakeGatewayResponse('{"answer":"ok"}')
+
+
+@pytest.mark.asyncio
+async def test_gateway_serializes_concurrent_openclaw_requests(monkeypatch, tmp_path):
+    tracker = {"active": 0, "max_active": 0}
+    monkeypatch.setattr(
+        llm_gateway.httpx,
+        "AsyncClient",
+        lambda **kwargs: _ConcurrencyTrackingClient(tracker),
+    )
+    monkeypatch.setattr(llm_gateway, "gateway_token", lambda: "test-token")
+    skill_path = tmp_path / "SKILL.md"
+    skill_path.write_text("Return one JSON object.", encoding="utf-8")
+
+    await asyncio.gather(*(
+        call_skill_json(
+            skill_path=skill_path,
+            payload={"request": index},
+            required_fields=["answer"],
+            retries=1,
+        )
+        for index in range(2)
+    ))
+
+    assert tracker["max_active"] == 1
 
 
 @pytest.mark.asyncio

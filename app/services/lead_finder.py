@@ -22,6 +22,7 @@ from app.db.models import (
 )
 from app.services.llm_gateway import call_skill_json, prompt_cache_metrics
 from app.services.lead_finder_provider import (
+    call_codex_reasoning,
     call_openai_reasoning,
     lead_finder_provider_model,
     lead_finder_provider_status,
@@ -44,6 +45,7 @@ TERMINAL_STEP_STATUSES = {"completed", "paused", "failed", "interrupted"}
 AUTO_RUN_DEFAULT_MAX_STEPS = 25
 AUTO_RUN_MAX_STEPS = 100
 GATEWAY_PAUSE_REASON = "gateway_temporarily_unavailable"
+RESPONSE_VALIDATION_PAUSE_REASON = "response_validation_failed"
 DEFAULT_LLM_PROVIDER = normalize_lead_finder_provider(
     os.getenv(
         "LEAD_FINDER_DEFAULT_LLM_PROVIDER",
@@ -265,6 +267,7 @@ async def run_lead_finder_step(
     run_id: str | None = None,
     llm_provider: str = "openclaw",
     previous_response_id: str | None = None,
+    codex_thread_id: str | None = None,
     provider_session_started: bool | None = None,
     attempt_observer: Callable[[dict[str, Any]], Awaitable[None]] | None = None,
     tool_executor: Callable[[str, dict[str, Any]], Awaitable[dict[str, Any]]] | None = None,
@@ -289,6 +292,14 @@ async def run_lead_finder_step(
             run_id=run_id,
             previous_response_id=previous_response_id,
             prompt_cache_key=_direct_prompt_cache_key(),
+            attempt_observer=attempt_observer,
+        )
+    elif selected_provider == "codex":
+        result = await call_codex_reasoning(
+            skill_path=SKILL_PATH,
+            payload=payload,
+            run_id=run_id,
+            thread_id=codex_thread_id,
             attempt_observer=attempt_observer,
         )
     else:
@@ -428,6 +439,7 @@ async def run_lead_finder_step(
             },
             "raw_response": result.raw_response,
             "response_id": getattr(result, "response_id", None),
+            "thread_id": getattr(result, "thread_id", None),
         },
     }
 
@@ -519,8 +531,40 @@ def _is_transient_gateway_error(error: BaseException | str | None) -> bool:
         "gateway transient",
         "connection reset",
         "connection refused",
+        "message too big",
+        "exceeds limit",
     )
     return name in transient_names or any(marker in message for marker in transient_markers)
+
+
+def _is_pretool_response_validation_error(
+    error: BaseException | str | None,
+) -> bool:
+    """Return true for model-response failures detected before tool execution."""
+    if error is None:
+        return False
+    message = str(error).lower()
+    codex_markers = (
+        "codex_app_server_response_invalid_json",
+        "codex_app_server_response_not_an_object",
+        "codex_app_server_state_updates_invalid_json",
+        "codex_app_server_state_updates_not_a_string",
+        "codex_app_server_state_updates_not_an_object",
+        "codex_app_server_action_not_an_object",
+        "codex_app_server_action_arguments_invalid_json",
+        "codex_app_server_action_arguments_not_a_string",
+        "codex_app_server_action_arguments_not_an_object",
+        "codex_app_server_required_fields_invalid",
+    )
+    if any(marker in message for marker in codex_markers):
+        return True
+    if "direct_openai_reasoning_failed" in message and (
+        "response_invalid_json" in message or "response_not_an_object" in message
+    ):
+        return True
+    return "gateway call failed" in message and (
+        "non-json" in message or "missing required fields" in message
+    )
 
 
 def _transient_tool_failure(transition: dict[str, Any]) -> str | None:
@@ -563,12 +607,15 @@ def _run_dict(row: LeadFinderRunRow) -> dict[str, Any]:
         "auto_run_stop_reason": row.auto_run_stop_reason,
         "resume_available": (
             row.auto_run_stop_reason == GATEWAY_PAUSE_REASON
+            or row.auto_run_stop_reason == RESPONSE_VALIDATION_PAUSE_REASON
             or _is_transient_gateway_error(row.error)
+            or _is_pretool_response_validation_error(row.error)
         ),
         "llm_provider": provider["provider"],
         "llm_model": provider["model"],
         "llm_configured": provider["configured"],
         "openai_previous_response_id": row.openai_previous_response_id,
+        "codex_thread_id": row.codex_thread_id,
         "openclaw_session_started": row.openclaw_session_started,
         "error": row.error,
         "restarted_from_run_id": row.restarted_from_run_id,
@@ -700,6 +747,7 @@ def _build_lead_finder_run_row(
         auto_run_max_steps=AUTO_RUN_DEFAULT_MAX_STEPS,
         llm_provider=normalize_lead_finder_provider(llm_provider),
         openclaw_session_started=False,
+        codex_thread_id=None,
         restarted_from_run_id=restarted_from_run_id,
     )
 
@@ -991,7 +1039,7 @@ async def get_lead_finder_llm_session(run_id: str) -> dict[str, Any]:
             raise LeadFinderNotFoundError("lead_finder_run_not_found")
         if normalize_lead_finder_provider(run.llm_provider) != "openclaw":
             raise LeadFinderSessionStateError(
-                "direct_openai_run_uses_persisted_response_attempts"
+                "non_openclaw_run_uses_persisted_provider_attempts"
             )
     return _load_openclaw_session_raw(run_id)
 
@@ -1008,6 +1056,8 @@ def _build_queued_step(
     continuation = (
         bool(run.openai_previous_response_id)
         if selected_provider == "openai"
+        else bool(run.codex_thread_id)
+        if selected_provider == "codex"
         else bool(run.openclaw_session_started)
     )
     return LeadFinderStepRow(
@@ -1175,7 +1225,7 @@ async def stop_lead_finder_auto_run(*, run_id: str) -> dict[str, Any]:
 
 
 async def resume_lead_finder_run(*, run_id: str) -> dict[str, Any]:
-    """Reopen a run stopped by transient gateway pressure without executing a step."""
+    """Reopen a safely retryable run without executing a step."""
     await ensure_lead_finder_tables()
     async with AsyncSessionLocal() as session:
         async with session.begin():
@@ -1208,13 +1258,19 @@ async def resume_lead_finder_run(*, run_id: str) -> dict[str, Any]:
                     .limit(1)
                 )
             ).scalar_one_or_none()
-            transient = (
+            resumable = (
                 run.auto_run_stop_reason == GATEWAY_PAUSE_REASON
+                or run.auto_run_stop_reason == RESPONSE_VALIDATION_PAUSE_REASON
                 or _is_transient_gateway_error(run.error)
+                or _is_pretool_response_validation_error(run.error)
                 or bool(latest_step and _is_transient_gateway_error(latest_step.error))
+                or bool(
+                    latest_step
+                    and _is_pretool_response_validation_error(latest_step.error)
+                )
             )
-            if not transient:
-                raise LeadFinderRunStateError("run_did_not_pause_for_transient_gateway_pressure")
+            if not resumable:
+                raise LeadFinderRunStateError("run_did_not_stop_for_a_safely_retryable_error")
             failed_steps = (
                 await session.execute(
                     select(LeadFinderStepRow).where(
@@ -1224,7 +1280,10 @@ async def resume_lead_finder_run(*, run_id: str) -> dict[str, Any]:
                 )
             ).scalars().all()
             for failed_step in failed_steps:
-                if _is_transient_gateway_error(failed_step.error):
+                if (
+                    _is_transient_gateway_error(failed_step.error)
+                    or _is_pretool_response_validation_error(failed_step.error)
+                ):
                     failed_step.status = "paused"
             if latest_step:
                 run.current_step = max(int(run.current_step or 0), latest_step.step_number)
@@ -1329,6 +1388,15 @@ async def _attempt_observer(step_id: str, base_attempt: int, event: dict[str, An
                     if run:
                         run.openai_previous_response_id = str(event["response_id"])
                         run.updated_at = now
+                elif (
+                    phase == "completed"
+                    and event.get("provider") == "codex"
+                    and event.get("thread_id")
+                ):
+                    run = await session.get(LeadFinderRunRow, step.run_id)
+                    if run:
+                        run.codex_thread_id = str(event["thread_id"])
+                        run.updated_at = now
                 if phase == "failed" and event.get("will_retry"):
                     step.status = "retrying"
 
@@ -1399,6 +1467,7 @@ async def execute_lead_finder_step(step_id: str) -> None:
     run_id: str | None = None
     selected_llm_provider = DEFAULT_LLM_PROVIDER
     previous_response_id: str | None = None
+    codex_thread_id: str | None = None
     provider_session_started = False
     async with AsyncSessionLocal() as session:
         async with session.begin():
@@ -1417,9 +1486,12 @@ async def execute_lead_finder_step(step_id: str) -> None:
             run_id = run.id
             selected_llm_provider = normalize_lead_finder_provider(run.llm_provider)
             previous_response_id = run.openai_previous_response_id
+            codex_thread_id = run.codex_thread_id
             provider_session_started = (
                 bool(previous_response_id)
                 if selected_llm_provider == "openai"
+                else bool(codex_thread_id)
+                if selected_llm_provider == "codex"
                 else bool(run.openclaw_session_started)
             )
             step.status = "running"
@@ -1454,31 +1526,38 @@ async def execute_lead_finder_step(step_id: str) -> None:
             run_id=step.run_id,
             llm_provider=selected_llm_provider,
             previous_response_id=previous_response_id,
+            codex_thread_id=codex_thread_id,
             provider_session_started=provider_session_started,
             attempt_observer=observe,
             tool_executor=execute_tool,
         )
     except Exception as exc:
         transient_gateway_failure = _is_transient_gateway_error(exc)
+        response_validation_failure = _is_pretool_response_validation_error(exc)
+        pauseable_failure = transient_gateway_failure or response_validation_failure
         async with AsyncSessionLocal() as session:
             async with session.begin():
                 step = await session.get(LeadFinderStepRow, step_id)
                 if not step:
                     return
                 run = await session.get(LeadFinderRunRow, step.run_id)
-                step.status = "paused" if transient_gateway_failure else "failed"
+                step.status = "paused" if pauseable_failure else "failed"
                 step.error = str(exc)
                 step.completed_at = datetime.now(timezone.utc)
                 if run:
-                    run.status = "paused" if transient_gateway_failure else "failed"
-                    if transient_gateway_failure:
+                    run.status = "paused" if pauseable_failure else "failed"
+                    if pauseable_failure:
                         # Consume the persisted ordinal while retaining the unchanged
                         # pre-step context, so a later retry gets a new audit row.
                         run.current_step = max(int(run.current_step or 0), step.step_number)
                     run.error = str(exc)
                     run.auto_run_enabled = False
                     run.auto_run_stop_reason = (
-                        GATEWAY_PAUSE_REASON if transient_gateway_failure else "step_failed"
+                        GATEWAY_PAUSE_REASON
+                        if transient_gateway_failure
+                        else RESPONSE_VALIDATION_PAUSE_REASON
+                        if response_validation_failure
+                        else "step_failed"
                     )
                     run.updated_at = datetime.now(timezone.utc)
         return
@@ -1527,6 +1606,8 @@ async def execute_lead_finder_step(step_id: str) -> None:
             run.error = transient_tool_error
             if gateway.get("provider") == "openai" and gateway.get("response_id"):
                 run.openai_previous_response_id = str(gateway["response_id"])
+            elif gateway.get("provider") == "codex" and gateway.get("thread_id"):
+                run.codex_thread_id = str(gateway["thread_id"])
             elif gateway.get("provider") == "openclaw":
                 run.openclaw_session_started = True
             run.updated_at = datetime.now(timezone.utc)

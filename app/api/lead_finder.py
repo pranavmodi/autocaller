@@ -47,8 +47,8 @@ class LeadFinderStepRequest(BaseModel):
 
 class LeadFinderRunCreateRequest(BaseModel):
     user_direction: str = Field(default="", max_length=10_000)
-    llm_provider: Literal["openai", "openclaw"] | None = None
-    web_research_provider: Literal["openai", "openclaw"] | None = None
+    llm_provider: Literal["openai", "openclaw", "codex"] | None = None
+    web_research_provider: Literal["openai", "openclaw", "codex"] | None = None
 
     def selected_provider(self) -> str:
         return self.llm_provider or self.web_research_provider or "openai"
@@ -71,15 +71,15 @@ class LeadFinderAutoRunRequest(BaseModel):
 class LeadFinderToolExecuteRequest(BaseModel):
     tool: str = Field(..., min_length=1, max_length=128)
     arguments: dict[str, Any] = Field(default_factory=dict)
-    llm_provider: Literal["openai", "openclaw"] | None = None
-    web_research_provider: Literal["openai", "openclaw"] | None = None
+    llm_provider: Literal["openai", "openclaw", "codex"] | None = None
+    web_research_provider: Literal["openai", "openclaw", "codex"] | None = None
 
     def selected_provider(self) -> str:
         return self.llm_provider or self.web_research_provider or "openai"
 
 
 class LeadFinderProviderRequest(BaseModel):
-    provider: Literal["openai", "openclaw"]
+    provider: Literal["openai", "openclaw", "codex"]
 
 
 @router.get("/context")
@@ -236,7 +236,7 @@ async def get_llm_session(run_id: str):
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except LeadFinderSessionStateError as exc:
         detail = str(exc)
-        status_code = 409 if detail.startswith("direct_openai_") else 502
+        status_code = 409 if detail == "non_openclaw_run_uses_persisted_provider_attempts" else 502
         raise HTTPException(status_code=status_code, detail=detail) from exc
 
 

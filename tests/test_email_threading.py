@@ -36,6 +36,34 @@ def test_zoho_api_receives_thread_ancestry(monkeypatch):
     assert captured["payload"]["refHeader"] == "<root@example.net> <original@example.net>"
 
 
+def test_zoho_attachment_upload_uses_multipart_form(monkeypatch, tmp_path):
+    attachment = tmp_path / "resume.pdf"
+    attachment.write_bytes(b"pdf-bytes")
+    captured = {}
+
+    class Response:
+        status_code = 200
+        content = b"{}"
+        text = ""
+
+        @staticmethod
+        def json():
+            return {"data": [{"storeName": "store-1", "attachmentName": "resume.pdf", "attachmentPath": "/Mail/resume.pdf"}]}
+
+    def fake_post(url, *, params, headers, files, timeout):
+        captured.update({"url": url, "params": params, "headers": headers, "files": files, "timeout": timeout})
+        return Response()
+
+    monkeypatch.setattr(email_notification_service, "_zoho_access_header", lambda: {"Authorization": "Zoho-oauthtoken test"})
+    monkeypatch.setattr(email_notification_service.httpx, "post", fake_post)
+
+    result = email_notification_service._zoho_upload_attachment("account-1", str(attachment))
+
+    assert result == {"storeName": "store-1", "attachmentName": "resume.pdf", "attachmentPath": "/Mail/resume.pdf"}
+    assert captured["params"] == {"uploadType": "multipart", "isInline": "false"}
+    assert captured["files"]["attach"] == ("resume.pdf", b"pdf-bytes", "application/pdf")
+
+
 def test_thread_references_default_to_in_reply_to():
     assert email_notification_service._normalize_thread_headers(
         in_reply_to="<original@example.net>",

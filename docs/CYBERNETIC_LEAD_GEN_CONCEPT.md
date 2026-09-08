@@ -57,8 +57,11 @@ The Lead Finder first uses transcript search, exact passage retrieval, and
 index-status inspection. After a named person is supported by an exact passage,
 it may research only that person on the public web for current role, recent
 news/signals, and source-backed outreach angles. Each run explicitly selects
-direct OpenAI (the default) or the OpenClaw gateway for every LLM call in that
-run, including reasoning and person research. Mission Control search and
+direct OpenAI (the default), the dedicated Possible OS Codex app-server, or the
+OpenClaw gateway for every LLM call in that run, including reasoning and person
+research. The Codex path is independently supervised and reusable by future
+Possible OS agents; it does not traverse OpenClaw's queue or Node process.
+Mission Control search and
 passage retrieval remain local non-LLM tool calls. The persisted attempts and
 tool results record which provider and model actually ran.
 Research does not implicitly become a result: a later explicit add-result tool
@@ -70,14 +73,14 @@ discovery source is exposed, and this slice intentionally performs no
 deduplication. Runs, individual debug steps, gateway attempts, tool calls,
 exact requests/responses, results, and context evolution are durable server-side
 state so an operator can inspect work while the browser is waiting.
-Each durable run keeps one isolated OpenClaw conversation, allowing later
-debug steps to reuse the stable instructions and growing history through
-provider prompt caching. The initial turn places deterministic job, tool, and
-baseline context before all run-specific state. Continuation turns do not resend
-that large immutable block; they rely on the isolated OpenClaw session and append
-only current mutable run state. Cache use is evidence-based: cached-token counts
-and hit rate are shown with the persisted gateway attempt instead of inferred
-from configuration.
+Each durable run keeps independent provider continuity: an isolated OpenClaw
+conversation, a Codex app-server thread, or a Responses API response chain.
+This lets later debug steps reuse stable instructions and growing history. The
+initial turn places deterministic job, tool, and baseline context before all
+run-specific state. Continuation turns append only current mutable run state
+when their provider retains the prior conversation. Cache use is
+evidence-based: cached-token counts and hit rate are shown with the persisted
+provider attempt instead of inferred from configuration.
 An explicitly confirmed clean-slate control deletes only this Lead Finder
 history and atomically replaces it with one fresh run before step one.
 

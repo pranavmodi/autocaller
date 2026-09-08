@@ -5,8 +5,10 @@ import json
 from datetime import datetime, timezone
 
 from app.services import lead_finder
+from app.services import lead_finder_provider
 from app.services import lead_finder_tools
 from app.services import lead_finder_web_research
+from app.services.codex_app_server import CodexTurnResult
 from app.services.lead_finder_provider import DirectReasoningResult
 from app.services.lead_finder_web_research import normalize_person_research
 from app.db.models import (
@@ -131,6 +133,155 @@ def test_step_uses_direct_responses_api_when_openai_is_selected(monkeypatch):
     assert result["gateway"]["prompt_cache"]["status"] == "hit"
 
 
+def test_step_uses_dedicated_codex_thread_when_codex_is_selected(monkeypatch):
+    captured = {}
+
+    async def fake_call_codex_reasoning(**kwargs):
+        captured.update(kwargs)
+        return DirectReasoningResult(
+            parsed={
+                "step_name": "Define target",
+                "summary": "Defined the target.",
+                "reasoning": "The requested market is clear.",
+                "state_updates": {"targeting_criteria": {"market": "PI firms"}},
+                "action": {"type": "reason", "tool": None, "arguments": {}},
+                "next_step": "Search Mission Control.",
+                "is_complete": False,
+            },
+            raw_response='{"step_name":"Define target"}',
+            raw_provider_response='{"events":[]}',
+            model="gpt-5.6-luna",
+            usage={"input_tokens": 100, "input_tokens_details": {"cached_tokens": 80}},
+            response_id="turn_test",
+            thread_id="thread_test",
+        )
+
+    monkeypatch.setattr(lead_finder, "call_codex_reasoning", fake_call_codex_reasoning)
+    result = asyncio.run(lead_finder.run_lead_finder_step(
+        context=lead_finder.load_lead_finder_context(),
+        user_direction="PI firm owners",
+        run_id="lfr_codex",
+        llm_provider="codex",
+        codex_thread_id="thread_prior",
+        provider_session_started=True,
+    ))
+
+    assert captured["thread_id"] == "thread_prior"
+    assert captured["payload"]["context_layout"] == "continuation_v2"
+    assert result["gateway"]["provider"] == "codex"
+    assert result["gateway"]["thread_id"] == "thread_test"
+    assert result["gateway"]["prompt_cache"]["status"] == "hit"
+
+
+def test_codex_reasoning_repairs_invalid_nested_json_once(monkeypatch, tmp_path):
+    skill_path = tmp_path / "SKILL.md"
+    skill_path.write_text("Return the required Lead Finder transition.", encoding="utf-8")
+    calls = []
+    observed = []
+    malformed = {
+        "step_name": "Research Mark Breyer",
+        "summary": "Selected a candidate.",
+        "reasoning": "Transcript evidence is sufficient.",
+        "state_updates": '{"candidate_queue":[{"name":"Mark Breyer"}}]}',
+        "action": {
+            "type": "tool_call",
+            "tool": "web.research_person",
+            "arguments": '{"person_name":"Mark Breyer"}',
+        },
+        "next_step": "Inspect research.",
+        "is_complete": False,
+    }
+    repaired = {
+        **malformed,
+        "state_updates": '{"candidate_queue":[{"name":"Mark Breyer"}]}',
+    }
+
+    async def fake_run_codex_turn(**kwargs):
+        calls.append(kwargs)
+        number = len(calls)
+        observer = kwargs.get("observer")
+        if observer:
+            await observer({
+                "phase": "started",
+                "attempt": 1,
+                "provider": "codex",
+                "model": "gpt-5.6-luna",
+                "request": {"prompt": kwargs["prompt"]},
+            })
+            await observer({
+                "phase": "completed",
+                "attempt": 1,
+                "provider": "codex",
+                "model": "gpt-5.6-luna",
+                "thread_id": "thread_test",
+                "raw_response": "provider response",
+                "usage": {},
+            })
+        return CodexTurnResult(
+            text=json.dumps(malformed if number == 1 else repaired),
+            thread_id="thread_test",
+            turn_id=f"turn_{number}",
+            model="gpt-5.6-luna",
+            usage={"input_tokens": 100},
+            events=[],
+            latency={"total_ms": 10.0},
+        )
+
+    async def observe(event):
+        observed.append(event)
+
+    monkeypatch.setattr(
+        lead_finder_provider, "run_codex_turn", fake_run_codex_turn
+    )
+    monkeypatch.setenv("LEAD_FINDER_CODEX_SCHEMA_REPAIR_RETRIES", "1")
+    result = asyncio.run(lead_finder_provider.call_codex_reasoning(
+        skill_path=skill_path,
+        payload={"kind": "test"},
+        run_id="lfr_test",
+        thread_id="thread_prior",
+        attempt_observer=observe,
+    ))
+
+    assert len(calls) == 2
+    assert calls[0]["thread_id"] == "thread_prior"
+    assert calls[1]["thread_id"] == "thread_test"
+    assert "Repair the immediately preceding assistant response only" in calls[1]["prompt"]
+    assert result.parsed["state_updates"]["candidate_queue"][0]["name"] == "Mark Breyer"
+    assert result.parsed["action"]["arguments"] == {"person_name": "Mark Breyer"}
+    assert any(
+        event.get("phase") == "failed"
+        and event.get("attempt") == 1
+        and event.get("will_retry") is True
+        for event in observed
+    )
+    assert any(
+        event.get("phase") == "completed" and event.get("attempt") == 2
+        for event in observed
+    )
+
+
+def test_codex_reasoning_schema_closes_every_object_without_json_strings():
+    schema = lead_finder_provider.CODEX_REASONING_SCHEMA
+    assert schema["properties"]["state_updates"]["type"] == "object"
+    assert schema["properties"]["action"]["properties"]["arguments"]["type"] == "object"
+
+    def assert_closed_objects(node):
+        if not isinstance(node, dict):
+            return
+        node_type = node.get("type")
+        types = node_type if isinstance(node_type, list) else [node_type]
+        if "object" in types:
+            assert node.get("additionalProperties") is False
+        for value in node.values():
+            if isinstance(value, dict):
+                assert_closed_objects(value)
+            elif isinstance(value, list):
+                for item in value:
+                    assert_closed_objects(item)
+
+    assert_closed_objects(schema)
+
+
 def test_lead_finder_cache_session_is_stable_per_run_and_scoped_between_runs():
     first = lead_finder._cache_session_user("lfr_one")
     assert first == lead_finder._cache_session_user("lfr_one")
@@ -242,6 +393,7 @@ def test_persistence_models_cover_runs_steps_and_every_gateway_attempt():
         "llm_provider",
         "openai_previous_response_id",
         "openclaw_session_started",
+        "codex_thread_id",
     }.issubset(LeadFinderRunRow.__table__.columns.keys())
     step_run_fk = next(iter(LeadFinderStepRow.__table__.c.run_id.foreign_keys))
     attempt_step_fk = next(iter(LeadFinderAttemptRow.__table__.c.step_id.foreign_keys))
@@ -340,6 +492,18 @@ def test_failed_gateway_tool_transition_requests_a_durable_pause():
     assert lead_finder._transient_tool_failure(transition) is None
 
 
+def test_pretool_response_validation_failures_are_safely_resumable():
+    assert lead_finder._is_pretool_response_validation_error(
+        "codex_app_server_state_updates_invalid_json"
+    ) is True
+    assert lead_finder._is_pretool_response_validation_error(
+        "gateway call failed after 2 attempts: gateway JSON missing required fields"
+    ) is True
+    assert lead_finder._is_pretool_response_validation_error(
+        "invalid_person_query"
+    ) is False
+
+
 def test_pause_action_is_preserved_as_a_control_signal():
     assert lead_finder._normalized_action({
         "type": "pause",
@@ -364,6 +528,7 @@ def test_fresh_run_row_starts_before_step_one_with_requested_direction():
     assert row.llm_provider == "openai"
     assert row.openai_previous_response_id is None
     assert row.openclaw_session_started is False
+    assert row.codex_thread_id is None
 
 
 def test_fresh_run_can_select_openclaw_for_all_llm_calls():
@@ -373,6 +538,15 @@ def test_fresh_run_can_select_openclaw_for_all_llm_calls():
     )
 
     assert row.llm_provider == "openclaw"
+
+
+def test_fresh_run_can_select_dedicated_codex_for_all_llm_calls():
+    row = lead_finder._build_lead_finder_run_row(
+        user_direction="PI intake leaders",
+        llm_provider="codex",
+    )
+
+    assert row.llm_provider == "codex"
 
 
 def test_auto_run_budget_counts_only_steps_after_auto_start():

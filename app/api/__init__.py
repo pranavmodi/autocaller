@@ -33,6 +33,7 @@ from .front_inbox import router as front_inbox_router
 from .call_lab import router as call_lab_router
 from .knowledge import router as knowledge_router
 from .lead_finder import router as lead_finder_router
+from .codex_gateway import router as codex_gateway_router
 
 __all__ = [
     "dashboard_router", "websocket_router", "settings_router",
@@ -49,4 +50,5 @@ __all__ = [
     "call_lab_router",
     "knowledge_router",
     "lead_finder_router",
+    "codex_gateway_router",
 ]

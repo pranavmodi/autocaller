@@ -3239,11 +3239,12 @@ export type LeadFinderRun = {
   auto_run_steps_used: number;
   auto_run_stop_reason: string | null;
   resume_available: boolean;
-  llm_provider: "openai" | "openclaw";
+  llm_provider: "openai" | "openclaw" | "codex";
   llm_model: string;
   llm_configured: boolean;
   openai_previous_response_id: string | null;
   openclaw_session_started: boolean;
+  codex_thread_id: string | null;
   error: string | null;
   restarted_from_run_id: string | null;
   completed_at: string | null;
@@ -3267,7 +3268,7 @@ export type LeadFinderLLMSessionRaw = {
 
 export const createLeadFinderRun = (
   userDirection: string,
-  llmProvider: "openai" | "openclaw" = "openai",
+  llmProvider: "openai" | "openclaw" | "codex" = "openai",
 ) =>
   post<{ run: LeadFinderRun }>("/api/lead-finder/runs", {
     user_direction: userDirection,
@@ -3316,7 +3317,7 @@ export const resumeLeadFinderRun = (runId: string) =>
 
 export const updateLeadFinderLLMProvider = (
   runId: string,
-  provider: "openai" | "openclaw",
+  provider: "openai" | "openclaw" | "codex",
 ) =>
   put<{ run: LeadFinderRun }>(
     `/api/lead-finder/runs/${runId}/llm-provider`,
@@ -3330,7 +3331,7 @@ export const restartLeadFinderRun = (runId: string, userDirection?: string) =>
 
 export const resetAllLeadFinderRuns = (
   userDirection: string,
-  llmProvider: "openai" | "openclaw" = "openai",
+  llmProvider: "openai" | "openclaw" | "codex" = "openai",
 ) =>
   post<{
     deleted: { runs: number; steps: number; attempts: number; tool_calls: number };

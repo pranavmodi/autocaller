@@ -5,7 +5,6 @@ import { Providers } from "@/lib/providers";
 import { Nav } from "@/components/Nav";
 import { ActiveCallOverlay } from "@/components/ActiveCallOverlay";
 import { ConsultBookingPopup } from "@/components/ConsultBookingPopup";
-import { OperatorNotificationPopup } from "@/components/OperatorNotificationPopup";
 import { EngagementNotificationPopup } from "@/components/EngagementNotificationPopup";
 
 const inter = Inter({ subsets: ["latin"] });
@@ -36,7 +35,7 @@ export default function RootLayout({
             </main>
           </div>
           <ActiveCallOverlay />
-          <OperatorNotificationPopup />
+          {/* Actions UI is disabled; the component remains available for internal workflows. */}
           <EngagementNotificationPopup />
           <ConsultBookingPopup />
         </Providers>

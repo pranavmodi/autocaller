@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pathlib import Path
 
-from .api import dashboard_router, websocket_router, settings_router, dispatcher_router, scenarios_router, carrier_router, cadence_router, consults_router, call_lists_router, voice_preview_router, firm_reviews_router, comms_router, sequences_router, outreach_router, lead_gen_router, resend_webhooks_router, inbound_email_router, operator_notifications_router, seo_router, product_traces_router, learning_router, todos_router, composer_variants_router, actions_router, front_router, research_router, aiaudit_router, visibility_links_router, data_returned_router, front_inbox_router, engagement_campaigns_router, call_lab_router, knowledge_router, lead_finder_router
+from .api import dashboard_router, websocket_router, settings_router, dispatcher_router, scenarios_router, carrier_router, cadence_router, consults_router, call_lists_router, voice_preview_router, firm_reviews_router, comms_router, sequences_router, outreach_router, lead_gen_router, resend_webhooks_router, inbound_email_router, operator_notifications_router, seo_router, product_traces_router, learning_router, todos_router, composer_variants_router, actions_router, front_router, research_router, aiaudit_router, visibility_links_router, data_returned_router, front_inbox_router, engagement_campaigns_router, call_lab_router, knowledge_router, lead_finder_router, codex_gateway_router
 from .api.agents import router as agents_router
 from .api.pif import router as pif_router
 from .api.auth import router as auth_router, SESSION_COOKIE, verify_session_token, auth_configured
@@ -386,6 +386,7 @@ app.include_router(cadence_router)
 app.include_router(call_lab_router)
 app.include_router(knowledge_router)
 app.include_router(lead_finder_router)
+app.include_router(codex_gateway_router)
 app.include_router(consults_router)
 app.include_router(call_lists_router)
 app.include_router(voice_preview_router)

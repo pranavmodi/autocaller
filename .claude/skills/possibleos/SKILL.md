@@ -21,7 +21,7 @@ baseline context is loaded from `docs/lead-finder-context/company.md`,
 `customer.md`, `offer.md`, and `voice.md`. Use `bin/possibleos lead-finder
 context --json` to inspect that context, `lead-finder start --direction "..."`
 to create a durable run, `lead-finder step <run_id>` to queue exactly one
-reasoning or bounded tool step through `openclaw/main`, and `lead-finder show
+reasoning or bounded tool step through the run's selected provider, and `lead-finder show
 <run_id>` to see exact requests, raw/parsed responses, context evolution,
 gateway attempts, and tool results. Use `lead-finder tools`, `mission-search`,
 `mission-passages`, and `mission-index-status` for operator parity with the
@@ -30,15 +30,24 @@ Control. Once exact passages support a named person, `web.research_person`
 may verify that person's current role, recent public evidence, and outreach
 angles. Direct OpenAI with `gpt-5.6-luna` is the default for every LLM call in
 the run, including reasoning and web research; use
-`lead-finder provider <run_id> openclaw` to select the OpenClaw fallback, or
-`lead-finder provider <run_id> openai` to switch back. This per-run setting
+`lead-finder provider <run_id> openclaw` to select the OpenClaw fallback,
+`lead-finder provider <run_id> codex` to use the dedicated Possible OS Codex
+app-server, or `lead-finder provider <run_id> openai` to switch back. This per-run setting
 affects future LLM calls; Mission Control tools remain local. Direct reasoning
 uses the Responses API and a persisted `previous_response_id`; OpenClaw uses
-its isolated run session. Persisted attempts and completed research expose the
+its isolated run session; dedicated Codex uses a persisted `codex_thread_id`.
+The generic `codex-gateway status`, `codex-gateway models`, and `codex-gateway
+turn` commands expose the same localhost-only app-server to future Possible OS
+agents independently of OpenClaw. Persisted attempts and completed research expose the
 actual provider/model/usage metadata. OpenClaw structured-output failures
 retain the exact malformed assistant text
 and receive one bounded JSON/schema repair attempt before the run fails; both
-attempts remain visible in persisted history. A later explicit
+attempts remain visible in persisted history. Dedicated Codex uses a fully
+typed closed schema for working-state sections, candidates, and every available
+tool's arguments, avoiding JSON-inside-a-string. One bounded repair remains for
+provider/schema drift and legacy turns. No tool runs before validation; if
+repair is exhausted, the run pauses and remains resumable from its unchanged
+context. A later explicit
 `lead_finder.add_researched_lead` call publishes that
 completed research into the run-local Found Leads list; inspect it with
 `lead-finder results <run_id>`. Use `lead-finder all-results --json` or the
@@ -59,9 +68,10 @@ connection-capacity failures pause the step and run instead of terminating them.
 The exact failed provider attempt and unchanged context remain persisted,
 auto-run stops, and no
 continuation is queued. Use `lead-finder resume <run_id>` to reopen a legacy or
-terminal-looking transient failure without executing it, then use
+terminal-looking transient or pre-tool response-validation failure without
+executing it, then use
 `lead-finder step` or `lead-finder auto-start` when capacity is available.
-Malformed output and other non-retryable errors still fail normally.
+Invalid tool names and other non-retryable application errors still fail normally.
 The agent can also return `action.type=pause` when its saved context proves that
 no useful in-scope work can continue until an external dependency recovers;
 this stops automatic chaining instead of spending steps restating the block.
@@ -78,10 +88,11 @@ canonical conversation JSONL exactly as stored, or `--source trajectory` to
 inspect the raw compiled system prompt, tool definitions, submitted prompts,
 model snapshots, and usage. Both outputs are unredacted and may contain
 sensitive workspace context; do not paste or transmit them casually.
-That command applies only while the run is OpenClaw-selected. Direct OpenAI
-turns have no local OpenClaw JSONL; use `lead-finder show <run_id> --json` or the
-browser's LLM trace view for persisted exact request, full Responses API object,
-parsed transition, response ID, and usage.
+That command applies only while the run is OpenClaw-selected. Direct OpenAI and
+dedicated Codex turns have no local OpenClaw JSONL; use `lead-finder show
+<run_id> --json` or the browser's LLM trace view for persisted exact request,
+provider event/response object, parsed transition, response/thread ID, usage,
+and latency.
 Use the browser's Runs tab for the newest-first persisted-run list, or
 `lead-finder runs` for the same headless inventory; opening a row loads that
 run's overview without creating or changing it.

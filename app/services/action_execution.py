@@ -6,6 +6,7 @@ import logging
 import os
 import uuid
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -1706,6 +1707,7 @@ async def create_send_email_action(
     transport: str | None = None,
     in_reply_to: str | None = None,
     references: str | None = None,
+    attachments: list[str] | None = None,
 ) -> dict[str, Any]:
     await ensure_agent_tables()
     email_mode = (mode or "test").strip().lower()
@@ -1724,6 +1726,12 @@ async def create_send_email_action(
         raise ValueError("draft_subject_empty")
     if not draft_body:
         raise ValueError("draft_body_empty")
+    attachment_paths: list[str] = []
+    for raw_path in attachments or []:
+        path = Path(str(raw_path)).expanduser().resolve()
+        if not path.is_file():
+            raise ValueError(f"attachment_file_not_found:{path}")
+        attachment_paths.append(str(path))
     action_id = _new_id("action")
     approved_actor = (approved_by or "").strip()
     approval_json = None
@@ -1759,6 +1767,7 @@ async def create_send_email_action(
         "transport": transport_override,
         "in_reply_to": reply_id,
         "references": reference_ids,
+        "attachments": attachment_paths,
     }
     if email_mode == "lead_gen":
         cleaned_action_type = _clean_lead_gen_action_type(lead_gen_action_type)
@@ -2486,6 +2495,7 @@ async def _execute_send_email(payload: dict[str, Any]) -> dict[str, Any]:
         in_reply_to=str(payload.get("in_reply_to") or "").strip() or None,
         references=str(payload.get("references") or "").strip() or None,
         brief_version=int(payload["brief_version"]) if payload.get("brief_version") else None,
+        attachments=[str(item) for item in (payload.get("attachments") or [])],
     )
     email_log: EmailLogRow | None = None
     async with AsyncSessionLocal() as session:

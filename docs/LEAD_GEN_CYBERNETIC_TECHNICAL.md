@@ -1309,8 +1309,17 @@ reasoning transition but also pauses the run. Both paths disable auto-run with
 `auto_run_stop_reason=gateway_temporarily_unavailable`, preserve the exact
 error, and queue no continuation. `POST /api/lead-finder/runs/{run_id}/resume`
 reopens such a run without executing anything; a later manual step or auto-run
-continues with a new persisted ordinal. Malformed output, invalid tool calls,
-and other semantic errors remain terminal failures.
+continues with a new persisted ordinal. Codex reasoning uses a fully typed,
+closed schema for the transition, working-state sections, candidate records,
+and the finite union of tool arguments; it does not carry JSON inside strings.
+One bounded same-thread repair remains as defense against provider/schema drift
+and for turns begun under the legacy string transport
+(`LEAD_FINDER_CODEX_SCHEMA_REPAIR_RETRIES=1`). The invalid and repaired attempts
+are both persisted, and no tool executes until the complete envelope validates.
+Exhausted pre-tool response validation failures pause with
+`auto_run_stop_reason=response_validation_failed` and can be explicitly
+resumed from the unchanged context. Invalid tool names and other application
+semantic errors remain terminal failures.
 
 The reasoning action contract also supports `action.type=pause`. The agent uses
 it when its context already proves that no useful in-scope action can proceed
@@ -1348,16 +1357,41 @@ request merely because browser polling continues.
 
 The `lead_finder_runs.llm_provider` field selects every future LLM call in the
 run. With `openai`, reasoning and web research call the OpenAI Responses API
-directly with `gpt-5.6-luna`; with `openclaw`, both use `openclaw/main` through
-the loopback gateway. Mission Control search and passage retrieval remain local
-non-LLM HTTP tools. Provider changes do not interrupt an active step and apply
-when the next step begins.
+directly with `gpt-5.6-luna`; with `codex`, both connect to the dedicated
+Possible OS Codex app-server on `127.0.0.1:4510`; with `openclaw`, both use
+`openclaw/main` through the OpenClaw loopback gateway. The Codex service is a
+separate systemd process and does not traverse the OpenClaw Node process or its
+shared lane. Mission Control search and passage retrieval remain local non-LLM
+HTTP tools. Provider changes do not interrupt an active step and apply when the
+next step begins.
+
+`app/services/codex_app_server.py` is a reusable infrastructure adapter rather
+than a Lead Finder client. `GET /api/codex-gateway/status`, `GET
+/api/codex-gateway/models`, and `POST /api/codex-gateway/turn` expose readiness,
+the connected account's live model catalog, and read-only threaded turns to any
+future Possible OS agent. The companion
+`deploy/systemd/possibleos-codex-app-server.service` binds WebSocket transport to
+localhost only. The adapter initializes JSON-RPC per connection, starts or
+resumes a persisted Codex thread, starts one turn, waits for `turn/completed`,
+and returns the final assistant item, raw streamed events, token usage, and
+queue/connect/first-token/total latency. A single in-process lock intentionally
+limits Possible OS callers to one active Codex turn on this two-core host.
+The client accepts bounded app-server frames up to 16 MiB by default
+(`CODEX_APP_SERVER_MAX_MESSAGE_BYTES`) because resumed thread snapshots and raw
+event traces can exceed the WebSocket library's 1 MiB default; exceeding the
+configured limit is treated as a resumable pre-tool transport failure.
 
 Each transport maintains independent run continuity. OpenClaw receives a
 deterministic, hashed run-scoped `user` value and keeps its local session. Direct
 reasoning stores the latest Responses API ID in
 `lead_finder_runs.openai_previous_response_id` and passes it as
-`previous_response_id` on the next direct reasoning turn. Possible OS persists
+`previous_response_id` on the next direct reasoning turn. Dedicated Codex stores
+`lead_finder_runs.codex_thread_id`, resumes that thread on later steps, and uses
+app-server `outputSchema` for the fixed transition envelope. Its working-state
+sections, candidate records, and superset of finite tool arguments are closed,
+fully typed objects; null marks an unchanged or unused scalar field and unused
+array arguments are empty. Possible OS removes unused argument fields before
+tool validation and persists
 the exact request, full provider response JSON, parsed transition, and usage in
 `lead_finder_attempts`. Switching away and back resumes that provider's prior
 lineage while current run state carries intervening tool evidence.
@@ -1395,9 +1429,10 @@ For readability, the browser splits the selected string by line, parses each
 record client-side, labels it by event type/role/sequence/timestamp, and renders
 an expandable syntax-highlighted JSON tree. Expand/collapse operations affect
 only the DOM presentation. The raw toggle, copy action, API, and CLI continue to
-use the byte-identical JSONL supplied by OpenClaw. Direct runs have no local
-OpenClaw JSONL; the same UI tab instead renders the persisted Responses API
-attempt trace, including the full provider response and latest response ID.
+use the byte-identical JSONL supplied by OpenClaw. Direct and dedicated-Codex
+runs have no local OpenClaw JSONL; the same UI tab instead renders their
+persisted provider attempt traces. Codex traces include the app-server thread
+ID, streamed JSON-RPC events, token usage, and latency.
 The shared tree also renders Possible OS current context, exact step requests,
 before/after snapshots, tool arguments/results, and JSON LLM responses. When a
 string field itself contains a valid JSON object or array (for example a gateway

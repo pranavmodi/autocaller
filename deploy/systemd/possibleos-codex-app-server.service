@@ -1,0 +1,20 @@
+[Unit]
+Description=Possible OS dedicated Codex App Server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/home/pranav/possibleos
+Environment=HOME=/root
+ExecStart=/usr/bin/codex app-server --listen ws://127.0.0.1:4510
+Restart=always
+RestartSec=5
+KillSignal=SIGTERM
+TimeoutStopSec=30
+StandardOutput=append:/var/log/possibleos-codex-app-server.log
+StandardError=append:/var/log/possibleos-codex-app-server.log
+
+[Install]
+WantedBy=multi-user.target
