@@ -65,3 +65,14 @@ Each decision must contain:
 Keep excerpts short. Unknown values are null/unknown, not guessed. Explain
 conflicts in reason/geography_note. Preserve meaningful differences between a
 firm role and a group technology subsidiary; reject unnamed client employers.
+
+## Verification repair mode
+`verification_repair` is one bounded correction pass, only for the supplied
+failed candidates. Each includes its original decision, precise validation
+error, and the SAME freshly fetched pages. Return the same decisions schema
+with exactly one decision per supplied candidate_id; do not return other jobs.
+Correct invalid fields and replace paraphrased or misattributed quotes with
+short exact excerpts from the identified supplied source. Do not invent text,
+weaken evidence requirements, browse for different evidence, or assume the
+original decision was correct. If those pages cannot support a valid active
+decision, return unverified with an honest reason and null unsupported evidence.
