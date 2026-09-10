@@ -50,6 +50,10 @@ Each decision must contain:
 - work_arrangement: remote|hybrid|onsite|unclear.
 - remote_scope: global|country_restricted|location_restricted|not_remote|unclear.
 - colombia_eligibility: explicit|conditional_latam|restricted|unknown.
+  Use explicit only when the source names Colombia as eligible or expressly
+  allows unrestricted worldwide work. A Latin America requirement is always
+  conditional_latam, even though Colombia is geographically in Latin America;
+  retain time-overlap and other conditions in geography_note.
 - geography_note (string), explicitly distinguish location eligibility from
   work authorization. Specific country/region restrictions beat generic badges.
   LATAM is location_restricted, NOT global. US-labeled role without an explicit

@@ -18,7 +18,7 @@ from app.models import Patient  # Patient is aliased as Lead in models/patient.p
 
 # Bump this when you change the template or tool list in a way that materially
 # affects calling behavior. Used by the judge + Phase B A/B tests to compare.
-PROMPT_VERSION = "v1.67"  # v1.67: repository trace bump for bounded daily career evidence repair instructions; attorney call template unchanged.
+PROMPT_VERSION = "v1.68"  # v1.68: clarify conditional LATAM versus explicit Colombia career eligibility; attorney call template unchanged.
 
 
 SYSTEM_PROMPT_TEMPLATE = """\
