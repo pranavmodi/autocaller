@@ -9040,6 +9040,12 @@ def pif_maintenance_status():
     console.print_json(data=_get("/api/pif/research-maintenance/status"))
 
 
+@pif_app.command("nightly-status")
+def pif_nightly_status():
+    """Show the live server's 01:00 IST sync schedule, stages, and last errors."""
+    console.print_json(data=_get("/api/pif/nightly-sync/status"))
+
+
 @pif_app.command("maintenance-queue")
 def pif_maintenance_queue(
     limit: int = typer.Option(175, "--limit", min=1, max=1000, help="Firms per research kind."),

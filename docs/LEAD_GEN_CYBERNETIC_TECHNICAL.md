@@ -13,6 +13,20 @@ Use the other lead-gen docs for different purposes:
 
 ## Runtime Surfaces
 
+### Fixed Nightly Producers
+
+`app/services/nightly_sync.py` owns the automatic 01:00 Asia/Kolkata pipeline
+started by `app/main.py`: firm delta sync -> autoresponses -> contact ingestion
+-> bounded Front sync -> due research maintenance. It replaces the three
+independent startup/86400-second producer loops, not the continuous workers.
+The durable slot/stage checkpoint lives under
+`system_settings.agent_config.nightly_sync`; a PostgreSQL advisory lock protects
+automatic execution across backend processes. No migration is needed.
+`GET /api/pif/nightly-sync/status` / `pif nightly-status` exposes live scheduler
+state, UTC/IST next slot, budgets, last stages and errors. Front's
+`sync_health.next_daily_run_at` uses this schedule, not last finish + 24 hours.
+See [Nightly Sync](NIGHTLY_SYNC.md) for deployment and interruption semantics.
+
 ### Backend
 
 FastAPI serves the lead-gen APIs through `app/api/lead_gen.py` and related
@@ -1610,9 +1624,10 @@ refresh cadence and no longer depends on the dead mission.db sync.
   `contacts`, `leadership`, `staff`, `contact_profiles`, `research_data`,
   `behavioral_data`, `score_breakdown`, `conversation_ids` — and `raw_json`, the
   untouched API record, so no future field is ever lost.
-- **Sync:** `sync_pif_directory()` paginates `GET {PIFSTATS_BASE_URL}/`
-  (page_size capped at 100) and upserts by `id`. `pif_directory_sync_loop`
-  refreshes daily; it no-ops while the flag is off.
+- **Sync:** the nightly pipeline invokes `firm_intel_sync.sync_firm_intel()`
+  for the raw v2 extraction delta, followed by autoresponse and contact ingestion.
+  `PIF_DIRECTORY_NATIVE` gates these three stages. `sync_pif_directory()` remains
+  a legacy direct v1 reader, not the automatic producer.
 - **Flag:** `PIF_DIRECTORY_NATIVE` (default off). When off, `resolve_firms` reads
   the mission.db map (legacy). When "1", it reads `load_pif_domain_map_from_db()`
   (the native directory; ~2,175 matchable domains vs ~1,141 from mission.db).

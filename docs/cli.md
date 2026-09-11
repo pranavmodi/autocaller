@@ -131,6 +131,7 @@ Every command accepts `--help`. Exit code is `0` on success, `1` on any error
 | `pif update <firm_id\|domain> --file <patch.json> [--dry-run]` | Partially update writable firm, contact, research, and vendor fields while rebuilding the firm's domain aliases. |
 | `pif delete <firm_id\|domain> [--dry-run] [--force] [-y]` | Delete the directory row and its aliases while preserving operational history. Upstream-synced records require `--force` because a later sync may recreate them. |
 | `pif firms [--vendor <vendor>] [--search <text>] [--source all\|manual\|synced] [--limit N]` | List local firms, optionally filtered by vendor and record origin. Every result includes `manually_added`; `--source manual` returns operator-created firms and `--source synced` returns sync-origin firms. |
+| `pif nightly-status` | Read the live backend's fixed 01:00 Asia/Kolkata pipeline: next slot in UTC/IST, enabled stages and budgets, running state, durable last slot, stage outcomes/errors. Does not sync or queue work. |
 | `pif people [--firm <text>] [--name <text>] [--title <text>] [--role <text>] [--source all\|leadership\|staff\|contacts] [--leader any\|leader\|non_leader] [--limit N]` | List people extracted into the local mirrored firm directory. This is the CLI counterpart to the Leads contacts view. |
 | `pif people-options` | List every Title and derived Role dropdown value available in the local mirrored people directory, with contact counts for each value. |
 | `pif enrich <firm_id> [--poll]` | Queue the durable local pipeline for canonical domain, firm profile, leadership/staff, vendor evidence, behavior, local leadership communication/contact profiles, contacts, job postings, and ICP score. Status includes the current stage, percentage, per-stage messages, and warnings. Existing researched facts are merged and never replaced by empty results. No EmailTag research call is made. |
@@ -679,6 +680,27 @@ bin/possibleos call LEAD-000001
 ---
 
 ## 10. Typical AI-agent recipes
+
+### Recipe: "check the 01:00 India nightly pipeline"
+
+```bash
+bin/possibleos pif nightly-status
+bin/possibleos pif sync-status
+bin/possibleos pif maintenance-status
+bin/possibleos front status
+```
+
+The automatic pipeline starts at 01:00 Asia/Kolkata (19:30 UTC on the previous
+calendar day). Firm sync, autoresponses, contact ingestion, Front, then due
+research run sequentially. Failed stages are recorded; independent later
+stages still run. Continuous workers finish research asynchronously.
+Restarting waits for the next slot; no startup catchup or same-slot retry.
+`nightly-status` reads server configuration, not the CLI process's environment.
+Parent/operator deployment can disable all producers with
+`POSSIBLEOS_NIGHTLY_SYNC_ENABLED=false`; `PIF_DIRECTORY_NATIVE`,
+`FRONT_SYNC_ENABLED`, and `PIF_RESEARCH_MAINTENANCE_ENABLED` gate their stages.
+See [Nightly Sync](NIGHTLY_SYNC.md) for timeout, failure, and deployment details.
+The separate PI career-search timer and all outbound schedules are unchanged.
 
 ### Recipe: "create today's cross-channel content campaign"
 ```bash

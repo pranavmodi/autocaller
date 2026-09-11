@@ -246,19 +246,3 @@ async def queue_due_firm_maintenance(
         "sitemap_pif_ids": queued_sitemaps,
         "failures": failures,
     }
-
-
-async def research_maintenance_loop() -> None:
-    startup_delay = _int_env("PIF_RESEARCH_MAINTENANCE_STARTUP_DELAY_SECONDS", 120, minimum=0)
-    interval = _int_env("PIF_RESEARCH_MAINTENANCE_INTERVAL_SECONDS", 86_400)
-    await asyncio.sleep(startup_delay)
-    while True:
-        try:
-            if maintenance_enabled():
-                result = await queue_due_firm_maintenance()
-                logger.info("PIF research maintenance: %s", result)
-        except asyncio.CancelledError:
-            raise
-        except Exception:
-            logger.exception("PIF research maintenance tick failed")
-        await asyncio.sleep(interval)

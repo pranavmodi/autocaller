@@ -346,6 +346,22 @@ contact ingestion, job postings, and scoring with percentage and warnings.
 Every persistence step merges with existing firm facts; empty or failed
 research must never erase leadership, staff, vendors, or prior job results.
 
+Automatic data producers share a fixed 01:00 Asia/Kolkata nightly slot
+(19:30 UTC on the previous date). Use `bin/possibleos pif nightly-status` for
+LIVE backend schedule/flags/budgets, UTC/IST next run, running stage and durable
+last-stage errors. Order: firm sync -> autoresponses -> contact ingestion ->
+Front -> due profile/review/job/sitemap maintenance. Each enabled stage is
+bounded (default 1800 seconds), and failures do not block later independent
+stages. Existing workers process queued research continuously; this is a
+producer schedule, not a promise that all research finishes at 01:00.
+Restart waits until the next slot without catchup; claimed/interrupted slots
+are not retried automatically. `POSSIBLEOS_NIGHTLY_SYNC_ENABLED=false` disables
+these producers. Existing native-directory and maintenance flags remain;
+`FRONT_SYNC_ENABLED=false` disables just automatic Front. Intervals/startup
+delays no longer schedule these producers. Manual sync/maintenance commands
+remain explicit operator actions, outside the automatic slot lock. See
+`docs/NIGHTLY_SYNC.md`. Do not alter the separate career-search schedule.
+
 Local firm research is operator-triggered outside the daily changed-firm queue
 because it spends web/LLM budget. Use `bin/possibleos research status --tasks` for
 coverage/open tasks, `research firm <domain-or-pif> [--staff/--no-staff]

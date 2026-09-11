@@ -853,8 +853,9 @@ async def front_status() -> dict[str, Any]:
     latest_state_at = max((state.updated_at for state in visible_states if state.updated_at), default=None)
     latest_watermark = max((state.watermark for state in visible_states if state.watermark), default=None)
     last_run_at = parse_front_datetime(last_run.get("finished_at")) or latest_state_at
-    interval_seconds = int(os.getenv("FRONT_SYNC_INTERVAL_SECONDS", "86400") or "86400")
-    next_daily_run_at = last_run_at + timedelta(seconds=interval_seconds) if last_run_at else None
+    from .nightly_sync import schedule_status
+    nightly = schedule_status()
+    next_daily_run_at = nightly["next_run_at"] if nightly["stages_enabled"]["front"] else None
     state_payloads = [
         {
             "key": row.key,
@@ -897,7 +898,9 @@ async def front_status() -> dict[str, Any]:
             "rate_limited": last_run.get("rate_limited"),
             "latest_watermark": _iso(latest_watermark),
             "latest_watermark_age_hours": _age_hours(latest_watermark, now=now),
-            "next_daily_run_at": _iso(next_daily_run_at),
+            "next_daily_run_at": next_daily_run_at,
+            "daily_schedule_timezone": nightly["timezone"],
+            "daily_schedule_local_time": nightly["local_time"],
             "last_error": last_run.get("error"),
             "stale": stale,
             "stale_after_hours": 36,
@@ -1290,21 +1293,3 @@ async def run_front_sync(*, max_calls: int = 300, full: bool = False) -> dict[st
         "scores": scores,
         "status": await front_status(),
     }
-
-
-async def front_sync_loop(*, interval_seconds: int = 86400, max_calls: int = 300) -> None:
-    while True:
-        try:
-            await run_front_sync(max_calls=max_calls, full=False)
-        except asyncio.CancelledError:
-            raise
-        except Exception as e:
-            await _save_front_last_run({
-                "started_at": _utcnow().isoformat(),
-                "finished_at": _utcnow().isoformat(),
-                "calls_used": None,
-                "call_budget": max_calls,
-                "full": False,
-                "error": f"{type(e).__name__}: {str(e)[:500]}",
-            })
-        await asyncio.sleep(interval_seconds)

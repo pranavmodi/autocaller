@@ -379,6 +379,12 @@ async def get_research_maintenance_status():
     return await research_maintenance_status()
 
 
+@router.get("/nightly-sync/status")
+async def get_nightly_sync_status():
+    from app.services.nightly_sync import nightly_status
+    return await nightly_status()
+
+
 @router.post("/research-maintenance/queue")
 async def post_research_maintenance_queue(limit: int = Query(175, ge=1, le=1000)):
     return await queue_due_firm_maintenance(limit=limit)

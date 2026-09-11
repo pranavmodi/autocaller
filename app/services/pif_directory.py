@@ -11,7 +11,7 @@ behavioral profiles, firm sender-role distributions, ICP scores), plus the full
 untouched record in `raw_json` so nothing is ever lost.
 
 Gated by PIF_DIRECTORY_NATIVE (default off). When off, nothing here runs and
-front_sync keeps reading mission.db. When on, the sync loop populates the table
+front_sync keeps reading mission.db. When on, the nightly pipeline populates the table
 and matching reads the domain map from it.
 
 PHI note: extraction_notes / conversation context may contain patient names.
@@ -20,7 +20,6 @@ authoritative for anything that leaves in outreach.
 """
 from __future__ import annotations
 
-import asyncio
 import logging
 import os
 from datetime import datetime, timezone
@@ -232,31 +231,3 @@ async def pif_directory_status() -> dict[str, Any]:
         "icp_tiers": {str(t or "untiered"): int(c) for t, c in tier_rows},
         "api_base": PIF_API_BASE,
     }
-
-
-async def pif_directory_sync_loop(*, interval_seconds: int = 86400) -> None:
-    """Daily directory refresh. No-op while the flag is off so enabling the
-    feature is a single env change. Never blocks startup."""
-    logger.info("pif_directory_sync_loop starting (interval=%ss)", interval_seconds)
-    # small stagger so it doesn't pile onto boot
-    await asyncio.sleep(60)
-    while True:
-        try:
-            if pif_native_enabled():
-                from app.services.firm_intel_sync import sync_firm_intel
-
-                await sync_firm_intel()
-                from app.services.pif_autorespond_sync import sync_autorespond_events
-                autorespond_result = await sync_autorespond_events()
-                logger.info("pif autorespond event sync: %s", autorespond_result)
-                # Roadmap step 1: fold the directory's titled contacts +
-                # leadership into firm_contacts so daily selection has named,
-                # persona-mapped decision-makers. Local-only.
-                from app.services.firm_contacts_service import ingest_pif_directory_contacts
-                ingest = await ingest_pif_directory_contacts()
-                logger.info("pif_directory contact ingest: %s", ingest)
-        except asyncio.CancelledError:
-            raise
-        except Exception:
-            logger.exception("pif_directory_sync_loop tick failed")
-        await asyncio.sleep(interval_seconds)

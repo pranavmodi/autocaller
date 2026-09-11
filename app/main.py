@@ -97,13 +97,6 @@ async def lifespan(app: FastAPI):
     # Start explicitly scheduled durable action sends. This does not start the
     # dispatcher; it only drains approved actions with scheduled_for set.
     scheduled_action_task = asyncio.create_task(scheduled_action_loop(interval_seconds=30))
-    from .services.front_sync import front_sync_loop
-    front_sync_task = asyncio.create_task(
-        front_sync_loop(
-            interval_seconds=int(os.getenv("FRONT_SYNC_INTERVAL_SECONDS", "86400")),
-            max_calls=int(os.getenv("FRONT_SYNC_MAX_CALLS", "300")),
-        )
-    )
     from .services.lead_gen_daily import daily_run_loop
     lead_gen_daily_task = asyncio.create_task(daily_run_loop(interval_seconds=600))
     from .services.master_agent import (
@@ -128,10 +121,6 @@ async def lifespan(app: FastAPI):
     # zombies on boot.
     from .services.call_reconciler import reconciler_loop as _reconciler_loop
     reconciler_task = asyncio.create_task(_reconciler_loop())
-    # Native PI-firm directory sync (pulls emailtag's pif-info into Postgres).
-    # No-op while PIF_DIRECTORY_NATIVE is off, so it is safe to always start.
-    from .services.pif_directory import pif_directory_sync_loop
-    pif_directory_task = asyncio.create_task(pif_directory_sync_loop())
     from .services.pif_job_posting_research import (
         job_posting_research_loop,
         recover_interrupted_job_research,
@@ -165,8 +154,8 @@ async def lifespan(app: FastAPI):
         asyncio.create_task(local_enrichment_loop())
         for _ in range(max(1, int(os.getenv("PIF_LOCAL_ENRICHMENT_WORKERS", "2"))))
     ]
-    from .services.pif_research_maintenance import research_maintenance_loop
-    pif_research_maintenance_task = asyncio.create_task(research_maintenance_loop())
+    from .services.nightly_sync import nightly_sync_loop
+    nightly_sync_task = asyncio.create_task(nightly_sync_loop())
     yield
     # Shutdown: stop the dispatcher, cancel background tasks, dispose engine
     get_dispatcher().stop()
@@ -177,11 +166,9 @@ async def lifespan(app: FastAPI):
         vm_followup_task,
         sequence_task,
         scheduled_action_task,
-        front_sync_task,
+        nightly_sync_task,
         lead_gen_daily_task,
         reconciler_task,
-        pif_directory_task,
-        pif_research_maintenance_task,
         *job_research_workers,
         *review_research_workers,
         *local_enrichment_workers,
