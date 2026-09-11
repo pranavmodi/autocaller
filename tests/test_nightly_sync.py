@@ -270,3 +270,13 @@ def test_cli_and_api_use_live_server_status(monkeypatch):
     live = AsyncMock(return_value={"running": True})
     monkeypatch.setattr(service, "nightly_status", live)
     assert asyncio.run(get_nightly_sync_status()) == {"running": True}
+
+
+def test_front_cli_reads_live_scheduler_status(monkeypatch):
+    from app import cli
+    get = MagicMock(return_value={"sync_health": {"next_daily_run_at": SLOT.isoformat()}})
+    monkeypatch.setattr(cli, "_get", get)
+    result = CliRunner().invoke(cli.app, ["front", "status", "--json"])
+    assert result.exit_code == 0
+    assert SLOT.isoformat() in result.stdout
+    get.assert_called_once_with("/api/front/status")

@@ -3637,9 +3637,7 @@ def front_sync_cmd(
 @front_app.command("status")
 def front_status_cmd(json_output: bool = typer.Option(False, "--json", help="Print raw JSON.")):
     """Show Front sync cursors, watermarks, counts, and last synced row."""
-    from app.services.front_sync import front_status
-
-    data = _run(front_status())
+    data = _get("/api/front/status")
     if json_output:
         console.print_json(data=data)
         return
