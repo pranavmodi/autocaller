@@ -30,6 +30,24 @@ a specific role, not just a generic careers board. Up to max_candidates only.
 No claims of active status from search snippets alone; a separate live verifier
 will check candidates.
 
+## Retry discovery mode
+`retry_discovery` recovers historical failed candidates whose raw inputs were
+not saved. Search ONLY the supplied employer career sources and the specific
+roles/employers described in previous_errors. No global discovery or unrelated
+employers. Use the discovery candidates schema and budgets. Do not assume an
+old domain or quote is still correct; inspect current employer/ATS sources.
+
+## Candidate repair mode
+`candidate_repair` corrects only the supplied candidate identity/field failures,
+using ONLY the freshly fetched pages. Return {"candidates": [...]} with each
+candidate's original candidate_id and all discovery fields. Keep firm_name and
+source_url unchanged. canonical_domain must exactly match the official employer
+evidence URL's domain; an ATS host is not the firm's canonical domain. Select
+an employer_evidence_url from supplied successful fetched pages, with a final
+URL on that same canonical domain. Do not invent domain aliases or change to
+another employer. If the pages cannot support a correction, omit that candidate.
+These are discovery corrections only, not approvals; live verification follows.
+
 ## Verification mode
 Use ONLY supplied freshly fetched pages. No additional web calls. Return
 {"decisions": [...]} with exactly one decision per candidate_id, same ID.
@@ -80,3 +98,9 @@ short exact excerpts from the identified supplied source. Do not invent text,
 weaken evidence requirements, browse for different evidence, or assume the
 original decision was correct. If those pages cannot support a valid active
 decision, return unverified with an honest reason and null unsupported evidence.
+The evidence_source_matches diagnostic lists supplied requested URLs containing
+each original exact quote. It is not an approval: use it to correct cross-page
+citations only when the page actually supports the claim. Employer PI evidence
+may come from the supplied job page while canonical employer identity remains
+anchored to the separately supplied official employer page. Never copy a quote
+from a job page and cite the official careers page instead.
