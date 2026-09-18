@@ -210,6 +210,10 @@ def _post(path: str, json_body: Optional[dict] = None, timeout: float = 30.0) ->
     return resp.json() if resp.content else {}
 
 
+from app.job_agent_cli import register as register_job_agent_cli
+register_job_agent_cli(app, _get, _post, console)
+
+
 def _parse_editor_draft(raw: str) -> tuple[str, str]:
     lines = raw.splitlines()
     if not lines:

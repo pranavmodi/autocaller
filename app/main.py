@@ -13,6 +13,7 @@ from pathlib import Path
 from .api import dashboard_router, websocket_router, settings_router, dispatcher_router, scenarios_router, carrier_router, cadence_router, consults_router, call_lists_router, voice_preview_router, firm_reviews_router, comms_router, sequences_router, outreach_router, lead_gen_router, resend_webhooks_router, inbound_email_router, operator_notifications_router, seo_router, product_traces_router, learning_router, todos_router, composer_variants_router, actions_router, front_router, research_router, aiaudit_router, visibility_links_router, data_returned_router, front_inbox_router, engagement_campaigns_router, call_lab_router, knowledge_router, lead_finder_router, codex_gateway_router
 from .api.agents import router as agents_router
 from .api.pif import router as pif_router
+from .api.job_agent import router as job_agent_router
 from .api.auth import router as auth_router, SESSION_COOKIE, verify_session_token, auth_configured
 from .services.dispatcher import get_dispatcher
 from .services.daily_report_service import daily_report_loop
@@ -156,6 +157,10 @@ async def lifespan(app: FastAPI):
     ]
     from .services.nightly_sync import nightly_sync_loop
     nightly_sync_task = asyncio.create_task(nightly_sync_loop())
+    from .services.job_agent import collection_loop
+    job_agent_collection_task = asyncio.create_task(collection_loop())
+    from .services.job_agent_processing import processing_loop
+    job_agent_processing_task = asyncio.create_task(processing_loop())
     yield
     # Shutdown: stop the dispatcher, cancel background tasks, dispose engine
     get_dispatcher().stop()
@@ -167,6 +172,8 @@ async def lifespan(app: FastAPI):
         sequence_task,
         scheduled_action_task,
         nightly_sync_task,
+        job_agent_collection_task,
+        job_agent_processing_task,
         lead_gen_daily_task,
         reconciler_task,
         *job_research_workers,
@@ -400,6 +407,7 @@ app.include_router(data_returned_router)
 app.include_router(front_inbox_router)
 app.include_router(agents_router)
 app.include_router(pif_router)
+app.include_router(job_agent_router)
 
 # Legacy static (kept for compatibility)
 STATIC_DIR = Path("static")

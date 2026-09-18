@@ -8,6 +8,7 @@ import {
   BrainCircuit,
   BookOpen,
   Bot,
+  BriefcaseBusiness,
   Building2,
   CalendarCheck,
   Database,
@@ -66,6 +67,7 @@ const items = [
   { href: "/outreach", label: "Outreach", icon: Send },
   { href: "/consults", label: "Consults", icon: CalendarCheck },
   { href: "/leads", label: "Leads", icon: Building2 },
+  { href: "/job-agent", label: "Job agent", icon: BriefcaseBusiness },
   { href: "/system", label: "Health", icon: Stethoscope },
 ];
 

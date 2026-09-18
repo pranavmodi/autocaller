@@ -105,8 +105,25 @@ Every command accepts `--help`. Exit code is `0` on success, `1` on any error
 
 ### New-command reference (v1.1)
 
+Job application workspace: `job-agent status`, `config`, `configure --file`,
+`collect`, `jobs`, `review`, and `events`. See [Job agent](JOB_AGENT.md) for the
+full contract. Classification maps jobs to reusable resumes and runs on demand for
+the selected job by default; applications are sent only through explicit
+`job-agent apply` / UI actions using Zoho CLI.
+
 | command | purpose |
 |---|---|
+| `job-agent status / config / events [--page 1]` | Inspect the Job agent workspace, saved preferences, search results and audit trail. |
+| `job-agent configure --file preferences.json` | Merge validated preferences with revision conflict protection. |
+| `job-agent collect / jobs [--status shortlisted --search AI --page 1 --order posted_desc]` | Queue/resume uncapped sync, or read the queue (newest posting date first; unknown dates last). |
+| `job-agent open-listing --firm-id ID --source-url URL --title TITLE [--job-id ID --location LOCATION]` | Resolve a canonical Leads job listing into the shared Job Agent record; never prepares or sends. |
+| `job-agent review ID --revision N --status shortlisted --note "…"` | Record an operator review; never sends or submits an application. |
+| `job-agent resumes / show ID` | List local PDFs or inspect category, resume and application state. |
+| `job-agent classify ID / category ID --category KEY --revision N` | Request classification only for this job, or manually override its category. |
+| `job-agent prepare ID --revision N` | Research the company and role, check published and eligible Possible OS firm contacts, then compose without sending. |
+| `job-agent apply ID --revision N` | Explicitly authorize one application email via Zoho CLI. |
+| `job-agent verify-sent ID` | Check the Sent copy and attachment hash; never resends. |
+| `job-agent sync-comms` | Idempotently backfill or repair Communications rows for attempted Job Agent emails; never sends. |
 | `reviews progress` | Show live raw, distinct, independent, classified, source-mix, firm-coverage, queue, and progress-to-5,000 review counts. |
 | `reviews queue [--limit N] [--include-researched]` | Incrementally bulk-queue canonical PI firms, prioritizing never-researched firms and low existing review counts without replacing prior evidence. |
 | `reviews classify [--force]` | Classify every source-backed review against the current versioned PI operational taxonomy. |

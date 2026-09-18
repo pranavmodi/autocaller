@@ -9,6 +9,44 @@ A FastAPI daemon + Typer CLI that cold-calls US personal-injury attorneys, runs 
 
 Full reference: `docs/cli.md` (read it for anything not covered here).
 
+Job application workspace: `/job-agent`. Use `bin/possibleos job-agent status`,
+`config`, `configure --file preferences.json`, `collect`, `jobs --order posted_desc
+--category ai_automation --page 1`, `review`, and `events --page 1`. Collection is
+uncapped/resumable. Bulk classification is off by default; `classify ID` requests
+classification for that job only and maps responsibilities to editable category/PDF
+settings. Classification uses the isolated `openclaw/neo` lane with a bounded
+timeout; do not route it through the stateful main-agent lane. `resumes` lists PDFs;
+`show ID` includes processing_revision, category,
+selected resume and application stage. Use `classify ID` to retry classification;
+`category ID --category KEY --revision N` manually overrides it. `prepare ID
+--revision N` researches and composes WITHOUT sending. `apply ID --revision N`
+explicitly authorizes one application via the official Zoho CLI. `verify-sent ID`
+checks the exact Sent copy/PDF and NEVER resends. Unclear classification, missing
+resume, unverified contacts or duplicates need review. Preparation checks both
+published web contacts and eligible `firm_contacts` records. Stored contacts must
+belong to the canonical firm or an exact-domain twin, use the verified employer
+domain, and have a suitable recruiting or routing role. The packet and UI identify
+Possible OS provenance; routing contacts always receive a forwarding request.
+Unknown send outcomes never
+automatically retry. Activity is hidden in the UI but API/CLI history persists.
+Attempted application emails are mirrored into Communications. Use `job-agent
+sync-comms` to idempotently repair or backfill those rows; it never sends email.
+Leads `/emailtag-firms` → **Job listings** can open a source-backed row directly in
+the same Job Agent workflow. CLI parity is `job-agent open-listing --firm-id ID
+--source-url URL --title TITLE [--job-id ID --location LOCATION]`. This resolves
+the canonical stored posting and does not classify, prepare or send by itself.
+No automatic inbox-referral handling or portal submissions. Inline PDF preview is
+browser-only; `resumes` / `show` return file paths relative to `/home/pranav/resume`
+for direct headless reading/copying. See `docs/JOB_AGENT.md`.
+
+Default resume categories also include `pi_case_management`,
+`entry_level_paralegal`, and `pi_intake`. They are career-transition categories
+for assistant, entry-level, explicitly trainable or transferable-experience work.
+Do not use them for postings whose
+mandatory certificate, jurisdiction qualification or multiple years of direct role
+experience are outside the category; do not convert technology exposure into a
+claim of direct caseload, discovery, filing or litigation experience.
+
 Lead-generation work has a living concept document:
 `docs/CYBERNETIC_LEAD_GEN_CONCEPT.md`. If you add or change a lead-gen feedback
 source, learning step, policy lever, suppression rule, sequence behavior,
