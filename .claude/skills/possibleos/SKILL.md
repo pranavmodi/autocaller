@@ -18,6 +18,9 @@ uncapped/resumable. Bulk classification is off by default; `classify ID` request
 classification for that job only and maps responsibilities to editable category/PDF
 settings. Classification uses the isolated `openclaw/neo` lane with a bounded
 timeout; do not route it through the stateful main-agent lane. `resumes` lists PDFs;
+manual searches are durable, and backend startup marks an orphaned running search
+`interrupted` only after acquiring the career-search advisory lock. Restart recovery
+never launches a replacement search; the operator explicitly retries with `search`.
 `show ID` includes processing_revision, category,
 selected resume and application stage. Use `classify ID` to retry classification;
 `category ID --category KEY --revision N` manually overrides it. `prepare ID

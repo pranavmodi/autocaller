@@ -106,6 +106,9 @@ function SearchSource({ data, onRefresh }: { data: Overview; onRefresh: () => vo
   const latest = data.source?.runs.find(run => run.result.manual_search);
   const running = data.source?.runs.some(run => run.status === "running") || false;
   const errors = Array.isArray(latest?.result.errors) ? latest.result.errors.length : 0;
+  const interrupted = latest?.status === "interrupted";
+  const restarted = interrupted && latest?.result.interrupted_reason === "backend_restart";
+  const failed = latest?.status === "failed";
   return <section className={`${panel} p-4`}>
     <h2 className="text-sm font-semibold">Find legal AI jobs</h2>
     <p className="mt-2 text-sm leading-relaxed text-neutral-600">Search public sources for legal-domain AI, agent and automation roles using your saved role, industry and location preferences.</p>
@@ -117,7 +120,9 @@ function SearchSource({ data, onRefresh }: { data: Overview; onRefresh: () => vo
     {latest && <div className="mt-4 space-y-1 border-t border-neutral-100 pt-3 text-xs text-neutral-500">
       <p className="font-medium text-neutral-700">Latest search: {readable(latest.status)}</p>
       <p>{latest.result.verified || 0} verified · {latest.result.new_jobs || 0} new · {latest.result.duplicates_skipped || 0} duplicates skipped</p>
-      {!!errors && <p className="text-amber-800">{errors} result{errors === 1 ? "" : "s"} could not be verified. Verified jobs were still saved.</p>}
+      {interrupted && <p className="text-amber-800">{restarted ? "The backend restarted before this search finished." : "The search worker stopped before completion."} No replacement search was started. Choose Search now to retry.</p>}
+      {failed && <p className="text-red-700">The search stopped before completion. Choose Search now to retry.</p>}
+      {!!errors && !interrupted && !failed && <p className="text-amber-800">{errors} result{errors === 1 ? "" : "s"} could not be verified. Verified jobs were still saved.</p>}
       <p>Started {date(latest.started_at)}</p>
     </div>}
     {!latest && <p className="mt-3 text-xs text-neutral-500">No Job Agent search has run yet.</p>}

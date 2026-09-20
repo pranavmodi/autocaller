@@ -58,6 +58,7 @@ export type Overview = {
       result: {
         new_jobs?: number; verified?: number; closed?: number; duplicates_skipped?: number;
         errors?: unknown[]; manual_search?: boolean; search_profile?: Record<string, unknown>;
+        interrupted_reason?: "backend_restart";
         [key: string]: unknown;
       } }[];
   };

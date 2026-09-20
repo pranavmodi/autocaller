@@ -55,6 +55,11 @@ ATS provider plus requisition ID, and the queue upserts stable candidate IDs. Ti
 alone do not merge jobs. The UI reports verified, new, duplicate-skipped and error
 counts and continues to poll while a run is active.
 
+If the backend restarts during a manual search, startup reconciliation uses the
+career-search advisory lock to prove that no worker remains, marks the run
+`interrupted`, and leaves retrying to the operator. The UI explains the stop and
+re-enables **Search now** instead of displaying a permanent running state.
+
 ## Categories and applications
 
 Settings has seven initial categories: AI agents and automation, engineering

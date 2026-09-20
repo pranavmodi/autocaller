@@ -643,7 +643,7 @@ async def overview():
                   "runs": [{"id": r["id"], "status": r["status"], "started_at": r["started_at"],
                             "completed_at": r["completed_at"], "result": {k: r["result"].get(k) for k in
                             ("new_jobs", "verified", "closed", "duplicates_skipped", "errors", "attempt_errors",
-                             "verification_rejections", "manual_search", "search_profile")}}
+                             "verification_rejections", "manual_search", "search_profile", "interrupted_reason")}}
                            for r in source["runs"]]}
         source_error = None
     except Exception:

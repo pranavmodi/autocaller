@@ -1,5 +1,6 @@
 """Contract tests and opt-in isolated PostgreSQL persistence regression."""
 import os
+from datetime import datetime, timezone
 from uuid import uuid4
 from unittest.mock import AsyncMock
 
@@ -113,6 +114,66 @@ async def test_search_endpoint_starts_non_sending_discovery(monkeypatch):
         response = await client.post("/api/job-agent/search", json={})
     assert response.status_code == 200 and response.json() == result
     handler.assert_awaited_once_with()
+
+
+@pytest.mark.asyncio
+async def test_backend_restart_closes_orphaned_manual_search(monkeypatch):
+    from types import SimpleNamespace
+    from app.services import daily_career_search
+
+    completed_at = datetime(2026, 9, 20, 10, 30, tzinfo=timezone.utc)
+    manual = SimpleNamespace(status="running", completed_at=None, result={"manual_search": True, "errors": []})
+    scheduled = SimpleNamespace(status="running", completed_at=None, result={})
+
+    class Connection:
+        async def __aenter__(self): return self
+        async def __aexit__(self, *_): pass
+        async def scalar(self, *_args, **_kwargs): return True
+        async def execute(self, *_args, **_kwargs): pass
+        async def commit(self): pass
+
+    class Engine:
+        def connect(self): return Connection()
+
+    class Session:
+        async def __aenter__(self): return self
+        async def __aexit__(self, *_): pass
+        async def scalars(self, *_args, **_kwargs):
+            return SimpleNamespace(all=lambda: [manual, scheduled])
+        async def commit(self): pass
+
+    async def ready(): pass
+    monkeypatch.setattr(daily_career_search, "ensure_tables", ready)
+    monkeypatch.setattr(daily_career_search, "async_engine", Engine())
+    monkeypatch.setattr(daily_career_search, "AsyncSessionLocal", Session)
+    monkeypatch.setattr(daily_career_search, "now_utc", lambda: completed_at)
+
+    assert await daily_career_search.reconcile_interrupted_manual_runs() == 1
+    assert manual.status == "interrupted" and manual.completed_at == completed_at
+    assert manual.result["interrupted_reason"] == "backend_restart"
+    assert "No automatic retry" in manual.result["errors"][-1]["error"]
+    assert scheduled.status == "running" and scheduled.completed_at is None
+
+
+@pytest.mark.asyncio
+async def test_restart_recovery_never_touches_an_active_search(monkeypatch):
+    from app.services import daily_career_search
+
+    class Connection:
+        async def __aenter__(self): return self
+        async def __aexit__(self, *_): pass
+        async def scalar(self, *_args, **_kwargs): return False
+        async def commit(self): pass
+
+    class Engine:
+        def connect(self): return Connection()
+
+    async def ready(): pass
+    monkeypatch.setattr(daily_career_search, "ensure_tables", ready)
+    monkeypatch.setattr(daily_career_search, "async_engine", Engine())
+    monkeypatch.setattr(daily_career_search, "AsyncSessionLocal",
+                        lambda: pytest.fail("an active worker must prevent reconciliation"))
+    assert await daily_career_search.reconcile_interrupted_manual_runs() == 0
 
 
 @pytest.mark.parametrize("raw, expected", [("2026-09-17", "2026-09-17"), ("unknown", None), ("2026-02-30", None), ("", None), (None, None)])

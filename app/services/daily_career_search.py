@@ -216,6 +216,48 @@ async def checkpoint(run_id: str, result: dict, final_status: str | None = None)
         await session.commit()
 
 
+async def reconcile_interrupted_manual_runs() -> int:
+    """Close manual searches whose worker disappeared during a backend restart.
+
+    Every real search holds the career-search advisory lock for its full run.
+    Acquiring it here proves that no search worker remains, including one in a
+    different process.
+    """
+    await ensure_tables()
+    async with async_engine.connect() as connection:
+        locked = await connection.scalar(text("SELECT pg_try_advisory_lock(:key)"), {"key": LOCK_ID})
+        await connection.commit()
+        if not locked:
+            return 0
+        try:
+            completed_at = now_utc()
+            async with AsyncSessionLocal() as session:
+                rows = (await session.scalars(
+                    select(CareerSearchRunRow).where(CareerSearchRunRow.status == "running")
+                )).all()
+                recovered = 0
+                for row in rows:
+                    result = dict(row.result or {})
+                    if not result.get("manual_search"):
+                        continue
+                    errors = list(result.get("errors") or [])
+                    errors.append({
+                        "phase": "run",
+                        "error": "Search worker stopped during a backend restart. No automatic retry was started.",
+                    })
+                    result.update({"errors": errors, "interrupted_reason": "backend_restart"})
+                    row.result = result
+                    row.status = "interrupted"
+                    row.completed_at = completed_at
+                    recovered += 1
+                if recovered:
+                    await session.commit()
+                return recovered
+        finally:
+            await connection.execute(text("SELECT pg_advisory_unlock(:key)"), {"key": LOCK_ID})
+            await connection.commit()
+
+
 async def llm(payload: dict, required: str, config: SearchConfig, audit: dict, run_id: str):
     verification = required == "decisions"
     attempts = 1 if payload["mode"] in {"verification_repair", "candidate_repair"} else config.max_attempts

@@ -157,6 +157,10 @@ async def lifespan(app: FastAPI):
     ]
     from .services.nightly_sync import nightly_sync_loop
     nightly_sync_task = asyncio.create_task(nightly_sync_loop())
+    from .services.daily_career_search import reconcile_interrupted_manual_runs
+    interrupted_searches = await reconcile_interrupted_manual_runs()
+    if interrupted_searches:
+        logger.info("Closed %s interrupted manual Job Agent searches", interrupted_searches)
     from .services.job_agent import collection_loop
     job_agent_collection_task = asyncio.create_task(collection_loop())
     from .services.job_agent_processing import processing_loop
