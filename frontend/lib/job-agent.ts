@@ -60,7 +60,8 @@ export type Overview = {
     runs: { id: string; status: string; started_at: string; completed_at: string | null;
       result: {
         new_jobs?: number; verified?: number; closed?: number; duplicates_skipped?: number;
-        errors?: unknown[]; manual_search?: boolean; search_profile?: Record<string, unknown>;
+        errors?: unknown[]; job_agent_search?: boolean; search_trigger?: "manual" | "scheduled" | "operator";
+        manual_search?: boolean; search_profile?: Record<string, unknown>;
         contacts_found?: number; contacts_inserted?: number;
         interrupted_reason?: "backend_restart";
         [key: string]: unknown;

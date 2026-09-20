@@ -683,8 +683,9 @@ async def overview():
         source = {**{k: source[k] for k in ("config", "next_due_at", "schedule_enabled", "timer_installation")},
                   "runs": [{"id": r["id"], "status": r["status"], "started_at": r["started_at"],
                             "completed_at": r["completed_at"], "result": {k: r["result"].get(k) for k in
-                            ("new_jobs", "verified", "closed", "duplicates_skipped", "errors", "attempt_errors",
-                             "verification_rejections", "manual_search", "search_profile", "interrupted_reason",
+                             ("new_jobs", "verified", "closed", "duplicates_skipped", "errors", "attempt_errors",
+                             "verification_rejections", "job_agent_search", "search_trigger", "manual_search",
+                             "search_profile", "interrupted_reason",
                              "contacts_found", "contacts_inserted")}}
                            for r in source["runs"]]}
         source_error = None

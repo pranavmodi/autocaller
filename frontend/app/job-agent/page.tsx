@@ -103,7 +103,7 @@ function SearchSource({ data, onRefresh }: { data: Overview; onRefresh: () => vo
     mutationFn: () => jobAgentRequest<{ status: string; message?: string }>("/search", {}),
     onSuccess: onRefresh,
   });
-  const latest = data.source?.runs.find(run => run.result.manual_search);
+  const latest = data.source?.runs.find(run => run.result.job_agent_search || run.result.manual_search);
   const running = data.source?.runs.some(run => run.status === "running") || false;
   const errors = Array.isArray(latest?.result.errors) ? latest.result.errors.length : 0;
   const interrupted = latest?.status === "interrupted";
@@ -111,7 +111,7 @@ function SearchSource({ data, onRefresh }: { data: Overview; onRefresh: () => vo
   const failed = latest?.status === "failed";
   return <section className={`${panel} p-4`}>
     <h2 className="text-sm font-semibold">Find target jobs</h2>
-    <p className="mt-2 text-sm leading-relaxed text-neutral-600">Search public sources for AI, agent and automation roles across your configured industries, then verify jobs and application contacts.</p>
+    <p className="mt-2 text-sm leading-relaxed text-neutral-600">Search public sources using your configured target roles, industries and location preferences, then verify jobs and application contacts. The daily run uses these same settings.</p>
     <button className={`${primary} mt-4 w-full`} disabled={search.isPending || running} onClick={() => search.mutate()}>
       <RefreshCw className={`h-4 w-4 ${search.isPending || running ? "animate-spin" : ""}`} />
       {search.isPending ? "Starting…" : running ? "Search in progress" : "Search now"}
@@ -128,7 +128,7 @@ function SearchSource({ data, onRefresh }: { data: Overview; onRefresh: () => vo
     </div>}
     {!latest && <p className="mt-3 text-xs text-neutral-500">No Job Agent search has run yet.</p>}
     <p className="mt-3 text-xs leading-relaxed text-neutral-500">Results are checked against employer and job sources, deduplicated, and added to this review queue. Searching never classifies or applies.</p>
-    {data.source ? <p className="mt-3 border-t border-neutral-100 pt-3 text-xs text-neutral-500">Existing PI search schedule: {data.source.schedule_enabled ? `${data.source.config.local_time} · ${data.source.config.timezone}` : "disabled"}. Next due: {date(data.source.next_due_at)}.</p> : <p className="mt-3 text-xs text-amber-800">{data.source_error}</p>}
+    {data.source ? <p className="mt-3 border-t border-neutral-100 pt-3 text-xs text-neutral-500">Daily Job Agent search: {data.source.schedule_enabled ? `${data.source.config.local_time} · ${data.source.config.timezone}` : "disabled"}. Next due: {date(data.source.next_due_at)}.</p> : <p className="mt-3 text-xs text-amber-800">{data.source_error}</p>}
   </section>;
 }
 

@@ -42,14 +42,15 @@ the same Job Agent workflow. CLI parity is `job-agent open-listing --firm-id ID
 the canonical stored posting and does not classify, prepare or send by itself.
 `job-agent search` starts public-source discovery using the saved target roles,
 preferred industries and location preferences. Comma-, semicolon-, or line-separated
-preferred industries define the employer industries that discovery queries and the
-verifier may accept. It searches those employers for AI/agent/automation roles, verifies the
-employer, live role and geographic claims, skips exact jobs already discovered,
+target roles and preferred industries define the roles and employer industries that
+discovery queries and the verifier may accept. The daily career-search timer uses
+this same Job Agent profile; there is no ordinary PI-only search path. It verifies
+the employer, target-role fit, live role and geographic claims, skips exact jobs already discovered,
 and imports verified new rows into the review queue. Officially published recruiting
 and routing emails are source-checked and stored once in `firm_contacts`; every role
 for that firm reuses them. `jobs --order contact_desc` puts firms with known emails
 first. It does not classify, prepare,
-email or submit. The UI's **Search now** button invokes the same command path.
+email or submit. The UI's **Search now** button invokes the same command path on demand.
 No automatic inbox-referral handling or portal submissions. Inline PDF preview is
 browser-only; `resumes` / `show` return file paths relative to `/home/pranav/resume`
 for direct headless reading/copying. See `docs/JOB_AGENT.md`.

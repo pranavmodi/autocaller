@@ -38,15 +38,17 @@ official Zoho CLI.
 - Old saved `import_limit` values are ignored on read and removed on the next settings
   write; new requests containing that retired control fail validation.
 
-## External search
+## Search and daily schedule
 
 **Search now** / `job-agent search` starts a background public-source search using
 the saved target roles, preferred industries, location preferences and overseas-
 employer preference. Comma-, semicolon-, or line-separated preferred industries
-are the verifier's allowed employer industries and generate industry-specific
-discovery queries. This supports legal, healthcare, medical-imaging, insurance, or
-other industries without a code change. It then requires exact source evidence for employer identity, the live role,
-technical responsibilities and every non-unknown geography claim. Results are added
+are the verifier's allowed employer industries; target roles use the same delimiter
+rules and both fields generate the discovery queries. This supports technical,
+legal-support and other configured roles across legal, healthcare, medical-imaging,
+insurance or future industries without a code change. It then requires exact source
+evidence for employer identity, target-role responsibilities, the live role and every
+non-unknown geography claim. Results are added
 to the existing local job store and the durable collection worker imports them into
 this queue. Discovery may also supply official employer contact pages. Recruiting
 or routing emails are accepted only when printed on a fetched official page, use
@@ -55,12 +57,17 @@ in `firm_contacts`, so every role attached to that firm reuses the same contacts
 Existing eligible Possible OS contacts are exposed the same way. Searching never
 classifies, prepares, sends, or submits an application.
 
-Each manual search is a durable career-search run and does not consume the daily PI
-search slot. Exact normalized URLs already discovered are skipped before another
+The daily timer invokes this same Job Agent search profile. There is no separate
+PI-only discovery path: scheduled and **Search now** runs use the same configured
+roles, industries, location preferences, verifier, contact discovery and deduplication.
+The schedule retains its configured timezone and local time; the nightly firm-research
+pipeline remains independent. An operator-triggered search does not consume the
+scheduled daily slot. Exact normalized URLs already discovered are skipped before another
 verification pass. Storage also merges canonical source URLs or an employer-scoped
 ATS provider plus requisition ID, and the queue upserts stable candidate IDs. Titles
 alone do not merge jobs. The UI reports verified, new, duplicate-skipped and error
-counts and continues to poll while a run is active.
+counts, shows the latest scheduled or operator run, and continues to poll while a
+run is active.
 
 If the backend restarts during a manual search, startup reconciliation uses the
 career-search advisory lock to prove that no worker remains, marks the run

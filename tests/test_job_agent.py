@@ -79,6 +79,7 @@ def _career_decision(**changes):
         "candidate_id": "0", "status": "active", "reason": "Primary sources", "technology_role": True,
         "title": "AI Engineer", "preferred_industry_employer": True,
         "matched_preferred_industry": "medical imaging",
+        "target_role_match": True, "matched_target_role": "AI agents",
         "employer_evidence": {"source_url": "https://imaging.example/about", "text": "medical imaging services"},
         "role_evidence": {"source_url": "https://imaging.example/jobs/1", "text": "Build AI agents"},
         "status_evidence": {"source_url": "https://imaging.example/jobs/1", "text": "Apply for AI Engineer"},
@@ -87,7 +88,7 @@ def _career_decision(**changes):
     return career_search.Decision(**values)
 
 
-def test_manual_search_verifier_uses_configured_preferred_industries():
+def test_search_verifier_uses_configured_industries_and_target_roles():
     profile = career_search.SearchProfile(
         target_roles="AI agents", preferred_industries="Legal technology, medical imaging; medical insurance firms",
         location_preferences="Remote from Colombia",
@@ -97,6 +98,16 @@ def test_manual_search_verifier_uses_configured_preferred_industries():
     with pytest.raises(ValueError, match="saved search profile"):
         career_search.validate_decision(
             decision.model_copy(update={"matched_preferred_industry": "pharmaceuticals"}),
+            _career_pages(), today=datetime(2026, 9, 20).date(), search_profile=profile,
+        )
+    with pytest.raises(ValueError, match="saved search profile"):
+        career_search.validate_decision(
+            decision.model_copy(update={"matched_target_role": "Sales"}),
+            _career_pages(), today=datetime(2026, 9, 20).date(), search_profile=profile,
+        )
+    with pytest.raises(ValueError, match="target role"):
+        career_search.validate_decision(
+            decision.model_copy(update={"target_role_match": False, "matched_target_role": None}),
             _career_pages(), today=datetime(2026, 9, 20).date(), search_profile=profile,
         )
     with pytest.raises(ValueError, match="direct PI"):
@@ -115,7 +126,7 @@ def test_manual_search_verifier_uses_configured_preferred_industries():
         legacy_legal, _career_pages(), today=datetime(2026, 9, 20).date(),
         search_profile=profile.model_copy(update={"preferred_industries": "Legal technology"}),
     )
-    with pytest.raises(ValueError, match="preferred-industry"):
+    with pytest.raises(ValueError, match="configured industry"):
         career_search.validate_decision(
             legacy_legal, _career_pages(), today=datetime(2026, 9, 20).date(),
             search_profile=profile.model_copy(update={"preferred_industries": "medical imaging"}),
@@ -130,10 +141,27 @@ def test_manual_search_queries_cover_each_configured_industry():
     queries = career_search.profile_queries(profile, 1)
     assert any('\"medical imaging\"' in query for query in queries)
     assert any('\"medical insurance firms\"' in query for query in queries)
+    assert all('\"AI agents\"' in query for query in queries)
     medical_only = career_search.profile_queries(
         profile.model_copy(update={"preferred_industries": "medical imaging"}), 1,
     )
     assert len(medical_only) == 1 and '"medical imaging"' in medical_only[0]
+
+
+@pytest.mark.asyncio
+async def test_daily_search_loads_the_saved_job_agent_profile(monkeypatch):
+    config = service.JobAgentConfig(
+        target_roles="AI agents; entry-level paralegal",
+        preferred_industries="Legal technology; medical imaging",
+        location_preferences="Remote from Colombia",
+    )
+    monkeypatch.setattr(service, "configuration", AsyncMock(return_value={
+        "config": config.model_dump(), "revision": 7,
+    }))
+    profile = await career_search.configured_job_agent_profile()
+    assert career_search.target_role_labels(profile) == ["AI agents", "entry-level paralegal"]
+    assert career_search.preferred_industry_labels(profile) == ["Legal technology", "medical imaging"]
+    assert profile.location_preferences == "Remote from Colombia"
 
 
 def test_search_contacts_require_published_employer_domain_and_suitable_purpose():

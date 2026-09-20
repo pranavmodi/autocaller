@@ -31,10 +31,11 @@ def profile():
     )
 
 
-def test_manual_profile_accepts_legal_tech_without_weakening_scheduled_pi_search():
+def test_configured_profile_accepts_legal_tech_without_weakening_legacy_seed_validation():
     value = service.Decision(
         candidate_id="0", status="active", reason="Primary sources",
         direct_pi_employer=False, legal_domain_employer=True, legal_domain_kind="legal_tech",
+        target_role_match=True, matched_target_role="AI agent engineering",
         technology_role=True, title="AI Agent Engineer",
         employer_evidence={"source_url": "https://example.com/about", "text": "Legal technology company"},
         role_evidence={"source_url": "https://example.com/jobs/1", "text": "Build AI agents"},

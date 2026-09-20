@@ -88,6 +88,14 @@ class SearchProfile(BaseModel):
     location_preferences: str = Field(min_length=1, max_length=2000)
     prefer_overseas_employers: bool = True
 
+    @model_validator(mode="after")
+    def configured_lists_not_empty(self):
+        if not any(value.strip() for value in re.split(r"[,;\n]+", self.target_roles)):
+            raise ValueError("target_roles must include at least one role")
+        if not any(value.strip() for value in re.split(r"[,;\n]+", self.preferred_industries)):
+            raise ValueError("preferred_industries must include at least one industry")
+        return self
+
 
 class CandidateFields(BaseModel):
     firm_name: str = Field(min_length=1, max_length=255)
@@ -139,7 +147,9 @@ class Decision(BaseModel):
     legal_domain_kind: Literal["law_firm", "legal_tech", "legal_services", "unclear"] = "unclear"
     preferred_industry_employer: bool = False
     matched_preferred_industry: str | None = None
-    technology_role: bool
+    target_role_match: bool = False
+    matched_target_role: str | None = None
+    technology_role: bool = False
     title: str
     requisition_id: str | None = None
     ats_provider: str | None = None
@@ -153,7 +163,7 @@ class Decision(BaseModel):
     remote_scope: Literal["global", "country_restricted", "location_restricted", "not_remote", "unclear"] = "unclear"
     colombia_eligibility: Literal["explicit", "conditional_latam", "restricted", "unknown"] = "unknown"
     geography_note: str = ""
-    role_category: Literal["technology_data"] = "technology_data"
+    role_category: Literal["technology_data", "legal_operations", "legal_support", "other"] = "other"
     trigger_tags: list[str] = Field(default_factory=list)
     technology_mentions: list[str] = Field(default_factory=list)
     responsibilities: list[str] = Field(default_factory=list)
@@ -183,18 +193,33 @@ def preferred_industry_labels(profile: SearchProfile) -> list[str]:
     return labels
 
 
+def target_role_labels(profile: SearchProfile) -> list[str]:
+    """Parse the saved target-role field using the same visible delimiters as industries."""
+    labels = []
+    seen = set()
+    for value in re.split(r"[,;\n]+", profile.target_roles):
+        label = " ".join(value.split())
+        key = label.casefold()
+        if label and key not in seen:
+            labels.append(label)
+            seen.add(key)
+    return labels
+
+
 def profile_queries(profile: SearchProfile, day_number: int) -> list[str]:
-    """Search every configured industry and add a legal specialist query when relevant."""
+    """Build one bounded discovery query per configured employer industry."""
     industries = preferred_industry_labels(profile)
-    configured = [
-        f'"{industry}" ("AI engineer" OR "AI agent" OR "workflow automation" OR "applied AI") remote Colombia LATAM'
-        for industry in industries
-    ]
-    legal_configured = any(any(term in industry.casefold() for term in (
-        "legal", "law firm", "personal injury",
-    )) for industry in industries)
-    specialist = [LEGAL_AI_QUERIES[day_number % len(LEGAL_AI_QUERIES)]] if legal_configured else []
-    return list(dict.fromkeys([*configured, *specialist]))
+    roles = target_role_labels(profile)
+    role_clause = " OR ".join(f'"{role}"' for role in roles)
+    return [f'"{industry}" ({role_clause}) jobs careers remote' for industry in industries]
+
+
+async def configured_job_agent_profile() -> SearchProfile:
+    """Load the one search profile shared by the daily timer and Search now."""
+    from app.services import job_agent
+    settings = await job_agent.configuration()
+    config = job_agent.JobAgentConfig.model_validate(settings["config"])
+    return SearchProfile.model_validate(job_agent.search_profile(config))
 
 
 def configured_legacy_legal_match(decision: Decision, profile: SearchProfile) -> bool:
@@ -260,7 +285,9 @@ async def status() -> dict:
     async with AsyncSessionLocal() as session:
         runs = list((await session.scalars(select(CareerSearchRunRow).order_by(CareerSearchRunRow.started_at.desc()).limit(10))).all())
     completed = {r.scheduled_day for r in runs if r.status == "completed"
-                 and not (r.result or {}).get("retry_of") and not (r.result or {}).get("manual_search")}
+                 and not (r.result or {}).get("retry_of")
+                 and not (r.result or {}).get("manual_search")
+                 and (r.result or {}).get("search_trigger") in {None, "scheduled"}}
     return {"config": config.model_dump(mode="json"), "next_due_at": next_due(config, completed, now=now_utc()).isoformat() if config.enabled else None,
             "schedule_enabled": config.enabled, "timer_installation": "external; verify systemctl timers",
             "runs": [serialize_run(r) for r in runs]}
@@ -351,7 +378,7 @@ async def llm(payload: dict, required: str, config: SearchConfig, audit: dict, r
                 model="openclaw/main", timeout_s=420, max_tokens=9000, retries=1,
                 schema_repair_retries=0 if verification or payload["mode"] == "candidate_repair" else 1,
                 attempt_observer=observe_attempt,
-                prompt_cache_key="possibleos:career-search:v3")
+                prompt_cache_key="possibleos:career-search:v4")
             audit["usage"].append(response.usage or {})
             audit.setdefault("prompt_cache_metrics", []).append(prompt_cache_metrics(response.usage))
             if verification:
@@ -500,12 +527,23 @@ def validate_decision(decision: Decision, pages: list[dict], *, today: date,
                 raise ValueError("matched preferred industry is not present in the saved search profile")
         elif decision.matched_preferred_industry:
             raise ValueError("matched preferred industry requires preferred_industry_employer")
+        if search_profile and decision.target_role_match:
+            configured_roles = {" ".join(label.split()).casefold() for label in target_role_labels(search_profile)}
+            matched_role = " ".join((decision.matched_target_role or "").split()).casefold()
+            if not matched_role or matched_role not in configured_roles:
+                raise ValueError("matched target role is not present in the saved search profile")
+        elif search_profile and decision.matched_target_role:
+            raise ValueError("matched target role requires target_role_match")
         employer_matches = ((decision.preferred_industry_employer
                              or configured_legacy_legal_match(decision, search_profile))
                             if search_profile else decision.direct_pi_employer)
-        if not employer_matches or not decision.technology_role:
-            raise ValueError("not a verified preferred-industry technology role" if search_profile
-                             else "not a direct PI technology role")
+        role_matches = decision.target_role_match if search_profile else decision.technology_role
+        if search_profile and not employer_matches:
+            raise ValueError("employer is not in a verified configured industry")
+        if search_profile and not role_matches:
+            raise ValueError("role does not match a configured target role")
+        if not search_profile and (not employer_matches or not role_matches):
+            raise ValueError("not a direct PI technology role")
         if not all((decision.employer_evidence, decision.role_evidence, decision.status_evidence)):
             raise ValueError("active job lacks required live evidence")
         if decision.posted_date and (not decision.date_evidence or decision.posted_date > today):
@@ -795,8 +833,8 @@ async def execute(run_id: str, config: SearchConfig, *, seed_only: bool, audit: 
         candidates = await tracked_candidates(config.max_rechecks)
         discovered = json.loads(SEEDS.read_text())["candidates"][:config.max_candidates]
     else:
-        # Manual Job Agent searches look for new roles matching the current profile.
-        # Scheduled PI runs continue to recheck their previously verified jobs.
+        # All ordinary daily and operator searches receive the same Job Agent profile.
+        # The null-profile branch remains only for legacy maintenance callers.
         candidates = [] if search_profile else await tracked_candidates(config.max_rechecks)
         sources = [] if search_profile else list(config.source_urls)
         offset = day_number % max(1, len(sources))
@@ -918,6 +956,7 @@ async def execute(run_id: str, config: SearchConfig, *, seed_only: bool, audit: 
 
 async def run(*, due_only: bool = False, seed_only: bool = False, retry_run: str | None = None,
               retry_candidates: list | None = None, search_profile: SearchProfile | dict | None = None) -> dict:
+    explicit_search_profile = search_profile is not None
     if search_profile is not None:
         search_profile = SearchProfile.model_validate(search_profile)
     if search_profile is not None and (due_only or seed_only or retry_run or retry_candidates is not None):
@@ -943,8 +982,10 @@ async def run(*, due_only: bool = False, seed_only: bool = False, retry_run: str
             current = await status()
             now = now_utc()
             day = now.astimezone(ZoneInfo(config.timezone)).date().isoformat()
-            today_runs = [r for r in current["runs"] if r["scheduled_day"] == day and not (r.get("result") or {}).get("retry_of")
-                          and not (r.get("result") or {}).get("manual_search")]
+            today_runs = [r for r in current["runs"] if r["scheduled_day"] == day
+                          and not (r.get("result") or {}).get("retry_of")
+                          and not (r.get("result") or {}).get("manual_search")
+                          and (r.get("result") or {}).get("search_trigger") in {None, "scheduled"}]
             if due_only:
                 if not config.enabled or next_due(config, {r["scheduled_day"] for r in today_runs if r["status"] == "completed"}, now=now) > now:
                     return {"status": "not_due"}
@@ -952,12 +993,18 @@ async def run(*, due_only: bool = False, seed_only: bool = False, retry_run: str
                     return {"status": "retry_limit", "error": "daily attempt limit reached; inspect status"}
                 if today_runs and datetime.fromisoformat(today_runs[0]["started_at"]) > now - timedelta(minutes=30):
                     return {"status": "backoff"}
+            if search_profile is None and not seed_only and not retry_run:
+                search_profile = await configured_job_agent_profile()
             audit = {"new_jobs": 0, "verified": 0, "closed": 0, "rejected": 0, "candidates": 0,
                      "duplicates_skipped": 0,
                      "contacts_found": 0, "contacts_inserted": 0,
                      "llm_calls": 0, "errors": [], "attempt_errors": [], "stored": [], "decisions": [], "usage": [], "prompt_cache_metrics": [], "seed_only": seed_only}
             if search_profile:
-                audit.update({"manual_search": True, "search_profile": search_profile.model_dump(mode="json")})
+                trigger = "manual" if explicit_search_profile else "scheduled" if due_only else "operator"
+                audit.update({"job_agent_search": True, "search_trigger": trigger,
+                              "search_profile": search_profile.model_dump(mode="json")})
+                if explicit_search_profile:
+                    audit["manual_search"] = True
             if retry_run:
                 audit["retry_of"] = retry_run
             run_id = uuid.uuid4().hex
