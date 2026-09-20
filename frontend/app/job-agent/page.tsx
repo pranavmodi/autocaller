@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { JobApplicationControls, ResumeSettings } from "@/components/JobApplicationControls";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BriefcaseBusiness, ArrowUpRight, Check, ListFilter, Loader2, RefreshCw, Settings2 } from "lucide-react";
+import { BriefcaseBusiness, ArrowUpRight, Building2, Check, FileText, Globe2, ListFilter, Loader2, MapPin, RefreshCw, Save, Search, Settings2, SlidersHorizontal } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { jobAgentRequest, type Candidate, type CollectionRun, type JobAgentConfig, type JobSource, type Overview, type ReviewStatus } from "@/lib/job-agent";
 
@@ -154,17 +154,65 @@ function SettingsForm({ snapshot, onSaved }: { snapshot: Overview; onSaved: () =
   const [saved, setSaved] = useState(false);
   const update = <K extends keyof JobAgentConfig>(key: K, value: JobAgentConfig[K]) => { setSaved(false); setConfig(c => ({ ...c, [key]: value })); };
   const save = useMutation({ mutationFn: () => jobAgentRequest<{ revision: number; config: JobAgentConfig }>("/config", { config, revision }), onSuccess: result => { setRevision(result.revision); setConfig(result.config); setSaved(true); onSaved(); } });
-  return <form onSubmit={e => { e.preventDefault(); save.mutate(); }} className="max-w-4xl space-y-5">
-    {snapshot.revision > revision && !save.isPending && <p role="alert" className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">Preferences changed in another window. Your edits are preserved. Reload the saved settings before editing again.<button type="button" className={`${button} ml-2`} onClick={() => { setConfig({ ...snapshot.config }); setRevision(snapshot.revision); setSaved(false); }}>Reload saved settings</button></p>}
-    <section className={`${panel} space-y-5 p-5`}><div><h2 className="font-semibold">Listing collection</h2><p className="mt-1 text-sm text-neutral-500">All matching listings are synced automatically, with no total limit. Filter changes apply to the next sync; an in-progress sync keeps its original filters. Existing decisions are preserved.</p></div>
-      <label className="flex items-start gap-3"><input type="checkbox" className="mt-1 h-4 w-4 accent-neutral-900" checked={config.collection_enabled} onChange={e => update("collection_enabled", e.target.checked)} /><span className="text-sm"><span className="font-medium">Automatically sync listings</span><span className="mt-1 block text-xs text-neutral-500">Check for stored listings every minute. Pause between batches without losing progress. The separate daily job search is unaffected.</span></span></label>
-      <div className="grid gap-4 sm:grid-cols-2"><label className="text-sm font-medium">Title or company contains<input className={`${input} mt-2`} value={config.search} maxLength={255} onChange={e => update("search", e.target.value)} placeholder="Any title or company" /></label><label className="text-sm font-medium">Work arrangement<select className={`${input} mt-2`} value={config.remote_scope} onChange={e => update("remote_scope", e.target.value as JobAgentConfig["remote_scope"])}><option value="any">All, including unknown</option><option value="remote">Remote roles</option><option value="global">Explicitly global remote</option></select></label><label className="text-sm font-medium">Posting age<select className={`${input} mt-2`} value={config.posted_within_days ?? ""} onChange={e => update("posted_within_days", e.target.value ? Number(e.target.value) : null)}><option value="">Any date, including unknown</option>{[7, 14, 30, 60, 90, 180, 365].map(days => <option key={days} value={days}>Last {days} days</option>)}</select><span className="mt-1 block text-xs font-normal text-neutral-500">Choosing a date range excludes listings with unknown dates.</span></label></div>
+  return <form onSubmit={e => { e.preventDefault(); save.mutate(); }} className="max-w-5xl space-y-6 pb-8">
+    <header className="overflow-hidden rounded-2xl border border-neutral-800 bg-gradient-to-br from-neutral-950 via-neutral-900 to-neutral-800 p-6 text-white shadow-sm">
+      <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+        <div className="max-w-2xl">
+          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-neutral-300"><SlidersHorizontal className="h-4 w-4" /> Agent configuration</div>
+          <h2 className="mt-3 text-xl font-semibold tracking-tight">Shape what the agent finds and how it applies</h2>
+          <p className="mt-2 text-sm leading-relaxed text-neutral-300">These settings control listing collection, the daily and on-demand search, resume selection, and application writing.</p>
+        </div>
+        <span className="w-fit rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-xs font-medium text-neutral-200">Revision {revision}</span>
+      </div>
+      <div className="mt-5 grid gap-2 text-xs sm:grid-cols-4">
+        {["Collection", "Search scope", "Resume routing", "Writing style"].map((label, index) => <div key={label} className="rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2.5"><span className="mr-2 text-neutral-500">0{index + 1}</span>{label}</div>)}
+      </div>
+    </header>
+
+    {snapshot.revision > revision && !save.isPending && <div role="alert" className="flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950 sm:flex-row sm:items-center sm:justify-between"><span>Preferences changed in another window. Your edits are preserved.</span><button type="button" className={button} onClick={() => { setConfig({ ...snapshot.config }); setRevision(snapshot.revision); setSaved(false); }}>Reload saved settings</button></div>}
+
+    <section className="overflow-hidden rounded-2xl border border-sky-200/80 bg-sky-50/40 shadow-sm">
+      <div className="flex items-start gap-3 border-b border-sky-200/70 bg-sky-100/70 p-5">
+        <span className="rounded-xl border border-sky-200 bg-white/80 p-2.5 text-sky-700"><RefreshCw className="h-5 w-5" /></span>
+        <div><p className="text-xs font-semibold uppercase tracking-wider text-sky-700">01 · Collection</p><h2 className="mt-1 font-semibold text-neutral-950">Listing collection</h2><p className="mt-1 max-w-3xl text-sm leading-relaxed text-neutral-600">Choose which stored Possible OS listings enter the review queue. Existing decisions remain unchanged when these filters change.</p></div>
+      </div>
+      <div className="space-y-4 p-5">
+        <label className="flex items-start gap-3 rounded-xl border border-sky-200/70 bg-white/90 p-4 shadow-sm"><input type="checkbox" className="mt-1 h-4 w-4 accent-sky-700" checked={config.collection_enabled} onChange={e => update("collection_enabled", e.target.checked)} /><span className="text-sm"><span className="font-medium text-neutral-900">Automatically sync stored listings</span><span className="mt-1 block text-xs leading-relaxed text-neutral-500">Check for stored listings every minute. Pausing does not lose progress. The daily Job Agent search continues on its own schedule.</span></span></label>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <label className="rounded-xl border border-sky-100 bg-white/80 p-4 text-sm font-medium text-neutral-800"><span className="flex items-center gap-2"><Search className="h-4 w-4 text-sky-700" />Title or company contains</span><input className={`${input} mt-3`} value={config.search} maxLength={255} onChange={e => update("search", e.target.value)} placeholder="Any title or company" /></label>
+          <label className="rounded-xl border border-sky-100 bg-white/80 p-4 text-sm font-medium text-neutral-800"><span className="flex items-center gap-2"><Globe2 className="h-4 w-4 text-sky-700" />Work arrangement</span><select className={`${input} mt-3`} value={config.remote_scope} onChange={e => update("remote_scope", e.target.value as JobAgentConfig["remote_scope"])}><option value="any">All, including unknown</option><option value="remote">Remote roles</option><option value="global">Explicitly global remote</option></select></label>
+          <label className="rounded-xl border border-sky-100 bg-white/80 p-4 text-sm font-medium text-neutral-800"><span className="flex items-center gap-2"><RefreshCw className="h-4 w-4 text-sky-700" />Posting age</span><select className={`${input} mt-3`} value={config.posted_within_days ?? ""} onChange={e => update("posted_within_days", e.target.value ? Number(e.target.value) : null)}><option value="">Any date, including unknown</option>{[7, 14, 30, 60, 90, 180, 365].map(days => <option key={days} value={days}>Last {days} days</option>)}</select><span className="mt-2 block text-xs font-normal leading-relaxed text-neutral-500">A date range excludes listings whose posting date cannot be verified.</span></label>
+        </div>
+      </div>
     </section>
+
+    <section className="overflow-hidden rounded-2xl border border-emerald-200/80 bg-emerald-50/40 shadow-sm">
+      <div className="flex items-start gap-3 border-b border-emerald-200/70 bg-emerald-100/70 p-5">
+        <span className="rounded-xl border border-emerald-200 bg-white/80 p-2.5 text-emerald-700"><Search className="h-5 w-5" /></span>
+        <div><p className="text-xs font-semibold uppercase tracking-wider text-emerald-700">02 · Search scope</p><h2 className="mt-1 font-semibold text-neutral-950">Roles, industries and location</h2><p className="mt-1 max-w-3xl text-sm leading-relaxed text-neutral-600">The daily search and Search now use this same scope. The verifier only accepts employers and roles supported by these settings.</p></div>
+      </div>
+      <div className="grid gap-4 p-5 lg:grid-cols-2">
+        <label className="rounded-xl border border-emerald-100 bg-white/90 p-4 text-sm font-medium text-neutral-800"><span className="flex items-center gap-2"><Search className="h-4 w-4 text-emerald-700" />Roles you want</span><textarea className={`${input} mt-3 min-h-28`} value={config.target_roles} maxLength={2000} onChange={e => update("target_roles", e.target.value)} /><span className="mt-2 block text-xs font-normal leading-relaxed text-neutral-500">Separate role groups with commas, semicolons, or new lines.</span></label>
+        <label className="rounded-xl border border-emerald-100 bg-white/90 p-4 text-sm font-medium text-neutral-800"><span className="flex items-center gap-2"><Building2 className="h-4 w-4 text-emerald-700" />Preferred industries</span><textarea className={`${input} mt-3 min-h-28`} value={config.preferred_industries} maxLength={2000} onChange={e => update("preferred_industries", e.target.value)} /><span className="mt-2 block text-xs font-normal leading-relaxed text-neutral-500">Each listed industry becomes an allowed employer category for verification.</span></label>
+        <label className="rounded-xl border border-emerald-100 bg-white/90 p-4 text-sm font-medium text-neutral-800 lg:col-span-2"><span className="flex items-center gap-2"><MapPin className="h-4 w-4 text-emerald-700" />Location and eligibility notes</span><textarea className={`${input} mt-3 min-h-24`} value={config.location_preferences} maxLength={2000} onChange={e => update("location_preferences", e.target.value)} /><span className="mt-2 block text-xs font-normal leading-relaxed text-neutral-500">Used to assess remote scope and country eligibility without assuming work authorization.</span></label>
+        <label className="flex items-start gap-3 rounded-xl border border-emerald-200/70 bg-white/90 p-4 text-sm lg:col-span-2"><input type="checkbox" className="mt-0.5 h-4 w-4 accent-emerald-700" checked={config.prefer_overseas_employers} onChange={e => update("prefer_overseas_employers", e.target.checked)} /><span><span className="font-medium text-neutral-900">Prioritize companies based abroad</span><span className="mt-1 block text-xs text-neutral-500">Includes overseas companies hiring in India or other locations permitted by your location preferences.</span></span></label>
+      </div>
+    </section>
+
     <ResumeSettings config={config} onChange={value => { setConfig(value); setSaved(false); }} />
-    <section className={`${panel} space-y-4 p-5`}><div><h2 className="font-semibold">Your search and application preferences</h2><p className="mt-1 text-sm text-neutral-500">Roles, industries and location guide external search and application research. Comma-separated preferred industries define which employer industries the verifier may accept. Category definitions control resume selection.</p></div>
-      {([{ key: "target_roles", label: "Roles you want", limit: 2000 }, { key: "preferred_industries", label: "Preferred industries", limit: 2000 }, { key: "location_preferences", label: "Location and eligibility notes", limit: 2000 }, { key: "application_notes", label: "Resume and writing preferences", limit: 4000 }] as const).map(field => <label key={field.key} className="block text-sm font-medium">{field.label}<textarea className={`${input} mt-2 min-h-20`} value={config[field.key]} maxLength={field.limit} onChange={e => update(field.key, e.target.value)} /></label>)}
-      <label className="flex items-center gap-3 text-sm"><input type="checkbox" className="h-4 w-4 accent-neutral-900" checked={config.prefer_overseas_employers} onChange={e => update("prefer_overseas_employers", e.target.checked)} />Prioritize companies based abroad, including those hiring in India</label>
+
+    <section className="overflow-hidden rounded-2xl border border-amber-200/80 bg-amber-50/40 shadow-sm">
+      <div className="flex items-start gap-3 border-b border-amber-200/70 bg-amber-100/70 p-5">
+        <span className="rounded-xl border border-amber-200 bg-white/80 p-2.5 text-amber-700"><FileText className="h-5 w-5" /></span>
+        <div><p className="text-xs font-semibold uppercase tracking-wider text-amber-700">04 · Writing style</p><h2 className="mt-1 font-semibold text-neutral-950">Resume and application preferences</h2><p className="mt-1 max-w-3xl text-sm leading-relaxed text-neutral-600">Give the application agent standing instructions for resume reuse, tone, positioning, and wording.</p></div>
+      </div>
+      <div className="p-5"><label className="block rounded-xl border border-amber-100 bg-white/90 p-4 text-sm font-medium text-neutral-800">Application instructions<textarea className={`${input} mt-3 min-h-32`} value={config.application_notes} maxLength={4000} onChange={e => update("application_notes", e.target.value)} /><span className="mt-2 block text-xs font-normal text-neutral-500">These instructions guide preparation. Factual claims still require resume or source evidence.</span></label></div>
     </section>
-    <ErrorBox error={save.error} /><div className="flex items-center gap-3"><button className={primary} type="submit" disabled={save.isPending || snapshot.revision > revision}>{save.isPending ? "Saving…" : "Save settings"}</button>{saved && <span role="status" className="text-sm text-emerald-700">Settings saved</span>}</div>
+
+    <ErrorBox error={save.error} />
+    <div className="sticky bottom-3 z-10 flex flex-col gap-3 rounded-2xl border border-neutral-200 bg-white/95 p-4 shadow-lg shadow-neutral-900/10 backdrop-blur sm:flex-row sm:items-center sm:justify-between">
+      <div><p className="text-sm font-medium text-neutral-900">Save the complete configuration</p><p className="mt-0.5 text-xs text-neutral-500">Changes take effect on the next collection, search, classification, or application action.</p></div>
+      <div className="flex items-center gap-3"><button className={`${primary} min-w-36`} type="submit" disabled={save.isPending || snapshot.revision > revision}>{save.isPending ? <><Loader2 className="h-4 w-4 animate-spin" />Saving…</> : <><Save className="h-4 w-4" />Save settings</>}</button>{saved && <span role="status" className="flex items-center gap-1.5 text-sm font-medium text-emerald-700"><Check className="h-4 w-4" />Saved</span>}</div>
+    </div>
   </form>;
 }

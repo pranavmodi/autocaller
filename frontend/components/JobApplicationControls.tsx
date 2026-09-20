@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Check, CheckCircle2, Circle, Clock3, Loader2, MailCheck, RotateCcw, ShieldCheck } from "lucide-react";
+import { AlertTriangle, Check, CheckCircle2, Circle, Clock3, ExternalLink, FileStack, Loader2, MailCheck, Plus, RotateCcw, ShieldCheck, Trash2 } from "lucide-react";
 import { apiUrl } from "@/lib/api";
 import { jobAgentRequest, type Candidate, type JobAgentConfig } from "@/lib/job-agent";
 
@@ -77,18 +77,30 @@ function StepIcon({ state }: { state: StepState }) {
 export function ResumeSettings({ config, onChange }: { config: JobAgentConfig; onChange: (value: JobAgentConfig) => void }) {
   const library = useQuery({ queryKey: ["job-agent", "resumes"], queryFn: () => jobAgentRequest<{ items: { path: string; filename: string }[] }>("/resumes"), staleTime: 60000 });
   const change = (index: number, key: "name" | "description" | "resume_path", value: string) => onChange({ ...config, resume_categories: config.resume_categories.map((c, i) => i === index ? { ...c, [key]: value } : c) });
-  return <section className="space-y-5 rounded-xl border border-neutral-200 bg-white p-5">
-    <div><h2 className="font-semibold">Job categories and resumes</h2><p className="mt-1 text-sm text-neutral-500">Each category uses one saved PDF. Classify a job when you are considering an application; unclear matches need review. Selected files must be readable, one-page resumes.</p></div>
-    <label className="flex items-center gap-3 text-sm"><input type="checkbox" checked={config.classification_enabled} onChange={e => onChange({ ...config, classification_enabled: e.target.checked })} />Automatically classify every queued job</label>
-    <label className="block text-sm font-medium">Minimum confidence for automatic selection<select className={`${input} mt-2`} value={config.classification_threshold} onChange={e => onChange({ ...config, classification_threshold: Number(e.target.value) })}>{Array.from(new Set([0.6, 0.7, 0.8, 0.9, 1, config.classification_threshold])).sort().map(value => <option key={value} value={value}>{Math.round(value * 100)}%</option>)}</select></label>
-    {library.error && <p role="alert" className="text-sm text-red-700">{library.error.message}</p>}
-    {config.resume_categories.map((category, index) => <div key={category.id} className="space-y-3 rounded-lg border border-neutral-200 p-4">
-      <label className="block text-sm font-medium">Category name<input className={`${input} mt-1`} value={category.name} maxLength={120} required onChange={e => change(index, "name", e.target.value)} /></label>
-      <label className="block text-sm font-medium">Which responsibilities belong here?<textarea className={`${input} mt-1 min-h-20`} value={category.description} maxLength={2000} required onChange={e => change(index, "description", e.target.value)} /></label>
-      <label className="block text-sm font-medium">Resume<select aria-label={`Resume for ${category.name}`} className={`${input} mt-1`} value={category.resume_path} onChange={e => change(index, "resume_path", e.target.value)}><option value="">No resume assigned — needs review</option>{category.resume_path && !library.data?.items.some(file => file.path === category.resume_path) && <option value={category.resume_path}>{category.resume_path.split("/").pop()}</option>}{library.data?.items.map(file => <option key={file.path} value={file.path}>{file.filename} — {file.path.startsWith("job-agent/resumes/") ? "Category library" : file.path.split("/").slice(0, -1).join("/")}</option>)}</select></label>
-      <div className="flex flex-wrap items-center justify-between gap-3">{category.resume_path && <a className="text-sm underline" href={pdfUrl(category.resume_path)} target="_blank" rel="noopener noreferrer">Preview resume</a>}<button type="button" className="text-xs text-red-700 underline" onClick={() => onChange({ ...config, resume_categories: config.resume_categories.filter((_, i) => i !== index) })}>Remove category</button></div>
-    </div>)}
-    <button type="button" className={button} onClick={() => onChange({ ...config, resume_categories: [...config.resume_categories, { id: `category_${Date.now()}`, name: "New category", description: "", resume_path: "" }] })}>Add category</button>
+  return <section className="overflow-hidden rounded-2xl border border-violet-200/80 bg-violet-50/40 shadow-sm">
+    <div className="flex items-start justify-between gap-4 border-b border-violet-200/70 bg-violet-100/70 p-5">
+      <div className="flex items-start gap-3"><span className="rounded-xl border border-violet-200 bg-white/80 p-2.5 text-violet-700"><FileStack className="h-5 w-5" /></span><div><p className="text-xs font-semibold uppercase tracking-wider text-violet-700">03 · Resume routing</p><h2 className="mt-1 font-semibold text-neutral-950">Job categories and resumes</h2><p className="mt-1 max-w-3xl text-sm leading-relaxed text-neutral-600">Define how jobs are grouped and assign one reusable, one-page PDF to each category.</p></div></div>
+      <span className="hidden rounded-full border border-violet-200 bg-white/70 px-3 py-1 text-xs font-medium text-violet-800 sm:block">{config.resume_categories.length} categories</span>
+    </div>
+    <div className="space-y-5 p-5">
+      <div className="grid gap-4 lg:grid-cols-[1fr_240px]">
+        <label className="flex items-start gap-3 rounded-xl border border-violet-200/70 bg-white/90 p-4 text-sm shadow-sm"><input type="checkbox" className="mt-0.5 h-4 w-4 accent-violet-700" checked={config.classification_enabled} onChange={e => onChange({ ...config, classification_enabled: e.target.checked })} /><span><span className="font-medium text-neutral-900">Automatically classify every queued job</span><span className="mt-1 block text-xs leading-relaxed text-neutral-500">When off, classification runs only when you request it for a specific job.</span></span></label>
+        <label className="rounded-xl border border-violet-100 bg-white/90 p-4 text-sm font-medium text-neutral-800">Minimum confidence<select className={`${input} mt-3`} value={config.classification_threshold} onChange={e => onChange({ ...config, classification_threshold: Number(e.target.value) })}>{Array.from(new Set([0.6, 0.7, 0.8, 0.9, 1, config.classification_threshold])).sort().map(value => <option key={value} value={value}>{Math.round(value * 100)}%</option>)}</select></label>
+      </div>
+      {library.isPending && <p className="flex items-center gap-2 text-sm text-violet-700"><Loader2 className="h-4 w-4 animate-spin" />Loading resume library…</p>}
+      {library.error && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{library.error.message}</p>}
+      <div className="space-y-4">
+        {config.resume_categories.map((category, index) => <div key={category.id} className="overflow-hidden rounded-xl border border-violet-100 bg-white/90 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-violet-100 bg-violet-50/70 px-4 py-3"><div className="flex items-center gap-3"><span className="flex h-7 w-7 items-center justify-center rounded-full bg-violet-700 text-xs font-semibold text-white">{index + 1}</span><div><p className="text-sm font-semibold text-neutral-900">{category.name || "Untitled category"}</p><p className="text-xs text-neutral-500">{category.resume_path ? "Resume assigned" : "Needs a resume"}</p></div></div>{category.resume_path && <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">Ready</span>}</div>
+          <div className="space-y-4 p-4">
+            <div className="grid gap-4 lg:grid-cols-2"><label className="block text-sm font-medium text-neutral-800">Category name<input className={`${input} mt-2`} value={category.name} maxLength={120} required onChange={e => change(index, "name", e.target.value)} /></label><label className="block text-sm font-medium text-neutral-800">Assigned one-page resume<select aria-label={`Resume for ${category.name}`} className={`${input} mt-2`} value={category.resume_path} onChange={e => change(index, "resume_path", e.target.value)}><option value="">No resume assigned — needs review</option>{category.resume_path && !library.data?.items.some(file => file.path === category.resume_path) && <option value={category.resume_path}>{category.resume_path.split("/").pop()}</option>}{library.data?.items.map(file => <option key={file.path} value={file.path}>{file.filename} — {file.path.startsWith("job-agent/resumes/") ? "Category library" : file.path.split("/").slice(0, -1).join("/")}</option>)}</select></label></div>
+            <label className="block text-sm font-medium text-neutral-800">Responsibilities and fit rules<textarea className={`${input} mt-2 min-h-24`} value={category.description} maxLength={2000} required onChange={e => change(index, "description", e.target.value)} /></label>
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-neutral-100 pt-3">{category.resume_path ? <a className="inline-flex items-center gap-1.5 text-sm font-medium text-violet-700 hover:text-violet-900" href={pdfUrl(category.resume_path)} target="_blank" rel="noopener noreferrer">Preview resume <ExternalLink className="h-3.5 w-3.5" /></a> : <span className="text-xs text-amber-700">Assign a PDF before this category can be used automatically.</span>}<button type="button" className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50" onClick={() => onChange({ ...config, resume_categories: config.resume_categories.filter((_, i) => i !== index) })}><Trash2 className="h-3.5 w-3.5" />Remove</button></div>
+          </div>
+        </div>)}
+      </div>
+      <button type="button" className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-dashed border-violet-300 bg-white/60 px-4 py-3 text-sm font-medium text-violet-800 hover:border-violet-400 hover:bg-white" onClick={() => onChange({ ...config, resume_categories: [...config.resume_categories, { id: `category_${Date.now()}`, name: "New category", description: "", resume_path: "" }] })}><Plus className="h-4 w-4" />Add job category</button>
+    </div>
   </section>;
 }
 
