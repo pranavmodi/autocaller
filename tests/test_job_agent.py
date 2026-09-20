@@ -102,6 +102,19 @@ async def test_open_leads_listing_uses_job_agent_bridge(monkeypatch):
     handler.assert_awaited_once_with(service.ListingSelection(**payload))
 
 
+@pytest.mark.asyncio
+async def test_search_endpoint_starts_non_sending_discovery(monkeypatch):
+    result = {"status": "queued", "message": "Searching public sources"}
+    handler = AsyncMock(return_value=result)
+    monkeypatch.setattr(service, "request_search", handler)
+    app = FastAPI()
+    app.include_router(router)
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url="http://test") as client:
+        response = await client.post("/api/job-agent/search", json={})
+    assert response.status_code == 200 and response.json() == result
+    handler.assert_awaited_once_with()
+
+
 @pytest.mark.parametrize("raw, expected", [("2026-09-17", "2026-09-17"), ("unknown", None), ("2026-02-30", None), ("", None), (None, None)])
 def test_posting_date_normalization(raw, expected):
     assert service.normalize_posting({"posted_date": raw})["posted_date"] == expected

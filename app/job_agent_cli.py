@@ -37,6 +37,11 @@ def register(app, get, post, console):
         """Queue or resume collection of all matching stored listings; inspect status for progress."""
         output(post("/api/job-agent/collect", {}, timeout=120))
 
+    @group.command("search")
+    def search():
+        """Search public sources using saved role, industry and location preferences."""
+        output(post("/api/job-agent/search", {}))
+
     @group.command("open-listing")
     def open_listing(
         firm_id: str = typer.Option(..., "--firm-id"),

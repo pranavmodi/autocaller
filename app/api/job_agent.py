@@ -39,6 +39,15 @@ async def collect():
         raise HTTPException(503, "Could not import listings. See the activity log and retry.") from exc
 
 
+@router.post("/search")
+async def search():
+    """Start evidence-backed external discovery; never classifies or applies."""
+    try:
+        return await service.request_search()
+    except Exception as exc:
+        raise HTTPException(503, "Could not start job search. Saved jobs and settings are unchanged.") from exc
+
+
 @router.post("/listings/open")
 async def open_listing(body: service.ListingSelection):
     """Open one canonical Leads job listing in the shared Job Agent workflow."""

@@ -3,8 +3,9 @@
 The `/job-agent` tab provides a persistent operator review queue, preferences,
 and collection progress. Only Review queue and Settings tabs are shown; the Activity
 tab is hidden for now. Audit history remains available through the CLI/API.
-Jobs are classified into configurable resume categories. Applications are processed
-only after an explicit operator action. Email delivery uses the official Zoho CLI.
+Jobs can be classified on demand into configurable resume categories. Applications
+are processed only after an explicit operator action. Email delivery uses the
+official Zoho CLI.
 
 ## Collection and ordering
 
@@ -36,6 +37,23 @@ only after an explicit operator action. Email delivery uses the official Zoho CL
   number of unique jobs in the queue.
 - Old saved `import_limit` values are ignored on read and removed on the next settings
   write; new requests containing that retired control fail validation.
+
+## External search
+
+**Search now** / `job-agent search` starts a background public-source search using
+the saved target roles, preferred industries, location preferences and overseas-
+employer preference. It covers law firms, legal-tech companies and legal-service
+providers, then requires exact source evidence for employer identity, the live role,
+technical responsibilities and every non-unknown geography claim. Results are added
+to the existing local job store and the durable collection worker imports them into
+this queue. Searching never classifies, prepares, sends, or submits an application.
+
+Each manual search is a durable career-search run and does not consume the daily PI
+search slot. Exact normalized URLs already discovered are skipped before another
+verification pass. Storage also merges canonical source URLs or an employer-scoped
+ATS provider plus requisition ID, and the queue upserts stable candidate IDs. Titles
+alone do not merge jobs. The UI reports verified, new, duplicate-skipped and error
+counts and continues to poll while a run is active.
 
 ## Categories and applications
 
@@ -156,6 +174,7 @@ inherit daemon authentication. UI overview and queue poll every 15 seconds; the 
 | GET `/api/job-agent/config` | `job-agent config` |
 | POST `/api/job-agent/config` | `job-agent configure --file preferences.json` |
 | POST `/api/job-agent/collect` | `job-agent collect` |
+| POST `/api/job-agent/search` | `job-agent search` |
 | POST `/api/job-agent/listings/open` | `job-agent open-listing --firm-id ID --source-url URL --title TITLE [...]` |
 | GET `/api/job-agent/jobs` | `job-agent jobs [--status shortlisted --search AI --page 1 --order posted_desc]` |
 | POST `/api/job-agent/jobs/{id}/review` | `job-agent review ID --revision N --status shortlisted --note "…"` |

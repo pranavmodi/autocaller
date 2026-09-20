@@ -222,6 +222,25 @@ class IntakeCallSessionRow(Base):
     )
 
 
+class CareerSearchStateRow(Base):
+    __tablename__ = "career_search_state"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    config: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    updated_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow)
+
+
+class CareerSearchRunRow(Base):
+    __tablename__ = "career_search_runs"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    scheduled_day: Mapped[str] = mapped_column(String(10), nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False)
+    started_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow)
+    completed_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    result: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+
+
 class SystemSettingsRow(Base):
     __tablename__ = "system_settings"
 

@@ -151,6 +151,7 @@ BATCH_SIZE = 100  # Transaction size only: every snapshot is drained to completi
 SYNC_INTERVAL_SECONDS = 60
 _wakeup = asyncio.Event()
 logger = logging.getLogger(__name__)
+_search_task: asyncio.Task | None = None
 
 _ready = False
 _schema_lock = asyncio.Lock()
@@ -268,6 +269,62 @@ async def collect(*, automatic=False):
         if not automatic:
             _wakeup.set()
         return serialize_run(run)
+
+
+def search_profile(config: JobAgentConfig) -> dict:
+    """Only operator search intent; application notes and resume data stay out."""
+    return {
+        "name": "Job Agent legal AI search",
+        "target_roles": config.target_roles,
+        "preferred_industries": config.preferred_industries,
+        "location_preferences": config.location_preferences,
+        "prefer_overseas_employers": config.prefer_overseas_employers,
+    }
+
+
+async def _search_and_import(profile: dict):
+    """Run verified discovery, then wake the existing durable queue importer."""
+    from app.services.daily_career_search import run as career_search_run
+    try:
+        result = await career_search_run(search_profile=profile)
+        if result.get("status") in {"completed", "partial"}:
+            try:
+                await collect()
+            except ValueError:
+                # Search results remain stored when queue collection is paused.
+                pass
+        await ensure_tables()
+        async with AsyncSessionLocal() as session:
+            counters = result.get("result") or {}
+            session.add(JobAgentEvent(
+                kind="external_search_finished",
+                message=(f"Legal AI search {result.get('status')}: "
+                         f"{counters.get('new_jobs', 0)} new, "
+                         f"{counters.get('duplicates_skipped', 0)} duplicates skipped"),
+                details={"run_id": result.get("id"), "status": result.get("status"),
+                         "new_jobs": counters.get("new_jobs", 0),
+                         "duplicates_skipped": counters.get("duplicates_skipped", 0)},
+            ))
+            await session.commit()
+        return result
+    except Exception:
+        logger.exception("Manual Job Agent search failed")
+        return {"status": "failed"}
+
+
+async def request_search():
+    """Start one non-sending search in the daemon and return immediately."""
+    global _search_task
+    from app.services.daily_career_search import status as career_status
+    current = await career_status()
+    running = next((run for run in current["runs"] if run["status"] == "running"), None)
+    if (_search_task and not _search_task.done()) or running:
+        return {"status": "busy", "run_id": running["id"] if running else None}
+    settings = await configuration()
+    profile = search_profile(JobAgentConfig.model_validate(settings["config"]))
+    _search_task = asyncio.create_task(_search_and_import(profile), name="job-agent-external-search")
+    return {"status": "queued", "search_profile": profile,
+            "message": "Searching public sources. Verified new jobs will be added to the review queue."}
 
 
 async def snapshot_source(session, run):
@@ -564,7 +621,8 @@ async def overview():
         source = {**{k: source[k] for k in ("config", "next_due_at", "schedule_enabled", "timer_installation")},
                   "runs": [{"id": r["id"], "status": r["status"], "started_at": r["started_at"],
                             "completed_at": r["completed_at"], "result": {k: r["result"].get(k) for k in
-                            ("new_jobs", "verified", "closed", "errors", "attempt_errors", "verification_rejections")}}
+                            ("new_jobs", "verified", "closed", "duplicates_skipped", "errors", "attempt_errors",
+                             "verification_rejections", "manual_search", "search_profile")}}
                            for r in source["runs"]]}
         source_error = None
     except Exception:

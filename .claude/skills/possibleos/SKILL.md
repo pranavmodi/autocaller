@@ -35,6 +35,12 @@ Leads `/emailtag-firms` → **Job listings** can open a source-backed row direct
 the same Job Agent workflow. CLI parity is `job-agent open-listing --firm-id ID
 --source-url URL --title TITLE [--job-id ID --location LOCATION]`. This resolves
 the canonical stored posting and does not classify, prepare or send by itself.
+`job-agent search` starts public-source discovery using the saved target roles,
+preferred industries and location preferences. It searches law firms, legal-tech
+companies and legal-service providers for AI/agent/automation roles, verifies the
+employer, live role and geographic claims, skips exact jobs already discovered,
+and imports verified new rows into the review queue. It does not classify, prepare,
+email or submit. The UI's **Search now** button invokes the same command path.
 No automatic inbox-referral handling or portal submissions. Inline PDF preview is
 browser-only; `resumes` / `show` return file paths relative to `/home/pranav/resume`
 for direct headless reading/copying. See `docs/JOB_AGENT.md`.

@@ -53,7 +53,11 @@ export type Overview = {
     config: { enabled: boolean; timezone: string; local_time: string };
     next_due_at: string | null; schedule_enabled: boolean; timer_installation: string;
     runs: { id: string; status: string; started_at: string; completed_at: string | null;
-      result: Record<string, unknown> }[];
+      result: {
+        new_jobs?: number; verified?: number; closed?: number; duplicates_skipped?: number;
+        errors?: unknown[]; manual_search?: boolean; search_profile?: Record<string, unknown>;
+        [key: string]: unknown;
+      } }[];
   };
 };
 export type AgentEvent = {

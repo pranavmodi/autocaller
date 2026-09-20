@@ -62,8 +62,8 @@ export default function JobAgentPage() {
         </button>)}</div>
         {!!jobs.data?.total && <div className="flex items-center justify-between gap-2 border-t border-neutral-200 p-3 text-xs text-neutral-500"><span>{jobs.data.total} listings · Page {page} of {jobs.data.total_pages}</span><div className="flex gap-2"><button className={button} disabled={page <= 1} onClick={() => setPage(p => p - 1)}>Previous</button><button className={button} disabled={page >= jobs.data.total_pages} onClick={() => setPage(p => p + 1)}>Next</button></div></div>}
       </section>
-      <aside className="space-y-4"><CollectionProgress data={data} total={total} /><section className={`${panel} p-4`}><h2 className="text-sm font-semibold">Operating status</h2><p className="mt-2 text-sm text-neutral-600">New jobs are classified into your resume categories. Open a job to review its match, prepare an email, or apply through Zoho.</p><dl className="mt-4 space-y-3 text-xs"><div className="flex justify-between"><dt className="text-neutral-500">Collection</dt><dd>{data.config.collection_enabled ? "Automatic · every minute" : "Paused"}</dd></div><div className="flex justify-between"><dt className="text-neutral-500">Last completed sync</dt><dd>{date(data.last_collected_at)}</dd></div><div className="flex justify-between"><dt className="text-neutral-500">Decisions</dt><dd>Reviewed by you</dd></div></dl><p className="mt-4 border-t border-neutral-100 pt-3 text-xs leading-relaxed text-neutral-500">Applications send only when you choose Apply via Zoho. Portal submissions are separate. Previous application packets and Zoho mail are checked before sending.</p></section>
-        <SearchSource data={data} />
+      <aside className="space-y-4"><CollectionProgress data={data} total={total} /><section className={`${panel} p-4`}><h2 className="text-sm font-semibold">Operating status</h2><p className="mt-2 text-sm text-neutral-600">Open a job when you want to classify it, review its match, prepare an email, or apply through Zoho.</p><dl className="mt-4 space-y-3 text-xs"><div className="flex justify-between"><dt className="text-neutral-500">Collection</dt><dd>{data.config.collection_enabled ? "Automatic · every minute" : "Paused"}</dd></div><div className="flex justify-between"><dt className="text-neutral-500">Last completed sync</dt><dd>{date(data.last_collected_at)}</dd></div><div className="flex justify-between"><dt className="text-neutral-500">Decisions</dt><dd>Reviewed by you</dd></div></dl><p className="mt-4 border-t border-neutral-100 pt-3 text-xs leading-relaxed text-neutral-500">Applications send only when you choose Apply via Zoho. Portal submissions are separate. Previous application packets and Zoho mail are checked before sending.</p></section>
+        <SearchSource data={data} onRefresh={refresh} />
         <section className={`${panel} p-4`}><h2 className="text-sm font-semibold">Your focus</h2><p className="mt-2 text-sm leading-relaxed text-neutral-600">{data.config.target_roles}</p><p className="mt-2 text-xs leading-relaxed text-neutral-500">{data.config.preferred_industries}</p><button onClick={() => setTab("settings")} className="mt-3 text-xs font-medium underline underline-offset-4">Edit preferences</button></section>
       </aside>
     </div>}
@@ -89,8 +89,32 @@ function CollectionProgress({ data, total }: { data: Overview; total: number }) 
   </section>;
 }
 
-function SearchSource({ data }: { data: Overview }) {
-  return <section className={`${panel} p-4`}><h2 className="text-sm font-semibold">Discovery source</h2>{data.source ? <><p className="mt-2 text-sm text-neutral-600">Daily PI technology search</p><p className="mt-2 text-xs text-neutral-500">{data.source.schedule_enabled ? `${data.source.config.local_time} · ${data.source.config.timezone}` : "Schedule disabled"}</p><p className="mt-2 text-xs text-neutral-500">Next due: {date(data.source.next_due_at)} (your local time)</p><p className="mt-3 text-xs text-neutral-500">Schedule from saved search settings; this does not confirm timer health. Automatic sync brings its stored listings into your review queue.</p></> : <p className="mt-2 text-sm text-amber-800">{data.source_error}</p>}</section>;
+function SearchSource({ data, onRefresh }: { data: Overview; onRefresh: () => void }) {
+  const search = useMutation({
+    mutationFn: () => jobAgentRequest<{ status: string; message?: string }>("/search", {}),
+    onSuccess: onRefresh,
+  });
+  const latest = data.source?.runs.find(run => run.result.manual_search);
+  const running = data.source?.runs.some(run => run.status === "running") || false;
+  const errors = Array.isArray(latest?.result.errors) ? latest.result.errors.length : 0;
+  return <section className={`${panel} p-4`}>
+    <h2 className="text-sm font-semibold">Find legal AI jobs</h2>
+    <p className="mt-2 text-sm leading-relaxed text-neutral-600">Search public sources for legal-domain AI, agent and automation roles using your saved role, industry and location preferences.</p>
+    <button className={`${primary} mt-4 w-full`} disabled={search.isPending || running} onClick={() => search.mutate()}>
+      <RefreshCw className={`h-4 w-4 ${search.isPending || running ? "animate-spin" : ""}`} />
+      {search.isPending ? "Starting…" : running ? "Search in progress" : "Search now"}
+    </button>
+    <ErrorBox error={search.error} />
+    {latest && <div className="mt-4 space-y-1 border-t border-neutral-100 pt-3 text-xs text-neutral-500">
+      <p className="font-medium text-neutral-700">Latest search: {readable(latest.status)}</p>
+      <p>{latest.result.verified || 0} verified · {latest.result.new_jobs || 0} new · {latest.result.duplicates_skipped || 0} duplicates skipped</p>
+      {!!errors && <p className="text-amber-800">{errors} result{errors === 1 ? "" : "s"} could not be verified. Verified jobs were still saved.</p>}
+      <p>Started {date(latest.started_at)}</p>
+    </div>}
+    {!latest && <p className="mt-3 text-xs text-neutral-500">No Job Agent search has run yet.</p>}
+    <p className="mt-3 text-xs leading-relaxed text-neutral-500">Results are checked against employer and job sources, deduplicated, and added to this review queue. Searching never classifies or applies.</p>
+    {data.source ? <p className="mt-3 border-t border-neutral-100 pt-3 text-xs text-neutral-500">Existing PI search schedule: {data.source.schedule_enabled ? `${data.source.config.local_time} · ${data.source.config.timezone}` : "disabled"}. Next due: {date(data.source.next_due_at)}.</p> : <p className="mt-3 text-xs text-amber-800">{data.source_error}</p>}
+  </section>;
 }
 
 function ReviewForm({ job, categories, onSaved }: { job: Candidate; categories: JobAgentConfig["resume_categories"]; onSaved: () => void }) {
@@ -122,7 +146,7 @@ function SettingsForm({ snapshot, onSaved }: { snapshot: Overview; onSaved: () =
       <div className="grid gap-4 sm:grid-cols-2"><label className="text-sm font-medium">Title or company contains<input className={`${input} mt-2`} value={config.search} maxLength={255} onChange={e => update("search", e.target.value)} placeholder="Any title or company" /></label><label className="text-sm font-medium">Work arrangement<select className={`${input} mt-2`} value={config.remote_scope} onChange={e => update("remote_scope", e.target.value as JobAgentConfig["remote_scope"])}><option value="any">All, including unknown</option><option value="remote">Remote roles</option><option value="global">Explicitly global remote</option></select></label><label className="text-sm font-medium">Posting age<select className={`${input} mt-2`} value={config.posted_within_days ?? ""} onChange={e => update("posted_within_days", e.target.value ? Number(e.target.value) : null)}><option value="">Any date, including unknown</option>{[7, 14, 30, 60, 90, 180, 365].map(days => <option key={days} value={days}>Last {days} days</option>)}</select><span className="mt-1 block text-xs font-normal text-neutral-500">Choosing a date range excludes listings with unknown dates.</span></label></div>
     </section>
     <ResumeSettings config={config} onChange={value => { setConfig(value); setSaved(false); }} />
-    <section className={`${panel} space-y-4 p-5`}><div><h2 className="font-semibold">Your application preferences</h2><p className="mt-1 text-sm text-neutral-500">Guidance used when researching and composing your application. Category definitions control resume selection.</p></div>
+    <section className={`${panel} space-y-4 p-5`}><div><h2 className="font-semibold">Your search and application preferences</h2><p className="mt-1 text-sm text-neutral-500">Roles, industries and location guide external search and application research. Category definitions control resume selection.</p></div>
       {([{ key: "target_roles", label: "Roles you want", limit: 2000 }, { key: "preferred_industries", label: "Preferred industries", limit: 2000 }, { key: "location_preferences", label: "Location and eligibility notes", limit: 2000 }, { key: "application_notes", label: "Resume and writing preferences", limit: 4000 }] as const).map(field => <label key={field.key} className="block text-sm font-medium">{field.label}<textarea className={`${input} mt-2 min-h-20`} value={config[field.key]} maxLength={field.limit} onChange={e => update(field.key, e.target.value)} /></label>)}
       <label className="flex items-center gap-3 text-sm"><input type="checkbox" className="h-4 w-4 accent-neutral-900" checked={config.prefer_overseas_employers} onChange={e => update("prefer_overseas_employers", e.target.checked)} />Prioritize companies based abroad, including those hiring in India</label>
     </section>
