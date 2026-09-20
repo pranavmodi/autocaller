@@ -5,6 +5,7 @@ import asyncio
 import hashlib
 import json
 import random
+import re
 import uuid
 from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
@@ -121,6 +122,8 @@ class Decision(BaseModel):
     direct_pi_employer: bool = False
     legal_domain_employer: bool = False
     legal_domain_kind: Literal["law_firm", "legal_tech", "legal_services", "unclear"] = "unclear"
+    preferred_industry_employer: bool = False
+    matched_preferred_industry: str | None = None
     technology_role: bool
     title: str
     requisition_id: str | None = None
@@ -149,6 +152,47 @@ class Decision(BaseModel):
 
 def now_utc():
     return datetime.now(timezone.utc)
+
+
+def preferred_industry_labels(profile: SearchProfile) -> list[str]:
+    """Parse the operator's configurable employer industries without inventing taxonomy."""
+    labels = []
+    seen = set()
+    for value in re.split(r"[,;\n]+", profile.preferred_industries):
+        label = " ".join(value.split())
+        key = label.casefold()
+        if label and key not in seen:
+            labels.append(label)
+            seen.add(key)
+    return labels
+
+
+def profile_queries(profile: SearchProfile, day_number: int) -> list[str]:
+    """Search every configured industry and add a legal specialist query when relevant."""
+    industries = preferred_industry_labels(profile)
+    configured = [
+        f'"{industry}" ("AI engineer" OR "AI agent" OR "workflow automation" OR "applied AI") remote Colombia LATAM'
+        for industry in industries
+    ]
+    legal_configured = any(any(term in industry.casefold() for term in (
+        "legal", "law firm", "personal injury",
+    )) for industry in industries)
+    specialist = [LEGAL_AI_QUERIES[day_number % len(LEGAL_AI_QUERIES)]] if legal_configured else []
+    return list(dict.fromkeys([*configured, *specialist]))
+
+
+def configured_legacy_legal_match(decision: Decision, profile: SearchProfile) -> bool:
+    """Honor older legal-domain decisions only when settings still allow that domain."""
+    labels = [" ".join(label.split()).casefold() for label in preferred_industry_labels(profile)]
+    terms = {
+        "law_firm": ("law firm", "personal injury", "legal services"),
+        "legal_tech": ("legal tech", "legal technology"),
+        "legal_services": ("legal service",),
+        "unclear": (),
+    }[decision.legal_domain_kind]
+    if decision.direct_pi_employer:
+        terms = (*terms, "personal injury")
+    return decision.legal_domain_employer and any(term in label for label in labels for term in terms)
 
 
 async def ensure_tables():
@@ -433,9 +477,18 @@ def validate_decision(decision: Decision, pages: list[dict], *, today: date,
         if evidence and " ".join(evidence.text.split()).casefold() not in content.get(str(evidence.source_url), ""):
             raise ValueError(f"{field} excerpt not found in fetched source")
     if decision.status == "active":
-        employer_matches = decision.legal_domain_employer if search_profile else decision.direct_pi_employer
+        if search_profile and decision.preferred_industry_employer:
+            configured = {" ".join(label.split()).casefold() for label in preferred_industry_labels(search_profile)}
+            matched = " ".join((decision.matched_preferred_industry or "").split()).casefold()
+            if not matched or matched not in configured:
+                raise ValueError("matched preferred industry is not present in the saved search profile")
+        elif decision.matched_preferred_industry:
+            raise ValueError("matched preferred industry requires preferred_industry_employer")
+        employer_matches = ((decision.preferred_industry_employer
+                             or configured_legacy_legal_match(decision, search_profile))
+                            if search_profile else decision.direct_pi_employer)
         if not employer_matches or not decision.technology_role:
-            raise ValueError("not a verified legal-domain technology role" if search_profile
+            raise ValueError("not a verified preferred-industry technology role" if search_profile
                              else "not a direct PI technology role")
         if not all((decision.employer_evidence, decision.role_evidence, decision.status_evidence)):
             raise ValueError("active job lacks required live evidence")
@@ -659,10 +712,12 @@ async def execute(run_id: str, config: SearchConfig, *, seed_only: bool, audit: 
         sources = [] if search_profile else list(config.source_urls)
         offset = day_number % max(1, len(sources))
         sources = (sources[offset:] + sources[:offset])[:config.max_sources] if sources else []
-        queries = LEGAL_AI_QUERIES if search_profile else PI_QUERIES
+        queries = profile_queries(search_profile, day_number) if search_profile else [
+            PI_QUERIES[(day_number + i) % len(PI_QUERIES)] for i in range(3)
+        ]
         result = await llm({"mode": "discovery", "window_start": (now.date() - timedelta(days=30)).isoformat(),
             "window_end": now.date().isoformat(), "search_profile": search_profile.model_dump(mode="json") if search_profile else None,
-            "queries": [queries[(day_number + i) % len(queries)] for i in range(3)],
+            "queries": queries,
             "career_sources": [str(s) for s in sources], "max_candidates": config.max_candidates,
             "max_sources": config.max_sources}, "candidates", config, audit, run_id)
         if not isinstance(result["candidates"], list):

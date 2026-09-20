@@ -41,8 +41,9 @@ the same Job Agent workflow. CLI parity is `job-agent open-listing --firm-id ID
 --source-url URL --title TITLE [--job-id ID --location LOCATION]`. This resolves
 the canonical stored posting and does not classify, prepare or send by itself.
 `job-agent search` starts public-source discovery using the saved target roles,
-preferred industries and location preferences. It searches law firms, legal-tech
-companies and legal-service providers for AI/agent/automation roles, verifies the
+preferred industries and location preferences. Comma-, semicolon-, or line-separated
+preferred industries define the employer industries that discovery queries and the
+verifier may accept. It searches those employers for AI/agent/automation roles, verifies the
 employer, live role and geographic claims, skips exact jobs already discovered,
 and imports verified new rows into the review queue. It does not classify, prepare,
 email or submit. The UI's **Search now** button invokes the same command path.

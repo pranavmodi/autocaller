@@ -15,10 +15,13 @@ career sources. Discover NEW employers as well as known firms. Limit this run
 to the supplied max_candidates and source budget; these are processing budgets,
 not a claim that the result set is exhaustive. When search_profile is present,
 use its target roles, preferred industries, location preferences and employer
-preference. Qualifying employers include law firms, legal-tech product companies
-and legal-service providers. The role itself must build or lead AI agents,
-applied AI, workflow automation, data/ML systems or closely related technical
-products in the legal domain. When search_profile is null, retain the scheduled
+preference. Treat each comma-, semicolon-, or line-separated preferred industry
+as an allowed employer industry. This is operator configuration, not a suggestion:
+a company outside those industries does not qualify. Law firms, legal-tech product
+companies and legal-service providers qualify only when one of those industries is
+configured. The role itself must build or lead AI agents, applied AI, workflow
+automation, data/ML systems or closely related technical products. When
+search_profile is null, retain the scheduled
 search's narrower focus on direct personal-injury law-firm technology roles.
 Exclude ordinary attorneys, paralegals, case managers or intake agents merely
 USING software. Do not conflate an unnamed recruiter with the actual employer.
@@ -30,8 +33,8 @@ are allowed but must not acquire an invented posting date.
 Return {"candidates": [{"firm_name": "...", "canonical_domain": "firm.com",
 "source_url": "https://...specific-job", "employer_evidence_url":
 "https://firm.com/about-or-careers", "title": "..."}]}. The evidence URL must
-be the employer's own site showing its legal-domain identity. For the scheduled
-PI search it must specifically show the firm's personal-injury identity. Every source URL must identify
+be the employer's own site showing its configured-industry identity. For the
+scheduled PI search it must specifically show the firm's personal-injury identity. Every source URL must identify
 a specific role, not just a generic careers board. Up to max_candidates only.
 No claims of active status from search snippets alone; a separate live verifier
 will check candidates.
@@ -67,10 +70,16 @@ Each decision must contain:
 - candidate_id; status: active|closed|unverified; reason (string).
 - direct_pi_employer (boolean); legal_domain_employer (boolean);
   legal_domain_kind: law_firm|legal_tech|legal_services|unclear;
+  preferred_industry_employer (boolean); matched_preferred_industry (string or
+  null). Set preferred_industry_employer true only when the official employer
+  evidence establishes that the employer operates in a configured preferred
+  industry. Copy matched_preferred_industry exactly from the supplied
+  search_profile.preferred_industries list; do not invent or broaden a category.
   technology_role (boolean). A qualifying Job Agent profile result requires
-  legal_domain_employer and technology_role. A scheduled PI result additionally
-  requires direct_pi_employer. A broad company serving many industries is not
-  legal-domain merely because the role description mentions one legal customer.
+  preferred_industry_employer and technology_role. legal_domain_employer remains
+  descriptive and does not bypass the operator's configured industry list.
+  A scheduled PI result requires direct_pi_employer. A broad company serving an
+  industry is not part of that industry merely because a role mentions one customer.
 - title; requisition_id (string or null); ats_provider (string or null).
 - posted_date (YYYY-MM-DD or null): ONLY original employer publication.
 - ats_created_at, ats_updated_at (ISO timestamps or null): never substitute
@@ -95,7 +104,9 @@ Each decision must contain:
   EXACT excerpt from supplied content}. Active decisions REQUIRE employer,
   role and active-job status evidence. Non-unknown geography requires geography
   evidence; a posted date requires date evidence. Never invent quotes or dates.
-Keep excerpts short. Unknown values are null/unknown, not guessed. Explain
+For a preferred-industry match, employer_evidence must establish both employer
+identity and the claimed industry from an official employer page. Keep excerpts
+short. Unknown values are null/unknown, not guessed. Explain
 conflicts in reason/geography_note. Preserve meaningful differences between a
 firm role and a group technology subsidiary; reject unnamed client employers.
 

@@ -11,6 +11,7 @@ from pydantic import ValidationError
 
 from app.api.job_agent import router
 from app.services import job_agent as service
+from app.services import daily_career_search as career_search
 
 
 def test_identity_ignores_tracking_but_is_employer_scoped():
@@ -63,6 +64,75 @@ def test_rejects_unsafe_source_links(url):
 def test_configuration_rejects_invalid_or_unimplemented_controls(changes):
     with pytest.raises(ValidationError):
         service.JobAgentConfig(**changes)
+
+
+def _career_pages():
+    return [
+        {"requested_url": "https://imaging.example/about", "content": "Precise Imaging provides medical imaging services."},
+        {"requested_url": "https://imaging.example/jobs/1", "content": "Build AI agents. Apply for AI Engineer."},
+    ]
+
+
+def _career_decision(**changes):
+    values = {
+        "candidate_id": "0", "status": "active", "reason": "Primary sources", "technology_role": True,
+        "title": "AI Engineer", "preferred_industry_employer": True,
+        "matched_preferred_industry": "medical imaging",
+        "employer_evidence": {"source_url": "https://imaging.example/about", "text": "medical imaging services"},
+        "role_evidence": {"source_url": "https://imaging.example/jobs/1", "text": "Build AI agents"},
+        "status_evidence": {"source_url": "https://imaging.example/jobs/1", "text": "Apply for AI Engineer"},
+    }
+    values.update(changes)
+    return career_search.Decision(**values)
+
+
+def test_manual_search_verifier_uses_configured_preferred_industries():
+    profile = career_search.SearchProfile(
+        target_roles="AI agents", preferred_industries="Legal technology, medical imaging; medical insurance firms",
+        location_preferences="Remote from Colombia",
+    )
+    decision = _career_decision()
+    career_search.validate_decision(decision, _career_pages(), today=datetime(2026, 9, 20).date(), search_profile=profile)
+    with pytest.raises(ValueError, match="saved search profile"):
+        career_search.validate_decision(
+            decision.model_copy(update={"matched_preferred_industry": "pharmaceuticals"}),
+            _career_pages(), today=datetime(2026, 9, 20).date(), search_profile=profile,
+        )
+    with pytest.raises(ValueError, match="direct PI"):
+        scheduled = decision.model_copy(update={
+            "preferred_industry_employer": False, "matched_preferred_industry": None,
+        })
+        career_search.validate_decision(scheduled, _career_pages(), today=datetime(2026, 9, 20).date())
+
+    legacy_legal = decision.model_copy(update={
+        "preferred_industry_employer": False,
+        "matched_preferred_industry": None,
+        "legal_domain_employer": True,
+        "legal_domain_kind": "legal_tech",
+    })
+    career_search.validate_decision(
+        legacy_legal, _career_pages(), today=datetime(2026, 9, 20).date(),
+        search_profile=profile.model_copy(update={"preferred_industries": "Legal technology"}),
+    )
+    with pytest.raises(ValueError, match="preferred-industry"):
+        career_search.validate_decision(
+            legacy_legal, _career_pages(), today=datetime(2026, 9, 20).date(),
+            search_profile=profile.model_copy(update={"preferred_industries": "medical imaging"}),
+        )
+
+
+def test_manual_search_queries_cover_each_configured_industry():
+    profile = career_search.SearchProfile(
+        target_roles="AI agents", preferred_industries="Legal technology, medical imaging, medical insurance firms",
+        location_preferences="Remote from Colombia",
+    )
+    queries = career_search.profile_queries(profile, 1)
+    assert any('\"medical imaging\"' in query for query in queries)
+    assert any('\"medical insurance firms\"' in query for query in queries)
+    medical_only = career_search.profile_queries(
+        profile.model_copy(update={"preferred_industries": "medical imaging"}), 1,
+    )
+    assert len(medical_only) == 1 and '"medical imaging"' in medical_only[0]
 
 
 @pytest.mark.asyncio

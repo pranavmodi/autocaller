@@ -42,8 +42,10 @@ official Zoho CLI.
 
 **Search now** / `job-agent search` starts a background public-source search using
 the saved target roles, preferred industries, location preferences and overseas-
-employer preference. It covers law firms, legal-tech companies and legal-service
-providers, then requires exact source evidence for employer identity, the live role,
+employer preference. Comma-, semicolon-, or line-separated preferred industries
+are the verifier's allowed employer industries and generate industry-specific
+discovery queries. This supports legal, healthcare, medical-imaging, insurance, or
+other industries without a code change. It then requires exact source evidence for employer identity, the live role,
 technical responsibilities and every non-unknown geography claim. Results are added
 to the existing local job store and the durable collection worker imports them into
 this queue. Searching never classifies, prepares, sends, or submits an application.
