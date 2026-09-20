@@ -20,11 +20,12 @@ from sqlalchemy.dialects.postgresql import JSONB, insert
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import AsyncSessionLocal, Base, async_engine
-from app.services.career_job_store import source_identity
+from app.services.career_job_store import PROVIDER, source_identity
 from app.services.job_agent_resumes import ResumeCategory, default_categories, inspect_resume
 
 
 ReviewStatus = Literal["new", "shortlisted", "needs_info", "skipped"]
+JobSource = Literal["possibleos", "external_search"]
 
 
 def now():
@@ -199,7 +200,7 @@ def legacy_candidate_id(posting: dict) -> str:
 
 
 def serialize_candidate(row):
-    return {"id": row.id, "posting": row.posting, "status": row.status,
+    return {"id": row.id, "posting": normalize_posting(row.posting), "status": row.status,
             "note": row.note, "revision": row.revision,
             "created_at": row.created_at.isoformat(), "updated_at": row.updated_at.isoformat(),
             "decision_source": "operator" if row.status != "new" or row.note else None,
@@ -363,8 +364,16 @@ async def snapshot_source(session, run):
     run.snapshot_ready = True
 
 
+def posting_source(posting: dict) -> JobSource:
+    """Classify durable provenance while remaining compatible with older rows."""
+    if posting.get("job_source") == "external_search" or posting.get("discovery_provider") == PROVIDER:
+        return "external_search"
+    return "possibleos"
+
+
 def normalize_posting(posting):
     posting = dict(posting)
+    posting["job_source"] = posting_source(posting)
     raw = posting.get("posted_date")
     try:
         posting["posted_date"] = date.fromisoformat(str(raw)).isoformat() if raw else None
@@ -567,7 +576,9 @@ async def review(identity: str, request: ReviewUpdate):
 JobOrder = Literal["posted_desc", "posted_asc", "found_desc"]
 
 
-async def candidates(status: ReviewStatus | None = None, search: str = "", page: int = 1, order: JobOrder = "posted_desc", category: str = ""):
+async def candidates(status: ReviewStatus | None = None, search: str = "", page: int = 1,
+                     order: JobOrder = "posted_desc", category: str = "",
+                     source: JobSource | None = None):
     from app.services.job_agent_processing import JobProcessing, attach_details
     await ensure_tables()
     query = select(JobAgentCandidate)
@@ -579,6 +590,16 @@ async def candidates(status: ReviewStatus | None = None, search: str = "", page:
             query = query.where(JobProcessing.classification['category_id'].astext == category)
     if status:
         query = query.where(JobAgentCandidate.status == status)
+    if source:
+        stored_source = JobAgentCandidate.posting["job_source"].astext
+        provider = JobAgentCandidate.posting["discovery_provider"].astext
+        derived_source = case(
+            (stored_source == "external_search", "external_search"),
+            (stored_source == "possibleos", "possibleos"),
+            (provider == PROVIDER, "external_search"),
+            else_="possibleos",
+        )
+        query = query.where(derived_source == source)
     if search.strip():
         phrase = f"%{search.strip()}%"
         query = query.where(JobAgentCandidate.posting["firm_name"].astext.ilike(phrase)

@@ -176,7 +176,7 @@ inherit daemon authentication. UI overview and queue poll every 15 seconds; the 
 | POST `/api/job-agent/collect` | `job-agent collect` |
 | POST `/api/job-agent/search` | `job-agent search` |
 | POST `/api/job-agent/listings/open` | `job-agent open-listing --firm-id ID --source-url URL --title TITLE [...]` |
-| GET `/api/job-agent/jobs` | `job-agent jobs [--status shortlisted --search AI --page 1 --order posted_desc]` |
+| GET `/api/job-agent/jobs` | `job-agent jobs [--status shortlisted --search AI --page 1 --order posted_desc --source external_search]` |
 | POST `/api/job-agent/jobs/{id}/review` | `job-agent review ID --revision N --status shortlisted --note "…"` |
 | GET `/api/job-agent/events?page=1` | `job-agent events --page 1` |
 | GET `/api/job-agent/resumes` | `job-agent resumes` |
@@ -190,7 +190,11 @@ inherit daemon authentication. UI overview and queue poll every 15 seconds; the 
 | POST `/api/job-agent/sync-comms` | `job-agent sync-comms` |
 
 Use `processing_revision` from `show` for category/application actions. `jobs` also
-accepts `--category CATEGORY` or `--category needs_review`.
+accepts `--category CATEGORY` or `--category needs_review`, and `--source
+external_search|possibleos`. Search-produced jobs store `job_source=external_search`;
+listings collected from the wider Possible OS firm directory store
+`job_source=possibleos`. Older rows are derived from their discovery provider and
+receive the explicit field on the next normal sync.
 `sync-comms` repairs historical `sent_verified` and `delivery_unconfirmed` application
 records in Communications without sending or changing mailbox state.
 

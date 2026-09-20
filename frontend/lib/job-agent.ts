@@ -1,6 +1,7 @@
 import { apiUrl } from "@/lib/api";
 
 export type ReviewStatus = "new" | "shortlisted" | "needs_info" | "skipped";
+export type JobSource = "possibleos" | "external_search";
 export type JobAgentConfig = {
   classification_enabled: boolean;
   classification_threshold: number;
@@ -36,6 +37,7 @@ export type Candidate = {
     location?: string; work_arrangement?: string; posted_date?: string;
     last_checked_at?: string; status?: string; remote_scope?: string;
     colombia_eligibility?: string; technology_mentions?: string[];
+    job_source?: JobSource; discovery_provider?: string;
   };
 };
 export type CollectionRun = {

@@ -60,8 +60,12 @@ def register(app, get, post, console):
         }))
 
     @group.command("jobs")
-    def jobs(status: str = typer.Option(None), search: str = typer.Option(""), page: int = typer.Option(1, min=1), order: str = typer.Option("posted_desc"), category: str = typer.Option("")):
-        output(get("/api/job-agent/jobs", status=status, search=search, page=page, order=order, category=category))
+    def jobs(status: str = typer.Option(None), search: str = typer.Option(""),
+             page: int = typer.Option(1, min=1), order: str = typer.Option("posted_desc"),
+             category: str = typer.Option(""), source: str = typer.Option(None)):
+        """Read the queue, optionally filtering by possibleos or external_search provenance."""
+        output(get("/api/job-agent/jobs", status=status, search=search, page=page,
+                   order=order, category=category, source=source))
 
     @group.command("review")
     def review(identity: str, status: str = typer.Option(...), revision: int = typer.Option(..., min=1), note: str = typer.Option("")):

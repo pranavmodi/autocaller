@@ -11,7 +11,9 @@ Full reference: `docs/cli.md` (read it for anything not covered here).
 
 Job application workspace: `/job-agent`. Use `bin/possibleos job-agent status`,
 `config`, `configure --file preferences.json`, `collect`, `jobs --order posted_desc
---category ai_automation --page 1`, `review`, and `events --page 1`. Collection is
+--category ai_automation --source external_search --page 1`, `review`, and `events
+--page 1`. Source values are `external_search` for Job Agent/public search and
+`possibleos` for the wider stored firm listings. Collection is
 uncapped/resumable. Bulk classification is off by default; `classify ID` requests
 classification for that job only and maps responsibilities to editable category/PDF
 settings. Classification uses the isolated `openclaw/neo` lane with a bounded

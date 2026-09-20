@@ -120,6 +120,11 @@ def test_posting_date_normalization(raw, expected):
     assert service.normalize_posting({"posted_date": raw})["posted_date"] == expected
 
 
+def test_posting_source_normalization_supports_existing_search_rows():
+    assert service.normalize_posting({"discovery_provider": "possibleos_daily_career_search"})["job_source"] == "external_search"
+    assert service.normalize_posting({})["job_source"] == "possibleos"
+
+
 @pytest.mark.asyncio
 async def test_api_defaults_to_posting_date_and_rejects_unknown_sort(monkeypatch):
     handler = AsyncMock(return_value={"items": [], "total": 0})
@@ -128,8 +133,11 @@ async def test_api_defaults_to_posting_date_and_rejects_unknown_sort(monkeypatch
     app.include_router(router)
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url="http://test") as client:
         assert (await client.get("/api/job-agent/jobs")).status_code == 200
-        handler.assert_awaited_once_with(None, "", 1, "posted_desc", "")
+        handler.assert_awaited_once_with(None, "", 1, "posted_desc", "", None)
         assert (await client.get("/api/job-agent/jobs?order=random")).status_code == 422
+        assert (await client.get("/api/job-agent/jobs?source=external_search")).status_code == 200
+        assert handler.await_args.args[-1] == "external_search"
+        assert (await client.get("/api/job-agent/jobs?source=unknown")).status_code == 422
         assert (await client.get("/api/job-agent/events?page=0")).status_code == 422
 
 
@@ -158,6 +166,7 @@ async def test_durable_uncapped_collection_sorting_pause_retry_and_history(monke
     postings[1]["posted_date"] = "2026-09-16"
     postings[2]["posted_date"] = "unknown"
     postings[3]["source_url"] = "invalid"
+    postings[4]["discovery_provider"] = "possibleos_daily_career_search"
 
     async def source_update():
         async with engine.begin() as conn:
@@ -225,6 +234,9 @@ async def test_durable_uncapped_collection_sorting_pause_retry_and_history(monke
         assert result["added"] == 603 and result["invalid"] == 1
         assert result["status"] == "completed_with_errors"
         assert (await service.candidates())["total"] == 604
+        searched = await service.candidates(source="external_search")
+        assert searched["total"] == 1 and searched["items"][0]["posting"]["job_source"] == "external_search"
+        assert (await service.candidates(source="possibleos"))["total"] == 603
         preserved = (await service.candidates("shortlisted"))["items"][0]
         assert preserved["note"] == "Preserve my decision" and preserved["email_status"] == "not_tracked"
         with pytest.raises(ValueError, match="changed"):
