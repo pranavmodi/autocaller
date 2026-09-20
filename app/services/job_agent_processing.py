@@ -18,6 +18,7 @@ from sqlalchemy import DateTime, Integer, String, func, select, text
 from sqlalchemy.dialects.postgresql import JSONB, insert
 from sqlalchemy.orm import Mapped, mapped_column
 
+from app.db.models import FirmContactRow
 from app.services import job_agent as core
 from app.services.job_agent_resumes import RESUME_ROOT, inspect_resume, resolve_resume
 from app.services.llm_gateway import LLMGatewayError, call_skill_json
@@ -101,7 +102,31 @@ async def attach_details(session, rows):
     config = core.saved_config(state.config) if state else core.JobAgentConfig()
     processing = {row.candidate_id: row for row in (await session.scalars(select(JobProcessing).where(
         JobProcessing.candidate_id.in_([r.id for r in rows])))).all()}
-    return [{**core.serialize_candidate(row), **processing_view(processing.get(row.id), config)} for row in rows]
+    firm_ids = {str(row.posting.get('firm_id') or '') for row in rows if row.posting.get('firm_id')}
+    contacts_by_firm = {firm_id: [] for firm_id in firm_ids}
+    if firm_ids:
+        contacts = (await session.scalars(select(FirmContactRow).where(
+            FirmContactRow.pif_id.in_(firm_ids), FirmContactRow.email.isnot(None),
+        ))).all()
+        for contact in contacts:
+            contacts_by_firm.setdefault(str(contact.pif_id), []).append(contact)
+    from app.services.job_agent_research import rank_possibleos_contacts, website_host
+    items = []
+    for row in rows:
+        serialized = core.serialize_candidate(row)
+        posting = serialized['posting']
+        firm_id = str(posting.get('firm_id') or '')
+        official_host = website_host(posting.get('website') or posting.get('employer_evidence_url'))
+        ranked = rank_possibleos_contacts(contacts_by_firm.get(firm_id, []), official_host, {firm_id})
+        best = ranked[0] if ranked else None
+        contact_view = {
+            'available': bool(best),
+            'count': len(ranked),
+            'best': ({key: best[key] for key in ('contact_id', 'email', 'name', 'title', 'kind', 'source')}
+                     if best else None),
+        }
+        items.append({**serialized, **processing_view(processing.get(row.id), config), 'contact': contact_view})
+    return items
 
 
 async def detail(identity):

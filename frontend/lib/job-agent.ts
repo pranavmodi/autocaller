@@ -32,6 +32,9 @@ export type Candidate = {
   id: string; status: ReviewStatus; note: string; revision: number;
   created_at: string; updated_at: string; decision_source: string | null;
   email_status: string; form_status: string;
+  contact?: { available: boolean; count: number; best: null | {
+    contact_id: string; email: string; name: string; title: string; kind: "recruiting" | "routing"; source: string;
+  } };
   posting: {
     firm_name: string; title: string; source_url: string; description_summary: string;
     location?: string; work_arrangement?: string; posted_date?: string;
@@ -58,6 +61,7 @@ export type Overview = {
       result: {
         new_jobs?: number; verified?: number; closed?: number; duplicates_skipped?: number;
         errors?: unknown[]; manual_search?: boolean; search_profile?: Record<string, unknown>;
+        contacts_found?: number; contacts_inserted?: number;
         interrupted_reason?: "backend_restart";
         [key: string]: unknown;
       } }[];

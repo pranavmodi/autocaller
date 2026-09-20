@@ -45,7 +45,10 @@ preferred industries and location preferences. Comma-, semicolon-, or line-separ
 preferred industries define the employer industries that discovery queries and the
 verifier may accept. It searches those employers for AI/agent/automation roles, verifies the
 employer, live role and geographic claims, skips exact jobs already discovered,
-and imports verified new rows into the review queue. It does not classify, prepare,
+and imports verified new rows into the review queue. Officially published recruiting
+and routing emails are source-checked and stored once in `firm_contacts`; every role
+for that firm reuses them. `jobs --order contact_desc` puts firms with known emails
+first. It does not classify, prepare,
 email or submit. The UI's **Search now** button invokes the same command path.
 No automatic inbox-referral handling or portal submissions. Inline PDF preview is
 browser-only; `resumes` / `show` return file paths relative to `/home/pranav/resume`

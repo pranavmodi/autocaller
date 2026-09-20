@@ -1,6 +1,6 @@
 ---
 name: legal-technology-career-search
-description: Evidence-backed discovery of legal-domain technology roles for a saved Job Agent profile or the scheduled PI search.
+description: Evidence-backed discovery of technology roles across a saved Job Agent profile's configured industries, or the scheduled PI search.
 ---
 
 # Legal technology career search v2
@@ -32,12 +32,17 @@ are allowed but must not acquire an invented posting date.
 
 Return {"candidates": [{"firm_name": "...", "canonical_domain": "firm.com",
 "source_url": "https://...specific-job", "employer_evidence_url":
-"https://firm.com/about-or-careers", "title": "..."}]}. The evidence URL must
+"https://firm.com/about-or-careers", "title": "...", "contact_urls":
+["https://firm.com/careers-or-contact"]}]}. The evidence URL must
 be the employer's own site showing its configured-industry identity. For the
 scheduled PI search it must specifically show the firm's personal-injury identity. Every source URL must identify
 a specific role, not just a generic careers board. Up to max_candidates only.
 No claims of active status from search snippets alone; a separate live verifier
-will check candidates.
+will check candidates. contact_urls are optional official-employer pages that
+appear to publish a recruiting email or a suitable general routing email. Use an
+empty array when none is found. Never include third-party people databases,
+guessed addresses, accessibility/accommodation mailboxes, or an address inferred
+from an email pattern.
 
 ## Retry discovery mode
 `retry_discovery` recovers historical failed candidates whose raw inputs were
@@ -104,6 +109,16 @@ Each decision must contain:
   EXACT excerpt from supplied content}. Active decisions REQUIRE employer,
   role and active-job status evidence. Non-unknown geography requires geography
   evidence; a posted date requires date evidence. Never invent quotes or dates.
+- application_contacts: array of zero or more {email, name, title,
+  kind: recruiting|routing, evidence: {source_url, text}}. Include only addresses
+  printed verbatim on a supplied freshly fetched page and using the verified
+  employer's email domain. Recruiting contacts include recruiting, careers, jobs,
+  talent, HR, people-operations mailboxes or people with those titles. Routing
+  contacts include suitable general office/contact/admin mailboxes or firm leaders
+  and operations leaders who can route an application. Exclude privacy, security,
+  billing, press, patient, medical-records, accessibility and accommodation
+  addresses. Evidence must include the exact email and the text establishing its
+  recruiting or routing purpose. Never guess or synthesize an address.
 For a preferred-industry match, employer_evidence must establish both employer
 identity and the claimed industry from an official employer page. Keep excerpts
 short. Unknown values are null/unknown, not guessed. Explain

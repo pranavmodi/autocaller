@@ -10,14 +10,15 @@ import uuid
 from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 from typing import Literal
+from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, model_validator
-from sqlalchemy import select, text
+from sqlalchemy import func, select, text
 from sqlalchemy.dialects.postgresql import insert
 
 from app.db import AsyncSessionLocal, async_engine
-from app.db.models import CareerSearchRunRow, CareerSearchStateRow, PifFirmRow
+from app.db.models import CareerSearchRunRow, CareerSearchStateRow, FirmContactRow, PifFirmRow
 from app.services.career_job_store import PROVIDER, job_id, merge_career_postings, source_identity, same_job
 from app.services.career_search_web import fetch_page
 from app.services.llm_gateway import call_skill_json, prompt_cache_metrics, LLMGatewayResponseError
@@ -81,7 +82,7 @@ class SearchConfig(BaseModel):
 class SearchProfile(BaseModel):
     """Operator intent for a manual Job Agent search; never grants application authority."""
     model_config = ConfigDict(extra="forbid", strict=True)
-    name: str = Field("Job Agent legal AI search", min_length=1, max_length=120)
+    name: str = Field("Job Agent target-job search", min_length=1, max_length=120)
     target_roles: str = Field(min_length=1, max_length=2000)
     preferred_industries: str = Field(min_length=1, max_length=2000)
     location_preferences: str = Field(min_length=1, max_length=2000)
@@ -94,6 +95,7 @@ class CandidateFields(BaseModel):
     source_url: HttpUrl
     employer_evidence_url: HttpUrl
     title: str = Field(min_length=1, max_length=300)
+    contact_urls: list[HttpUrl] = Field(default_factory=list, max_length=5)
 
 
 class Candidate(CandidateFields):
@@ -106,6 +108,10 @@ class Candidate(CandidateFields):
             raise ValueError("official domain must match employer identity evidence")
         if any(domain == host or domain.endswith("." + host) for host in SHARED_RECRUITING_DOMAINS):
             raise ValueError("shared recruiting platform cannot be the canonical employer domain")
+        for url in self.contact_urls:
+            contact_domain = normalize_domain(str(url))
+            if contact_domain != domain and not contact_domain.endswith("." + domain):
+                raise ValueError("contact source must use the official employer domain")
         self.canonical_domain = domain
         return self
 
@@ -113,6 +119,15 @@ class Candidate(CandidateFields):
 class Excerpt(BaseModel):
     source_url: HttpUrl
     text: str = Field(min_length=1, max_length=1200)
+
+
+class ApplicationContact(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    email: str = Field(pattern=r"^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$", max_length=320)
+    name: str = Field("", max_length=255)
+    title: str = Field("", max_length=255)
+    kind: Literal["recruiting", "routing"]
+    evidence: Excerpt
 
 
 class Decision(BaseModel):
@@ -148,6 +163,7 @@ class Decision(BaseModel):
     status_evidence: Excerpt | None = None
     geography_evidence: Excerpt | None = None
     date_evidence: Excerpt | None = None
+    application_contacts: list[ApplicationContact] = Field(default_factory=list, max_length=12)
 
 
 def now_utc():
@@ -335,7 +351,7 @@ async def llm(payload: dict, required: str, config: SearchConfig, audit: dict, r
                 model="openclaw/main", timeout_s=420, max_tokens=9000, retries=1,
                 schema_repair_retries=0 if verification or payload["mode"] == "candidate_repair" else 1,
                 attempt_observer=observe_attempt,
-                prompt_cache_key="possibleos:legal-career-search:v2")
+                prompt_cache_key="possibleos:career-search:v3")
             audit["usage"].append(response.usage or {})
             audit.setdefault("prompt_cache_metrics", []).append(prompt_cache_metrics(response.usage))
             if verification:
@@ -498,10 +514,26 @@ def validate_decision(decision: Decision, pages: list[dict], *, today: date,
             raise ValueError("geographic classification lacks evidence")
         if decision.remote_scope == "global" and decision.colombia_eligibility == "restricted":
             raise ValueError("contradictory global and restricted geography")
+        from app.services.job_agent_research import _possibleos_contact_kind, organization_domain_matches
+        official_host = urlsplit(str(decision.employer_evidence.source_url)).hostname or ""
+        for contact in decision.application_contacts:
+            page = next((item for item in pages if item["requested_url"] == str(contact.evidence.source_url)), None)
+            content = page["content"] if page and page.get("http_status", 200) == 200 else ""
+            if contact.email.casefold() not in content.casefold():
+                raise ValueError("application contact email not found in fetched source")
+            if " ".join(contact.evidence.text.split()).casefold() not in " ".join(content.split()).casefold():
+                raise ValueError("application contact evidence excerpt not found in fetched source")
+            if not organization_domain_matches(contact.email, official_host):
+                raise ValueError("application contact email must use the verified employer domain")
+            kind = _possibleos_contact_kind({
+                "email": contact.email, "title": contact.title, "research_title": contact.title,
+            })
+            if not kind or kind[0] != contact.kind:
+                raise ValueError("application contact is not a suitable recruiting or routing contact")
 
 
 def to_posting(candidate: Candidate, decision: Decision, *, checked_at: datetime) -> dict:
-    payload = decision.model_dump(mode="json", exclude={"candidate_id"})
+    payload = decision.model_dump(mode="json", exclude={"candidate_id", "application_contacts"})
     payload.update({"source_url": str(candidate.source_url), "source_name": "Verified employer / ATS",
         "employer_posted_date": payload["posted_date"], "first_seen_at": checked_at.isoformat(),
         "last_checked_at": checked_at.isoformat(), "last_verified_at": checked_at.isoformat(),
@@ -525,7 +557,11 @@ async def ingest(candidate: Candidate, posting: dict) -> dict:
         entity_type = "pi_law_firm" if posting.get("direct_pi_employer") else {
             "law_firm": "law_firm", "legal_tech": "legal_tech_company",
             "legal_services": "legal_services",
-        }.get(posting.get("legal_domain_kind"), "legal_employer")
+        }.get(posting.get("legal_domain_kind"))
+        if not entity_type:
+            entity_type = re.sub(r"[^a-z0-9]+", "_", str(
+                posting.get("matched_preferred_industry") or "company"
+            ).casefold()).strip("_")[:64] or "company"
         created = await upsert_pif_firm({"firm_name": candidate.firm_name, "canonical_website": candidate.canonical_domain,
             "entity_type": entity_type})
         firm_id = created["firm_id"]
@@ -541,6 +577,59 @@ async def ingest(candidate: Candidate, posting: dict) -> dict:
         await session.commit()
     stored = next(p for p in merged if same_job(p, posting))
     return {"firm_id": firm_id, "job_id": stored.get("id"), "added": added, "source_url": posting["source_url"]}
+
+
+async def ingest_application_contacts(firm_id: str, contacts: list[ApplicationContact]) -> dict:
+    """Upsert source-verified firm contacts once so every role can reuse them."""
+    counts = {"verified": len(contacts), "inserted": 0, "updated": 0, "existing": 0}
+    if not contacts:
+        return counts
+    observed_at = now_utc()
+    async with AsyncSessionLocal() as session:
+        for contact in contacts:
+            email = contact.email.strip().casefold()
+            row = await session.scalar(select(FirmContactRow).where(
+                FirmContactRow.pif_id == firm_id,
+                func.lower(FirmContactRow.email) == email,
+            ).limit(1))
+            signal = {
+                "kind": contact.kind,
+                "source_url": str(contact.evidence.source_url),
+                "evidence": contact.evidence.text,
+                "observed_at": observed_at.isoformat(),
+            }
+            if row:
+                changed = False
+                if not row.full_name and contact.name:
+                    row.full_name = contact.name; changed = True
+                if not row.first_name and contact.name:
+                    row.first_name = contact.name.split()[0]; changed = True
+                if not row.title and contact.title:
+                    row.title = contact.title; changed = True
+                if not row.research_title and contact.title:
+                    row.research_title = contact.title; changed = True
+                signals = dict(row.tech_signals or {})
+                if signals.get("job_search_contact") != signal:
+                    signals["job_search_contact"] = signal
+                    row.tech_signals = signals
+                    changed = True
+                counts["updated" if changed else "existing"] += 1
+                continue
+            display_name = contact.name.strip() or ("Recruiting" if contact.kind == "recruiting" else "Office")
+            session.add(FirmContactRow(
+                id=uuid.uuid4().hex,
+                pif_id=firm_id,
+                full_name=display_name,
+                first_name=display_name.split()[0],
+                email=email,
+                title=contact.title or None,
+                research_title=contact.title or None,
+                source="job_search",
+                tech_signals={"job_search_contact": signal},
+            ))
+            counts["inserted"] += 1
+        await session.commit()
+    return counts
 
 
 async def tracked_candidates(limit: int, source_urls: list[str] | None = None) -> list[dict]:
@@ -756,7 +845,24 @@ async def execute(run_id: str, config: SearchConfig, *, seed_only: bool, audit: 
                 employer_page = cache[employer_url]
                 if employer_page["http_status"] != 200:
                     raise ValueError("employer identity page unavailable")
-                batch.append({**item, "candidate_id": str(index), "pages": [job_page, employer_page]})
+                contact_pages = []
+                for contact_url in candidate.contact_urls:
+                    url = str(contact_url)
+                    try:
+                        if url not in cache:
+                            cache[url] = await fetch_page(url)
+                        if cache[url]["http_status"] == 200:
+                            contact_pages.append(cache[url])
+                        else:
+                            audit.setdefault("contact_errors", []).append({
+                                "source_url": url, "error": f"HTTP {cache[url]['http_status']}",
+                            })
+                    except Exception as exc:
+                        audit.setdefault("contact_errors", []).append({
+                            "source_url": url, "error": str(exc)[:1000],
+                        })
+                batch.append({**item, "candidate_id": str(index),
+                              "pages": [job_page, employer_page, *contact_pages]})
             except Exception as exc:
                 audit["errors"].append({"source_url": str(candidate.source_url), "error": str(exc)[:1000]})
                 if item.get("tracked"):
@@ -777,8 +883,12 @@ async def execute(run_id: str, config: SearchConfig, *, seed_only: bool, audit: 
                     posting = to_posting(candidate, decision, checked_at=now_utc())
                     posting["source_urls"] = list(dict.fromkeys([str(candidate.source_url), item["pages"][0]["final_url"]]))
                     stored = await ingest(candidate, posting)
+                    contact_counts = await ingest_application_contacts(stored["firm_id"], decision.application_contacts)
+                    stored["contacts"] = contact_counts
                     audit["new_jobs"] += stored["added"]
                     audit["verified"] += 1
+                    audit["contacts_found"] = audit.get("contacts_found", 0) + contact_counts["verified"]
+                    audit["contacts_inserted"] = audit.get("contacts_inserted", 0) + contact_counts["inserted"]
                     audit["stored"].append(stored)
                     # Revisit newly learned employer sources on subsequent rotating runs.
                     async with AsyncSessionLocal() as session:
@@ -844,6 +954,7 @@ async def run(*, due_only: bool = False, seed_only: bool = False, retry_run: str
                     return {"status": "backoff"}
             audit = {"new_jobs": 0, "verified": 0, "closed": 0, "rejected": 0, "candidates": 0,
                      "duplicates_skipped": 0,
+                     "contacts_found": 0, "contacts_inserted": 0,
                      "llm_calls": 0, "errors": [], "attempt_errors": [], "stored": [], "decisions": [], "usage": [], "prompt_cache_metrics": [], "seed_only": seed_only}
             if search_profile:
                 audit.update({"manual_search": True, "search_profile": search_profile.model_dump(mode="json")})

@@ -70,6 +70,7 @@ def _career_pages():
     return [
         {"requested_url": "https://imaging.example/about", "content": "Precise Imaging provides medical imaging services."},
         {"requested_url": "https://imaging.example/jobs/1", "content": "Build AI agents. Apply for AI Engineer."},
+        {"requested_url": "https://imaging.example/contact", "content": "Careers and recruiting: jobs@imaging.example"},
     ]
 
 
@@ -133,6 +134,48 @@ def test_manual_search_queries_cover_each_configured_industry():
         profile.model_copy(update={"preferred_industries": "medical imaging"}), 1,
     )
     assert len(medical_only) == 1 and '"medical imaging"' in medical_only[0]
+
+
+def test_search_contacts_require_published_employer_domain_and_suitable_purpose():
+    profile = career_search.SearchProfile(
+        target_roles="AI agents", preferred_industries="medical imaging",
+        location_preferences="Remote from Colombia",
+    )
+    contact = {
+        "email": "jobs@imaging.example", "name": "Recruiting", "title": "Careers and recruiting",
+        "kind": "recruiting", "evidence": {
+            "source_url": "https://imaging.example/contact",
+            "text": "Careers and recruiting: jobs@imaging.example",
+        },
+    }
+    decision = _career_decision(application_contacts=[contact])
+    career_search.validate_decision(decision, _career_pages(), today=datetime(2026, 9, 20).date(), search_profile=profile)
+    with pytest.raises(ValueError, match="employer domain"):
+        career_search.validate_decision(
+            _career_decision(application_contacts=[{**contact, "email": "jobs@gmail.com",
+                "evidence": {**contact["evidence"], "text": "Careers and recruiting: jobs@imaging.example jobs@gmail.com"}}]),
+            [*_career_pages()[:-1], {"requested_url": "https://imaging.example/contact",
+                "content": "Careers and recruiting: jobs@imaging.example jobs@gmail.com"}],
+            today=datetime(2026, 9, 20).date(), search_profile=profile,
+        )
+    with pytest.raises(ValueError, match="suitable recruiting or routing"):
+        career_search.validate_decision(
+            _career_decision(application_contacts=[{**contact, "email": "privacy@imaging.example", "kind": "routing",
+                "title": "Privacy", "evidence": {**contact["evidence"], "text": "privacy@imaging.example"}}]),
+            [*_career_pages()[:-1], {"requested_url": "https://imaging.example/contact",
+                "content": "privacy@imaging.example"}],
+            today=datetime(2026, 9, 20).date(), search_profile=profile,
+        )
+
+
+def test_candidate_contact_sources_must_belong_to_employer():
+    with pytest.raises(ValueError, match="official employer domain"):
+        career_search.Candidate(
+            firm_name="Imaging", canonical_domain="imaging.example",
+            source_url="https://jobs.ashbyhq.com/imaging/1",
+            employer_evidence_url="https://imaging.example/about", title="AI Engineer",
+            contact_urls=["https://people-database.example/imaging"],
+        )
 
 
 @pytest.mark.asyncio

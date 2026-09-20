@@ -115,8 +115,8 @@ the selected job by default; applications are sent only through explicit
 |---|---|
 | `job-agent status / config / events [--page 1]` | Inspect the Job agent workspace, saved preferences, search results and audit trail. |
 | `job-agent configure --file preferences.json` | Merge validated preferences with revision conflict protection. |
-| `job-agent search` | Start a non-sending public-source search for legal-domain AI, agent and automation roles using saved role, industry and location preferences. Verified results are deduplicated and imported into the review queue. |
-| `job-agent collect / jobs [--status shortlisted --search AI --page 1 --order posted_desc --source external_search\|possibleos]` | Queue/resume uncapped sync, or read/filter the queue (newest posting date first; unknown dates last). `external_search` means Job Agent/public search; `possibleos` means the wider stored firm listings. |
+| `job-agent search` | Start a non-sending public-source search across the configured employer industries. Verified jobs are deduplicated and verified recruiting/routing contacts are shared through the firm record. |
+| `job-agent collect / jobs [--status shortlisted --search AI --page 1 --order posted_desc\|contact_desc --source external_search\|possibleos]` | Queue/resume uncapped sync, or read/filter the queue. `contact_desc` puts firms with a known email first, then newest. `external_search` means Job Agent/public search; `possibleos` means the wider stored firm listings. |
 | `job-agent open-listing --firm-id ID --source-url URL --title TITLE [--job-id ID --location LOCATION]` | Resolve a canonical Leads job listing into the shared Job Agent record; never prepares or sends. |
 | `job-agent review ID --revision N --status shortlisted --note "…"` | Record an operator review; never sends or submits an application. |
 | `job-agent resumes / show ID` | List local PDFs or inspect category, resume and application state. |

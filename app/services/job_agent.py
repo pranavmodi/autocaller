@@ -15,7 +15,7 @@ from typing import Literal
 from urllib.parse import urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
-from sqlalchemy import DateTime, Integer, String, Boolean, case, delete, func, select, text
+from sqlalchemy import DateTime, Integer, String, Boolean, case, delete, func, or_, select, text
 from sqlalchemy.dialects.postgresql import JSONB, insert
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -275,7 +275,7 @@ async def collect(*, automatic=False):
 def search_profile(config: JobAgentConfig) -> dict:
     """Only operator search intent; application notes and resume data stay out."""
     return {
-        "name": "Job Agent legal AI search",
+        "name": "Job Agent target-job search",
         "target_roles": config.target_roles,
         "preferred_industries": config.preferred_industries,
         "location_preferences": config.location_preferences,
@@ -299,12 +299,14 @@ async def _search_and_import(profile: dict):
             counters = result.get("result") or {}
             session.add(JobAgentEvent(
                 kind="external_search_finished",
-                message=(f"Legal AI search {result.get('status')}: "
+                message=(f"Target-job search {result.get('status')}: "
                          f"{counters.get('new_jobs', 0)} new, "
-                         f"{counters.get('duplicates_skipped', 0)} duplicates skipped"),
+                         f"{counters.get('duplicates_skipped', 0)} duplicates skipped, "
+                         f"{counters.get('contacts_found', 0)} contacts verified"),
                 details={"run_id": result.get("id"), "status": result.get("status"),
                          "new_jobs": counters.get("new_jobs", 0),
-                         "duplicates_skipped": counters.get("duplicates_skipped", 0)},
+                         "duplicates_skipped": counters.get("duplicates_skipped", 0),
+                         "contacts_found": counters.get("contacts_found", 0)},
             ))
             await session.commit()
         return result
@@ -573,7 +575,7 @@ async def review(identity: str, request: ReviewUpdate):
         return serialize_candidate(row)
 
 
-JobOrder = Literal["posted_desc", "posted_asc", "found_desc"]
+JobOrder = Literal["posted_desc", "posted_asc", "found_desc", "contact_desc"]
 
 
 async def candidates(status: ReviewStatus | None = None, search: str = "", page: int = 1,
@@ -609,9 +611,48 @@ async def candidates(status: ReviewStatus | None = None, search: str = "", page:
         posted = JobAgentCandidate.posting["posted_date"].astext
         # Normalized on sync; guard legacy unknown labels while backfill catches up.
         posted = case((posted.op("~")(r"^\d{4}-\d{2}-\d{2}$"), posted), else_=None)
-        ordering = {"posted_desc": posted.desc().nulls_last(), "posted_asc": posted.asc().nulls_last(),
-                    "found_desc": JobAgentCandidate.created_at.desc()}[order]
-        rows = (await session.scalars(query.order_by(ordering, JobAgentCandidate.id)
+        from app.db.models import FirmContactRow
+        from app.services.job_agent_research import (
+            BLOCKED_MAILBOXES, RECRUITING_MAILBOXES, RECRUITING_TERMS,
+            ROUTING_MAILBOXES, ROUTING_TERMS,
+        )
+        email_host = func.lower(func.split_part(FirmContactRow.email, "@", 2))
+        website_host = func.regexp_replace(
+            func.regexp_replace(
+                func.lower(func.coalesce(
+                    JobAgentCandidate.posting["website"].astext,
+                    JobAgentCandidate.posting["employer_evidence_url"].astext,
+                    "",
+                )),
+                r"^https?://(www\.)?", "", "g",
+            ),
+            r"/.*$", "", "g",
+        )
+        mailbox = func.lower(func.split_part(FirmContactRow.email, "@", 1))
+        contact_title = func.lower(func.coalesce(
+            FirmContactRow.research_title, FirmContactRow.title, "",
+        ))
+        suitable_role = or_(
+            mailbox.in_((*RECRUITING_MAILBOXES, *ROUTING_MAILBOXES)),
+            *(contact_title.contains(term) for term in (*RECRUITING_TERMS, *ROUTING_TERMS)),
+        )
+        contact_count = select(func.count(FirmContactRow.id)).where(
+            FirmContactRow.pif_id == JobAgentCandidate.posting["firm_id"].astext,
+            FirmContactRow.email.isnot(None),
+            website_host != "",
+            or_(email_host == website_host,
+                email_host.endswith("." + website_host),
+                website_host.endswith("." + email_host)),
+            mailbox.not_in(BLOCKED_MAILBOXES),
+            suitable_role,
+        ).correlate(JobAgentCandidate).scalar_subquery()
+        ordering = {
+            "posted_desc": (posted.desc().nulls_last(),),
+            "posted_asc": (posted.asc().nulls_last(),),
+            "found_desc": (JobAgentCandidate.created_at.desc(),),
+            "contact_desc": (contact_count.desc(), posted.desc().nulls_last()),
+        }[order]
+        rows = (await session.scalars(query.order_by(*ordering, JobAgentCandidate.id)
                                      .offset((page - 1) * 25).limit(25))).all()
         return {"items": await attach_details(session, rows), "total": total, "page": page,
                 "page_size": 25, "total_pages": (total + 24) // 25}
@@ -643,7 +684,8 @@ async def overview():
                   "runs": [{"id": r["id"], "status": r["status"], "started_at": r["started_at"],
                             "completed_at": r["completed_at"], "result": {k: r["result"].get(k) for k in
                             ("new_jobs", "verified", "closed", "duplicates_skipped", "errors", "attempt_errors",
-                             "verification_rejections", "manual_search", "search_profile", "interrupted_reason")}}
+                             "verification_rejections", "manual_search", "search_profile", "interrupted_reason",
+                             "contacts_found", "contacts_inserted")}}
                            for r in source["runs"]]}
         source_error = None
     except Exception:

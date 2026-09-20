@@ -28,8 +28,8 @@ official Zoho CLI.
   not delete jobs or overwrite operator notes/decisions. Missing-from-source jobs are
   retained; source disappearance alone is not evidence a role closed.
 - The review queue defaults to **Most recently posted**, with unknown/invalid posting
-  dates last and a stable identity tie-breaker. Oldest posted and recently added to
-  queue are alternative orders. Discovery/import time never substitutes for a posting
+  dates last and a stable identity tie-breaker. **Known contact email first**, oldest
+  posted and recently added are alternative orders. Discovery/import time never substitutes for a posting
   date. Queue pages and audit API pages are 25 records; every page remains accessible.
 - Employer-scoped identities use stored job IDs, otherwise source URL/title/location.
   Legacy URL-only IDs and reviews are retained where the role and location match.
@@ -48,7 +48,12 @@ discovery queries. This supports legal, healthcare, medical-imaging, insurance, 
 other industries without a code change. It then requires exact source evidence for employer identity, the live role,
 technical responsibilities and every non-unknown geography claim. Results are added
 to the existing local job store and the durable collection worker imports them into
-this queue. Searching never classifies, prepares, sends, or submits an application.
+this queue. Discovery may also supply official employer contact pages. Recruiting
+or routing emails are accepted only when printed on a fetched official page, use
+the employer domain and have evidence of a suitable purpose. They are stored once
+in `firm_contacts`, so every role attached to that firm reuses the same contacts.
+Existing eligible Possible OS contacts are exposed the same way. Searching never
+classifies, prepares, sends, or submits an application.
 
 Each manual search is a durable career-search run and does not consume the daily PI
 search slot. Exact normalized URLs already discovered are skipped before another
@@ -205,7 +210,8 @@ receive the explicit field on the next normal sync.
 `sync-comms` repairs historical `sent_verified` and `delivery_unconfirmed` application
 records in Communications without sending or changing mailbox state.
 
-Orders: `posted_desc` (default), `posted_asc`, `found_desc` (added to queue).
+Orders: `posted_desc` (default), `contact_desc` (known firm email, then newest),
+`posted_asc`, `found_desc` (added to queue).
 All commands return JSON. `configure` accepts partial preferences and merges using
 the current revision. Collection requests coalesce while a run is in progress.
 
