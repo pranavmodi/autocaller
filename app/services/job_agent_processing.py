@@ -8,7 +8,7 @@ import logging
 import os
 import re
 import shutil
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Literal
 from uuid import uuid4
@@ -26,6 +26,7 @@ from app.services.llm_gateway import LLMGatewayError, call_skill_json
 logger = logging.getLogger(__name__)
 SKILL = Path(__file__).resolve().parents[1] / 'skills/job-application-agent/SKILL.md'
 CLASSIFICATION_BATCH_SIZE = 15
+SENT_RECHECK_DELAYS_SECONDS = (30, 120, 600)
 _wakeup = asyncio.Event()
 
 
@@ -331,6 +332,27 @@ async def set_application(identity, *, status=None, **updates):
         await session.commit()
 
 
+def next_sent_recheck_at(completed_rechecks, *, now=None):
+    """Return the next bounded read-only Sent check, never a send retry."""
+    if completed_rechecks >= len(SENT_RECHECK_DELAYS_SECONDS):
+        return None
+    now = now or core.now()
+    return (now + timedelta(seconds=SENT_RECHECK_DELAYS_SECONDS[completed_rechecks])).isoformat()
+
+
+def sent_recheck_due(application, *, now=None):
+    if int(application.get('verification_rechecks') or 0) >= len(SENT_RECHECK_DELAYS_SECONDS):
+        return False
+    raw = application.get('verification_next_at')
+    if not raw:
+        return False
+    try:
+        due = datetime.fromisoformat(str(raw).replace('Z', '+00:00'))
+    except ValueError:
+        return False
+    return due <= (now or core.now())
+
+
 def safe_slug(value):
     return re.sub(r'[^a-zA-Z0-9_-]+', '_', str(value)).strip('_')[:90] or 'job'
 
@@ -500,19 +522,26 @@ async def send_application(identity, application):
             comms_log_id = await record_application_communication(
                 identity, application, 'sent_verified', verification=verification)
             await set_application(identity, status='sent_verified', stage='Email verified in Zoho Sent', verification=verification,
-                phase='sent_verified', sent_at=core.now().isoformat(), error=None, comms_log_id=comms_log_id)
+                phase='sent_verified', sent_at=core.now().isoformat(), error=None,
+                verification_next_at=None, comms_log_id=comms_log_id)
         else:
+            checked_at = core.now()
             comms_log_id = await record_application_communication(
                 identity, application, 'unverified', error='No matching copy was verified in Zoho Sent.')
             await set_application(identity, status='delivery_unconfirmed', stage='Sent verification needed',
                 phase='verification_needed', retryable=True, comms_log_id=comms_log_id,
+                verification_checked_at=checked_at.isoformat(), verification_rechecks=0,
+                verification_next_at=next_sent_recheck_at(0, now=checked_at),
                 error='The send was attempted, but its Sent copy is not verified. No automatic resend will occur.')
     except Exception as exc:
         logger.warning('Job application send needs verification: %s', type(exc).__name__)
+        checked_at = core.now()
         comms_log_id = await record_application_communication(
             identity, application, 'unverified', error=f'{type(exc).__name__}: {str(exc)[:300]}')
         await set_application(identity, status='delivery_unconfirmed', stage='Sent verification needed',
             phase='verification_needed', retryable=True, comms_log_id=comms_log_id,
+            verification_checked_at=checked_at.isoformat(), verification_rechecks=0,
+            verification_next_at=next_sent_recheck_at(0, now=checked_at),
             error='The send result is uncertain. Check Zoho Sent before any further action; no automatic resend will occur.')
 
 
@@ -529,6 +558,7 @@ async def verify_application(identity):
         await set_application(identity, status='sent_verified', phase='sent_verified',
             stage='Email verified in Zoho Sent', verification=verified,
             verification_checked_at=core.now().isoformat(), error=None, retryable=False,
+            verification_next_at=None,
             comms_log_id=comms_log_id)
     else:
         comms_log_id = await record_application_communication(
@@ -538,6 +568,60 @@ async def verify_application(identity):
             retryable=True, comms_log_id=comms_log_id,
             error='No matching copy was found in Zoho Sent. No resend occurred; check again later or review Zoho Sent manually.')
     return await detail(identity)
+
+
+async def automatic_sent_recheck(identity, application):
+    """Reconcile a delayed Zoho Sent copy. This function has no send path."""
+    from app.services.job_agent_mail import verify_sent
+    checked_at = core.now()
+    verified = await asyncio.to_thread(
+        verify_sent, application['email'], application['attachment']['sha256'])
+    if verified:
+        comms_log_id = await record_application_communication(
+            identity, application, 'sent_verified', verification=verified)
+        await set_application(identity, status='sent_verified', phase='sent_verified',
+            stage='Email verified in Zoho Sent', verification=verified,
+            verification_checked_at=checked_at.isoformat(), verification_next_at=None,
+            error=None, retryable=False, comms_log_id=comms_log_id)
+        return
+    count = int(application.get('verification_rechecks') or 0)
+    next_at = next_sent_recheck_at(count, now=checked_at)
+    comms_log_id = await record_application_communication(
+        identity, application, 'unverified', error='No matching copy was found in Zoho Sent.')
+    await set_application(identity, status='delivery_unconfirmed', phase='verification_needed',
+        stage='Sent verification scheduled' if next_at else 'Automatic Sent checks completed',
+        verification_checked_at=checked_at.isoformat(), verification_next_at=next_at,
+        retryable=True, comms_log_id=comms_log_id,
+        error=('Zoho Sent has not synchronized yet. Another read-only check is scheduled; no resend will occur.'
+               if next_at else
+               'No matching copy was found after the automatic checks. No resend occurred; review Zoho Sent manually.'))
+
+
+async def process_sent_recheck():
+    """Claim one due delayed-Sent check for the single durable worker."""
+    now = core.now()
+    async with core.AsyncSessionLocal() as session:
+        rows = list((await session.scalars(select(JobProcessing).where(
+            JobProcessing.application_status == 'delivery_unconfirmed',
+            JobProcessing.application['verification_next_at'].astext.is_not(None))
+            .order_by(JobProcessing.updated_at).limit(25).with_for_update(skip_locked=True))).all())
+        row = next((item for item in rows if sent_recheck_due(item.application, now=now)), None)
+        if row is None:
+            return False
+        application = dict(row.application)
+        count = int(application.get('verification_rechecks') or 0) + 1
+        application.update({'verification_rechecks': count,
+            'verification_checked_at': now.isoformat(),
+            # A future reservation makes a worker crash recoverable without any send retry.
+            'verification_next_at': next_sent_recheck_at(count, now=now),
+            'phase': 'verifying_sent',
+            'stage': f'Checking Zoho Sent automatically ({count}/{len(SENT_RECHECK_DELAYS_SECONDS)})'})
+        row.application = application
+        row.updated_at = now
+        identity = row.candidate_id
+        await session.commit()
+    await automatic_sent_recheck(identity, application)
+    return True
 
 
 async def process_application():
@@ -592,6 +676,8 @@ async def processing_loop():
                 try:
                     await enqueue_missing()
                     if await process_application():
+                        continue
+                    if await process_sent_recheck():
                         continue
                     if await classify_batch(requested_only=True):
                         continue

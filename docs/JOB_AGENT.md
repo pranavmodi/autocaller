@@ -154,8 +154,11 @@ are read-only. Upload the PDF using the existing authenticated Zoho attachment A
 then send through `/usr/local/bin/zmail-possibleos message send` (official CLI), with
 no Resend fallback. Persist sending intent before the provider call. Repeated clicks
 coalesce; ambiguous results and interrupted sends become `delivery_unconfirmed` and
-are never automatically resent. Successful status requires matching the recipient,
-subject/body and attachment hash in Zoho Sent. Sent evidence is not proof of recipient
+are never automatically resent. When the initial Sent copy is delayed, the worker
+performs up to three additional read-only IMAP checks after approximately 30 seconds,
+2 minutes and 10 minutes. The operator can also request a read-only check at any time.
+Successful status requires matching the recipient, subject/body and attachment hash
+in Zoho Sent. Sent evidence is not proof of recipient
 delivery or an ATS submission. Each attempted send is also mirrored idempotently into
 the shared Communications email log with its company, recipient, complete body,
 Zoho status and Job Agent source ID. Rechecking Zoho Sent updates that row instead of
@@ -168,7 +171,7 @@ creation, Zoho send, and Sent verification. Each checkpoint is rendered as pendi
 active, completed, stopped or uncertain. Failures retain the phase and exact error.
 Preparation failures can start a new draft-only attempt; duplicate blocks require
 manual review. Once a provider send starts, the UI never offers a preparation retry
-or resend and exposes only the read-only Zoho Sent verification action. `ready`
+or resend and shows the scheduled or operator-requested read-only Sent checks. `ready`
 always means draft/PDF ready and not sent; `sent_verified` means an exact Sent copy
 was found, not recipient delivery or ATS submission. Activity remains hidden.
 Automatic inbox referral handling and portal submission are future work.

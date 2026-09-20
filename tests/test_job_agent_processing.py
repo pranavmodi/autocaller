@@ -3,6 +3,7 @@ import asyncio
 import hashlib
 import json
 import os
+from datetime import datetime, timezone
 from email.message import EmailMessage
 from pathlib import Path
 from types import SimpleNamespace
@@ -89,6 +90,43 @@ def test_sent_verification_requires_body_and_exact_attachment(monkeypatch):
     assert mail.verify_sent(email, hashlib.sha256(b'correct-pdf').hexdigest())['uid'] == '1'
     assert mail.verify_sent(email, hashlib.sha256(b'wrong-pdf').hexdigest()) is None
     assert mail.verify_sent({**email, 'body_text': 'Different draft'}, hashlib.sha256(b'correct-pdf').hexdigest()) is None
+
+
+def test_sent_recheck_schedule_is_bounded_and_due():
+    now = datetime(2026, 9, 20, 18, 0, tzinfo=timezone.utc)
+    first = processing.next_sent_recheck_at(0, now=now)
+    assert first == '2026-09-20T18:00:30+00:00'
+    assert not processing.sent_recheck_due({
+        'verification_rechecks': 0, 'verification_next_at': first}, now=now)
+    assert processing.sent_recheck_due({
+        'verification_rechecks': 0, 'verification_next_at': first},
+        now=datetime(2026, 9, 20, 18, 0, 30, tzinfo=timezone.utc))
+    assert processing.next_sent_recheck_at(3, now=now) is None
+    assert not processing.sent_recheck_due({
+        'verification_rechecks': 3, 'verification_next_at': first},
+        now=datetime(2026, 9, 20, 18, 1, tzinfo=timezone.utc))
+
+
+@pytest.mark.asyncio
+async def test_automatic_sent_recheck_verifies_without_sending(monkeypatch):
+    async def directly(function, *args, **kwargs):
+        return function(*args, **kwargs)
+
+    save = AsyncMock()
+    monkeypatch.setattr(processing.asyncio, 'to_thread', directly)
+    monkeypatch.setattr(processing, 'set_application', save)
+    monkeypatch.setattr(processing, 'record_application_communication', AsyncMock(return_value='log-1'))
+    monkeypatch.setattr(mail, 'verify_sent', lambda *_args: {
+        'uid': 'sent-1', 'attachment_sha256': 'hash'})
+
+    await processing.automatic_sent_recheck('candidate', {
+        'email': {'to': 'jobs@example.com'}, 'attachment': {'sha256': 'hash'},
+        'verification_rechecks': 1,
+    })
+
+    assert save.await_args.kwargs['status'] == 'sent_verified'
+    assert save.await_args.kwargs['verification_next_at'] is None
+    assert save.await_args.kwargs['retryable'] is False
 
 
 @pytest.mark.asyncio

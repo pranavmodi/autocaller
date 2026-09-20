@@ -32,8 +32,10 @@ published web contacts and eligible `firm_contacts` records. Stored contacts mus
 belong to the canonical firm or an exact-domain twin, use the verified employer
 domain, and have a suitable recruiting or routing role. The packet and UI identify
 Possible OS provenance; routing contacts always receive a forwarding request.
-Unknown send outcomes never
-automatically retry. Activity is hidden in the UI but API/CLI history persists.
+Unknown send outcomes never automatically retry the send. Delayed Sent copies get
+bounded read-only IMAP reconciliation after about 30 seconds, 2 minutes and 10 minutes;
+the exact recipient, subject/body, sender and PDF hash must match. Activity is hidden
+in the UI but API/CLI history persists.
 Attempted application emails are mirrored into Communications. Use `job-agent
 sync-comms` to idempotently repair or backfill those rows; it never sends email.
 Leads `/emailtag-firms` → **Job listings** can open a source-backed row directly in

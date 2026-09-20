@@ -23,7 +23,8 @@ export type Candidate = {
   application?: { status: string; stage?: string; phase?: string; failed_phase?: string; retryable?: boolean;
     attempt?: number; error?: string; company_summary?: string; gaps?: string[]; send_requested?: boolean;
     authorized_at?: string | null; send_started_at?: string; prepared_at?: string; sent_at?: string;
-    duplicate_checked_at?: string; verification_checked_at?: string;
+    duplicate_checked_at?: string; verification_checked_at?: string; verification_next_at?: string | null;
+    verification_rechecks?: number;
     recipient?: { email: string; name: string; reason: string; evidence: {
       source_url: string; text: string; source_type?: "public_page" | "possibleos_contact";
       contact_id?: string | null; source_name?: string | null; observed_at?: string | null;
