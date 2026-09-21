@@ -86,6 +86,15 @@ Add/edit/remove categories, describe their responsibilities, select another PDF
 from the local resume library, and preview it. Settings validates assigned PDFs
 as readable and exactly one page, restricting paths to the resume library.
 
+The separate **CVs** tab is the operator-facing file library. It puts company-specific
+application PDFs first, shows the job, email recipient and application/Sent status,
+and keeps reusable category CVs distinct from other saved PDFs. Selecting a CV opens
+an inline preview and an explicit browser download using the original filename. The
+download endpoint resolves every path beneath `/home/pranav/resume` and returns an
+attachment response; arbitrary filesystem paths are rejected. Headless operators can
+list the same catalog with `job-agent resumes` and copy one file with
+`job-agent resume-download PATH --output FILE`.
+
 A durable background worker classifies a job only after the operator requests it
 from that job's detail view or with `job-agent classify ID`. It uses the existing
 isolated OpenClaw `neo` lane and structured category IDs, confidence, reasons and
@@ -201,8 +210,8 @@ inherit daemon authentication. UI overview and queue poll every 15 seconds; the 
 | GET `/api/job-agent/jobs` | `job-agent jobs [--status shortlisted --search AI --page 1 --order posted_desc --source external_search]` |
 | POST `/api/job-agent/jobs/{id}/review` | `job-agent review ID --revision N --status shortlisted --note "…"` |
 | GET `/api/job-agent/events?page=1` | `job-agent events --page 1` |
-| GET `/api/job-agent/resumes` | `job-agent resumes` |
-| GET `/api/job-agent/resume?path=...` | Preview a file returned by `job-agent resumes` |
+| GET `/api/job-agent/resumes` | `job-agent resumes` (catalog with category and application-email context) |
+| GET `/api/job-agent/resume?path=...&download=true` | Preview or download a catalog file; CLI: `job-agent resume-download PATH --output FILE` |
 | GET `/api/job-agent/jobs/{id}` | `job-agent show ID` |
 | POST `/api/job-agent/jobs/{id}/classify` | `job-agent classify ID` |
 | POST `/api/job-agent/jobs/{id}/category` | `job-agent category ID --category ai_automation --revision N` |

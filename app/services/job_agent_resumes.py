@@ -74,7 +74,58 @@ def resume_library():
             continue
         try:
             resolved = resolve_resume(str(path))
-            items.append({'path': str(resolved.relative_to(RESUME_ROOT.resolve())), 'filename': path.name})
+            relative = str(resolved.relative_to(RESUME_ROOT.resolve()))
+            items.append({'path': relative, 'filename': path.name, 'kind': 'library',
+                          'size_bytes': resolved.stat().st_size})
         except ValueError:
             continue
     return sorted(items, key=lambda item: (not item['path'].startswith('job-agent/resumes/'), item['path']))
+
+
+def resume_catalog(categories, applications):
+    """Describe reusable CVs and exact PDFs prepared for Job Agent emails."""
+    items = {item['path']: {**item, 'category_ids': [], 'category_names': []}
+             for item in resume_library()}
+    for category in categories:
+        path = category.resume_path if hasattr(category, 'resume_path') else category.get('resume_path', '')
+        if not path:
+            continue
+        try:
+            resolved = resolve_resume(path)
+        except ValueError:
+            continue
+        relative = str(resolved.relative_to(RESUME_ROOT.resolve()))
+        item = items.setdefault(relative, {'path': relative, 'filename': resolved.name,
+            'kind': 'library', 'size_bytes': resolved.stat().st_size,
+            'category_ids': [], 'category_names': []})
+        item['kind'] = 'category'
+        category_id = category.id if hasattr(category, 'id') else category.get('id')
+        category_name = category.name if hasattr(category, 'name') else category.get('name')
+        if category_id and category_id not in item['category_ids']:
+            item['category_ids'].append(category_id)
+        if category_name and category_name not in item['category_names']:
+            item['category_names'].append(category_name)
+
+    for application in applications:
+        path = str(application.get('path') or '')
+        try:
+            resolved = resolve_resume(path)
+        except ValueError:
+            continue
+        relative = str(resolved.relative_to(RESUME_ROOT.resolve()))
+        item = items.setdefault(relative, {'path': relative, 'filename': resolved.name,
+            'kind': 'library', 'size_bytes': resolved.stat().st_size,
+            'category_ids': [], 'category_names': []})
+        item.update({key: value for key, value in application.items() if key != 'path'})
+        item['path'] = relative
+        item['filename'] = application.get('filename') or resolved.name
+        item['kind'] = 'application'
+        item['size_bytes'] = resolved.stat().st_size
+
+    applications = sorted((item for item in items.values() if item['kind'] == 'application'),
+                          key=lambda item: item.get('updated_at') or '', reverse=True)
+    categories = sorted((item for item in items.values() if item['kind'] == 'category'),
+                        key=lambda item: item['filename'].casefold())
+    library = sorted((item for item in items.values() if item['kind'] == 'library'),
+                     key=lambda item: item['filename'].casefold())
+    return [*applications, *categories, *library]

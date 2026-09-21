@@ -20,7 +20,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.models import FirmContactRow
 from app.services import job_agent as core
-from app.services.job_agent_resumes import RESUME_ROOT, inspect_resume, resolve_resume
+from app.services.job_agent_resumes import RESUME_ROOT, inspect_resume, resolve_resume, resume_catalog
 from app.services.llm_gateway import LLMGatewayError, call_skill_json
 
 logger = logging.getLogger(__name__)
@@ -137,6 +137,40 @@ async def detail(identity):
         if not row:
             raise KeyError(identity)
         return (await attach_details(session, [row]))[0]
+
+
+async def resumes():
+    """Return CVs with category mappings and their Job Agent email context."""
+    await core.ensure_tables()
+    async with core.AsyncSessionLocal() as session:
+        state = await session.get(core.JobAgentState, 'default')
+        config = core.saved_config(state.config) if state else core.JobAgentConfig()
+        rows = (await session.execute(select(JobProcessing, core.JobAgentCandidate).join(
+            core.JobAgentCandidate, core.JobAgentCandidate.id == JobProcessing.candidate_id)
+            .where(JobProcessing.application_status != 'not_started'))).all()
+        applications = []
+        for processing, candidate in rows:
+            application = dict(processing.application or {})
+            attachment = application.get('attachment') if isinstance(application.get('attachment'), dict) else None
+            email = application.get('email') if isinstance(application.get('email'), dict) else None
+            if not attachment or not email or not attachment.get('path'):
+                continue
+            applications.append({
+                'path': attachment['path'],
+                'filename': attachment.get('filename') or Path(attachment['path']).name,
+                'candidate_id': processing.candidate_id,
+                'firm_name': candidate.posting.get('firm_name'),
+                'role_title': candidate.posting.get('title'),
+                'application_status': processing.application_status,
+                'recipient': email.get('to'),
+                'prepared_at': application.get('prepared_at'),
+                'updated_at': processing.updated_at.isoformat() if processing.updated_at else None,
+                'sent_verified': processing.application_status == 'sent_verified',
+            })
+    items = await asyncio.to_thread(resume_catalog, config.resume_categories, applications)
+    return {'items': items, 'total': len(items),
+            'application_count': sum(item['kind'] == 'application' for item in items),
+            'category_count': sum(item['kind'] == 'category' for item in items)}
 
 
 async def enqueue_missing():

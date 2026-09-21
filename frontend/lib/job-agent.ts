@@ -73,6 +73,30 @@ export type AgentEvent = {
   id: number; kind: string; message: string; created_at: string; details: Record<string, unknown>;
 };
 
+export type JobCv = {
+  path: string;
+  filename: string;
+  kind: "application" | "category" | "library";
+  size_bytes: number;
+  category_ids: string[];
+  category_names: string[];
+  candidate_id?: string;
+  firm_name?: string;
+  role_title?: string;
+  application_status?: string;
+  recipient?: string;
+  prepared_at?: string | null;
+  updated_at?: string | null;
+  sent_verified?: boolean;
+};
+
+export type JobCvCatalog = {
+  items: JobCv[];
+  total: number;
+  application_count: number;
+  category_count: number;
+};
+
 export async function jobAgentRequest<T>(path: string, body?: unknown): Promise<T> {
   const response = await fetch(apiUrl(`/api/job-agent${path}`), {
     method: body === undefined ? "GET" : "POST", credentials: "include",

@@ -78,18 +78,17 @@ async def events(page: int = Query(1, ge=1)):
 
 @router.get('/resumes')
 async def resumes():
-    import asyncio
-    from app.services.job_agent_resumes import resume_library
-    return {'items': await asyncio.to_thread(resume_library)}
+    return await processing.resumes()
 
 
 @router.get('/resume')
-async def resume(path: str = Query(..., max_length=1000)):
+async def resume(path: str = Query(..., max_length=1000), download: bool = False):
     from fastapi.responses import FileResponse
     from app.services.job_agent_resumes import resolve_resume
     try:
         file = resolve_resume(path)
-        return FileResponse(file, media_type='application/pdf', filename=file.name, content_disposition_type='inline')
+        return FileResponse(file, media_type='application/pdf', filename=file.name,
+                            content_disposition_type='attachment' if download else 'inline')
     except ValueError as exc:
         raise HTTPException(404, str(exc)) from exc
 

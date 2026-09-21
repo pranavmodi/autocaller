@@ -17,7 +17,10 @@ Job application workspace: `/job-agent`. Use `bin/possibleos job-agent status`,
 uncapped/resumable. Bulk classification is off by default; `classify ID` requests
 classification for that job only and maps responsibilities to editable category/PDF
 settings. Classification uses the isolated `openclaw/neo` lane with a bounded
-timeout; do not route it through the stateful main-agent lane. `resumes` lists PDFs;
+timeout; do not route it through the stateful main-agent lane. `resumes` lists the CV
+catalog with category and application-email context; `resume-download PATH --output
+FILE` copies an exact PDF for local use. The UI exposes the same catalog in its
+separate **CVs** tab with selection, preview and download;
 manual searches are durable, and backend startup marks an orphaned running search
 `interrupted` only after acquiring the career-search advisory lock. Restart recovery
 never launches a replacement search; the operator explicitly retries with `search`.
@@ -53,9 +56,9 @@ and routing emails are source-checked and stored once in `firm_contacts`; every 
 for that firm reuses them. `jobs --order contact_desc` puts firms with known emails
 first. It does not classify, prepare,
 email or submit. The UI's **Search now** button invokes the same command path on demand.
-No automatic inbox-referral handling or portal submissions. Inline PDF preview is
-browser-only; `resumes` / `show` return file paths relative to `/home/pranav/resume`
-for direct headless reading/copying. See `docs/JOB_AGENT.md`.
+No automatic inbox-referral handling or portal submissions. `resumes` / `show` return
+file paths relative to `/home/pranav/resume`; use `resume-download` for a guarded
+headless copy. See `docs/JOB_AGENT.md`.
 
 Default resume categories also include `pi_case_management`,
 `entry_level_paralegal`, and `pi_intake`. They are career-transition categories

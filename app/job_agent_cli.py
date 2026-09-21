@@ -1,5 +1,6 @@
 """CLI parity for the Job agent workspace. HTTP helpers supplied by app.cli."""
 import json
+import shutil
 from pathlib import Path
 
 import typer
@@ -78,8 +79,23 @@ def register(app, get, post, console):
 
     @group.command("resumes")
     def resumes():
-        """List local PDF files available for category mappings."""
+        """List reusable CVs and company-specific PDFs prepared for emails."""
         output(get("/api/job-agent/resumes"))
+
+    @group.command("resume-download")
+    def resume_download(path: str, output_path: Path = typer.Option(..., "--output", "-o")):
+        """Copy one CV returned by job-agent resumes to a local path."""
+        from app.services.job_agent_resumes import resolve_resume
+        try:
+            source = resolve_resume(path)
+            target = output_path / source.name if output_path.is_dir() else output_path
+            if target.exists():
+                raise ValueError(f"Output already exists: {target}")
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, target)
+        except (OSError, ValueError) as exc:
+            raise typer.BadParameter(str(exc)) from exc
+        console.print(str(target.resolve()))
 
     @group.command("show")
     def show(identity: str):

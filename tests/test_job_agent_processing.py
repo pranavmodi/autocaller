@@ -48,6 +48,28 @@ def test_real_category_resumes_are_one_page():
         assert 'Possible Minds' in result['text'] and 'PRANAV MODI' in result['text']
 
 
+def test_resume_catalog_separates_application_category_and_library(tmp_path, monkeypatch):
+    monkeypatch.setattr(resumes, 'RESUME_ROOT', tmp_path)
+    (tmp_path / 'job-agent' / 'resumes').mkdir(parents=True)
+    (tmp_path / 'applications' / 'Example').mkdir(parents=True)
+    (tmp_path / 'misc').mkdir()
+    category_file = tmp_path / 'job-agent' / 'resumes' / 'AI.pdf'
+    application_file = tmp_path / 'applications' / 'Example' / 'Pranav_Example.pdf'
+    other_file = tmp_path / 'misc' / 'Older.pdf'
+    for path in (category_file, application_file, other_file):
+        path.write_bytes(b'%PDF test')
+    categories = [SimpleNamespace(id='ai', name='AI automation', resume_path='job-agent/resumes/AI.pdf')]
+    applications = [{'path': 'applications/Example/Pranav_Example.pdf', 'filename': 'Pranav_Example.pdf',
+                     'firm_name': 'Example', 'role_title': 'AI Engineer', 'application_status': 'sent_verified',
+                     'sent_verified': True, 'updated_at': '2026-09-21T10:00:00+00:00'}]
+
+    items = resumes.resume_catalog(categories, applications)
+
+    assert [item['kind'] for item in items] == ['application', 'category', 'library']
+    assert items[0]['firm_name'] == 'Example' and items[0]['sent_verified'] is True
+    assert items[1]['category_names'] == ['AI automation']
+
+
 @pytest.mark.asyncio
 async def test_job_agent_uses_isolated_agent_for_classification(monkeypatch):
     gateway = AsyncMock(return_value=SimpleNamespace(parsed={'decisions': []}))
