@@ -99,6 +99,16 @@ def official_host_matches(value, official_host):
     return bool(official_host and (candidate == official_host or candidate.endswith('.' + official_host)))
 
 
+def canonical_company_url(posting):
+    value = str(posting.get('website') or '').strip()
+    if not value:
+        return None
+    parsed = urlsplit(value if '://' in value else 'https://' + value)
+    if parsed.scheme != 'https' or not parsed.hostname:
+        return None
+    return f'https://{parsed.hostname.lower()}/'
+
+
 def normalized(value):
     value = unicodedata.normalize('NFKD', str(value)).encode('ascii', 'ignore').decode()
     return ' '.join(re.sub(r'[^a-z0-9]+', ' ', value.casefold()).split())
@@ -310,8 +320,10 @@ async def research_application(application, ask_model, update_phase=None):
         raise ValueError('The research returned a different company website. Verify employer identity before applying.')
 
     canonical_job_url = posting['source_url']
+    canonical_company = canonical_company_url(posting)
     job_urls = list(dict.fromkeys([canonical_job_url, *discoveries.job_urls]))
-    urls = list(dict.fromkeys([*job_urls, company_url, *discoveries.contact_urls]))
+    urls = list(dict.fromkeys([*job_urls, company_url, *([canonical_company] if canonical_company else []),
+                              *discoveries.contact_urls]))
 
     async def read(url):
         try:
@@ -333,9 +345,12 @@ async def research_application(application, ask_model, update_phase=None):
         raise ValueError('The job source and corroborating role pages could not be verified.' +
                          (f' Fetch results: {detail}' if detail else ''))
 
-    fetched_company_page = next((page for page in pages
-        if page['requested_url'] == company_url and page['http_status'] == 200
+    identity_urls = [company_url, *([canonical_company] if canonical_company else [])]
+    fetched_company_page = next((page for requested in identity_urls for page in pages
+        if page['requested_url'] == requested and page['http_status'] == 200
         and (not expected_host or official_host_matches(page['final_url'], expected_host))), None)
+    if fetched_company_page:
+        company_url = fetched_company_page['requested_url']
     # Some official corporate homepages challenge automated reads or redirect to
     # a separate consumer domain. An employer-owned jobs subdomain is still
     # strong company identity evidence when it also carries the current role.
