@@ -29,6 +29,10 @@ SKILL = Path(__file__).resolve().parents[1] / "skills/daily-pi-career-search/SKI
 SEEDS = SKILL.with_name("seeds.json")
 LOCK_ID = 734985210
 SCHEMA_LOCK_ID = 734985216
+RUN_TIMEOUT_SECONDS = 1800
+RUN_CLEANUP_RESERVE_SECONDS = 60
+MIN_LLM_CALL_SECONDS = 30
+LLM_TIMEOUT_SECONDS = 420
 # Shared recruiting platforms are evidence sources, never employer identities.
 SHARED_RECRUITING_DOMAINS = frozenset({
     "jobvite.com", "greenhouse.io", "lever.co", "ashbyhq.com", "smartrecruiters.com",
@@ -54,6 +58,14 @@ LEGAL_AI_QUERIES = [
 QUERIES = PI_QUERIES
 _schema_ready = False
 _schema_lock = asyncio.Lock()
+
+
+class CareerSearchBudgetExceeded(TimeoutError):
+    """The bounded run lacks enough time for another model call."""
+
+
+def deadline_kwargs(deadline: float | None) -> dict:
+    return {"deadline": deadline} if deadline is not None else {}
 
 
 class SearchConfig(BaseModel):
@@ -345,7 +357,8 @@ async def reconcile_interrupted_manual_runs() -> int:
             await connection.commit()
 
 
-async def llm(payload: dict, required: str, config: SearchConfig, audit: dict, run_id: str):
+async def llm(payload: dict, required: str, config: SearchConfig, audit: dict, run_id: str,
+              *, deadline: float | None = None):
     verification = required == "decisions"
     attempts = 1 if payload["mode"] in {"verification_repair", "candidate_repair"} else config.max_attempts
     for attempt in range(attempts):
@@ -372,13 +385,27 @@ async def llm(payload: dict, required: str, config: SearchConfig, audit: dict, r
             await checkpoint(run_id, audit)
 
         try:
+            call_timeout = float(LLM_TIMEOUT_SECONDS)
+            if deadline is not None:
+                call_timeout = min(call_timeout, deadline - asyncio.get_running_loop().time())
+                if call_timeout < MIN_LLM_CALL_SECONDS:
+                    raise CareerSearchBudgetExceeded(
+                        f"{payload['mode']} skipped because the run time budget was exhausted")
             audit["llm_calls"] += 1
             await checkpoint(run_id, audit)
-            response = await call_skill_json(skill_path=SKILL, payload=payload, required_fields=[required],
-                model="openclaw/main", timeout_s=420, max_tokens=9000, retries=1,
+            request = call_skill_json(skill_path=SKILL, payload=payload, required_fields=[required],
+                model="openclaw/main", timeout_s=max(1, int(call_timeout)), max_tokens=9000, retries=1,
                 schema_repair_retries=0 if verification or payload["mode"] == "candidate_repair" else 1,
                 attempt_observer=observe_attempt,
                 prompt_cache_key="possibleos:career-search:v4")
+            task = asyncio.create_task(request)
+            done, _ = await asyncio.wait({task}, timeout=call_timeout)
+            if not done:
+                task.cancel()
+                await asyncio.gather(task, return_exceptions=True)
+                raise CareerSearchBudgetExceeded(
+                    f"{payload['mode']} exceeded its remaining {call_timeout:.0f}-second run budget")
+            response = task.result()
             audit["usage"].append(response.usage or {})
             audit.setdefault("prompt_cache_metrics", []).append(prompt_cache_metrics(response.usage))
             if verification:
@@ -387,6 +414,8 @@ async def llm(payload: dict, required: str, config: SearchConfig, audit: dict, r
             if not isinstance(response.parsed[required], list):
                 raise ValueError(f"{required} must be an array")
             return response.parsed
+        except CareerSearchBudgetExceeded:
+            raise
         except Exception as exc:
             if verification and structured_failure is not None:
                 failure = {"invalid_response": audit_value(structured_failure.get("raw_response")),
@@ -471,12 +500,27 @@ def inspect_verification(batch: list[dict], response, *, today: date, phase: str
 
 
 async def verified_decisions(batch: list[dict], config: SearchConfig, audit: dict, run_id: str, *, today: date,
-                             search_profile: SearchProfile | None = None):
+                             search_profile: SearchProfile | None = None, deadline: float | None = None):
     profile = search_profile.model_dump(mode="json") if search_profile else None
     payload = {"mode": "verification", "as_of": today.isoformat(), "search_profile": profile, "candidates": [
         {"candidate_id": item["candidate_id"], **item["candidate"].model_dump(mode="json"), "pages": item["pages"]} for item in batch
     ]}
-    response = await llm(payload, "decisions", config, audit, run_id)
+    try:
+        response = await llm(payload, "decisions", config, audit, run_id, **deadline_kwargs(deadline))
+    except Exception as exc:
+        error = str(exc)[:1000] or type(exc).__name__
+        audit.setdefault("verification_rejections", []).append({
+            "phase": "initial_transport", "validation_error": error,
+            "candidate_ids": [item["candidate_id"] for item in batch],
+        })
+        for item in batch:
+            audit["errors"].append({"candidate_id": item["candidate_id"],
+                "source_url": str(item["candidate"].source_url), "phase": "verification",
+                "status": "unverified", "error": error})
+            if item.get("tracked"):
+                await mark_checked(item, closed=False, reason=error)
+        await checkpoint(run_id, audit)
+        return
     accepted, failed = inspect_verification(batch, response, today=today, phase="initial", audit=audit,
                                             search_profile=search_profile)
     await checkpoint(run_id, audit)
@@ -494,7 +538,7 @@ async def verified_decisions(batch: list[dict], config: SearchConfig, audit: dic
     ]}
     await checkpoint(run_id, audit)
     try:
-        repaired = await llm(repair_payload, "decisions", config, audit, run_id)
+        repaired = await llm(repair_payload, "decisions", config, audit, run_id, **deadline_kwargs(deadline))
         accepted, remaining = inspect_verification([item for item, _ in failed], repaired, today=today,
                                                    phase="repair", audit=audit, search_profile=search_profile)
     except Exception as exc:
@@ -721,7 +765,8 @@ async def mark_checked(item: dict, *, closed: bool, reason: str):
         await session.commit()
 
 
-async def recover_candidates(discovered: list, config: SearchConfig, audit: dict, run_id: str) -> list[Candidate]:
+async def recover_candidates(discovered: list, config: SearchConfig, audit: dict, run_id: str,
+                             *, deadline: float | None = None) -> list[Candidate]:
     accepted, failed = [], []
     for index, raw in enumerate(discovered):
         try:
@@ -760,7 +805,8 @@ async def recover_candidates(discovered: list, config: SearchConfig, audit: dict
         return accepted
     audit["candidate_repair_calls"] = audit.get("candidate_repair_calls", 0) + 1
     try:
-        response = await llm({"mode": "candidate_repair", "candidates": repair_items}, "candidates", config, audit, run_id)
+        response = await llm({"mode": "candidate_repair", "candidates": repair_items}, "candidates", config,
+                             audit, run_id, **deadline_kwargs(deadline))
         audit.setdefault("candidate_repair_responses", []).append(audit_value(response))
         rows = response.get("candidates")
         if not isinstance(rows, list):
@@ -807,7 +853,8 @@ def retry_inputs(previous: dict) -> dict:
 
 
 async def execute(run_id: str, config: SearchConfig, *, seed_only: bool, audit: dict, retry_result: dict | None = None,
-                  retry_candidates: list | None = None, search_profile: SearchProfile | None = None):
+                  retry_candidates: list | None = None, search_profile: SearchProfile | None = None,
+                  deadline: float | None = None):
     now = now_utc()
     day_number = now.date().toordinal()
     if retry_result is not None:
@@ -822,7 +869,8 @@ async def execute(run_id: str, config: SearchConfig, *, seed_only: bool, audit: 
             result = await llm({"mode": "retry_discovery", "window_start": (now.date() - timedelta(days=30)).isoformat(),
                 "window_end": now.date().isoformat(), "career_sources": retry["career_sources"][:config.max_sources],
                 "previous_errors": retry["legacy_errors"], "max_candidates": config.max_candidates - len(discovered),
-                "max_sources": config.max_sources}, "candidates", config, audit, run_id)
+                "max_sources": config.max_sources}, "candidates", config, audit, run_id,
+                **deadline_kwargs(deadline))
             recovered = result["candidates"][:max(0, config.max_candidates - len(discovered))]
             audit["legacy_rediscovery"] = {"errors": retry["legacy_errors"], "response": audit_value(result)}
             if not recovered:
@@ -846,7 +894,8 @@ async def execute(run_id: str, config: SearchConfig, *, seed_only: bool, audit: 
             "window_end": now.date().isoformat(), "search_profile": search_profile.model_dump(mode="json") if search_profile else None,
             "queries": queries,
             "career_sources": [str(s) for s in sources], "max_candidates": config.max_candidates,
-            "max_sources": config.max_sources}, "candidates", config, audit, run_id)
+            "max_sources": config.max_sources}, "candidates", config, audit, run_id,
+            **deadline_kwargs(deadline))
         if not isinstance(result["candidates"], list):
             raise ValueError("discovery candidates must be an array")
         discovered = result["candidates"][:config.max_candidates]
@@ -854,7 +903,7 @@ async def execute(run_id: str, config: SearchConfig, *, seed_only: bool, audit: 
         source_identity(str(i["candidate"].source_url)) for i in candidates
     }
     audit["discovery_candidates"] = audit_value(discovered)
-    for candidate in await recover_candidates(discovered, config, audit, run_id):
+    for candidate in await recover_candidates(discovered, config, audit, run_id, deadline=deadline):
         key = source_identity(str(candidate.source_url))
         if key not in seen:
             candidates.append({"candidate": candidate})
@@ -865,6 +914,11 @@ async def execute(run_id: str, config: SearchConfig, *, seed_only: bool, audit: 
     await checkpoint(run_id, audit)
     cache = {}
     for start in range(0, len(candidates), 3):
+        if deadline is not None and deadline - asyncio.get_running_loop().time() < MIN_LLM_CALL_SECONDS:
+            audit["errors"].append({"phase": "run_budget",
+                "error": "Stopped before the next verification batch because the run time budget was exhausted."})
+            await checkpoint(run_id, audit)
+            break
         batch = []
         for index, item in enumerate(candidates[start:start + 3], start=start):
             candidate = item["candidate"]
@@ -909,7 +963,7 @@ async def execute(run_id: str, config: SearchConfig, *, seed_only: bool, audit: 
             await checkpoint(run_id, audit)
             continue
         async for item, decision in verified_decisions(batch, config, audit, run_id, today=now.date(),
-                                                       search_profile=search_profile):
+                                                       search_profile=search_profile, deadline=deadline):
             candidate = item["candidate"]
             try:
                 audit["decisions"].append({"candidate": candidate.model_dump(mode="json"), "decision": decision.model_dump(mode="json")})
@@ -1017,10 +1071,16 @@ async def run(*, due_only: bool = False, seed_only: bool = False, retry_run: str
                 session.add(CareerSearchRunRow(id=run_id, scheduled_day=day, status="running", started_at=now, result=audit))
                 await session.commit()
             try:
+                loop = asyncio.get_running_loop()
+                deadline = loop.time() + RUN_TIMEOUT_SECONDS - RUN_CLEANUP_RESERVE_SECONDS
                 await asyncio.wait_for(execute(run_id, config, seed_only=seed_only, audit=audit,
                     retry_result=retry_result, retry_candidates=retry_candidates,
-                    search_profile=search_profile), timeout=1800)
+                    search_profile=search_profile, deadline=deadline), timeout=RUN_TIMEOUT_SECONDS)
                 final = "partial" if audit["errors"] else "completed"
+            except TimeoutError:
+                audit["errors"].append({"phase": "run",
+                    "error": "Run exceeded the 30-minute safety limit; completed results were preserved."})
+                final = "partial" if audit["stored"] or audit["decisions"] else "failed"
             except Exception as exc:
                 audit["errors"].append({"phase": "run", "error": str(exc)[:1000] or type(exc).__name__})
                 final = "failed"
