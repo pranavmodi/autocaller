@@ -16,8 +16,9 @@ Job application workspace: `/job-agent`. Use `bin/possibleos job-agent status`,
 `possibleos` for the wider stored firm listings. Collection is
 uncapped/resumable. Bulk classification is off by default; `classify ID` requests
 classification for that job only and maps responsibilities to editable category/PDF
-settings. Classification uses the isolated `openclaw/neo` lane with a bounded
-timeout; do not route it through the stateful main-agent lane. `resumes` lists the CV
+settings. Classification uses TypeSafe System One `jev-latest` Choice judgments
+with a bounded timeout and full category probabilities; it does not fall back to
+OpenClaw. `resumes` lists the CV
 catalog with category and application-email context; `resume-download PATH --output
 FILE` copies an exact PDF for local use. The UI exposes the same catalog in its
 separate **CVs** tab with selection, preview and download;

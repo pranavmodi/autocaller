@@ -120,7 +120,7 @@ the selected job by default; applications are sent only through explicit
 | `job-agent open-listing --firm-id ID --source-url URL --title TITLE [--job-id ID --location LOCATION]` | Resolve a canonical Leads job listing into the shared Job Agent record; never prepares or sends. |
 | `job-agent review ID --revision N --status shortlisted --note "…"` | Record an operator review; never sends or submits an application. |
 | `job-agent resumes / resume-download PATH --output FILE / show ID` | List the CV catalog with email/category context, copy one PDF locally, or inspect category, resume and application state. |
-| `job-agent classify ID / category ID --category KEY --revision N` | Request classification only for this job, or manually override its category. |
+| `job-agent classify ID / category ID --category KEY --revision N` | Request TypeSafe Jev Choice classification only for this job, or manually override its category. |
 | `job-agent prepare ID --revision N` | Research the company and role, check published and eligible Possible OS firm contacts, then compose without sending. |
 | `job-agent apply ID --revision N` | Explicitly authorize one application email via Zoho CLI. |
 | `job-agent verify-sent ID` | Check the Sent copy and attachment hash; never resends. |

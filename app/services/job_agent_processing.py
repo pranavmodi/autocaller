@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Literal
 from uuid import uuid4
 
+import httpx
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import DateTime, Integer, String, func, select, text
 from sqlalchemy.dialects.postgresql import JSONB, insert
@@ -26,6 +27,8 @@ from app.services.llm_gateway import LLMGatewayError, call_skill_json
 logger = logging.getLogger(__name__)
 SKILL = Path(__file__).resolve().parents[1] / 'skills/job-application-agent/SKILL.md'
 CLASSIFICATION_BATCH_SIZE = 15
+TYPESAFE_SYSTEM_ONE_URL = 'https://api.typesafe.ai/v1/systemone'
+JEV_NO_MATCH = '__no_clear_match__'
 SENT_RECHECK_DELAYS_SECONDS = (30, 120, 600)
 _wakeup = asyncio.Event()
 
@@ -60,7 +63,9 @@ class ClassificationDecision(BaseModel):
     category_id: str | None
     confidence: float = Field(ge=0, le=1)
     reason: str = Field(min_length=1, max_length=2000)
-    tags: list[str] = Field(default_factory=list)
+    probabilities: dict[str, float] = Field(default_factory=dict)
+    model: str = Field(min_length=1, max_length=120)
+    usage: dict = Field(default_factory=dict)
 
 
 def taxonomy_key(config):
@@ -234,15 +239,139 @@ async def request_classification(identity):
     return await detail(identity)
 
 
-async def ask_model(mode, payload, fields):
-    timeout_s = int(os.getenv(
-        'JOB_AGENT_CLASSIFICATION_TIMEOUT_S' if mode == 'classify' else 'JOB_AGENT_GATEWAY_TIMEOUT_S',
-        '120' if mode == 'classify' else '420',
-    ))
+async def ask_application_model(mode, payload, fields):
+    timeout_s = int(os.getenv('JOB_AGENT_GATEWAY_TIMEOUT_S', '420'))
     result = await call_skill_json(skill_path=SKILL, payload={'mode': mode, **payload}, required_fields=fields,
         model=os.getenv('JOB_AGENT_MODEL', 'openclaw/neo'), timeout_s=timeout_s, max_tokens=7000, retries=1,
         schema_repair_retries=1, prompt_cache_key='possibleos:job-application-agent:v2')
     return result.parsed
+
+
+def _jev_text(value) -> str:
+    if value is None:
+        return ''
+    if isinstance(value, str):
+        return value
+    return json.dumps(value, ensure_ascii=True, sort_keys=True)
+
+
+def _jev_request(jobs, categories):
+    state_jobs = [{key: _jev_text(job.get(key)) for key in
+        ('title', 'description_summary', 'responsibilities', 'qualifications',
+         'role_category', 'technology_mentions')} for job in jobs]
+    criteria = {
+        category.id: {'category': category.name, 'definition': category.description}
+        for category in categories
+    }
+    criteria[JEV_NO_MATCH] = {
+        'category': 'No clear match',
+        'definition': (
+            'Choose this when no configured category fits the primary responsibilities, '
+            'the evidence is sparse or ambiguous, or mandatory credentials or direct-experience '
+            'requirements conflict with the configured category definitions.'
+        ),
+    }
+    rules = [
+        'Judge primary responsibilities and mandatory qualifications, not title or employer sector alone.',
+        'Incidental mentions of AI, CRM, software, or automation do not make routine legal, intake, sales, clerical, or customer-service work technical.',
+        'Apply every inclusion and exclusion in the category definitions.',
+        'Choose exactly one configured category or No clear match.',
+    ]
+    questions = {
+        f'job_{index}': {
+            'type': 'choice',
+            'instructions': {
+                'task': f'Which resume category best fits only `jobs[{index}]`?',
+                'rules': rules,
+            },
+            'criteria': criteria,
+        }
+        for index in range(len(state_jobs))
+    }
+    return {'state': {'jobs': state_jobs},
+            'model': os.getenv('JOB_AGENT_TYPESAFE_MODEL', 'jev-latest'),
+            'questions': questions}
+
+
+def _classification_reason(category, probability, probabilities, categories):
+    names = {item.id: item.name for item in categories}
+    alternatives = sorted(
+        ((key, value) for key, value in probabilities.items()
+         if key not in {category.id, JEV_NO_MATCH}),
+        key=lambda item: item[1], reverse=True,
+    )
+    suffix = ''
+    if alternatives and alternatives[0][1] > 0:
+        suffix = f'; next closest: {names.get(alternatives[0][0], alternatives[0][0])} {alternatives[0][1]:.0%}'
+    return (f'Jev matched {category.name} to the job\'s primary responsibilities and '
+            f'qualifications ({probability:.0%} category probability{suffix}).')
+
+
+def _parse_jev_decisions(response, identities, categories):
+    if not isinstance(response, dict) or not isinstance(response.get('answers'), dict):
+        raise ValueError('TypeSafe response is missing answers.')
+    model = response.get('model')
+    if not isinstance(model, str) or not model:
+        raise ValueError('TypeSafe response is missing its model version.')
+    usage = response.get('usage') if isinstance(response.get('usage'), dict) else {}
+    by_id = {category.id: category for category in categories}
+    option_ids = {*by_id, JEV_NO_MATCH}
+    decisions = []
+    for index, identity in enumerate(identities):
+        answer = response['answers'].get(f'job_{index}')
+        if not isinstance(answer, dict) or answer.get('type') != 'choice':
+            raise ValueError(f'TypeSafe response is missing Choice answer job_{index}.')
+        choice = answer.get('choice')
+        probabilities = answer.get('probabilities')
+        confidence = answer.get('confidence')
+        if choice not in option_ids or not isinstance(probabilities, dict) or set(probabilities) != option_ids:
+            raise ValueError(f'TypeSafe Choice answer job_{index} has invalid options.')
+        if isinstance(confidence, bool) or not isinstance(confidence, (int, float)) or not 0 <= confidence <= 1:
+            raise ValueError(f'TypeSafe Choice answer job_{index} has invalid confidence.')
+        if any(isinstance(value, bool) or not isinstance(value, (int, float)) or not 0 <= value <= 1
+               for value in probabilities.values()) or abs(sum(probabilities.values()) - 1) > 0.02:
+            raise ValueError(f'TypeSafe Choice answer job_{index} has invalid probabilities.')
+        normalized = {key: float(value) for key, value in probabilities.items()}
+        if choice == JEV_NO_MATCH:
+            decisions.append(ClassificationDecision(candidate_id=identity, category_id=None,
+                confidence=float(confidence), reason='Jev found no clear match among the configured resume categories.',
+                probabilities=normalized, model=model, usage=usage))
+            continue
+        category = by_id[choice]
+        decisions.append(ClassificationDecision(candidate_id=identity, category_id=choice,
+            confidence=float(confidence),
+            reason=_classification_reason(category, normalized[choice], normalized, categories),
+            probabilities=normalized, model=model, usage=usage))
+    return decisions
+
+
+async def classify_with_jev(jobs, categories):
+    api_key = os.getenv('TYPESAFE_API_KEY', '').strip()
+    if not api_key:
+        raise RuntimeError('TYPESAFE_API_KEY is not configured.')
+    request = _jev_request(jobs, categories)
+    timeout_s = int(os.getenv('JOB_AGENT_CLASSIFICATION_TIMEOUT_S', '120'))
+    url = os.getenv('TYPESAFE_SYSTEM_ONE_URL', TYPESAFE_SYSTEM_ONE_URL)
+    last_error = None
+    for attempt in range(2):
+        try:
+            async with httpx.AsyncClient(timeout=timeout_s, trust_env=False) as client:
+                response = await client.post(url, headers={
+                    'Authorization': f'Bearer {api_key}',
+                    'Content-Type': 'application/json',
+                }, json=request)
+            if response.status_code in {429, 500, 502, 503, 504} and attempt == 0:
+                await asyncio.sleep(0.5)
+                continue
+            response.raise_for_status()
+            return _parse_jev_decisions(response.json(), [job['candidate_id'] for job in jobs], categories)
+        except (httpx.TransportError, httpx.HTTPStatusError, json.JSONDecodeError) as exc:
+            last_error = exc
+            if attempt == 0 and isinstance(exc, httpx.TransportError):
+                await asyncio.sleep(0.5)
+                continue
+            break
+    raise RuntimeError('TypeSafe Jev classification request failed.') from last_error
 
 
 async def classify_batch(*, requested_only=False):
@@ -269,11 +398,10 @@ async def classify_batch(*, requested_only=False):
             snapshots[row.candidate_id] = {'revision': row.revision, 'posting': candidates[row.candidate_id].posting}
         await session.commit()
     try:
-        result = await ask_model('classify', {'categories': [c.model_dump(exclude={'resume_path'}) for c in config.resume_categories],
-            'jobs': [{'candidate_id': identity, 'posting': {key: value['posting'].get(key) for key in
-                ('title', 'description_summary', 'responsibilities', 'qualifications', 'role_category', 'technology_mentions')}}
-                for identity, value in snapshots.items()]}, ['decisions'])
-        decisions = [ClassificationDecision.model_validate(d) for d in result['decisions']]
+        jobs = [{'candidate_id': identity, **{key: value['posting'].get(key) for key in
+            ('title', 'description_summary', 'responsibilities', 'qualifications',
+             'role_category', 'technology_mentions')}} for identity, value in snapshots.items()]
+        decisions = await classify_with_jev(jobs, config.resume_categories)
         if len({d.candidate_id for d in decisions}) != len(decisions) or {d.candidate_id for d in decisions} != set(snapshots):
             raise ValueError('Classification response did not match the requested jobs.')
         allowed = {c.id for c in config.resume_categories}
@@ -291,6 +419,7 @@ async def classify_batch(*, requested_only=False):
                     row.classification_status = 'pending'
                     continue
                 row.classification = {**decision.model_dump(exclude={'candidate_id'}), 'source': 'model',
+                    'provider': 'typesafe_jev',
                     'taxonomy_key': taxonomy_key(config), 'job_key': job_key(candidate.posting)}
                 row.classification_status = 'classified' if decision.category_id and decision.confidence >= config.classification_threshold else 'needs_review'
                 row.revision += 1
@@ -491,7 +620,7 @@ async def prepare_application(identity, application):
         await set_application(identity, phase=phase, stage=stage)
 
     await set_application(identity, phase='researching', stage='Researching the company, role and recruiting contacts')
-    packet = await research_application(application, ask_model, update_phase)
+    packet = await research_application(application, ask_application_model, update_phase)
     await set_application(identity, phase='checking_duplicates',
         stage='Research and draft verified; checking previous applications', **packet)
     duplicate = await duplicate_evidence(packet['email'], application['posting'])

@@ -102,18 +102,19 @@ list the same catalog with `job-agent resumes` and copy one file with
 `job-agent resume-download PATH --output FILE`.
 
 A durable background worker classifies a job only after the operator requests it
-from that job's detail view or with `job-agent classify ID`. It uses the existing
-isolated OpenClaw `neo` lane and structured category IDs, confidence, reasons and
-industry tags, avoiding contention with the stateful main-agent research queue. It
-uses responsibilities, not employer sector or keyword rules. The default
+from that job's detail view or with `job-agent classify ID`. It sends the job's
+responsibilities and qualifications plus the complete configured taxonomy to
+TypeSafe System One `jev-latest` as a Choice judgment. Possible OS stores the chosen
+category, full probability distribution, confidence, exact returned model version
+and usage. There is no OpenClaw classification fallback. It uses responsibilities,
+not employer sector or keyword rules. The default
 confidence threshold is 80%. Unmatched, ambiguous, missing-resume and failed
 classifications need review. Operators can override the category or request
 reclassification. Operator decisions are protected from late model results.
 The detail view distinguishes queued, actively classifying and needs-review states;
 an active classification has a bounded provider timeout and becomes needs review on
-failure rather than remaining indefinitely active.
-Possible OS serializes calls within each OpenClaw agent lane but does not make the
-independent `neo` classifier wait behind another agent's research requests.
+failure rather than remaining indefinitely active. A batch makes one System One
+request with one independent Choice question per job.
 Category-definition changes invalidate model classifications that have not entered
 application processing. Bulk automatic classification remains an explicit Settings
 option and is off by default. Pending jobs do not consume model calls while it is

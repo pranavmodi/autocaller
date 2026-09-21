@@ -10,6 +10,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 from uuid import uuid4
 
+import httpx
 import pytest
 from pydantic import ValidationError
 
@@ -71,15 +72,81 @@ def test_resume_catalog_separates_application_category_and_library(tmp_path, mon
 
 
 @pytest.mark.asyncio
-async def test_job_agent_uses_isolated_agent_for_classification(monkeypatch):
-    gateway = AsyncMock(return_value=SimpleNamespace(parsed={'decisions': []}))
+async def test_job_agent_classification_uses_one_jev_choice_request(monkeypatch):
+    categories = resumes.default_categories()[:2]
+    options = {category.id: 0.0 for category in categories}
+    options[processing.JEV_NO_MATCH] = 0.0
+    answers = {
+        'job_0': {'type': 'choice', 'choice': categories[0].id, 'confidence': 0.96,
+                  'probabilities': {**options, categories[0].id: 0.97, categories[1].id: 0.03}},
+        'job_1': {'type': 'choice', 'choice': processing.JEV_NO_MATCH, 'confidence': 0.91,
+                  'probabilities': {**options, processing.JEV_NO_MATCH: 0.95,
+                                    categories[0].id: 0.03, categories[1].id: 0.02}},
+    }
+    captured = {}
+
+    class Client:
+        def __init__(self, **kwargs):
+            captured['client'] = kwargs
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return None
+
+        async def post(self, url, **kwargs):
+            captured['url'], captured['request'] = url, kwargs
+            return httpx.Response(200, request=httpx.Request('POST', url), json={
+                'model': 'jev-1.13.0', 'answers': answers,
+                'usage': {'input_tokens': 400, 'output_tokens': 80},
+            })
+
+    monkeypatch.setattr(processing.httpx, 'AsyncClient', Client)
+    monkeypatch.setenv('TYPESAFE_API_KEY', 'secret-test-key')
+    monkeypatch.delenv('JOB_AGENT_TYPESAFE_MODEL', raising=False)
+    jobs = [
+        {'candidate_id': 'a', 'title': 'AI Engineer', 'responsibilities': ['Build agents']},
+        {'candidate_id': 'b', 'title': 'Attorney', 'responsibilities': ['Try cases']},
+    ]
+
+    decisions = await processing.classify_with_jev(jobs, categories)
+
+    assert [decision.category_id for decision in decisions] == [categories[0].id, None]
+    assert decisions[0].model == 'jev-1.13.0'
+    assert decisions[0].probabilities[categories[0].id] == 0.97
+    assert '97% category probability' in decisions[0].reason
+    assert captured['url'] == processing.TYPESAFE_SYSTEM_ONE_URL
+    assert captured['request']['headers']['Authorization'] == 'Bearer secret-test-key'
+    assert captured['request']['json']['model'] == 'jev-latest'
+    assert set(captured['request']['json']['questions']) == {'job_0', 'job_1'}
+    assert set(captured['request']['json']['questions']['job_0']['criteria']) == set(options)
+
+
+def test_jev_response_rejects_missing_category_probabilities():
+    category = resumes.default_categories()[0]
+    response = {'model': 'jev-1.13.0', 'answers': {
+        'job_0': {'type': 'choice', 'choice': category.id, 'confidence': 0.9,
+                  'probabilities': {category.id: 1.0}},
+    }}
+
+    with pytest.raises(ValueError, match='invalid options'):
+        processing._parse_jev_decisions(response, ['job'], [category])
+
+
+@pytest.mark.asyncio
+async def test_jev_requires_api_key_without_using_openclaw(monkeypatch):
+    monkeypatch.delenv('TYPESAFE_API_KEY', raising=False)
+    gateway = AsyncMock()
     monkeypatch.setattr(processing, 'call_skill_json', gateway)
-    monkeypatch.delenv('JOB_AGENT_MODEL', raising=False)
-    monkeypatch.delenv('JOB_AGENT_CLASSIFICATION_TIMEOUT_S', raising=False)
-    assert await processing.ask_model('classify', {'jobs': []}, ['decisions']) == {'decisions': []}
-    kwargs = gateway.await_args.kwargs
-    assert kwargs['model'] == 'openclaw/neo'
-    assert kwargs['timeout_s'] == 120
+
+    with pytest.raises(RuntimeError, match='TYPESAFE_API_KEY'):
+        await processing.classify_with_jev(
+            [{'candidate_id': 'a', 'title': 'Data analyst'}],
+            resumes.default_categories(),
+        )
+
+    gateway.assert_not_awaited()
 
 
 def test_zoho_cli_uses_attachment_tuple_and_no_shell(monkeypatch):
