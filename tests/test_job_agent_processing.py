@@ -579,6 +579,49 @@ async def test_research_reports_job_fetch_failures_before_composition(monkeypatc
 
 
 @pytest.mark.asyncio
+async def test_research_uses_official_job_subdomain_when_company_page_redirects_elsewhere(monkeypatch):
+    job = 'https://jobs.example.com/architect'
+    company = 'https://example.com'
+    application = {
+        'posting': {'firm_id': 'firm-1', 'title': 'Data Architect', 'firm_name': 'Example Systems',
+                    'website': 'example.com', 'source_url': job},
+        'resume': {'text': 'PRANAV MODI\nFounder, Possible Minds'},
+        'preferences': {},
+    }
+
+    async def fetch(url, **_kwargs):
+        if url == company:
+            return {'requested_url': url, 'final_url': 'https://consumer.example.net',
+                    'http_status': 200, 'content': 'Unrelated consumer destination'}
+        return {'requested_url': url, 'final_url': url, 'http_status': 200,
+                'content': 'Example Systems — Data Architect — Apply now. Recruiting: jobs@example.com'}
+
+    async def model(mode, payload, _fields):
+        if mode == 'discover_contacts':
+            return {'company_url': company, 'contact_urls': [], 'job_urls': [], 'summary': 'Example'}
+        if mode == 'compose':
+            assert payload['company_url'] == job
+            return {'blocked_reason': None, 'packet': {
+                'company_summary': 'Example Systems employs data architects.',
+                'company_evidence': {'source_url': job, 'text': 'Example Systems'},
+                'job_evidence': {'source_url': job, 'text': 'Data Architect — Apply now'},
+                'recipient': {'email': 'jobs@example.com', 'name': 'Recruiting', 'kind': 'recruiting',
+                              'evidence': {'source_url': job, 'text': 'Recruiting: jobs@example.com'},
+                              'reason': 'Published recruiting inbox'},
+                'subject': 'Application: Data Architect - Pranav Modi',
+                'body_text': f'Hello, I am applying for this role. My resume is attached.\n\nRole: {job}',
+                'fit_reason': 'Relevant data architecture experience.', 'gaps': []}}
+        assert mode == 'audit_email'
+        return {'approved': True, 'reason': 'Evidence is complete.'}
+
+    monkeypatch.setattr(research, 'fetch_page', fetch)
+    monkeypatch.setattr(research, 'load_possibleos_contacts', AsyncMock(return_value=[]))
+    result = await research.research_application(application, model)
+    assert result['evidence']['company']['source_url'] == job
+    assert result['evidence']['job']['source_url'] == job
+
+
+@pytest.mark.asyncio
 @pytest.mark.skipif(os.getenv('JOB_AGENT_DB_TESTS') != '1', reason='Requires isolated schema on local PostgreSQL')
 async def test_classification_override_and_prepare_send_intent(monkeypatch, tmp_path):
     import shutil

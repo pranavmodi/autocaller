@@ -94,6 +94,11 @@ def website_host(value):
     return (parsed.hostname or '').lower().removeprefix('www.')
 
 
+def official_host_matches(value, official_host):
+    candidate = host(value)
+    return bool(official_host and (candidate == official_host or candidate.endswith('.' + official_host)))
+
+
 def normalized(value):
     value = unicodedata.normalize('NFKD', str(value)).encode('ascii', 'ignore').decode()
     return ' '.join(re.sub(r'[^a-z0-9]+', ' ', value.casefold()).split())
@@ -301,7 +306,7 @@ async def research_application(application, ask_model, update_phase=None):
         'discover_contacts', {'job': posting}, ['company_url', 'contact_urls', 'job_urls']))
     company_url = discoveries.company_url
     expected_host = website_host(posting.get('website') or '')
-    if expected_host and host(company_url) != expected_host:
+    if expected_host and not official_host_matches(company_url, expected_host):
         raise ValueError('The research returned a different company website. Verify employer identity before applying.')
 
     canonical_job_url = posting['source_url']
@@ -329,7 +334,16 @@ async def research_application(application, ask_model, update_phase=None):
                          (f' Fetch results: {detail}' if detail else ''))
 
     fetched_company_page = next((page for page in pages
-        if page['requested_url'] == company_url and page['http_status'] == 200), None)
+        if page['requested_url'] == company_url and page['http_status'] == 200
+        and (not expected_host or official_host_matches(page['final_url'], expected_host))), None)
+    # Some official corporate homepages challenge automated reads or redirect to
+    # a separate consumer domain. An employer-owned jobs subdomain is still
+    # strong company identity evidence when it also carries the current role.
+    if not fetched_company_page and expected_host:
+        fetched_company_page = next((page for page in successful_job_pages
+            if official_host_matches(page['final_url'], expected_host)), None)
+        if fetched_company_page:
+            company_url = fetched_company_page['requested_url']
     possibleos_contacts = []
     possibleos_contact_error = None
     if fetched_company_page:
@@ -348,7 +362,7 @@ async def research_application(application, ask_model, update_phase=None):
         raise ValueError(str(result.get('blocked_reason') or 'No suitable verified application contact was found.'))
     packet = Packet.model_validate(result['packet'])
     company_page = validate_evidence(packet.company_evidence, pages, 'Company evidence')
-    if expected_host and host(company_page['final_url']) != expected_host:
+    if expected_host and not official_host_matches(company_page['final_url'], expected_host):
         raise ValueError('The company page redirected to another domain. Verify the employer before applying.')
     if packet.company_evidence.source_url != company_url:
         raise ValueError('Company identity must be established by its official page.')
