@@ -27,8 +27,9 @@ async def update_config(body: service.ConfigUpdate):
 async def jobs(status: service.ReviewStatus | None = None,
                search: str = Query("", max_length=255), page: int = Query(1, ge=1),
                order: service.JobOrder = "posted_desc", category: str = Query("", max_length=64),
-               source: service.JobSource | None = None):
-    return await service.candidates(status, search, page, order, category, source)
+               source: service.JobSource | None = None,
+               legal_degree: service.LegalDegreeFilter = "exclude"):
+    return await service.candidates(status, search, page, order, category, source, legal_degree)
 
 
 @router.post("/collect")

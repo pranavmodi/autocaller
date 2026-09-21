@@ -1,8 +1,8 @@
 # Job agent workspace
 
-The `/job-agent` tab provides a persistent operator review queue, preferences,
-and collection progress. Only Review queue and Settings tabs are shown; the Activity
-tab is hidden for now. Audit history remains available through the CLI/API.
+The `/job-agent` tab provides a persistent operator review queue, CV library,
+preferences, and collection progress. The Activity tab is hidden for now. Audit
+history remains available through the CLI/API.
 Jobs can be classified on demand into configurable resume categories. Applications
 are processed only after an explicit operator action. Email delivery uses the
 official Zoho CLI.
@@ -31,6 +31,12 @@ official Zoho CLI.
   dates last and a stable identity tie-breaker. **Known contact email first**, oldest
   posted and recently added are alternative orders. Discovery/import time never substitutes for a posting
   date. Queue pages and audit API pages are 25 records; every page remains accessible.
+- Roles that explicitly require a law degree, bar admission or attorney license are
+  hidden from the queue by default. The legal-degree filter can show all roles or
+  only those roles. When all roles are shown, flagged roles sort below otherwise
+  equivalent jobs. The signal uses practitioner titles and explicit stored credential
+  language; absence stays unknown. Legal AI, legal operations, paralegal and legal-
+  assistant titles are not rejected merely for containing legal-domain words.
 - Employer-scoped identities use stored job IDs, otherwise source URL/title/location.
   Legacy URL-only IDs and reviews are retained where the role and location match.
   Multiple source records can identify the same job, so source totals can exceed the
@@ -221,8 +227,9 @@ inherit daemon authentication. UI overview and queue poll every 15 seconds; the 
 | POST `/api/job-agent/sync-comms` | `job-agent sync-comms` |
 
 Use `processing_revision` from `show` for category/application actions. `jobs` also
-accepts `--category CATEGORY` or `--category needs_review`, and `--source
-external_search|possibleos`. Search-produced jobs store `job_source=external_search`;
+accepts `--category CATEGORY` or `--category needs_review`, `--source
+external_search|possibleos`, and `--legal-degree exclude|all|required` (default:
+`exclude`). Search-produced jobs store `job_source=external_search`;
 listings collected from the wider Possible OS firm directory store
 `job_source=possibleos`. Older rows are derived from their discovery provider and
 receive the explicit field on the next normal sync.

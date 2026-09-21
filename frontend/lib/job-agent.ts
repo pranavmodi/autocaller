@@ -42,6 +42,8 @@ export type Candidate = {
     last_checked_at?: string; status?: string; remote_scope?: string;
     colombia_eligibility?: string; technology_mentions?: string[];
     job_source?: JobSource; discovery_provider?: string;
+    legal_degree_requirement?: "required" | "unknown";
+    legal_degree_reason?: string; legal_degree_evidence?: string | null;
   };
 };
 export type CollectionRun = {

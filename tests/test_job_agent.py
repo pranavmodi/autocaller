@@ -327,6 +327,35 @@ def test_posting_source_normalization_supports_existing_search_rows():
     assert service.normalize_posting({})["job_source"] == "possibleos"
 
 
+@pytest.mark.parametrize("posting", [
+    {"title": "Associate Attorney"},
+    {"title": "Senior Legal Counsel"},
+    {"title": "Legal Operations Specialist", "qualifications": ["Juris Doctor degree required"]},
+    {"title": "Claims Analyst", "requirements": "Must be admitted to the California Bar"},
+    {"title": "Legal Knowledge Manager", "requirements": "A J.D. is required"},
+    {"title": "Compliance Specialist", "minimum_qualifications": "LL.B. mandatory"},
+])
+def test_legal_degree_assessment_flags_practitioner_roles_and_explicit_credentials(posting):
+    result = service.legal_degree_assessment(posting)
+    assert result["status"] == "required"
+    assert result["evidence"]
+
+
+@pytest.mark.parametrize("title", [
+    "Legal AI Engineer",
+    "Legal Operations Specialist",
+    "Entry-Level Paralegal",
+    "Legal Assistant",
+    "Attorney Recruiting Coordinator",
+])
+def test_legal_degree_assessment_does_not_reject_legal_adjacent_roles(title):
+    result = service.legal_degree_assessment({
+        "title": title,
+        "description_summary": "Work with attorneys and legal teams; a JD is preferred but not required.",
+    })
+    assert result["status"] == "unknown"
+
+
 @pytest.mark.asyncio
 async def test_api_defaults_to_posting_date_and_rejects_unknown_sort(monkeypatch):
     handler = AsyncMock(return_value={"items": [], "total": 0})
@@ -335,11 +364,14 @@ async def test_api_defaults_to_posting_date_and_rejects_unknown_sort(monkeypatch
     app.include_router(router)
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url="http://test") as client:
         assert (await client.get("/api/job-agent/jobs")).status_code == 200
-        handler.assert_awaited_once_with(None, "", 1, "posted_desc", "", None)
+        handler.assert_awaited_once_with(None, "", 1, "posted_desc", "", None, "exclude")
         assert (await client.get("/api/job-agent/jobs?order=random")).status_code == 422
         assert (await client.get("/api/job-agent/jobs?source=external_search")).status_code == 200
-        assert handler.await_args.args[-1] == "external_search"
+        assert handler.await_args.args[-2:] == ("external_search", "exclude")
         assert (await client.get("/api/job-agent/jobs?source=unknown")).status_code == 422
+        assert (await client.get("/api/job-agent/jobs?legal_degree=required")).status_code == 200
+        assert handler.await_args.args[-1] == "required"
+        assert (await client.get("/api/job-agent/jobs?legal_degree=maybe")).status_code == 422
         assert (await client.get("/api/job-agent/events?page=0")).status_code == 422
 
 
@@ -458,6 +490,26 @@ async def test_durable_uncapped_collection_sorting_pause_retry_and_history(monke
         known = [d for d in dates if d]
         assert dates == sorted(known, reverse=True) + [None] * (len(dates) - len(known))
         assert (await service.candidates(order="posted_asc"))["items"][0]["posting"]["posted_date"] == "2026-09-15"
+        # Explicit practitioner roles are hidden by default and ranked last when shown.
+        attorney = service.normalize_posting({
+            "firm_id": "firm-a", "firm_name": "Example", "job_id": "attorney",
+            "title": "Associate Attorney", "source_url": "https://example.com/attorney",
+            "posted_date": "2026-09-19",
+        })
+        async with service.AsyncSessionLocal() as session:
+            assert await service.upsert_posting(session, attorney) == "added"
+            await session.commit()
+        assert (await service.candidates())["total"] == 605
+        required = await service.candidates(legal_degree="required")
+        assert required["total"] == 1
+        assert required["items"][0]["posting"]["title"] == "Associate Attorney"
+        all_pages = (await service.candidates(legal_degree="all"))["total_pages"]
+        all_with_attorney = [
+            row for page in range(1, all_pages + 1)
+            for row in (await service.candidates(page=page, legal_degree="all"))["items"]
+        ]
+        assert len(all_with_attorney) == 606
+        assert all_with_attorney[-1]["posting"]["title"] == "Associate Attorney"
         # All audit history remains accessible, including records beyond 100.
         async with service.AsyncSessionLocal() as session:
             for i in range(110):

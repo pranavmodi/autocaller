@@ -9,13 +9,14 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import logging
+import re
 from uuid import uuid4
 from datetime import date, datetime, timedelta, timezone
 from typing import Literal
 from urllib.parse import urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
-from sqlalchemy import DateTime, Integer, String, Boolean, case, delete, func, or_, select, text
+from sqlalchemy import DateTime, Integer, String, Boolean, and_, case, cast, delete, func, not_, or_, select, text
 from sqlalchemy.dialects.postgresql import JSONB, insert
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -26,6 +27,7 @@ from app.services.job_agent_resumes import ResumeCategory, default_categories, i
 
 ReviewStatus = Literal["new", "shortlisted", "needs_info", "skipped"]
 JobSource = Literal["possibleos", "external_search"]
+LegalDegreeFilter = Literal["exclude", "all", "required"]
 
 
 def now():
@@ -373,6 +375,60 @@ def posting_source(posting: dict) -> JobSource:
     return "possibleos"
 
 
+_LEGAL_PRACTITIONER_TITLE = re.compile(r"\b(attorney|lawyer|solicitor|barrister|prosecutor|counsel)\b", re.I)
+_NON_PRACTITIONER_TITLE = re.compile(
+    r"\b(attorney|lawyer|counsel|legal)\s+(recruiting|recruitment|talent|development)\b|"
+    r"\b(recruiting|recruitment|talent)\b.*\b(attorney|lawyer|counsel)\b",
+    re.I,
+)
+_LEGAL_CREDENTIAL = re.compile(
+    r"(?:\b(?:j\.?\s*d\.?|juris doctor|law degree|ll\.?\s*b\.?)(?=\W|$)(?:\s+degree)?(?:\s+or equivalent)?\s+(?:is\s+)?(?:required|mandatory)\b)|"
+    r"(?:\b(?:required|mandatory)(?:\s+(?:degree|qualification))?\s*[:\-]?\s*(?:an?\s+)?(?:j\.?\s*d\.?|juris doctor|law degree|ll\.?\s*b\.?)(?=\W|$))|"
+    r"(?:\bmust have\s+(?:an?\s+)?(?:j\.?\s*d\.?|juris doctor|law degree|ll\.?\s*b\.?)(?=\W|$))|"
+    r"(?:\bminimum qualification.{0,30}\b(?:j\.?\s*d\.?|juris doctor|law degree|ll\.?\s*b\.?)(?=\W|$))|"
+    r"(?:\b(?:active|current)\b.{0,40}\bbar\b.{0,30}\b(?:membership|admission|license|standing)\b)|"
+    r"(?:\b(?:admitted to|member of)\b.{0,40}\bbar\b)|"
+    r"(?:\blicensed (?:as an )?attorney\b)|(?:\blicensed to practice law\b)",
+    re.I,
+)
+
+
+def legal_degree_assessment(posting: dict) -> dict:
+    """Flag only explicit practitioner roles or mandatory legal credentials.
+
+    This is a transparent queue eligibility signal, not job classification. An
+    absent requirement remains unknown so legal-adjacent roles are not rejected.
+    """
+    title = " ".join(str(posting.get("title") or "").split())
+    if _LEGAL_PRACTITIONER_TITLE.search(title) and not _NON_PRACTITIONER_TITLE.search(title):
+        return {
+            "status": "required",
+            "reason": f"The role title is {title}, which is a licensed legal-practitioner role.",
+            "evidence": title,
+        }
+    fields = []
+    for key in ("qualifications", "requirements", "required_qualifications", "minimum_qualifications", "description_summary"):
+        value = posting.get(key)
+        if isinstance(value, list):
+            fields.extend(str(item) for item in value if item)
+        elif isinstance(value, str) and value.strip():
+            fields.append(value)
+    requirements = " ".join(" ".join(fields).split())
+    match = _LEGAL_CREDENTIAL.search(requirements)
+    if match:
+        evidence = match.group(0).strip()
+        return {
+            "status": "required",
+            "reason": "The listing explicitly requires a law degree, bar admission, or an attorney license.",
+            "evidence": evidence,
+        }
+    return {
+        "status": "unknown",
+        "reason": "No explicit law-degree or attorney-license requirement was detected in the stored listing.",
+        "evidence": None,
+    }
+
+
 def normalize_posting(posting):
     posting = dict(posting)
     posting["job_source"] = posting_source(posting)
@@ -382,6 +438,10 @@ def normalize_posting(posting):
     except ValueError:
         posting["posted_date"] = None
         posting["posted_date_raw"] = raw
+    assessment = legal_degree_assessment(posting)
+    posting["legal_degree_requirement"] = assessment["status"]
+    posting["legal_degree_reason"] = assessment["reason"]
+    posting["legal_degree_evidence"] = assessment["evidence"]
     return posting
 
 
@@ -578,9 +638,60 @@ async def review(identity: str, request: ReviewUpdate):
 JobOrder = Literal["posted_desc", "posted_asc", "found_desc", "contact_desc"]
 
 
+def legal_degree_required_expression():
+    """PostgreSQL expression matching ``legal_degree_assessment`` for queue filters."""
+    normalized_title = func.concat(
+        " ",
+        func.regexp_replace(
+            func.lower(func.coalesce(JobAgentCandidate.posting["title"].astext, "")),
+            r"[^a-z]+", " ", "g",
+        ),
+        " ",
+    )
+    practitioner_title = or_(*(
+        normalized_title.contains(f" {term} ")
+        for term in ("attorney", "lawyer", "solicitor", "barrister", "prosecutor", "counsel")
+    ))
+    non_practitioner_title = or_(*(
+        normalized_title.contains(f" {phrase} ")
+        for phrase in (
+            "attorney recruiting", "attorney recruitment", "attorney talent", "attorney development",
+            "lawyer recruiting", "lawyer recruitment", "lawyer talent", "lawyer development",
+            "counsel recruiting", "counsel recruitment", "counsel talent", "counsel development",
+            "recruiting attorney", "recruitment attorney", "talent attorney",
+            "recruiting lawyer", "recruitment lawyer", "talent lawyer",
+            "recruiting counsel", "recruitment counsel", "talent counsel",
+        )
+    ))
+    requirement_text = func.regexp_replace(
+        func.lower(func.concat(
+            " ", cast(JobAgentCandidate.posting["qualifications"], String),
+            " ", cast(JobAgentCandidate.posting["requirements"], String),
+            " ", cast(JobAgentCandidate.posting["required_qualifications"], String),
+            " ", cast(JobAgentCandidate.posting["minimum_qualifications"], String),
+            " ", func.coalesce(JobAgentCandidate.posting["description_summary"].astext, ""), " ",
+        )),
+        r"[^a-z]+", " ", "g",
+    )
+    credential_required = requirement_text.op("~")(
+        r"((^| )(jd|j d|juris doctor|law degree|llb|ll b)( degree)?( or equivalent)? (is )?(required|mandatory)( |$))|"
+        r"((required|mandatory)( degree| qualification)? (a |an )?(jd|j d|juris doctor|law degree|llb|ll b)( |$))|"
+        r"(must have (a |an )?(jd|j d|juris doctor|law degree|llb|ll b)( |$))|"
+        r"(minimum qualification.{0,30}(jd|j d|juris doctor|law degree|llb|ll b)( |$))|"
+        r"((active|current).{0,40}bar.{0,30}(membership|admission|license|standing))|"
+        r"((admitted to|member of).{0,40}bar)|"
+        r"(licensed (as an )?attorney)|(licensed to practice law)"
+    )
+    stored_required = func.coalesce(
+        JobAgentCandidate.posting["legal_degree_requirement"].astext == "required", False,
+    )
+    return or_(stored_required, and_(practitioner_title, not_(non_practitioner_title)), credential_required)
+
+
 async def candidates(status: ReviewStatus | None = None, search: str = "", page: int = 1,
                      order: JobOrder = "posted_desc", category: str = "",
-                     source: JobSource | None = None):
+                     source: JobSource | None = None,
+                     legal_degree: LegalDegreeFilter = "exclude"):
     from app.services.job_agent_processing import JobProcessing, attach_details
     await ensure_tables()
     query = select(JobAgentCandidate)
@@ -606,6 +717,11 @@ async def candidates(status: ReviewStatus | None = None, search: str = "", page:
         phrase = f"%{search.strip()}%"
         query = query.where(JobAgentCandidate.posting["firm_name"].astext.ilike(phrase)
                             | JobAgentCandidate.posting["title"].astext.ilike(phrase))
+    legal_degree_required = legal_degree_required_expression()
+    if legal_degree == "exclude":
+        query = query.where(not_(legal_degree_required))
+    elif legal_degree == "required":
+        query = query.where(legal_degree_required)
     async with AsyncSessionLocal() as session:
         total = await session.scalar(select(func.count()).select_from(query.subquery()))
         posted = JobAgentCandidate.posting["posted_date"].astext
@@ -652,7 +768,8 @@ async def candidates(status: ReviewStatus | None = None, search: str = "", page:
             "found_desc": (JobAgentCandidate.created_at.desc(),),
             "contact_desc": (contact_count.desc(), posted.desc().nulls_last()),
         }[order]
-        rows = (await session.scalars(query.order_by(*ordering, JobAgentCandidate.id)
+        legal_degree_rank = case((legal_degree_required, 1), else_=0)
+        rows = (await session.scalars(query.order_by(legal_degree_rank, *ordering, JobAgentCandidate.id)
                                      .offset((page - 1) * 25).limit(25))).all()
         return {"items": await attach_details(session, rows), "total": total, "page": page,
                 "page_size": 25, "total_pages": (total + 24) // 25}

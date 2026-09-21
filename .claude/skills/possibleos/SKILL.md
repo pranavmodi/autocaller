@@ -21,6 +21,11 @@ timeout; do not route it through the stateful main-agent lane. `resumes` lists t
 catalog with category and application-email context; `resume-download PATH --output
 FILE` copies an exact PDF for local use. The UI exposes the same catalog in its
 separate **CVs** tab with selection, preview and download;
+`jobs` excludes explicit law-degree, bar-admission and attorney-license roles by
+default. Use `--legal-degree all` to inspect them below other roles, or
+`--legal-degree required` to show only them. This is an explicit credential/title
+signal, not model classification; legal operations, legal AI, paralegal and legal-
+assistant titles remain eligible unless the stored requirements say otherwise.
 manual searches are durable, and backend startup marks an orphaned running search
 `interrupted` only after acquiring the career-search advisory lock. Restart recovery
 never launches a replacement search; the operator explicitly retries with `search`.
