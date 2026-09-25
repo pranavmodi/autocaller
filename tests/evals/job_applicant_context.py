@@ -26,7 +26,36 @@ async def location(label,expected):
  action=BrowserAction.model_validate(result['action'])
  assert action.kind=='select' and action.value==expected,action.model_dump()
  print(label,action.value,flush=True)
+
+async def explicit_sponsorship():
+ state=copy.deepcopy(BASE)
+ state['posting'].update(firm_name='Example Health',title='Senior AI Engineer',location='United States')
+ state['saved_profile'].append({'id':'sponsorship','revision':1,
+  'question':'Will Example Health need to sponsor your US employment authorization?',
+  'answer':'No. Select No for sponsorship. I am still not currently authorized to work in the US.',
+  'scope':'company','scope_value':'Example Health','context':{}})
+ state['error']='Earlier agent wrongly blocked: no US authorization implies sponsorship must be Yes.'
+ state['snapshot']['frames']=[{'text':'Example Health application. US SPONSORSHIP: Will you now or in the future require employer sponsorship? Required.',
+  'controls':[{'id':'sponsor_yes','tag':'input','type':'radio','label':'Yes','value':'Yes','checked':False,'required':True},
+              {'id':'sponsor_no','tag':'input','type':'radio','label':'No','value':'No','checked':False,'required':True}]}]
+ result,_=await model_decision('decide',state,action_schema=BrowserAction.model_json_schema())
+ action=BrowserAction.model_validate(result['action'])
+ assert action.kind in {'check','click'} and action.element=='sponsor_no',action.model_dump()
+ result,_=await model_decision('audit_action',state,proposed_action=action.model_dump())
+ assert result['allowed'] is True,result
+ print('Explicit sponsorship No decision and audit passed:',result,flush=True)
+ state['snapshot']['frames']=[{'text':'Are you currently authorized to work in the United States? Required.',
+  'controls':[{'id':'auth_yes','tag':'input','type':'radio','label':'Yes','value':'Yes','checked':False,'required':True},
+              {'id':'auth_no','tag':'input','type':'radio','label':'No','value':'No','checked':False,'required':True}]}]
+ for element,expected in [('auth_no',True),('auth_yes',False)]:
+  action=BrowserAction(kind='check',element=element,checked=True,
+   summary='Answer current US work authorization.',evidence='Applicant explicitly says current US work authorization is No.')
+  result,_=await model_decision('audit_action',state,proposed_action=action.model_dump())
+  assert result['allowed'] is expected,result
+  print('Authorization audit:',element,result,flush=True)
+
 async def main():
+ await explicit_sponsorship()
  await location('Current country of residence','india')
  await location('Preferred country for future remote work','colombia')
  state=copy.deepcopy(BASE)

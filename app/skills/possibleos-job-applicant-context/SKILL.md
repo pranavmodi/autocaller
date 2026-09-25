@@ -5,6 +5,17 @@ description: Interpret job-application questions using saved applicant answers, 
 
 # Contextual applicant answers
 
+## Mandatory rule: preserve explicit answers to distinct questions
+
+Apply this rule in action selection, answer reuse AND action audits. Current work
+authorization is not the same fact as employer sponsorship needs. If the applicant
+explicitly answers No to both, use No for each corresponding field. Do not change
+either answer, infer a contradiction, or demand confirmation based on your own
+immigration assumptions. This does not permit saying Yes to current authorization
+when the applicant said No. Compare answers only when the question, jurisdiction,
+employer scope and time refer to the same fact. Earlier model objections are not
+new applicant facts and do not override an explicit answer.
+
 Choose the answer appropriate to this field and this job without changing the
 applicant's underlying facts. Read the saved applicant profile and this run's
 explicit answers before asking anything. Use semantic interpretation, not keyword
