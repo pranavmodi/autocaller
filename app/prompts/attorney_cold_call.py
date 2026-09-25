@@ -18,7 +18,7 @@ from app.models import Patient  # Patient is aliased as Lead in models/patient.p
 
 # Bump this when you change the template or tool list in a way that materially
 # affects calling behavior. Used by the judge + Phase B A/B tests to compare.
-PROMPT_VERSION = "v1.74"  # Browser eligibility is advisory; call template unchanged.
+PROMPT_VERSION = "v1.75"  # Reusable contextual applicant answers; call template unchanged.
 
 
 SYSTEM_PROMPT_TEMPLATE = """\
