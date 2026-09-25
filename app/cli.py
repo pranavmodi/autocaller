@@ -8980,6 +8980,40 @@ def pif_autorespond_sync(
     console.print_json(data=asyncio.run(sync_autorespond_events(full=full)))
 
 
+@pif_app.command("aliases-audit")
+def pif_aliases_audit():
+    """Audit local firm-domain aliases without changing data."""
+    from app.services.firm_alias_integrity import audit_firm_aliases
+
+    console.print_json(data=asyncio.run(audit_firm_aliases()))
+
+
+@pif_app.command("aliases-rebuild")
+def pif_aliases_rebuild(
+    apply: bool = typer.Option(False, "--apply", help="Apply the rebuild; default is a dry run."),
+):
+    """Rebuild domain aliases from canonical and operator-verified identity."""
+    from app.services.firm_alias_integrity import rebuild_firm_aliases
+
+    console.print_json(data=asyncio.run(rebuild_firm_aliases(dry_run=not apply)))
+
+
+@pif_app.command("alias-verify")
+def pif_alias_verify(
+    firm_id: str = typer.Argument(..., help="Local mirrored firm UUID."),
+    domain: str = typer.Argument(..., help="Verified alternate firm domain."),
+    evidence_url: str = typer.Option(..., "--evidence-url", help="Public source proving ownership."),
+):
+    """Add one source-backed alternate domain to a firm identity."""
+    from app.services.firm_alias_integrity import verify_firm_domain_alias
+
+    console.print_json(data=asyncio.run(verify_firm_domain_alias(
+        firm_id,
+        domain,
+        evidence_url=evidence_url,
+    )))
+
+
 @pif_app.command("research-job-postings")
 def pif_research_job_postings(
     firm_id: str = typer.Argument(..., help="Mirrored firm UUID."),

@@ -70,6 +70,8 @@ class FakeSession:
 
     async def execute(self, stmt):
         rendered = str(stmt)
+        if rendered.startswith("DELETE FROM firm_intel_aliases"):
+            return FakeResult()
         if "count(" in rendered and "FROM pif_directory_firms" in rendered:
             return FakeResult(scalar=len(self.store.firms))
         if "count(" in rendered and "FROM firm_intel_aliases" in rendered:
@@ -468,6 +470,53 @@ def test_alias_upsert_idempotent_on_rerun(monkeypatch):
     assert second["updated"] == 1
     assert second["items"][0]["status"] == "updated"
     assert len(store.aliases) == alias_count
+
+
+def test_alias_candidates_do_not_promote_observed_or_contact_domains():
+    incoming = profile(
+        "firm-1",
+        canonical="smithlaw.com",
+        domains=["smithlaw.com", "referralclinic.com", "movedocs.com"],
+        decision_email="owner@outsidevendor.com",
+    )
+
+    candidates = svc._alias_candidates(incoming)
+
+    assert ("domain", "smithlaw.com") in candidates
+    assert ("domain", "referralclinic.com") not in candidates
+    assert ("domain", "movedocs.com") not in candidates
+    assert ("domain", "outsidevendor.com") not in candidates
+    assert ("vanity_domain", "smithlaw.filevineapp.com") in candidates
+
+
+def test_alias_candidates_accept_operator_verified_alternate():
+    incoming = profile(
+        "firm-1",
+        canonical="smithlaw.com",
+        domains=["smithlaw.com", "smithinjury.com"],
+    )
+    incoming["_trusted_domain_aliases"] = True
+
+    candidates = svc._alias_candidates(incoming)
+
+    assert ("domain", "smithinjury.com") in candidates
+
+
+def test_duplicate_canonical_resolution_uses_rebuilt_alias_owner():
+    store = FakeStore()
+    store.firms["sparse"] = PifFirmRow(
+        id="sparse", website="samefirm.com", canonical_website="samefirm.com"
+    )
+    store.firms["complete"] = PifFirmRow(
+        id="complete", website="samefirm.com", canonical_website="samefirm.com"
+    )
+    store.aliases[("domain", "samefirm.com")] = FirmAliasRow(
+        alias_type="domain", alias_value="samefirm.com", firm_id="complete"
+    )
+
+    resolved = asyncio.run(svc._firm_id_by_website(FakeSession(store), "samefirm.com"))
+
+    assert resolved == "complete"
 
 
 def test_incidental_domain_alias_cannot_steal_canonical_owner():

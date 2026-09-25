@@ -390,8 +390,14 @@ to populate `pif_directory_firms`, `firm_intel_aliases`, and the
 `pif status`, or use local-only `pif sync-status` for the last daily-sync delta
 and its firm-level touched ledger without calling EmailTag health. The ledger
 includes firm name/id, created/updated status, website, source timestamp,
-people count, and per-firm alias count when the run recorded it. Resolve
-domains/emails/legacy PIF IDs with
+people count, and per-firm alias count when the run recorded it.
+
+Use `pif aliases-audit` to inspect identity integrity. `pif aliases-rebuild`
+previews a canonical-only repair; add `--apply` for the transactional rebuild.
+Contact email, vendor, and referral domains are evidence, not firm aliases.
+Use `pif alias-verify <firm_id> <domain> --evidence-url <url>` only after a
+public source proves that an alternate domain belongs to the same firm.
+Resolve domains/emails/legacy PIF IDs with
 `pif resolve <value>` (local first, v2 `/firms/resolve` fallback), and inspect a
 mirrored profile with `pif show <firm_id|domain>`. Use `pif vendors` to list
 every extracted vendor in the mirror with counts, and `pif firms --vendor

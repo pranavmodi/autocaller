@@ -15,6 +15,10 @@ from sqlalchemy import delete, or_, select
 
 from app.db import AsyncSessionLocal
 from app.db.models import FirmAliasRow, PifFirmRow
+from app.services.firm_alias_integrity import (
+    is_trusted_domain_alias,
+    normalize_identity_domain,
+)
 from app.services.firm_intel_sync import ensure_firm_intel_tables, get_mirrored_pif_firm
 from app.services.front_sync import is_consumer_domain, normalize_domain
 
@@ -143,8 +147,8 @@ def _normalize_aliases(value: Any) -> dict[str, list[str]]:
             if not text:
                 continue
             if key != "legacy_pif_ids":
-                text = normalize_domain(text)
-                if not text or is_consumer_domain(text):
+                text = normalize_identity_domain(text, allow_shared=key == "vanity_domains")
+                if not text:
                     raise PifFirmCrudError(f"invalid firm domain alias: {raw}")
             if text not in normalized:
                 normalized.append(text)
@@ -180,8 +184,8 @@ def normalize_firm_write(payload: dict[str, Any], *, creating: bool) -> dict[str
     website_supplied = "website" in normalized or "canonical_website" in normalized
     if website_supplied:
         raw_website = normalized.get("canonical_website") or normalized.get("website")
-        domain = normalize_domain(str(raw_website or ""))
-        if not domain or is_consumer_domain(domain):
+        domain = normalize_identity_domain(raw_website)
+        if not domain:
             raise PifFirmCrudError("website must be a valid non-consumer domain or URL")
         normalized["website"] = domain
         normalized["canonical_website"] = domain
@@ -352,30 +356,52 @@ async def _resolve_row(session, value: str) -> PifFirmRow | None:
     row = await session.get(PifFirmRow, raw)
     if row is not None:
         return row
-    domain = normalize_domain(raw)
+    domain = normalize_identity_domain(normalize_domain(raw))
     if not domain:
         return None
-    alias = await session.get(FirmAliasRow, {"alias_type": "domain", "alias_value": domain})
-    if alias is not None:
-        return await session.get(PifFirmRow, alias.firm_id)
     result = await session.execute(
         select(PifFirmRow).where(
             or_(PifFirmRow.canonical_website == domain, PifFirmRow.website == domain)
         )
     )
-    return result.scalar_one_or_none()
+    canonical_rows = list(result.scalars().all())
+    if len(canonical_rows) == 1:
+        return canonical_rows[0]
+    if len(canonical_rows) > 1:
+        alias = await session.get(FirmAliasRow, {"alias_type": "domain", "alias_value": domain})
+        if alias is not None:
+            selected = next((item for item in canonical_rows if item.id == alias.firm_id), None)
+            if selected is not None:
+                return selected
+        return sorted(canonical_rows, key=lambda item: item.id)[0]
+    alias = await session.get(FirmAliasRow, {"alias_type": "domain", "alias_value": domain})
+    if alias is not None:
+        owner = await session.get(PifFirmRow, alias.firm_id)
+        if is_trusted_domain_alias(owner, domain):
+            return owner
+    return None
 
 
 async def _domain_owner(session, domain: str) -> str | None:
-    alias = await session.get(FirmAliasRow, {"alias_type": "domain", "alias_value": domain})
-    if alias is not None:
-        return alias.firm_id
     result = await session.execute(
-        select(PifFirmRow.id).where(
+        select(PifFirmRow).where(
             or_(PifFirmRow.canonical_website == domain, PifFirmRow.website == domain)
         )
     )
-    return result.scalar_one_or_none()
+    canonical_rows = list(result.scalars().all())
+    if len(canonical_rows) == 1:
+        return canonical_rows[0].id
+    if len(canonical_rows) > 1:
+        alias = await session.get(FirmAliasRow, {"alias_type": "domain", "alias_value": domain})
+        if alias is not None and any(item.id == alias.firm_id for item in canonical_rows):
+            return alias.firm_id
+        return sorted(item.id for item in canonical_rows)[0]
+    alias = await session.get(FirmAliasRow, {"alias_type": "domain", "alias_value": domain})
+    if alias is not None:
+        owner = await session.get(PifFirmRow, alias.firm_id)
+        if is_trusted_domain_alias(owner, domain):
+            return alias.firm_id
+    return None
 
 
 async def _replace_aliases(

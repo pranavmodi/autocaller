@@ -18,11 +18,12 @@ from types import SimpleNamespace
 from typing import Any
 
 import httpx
-from sqlalchemy import String, and_, bindparam, cast, exists, func, inspect, or_, select, text
+from sqlalchemy import String, and_, bindparam, cast, delete, exists, func, inspect, or_, select, text
 from sqlalchemy.dialects.postgresql import JSONPATH
 
 from app.db import AsyncSessionLocal, async_engine
 from app.db.models import FirmAliasRow, FirmIntelSyncStateRow, PifAutorespondEventRow, PifFirmRow
+from app.services.firm_alias_integrity import is_trusted_domain_alias, normalize_identity_domain
 from app.services.front_sync import is_consumer_domain, normalize_domain
 from app.services.persona_mapper import classify_contact
 
@@ -527,14 +528,17 @@ def _alias_candidates(profile: dict[str, Any]) -> set[tuple[str, str]]:
     aliases = _as_dict(profile.get("aliases"))
     candidates: set[tuple[str, str]] = set()
 
-    canonical = normalize_domain(profile.get("canonical_website"))
-    if canonical and not is_consumer_domain(canonical):
+    canonical = normalize_identity_domain(profile.get("canonical_website"))
+    if canonical:
         candidates.add(("domain", canonical))
 
-    for domain in _as_list(aliases.get("domains")):
-        normalized = normalize_domain(str(domain))
-        if normalized and not is_consumer_domain(normalized):
-            candidates.add(("domain", normalized))
+    # Upstream observed domains and contact email domains are evidence, not
+    # identity. Only operator-reviewed aliases may resolve a firm.
+    if profile.get("_trusted_domain_aliases") is True:
+        for domain in _as_list(aliases.get("domains")):
+            normalized = normalize_identity_domain(domain)
+            if normalized:
+                candidates.add(("domain", normalized))
 
     for domain in _as_list(aliases.get("vanity_domains")):
         normalized = normalize_domain(str(domain))
@@ -545,11 +549,6 @@ def _alias_candidates(profile: dict[str, Any]) -> set[tuple[str, str]]:
         value = str(legacy_id or "").strip().lower()
         if value:
             candidates.add(("legacy_pif_id", value))
-
-    for person in _people(profile):
-        email_domain = normalize_domain(person.get("email"))
-        if email_domain and not is_consumer_domain(email_domain):
-            candidates.add(("domain", email_domain))
 
     return candidates
 
@@ -596,8 +595,18 @@ async def _upsert_aliases(session, profile: dict[str, Any], *, now: datetime) ->
     if not firm_id:
         return 0
     canonical = _profile_website(profile)
+    candidates = _alias_candidates(profile)
+    trusted_domains = [value for alias_type, value in candidates if alias_type == "domain"]
+    stale_domains = delete(FirmAliasRow).where(
+        FirmAliasRow.alias_type == "domain",
+        FirmAliasRow.firm_id == firm_id,
+    )
+    if trusted_domains:
+        stale_domains = stale_domains.where(FirmAliasRow.alias_value.not_in(trusted_domains))
+    await session.execute(stale_domains)
+
     touched = 0
-    for alias_type, alias_value in _alias_candidates(profile):
+    for alias_type, alias_value in candidates:
         row = await session.get(
             FirmAliasRow,
             {"alias_type": alias_type, "alias_value": alias_value},
@@ -669,6 +678,7 @@ async def _upsert_profile(session, profile: dict[str, Any], *, now: datetime) ->
         alias_profile["canonical_website"] = row.canonical_website or row.website
         alias_profile["aliases"] = deepcopy(manual_overrides["aliases"])
         alias_profile["people"] = []
+        alias_profile["_trusted_domain_aliases"] = True
     if row.id != firm_id:
         alias_profile = deepcopy(profile)
         alias_profile["firm_id"] = row.id
@@ -883,8 +893,18 @@ async def _firm_id_by_local_alias(session, value: str) -> str | None:
                 FirmAliasRow,
                 {"alias_type": alias_type, "alias_value": alias_value},
             )
-            if row and row.firm_id:
-                return str(row.firm_id)
+            if not row or not row.firm_id:
+                continue
+            if alias_type == "domain":
+                owner = await session.get(PifFirmRow, row.firm_id)
+                if not is_trusted_domain_alias(owner, alias_value):
+                    logger.warning(
+                        "ignoring untrusted firm domain alias %s -> %s",
+                        alias_value,
+                        row.firm_id,
+                    )
+                    continue
+            return str(row.firm_id)
     return None
 
 
@@ -895,20 +915,28 @@ async def _firm_id_by_website(session, value: str) -> str | None:
     result = await session.execute(
         select(PifFirmRow.id, PifFirmRow.canonical_website, PifFirmRow.website)
     )
+    matches: list[str] = []
     for firm_id, canonical_website, website in result.all():
         if normalize_domain(canonical_website) == domain or normalize_domain(website) == domain:
-            return str(firm_id)
-    return None
+            matches.append(str(firm_id))
+    if not matches:
+        return None
+    if len(matches) == 1:
+        return matches[0]
+    alias = await session.get(FirmAliasRow, {"alias_type": "domain", "alias_value": domain})
+    if alias is not None and str(alias.firm_id) in matches:
+        return str(alias.firm_id)
+    return sorted(matches)[0]
 
 
 async def resolve_firm_local(value: str) -> str | None:
     """Resolve a domain, email, URL, or legacy PIF ID using local mirror data only."""
     await ensure_firm_intel_tables()
     async with AsyncSessionLocal() as session:
-        firm_id = await _firm_id_by_local_alias(session, value)
+        firm_id = await _firm_id_by_website(session, value)
         if firm_id:
             return firm_id
-        return await _firm_id_by_website(session, value)
+        return await _firm_id_by_local_alias(session, value)
 
 
 def _remote_resolve_params(value: str) -> dict[str, str]:
