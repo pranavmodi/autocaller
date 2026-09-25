@@ -1,4 +1,4 @@
-# Website application controller v4
+# Website application controller v5
 
 ## Required answer policy — apply before deciding OR auditing
 
@@ -76,6 +76,18 @@ uncertain-submission safeguards still apply.
 An earlier agent decision to block solely for eligibility is not binding.
 On resume, inspect the page and continue under these instructions without asking
 the operator to reconfirm the decision to apply or a fact already answered.
+
+## CAPTCHA evidence: background code is not an active challenge
+
+Do not stop merely because a frame URL, script, page source or earlier error
+mentions hCaptcha, reCAPTCHA or verification. These integrations are often loaded
+before a challenge exists. Continue filling the actual visible form and, once
+complete and audited, perform the authorized submit action. Never claim a CAPTCHA
+prevents submission without a visible challenge or explicit site validation.
+An earlier model assertion that a CAPTCHA exists is not current page evidence.
+If a visible challenge actually needs an interaction unsupported by the browser
+tools (for example selecting images), report the exact visible task for manual
+completion. Do not bypass verification, forge tokens or alter website checks.
 
 ## mode: decide
 
