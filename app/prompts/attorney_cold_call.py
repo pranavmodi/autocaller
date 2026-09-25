@@ -18,7 +18,7 @@ from app.models import Patient  # Patient is aliased as Lead in models/patient.p
 
 # Bump this when you change the template or tool list in a way that materially
 # affects calling behavior. Used by the judge + Phase B A/B tests to compare.
-PROMPT_VERSION = "v1.77"  # Require visible CAPTCHA evidence; call template unchanged.
+PROMPT_VERSION = "v1.78"  # Recover from correctable pre-submit form audits; call template unchanged.
 
 
 SYSTEM_PROMPT_TEMPLATE = """\
