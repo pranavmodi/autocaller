@@ -39,6 +39,7 @@ RUN_TIMEOUT_SECONDS = 1800
 RUN_CLEANUP_RESERVE_SECONDS = 60
 MIN_LLM_CALL_SECONDS = 30
 LLM_TIMEOUT_SECONDS = 420
+MODEL_HEARTBEAT_SECONDS = 10
 # Shared recruiting platforms are evidence sources, never employer identities.
 SHARED_RECRUITING_DOMAINS = frozenset({
     "jobvite.com", "greenhouse.io", "lever.co", "ashbyhq.com", "smartrecruiters.com",
@@ -462,7 +463,26 @@ async def status() -> dict:
             "runs": [serialize_run(r) for r in runs]}
 
 
+def activity(audit: dict, kind: str, message: str, **details):
+    """Observable operations only, never model reasoning or private prompt contents."""
+    events = audit.setdefault('activity', [])
+    event = {'id': len(events) + 1, 'at': now_utc().isoformat(), 'kind': kind,
+             'message': message, **details}
+    events.append(event)
+    audit['last_activity_at'] = event['at']
+
+
+async def publish(run_id: str, audit: dict, message: str, *, kind='stage', **details):
+    audit['phase'] = message
+    activity(audit, kind, message, **details)
+    await checkpoint(run_id, audit)
+
+
 async def checkpoint(run_id: str, result: dict, final_status: str | None = None):
+    result['updated_at'] = now_utc().isoformat()
+    if final_status:
+        activity(result, 'finished', f'Search {final_status}.', status=final_status)
+        result['waiting_for_model'] = False
     async with AsyncSessionLocal() as session:
         run = await session.get(CareerSearchRunRow, run_id, with_for_update=True)
         run.result = json.loads(json.dumps(result))
@@ -527,8 +547,17 @@ async def llm(payload: dict, required: str, config: SearchConfig, audit: dict, r
 
         async def observe_attempt(event: dict):
             nonlocal structured_failure
+            if event.get('phase') in {'started', 'completed'}:
+                phase = event['phase']
+                activity(audit, 'model_' + phase,
+                    'Research request queued or running in the gateway.' if phase == 'started'
+                    else 'Research response received.', mode=payload['mode'], attempt=attempt + 1)
+                await checkpoint(run_id, audit)
+                return
             if event.get("phase") != "failed":
                 return
+            activity(audit, 'model_failed', 'Research request failed; checking whether it can be retried.',
+                     mode=payload['mode'], attempt=attempt + 1)
             # The gateway includes parsed_response only for JSON/shape failures;
             # transport failures may also have raw_response (e.g. a 502 body).
             if "parsed_response" in event:
@@ -553,6 +582,9 @@ async def llm(payload: dict, required: str, config: SearchConfig, audit: dict, r
                     raise CareerSearchBudgetExceeded(
                         f"{payload['mode']} skipped because the run time budget was exhausted")
             audit["llm_calls"] += 1
+            audit['waiting_for_model'] = True
+            audit['model_request'] = {'mode': payload['mode'], 'attempt': attempt + 1,
+                'started_at': now_utc().isoformat(), 'timeout_seconds': round(call_timeout)}
             await checkpoint(run_id, audit)
             tool_access = (
                 payload["mode"] in {"discovery", "retry_discovery"}
@@ -566,13 +598,22 @@ async def llm(payload: dict, required: str, config: SearchConfig, audit: dict, r
                 allow_tools=tool_access,
                 lane=lane or os.getenv("OPENCLAW_RPC_BATCH_LANE", "possibleos-batch"))
             task = asyncio.create_task(request)
-            done, _ = await asyncio.wait({task}, timeout=call_timeout)
-            if not done:
-                task.cancel()
-                await asyncio.gather(task, return_exceptions=True)
-                raise CareerSearchBudgetExceeded(
-                    f"{payload['mode']} exceeded its remaining {call_timeout:.0f}-second run budget")
-            response = task.result()
+            end = asyncio.get_running_loop().time() + call_timeout
+            try:
+                while not task.done():
+                    remaining = end - asyncio.get_running_loop().time()
+                    if remaining <= 0:
+                        raise CareerSearchBudgetExceeded(
+                            f"{payload['mode']} exceeded its remaining {call_timeout:.0f}-second run budget")
+                    await asyncio.wait({task}, timeout=min(MODEL_HEARTBEAT_SECONDS, remaining))
+                    audit['heartbeat_at'] = now_utc().isoformat()
+                    await checkpoint(run_id, audit)
+                response = task.result()
+            finally:
+                audit['waiting_for_model'] = False
+                if not task.done():
+                    task.cancel()
+                    await asyncio.gather(task, return_exceptions=True)
             audit["usage"].append(response.usage or {})
             audit.setdefault("prompt_cache_metrics", []).append(prompt_cache_metrics(response.usage))
             if verification:
@@ -1313,8 +1354,7 @@ async def execute(run_id: str, config: SearchConfig, *, seed_only: bool, audit: 
             PI_QUERIES[(day_number + i) % len(PI_QUERIES)] for i in range(3)
         ]
         audit['queries'] = queries
-        audit['phase'] = 'Searching configured sources'
-        await checkpoint(run_id, audit)
+        await publish(run_id, audit, 'Searching the web and selected job sources', sources=len(sources), queries=len(queries))
         result = await llm({"mode": "discovery", "window_start": (now.date() - timedelta(days=search_profile.posted_within_days if search_profile else 30)).isoformat(),
             "window_end": now.date().isoformat(), "search_profile": search_profile.model_dump(mode="json") if search_profile else None,
             "queries": queries,
@@ -1328,6 +1368,8 @@ async def execute(run_id: str, config: SearchConfig, *, seed_only: bool, audit: 
         audit['queries_used'] = [q for q in (result.get('queries_used') or []) if isinstance(q, str)]
         discovered = result["candidates"][:config.max_candidates]
     audit["discovery_candidates"] = audit_value(discovered)
+    await publish(run_id, audit, f'Found {len(discovered)} candidate jobs; checking employer identities',
+                  kind='discovered', found=len(discovered))
     if direct_source_url:
         recovered = await recover_direct_import_candidate(
             discovered,
@@ -1371,9 +1413,8 @@ async def execute(run_id: str, config: SearchConfig, *, seed_only: bool, audit: 
                 seen.add(key)
             else:
                 audit["duplicates_skipped"] = audit.get("duplicates_skipped", 0) + 1
-    audit['phase'] = 'Verifying jobs and evaluating search requirements'
     audit["candidates"] = len(candidates)
-    await checkpoint(run_id, audit)
+    await publish(run_id, audit, f'Checking {len(candidates)} jobs against sources and search requirements')
     cache = {}
     for start in range(0, len(candidates), 3):
         if deadline is not None and deadline - asyncio.get_running_loop().time() < MIN_LLM_CALL_SECONDS:
@@ -1385,6 +1426,8 @@ async def execute(run_id: str, config: SearchConfig, *, seed_only: bool, audit: 
         for index, item in enumerate(candidates[start:start + 3], start=start):
             candidate = item["candidate"]
             try:
+                await publish(run_id, audit, f'Opening job {index + 1} of {len(candidates)}: {candidate.title}',
+                    kind='fetch', source_url=str(candidate.source_url), firm_name=candidate.firm_name)
                 job_page = item.get("prefetched_job_page") or await fetch_page(str(candidate.source_url))
                 if job_page["http_status"] in {404, 410}:
                     if search_profile and search_profile.precise:
@@ -1429,17 +1472,23 @@ async def execute(run_id: str, config: SearchConfig, *, seed_only: bool, audit: 
                               "pages": [job_page, employer_page, *contact_pages]})
             except Exception as exc:
                 audit["errors"].append({"source_url": str(candidate.source_url), "error": str(exc)[:1000]})
+                activity(audit, 'fetch_failed', f'Could not verify {candidate.title}: {str(exc)[:500]}',
+                         source_url=str(candidate.source_url))
+                await checkpoint(run_id, audit)
                 if item.get("tracked"):
                     await mark_checked(item, closed=False, reason=str(exc)[:1000])
         if not batch:
             await checkpoint(run_id, audit)
             continue
         verified_batch = []
+        await publish(run_id, audit, f'Evaluating {len(batch)} jobs against your search requirements')
         async for item, decision in verified_decisions(batch, config, audit, run_id, today=now.date(),
                                                        search_profile=search_profile, deadline=deadline,
                                                        direct_import=bool(direct_source_url)):
             candidate = item["candidate"]
             audit["decisions"].append({"candidate": candidate.model_dump(mode="json"), "decision": decision.model_dump(mode="json")})
+            activity(audit, 'assessed', f'Checked {candidate.title} at {candidate.firm_name}.',
+                     source_url=str(candidate.source_url), status=decision.status)
             verified_batch.append((item, decision))
             if search_profile and search_profile.precise:
                 assessment = assess_search_match(decision, search_profile, today=now.date())
@@ -1466,6 +1515,7 @@ async def execute(run_id: str, config: SearchConfig, *, seed_only: bool, audit: 
                 audit["errors"].append({"source_url": str(candidate.source_url), "error": str(exc)[:1000]})
 
         if prepared:
+            await publish(run_id, audit, f'Checking contract status for {len(prepared)} jobs')
             from app.services.job_contract_classification import classify_extracted_postings
             positions = list(prepared)
             classified_postings, contract_error = await classify_extracted_postings(
@@ -1492,6 +1542,7 @@ async def execute(run_id: str, config: SearchConfig, *, seed_only: bool, audit: 
                     posting = prepared.get(index)
                     if posting is None:
                         continue
+                    await publish(run_id, audit, f'Saving {candidate.title} and checking for duplicates', source_url=str(candidate.source_url))
                     stored = await ingest(candidate, posting)
                     contact_counts = await ingest_application_contacts(stored["firm_id"], decision.application_contacts)
                     stored["contacts"] = contact_counts
@@ -1509,6 +1560,8 @@ async def execute(run_id: str, config: SearchConfig, *, seed_only: bool, audit: 
                     audit["contacts_found"] = audit.get("contacts_found", 0) + contact_counts["verified"]
                     audit["contacts_inserted"] = audit.get("contacts_inserted", 0) + contact_counts["inserted"]
                     audit["stored"].append(stored)
+                    activity(audit, 'saved', f"{'Added' if stored['added'] else 'Updated existing job'}: {candidate.title}.",
+                             source_url=str(candidate.source_url), firm_name=candidate.firm_name)
                     # Revisit newly learned employer sources on subsequent rotating runs.
                     async with AsyncSessionLocal() as session:
                         state = await session.get(CareerSearchStateRow, "daily_pi_tech", with_for_update=True)
@@ -1702,6 +1755,8 @@ async def run(*, due_only: bool = False, seed_only: bool = False, retry_run: str
             if queued_audit:
                 audit.update(queued_audit)
                 audit['phase'] = 'Starting search'
+                audit['execution_started_at'] = now.isoformat()
+                activity(audit, 'started', 'Search worker started this run.')
             run_id = queued_run_id or uuid.uuid4().hex
             async with AsyncSessionLocal() as session:
                 if queued_run_id:

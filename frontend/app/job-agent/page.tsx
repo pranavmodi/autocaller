@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { JobApplicationControls, ResumeSettings } from "@/components/JobApplicationControls";
 import { JobApplicantProfile } from "@/components/JobApplicantProfile";
 import { JobCvLibrary } from "@/components/JobCvLibrary";
@@ -36,6 +36,7 @@ function ErrorBox({ error }: { error: Error | null }) { return error ? <div role
 export default function JobAgentPage() {
   const client = useQueryClient();
   const [tab, setTab] = useState("queue");
+  useEffect(() => { const params = new URLSearchParams(window.location.search); if (params.get('tab') === 'searches' || params.has('run')) setTab('searches'); }, []);
   const [filter, setFilter] = useState<ReviewStatus | "">("");
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("");

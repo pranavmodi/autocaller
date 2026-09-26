@@ -436,3 +436,16 @@ Storage: `job_agent_saved_searches` holds revisioned configuration;
 `career_search_runs` holds queued/running/completed/partial/failed/interrupted runs,
 settings snapshots, and per-job observations linked to canonical candidate IDs.
 `g2060926a001` is the additive migration; startup also creates the table if absent.
+
+### Live run observability
+Searches opens the active/latest run automatically and keeps the selected run in
+`?tab=searches&run=RUN_ID`, so refresh preserves the view. Run details appear above
+history, poll every two seconds while active, and show found/assessed/saved/error
+counts, elapsed time, current operation, researcher wait/attempt, worker heartbeat,
+and a timestamped activity timeline. The backend records discovery candidates
+before identity repair or verification; pending jobs and failed fetches remain
+visible even when zero jobs were added. History counts use the same projection as
+the result list. A heartbeat is liveness only, never an invented research action.
+OpenClaw's internal browsing actions and partial model output are not streamed;
+discovery jobs appear when the discovery response is received. Older runs retain
+their actual saved findings and explicitly lack the new activity timeline.

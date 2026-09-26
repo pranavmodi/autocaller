@@ -1194,3 +1194,10 @@ run is not proof it was searched. Snapshots preserve each run's settings. Schedu
 are configured per saved search, not `career-search-config`; the existing timer
 checks due searches every five minutes. Each schedule attempts once per local day;
 manual retries are explicit. Search never authorizes applications or correspondence.
+
+Search monitoring: `job-agent search-results RUN_ID` returns progress counters and
+a timestamped `activity` timeline. Discovery findings are visible before validation;
+`new_jobs=0` does not mean nothing was found. Model wait/heartbeat is not proof that
+a particular website was inspected. Share `/job-agent?tab=searches&run=RUN_ID` to
+open that run's live status and results. Earlier runs cannot acquire historical
+telemetry that was never recorded.

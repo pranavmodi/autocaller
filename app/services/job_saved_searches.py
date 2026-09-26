@@ -165,6 +165,7 @@ async def enqueue(identity: str, trigger='manual', scheduled_day: str | None = N
             'settings_snapshot': row.config, 'search_profile': profile(settings).model_dump(mode='json'),
             'search_trigger': trigger, 'job_agent_search': True, 'manual_search': trigger == 'manual',
             'phase': 'queued', 'results': [], 'errors': []}
+        career.activity(payload, 'queued', 'Search queued; waiting for the research worker.')
         session.add(CareerSearchRunRow(id=run_id, scheduled_day=scheduled_day or career.now_utc().date().isoformat(),
             status='queued', started_at=career.now_utc(), result=payload))
         await session.commit()
@@ -189,14 +190,49 @@ async def enqueue_due():
     return {'status': 'scheduled', 'runs': queued}
 
 
+def run_results(a: dict, status: str) -> list[dict]:
+    results = a.get('results')
+    if results is None:
+        results = [{'candidate': d.get('candidate'), 'decision': d.get('decision'),
+                    'outcome': 'legacy', 'reason': (d.get('decision') or {}).get('reason', '')}
+                   for d in a.get('decisions', [])]
+    seen = {str((r.get('candidate') or {}).get('source_url')) for r in results}
+    for candidate in a.get('discovery_candidates', []):
+        if not isinstance(candidate, dict) or str(candidate.get('source_url')) in seen: continue
+        url = str(candidate.get('source_url'))
+        errors = [e.get('error', '') for e in a.get('errors', []) if e.get('source_url') == url]
+        decision = next((d.get('decision', {}) for d in a.get('decisions', [])
+                         if (d.get('candidate') or {}).get('source_url') == url), {})
+        outcome = 'error' if errors else 'uncertain' if status not in ('running', 'queued') else 'pending'
+        results = [*results, {'candidate': candidate, 'decision': decision, 'outcome': outcome,
+            'reason': '; '.join(errors) or decision.get('reason') or ('Found during discovery; waiting for verification.' if status in ('running', 'queued') else 'No completed assessment was saved.')}]
+        seen.add(url)
+    return results
+
+
+def progress(row):
+    a = row.result or {}
+    results = run_results(a, row.status)
+    seen = {str((r.get('candidate') or {}).get('source_url')) for r in results}
+    return {'found': len(seen), 'assessed': len(a.get('decisions', [])),
+            'saved': len(a.get('stored', [])), 'errors': len(a.get('errors', [])),
+            'updated_at': a.get('updated_at'), 'heartbeat_at': a.get('heartbeat_at'),
+            'last_activity_at': a.get('last_activity_at'),
+            'waiting_for_model': a.get('waiting_for_model', False),
+            'model_request': a.get('model_request'),
+            'execution_started_at': a.get('execution_started_at'),
+            'live_telemetry': bool(a.get('activity'))}
+
+
 def summary(row):
     audit = row.result or {}
-    results = audit.get('results', [])
+    results = run_results(audit, row.status)
     return {'id': row.id, 'status': row.status, 'search_id': audit.get('saved_search_id'),
         'name': (audit.get('search_profile') or {}).get('name', 'Earlier career search'),
         'trigger': audit.get('search_trigger', 'legacy'), 'phase': audit.get('phase', row.status),
         'started_at': row.started_at.isoformat(),
         'completed_at': row.completed_at.isoformat() if row.completed_at else None,
+        'progress': progress(row),
         'counts': {k: sum(r.get('outcome') == k for r in results) for k in ['match','uncertain','excluded','error']},
         'new_jobs': audit.get('new_jobs', 0), 'verified': audit.get('verified', 0),
         'duplicates': audit.get('duplicates_skipped', 0), 'errors': len(audit.get('errors', []))}
@@ -216,25 +252,11 @@ async def run_detail(identity: str):
         row = await session.get(CareerSearchRunRow, identity)
         if not row: raise KeyError(identity)
         a = row.result or {}
-        results = a.get('results')
-        if results is None:
-            results = [{'candidate': d.get('candidate'), 'decision': d.get('decision'),
-                        'outcome': 'legacy', 'reason': (d.get('decision') or {}).get('reason', '')}
-                       for d in a.get('decisions', [])]
-        seen = {str((r.get('candidate') or {}).get('source_url')) for r in results}
-        for candidate in a.get('discovery_candidates', []):
-            if not isinstance(candidate, dict) or str(candidate.get('source_url')) in seen: continue
-            url = str(candidate.get('source_url'))
-            errors = [e.get('error', '') for e in a.get('errors', []) if e.get('source_url') == url]
-            decision = next((d.get('decision', {}) for d in a.get('decisions', [])
-                             if (d.get('candidate') or {}).get('source_url') == url), {})
-            outcome = 'error' if errors else 'uncertain' if row.status not in ('running', 'queued') else 'pending'
-            results = [*results, {'candidate': candidate, 'decision': decision, 'outcome': outcome,
-                'reason': '; '.join(errors) or decision.get('reason') or 'No completed assessment was saved.'}]
-            seen.add(url)
+        results = run_results(a, row.status)
         return {**summary(row), 'settings': a.get('settings_snapshot') or a.get('search_profile'),
             'results': sorted(results, key=lambda r: ({'match': 0, 'uncertain': 1, 'pending': 2, 'excluded': 3, 'error': 4}.get(r.get('outcome'), 5), -r.get('preference_score', 0))), 'queries': a.get('queries_used') or a.get('queries', []),
             'sources': a.get('search_sources_consulted', []), 'source_checks': a.get('source_checks', []),
+            'activity': a.get('activity', []),
             'errors_detail': a.get('errors', []), 'legacy': 'results' not in a}
 
 async def draft(body: ParseSearch):

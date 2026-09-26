@@ -187,3 +187,60 @@ async def test_daily_slot_is_idempotent_even_for_failed_run(monkeypatch):
     monkeypatch.setattr(saved,'AsyncSessionLocal',lambda:session)
     assert await saved.enqueue('s','scheduled','2026-09-26') == {'status':'not_due'}
     assert not session.added
+
+
+def test_history_counts_include_discovered_jobs_whose_fetch_failed():
+    now=datetime.now(timezone.utc)
+    row=SimpleNamespace(id='r',status='partial',started_at=now,completed_at=now,result={
+        'results':[], 'discovery_candidates':[{'source_url':'https://example.com/1','title':'AI Engineer'}],
+        'errors':[{'source_url':'https://example.com/1','error':'HTTP 403'}]})
+    summary=saved.summary(row)
+    assert summary['progress']['found']==1
+    assert summary['counts']['error']==1
+    assert summary['new_jobs']==0
+    assert summary['progress']['live_telemetry'] is False
+
+
+def test_unverified_discoveries_are_visible_while_run_is_active():
+    result=saved.run_results({'results':[],'discovery_candidates':[{'source_url':'https://example.com/1','title':'AI Engineer'}]},'running')
+    assert result[0]['outcome']=='pending'
+    assert 'waiting for verification' in result[0]['reason']
+    assert not result[0].get('candidate_id')
+
+
+@pytest.mark.asyncio
+async def test_discovery_is_checkpointed_before_slow_identity_repair(monkeypatch):
+    from tests.test_daily_career_search import candidate
+    snapshots=[]
+    async def checkpoint(_id,audit,*args): snapshots.append(copy.deepcopy(audit))
+    monkeypatch.setattr(career,'checkpoint',checkpoint)
+    raw=candidate().model_dump(mode='json')
+    monkeypatch.setattr(career,'llm',AsyncMock(return_value={'candidates':[raw]}))
+    async def recover(*args,**kwargs):
+        assert snapshots[-1]['discovery_candidates']==[raw]
+        assert snapshots[-1]['activity'][-1]['kind']=='discovered'
+        return []
+    monkeypatch.setattr(career,'recover_candidates',recover)
+    monkeypatch.setattr(career,'known_source_identities',AsyncMock(return_value=set()))
+    await career.execute('r',career.SearchConfig(),seed_only=False,audit={},search_profile=saved.profile(settings()))
+
+
+@pytest.mark.asyncio
+async def test_model_wait_reports_heartbeat_without_inventing_progress(monkeypatch):
+    import asyncio
+    audit={'llm_calls':0,'usage':[]}
+    snapshots=[]
+    async def checkpoint(_id,audit,*args): snapshots.append(copy.deepcopy(audit))
+    async def model(**kwargs):
+        await kwargs['attempt_observer']({'phase':'started'})
+        await asyncio.sleep(.035)
+        await kwargs['attempt_observer']({'phase':'completed'})
+        return SimpleNamespace(parsed={'candidates':[]},usage={})
+    monkeypatch.setattr(career,'MODEL_HEARTBEAT_SECONDS',.01)
+    monkeypatch.setattr(career,'checkpoint',checkpoint)
+    monkeypatch.setattr(career,'call_skill_json',model)
+    assert await career.llm({'mode':'discovery'},'candidates',career.SearchConfig(),audit,'r')=={'candidates':[]}
+    assert any(s.get('heartbeat_at') and s['waiting_for_model'] for s in snapshots)
+    assert [e['kind'] for e in audit['activity']]==['model_started','model_completed']
+    assert audit['waiting_for_model'] is False
+    assert 'discovery_candidates' not in audit

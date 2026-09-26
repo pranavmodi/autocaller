@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Search, Plus, Play, Settings2, Clock, Loader2, ArrowUpRight, Sparkles, ChevronLeft } from "lucide-react";
 import { jobAgentRequest as request, type Candidate, type Overview } from "@/lib/job-agent";
@@ -14,14 +14,19 @@ type Config = {
   schedule_enabled: boolean; timezone: string; local_time: string;
 };
 type Saved = { id: string; revision: number; config: Config };
+type Progress = { found: number; assessed: number; saved: number; errors: number;
+  updated_at?: string; heartbeat_at?: string; last_activity_at?: string; live_telemetry: boolean;
+  execution_started_at?: string; waiting_for_model: boolean;
+  model_request?: { mode: string; attempt: number; started_at: string; timeout_seconds: number } };
+type Activity = { id: number; at: string; kind: string; message: string; source_url?: string };
 type Run = { id: string; name: string; search_id?: string; status: string; phase: string; trigger: string;
   started_at: string; completed_at?: string; new_jobs: number; verified: number; duplicates: number; errors: number;
-  counts: Record<string, number> };
+  counts: Record<string, number>; progress?: Progress };
 type Result = { candidate: { firm_name?: string; title?: string; source_url?: string }; candidate_id?: string;
   outcome: string; reason: string; already_known?: boolean; contract_status?: string;
   contacts?: { verified: number }; decision?: { location?: string; posted_date?: string; work_arrangement?: string;
     search_checks?: { criterion: string; result: string; reason: string; confidence: number; evidence?: { source_url: string; text: string } }[] } };
-type Detail = Run & { settings: Record<string, unknown>; results: Result[]; queries: string[]; sources: string[];
+type Detail = Run & { activity?: Activity[]; settings: Record<string, unknown>; results: Result[]; queries: string[]; sources: string[];
   source_checks: { url: string; status: string; reason: string }[];
   errors_detail: { source_url?: string; phase?: string; error?: string }[]; legacy: boolean };
 const input = "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-100";
@@ -40,13 +45,25 @@ export default function JobSearches({ overview, onOpen }: { overview: Overview; 
   const [searchId, setSearchId] = useState("");
   const [page, setPage] = useState(1);
   const [runId, setRunId] = useState("");
+  const [autoSelect, setAutoSelect] = useState(true);
+  useEffect(() => { const saved = new URLSearchParams(window.location.search).get('run'); if (saved) setRunId(saved); }, []);
+  useEffect(() => {
+    if (!runId) return;
+    const u = new URL(window.location.href); u.searchParams.set('run', runId); u.searchParams.set('tab', 'searches');
+    window.history.replaceState(null, '', u);
+  }, [runId]);
   const [filter, setFilter] = useState("all");
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [description, setDescription] = useState("");
   const searches = useQuery({ queryKey: ["job-agent", "searches"], queryFn: () => request<{ items: Saved[] }>("/searches") });
   const runs = useQuery({ queryKey: ["job-agent", "search-runs", searchId, page], queryFn: () => request<{ items: Run[]; total_pages: number; total: number }>(`/search-runs?${new URLSearchParams({ ...(searchId ? { search_id: searchId } : {}), page: String(page) })}`), refetchInterval: 5000 });
-  const detail = useQuery({ queryKey: ["job-agent", "search-run", runId], queryFn: () => request<Detail>(`/search-runs/${runId}`), enabled: !!runId, refetchInterval: 5000 });
+  useEffect(() => {
+    if (runId || !autoSelect || new URLSearchParams(window.location.search).has('run') || !runs.data?.items.length) return;
+    const latest = runs.data.items.find(r => r.status === 'running') || runs.data.items[0];
+    setRunId(latest.id);
+  }, [runs.data, runId, autoSelect]);
+  const detail = useQuery({ queryKey: ["job-agent", "search-run", runId], queryFn: () => request<Detail>(`/search-runs/${runId}`), enabled: !!runId, refetchInterval: query => ['running', 'queued'].includes(query.state.data?.status || '') ? 2000 : 10000 });
   const refresh = () => client.invalidateQueries({ queryKey: ["job-agent"] });
   async function act(key: string, fn: () => Promise<void>) { setBusy(key); setError(""); try { await fn(); } catch (e) { setError(e instanceof Error ? e.message : "Something went wrong. Try again."); } finally { setBusy(""); } }
   function fresh(): Saved {
@@ -81,17 +98,10 @@ export default function JobSearches({ overview, onOpen }: { overview: Overview; 
       <div className="rounded-xl border border-indigo-100 bg-indigo-50 p-4"><label className="flex items-center gap-2 text-sm font-medium"><input type="checkbox" checked={edit.config.schedule_enabled} onChange={e => update("schedule_enabled", e.target.checked)} /><Clock size={16} />Run daily</label>{edit.config.schedule_enabled && <div className="mt-3 grid gap-3 sm:grid-cols-2"><label className={label}>Time<input type="time" required className={input} value={edit.config.local_time} onChange={e => update("local_time", e.target.value)} /></label><label className={label}>Timezone<input required className={input} value={edit.config.timezone} onChange={e => update("timezone", e.target.value)} placeholder="Asia/Kolkata" /></label></div>}<p className="mt-2 text-xs text-slate-500">The scheduler checks every five minutes. Queued searches run one at a time.</p></div>
       <button className={primary} disabled={!!busy}>{busy === "save" ? "Saving…" : "Save search"}</button>
     </form>}
-    {!edit && <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{searches.isPending && <p className="text-sm text-slate-500">Loading saved searches…</p>}{searches.data?.items.map(search => <article key={search.id} className="flex flex-col rounded-xl border border-slate-200 bg-white p-5"><div className="flex items-start justify-between gap-2"><h3 className="font-semibold">{search.config.name}</h3><button aria-label={`Edit ${search.config.name}`} className="rounded p-1 text-slate-500 hover:bg-slate-100" onClick={() => setEdit(search)}><Settings2 size={18} /></button></div><p className="mt-3 line-clamp-3 text-sm text-slate-600">{search.config.target_roles}</p><p className="mt-2 text-xs text-slate-500">{search.config.preferred_industries}</p><p className="mt-2 text-xs text-slate-500">{search.config.location_preferences}</p><div className="my-4 flex flex-wrap gap-2"><Badge value={search.config.employment_type === 'any' ? 'any employment' : search.config.employment_type} /><Badge value={`last ${search.config.posted_within_days} days`} /></div><p className="mb-4 text-xs text-indigo-700">{search.config.schedule_enabled ? `Daily · ${search.config.local_time} ${search.config.timezone}` : 'Manual runs only'}</p><div className="mt-auto flex gap-2"><button className={primary} disabled={!!busy} onClick={() => act(search.id, async () => { const r = await request<{ id: string }>(`/searches/${search.id}/run`, {}); setRunId(r.id); setFilter('all'); refresh(); })}><Play size={14} />{busy === search.id ? 'Queuing…' : 'Run now'}</button><button className={button} onClick={() => { setSearchId(search.id); setPage(1); setRunId(''); }}>Run history</button></div></article>)}</div>}
-    <div className="rounded-xl border border-slate-200 bg-white">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 p-4"><h3 className="font-semibold">Run history</h3><select aria-label="Filter search runs" className={`${input} max-w-xs`} value={searchId} onChange={e => { setSearchId(e.target.value); setPage(1); }}><option value="">All searches, including earlier runs</option>{searches.data?.items.map(s => <option key={s.id} value={s.id}>{s.config.name}</option>)}</select></div>
-      {runs.isPending && <p className="p-5 text-sm">Loading runs…</p>}{runs.data?.items.length === 0 && <p className="p-6 text-sm text-slate-500">No runs yet. Save a search and choose Run now.</p>}
-      <div className="divide-y divide-slate-100">{runs.data?.items.map(run => <button key={run.id} className={`flex w-full flex-col gap-2 p-4 text-left hover:bg-sky-50 sm:flex-row sm:items-center sm:justify-between ${runId === run.id ? 'bg-sky-50' : ''}`} onClick={() => { setRunId(run.id); setFilter('all'); }}><div><span className="text-sm font-medium">{run.name}</span><p className="mt-1 text-xs text-slate-500">{date(run.started_at)} · {run.trigger}</p></div><div className="flex flex-wrap items-center gap-3 text-xs text-slate-600"><span>{run.new_jobs} new · {run.duplicates} already known · {run.errors} errors</span><Badge value={run.status} /></div></button>)}</div>
-      {!!runs.data?.total && <div className="flex items-center justify-between border-t p-3 text-xs"><span>{runs.data.total} runs · Page {page} of {runs.data.total_pages}</span><div className="flex gap-2"><button className={button} disabled={page <= 1} onClick={() => setPage(page-1)}>Previous</button><button className={button} disabled={page >= runs.data.total_pages} onClick={() => setPage(page+1)}>Next</button></div></div>}
-    </div>
-    {runId && <div className="rounded-2xl border border-sky-200 bg-white p-5"><button className="mb-3 flex items-center gap-1 text-xs text-slate-500" onClick={() => setRunId('')}><ChevronLeft size={14} />Close run details</button>{detail.isPending && <p>Loading results…</p>}{current && <>
+    {runId && <div className="rounded-2xl border border-sky-200 bg-white p-5"><button className="mb-3 flex items-center gap-1 text-xs text-slate-500" onClick={() => { setRunId(''); setAutoSelect(false); const u = new URL(window.location.href); u.searchParams.delete('run'); window.history.replaceState(null, '', u); }}><ChevronLeft size={14} />Close run details</button>{detail.isPending && <p>Loading results…</p>}{current && <>
       <div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="text-lg font-semibold">{current.name}</h3><p className="mt-1 text-xs text-slate-500">{date(current.started_at)}{current.completed_at && ` → ${date(current.completed_at)}`}</p></div><Badge value={current.status} /></div>
-      <p role="status" className="my-4 flex items-center gap-2 rounded-lg bg-sky-50 p-3 text-sm text-sky-900">{['running','queued'].includes(current.status) && <Loader2 size={16} className="animate-spin" />}{current.status === 'queued' ? 'Waiting for the search worker. Another search may be using the research lane.' : current.phase}</p>
-      <p className="mb-4 text-sm text-slate-600">{current.results.length} findings · {current.new_jobs} new jobs · {current.duplicates} already in queue · {current.errors} errors</p>
+      <LiveRunProgress run={current} refreshing={detail.isFetching} lastRefresh={detail.dataUpdatedAt} onRefresh={() => detail.refetch()} />
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><h4 className="font-semibold">Jobs found in this run ({current.results.length})</h4><span className="text-xs text-slate-500">{current.new_jobs} new · {current.duplicates} already in queue</span></div>
       <details className="mb-4 rounded-lg border p-3"><summary className="cursor-pointer text-sm font-medium">Settings and sources used for this run</summary><p className="my-2 text-xs text-slate-500">This snapshot does not change when you edit the saved search.</p><pre className="max-h-80 overflow-auto whitespace-pre-wrap break-words rounded bg-slate-50 p-3 text-xs">{JSON.stringify(current.settings, null, 2)}</pre><h4 className="mt-3 text-sm font-medium">Queries</h4><ul className="list-inside list-disc text-xs text-slate-600">{current.queries.map((q,i) => <li key={i}>{q}</li>)}</ul><h4 className="mt-3 text-sm font-medium">Sources assigned</h4>{current.sources.map((s,i) => <p className="break-all text-xs" key={i}><a href={url(s)} target="_blank" rel="noreferrer" className="text-sky-700 underline">{s}</a></p>)}<h4 className="mt-3 text-sm font-medium">Source checks reported by the researcher</h4>{!current.source_checks.length && <p className="text-xs text-slate-500">No source-check report was saved. Assigned sources alone do not prove they were searched.</p>}{current.source_checks.map((s,i) => <p className="mt-1 break-words text-xs" key={i}>{s.url} · {s.status} · {s.reason}</p>)}</details>
       {current.legacy && <p className="mb-4 text-xs text-amber-800">Earlier run: showing recorded decisions. Detailed requirement checks and queue links were not recorded at the time.</p>}
       {!!current.errors_detail.length && <details className="mb-4 rounded-lg border border-rose-100 bg-rose-50 p-3"><summary className="cursor-pointer text-sm text-rose-800">{current.errors_detail.length} processing errors</summary>{current.errors_detail.map((e,i) => <p key={i} className="mt-2 break-words text-xs text-rose-800">{e.phase || e.source_url}: {e.error}</p>)}</details>}
@@ -99,5 +109,39 @@ export default function JobSearches({ overview, onOpen }: { overview: Overview; 
       <div className="space-y-3">{current.results.filter(r => filter==='all' || r.outcome===filter).map((r,i) => <article key={`${r.candidate?.source_url}-${i}`} className="rounded-xl border border-slate-200 p-4"><div className="flex flex-wrap items-start justify-between gap-2"><div><h4 className="font-medium">{r.candidate?.title || 'Unresolved job'}</h4><p className="mt-1 text-sm text-slate-600">{r.candidate?.firm_name} · {r.decision?.location || 'Location unknown'}</p></div><Badge value={r.outcome} /></div><p className="my-3 text-sm text-slate-700">{r.reason}</p><div className="flex flex-wrap gap-2 text-xs text-slate-500">{r.already_known && <Badge value="Already in your queue" />}<span>{r.decision?.posted_date || 'Posting date unknown'}</span>{r.contract_status && <span>· {readable(r.contract_status)}</span>}{r.contacts && <span>· {r.contacts.verified} verified contacts</span>}</div>{!!r.decision?.search_checks?.length && <details className="mt-3"><summary className="cursor-pointer text-xs font-medium text-sky-700">Why this result?</summary><div className="mt-2 space-y-2">{r.decision.search_checks.map((c,j) => <div className="rounded bg-slate-50 p-2 text-xs" key={j}><span className="font-medium capitalize">{c.criterion}</span> · <Badge value={c.result} /><p className="mt-2">{c.reason}</p>{c.evidence && <blockquote className="mt-2 border-l-2 border-sky-200 pl-2 text-slate-500">{c.evidence.text}</blockquote>}</div>)}</div></details>}<div className="mt-3 flex gap-2">{url(r.candidate?.source_url) && <a className={button} href={url(r.candidate?.source_url)} target="_blank" rel="noreferrer">View listing<ArrowUpRight size={14} /></a>}{r.candidate_id && <button className={button} disabled={!!busy} onClick={() => act('open', async () => onOpen(await request<Candidate>(`/jobs/${r.candidate_id}`)))}>Open saved job</button>}</div></article>)}</div>
       {!current.results.length && <p className="py-6 text-center text-sm text-slate-500">{['running','queued'].includes(current.status) ? 'Findings will appear as research progresses.' : 'No findings were recorded. Check source reports and errors, or broaden the search.'}</p>}
     </>}</div>}
+    {!edit && <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{searches.isPending && <p className="text-sm text-slate-500">Loading saved searches…</p>}{searches.data?.items.map(search => <article key={search.id} className="flex flex-col rounded-xl border border-slate-200 bg-white p-5"><div className="flex items-start justify-between gap-2"><h3 className="font-semibold">{search.config.name}</h3><button aria-label={`Edit ${search.config.name}`} className="rounded p-1 text-slate-500 hover:bg-slate-100" onClick={() => setEdit(search)}><Settings2 size={18} /></button></div><p className="mt-3 line-clamp-3 text-sm text-slate-600">{search.config.target_roles}</p><p className="mt-2 text-xs text-slate-500">{search.config.preferred_industries}</p><p className="mt-2 text-xs text-slate-500">{search.config.location_preferences}</p><div className="my-4 flex flex-wrap gap-2"><Badge value={search.config.employment_type === 'any' ? 'any employment' : search.config.employment_type} /><Badge value={`last ${search.config.posted_within_days} days`} /></div><p className="mb-4 text-xs text-indigo-700">{search.config.schedule_enabled ? `Daily · ${search.config.local_time} ${search.config.timezone}` : 'Manual runs only'}</p><div className="mt-auto flex gap-2"><button className={primary} disabled={!!busy} onClick={() => act(search.id, async () => { const r = await request<{ id: string }>(`/searches/${search.id}/run`, {}); setRunId(r.id); setFilter('all'); refresh(); })}><Play size={14} />{busy === search.id ? 'Queuing…' : 'Run now'}</button><button className={button} onClick={() => { setSearchId(search.id); setPage(1); setRunId(''); }}>Run history</button></div></article>)}</div>}
+    <div className="rounded-xl border border-slate-200 bg-white">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 p-4"><h3 className="font-semibold">Run history</h3><select aria-label="Filter search runs" className={`${input} max-w-xs`} value={searchId} onChange={e => { setSearchId(e.target.value); setPage(1); }}><option value="">All searches, including earlier runs</option>{searches.data?.items.map(s => <option key={s.id} value={s.id}>{s.config.name}</option>)}</select></div>
+      {runs.isPending && <p className="p-5 text-sm">Loading runs…</p>}{runs.data?.items.length === 0 && <p className="p-6 text-sm text-slate-500">No runs yet. Save a search and choose Run now.</p>}
+      <div className="divide-y divide-slate-100">{runs.data?.items.map(run => <button key={run.id} className={`flex w-full flex-col gap-2 p-4 text-left hover:bg-sky-50 sm:flex-row sm:items-center sm:justify-between ${runId === run.id ? 'bg-sky-50' : ''}`} onClick={() => { setRunId(run.id); setFilter('all'); }}><div><span className="text-sm font-medium">{run.name}</span><p className="mt-1 text-xs text-slate-500">{date(run.started_at)} · {run.trigger}</p></div><div className="flex flex-wrap items-center gap-3 text-xs text-slate-600"><span>{run.progress?.found ?? 0} found · {run.new_jobs} new · {run.duplicates} already known · {run.errors} errors</span><span className="text-sky-700">View progress &amp; jobs →</span><Badge value={run.status} /></div></button>)}</div>
+      {!!runs.data?.total && <div className="flex items-center justify-between border-t p-3 text-xs"><span>{runs.data.total} runs · Page {page} of {runs.data.total_pages}</span><div className="flex gap-2"><button className={button} disabled={page <= 1} onClick={() => setPage(page-1)}>Previous</button><button className={button} disabled={page >= runs.data.total_pages} onClick={() => setPage(page+1)}>Next</button></div></div>}
+    </div>
+
   </section>;
+}
+
+
+function LiveRunProgress({ run, refreshing, lastRefresh, onRefresh }: { run: Detail; refreshing: boolean; lastRefresh: number; onRefresh: () => void }) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(timer); }, []);
+  const active = ['queued', 'running'].includes(run.status);
+  const elapsed = Math.max(0, Math.floor(((run.completed_at ? Date.parse(run.completed_at) : now) - Date.parse(run.started_at)) / 1000));
+  const age = run.progress?.updated_at ? Math.max(0, Math.floor((now - Date.parse(run.progress.updated_at))/1000)) : null;
+  const terminal: Record<string, string> = { completed: 'Search finished. Review the jobs below.', partial: 'Search finished with some incomplete checks. Findings and errors are preserved below.', failed: 'Search failed. Any findings are preserved below.', interrupted: 'The worker stopped before completion. Findings are preserved below.' };
+  return <div className="my-4 space-y-3">
+    <div className="rounded-xl border border-sky-100 bg-sky-50 p-4">
+      <div role="status" className="flex items-center gap-2 text-sm font-medium text-sky-950">{active && <Loader2 size={16} className="animate-spin" />}{run.status === 'queued' ? 'Queued — waiting for the research worker' : terminal[run.status] || run.phase}</div>
+      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-sky-800"><span>{Math.floor(elapsed/60)}m {elapsed%60}s elapsed{run.progress?.execution_started_at ? ' including queue time' : ''}</span><span>{active ? 'Updates automatically every 2 seconds' : 'Saved run history'}</span><button className="underline" disabled={refreshing} onClick={onRefresh}>{refreshing ? 'Refreshing…' : 'Refresh now'}</button><span>Last checked {lastRefresh ? new Date(lastRefresh).toLocaleTimeString() : '…'}</span></div>
+      {active && run.progress?.waiting_for_model && <p className="mt-3 text-xs text-sky-900">Waiting for the researcher’s response · {readable(run.progress.model_request?.mode || 'research')} · attempt {run.progress.model_request?.attempt || 1}. Jobs appear when the discovery batch returns; individual browser/tool actions are not streamed.</p>}
+      {active && age !== null && <p className={`mt-2 text-xs ${age > 45 ? 'text-amber-800' : 'text-sky-700'}`}>{age > 45 ? `No worker update for ${age}s. The page is still polling; this alone does not confirm a failure.` : `Worker last reported ${age}s ago. A heartbeat confirms the worker is responsive, not that new jobs were found.`}</p>}
+      {active && !run.progress?.live_telemetry && <p className="mt-2 text-xs text-slate-600">This run began before detailed activity reporting. Its saved findings and status still update here.</p>}
+    </div>
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">{[
+      ['Found', run.progress?.found ?? run.results.length], ['Assessed', run.progress?.assessed ?? 0],
+      ['Saved to queue', run.progress?.saved ?? run.verified], ['Processing errors', run.errors]
+    ].map(([name,count]) => <div key={name} className="rounded-lg border border-slate-200 bg-slate-50 p-3"><p className="text-xs text-slate-500">{name}</p><p className="mt-1 text-xl font-semibold">{count}</p></div>)}</div>
+    <details open={active} className="rounded-xl border border-slate-200 p-3"><summary className="cursor-pointer text-sm font-medium">Run activity ({run.activity?.length || 0})</summary>
+      <div className="mt-3 max-h-64 space-y-3 overflow-y-auto" aria-label="Search run activity">{!(run.activity?.length) && <p className="text-xs text-slate-500">No detailed events were recorded for this run. See its status and findings.</p>}{[...(run.activity || [])].reverse().map(event => <div key={event.id} className="border-l-2 border-sky-200 pl-3"><time className="text-[11px] text-slate-500">{new Date(event.at).toLocaleTimeString()}</time><p className="text-sm text-slate-700">{event.message}</p>{url(event.source_url) && <a href={url(event.source_url)} target="_blank" rel="noreferrer" className="text-xs text-sky-700 underline">Source page</a>}</div>)}</div>
+    </details>
+  </div>;
 }

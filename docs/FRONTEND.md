@@ -291,3 +291,9 @@ daily scheduling, paginated run history, immutable snapshots and per-job evidenc
 Results distinguish matches, uncertainty, exclusions, processing errors and pending
 checks. Known jobs remain visible and open the shared candidate modal. Polling is
 active only while this tab is mounted. No search button authorizes an application.
+
+Search run details now lead the Searches view, auto-open the active/latest run,
+persist selection in the URL, and poll active work every two seconds. The activity
+panel distinguishes actual worker operations from gateway waiting and heartbeat
+updates. Discovered jobs appear pending before verification, and failed sources
+remain visible as findings instead of disappearing behind a zero-new-jobs count.

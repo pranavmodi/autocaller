@@ -1549,3 +1549,9 @@ inspect errors before running again. A saved search's config is the authority fo
 its schedule; `pif career-search-run --due` queues all due saved searches. The old
 `job-agent search` queues the migrated broad search (`default`). Search does not
 apply. Existing jobs rediscovered by another search link the same application.
+
+`job-agent search-results RUN_ID` now includes `progress` (found, assessed, saved,
+errors, model wait/attempt, last worker update) and ordered timestamped `activity`.
+`search-runs` includes the same found/error counts as detail results, including
+unverified discoveries and fetch failures. Poll these read-only commands; they do
+not resume or rerun the search. Browser deep link: `/job-agent?tab=searches&run=RUN_ID`.
