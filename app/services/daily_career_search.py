@@ -556,7 +556,7 @@ async def llm(payload: dict, required: str, config: SearchConfig, audit: dict, r
                 return
             if event.get("phase") != "failed":
                 return
-            activity(audit, 'model_failed', 'Research request failed; checking whether it can be retried.',
+            activity(audit, 'model_failed', 'Research request failed: ' + str(event.get('error') or 'Unknown gateway error')[:500],
                      mode=payload['mode'], attempt=attempt + 1)
             # The gateway includes parsed_response only for JSON/shape failures;
             # transport failures may also have raw_response (e.g. a 502 body).

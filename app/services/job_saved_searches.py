@@ -256,7 +256,7 @@ async def run_detail(identity: str):
         return {**summary(row), 'settings': a.get('settings_snapshot') or a.get('search_profile'),
             'results': sorted(results, key=lambda r: ({'match': 0, 'uncertain': 1, 'pending': 2, 'excluded': 3, 'error': 4}.get(r.get('outcome'), 5), -r.get('preference_score', 0))), 'queries': a.get('queries_used') or a.get('queries', []),
             'sources': a.get('search_sources_consulted', []), 'source_checks': a.get('source_checks', []),
-            'activity': a.get('activity', []),
+            'activity': a.get('activity', []), 'retry_errors': a.get('attempt_errors', []),
             'errors_detail': a.get('errors', []), 'legacy': 'results' not in a}
 
 async def draft(body: ParseSearch):
