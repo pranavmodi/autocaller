@@ -9,7 +9,8 @@ import { jobAgentRequest, type Candidate, type JobAgentConfig } from "@/lib/job-
 
 type BrowserRun = {
   can_quit?: boolean; quit_reason?: string; browser_cleanup_error?: string;
-  can_restart?: boolean; restart_blocked_reason?: string; attempt?: number;
+  can_restart?: boolean; can_resume?: boolean; recoverable_input_interruption?: boolean;
+  restart_blocked_reason?: string; attempt?: number;
   profile_count?: number;
   browser_transport?: string; browser_session_status?: string; browser_closed?: boolean;
   ai_provider?: "gateway" | "openai"; openai_model?: string;
@@ -103,7 +104,7 @@ export function JobBrowserApplication({ job }: { job: Candidate }) {
         {run.error && <div role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950"><p>{run.error}</p>{run.failed_action && <p className="mt-2 text-xs"><strong>Stopped before:</strong> {run.failed_action.summary} ({run.failed_action.kind})</p>}{run.failed_audit?.reason && <p className="mt-1 text-xs"><strong>Safety audit:</strong> {run.failed_audit.reason}{run.failed_audit.effect ? ` · Audited effect: ${run.failed_audit.effect}` : ""}</p>}</div>}
         {cancelled && <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-4 text-sm text-neutral-700"><p className="font-medium">You stopped this website application.</p>{run.quit_reason && <p className="mt-2">Reason: {run.quit_reason}</p>}<p className="mt-2 text-xs">Your history and saved answers are retained. This reason applies only to this application.</p></div>}
         {run.browser_cleanup_error && <p role="alert" className="text-sm text-amber-900">{run.browser_cleanup_error}</p>}
-        {uncertain && <p className="text-sm text-amber-900">{run.can_restart ? "The last action stopped before reaching the browser. You can restart safely with your saved answers." : "An action may have submitted the form. Automatic submission is locked. Check the saved page or employer portal before taking further action."}</p>}
+        {uncertain && <p className="text-sm text-amber-900">{run.recoverable_input_interruption ? "An ordinary form input was interrupted. The preserved page can be inspected and continued without replaying that action." : run.can_restart ? "The last action stopped before reaching the browser. You can restart safely with your saved answers." : "An action may have submitted the form. Automatic submission is locked. Check the saved page or employer portal before taking further action."}</p>}
         {waiting && run.question && <div className="space-y-3 rounded-xl border-2 border-amber-300 bg-amber-50 p-4">
           <h4 className="flex items-center gap-2 text-sm font-semibold"><MessageCircle className="h-4 w-4" />Your answer is needed</h4>
           <label className="block text-sm" htmlFor={`browser-answer-${job.id}`}>{run.question.text}</label>
@@ -128,7 +129,7 @@ export function JobBrowserApplication({ job }: { job: Candidate }) {
           {!waiting && run.can_quit && <button className={button} disabled={action.isPending || query.isError} onClick={openQuit}>Quit application</button>}
           {!active && !submitted && !cancelled && run.browser_transport === "broker" && !run.browser_closed && <button className={button} disabled={action.isPending || query.isError} onClick={() => control("reconnect")}>Reconnect to existing browser</button>}
           {active && <button className={button} disabled={action.isPending} onClick={() => control("pause")}><Pause className="h-4 w-4" />Pause after current action</button>}
-          {["paused", "blocked"].includes(run.status) && !run.submit_started_at && !run.interaction_started && <button className={button} disabled={action.isPending || query.isError} onClick={() => control("resume")}><Play className="h-4 w-4" />Resume application</button>}
+          {run.can_resume && <button className={button} disabled={action.isPending || query.isError} onClick={() => control("resume")}><Play className="h-4 w-4" />Resume application</button>}
           {!active && (run.session_available || run.browser_cleanup_error) && !submitted && <button className={button} disabled={action.isPending} onClick={() => control("release")}>Close browser, keep saved answers</button>}
           {uncertain && run.session_available && <button className={button} disabled={action.isPending} onClick={() => control("verify")}>Check confirmation only</button>}
           {!active && !submitted && <button className={button} disabled={!run.can_restart || action.isPending || query.isError} title={run.restart_blocked_reason || undefined} onClick={() => setConfirmRestart(true)}><RotateCcw className="h-4 w-4" />Restart from beginning</button>}

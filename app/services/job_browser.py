@@ -85,7 +85,26 @@ def undispatched_missing_control(state):
             and bool(action.get('element'))
             and 'snapshot' in state
             and not any(c.get('id') == action['element']
-                for f in state['snapshot'].get('frames', []) for c in f.get('controls', [])))
+            for f in state['snapshot'].get('frames', []) for c in f.get('controls', [])))
+
+
+def recoverable_input_interruption(state):
+    """Return true when the write-ahead marker can only describe form input.
+
+    The action audit is the authority here: an interrupted submit, navigation,
+    or advance remains locked. A separately managed browser can instead be
+    re-inspected after an audited input action without replaying that action.
+    """
+    action = state.get('last_action') or {}
+    audit = state.get('audit') or {}
+    return (bool(state.get('interaction_started'))
+            and not state.get('submit_started_at')
+            and not state.get('confirmation')
+            and state.get('browser_transport') == 'broker'
+            and bool(state.get('session_available'))
+            and action.get('kind') in {'fill', 'check', 'select', 'upload', 'click'}
+            and audit.get('allowed') is True
+            and audit.get('effect') == 'input')
 
 
 def restart_blocker(row):
@@ -94,6 +113,8 @@ def restart_blocker(row):
         return 'Pause the application before restarting.'
     if row.status == 'submitted' or state.get('confirmation') or state.get('submit_started_at'):
         return 'A submission was attempted or confirmed. Verify it before starting another application.'
+    if recoverable_input_interruption(state):
+        return None
     if state.get('interaction_started') and not undispatched_missing_control(state):
         return 'An earlier browser interaction may have submitted the form. Verify its outcome first.'
     if row.status == 'submission_uncertain' and not undispatched_missing_control(state):
@@ -106,9 +127,14 @@ def view(row):
         return {'status': 'not_started', 'revision': 0}
     # Keep resume text / internal page context out of polling responses.
     state = {k: v for k, v in row.state.items() if k not in {'resume', 'posting', 'preferences', 'snapshot', 'page_evidence', 'action_history', 'saved_profile', 'profile_history', 'attempt_history'}}
+    can_resume = ((row.status in {'paused', 'blocked'}
+                   and not state.get('submit_started_at') and not state.get('interaction_started'))
+                  or (row.status == 'submission_uncertain' and recoverable_input_interruption(state)))
     return {**state, 'status': row.status, 'revision': row.revision,
             'run_id': row.run_id, 'updated_at': row.updated_at.isoformat(),
             'can_restart': restart_blocker(row) is None, 'restart_blocked_reason': restart_blocker(row),
+            'can_resume': can_resume,
+            'recoverable_input_interruption': recoverable_input_interruption(state),
             'can_quit': row.status != 'cancelled' and restart_blocker(row) is None}
 
 
@@ -338,7 +364,12 @@ async def control(identity, request: ControlRequest):
             row.status, state['stage'] = 'verifying', 'Checking the existing page without resubmitting'
             state['verification_only'] = True
         else:
-            if row.status in ACTIVE or row.status in LOCKED or state.get('submit_started_at') or state.get('interaction_started'):
+            recovering_input = (request.action == 'resume'
+                                and row.status == 'submission_uncertain'
+                                and recoverable_input_interruption(state))
+            if (row.status in ACTIVE or (row.status in LOCKED and not recovering_input)
+                    or state.get('submit_started_at')
+                    or (state.get('interaction_started') and not recovering_input)):
                 raise ValueError('This application cannot be restarted. Check submission evidence first.')
             if request.action == 'answer':
                 question = state.get('question')
@@ -360,6 +391,18 @@ async def control(identity, request: ControlRequest):
             state['segment_steps'] = 0
             state['profile_reuse_signatures'] = []
             state['audit_repair_count'] = 0
+            if recovering_input:
+                state['interrupted_action_recovery'] = {
+                    'at': core.now().isoformat(),
+                    'action': state.get('last_action'),
+                    'audit': state.get('audit')}
+                state['interaction_started'] = False
+                state['browser_action_id'] = None
+                state['action_signature'] = None
+                state['repeat_count'] = 0
+                add_event(session, row,
+                    'Continuing after an interrupted audited input. The preserved page will be inspected before choosing another action.',
+                    'input_recovered')
         if request.action in {'resume', 'answer', 'verify', 'restart'}:
             settings = await session.get(core.JobAgentState, 'default')
             config = core.saved_config(settings.config) if settings else core.JobAgentConfig()

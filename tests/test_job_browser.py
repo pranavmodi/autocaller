@@ -164,6 +164,46 @@ async def test_restart_never_requeues_possible_submission(isolated_store):
 
 
 @pytest.mark.asyncio
+async def test_interrupted_audited_input_can_resume_preserved_page(isolated_store):
+    row = await seed_run(isolated_store)
+    row = await service.checkpoint('fixture', row.revision, status='submission_uncertain',
+        interaction_started=True, browser_transport='broker', session_available=True,
+        error='Browser service request failed; inspect the saved page before retrying.',
+        last_action={'kind':'select', 'element':'e7', 'value':'India'},
+        audit={'allowed':True, 'effect':'input', 'reason':'Current country field.',
+               'recovery':'none', 'repair_hint':''})
+    visible = service.view(row)
+    assert visible['can_resume'] is True
+    assert visible['recoverable_input_interruption'] is True
+    resumed = await service.control('fixture', service.ControlRequest(
+        revision=row.revision, action='resume'))
+    assert resumed['status'] == 'queued'
+    assert resumed['interaction_started'] is False
+    assert resumed['interrupted_action_recovery']['action']['kind'] == 'select'
+    current = await service.get('fixture')
+    assert any(event['kind'] == 'input_recovered' for event in current['events'])
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('action,audit', [
+    ({'kind':'submit', 'element':'e9'}, {'allowed':True, 'effect':'submit'}),
+    ({'kind':'click', 'element':'e9'}, {'allowed':True, 'effect':'advance'}),
+    ({'kind':'select', 'element':'e7'}, {'allowed':False, 'effect':'input'}),
+])
+async def test_interrupted_non_input_or_rejected_action_stays_locked(isolated_store, action, audit):
+    row = await seed_run(isolated_store)
+    row = await service.checkpoint('fixture', row.revision, status='submission_uncertain',
+        interaction_started=True, browser_transport='broker', session_available=True,
+        last_action=action, audit={**audit, 'reason':'Fixture', 'recovery':'stop', 'repair_hint':''})
+    visible = service.view(row)
+    assert visible['can_resume'] is False
+    assert visible['recoverable_input_interruption'] is False
+    with pytest.raises(ValueError, match='cannot be restarted'):
+        await service.control('fixture', service.ControlRequest(
+            revision=row.revision, action='resume'))
+
+
+@pytest.mark.asyncio
 async def test_pause_invalidates_inflight_model_decision(isolated_store):
     row = await seed_run(isolated_store)
     await service.control('fixture', service.ControlRequest(revision=row.revision, action='pause'))
