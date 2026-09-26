@@ -230,7 +230,7 @@ async def test_human_supplied_challenge_code_is_used_once_and_never_persisted(is
     completed = await service.control('fixture', service.ControlRequest(
         revision=row.revision, action='challenge', answer='Ab12Cd34', remember=False))
     assert completed['status'] == 'verifying'
-    assert completed['human_verification_completed_at']
+    assert completed['human_verification_click_completed_at']
     assert browser.execute.await_count == 9
     actions = [call.args[0] for call in browser.execute.await_args_list]
     fills, submit = actions[:-1], actions[-1]
@@ -240,6 +240,46 @@ async def test_human_supplied_challenge_code_is_used_once_and_never_persisted(is
     saved = await load_run()
     assert 'Ab12Cd34' not in str(saved.state)
     assert 'Ab12Cd34' not in str((await service.get('fixture'))['events'])
+
+
+@pytest.mark.asyncio
+async def test_rejected_challenge_code_can_be_retried_without_claiming_submission(isolated_store):
+    row = await seed_run(isolated_store)
+    row = await service.checkpoint('fixture', row.revision, status='submission_uncertain',
+        browser_transport='broker', session_available=True,
+        submit_started_at='2026-09-26T14:22:34Z',
+        human_verification_click_completed_at='2026-09-26T14:41:56Z')
+    values = [''] * 8
+    clicked = False
+    browser = AsyncMock()
+    def challenge():
+        text = ("A verification code was sent to applicant@example.com. To submit your application, "
+                "enter the 8-character code to confirm you're a human.")
+        if clicked:
+            text += "\nInvalid security code"
+        return {'url':'https://fixture.invalid/job', 'frames':[{'text':text,
+            'controls':[{'id':f'e{index + 1}','tag':'input','type':'text',
+                         'label':'Security code' if index == 0 else '', 'disabled':False,
+                         'value':value} for index, value in enumerate(values)] +
+                       [{'id':'e9','tag':'button','type':'submit','label':'Submit application',
+                         'disabled':any(not value for value in values)}]}]}
+    async def observe(*_):
+        return challenge()
+    async def execute(action, _resume):
+        nonlocal clicked
+        if action.kind == 'fill':
+            values[int(action.element[1:]) - 1] = action.value
+        elif action.kind == 'submit':
+            clicked = True
+    browser.observe.side_effect = observe
+    browser.execute.side_effect = execute
+    service._sessions['fixture'] = browser
+    result = await service.control('fixture', service.ControlRequest(
+        revision=row.revision, action='challenge', answer='Ab12Cd34', remember=False))
+    assert result['status'] == 'submission_uncertain'
+    assert result['stage'] == 'Verification code rejected'
+    assert 'latest code' in result['error']
+    assert 'Ab12Cd34' not in str((await load_run()).state)
 
 
 @pytest.mark.asyncio

@@ -311,7 +311,7 @@ async def complete_human_verification(identity, request: ControlRequest):
             raise ValueError('The browser progressed. Refresh its status before this action.')
         state = row.state
         if (row.status != 'submission_uncertain' or not state.get('submit_started_at')
-                or state.get('confirmation') or state.get('human_verification_completed_at')):
+                or state.get('confirmation')):
             raise ValueError('A pending human-verification challenge was not established for this application.')
         browser = await attach_browser(row)
         if not browser:
@@ -354,11 +354,19 @@ async def complete_human_verification(identity, request: ControlRequest):
             message='The final submission click was attempted; inspect the preserved page without resubmitting.',
             kind='error')
         raise
-    saved = await checkpoint(identity, row.revision, status='verifying',
-        stage='Checking the employer confirmation after human verification',
-        interaction_started=False, human_verification_completed_at=core.now().isoformat(), error=None,
-        message='Human verification completed; checking the employer confirmation without resubmitting.',
-        kind='human_verification_completed')
+    snapshot = await browser.observe(ROOT / run_id / 'page.png')
+    visible = '\n'.join(frame.get('text', '') for frame in snapshot.get('frames', []))
+    rejected = 'Invalid security code' in visible
+    saved = await checkpoint(identity, row.revision,
+        status='submission_uncertain' if rejected else 'verifying',
+        stage='Verification code rejected' if rejected else
+              'Checking the employer confirmation after human verification',
+        interaction_started=False,
+        human_verification_click_completed_at=core.now().isoformat(),
+        error='Greenhouse rejected the security code. Enter the latest code from the newest email.' if rejected else None,
+        message='Greenhouse rejected the security code; the application remains unsubmitted.' if rejected else
+                'The verification click completed; checking the employer confirmation without resubmitting.',
+        kind='human_verification_rejected' if rejected else 'human_verification_completed')
     _wake.set()
     return view(saved)
 

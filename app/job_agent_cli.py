@@ -256,7 +256,7 @@ def register(app, get, post, console):
         """Control a run; challenge uses a human-supplied one-time code without saving it."""
         output(post(f'/api/job-agent/jobs/{identity}/browser/control', {
             'revision': revision, 'action': action, 'question_id': question_id, 'provider': provider, 'reason': reason,
-            'answer': answer_file.read_text() if answer_file else '', 'remember': remember}))
+            'answer': answer_file.read_text() if answer_file else '', 'remember': remember}, timeout=180))
 
     @group.command('browser-quit-reasons')
     def browser_quit_reasons(identity: str):
