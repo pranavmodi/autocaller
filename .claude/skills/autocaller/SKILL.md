@@ -1201,3 +1201,12 @@ a timestamped `activity` timeline. Discovery findings are visible before validat
 a particular website was inspected. Share `/job-agent?tab=searches&run=RUN_ID` to
 open that run's live status and results. Earlier runs cannot acquire historical
 telemetry that was never recorded.
+
+Search transport: set saved config `ai_provider` to `gateway` (default) or `openai`,
+and `openai_model` (default `gpt-5.6-luna`), then `search-save`. Settings drafting
+also supports `search-draft "intent" --provider openai --model gpt-5.6-luna`.
+OpenAI requires the server key and uses Responses with web search for discovery;
+verification/repair use supplied evidence. No automatic provider fallback. Each
+run keeps its original provider snapshot; editing only affects future runs.
+`search-runs` and `search-results` report the provider/model. Application providers
+are separate. Queue sidebar removal is UI-only; collection/sync still operate.

@@ -77,7 +77,7 @@ export default function JobAgentPage() {
     {notice && <div role="status" className="flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800"><Check className="mt-0.5 h-4 w-4 shrink-0" />{notice}</div>}
     <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">{(Object.keys(labels) as ReviewStatus[]).map(status => <button key={status} onClick={() => { setFilter(status); setPage(1); setTab("queue"); }} className={`${panel} p-4 text-left transition-colors hover:border-neutral-400`}><p className="text-xs font-medium text-neutral-500">{labels[status]}</p><p className="mt-2 text-3xl font-semibold tracking-tight">{data.counts[status]}</p></button>)}</div>
     <div className="flex gap-1 overflow-x-auto border-b border-neutral-200" role="tablist" aria-label="Job agent sections">{[{ key: "queue", label: "Review queue", icon: BriefcaseBusiness }, { key: "searches", label: "Searches", icon: Search }, { key: "applications", label: "Applications", icon: ClipboardCheck }, { key: "cvs", label: "CVs", icon: FileText }, { key: "profile", label: "Applicant profile", icon: ClipboardCheck }, { key: "settings", label: "Settings", icon: Settings2 }].map(({ key, label, icon: Icon }) => <button key={key} id={`tab-${key}`} role="tab" aria-controls={`panel-${key}`} aria-selected={tab === key} onClick={() => setTab(key)} className={`flex min-h-11 shrink-0 items-center gap-2 border-b-2 px-3 text-sm font-medium ${tab === key ? "border-neutral-900 text-neutral-900" : "border-transparent text-neutral-500 hover:text-neutral-800"}`}><Icon className="h-4 w-4" />{label}</button>)}</div>
-    {tab === "queue" && <div role="tabpanel" id="panel-queue" aria-labelledby="tab-queue" className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_300px]">
+    {tab === "queue" && <div role="tabpanel" id="panel-queue" aria-labelledby="tab-queue" className="min-w-0">
       <section className={`${panel} min-w-0 overflow-hidden`}>
         <div className="grid gap-3 border-b border-neutral-200 p-4 sm:grid-cols-2"><select aria-label="Order jobs" className={input} value={order} onChange={e => { setOrder(e.target.value); setPage(1); }}><option value="posted_desc">Most recently posted</option><option value="contact_desc">Known contact email first</option><option value="posted_asc">Oldest posted first</option><option value="found_desc">Recently added to queue</option></select><input aria-label="Search review queue" className={input} placeholder="Search company or role…" value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} /><select aria-label="Review status" className={input} value={filter} onChange={e => { setFilter(e.target.value as ReviewStatus | ""); setPage(1); }}><option value="">All decisions</option>{Object.entries(labels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select><select aria-label="Filter by category" className={input} value={category} onChange={e => { setCategory(e.target.value); setPage(1); }}><option value="">All categories</option><option value="needs_review">Classification needs review</option>{data.config.resume_categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select><select aria-label="Filter by job source" className={input} value={source} onChange={e => { setSource(e.target.value as JobSource | ""); setPage(1); }}><option value="">All sources</option><option value="external_search">Job Agent search</option><option value="possibleos">Possible OS</option></select><select aria-label="Filter by contract status" className={input} value={contract} onChange={e => { setContract(e.target.value as ContractFilter); setPage(1); }}><option value="all">All contract types</option><option value="contract">Contract roles</option><option value="non_contract">Non-contract roles</option><option value="unknown">Contract type unknown</option></select><select aria-label="Filter by legal degree requirement" className={input} value={legalDegree} onChange={e => { setLegalDegree(e.target.value as LegalDegreeFilter); setPage(1); }}><option value="exclude">Hide legal-degree roles</option><option value="all">Show all roles</option><option value="required">Legal-degree roles only</option></select></div>
         <ErrorBox error={jobs.error} />
@@ -91,10 +91,6 @@ export default function JobAgentPage() {
         </button>)}</div>
         {!!jobs.data?.total && <div className="flex items-center justify-between gap-2 border-t border-neutral-200 p-3 text-xs text-neutral-500"><span>{jobs.data.total} listings · Page {page} of {jobs.data.total_pages}</span><div className="flex gap-2"><button className={button} disabled={page <= 1} onClick={() => setPage(p => p - 1)}>Previous</button><button className={button} disabled={page >= jobs.data.total_pages} onClick={() => setPage(p => p + 1)}>Next</button></div></div>}
       </section>
-      <aside className="space-y-4"><CollectionProgress data={data} total={total} /><section className={`${panel} p-4`}><h2 className="text-sm font-semibold">Operating status</h2><p className="mt-2 text-sm text-neutral-600">Open a job when you want to classify it, review its match, prepare an email, apply through Zoho, or apply on the employer website.</p><dl className="mt-4 space-y-3 text-xs"><div className="flex justify-between"><dt className="text-neutral-500">Collection</dt><dd>{data.config.collection_enabled ? "Automatic · every minute" : "Paused"}</dd></div><div className="flex justify-between"><dt className="text-neutral-500">Last completed sync</dt><dd>{date(data.last_collected_at)}</dd></div><div className="flex justify-between"><dt className="text-neutral-500">Decisions</dt><dd>Reviewed by you</dd></div></dl><p className="mt-4 border-t border-neutral-100 pt-3 text-xs leading-relaxed text-neutral-500">Choose Apply via Zoho for email or Start website application for the employer form. Each has separate progress and confirmation. Previous application packets and Zoho mail are checked before sending.</p></section>
-        <SearchSource data={data} onRefresh={refresh} />
-        <section className={`${panel} p-4`}><h2 className="text-sm font-semibold">Your focus</h2><p className="mt-2 text-sm leading-relaxed text-neutral-600">{data.config.target_roles}</p><p className="mt-2 text-xs leading-relaxed text-neutral-500">{data.config.preferred_industries}</p><button onClick={() => setTab("settings")} className="mt-3 text-xs font-medium underline underline-offset-4">Edit preferences</button></section>
-      </aside>
     </div>}
     {tab === "applications" && <ApplicationsPanel data={applications.data} loading={applications.isPending} error={applications.error} search={applicationSearch} status={applicationStatus} order={applicationOrder} page={applicationPage} onSearch={value => { setApplicationSearch(value); setApplicationPage(1); }} onStatus={value => { setApplicationStatus(value); setApplicationPage(1); }} onOrder={value => { setApplicationOrder(value); setApplicationPage(1); }} onPage={setApplicationPage} onOpen={setSelected} />}
     {tab === "searches" && <JobSearches overview={data} onOpen={setSelected} />}
@@ -151,60 +147,6 @@ function ApplicationsPanel({ data, loading, error, search, status, order, page, 
       })}</div>
       {!!data?.total && <div className="flex items-center justify-between gap-3 border-t border-neutral-200 p-3 text-xs text-neutral-500"><span>{data.total} applications · Page {page} of {data.total_pages}</span><div className="flex gap-2"><button className={button} disabled={page <= 1} onClick={() => onPage(page - 1)}>Previous</button><button className={button} disabled={page >= data.total_pages} onClick={() => onPage(page + 1)}>Next</button></div></div>}
     </div>
-  </section>;
-}
-
-function CollectionProgress({ data, total }: { data: Overview; total: number }) {
-  const run = data.collection;
-  return <section className={`${panel} p-4`}><h2 className="text-sm font-semibold">Collection progress</h2>
-    <p className="mt-2 text-2xl font-semibold">{total.toLocaleString()} <span className="text-sm font-normal text-neutral-500">jobs in your queue</span></p>
-    <p className="mt-2 text-xs text-neutral-500">{data.processing_counts.classified || 0} categorized · {data.processing_counts.needs_review || 0} need review · {(data.processing_counts.pending || 0) + (data.processing_counts.classifying || 0)} awaiting classification</p><p className="mt-2 text-xs text-neutral-500">Newest posting dates first by default. Unknown dates appear last.</p>
-    {run ? <div className="mt-4 space-y-2 text-xs"><p className="font-medium">{!data.config.collection_enabled && !run.completed_at ? "Paused" : readable(run.status)}</p>
-      <progress aria-label="Collection progress" className="h-2 w-full accent-neutral-900" max={Math.max(1, run.total)} value={run.processed} />
-      <p>{run.processed.toLocaleString()} of {run.total.toLocaleString()} source listings checked · {run.remaining.toLocaleString()} remaining</p>
-      <p className="text-neutral-500">{run.added} added · {run.updated} refreshed · {run.invalid} invalid</p>
-      {!!run.invalid && <p className="text-amber-800">Some source listings could not be imported.</p>}
-      {run.error && <p role="alert" className="text-red-700">{run.error}</p>}
-      {run.config_revision !== data.revision && !run.completed_at && <p className="text-amber-800">This sync uses earlier settings. Your new settings apply to the next sync.</p>}
-      <p className="text-neutral-500">Updated {date(run.updated_at)}</p>
-    </div> : <p className="mt-4 text-xs text-neutral-500">{data.config.collection_enabled ? "Waiting for the first automatic sync…" : "Collection paused"}</p>}
-  </section>;
-}
-
-function SearchSource({ data, onRefresh }: { data: Overview; onRefresh: () => void }) {
-  const search = useMutation({
-    mutationFn: () => jobAgentRequest<{ status: string; message?: string }>("/search", {}),
-    onSuccess: onRefresh,
-  });
-  const latest = data.source?.runs.find(run => run.result.job_agent_search || run.result.manual_search);
-  const running = data.source?.runs.some(run => run.status === "running") || false;
-  const errors = Array.isArray(latest?.result.errors) ? latest.result.errors.length : 0;
-  const interrupted = latest?.status === "interrupted";
-  const restarted = interrupted && latest?.result.interrupted_reason === "backend_restart";
-  const failed = latest?.status === "failed";
-  const consulted = Array.isArray(latest?.result.search_sources_consulted) ? latest.result.search_sources_consulted.length : 0;
-  return <section className={`${panel} p-4`}>
-    <h2 className="text-sm font-semibold">Find target jobs</h2>
-    <p className="mt-2 text-sm leading-relaxed text-neutral-600">Search public sources using your configured target roles, industries and location preferences, then verify jobs and application contacts. The daily run uses these same settings.</p>
-    <p className="mt-2 text-xs text-neutral-500">{data.search_sources.enabled_count} sources enabled · up to {data.source?.config.max_sources || 6} rotate into each run</p>
-    <button className={`${primary} mt-4 w-full`} disabled={search.isPending || running} onClick={() => search.mutate()}>
-      <RefreshCw className={`h-4 w-4 ${search.isPending || running ? "animate-spin" : ""}`} />
-      {search.isPending ? "Starting…" : running ? "Search in progress" : "Search now"}
-    </button>
-    <ErrorBox error={search.error} />
-    {latest && <div className="mt-4 space-y-1 border-t border-neutral-100 pt-3 text-xs text-neutral-500">
-      <p className="font-medium text-neutral-700">Latest search: {readable(latest.status)}</p>
-      <p>{latest.result.verified || 0} verified · {latest.result.new_jobs || 0} new · {latest.result.duplicates_skipped || 0} duplicates skipped</p>
-      {!!consulted && <p>{consulted} configured source{consulted === 1 ? "" : "s"} consulted in this run, alongside targeted web queries.</p>}
-      {interrupted && <p className="text-amber-800">{restarted ? "The backend restarted before this search finished." : "The search worker stopped before completion."} No replacement search was started. Choose Search now to retry.</p>}
-      {failed && <p className="text-red-700">The search stopped before completion. Choose Search now to retry.</p>}
-      {!!errors && !interrupted && !failed && <p className="text-amber-800">{errors} result{errors === 1 ? "" : "s"} could not be verified. Verified jobs were still saved.</p>}
-      {!!latest.result.contacts_found && <p className="text-emerald-700">{latest.result.contacts_found} verified application contact{latest.result.contacts_found === 1 ? "" : "s"} saved and shared across the firm&apos;s roles.</p>}
-      <p>Started {date(latest.started_at)}</p>
-    </div>}
-    {!latest && <p className="mt-3 text-xs text-neutral-500">No Job Agent search has run yet.</p>}
-    <p className="mt-3 text-xs leading-relaxed text-neutral-500">Results are checked against employer and job sources, deduplicated, and added to this review queue. Searching never classifies or applies.</p>
-    <p className="mt-3 border-t border-neutral-100 pt-3 text-xs text-neutral-500">Manage daily schedules and inspect every run in the Searches tab.</p>
   </section>;
 }
 

@@ -1535,7 +1535,7 @@ and it does not cancel an independent email application or change job review.
 | Command | Purpose |
 | --- | --- |
 | `job-agent searches` | Saved searches, revisions and daily schedules |
-| `job-agent search-draft "description"` | Generate editable JSON settings; no save or run |
+| `job-agent search-draft "description" [--provider gateway\|openai] [--model MODEL]` | Generate editable JSON settings with the chosen provider; no save or run |
 | `job-agent search-save --file config.json` | Create a saved search |
 | `job-agent search-save --id ID --revision N --file config.json` | Edit targeting or schedule with conflict protection |
 | `job-agent search-run ID` | Queue once and return durable run ID |
@@ -1555,3 +1555,14 @@ errors, model wait/attempt, last worker update) and ordered timestamped `activit
 `search-runs` includes the same found/error counts as detail results, including
 unverified discoveries and fetch failures. Poll these read-only commands; they do
 not resume or rerun the search. Browser deep link: `/job-agent?tab=searches&run=RUN_ID`.
+
+Choose a search transport in the saved config: `ai_provider: "gateway"` (default)
+or `"openai"`, with `openai_model` (default `gpt-5.6-luna`). Save with the same
+`search-save` command. `search-draft "intent" --provider openai --model gpt-5.6-luna`
+uses the selected transport for settings drafting too. OpenAI uses server
+`OPENAI_API_KEY`, Responses and hosted web search; discovery browses, verification
+and repair use supplied evidence only. There is no silent gateway fallback.
+Each queued run snapshots its provider/model; editing affects future runs only.
+Run list/detail expose `ai_provider` and `model`. This does not change application
+providers. The redundant queue sidebar was removed (UI-only); sync and search CLI
+commands remain available.

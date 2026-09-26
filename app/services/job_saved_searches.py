@@ -38,6 +38,8 @@ class SearchSettings(BaseModel):
     employer_urls: list[str] = Field(default_factory=list, max_length=30)
     max_candidates: int = Field(10, ge=1, le=100)
     max_sources: int = Field(6, ge=1, le=30)
+    ai_provider: Literal['gateway', 'openai'] = 'gateway'
+    openai_model: str = Field('gpt-5.6-luna', min_length=1, max_length=120, pattern=r'^\S+$')
     schedule_enabled: bool = False
     timezone: str = 'Asia/Kolkata'
     local_time: str = '01:00'
@@ -67,6 +69,8 @@ class SaveSearch(BaseModel):
     config: SearchSettings
 
 class ParseSearch(BaseModel):
+    ai_provider: Literal['gateway', 'openai'] = 'gateway'
+    openai_model: str = Field('gpt-5.6-luna', min_length=1, max_length=120, pattern=r'^\S+$')
     description: str = Field(min_length=5, max_length=5000)
 
 class SavedSearch(Base):
@@ -112,7 +116,7 @@ def profile(config: SearchSettings):
 
 
 def view(row):
-    return {'id': row.id, 'revision': row.revision, 'config': row.config,
+    return {'id': row.id, 'revision': row.revision, 'config': SearchSettings.model_validate(row.config).model_dump(),
             'created_at': row.created_at.isoformat(), 'updated_at': row.updated_at.isoformat()}
 
 async def list_searches():
@@ -162,7 +166,7 @@ async def enqueue(identity: str, trigger='manual', scheduled_day: str | None = N
         settings = SearchSettings.model_validate(row.config)
         run_id = uuid4().hex
         payload = {'saved_search_id': identity, 'saved_search_revision': row.revision,
-            'settings_snapshot': row.config, 'search_profile': profile(settings).model_dump(mode='json'),
+            'settings_snapshot': settings.model_dump(), 'search_profile': profile(settings).model_dump(mode='json'),
             'search_trigger': trigger, 'job_agent_search': True, 'manual_search': trigger == 'manual',
             'phase': 'queued', 'results': [], 'errors': []}
         career.activity(payload, 'queued', 'Search queued; waiting for the research worker.')
@@ -233,6 +237,9 @@ def summary(row):
         'started_at': row.started_at.isoformat(),
         'completed_at': row.completed_at.isoformat() if row.completed_at else None,
         'progress': progress(row),
+        'ai_provider': (audit.get('settings_snapshot') or {}).get('ai_provider', 'gateway'),
+        'model': ((audit.get('settings_snapshot') or {}).get('openai_model', 'gpt-5.6-luna')
+                  if (audit.get('settings_snapshot') or {}).get('ai_provider') == 'openai' else 'openclaw/main'),
         'counts': {k: sum(r.get('outcome') == k for r in results) for k in ['match','uncertain','excluded','error']},
         'new_jobs': audit.get('new_jobs', 0), 'verified': audit.get('verified', 0),
         'duplicates': audit.get('duplicates_skipped', 0), 'errors': len(audit.get('errors', []))}
@@ -262,11 +269,21 @@ async def run_detail(identity: str):
 async def draft(body: ParseSearch):
     from app.services.llm_gateway import call_skill_json
     from app.services.job_search_sources import catalog_payload
-    response = await call_skill_json(skill_path=Path(__file__).resolve().parents[1]/'skills/job-search-settings/SKILL.md',
-        payload={'description': body.description, 'sources': catalog_payload([]), 'schema': SearchSettings.model_json_schema()},
-        required_fields=['config'], model='openclaw/main', timeout_s=90, retries=1, allow_tools=False,
-        lane='possibleos-interactive', prompt_cache_key='possibleos:search-settings:v1')
+    skill = Path(__file__).resolve().parents[1]/'skills/job-search-settings/SKILL.md'
+    payload = {'mode': 'settings', 'description': body.description, 'sources': catalog_payload([]),
+               'schema': SearchSettings.model_json_schema()}
+    if body.ai_provider == 'openai':
+        from app.services.job_search_ai import direct_search
+        async def observe(_event): pass
+        response = await direct_search(payload=payload, required='config', model=body.openai_model,
+            skill_path=skill, timeout_s=90, allow_tools=False, attempt_observer=observe)
+    else:
+        response = await call_skill_json(skill_path=skill, payload=payload,
+            required_fields=['config'], model='openclaw/main', timeout_s=90, retries=1, allow_tools=False,
+            lane='possibleos-interactive', prompt_cache_key='possibleos:search-settings:v1')
     config = SearchSettings.model_validate(response.parsed['config'])
+    config.ai_provider = body.ai_provider
+    config.openai_model = body.openai_model
     config.schedule_enabled = False  # A draft never schedules itself.
     return {'config': config.model_dump()}
 

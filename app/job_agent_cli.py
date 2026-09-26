@@ -28,9 +28,10 @@ def register(app, get, post, console):
                     {'revision': revision, 'config': config}))
 
     @group.command("search-draft")
-    def search_draft(description: str):
+    def search_draft(description: str, provider: str = typer.Option("gateway", "--provider"),
+                     model: str = typer.Option("gpt-5.6-luna", "--model")):
         """Convert plain language to editable search settings; does not save or run."""
-        output(post('/api/job-agent/searches/draft', {'description': description}, timeout=120))
+        output(post('/api/job-agent/searches/draft', {'description': description, 'ai_provider': provider, 'openai_model': model}, timeout=120))
 
     @group.command("search-run")
     def search_run(identity: str):

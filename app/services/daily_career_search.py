@@ -538,6 +538,9 @@ async def llm(payload: dict, required: str, config: SearchConfig, audit: dict, r
               *, deadline: float | None = None, lane: str | None = None,
               allow_tools: bool | None = None):
     verification = required == "decisions"
+    settings = audit.get("settings_snapshot") or {}
+    provider = settings.get("ai_provider", "gateway")
+    provider_label = "OpenAI API" if provider == "openai" else "OpenClaw gateway"
     attempts = 1 if payload["mode"] in {
         "verification_repair", "candidate_repair", "url_import", "url_import_identity",
         "url_import_enrichment",
@@ -550,13 +553,13 @@ async def llm(payload: dict, required: str, config: SearchConfig, audit: dict, r
             if event.get('phase') in {'started', 'completed'}:
                 phase = event['phase']
                 activity(audit, 'model_' + phase,
-                    'Research request queued or running in the gateway.' if phase == 'started'
+                    f'Research request queued or running through {provider_label}.' if phase == 'started'
                     else 'Research response received.', mode=payload['mode'], attempt=attempt + 1)
                 await checkpoint(run_id, audit)
                 return
             if event.get("phase") != "failed":
                 return
-            activity(audit, 'model_failed', 'Research request failed: ' + str(event.get('error') or 'Unknown gateway error')[:500],
+            activity(audit, 'model_failed', 'Research request failed: ' + str(event.get('error') or 'Unknown provider error')[:500],
                      mode=payload['mode'], attempt=attempt + 1)
             # The gateway includes parsed_response only for JSON/shape failures;
             # transport failures may also have raw_response (e.g. a 502 body).
@@ -590,13 +593,19 @@ async def llm(payload: dict, required: str, config: SearchConfig, audit: dict, r
                 payload["mode"] in {"discovery", "retry_discovery"}
                 if allow_tools is None else allow_tools
             )
-            request = call_skill_json(skill_path=SKILL, payload=payload, required_fields=[required],
-                model="openclaw/main", timeout_s=max(1, int(call_timeout)), max_tokens=9000, retries=1,
-                schema_repair_retries=0 if verification or payload["mode"] == "candidate_repair" else 1,
-                attempt_observer=observe_attempt,
-                prompt_cache_key="possibleos:career-search:v4",
-                allow_tools=tool_access,
-                lane=lane or os.getenv("OPENCLAW_RPC_BATCH_LANE", "possibleos-batch"))
+            if provider == "openai":
+                from app.services.job_search_ai import direct_search
+                request = direct_search(payload=payload, required=required,
+                    model=settings.get('openai_model', 'gpt-5.6-luna'), skill_path=SKILL,
+                    timeout_s=call_timeout, allow_tools=tool_access, attempt_observer=observe_attempt)
+            else:
+                request = call_skill_json(skill_path=SKILL, payload=payload, required_fields=[required],
+                    model="openclaw/main", timeout_s=max(1, int(call_timeout)), max_tokens=9000, retries=1,
+                    schema_repair_retries=0 if verification or payload["mode"] == "candidate_repair" else 1,
+                    attempt_observer=observe_attempt,
+                    prompt_cache_key="possibleos:career-search:v4",
+                    allow_tools=tool_access,
+                    lane=lane or os.getenv("OPENCLAW_RPC_BATCH_LANE", "possibleos-batch"))
             task = asyncio.create_task(request)
             end = asyncio.get_running_loop().time() + call_timeout
             try:
@@ -614,6 +623,8 @@ async def llm(payload: dict, required: str, config: SearchConfig, audit: dict, r
                 if not task.done():
                     task.cancel()
                     await asyncio.gather(task, return_exceptions=True)
+            if provider == "openai":
+                audit.setdefault("provider_responses", []).append(response.metadata)
             audit["usage"].append(response.usage or {})
             audit.setdefault("prompt_cache_metrics", []).append(prompt_cache_metrics(response.usage))
             if verification:

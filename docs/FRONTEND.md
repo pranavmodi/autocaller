@@ -297,3 +297,10 @@ persist selection in the URL, and poll active work every two seconds. The activi
 panel distinguishes actual worker operations from gateway waiting and heartbeat
 updates. Discovered jobs appear pending before verification, and failed sources
 remain visible as findings instead of disappearing behind a zero-new-jobs count.
+
+Review queue is now full-width. Removed the duplicate Collection progress,
+Operating status, Find target jobs and Your focus sidebar. Searches owns research
+controls and run monitoring; Settings retains preferences and collection controls.
+Each search editor has an OpenClaw gateway / OpenAI API selector and editable API
+model. Cards and run views show the provider, including the immutable provider used
+by historical runs. Settings drafting follows the editor's chosen provider.
