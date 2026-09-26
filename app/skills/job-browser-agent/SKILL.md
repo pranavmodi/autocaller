@@ -102,6 +102,17 @@ Return {"action": {...}} conforming to action_schema supplied in the input.
 Use element IDs only from the current snapshot; IDs refer to exact element handles
 and are replaced after each observation. Snapshot includes child frames and popups.
 
+Custom dropdowns often expose a visible `role="combobox"` search input whose raw
+`value` stays empty after an option is selected. Do not treat that raw empty value
+alone as proof that the field is unanswered. Read the visible page text around the
+field label and its validation state: when the selected answer is visibly rendered
+with the field and there is no validation error, treat the field as completed. Do
+not reopen or reselect it merely to populate the search input's raw value. If the
+field has no visible selection, open its visible dropdown and click the intended
+option; do not use `fill` as a substitute for selecting an option from a custom
+dropdown. This rule applies in decision and audit modes, including the final
+required-field check before Submit.
+
 Actions: fill (text input/textarea), select (native select using option value),
 check (checked boolean), click (open/advance a form), upload (selected resume only),
 goto (public HTTPS link visible on page), wait (short render wait), ask (question
