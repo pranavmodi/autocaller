@@ -426,7 +426,10 @@ def validate_audit(action, audit):
         raise ValueError(str(audit.get('reason') or 'This action needs clarification.'))
     allowed_effects = {'fill': {'input'}, 'select': {'input'}, 'check': {'input'},
                       'upload': {'input'}, 'goto': {'navigation'},
-                      'click': {'navigation', 'advance'}, 'submit': {'submit'}}
+                      # Custom comboboxes commonly expose their flyout and options
+                      # as buttons. Those clicks change a form input without
+                      # navigating. The independent audit must still reject submit.
+                      'click': {'input', 'navigation', 'advance'}, 'submit': {'submit'}}
     if audit.get('effect') not in allowed_effects.get(action.kind, set()):
         raise ValueError('The action audit identified a different effect. Inspect the page again before proceeding.')
 
@@ -587,7 +590,18 @@ async def step(row):
                 message=('Automatic correction stopped: ' if exhausted else 'Fixing form: ') + (audit['repair_hint'] or audit['reason']),
                 kind='audit_repair_stopped' if exhausted else 'audit_repair')
             return  # Rejected actions are never dispatched or counted as submit attempts.
-        validate_audit(action, audit)
+        try:
+            validate_audit(action, audit)
+        except ValueError as exc:
+            # Preserve the proposal that actually failed. Previously the UI showed
+            # the last successful action/audit, which made this stop misleading.
+            await checkpoint(identity, row.revision, status='blocked',
+                stage='Proposed browser action did not pass its safety audit',
+                error=str(exc), failed_action=action.model_dump(), failed_audit=audit,
+                failed_model=usage, failed_audit_model=audit_usage,
+                message=f'Stopped before {action.summary}: {audit.get("reason") or str(exc)}',
+                kind='audit_blocked')
+            return
     else:
         audit, audit_usage = {}, {}
     if action.kind == 'submit':
@@ -631,6 +645,7 @@ async def step(row):
         return
     await browser.execute(action, resume)
     await checkpoint(identity, row.revision, interaction_started=False, error=None,
+        failed_action=None, failed_audit=None, failed_model=None, failed_audit_model=None,
         audit_feedback=None, audit_repair_count=0,
         status='verifying' if action.kind == 'submit' else None)
 

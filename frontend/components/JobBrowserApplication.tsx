@@ -19,6 +19,8 @@ type BrowserRun = {
   question?: { id: string; text: string; choices: string[] } | null;
   answers?: { question: string; answer: string; at: string }[];
   confirmation?: { quote: string; url: string; at: string };
+  failed_action?: { kind: string; summary: string } | null;
+  failed_audit?: { effect?: string; reason?: string } | null;
   events?: { id: number; kind: string; message: string; at: string }[];
 };
 const button = "inline-flex items-center justify-center gap-2 rounded-lg border border-sky-200 bg-white px-3 py-2 text-sm font-medium text-sky-950 disabled:opacity-50";
@@ -98,7 +100,7 @@ export function JobBrowserApplication({ job }: { job: Candidate }) {
             </> : <p>{uncertain ? "The original browser is required to check confirmation. Reopening the job cannot verify a previous submission." : run.session_available ? "This older browser session is tied to the worker and will close if it restarts." : "The browser opens when processing resumes, using your saved answers."}</p>}
           </div>}
         </div>
-        {run.error && <p role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">{run.error}</p>}
+        {run.error && <div role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950"><p>{run.error}</p>{run.failed_action && <p className="mt-2 text-xs"><strong>Stopped before:</strong> {run.failed_action.summary} ({run.failed_action.kind})</p>}{run.failed_audit?.reason && <p className="mt-1 text-xs"><strong>Safety audit:</strong> {run.failed_audit.reason}{run.failed_audit.effect ? ` · Audited effect: ${run.failed_audit.effect}` : ""}</p>}</div>}
         {cancelled && <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-4 text-sm text-neutral-700"><p className="font-medium">You stopped this website application.</p>{run.quit_reason && <p className="mt-2">Reason: {run.quit_reason}</p>}<p className="mt-2 text-xs">Your history and saved answers are retained. This reason applies only to this application.</p></div>}
         {run.browser_cleanup_error && <p role="alert" className="text-sm text-amber-900">{run.browser_cleanup_error}</p>}
         {uncertain && <p className="text-sm text-amber-900">{run.can_restart ? "The last action stopped before reaching the browser. You can restart safely with your saved answers." : "An action may have submitted the form. Automatic submission is locked. Check the saved page or employer portal before taking further action."}</p>}

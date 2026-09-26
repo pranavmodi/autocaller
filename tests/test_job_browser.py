@@ -27,6 +27,9 @@ def test_click_cannot_disguise_submission_or_bypass_action_audit():
         service.validate_audit(click, {'allowed': True, 'effect': 'submit'})
     with pytest.raises(ValueError, match='unsupported'):
         service.validate_audit(click, {'allowed': False, 'reason': 'unsupported fact'})
+    # Greenhouse and similar forms use button clicks to open/select custom
+    # combobox values. An audited input effect is valid and is not a submit.
+    service.validate_audit(click, {'allowed': True, 'effect': 'input'})
     service.validate_audit(click, {'allowed': True, 'effect': 'advance'})
 
 
