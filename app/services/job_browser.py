@@ -131,11 +131,24 @@ def human_verification_controls(snapshot):
     return (code, submit) if established and valid_code_group else ([], None)
 
 
+def rejected_human_verification(state):
+    """A visible rejected code proves this challenge did not submit the application."""
+    snapshot = state.get('snapshot') or {}
+    visible = '\n'.join(frame.get('text', '') for frame in snapshot.get('frames', []))
+    code_controls, submit = human_verification_controls(snapshot)
+    return (bool(code_controls) and bool(submit) and bool(submit.get('disabled'))
+            and 'Invalid security code' in visible)
+
+
 def restart_blocker(row):
     state = row.state
     if row.status in ACTIVE:
         return 'Pause the application before restarting.'
-    if row.status == 'submitted' or state.get('confirmation') or state.get('submit_started_at'):
+    if row.status == 'submitted' or state.get('confirmation'):
+        return 'A submission was attempted or confirmed. Verify it before starting another application.'
+    if rejected_human_verification(state):
+        return None
+    if state.get('submit_started_at'):
         return 'A submission was attempted or confirmed. Verify it before starting another application.'
     if recoverable_input_interruption(state):
         return None

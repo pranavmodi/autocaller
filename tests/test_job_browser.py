@@ -283,6 +283,32 @@ async def test_rejected_challenge_code_can_be_retried_without_claiming_submissio
 
 
 @pytest.mark.asyncio
+async def test_explicitly_rejected_code_allows_clean_restart(isolated_store):
+    row = await seed_run(isolated_store)
+    controls = [{'id':f'e{index + 1}','tag':'input','type':'text',
+                 'label':'Security code' if index == 0 else '', 'disabled':False,
+                 'value':value} for index, value in enumerate('Ab12Cd34')]
+    controls.append({'id':'e9','tag':'button','type':'submit','label':'Submit application',
+                     'disabled':True})
+    snapshot = {'url':'https://fixture.invalid/job', 'frames':[{
+        'text':("A verification code was sent to applicant@example.com. To submit your application, "
+                "enter the 8-character code to confirm you're a human.\nInvalid security code"),
+        'controls':controls}]}
+    row = await service.checkpoint('fixture', row.revision, status='submission_uncertain',
+        browser_transport='broker', session_available=True,
+        submit_started_at='2026-09-26T14:22:34Z', snapshot=snapshot)
+    assert service.view(row)['can_restart'] is True
+    browser = AsyncMock()
+    service._sessions['fixture'] = browser
+    restarted = await service.control('fixture', service.ControlRequest(
+        revision=row.revision, action='restart'))
+    assert restarted['status'] == 'queued'
+    assert restarted['run_id'] != row.run_id
+    assert not restarted.get('submit_started_at')
+    browser.close.assert_awaited_once()
+
+
+@pytest.mark.asyncio
 async def test_challenge_action_requires_exact_visible_human_verification(isolated_store):
     row = await seed_run(isolated_store)
     row = await service.checkpoint('fixture', row.revision, status='submission_uncertain',
