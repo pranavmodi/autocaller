@@ -215,3 +215,35 @@ async def verify_sent(identity: str):
 async def sync_comms():
     """Backfill or repair Communications rows for attempted application emails."""
     return await processing.sync_application_comms()
+
+
+# Saved searches are independent from resume/application actions.
+from app.services import job_saved_searches as saved_searches
+
+@router.get('/searches')
+async def searches_list():
+    return await saved_searches.list_searches()
+
+@router.post('/searches')
+async def searches_create(body: saved_searches.SaveSearch):
+    return await processing_response(saved_searches.save(body))
+
+@router.post('/searches/draft')
+async def searches_draft(body: saved_searches.ParseSearch):
+    return await processing_response(saved_searches.draft(body))
+
+@router.post('/searches/{identity}')
+async def searches_update(identity: str, body: saved_searches.SaveSearch):
+    return await processing_response(saved_searches.save(body, identity))
+
+@router.post('/searches/{identity}/run')
+async def searches_run(identity: str):
+    return await processing_response(saved_searches.enqueue(identity))
+
+@router.get('/search-runs')
+async def search_runs(search_id: str | None = None, page: int = Query(1, ge=1)):
+    return await saved_searches.runs(search_id, page)
+
+@router.get('/search-runs/{identity}')
+async def search_run(identity: str):
+    return await processing_response(saved_searches.run_detail(identity))

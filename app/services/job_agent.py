@@ -341,18 +341,8 @@ async def _search_and_import(profile: dict):
 
 
 async def request_search():
-    """Start one non-sending search in the daemon and return immediately."""
-    global _search_task
-    from app.services.daily_career_search import status as career_status
-    current = await career_status()
-    running = next((run for run in current["runs"] if run["status"] == "running"), None)
-    if (_search_task and not _search_task.done()) or running:
-        return {"status": "busy", "run_id": running["id"] if running else None}
-    settings = await configuration()
-    profile = search_profile(JobAgentConfig.model_validate(settings["config"]))
-    _search_task = asyncio.create_task(_search_and_import(profile), name="job-agent-external-search")
-    return {"status": "queued", "search_profile": profile,
-            "message": "Searching public sources. Verified new jobs will be added to the review queue."}
+    from app.services.job_saved_searches import enqueue
+    return await enqueue('default')
 
 
 async def snapshot_source(session, run):

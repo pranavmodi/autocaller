@@ -166,6 +166,8 @@ async def lifespan(app: FastAPI):
         logger.info("Closed %s interrupted manual Job Agent searches", interrupted_searches)
     from .services.job_agent import collection_loop
     job_agent_collection_task = asyncio.create_task(collection_loop())
+    from .services.job_saved_searches import worker as saved_search_worker
+    job_saved_search_task = asyncio.create_task(saved_search_worker())
     from .services.job_agent_processing import processing_loop
     job_agent_processing_task = asyncio.create_task(processing_loop())
     from .services.job_browser import worker as job_browser_worker
@@ -182,6 +184,7 @@ async def lifespan(app: FastAPI):
         scheduled_action_task,
         nightly_sync_task,
         job_agent_collection_task,
+        job_saved_search_task,
         job_agent_processing_task,
         job_browser_task,
         lead_gen_daily_task,

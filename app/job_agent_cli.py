@@ -14,6 +14,38 @@ def register(app, get, post, console):
     def output(value):
         console.print_json(data=value)
 
+    @group.command("searches")
+    def searches():
+        """List saved targeted searches and schedules."""
+        output(get('/api/job-agent/searches'))
+
+    @group.command("search-save")
+    def search_save(file: Path = typer.Option(..., '--file', exists=True, dir_okay=False),
+                    identity: str = typer.Option('', '--id'), revision: int = typer.Option(0, '--revision')):
+        """Create or edit a search; edits require the current revision."""
+        config = json.loads(file.read_text())
+        output(post('/api/job-agent/searches' + ('/' + identity if identity else ''),
+                    {'revision': revision, 'config': config}))
+
+    @group.command("search-draft")
+    def search_draft(description: str):
+        """Convert plain language to editable search settings; does not save or run."""
+        output(post('/api/job-agent/searches/draft', {'description': description}, timeout=120))
+
+    @group.command("search-run")
+    def search_run(identity: str):
+        """Queue a saved search once; returns its durable run ID."""
+        output(post(f'/api/job-agent/searches/{identity}/run', {}))
+
+    @group.command("search-runs")
+    def search_runs(search_id: str = typer.Option('', '--search-id'), page: int = typer.Option(1, min=1)):
+        output(get('/api/job-agent/search-runs', search_id=search_id or None, page=page))
+
+    @group.command("search-results")
+    def search_results(identity: str):
+        """Inspect snapshot, queries, sources, per-job outcomes and errors."""
+        output(get(f'/api/job-agent/search-runs/{identity}'))
+
     @group.command("status")
     def status():
         output(get("/api/job-agent/overview"))

@@ -79,9 +79,9 @@ class SearchConfig(BaseModel):
     enabled: bool = False
     timezone: str = "America/Bogota"
     local_time: str = "08:00"
-    max_candidates: int = Field(10, ge=1, le=20)
+    max_candidates: int = Field(10, ge=1, le=100)
     max_rechecks: int = Field(8, ge=0, le=20)
-    max_sources: int = Field(6, ge=1, le=12)
+    max_sources: int = Field(6, ge=1, le=30)
     max_attempts: int = Field(3, ge=1, le=4)
     source_urls: list[HttpUrl] = Field(default_factory=lambda: [
         "https://www.ciglaw.com/", "https://jobs.jobvite.com/jacobyandmeyerscareers/jobs",
@@ -106,7 +106,15 @@ class SearchProfile(BaseModel):
     location_preferences: str = Field(min_length=1, max_length=2000)
     prefer_overseas_employers: bool = True
     source_ids: list[str] = Field(default_factory=list, max_length=30)
-    source_urls: list[HttpUrl] = Field(default_factory=list, max_length=30)
+    source_urls: list[HttpUrl] = Field(default_factory=list, max_length=60)
+    precise: bool = False
+    industry_mode: Literal['required', 'preferred'] = 'required'
+    location_mode: Literal['required', 'preferred'] = 'preferred'
+    employment_type: Literal['any', 'contract', 'non_contract'] = 'any'
+    employment_mode: Literal['required', 'preferred'] = 'preferred'
+    exclusions: str = ''
+    additional_preferences: str = ''
+    posted_within_days: int = Field(30, ge=1, le=365)
 
     @model_validator(mode="after")
     def configured_lists_not_empty(self):
@@ -231,7 +239,16 @@ class ApplicationContact(BaseModel):
         return "" if value is None else value
 
 
+class SearchCheck(BaseModel):
+    criterion: Literal['role', 'industry', 'location', 'employment', 'exclusions', 'preferences']
+    result: Literal['met', 'not_met', 'unknown']
+    reason: str = Field(min_length=1, max_length=2000)
+    confidence: float = Field(ge=0, le=1)
+    evidence: Excerpt | None = None
+
+
 class Decision(BaseModel):
+    search_checks: list[SearchCheck] = Field(default_factory=list)
     candidate_id: str
     status: Literal["active", "closed", "unverified"]
     reason: str
@@ -411,9 +428,37 @@ async def status() -> dict:
     config = await configuration()
     async with AsyncSessionLocal() as session:
         runs = list((await session.scalars(select(CareerSearchRunRow).order_by(CareerSearchRunRow.started_at.desc()).limit(10))).all())
+        effective = config.model_dump(mode="json")
+        saved_schedules = []
+        next_default = None
+        has_saved = bool(await session.scalar(text("SELECT to_regclass('job_agent_saved_searches')")))
+        if has_saved:
+            from app.services.job_saved_searches import SavedSearch
+            searches = (await session.scalars(select(SavedSearch))).all()
+            for saved in searches:
+                c = saved.config
+                local = now_utc().astimezone(ZoneInfo(c['timezone']))
+                attempted = await session.scalar(select(CareerSearchRunRow.id).where(
+                    CareerSearchRunRow.result['saved_search_id'].astext == saved.id,
+                    CareerSearchRunRow.result['search_trigger'].astext == 'scheduled',
+                    CareerSearchRunRow.scheduled_day == local.date().isoformat()).limit(1))
+                completed = {local.date().isoformat()} if attempted else set()
+                if saved.id == 'default':
+                    completed |= {r.scheduled_day for r in runs if not r.result.get('saved_search_id') and run_consumes_daily_slot(r)}
+                scheduling = config.model_copy(update={'enabled': c['schedule_enabled'], 'timezone': c['timezone'], 'local_time': c['local_time']})
+                due = next_due(scheduling, completed, now=now_utc()).isoformat() if scheduling.enabled else None
+                saved_schedules.append({'id':saved.id, 'name':c['name'], 'enabled':c['schedule_enabled'],
+                    'timezone':c['timezone'], 'local_time':c['local_time'], 'next_due_at':due})
+                if saved.id == 'default':
+                    effective.update(enabled=c['schedule_enabled'], timezone=c['timezone'], local_time=c['local_time'],
+                                     max_sources=c['max_sources'], max_candidates=c['max_candidates'])
+                    next_default = due
     completed = {r.scheduled_day for r in runs if run_consumes_daily_slot(r)}
-    return {"config": config.model_dump(mode="json"), "next_due_at": next_due(config, completed, now=now_utc()).isoformat() if config.enabled else None,
-            "schedule_enabled": config.enabled, "timer_installation": "external; verify systemctl timers",
+    return {"config": effective,
+            "next_due_at": next_default if has_saved else next_due(config, completed, now=now_utc()).isoformat() if config.enabled else None,
+            "schedule_enabled": any(s['enabled'] for s in saved_schedules) if has_saved else config.enabled,
+            "saved_schedules": saved_schedules,
+            "timer_installation": "external; verify systemctl timers",
             "runs": [serialize_run(r) for r in runs]}
 
 
@@ -449,7 +494,7 @@ async def reconcile_interrupted_manual_runs() -> int:
                 recovered = 0
                 for row in rows:
                     result = dict(row.result or {})
-                    if not result.get("manual_search"):
+                    if not result.get("manual_search") and not result.get("saved_search_id"):
                         continue
                     errors = list(result.get("errors") or [])
                     errors.append({
@@ -731,6 +776,9 @@ def validate_decision(decision: Decision, pages: list[dict], *, today: date,
         evidence = getattr(decision, field)
         if evidence and " ".join(evidence.text.split()).casefold() not in content.get(str(evidence.source_url), ""):
             raise ValueError(f"{field} excerpt not found in fetched source")
+    for check in decision.search_checks:
+        if check.evidence and not evidence_excerpt_matches(check.evidence, pages):
+            raise ValueError('Search criterion evidence not found in fetched source')
     if decision.status == "active":
         if search_profile and decision.preferred_industry_employer:
             configured = {" ".join(label.split()).casefold() for label in preferred_industry_labels(search_profile)}
@@ -750,7 +798,7 @@ def validate_decision(decision: Decision, pages: list[dict], *, today: date,
                              or configured_legacy_legal_match(decision, search_profile))
                             if search_profile else decision.direct_pi_employer)
         role_matches = decision.target_role_match if search_profile else decision.technology_role
-        if not direct_import:
+        if not direct_import and not (search_profile and search_profile.precise):
             if search_profile and not employer_matches:
                 raise ValueError("employer is not in a verified configured industry")
             if search_profile and not role_matches:
@@ -792,7 +840,7 @@ def to_posting(candidate: Candidate, decision: Decision, *, checked_at: datetime
         "last_checked_at": checked_at.isoformat(), "last_verified_at": checked_at.isoformat(),
         "discovery_provider": PROVIDER, "employer_evidence_url": str(candidate.employer_evidence_url),
         "remote_eligibility": decision.geography_note,
-        "recency_label": "confirmed_last_30_days" if decision.posted_date and decision.posted_date >= checked_at.date() - timedelta(days=30) else "publication_date_unknown" if not decision.posted_date else "older_tracked_job"})
+        "recency_label": "confirmed_last_30_days" if decision.posted_date and decision.posted_date >= checked_at.date() - timedelta(days=search_profile.posted_within_days if search_profile else 30) else "publication_date_unknown" if not decision.posted_date else "older_tracked_job"})
     classified = classify_job_posting(payload, classified_at=checked_at)
     classified.update({key: payload[key] for key in ("work_arrangement", "remote_scope", "role_category", "trigger_tags", "technology_mentions")})
     classified.update({"global_remote": decision.remote_scope == "global", "global_remote_evidence": [decision.geography_evidence.text] if decision.geography_evidence else [],
@@ -1237,7 +1285,7 @@ async def execute(run_id: str, config: SearchConfig, *, seed_only: bool, audit: 
         elif retry["legacy_errors"]:
             if not retry["career_sources"]:
                 raise ValueError("historical candidates missing; no affected employer sources for bounded rediscovery")
-            result = await llm({"mode": "retry_discovery", "window_start": (now.date() - timedelta(days=30)).isoformat(),
+            result = await llm({"mode": "retry_discovery", "window_start": (now.date() - timedelta(days=search_profile.posted_within_days if search_profile else 30)).isoformat(),
                 "window_end": now.date().isoformat(), "career_sources": retry["career_sources"][:config.max_sources],
                 "previous_errors": retry["legacy_errors"], "max_candidates": config.max_candidates - len(discovered),
                 "max_sources": config.max_sources}, "candidates", config, audit, run_id,
@@ -1264,7 +1312,10 @@ async def execute(run_id: str, config: SearchConfig, *, seed_only: bool, audit: 
         queries = profile_queries(search_profile, day_number) if search_profile else [
             PI_QUERIES[(day_number + i) % len(PI_QUERIES)] for i in range(3)
         ]
-        result = await llm({"mode": "discovery", "window_start": (now.date() - timedelta(days=30)).isoformat(),
+        audit['queries'] = queries
+        audit['phase'] = 'Searching configured sources'
+        await checkpoint(run_id, audit)
+        result = await llm({"mode": "discovery", "window_start": (now.date() - timedelta(days=search_profile.posted_within_days if search_profile else 30)).isoformat(),
             "window_end": now.date().isoformat(), "search_profile": search_profile.model_dump(mode="json") if search_profile else None,
             "queries": queries,
             "career_sources": [str(s) for s in sources], "max_candidates": config.max_candidates,
@@ -1272,6 +1323,9 @@ async def execute(run_id: str, config: SearchConfig, *, seed_only: bool, audit: 
             **deadline_kwargs(deadline))
         if not isinstance(result["candidates"], list):
             raise ValueError("discovery candidates must be an array")
+        audit['source_checks'] = [{k: str(row.get(k) or '')[:2000] for k in ('url', 'status', 'reason')}
+                                  for row in (result.get('source_checks') or []) if isinstance(row, dict)]
+        audit['queries_used'] = [q for q in (result.get('queries_used') or []) if isinstance(q, str)]
         discovered = result["candidates"][:config.max_candidates]
     audit["discovery_candidates"] = audit_value(discovered)
     if direct_source_url:
@@ -1299,16 +1353,25 @@ async def execute(run_id: str, config: SearchConfig, *, seed_only: bool, audit: 
         candidates.append({"candidate": candidate, "prefetched_job_page": direct_page,
                            "input_source_url": direct_source_url})
     else:
+        run_seen = set()
         seen = await known_source_identities() if search_profile else {
             source_identity(str(i["candidate"].source_url)) for i in candidates
         }
         for candidate in recovered:
             key = source_identity(str(candidate.source_url))
-            if key not in seen:
+            if key in run_seen:
+                continue
+            run_seen.add(key)
+            if search_profile and search_profile.precise:
+                # Rediscovery is a run result, not a duplicate canonical job.
+                candidates.append({"candidate": candidate, "rediscovered": key in seen})
+                seen.add(key)
+            elif key not in seen:
                 candidates.append({"candidate": candidate})
                 seen.add(key)
             else:
                 audit["duplicates_skipped"] = audit.get("duplicates_skipped", 0) + 1
+    audit['phase'] = 'Verifying jobs and evaluating search requirements'
     audit["candidates"] = len(candidates)
     await checkpoint(run_id, audit)
     cache = {}
@@ -1324,6 +1387,9 @@ async def execute(run_id: str, config: SearchConfig, *, seed_only: bool, audit: 
             try:
                 job_page = item.get("prefetched_job_page") or await fetch_page(str(candidate.source_url))
                 if job_page["http_status"] in {404, 410}:
+                    if search_profile and search_profile.precise:
+                        audit.setdefault('results', []).append({'candidate': candidate.model_dump(mode='json'),
+                            'outcome': 'excluded', 'reason': f"Listing is unavailable (HTTP {job_page['http_status']})."})
                     if item.get("tracked") and source_identity(job_page["final_url"]) == source_identity(
                             str(candidate.source_url)):
                         await mark_checked(item, closed=True, reason=f"HTTP {job_page['http_status']}")
@@ -1375,14 +1441,19 @@ async def execute(run_id: str, config: SearchConfig, *, seed_only: bool, audit: 
             candidate = item["candidate"]
             audit["decisions"].append({"candidate": candidate.model_dump(mode="json"), "decision": decision.model_dump(mode="json")})
             verified_batch.append((item, decision))
+            if search_profile and search_profile.precise:
+                assessment = assess_search_match(decision, search_profile, today=now.date())
+                item['run_result'] = {'candidate': candidate.model_dump(mode='json'),
+                    'decision': decision.model_dump(mode='json'), **assessment}
+                audit.setdefault('results', []).append(item['run_result'])
             await checkpoint(run_id, audit)
 
         prepared: dict[int, dict] = {}
         for index, (item, decision) in enumerate(verified_batch):
             candidate = item["candidate"]
-            if decision.status != "active":
+            if decision.status != "active" or (item.get('run_result') or {}).get('outcome') == 'excluded':
                 continue
-            if (decision.posted_date and decision.posted_date < now.date() - timedelta(days=30)
+            if (decision.posted_date and decision.posted_date < now.date() - timedelta(days=search_profile.posted_within_days if search_profile else 30)
                     and not item.get("tracked") and not direct_source_url):
                 continue
             try:
@@ -1411,7 +1482,10 @@ async def execute(run_id: str, config: SearchConfig, *, seed_only: bool, audit: 
             candidate = item["candidate"]
             try:
                 if decision.status == "active":
-                    if (decision.posted_date and decision.posted_date < now.date() - timedelta(days=30)
+                    if (item.get('run_result') or {}).get('outcome') == 'excluded':
+                        audit['rejected'] += 1
+                        continue
+                    if (decision.posted_date and decision.posted_date < now.date() - timedelta(days=search_profile.posted_within_days if search_profile else 30)
                             and not item.get("tracked") and not direct_source_url):
                         audit["rejected"] += 1
                         continue
@@ -1421,6 +1495,15 @@ async def execute(run_id: str, config: SearchConfig, *, seed_only: bool, audit: 
                     stored = await ingest(candidate, posting)
                     contact_counts = await ingest_application_contacts(stored["firm_id"], decision.application_contacts)
                     stored["contacts"] = contact_counts
+                    if search_profile and search_profile.precise:
+                        from app.services import job_agent
+                        canonical = await job_agent.open_stored_listing(job_agent.ListingSelection(
+                            firm_id=stored['firm_id'], job_id=stored['job_id'],
+                            source_url=stored['source_url'], title=posting['title'], location=posting.get('location')), event_kind=None)
+                        item['run_result'].update({'candidate_id': canonical['candidate']['id'],
+                            'already_known': stored['added'] == 0, 'contacts': contact_counts,
+                            'contract_status': posting.get('contract_status', 'unknown')})
+                        if stored['added'] == 0: audit['duplicates_skipped'] += 1
                     audit["new_jobs"] += stored["added"]
                     audit["verified"] += 1
                     audit["contacts_found"] = audit.get("contacts_found", 0) + contact_counts["verified"]
@@ -1538,6 +1621,7 @@ async def import_url(source_url: str, *, search_profile: SearchProfile | dict | 
                     "phase": "url_import", "error": str(exc)[:1000] or type(exc).__name__,
                 })
                 final = "failed"
+            audit['phase'] = final
             await checkpoint(run_id, audit, final)
             return {"id": run_id, "status": final, "result": audit}
         finally:
@@ -1546,7 +1630,18 @@ async def import_url(source_url: str, *, search_profile: SearchProfile | dict | 
 
 
 async def run(*, due_only: bool = False, seed_only: bool = False, retry_run: str | None = None,
-              retry_candidates: list | None = None, search_profile: SearchProfile | dict | None = None) -> dict:
+              retry_candidates: list | None = None, search_profile: SearchProfile | dict | None = None,
+              queued_run_id: str | None = None) -> dict:
+    if due_only:
+        from app.services.job_saved_searches import enqueue_due
+        return await enqueue_due()
+    queued_audit = None
+    if queued_run_id:
+        async with AsyncSessionLocal() as session:
+            pending = await session.get(CareerSearchRunRow, queued_run_id)
+            if not pending or pending.status != 'queued': return {'status': 'not_queued'}
+            queued_audit = dict(pending.result)
+            search_profile = queued_audit['search_profile']
     explicit_search_profile = search_profile is not None
     if search_profile is not None:
         search_profile = SearchProfile.model_validate(search_profile)
@@ -1564,6 +1659,9 @@ async def run(*, due_only: bool = False, seed_only: bool = False, retry_run: str
                 raise ValueError("retry requires an existing finished run")
             retry_result = json.loads(json.dumps(previous.result))
     config = await configuration()
+    if queued_audit:
+        settings = queued_audit['settings_snapshot']
+        config = config.model_copy(update={k: settings[k] for k in ('max_candidates', 'max_sources')})
     async with async_engine.connect() as connection:
         locked = await connection.scalar(text("SELECT pg_try_advisory_lock(:key)"), {"key": LOCK_ID})
         await connection.commit()
@@ -1601,14 +1699,24 @@ async def run(*, due_only: bool = False, seed_only: bool = False, retry_run: str
                     audit["manual_search"] = True
             if retry_run:
                 audit["retry_of"] = retry_run
-            run_id = uuid.uuid4().hex
+            if queued_audit:
+                audit.update(queued_audit)
+                audit['phase'] = 'Starting search'
+            run_id = queued_run_id or uuid.uuid4().hex
             async with AsyncSessionLocal() as session:
+                if queued_run_id:
+                    pending = await session.get(CareerSearchRunRow, queued_run_id, with_for_update=True)
+                    if pending.status != 'queued': return {'status': 'not_queued'}
                 # Holding the advisory lock proves earlier running processes are gone.
                 stale = (await session.scalars(select(CareerSearchRunRow).where(CareerSearchRunRow.status == "running"))).all()
                 for row in stale:
                     row.status = "interrupted"
                     row.completed_at = now
-                session.add(CareerSearchRunRow(id=run_id, scheduled_day=day, status="running", started_at=now, result=audit))
+                if queued_run_id:
+                    pending.status = 'running'
+                    pending.result = audit
+                else:
+                    session.add(CareerSearchRunRow(id=run_id, scheduled_day=day, status="running", started_at=now, result=audit))
                 await session.commit()
             try:
                 loop = asyncio.get_running_loop()
@@ -1629,8 +1737,31 @@ async def run(*, due_only: bool = False, seed_only: bool = False, retry_run: str
             except Exception as exc:
                 audit["errors"].append({"phase": "run", "error": str(exc)[:1000] or type(exc).__name__})
                 final = "failed"
+            audit['phase'] = final
             await checkpoint(run_id, audit, final)
             return {"id": run_id, "status": final, "result": audit}
         finally:
             await connection.execute(text("SELECT pg_advisory_unlock(:key)"), {"key": LOCK_ID})
             await connection.commit()
+
+
+def assess_search_match(decision: Decision, profile: SearchProfile, *, today: date) -> dict:
+    if decision.status != 'active':
+        return {'outcome': 'excluded' if decision.status == 'closed' else 'uncertain', 'reason': decision.reason}
+    required = {'role'}
+    if profile.industry_mode == 'required': required.add('industry')
+    if profile.location_mode == 'required': required.add('location')
+    if profile.employment_type != 'any' and profile.employment_mode == 'required': required.add('employment')
+    if profile.exclusions.strip(): required.add('exclusions')
+    checks = {c.criterion: c for c in decision.search_checks}
+    failed = [checks[k].reason for k in sorted(required) if k in checks and checks[k].result == 'not_met' and checks[k].evidence]
+    if decision.posted_date and decision.posted_date < today - timedelta(days=profile.posted_within_days):
+        failed.append(f'Posted outside the last {profile.posted_within_days} days.')
+    if failed: return {'outcome': 'excluded', 'reason': ' '.join(failed)}
+    unknown = [checks[k].reason if k in checks else f'{k.capitalize()} was not assessed.'
+               for k in sorted(required) if k not in checks or checks[k].result == 'unknown' or not checks[k].evidence]
+    if not decision.posted_date: unknown.append('Posting date is not verified.')
+    return {'outcome': 'uncertain' if unknown else 'match',
+            'reason': ' '.join(unknown) if unknown else decision.reason,
+            'preference_score': sum(c.confidence for c in decision.search_checks
+                                    if c.criterion not in required and c.result == 'met')}

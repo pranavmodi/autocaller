@@ -1181,3 +1181,16 @@ resume/answer do not reactivate them. Explicit guarded restart can begin a fresh
 attempt. Active runs must pause first; possible/confirmed submissions cannot be
 relabelled cancelled. This is local cancellation, not employer-side withdrawal,
 and it does not cancel an independent email application or change job review.
+
+## Targeted job searches and run results
+Use `job-agent searches` for saved scopes/schedules. `job-agent search-draft "intent"`
+returns editable `config` JSON without saving/running. Save that config object with
+`job-agent search-save --file FILE` (edit: `--id ID --revision N`), then
+`job-agent search-run ID`. Poll `job-agent search-results RUN_ID`; list all history
+with `job-agent search-runs [--search-id ID] [--page N]`. Queued is not completed.
+Required mismatches are excluded, unsupported requirements uncertain, preferences
+rank. Rediscovered jobs link existing application records. A source assigned to a
+run is not proof it was searched. Snapshots preserve each run's settings. Schedules
+are configured per saved search, not `career-search-config`; the existing timer
+checks due searches every five minutes. Each schedule attempts once per local day;
+manual retries are explicit. Search never authorizes applications or correspondence.

@@ -237,3 +237,12 @@ Current verification is HTTP + embedded structured data, not a browser capable
 of proving every application form's interactive behavior. Configuration does
 not prove timer installation; check the actual systemd timer when diagnosing
 scheduling problems.
+
+### Saved-search scheduling supersedes global profile (2026-09-26)
+The timer remains installed but `career-search-run --due` now enqueues due saved
+Job Agent searches; the backend durable worker executes them. Each has its own
+required/preferred scope and daily timezone/time. The legacy schedule is copied
+once into `default`, preserving its time. Use `job-agent searches/search-save` to
+inspect/change schedules. `career-search-config` remains a legacy transport/default
+configuration and does not override saved schedules. All run snapshots and results
+are available through `job-agent search-runs/search-results` and the Searches tab.

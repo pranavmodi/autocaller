@@ -283,3 +283,11 @@ The inline confirmation loads selectable model-inferred reasons, with optional
 editable text and Keep applying. Quit by you hides the unanswered form while
 preserving its question in history. Suggestions never submit an answer or create
 a global profile preference. Browser cleanup failure is separate and retryable.
+
+### Job Agent: Searches
+`JobSearches.tsx` adds saved search cards, plain-language settings drafting,
+required/preferred controls, exclusions, source and breadth controls, per-search
+daily scheduling, paginated run history, immutable snapshots and per-job evidence.
+Results distinguish matches, uncertainty, exclusions, processing errors and pending
+checks. Known jobs remain visible and open the shared candidate modal. Polling is
+active only while this tab is mounted. No search button authorizes an application.

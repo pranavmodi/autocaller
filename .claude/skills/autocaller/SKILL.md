@@ -9,17 +9,107 @@ A FastAPI daemon + Typer CLI that cold-calls US personal-injury attorneys, runs 
 
 Full reference: `docs/cli.md` (read it for anything not covered here).
 
-Job-agent workspace (`/job-agent`): the canonical `.claude/skills/possibleos/SKILL.md`
-and `docs/JOB_AGENT.md` document automatic uncapped collection, durable progress,
-newest-posted ordering, paginated history, and `bin/possibleos job-agent status`, `config`,
-`configure --file`, `collect`, `jobs`, `review`, and `events`. Classification is
-on demand per selected job by default and maps categories to resumes. See the canonical skill
-for `resumes`, `show`, `classify`, `category`, `prepare`, `apply`, and `verify-sent`.
-Only an explicit apply action authorizes an application email through Zoho CLI.
-The default ontology includes narrow career-transition categories for PI case
-management, entry-level paralegal/legal-assistant and PI intake roles. On-demand
-classification uses TypeSafe System One `jev-latest` Choice judgments with no
-OpenClaw fallback.
+Job application workspace: `/job-agent`. For end-to-end applications, load the
+dedicated `possibleos-job-application` skill before mutating state.
+Use `bin/possibleos job-agent status`,
+`config`, `configure --file preferences.json`, `collect`, `jobs --order posted_desc
+--category ai_automation --source external_search --page 1`, `review`, and `events
+--page 1`. Source values are `external_search` for Job Agent/public search and
+`possibleos` for the wider stored firm listings. Collection is
+uncapped/resumable. Bulk classification is off by default; `classify ID` requests
+classification for that job only and maps responsibilities to editable category/PDF
+settings. Classification uses TypeSafe System One `jev-latest` Choice judgments
+with a bounded timeout and full category probabilities; it does not fall back to
+OpenClaw. `resumes` lists the CV
+catalog with category and application-email context; `resume-download PATH --output
+FILE` copies an exact PDF for local use. The UI exposes the same catalog in its
+separate **CVs** tab with selection, preview and download;
+`jobs` excludes explicit law-degree, bar-admission and attorney-license roles by
+default. Use `--legal-degree all` to inspect them below other roles, or
+`--legal-degree required` to show only them. This is an explicit credential/title
+signal, not model classification; legal operations, legal AI, paralegal and legal-
+assistant titles remain eligible unless the stored requirements say otherwise.
+manual searches are durable, and backend startup marks an orphaned running search
+`interrupted` only after acquiring the career-search advisory lock. Restart recovery
+never launches a replacement search; the operator explicitly retries with `search`.
+`show ID` includes processing_revision, category,
+selected resume and application stage. Use `classify ID` to retry classification;
+`applications --order updated_desc --page 1` lists every application workflow that
+has been started, including stopped research, ready drafts, queued or uncertain
+sends, and Sent-verified messages. Filter with `--status` or `--search`; listing is
+read-only.
+`category ID --category KEY --revision N` manually overrides it. `prepare ID
+--revision N` researches and composes WITHOUT sending. `apply ID --revision N`
+explicitly authorizes one application via the official Zoho CLI. `verify-sent ID`
+checks the exact Sent copy/PDF and NEVER resends. Unclear classification, missing
+resume, unverified contacts or duplicates need review. Preparation checks both
+published web contacts and eligible `firm_contacts` records. Stored contacts must
+belong to the canonical firm or an exact-domain twin, use the verified employer
+domain, and have a suitable recruiting or routing role. The packet and UI identify
+Possible OS provenance; routing contacts always receive a forwarding request.
+Preparation shows separate public-web discovery, source-fetch, stored-contact,
+drafting and audit phases. It is bounded by `JOB_AGENT_PREPARATION_TIMEOUT_S`
+(240 seconds by default); individual gateway calls default to 150 seconds. A timeout
+stops before sending and is retryable. A failed UI status poll must stop displaying
+an unconditional progress spinner and offer a reload while polling recovers.
+Unknown send outcomes never automatically retry the send. Delayed Sent copies get
+bounded read-only IMAP reconciliation after about 30 seconds, 2 minutes and 10 minutes;
+the exact recipient, subject/body, sender and PDF hash must match. Activity is hidden
+in the UI but API/CLI history persists.
+Attempted application emails are mirrored into Communications. Use `job-agent
+sync-comms` to idempotently repair or backfill those rows; it never sends email.
+Leads `/emailtag-firms` → **Job listings** can open a source-backed row directly in
+the same Job Agent workflow. CLI parity is `job-agent open-listing --firm-id ID
+--source-url URL --title TITLE [--job-id ID --location LOCATION]`. This resolves
+the canonical stored posting and does not classify, prepare or send by itself.
+For a specific public job URL that has not been stored, use `job-agent import-url
+URL`. It verifies the exact employer, role and live status, creates or reuses the
+durable firm/job record, and returns the candidate ID. It never classifies,
+prepares or sends; continue with `classify`, `show`, `prepare` and an explicitly
+authorized `apply` using the returned ID and revisions. If a job board establishes
+the role but not the employer's official domain, the import performs one bounded
+public-source enrichment pass for that exact employer. It first tries direct
+OpenClaw tool RPC and falls back to one provider-native search turn when the
+generic search tool is unavailable, then freshly fetches and validates the
+returned official page. A blocked official page may be fetched through a public
+same-origin WordPress REST representation, but structured identity and exact
+quoted-evidence checks remain mandatory. Application preparation reuses the saved
+verified employer-evidence URL when the homepage is blocked, then checks reusable
+Possible OS contacts for that canonical firm. `job-agent events` records the start and
+terminal result, including the career-search run ID and stop reason on failure.
+`job-agent search` starts public-source discovery using the saved target roles,
+preferred industries, location preferences and enabled source catalog. Use
+`job-agent sources` to inspect the normalized public feeds/APIs, public pages,
+indexed-web sources and unavailable/account-gated sources. Enabled boards rotate
+through the per-run source budget; direct public queries continue alongside them.
+Comma-, semicolon-, or line-separated
+target roles and preferred industries define the roles and employer industries that
+discovery queries and the verifier may accept. The daily career-search timer uses
+this same Job Agent profile; there is no ordinary PI-only search path. It verifies
+the employer, target-role fit, live role and geographic claims, skips exact jobs already discovered,
+and imports verified new rows into the review queue. Each extracted job receives one
+stored TypeSafe Jev contract-status judgment (`contract`, `non_contract`, or
+`unknown`) with probabilities and model provenance; application preparation reuses
+it and never classifies contract status again. Use `job-agent jobs --contract
+all|contract|non_contract|unknown` to filter it, and `job-agent
+backfill-contract-status` to resumably classify older queue rows. Officially published recruiting
+and routing emails are source-checked and stored once in `firm_contacts`; every role
+for that firm reuses them. `jobs --order contact_desc` puts firms with known emails
+first. It does not classify a resume category, prepare,
+email or submit. The UI's **Search now** button invokes the same command path on demand.
+Use `pif job-postings --contract contract|non_contract|unknown` for CLI parity
+with the Leads / Job listings contract filter.
+No automatic inbox-referral handling or portal submissions. `resumes` / `show` return
+file paths relative to `/home/pranav/resume`; use `resume-download` for a guarded
+headless copy. See `docs/JOB_AGENT.md`.
+
+Default resume categories also include `pi_case_management`,
+`entry_level_paralegal`, and `pi_intake`. They are career-transition categories
+for assistant, entry-level, explicitly trainable or transferable-experience work.
+Do not use them for postings whose
+mandatory certificate, jurisdiction qualification or multiple years of direct role
+experience are outside the category; do not convert technology exposure into a
+claim of direct caseload, discovery, filing or litigation experience.
 
 Lead-generation work has a living concept document:
 `docs/CYBERNETIC_LEAD_GEN_CONCEPT.md`. If you add or change a lead-gen feedback
@@ -27,6 +117,104 @@ source, learning step, policy lever, suppression rule, sequence behavior,
 routing action, or implemented capability, update that document in the same
 change set. Keep its `What Exists Today`, feedback sources, degrees of freedom,
 and open gaps accurate.
+
+The recommendation-only Lead Finder debug workspace is `/lead-finder`. Its
+baseline context is loaded from `docs/lead-finder-context/company.md`,
+`customer.md`, `offer.md`, and `voice.md`. Use `bin/possibleos lead-finder
+context --json` to inspect that context, `lead-finder start --direction "..."`
+to create a durable run, `lead-finder step <run_id>` to queue exactly one
+reasoning or bounded tool step through the run's selected provider, and `lead-finder show
+<run_id>` to see exact requests, raw/parsed responses, context evolution,
+gateway attempts, and tool results. Use `lead-finder tools`, `mission-search`,
+`mission-passages`, and `mission-index-status` for operator parity with the
+agent's Mission Control transcript tools. Discovery is restricted to Mission
+Control. Once exact passages support a named person, `web.research_person`
+may verify that person's current role, recent public evidence, and outreach
+angles. Direct OpenAI with `gpt-5.6-luna` is the default for every LLM call in
+the run, including reasoning and web research; use
+`lead-finder provider <run_id> openclaw` to select the OpenClaw fallback,
+`lead-finder provider <run_id> codex` to use the dedicated Possible OS Codex
+app-server, or `lead-finder provider <run_id> openai` to switch back. This per-run setting
+affects future LLM calls; Mission Control tools remain local. Direct reasoning
+uses the Responses API and a persisted `previous_response_id`; OpenClaw uses
+its isolated run session; dedicated Codex uses a persisted `codex_thread_id`.
+The generic `codex-gateway status`, `codex-gateway models`, and `codex-gateway
+turn` commands expose the same localhost-only app-server to future Possible OS
+agents independently of OpenClaw. Persisted attempts and completed research expose the
+actual provider/model/usage metadata. OpenClaw structured-output failures
+retain the exact malformed assistant text
+and receive one bounded JSON/schema repair attempt before the run fails; both
+attempts remain visible in persisted history. Dedicated Codex uses a fully
+typed closed schema for working-state sections, candidates, and every available
+tool's arguments, avoiding JSON-inside-a-string. One bounded repair remains for
+provider/schema drift and legacy turns. No tool runs before validation; if
+repair is exhausted, the run pauses and remains resumable from its unchanged
+context. A later explicit
+`lead_finder.add_researched_lead` call publishes that
+completed research into the run-local Found Leads list; inspect it with
+`lead-finder results <run_id>`. Use `lead-finder all-results --json` or the
+top-level Research Leads workspace at `/research-leads` for the newest-first
+consolidated catalog across every run; each publication retains its originating
+run, step, direction, and time, and selecting it opens the full evidence and
+outreach-angle detail. No
+cross-run or CRM deduplication is performed.
+Use `lead-finder auto-start <run_id> --max-steps 25` to let the server continue
+through the same persisted one-transition steps without manual clicks. It ends
+on model completion, non-retryable failure, operator stop, or the bounded step cap and resumes
+stranded enabled runs after a backend restart. Use `lead-finder auto-stop
+<run_id>` to stop chaining after the active step; it does not interrupt an
+in-flight OpenClaw or tool call. Manual `lead-finder step` requests are rejected
+while auto-run is enabled.
+Transient provider timeouts, rate limits, temporary 502/503/504 responses, and
+connection-capacity failures pause the step and run instead of terminating them.
+The exact failed provider attempt and unchanged context remain persisted,
+auto-run stops, and no
+continuation is queued. Use `lead-finder resume <run_id>` to reopen a legacy or
+terminal-looking transient or pre-tool response-validation failure without
+executing it, then use
+`lead-finder step` or `lead-finder auto-start` when capacity is available.
+Invalid tool names and other non-retryable application errors still fail normally.
+The agent can also return `action.type=pause` when its saved context proves that
+no useful in-scope work can continue until an external dependency recovers;
+this stops automatic chaining instead of spending steps restating the block.
+Each durable run uses its own stable OpenClaw session so later steps can reuse
+the growing prompt prefix. The first turn sends `initial_v2`, with deterministic
+job, tools, and baseline files before mutable run state; later `continuation_v2`
+turns rely on that session prefix and send only current mutable run state. Do
+not re-add the baseline to continuation payloads. `lead-finder step` and
+`lead-finder show` report
+`prompt_cache` status, cached tokens, and hit rate; a positive cached-token
+count is the evidence of a real cache hit.
+Use `lead-finder llm-session <run_id> --source session` to print OpenClaw's
+canonical conversation JSONL exactly as stored, or `--source trajectory` to
+inspect the raw compiled system prompt, tool definitions, submitted prompts,
+model snapshots, and usage. Both outputs are unredacted and may contain
+sensitive workspace context; do not paste or transmit them casually.
+That command applies only while the run is OpenClaw-selected. Direct OpenAI and
+dedicated Codex turns have no local OpenClaw JSONL; use `lead-finder show
+<run_id> --json` or the browser's LLM trace view for persisted exact request,
+provider event/response object, parsed transition, response/thread ID, usage,
+and latency.
+Use the browser's Runs tab for the newest-first persisted-run list, or
+`lead-finder runs` for the same headless inventory; opening a row loads that
+run's overview without creating or changing it.
+The browser adds an expandable, syntax-highlighted tree over those same raw
+records and retains a raw-text toggle; this is presentation only and does not
+normalize or replace OpenClaw's stored JSONL. The same viewer covers persisted
+context, requests, and tool payloads and recursively exposes object/array JSON
+encoded inside string fields while leaving the stored strings unchanged.
+`lead-finder restart <run_id>` creates a linked step-0 run without deleting the
+prior history. `lead-finder reset-all --yes` is the explicit destructive path:
+it deletes only Lead Finder runs, steps, gateway attempts, and tool calls and
+atomically creates one fresh step-0 run. Mission Control owns transcript indexes;
+Possible OS must use its HTTP search API rather than access Mission Control
+SQLite directly. Each transition permits at most one validated tool call and
+persists its result before either pausing or queuing the next enabled auto-run
+step. It never sends outreach or mutates CRM lead
+data; only the explicit add tool may update the run-local results list.
+The browser's Run overview timeline is presentation over `lead-finder show`
+data: step reasoning, tool status/result, and next transition remain available
+to headless operators through the CLI JSON output.
 
 Decision log: record important decisions (architecture, policy, flag flips,
 tooling/transport choices, deferrals, reversals — not routine fixes) by
@@ -84,7 +272,10 @@ send requires an explicit `--transport` (`resend` or `zoho_api`) — the provide
 is never auto-selected, and it is echoed in the output + stored on the action.**
 Use `resend` (from getpossibleminds.com, lands in the inbox) for now; `zoho_api`
 uses the shared Zoho India IP and is junk-prone. An explicit `--transport` is
-authoritative and bypasses the policy transport strategy. Regular
+authoritative and bypasses the policy transport strategy.
+Pass `--action-type follow_up` for a manually curated follow-up so Send Queue
+does not display it as a first touch.
+Regular
 durable email actions use `bin/possibleos actions send-email --mode=test
 --to=<email> --subject=... --body=... --transport=resend`; `actions
 send-test-email` is a convenience alias. Lead-gen email actions use
@@ -95,6 +286,22 @@ Both `actions send-approved-lead-gen-draft` and `actions send-email` accept
 `scheduled_for`, runs the normal policy check, prints PT and UTC, and does not
 send immediately; the daemon's scheduled-action loop sends due approved actions
 every 30 seconds and expires anything more than 24 hours stale.
+For a genuine reply, also pass `--in-reply-to '<RFC-Message-ID>'` and optionally
+`--references '<root-id> <parent-id>'`; references defaults to the parent id.
+These fields work through Resend, SMTP, and Zoho API, where they map to
+`inReplyTo` and `refHeader`. Use the RFC `message_id` from a sent-email or
+delivery record, never the Resend provider UUID. Thread ancestry is stored on
+the durable action, bound into approval metadata, and checked again at send
+time. `lead-gen edit-draft` accepts the same threading flags plus `--transport`
+to update an already scheduled action in place. It also accepts
+`--action-type first_touch|follow_up` and persists that classification on both
+the durable action and batch item.
+For a classification-only correction, use
+`bin/possibleos lead-gen set-action-type <batch_item_id> --action-type follow_up`;
+it leaves copy, schedule, transport, and thread headers unchanged.
+Do not create a new action on an item with `last_sent_at` or
+`last_sent_message_id`; create a fresh batch item for the next follow-up so the
+preview does not inherit the historical sent state.
 Policy verifies the exact approval hashes, contact/recipient match, consult
 link, no patient data in outreach, Zoho transport, no selection suppressions,
 and no prior successful send for the same item/recipient. The PHI egress guard
@@ -144,10 +351,33 @@ params); and `lead-gen schedule-wave <batch_id> --subject ... --body-file
 workshop] [--dry-run]` renders `{first_name}`/`{full_name}`/`{firm}`/`{link}`
 per item, rechecks domain freshness and the per-domain cap, and creates approved
 scheduled sends the daemon executes when due.
+For a single person from LinkedIn, use `lead-gen workshop-link --name "..."
+--firm "..." [--title "..." --linkedin-url "..."]`. It only creates or reuses
+the person's attributed URL; write the message in the active chat. LinkedIn
+redirects carry opaque `lc`/`c` values only, with no contact PII in the visible
+destination URL. Inspect clicks in `/click-analytics`.
+For daily multi-channel content outreach, use `campaigns create`, then mint a
+fresh `campaigns link` for each email/LinkedIn recipient or one `public` link for
+a post. Campaign links use `/t/{code}`, accept any HTTPS Possible Minds page or
+subdomain, and roll raw clicks plus classified on-page behavior into the
+Engagement page. Use `campaigns list --search ...` or `campaigns show <id>` for
+campaign-level and per-channel stats.
+Use `campaigns activity --days 1` for the newest confirmed engagement across
+all campaigns; add `--quality all` only when diagnosing scanner or unconfirmed
+traffic. The `/click-analytics` page polls the same local endpoint and can show
+in-app plus opt-in desktop alerts for newly arriving human events.
+That page is workshop-only and shows recipient-level raw opens, scanner or
+suspect sessions, confirmed visits, prompt reveals, scroll depth, and on-page
+button/link clicks. The CLI equivalent is `lead-gen workshop-analytics
+[--days N] [--events] [--json]`.
 Interleave A/B arms with offset --start times. The experiment send gate
 requires a complete wave card first: `lead-gen wave-card <batch_id> --from
 <card.json>`. See docs/cli.md §10 "run an A/B email wave" for the exact
-sequence.
+sequence. Read the wave with `lead-gen wave-rollup <batch_id>`: page sessions
+are grouped by session_id and `human_page_sessions` needs interaction evidence
+(>10s page_leave dwell, an on-page click, or arrival >15 min after the item's
+email_sent) — email-security scanners run JS, so bare session_ready beacons
+count only in `raw_page_sessions` / `suspect_page_sessions`.
 
 For the current master-agent lead-generation slice, use
 `bin/possibleos lead-gen email-agent-slice --limit 3 --approval-ready`. To compose for a hand-curated batch instead of auto-selection: `lead-gen email-agent-slice --batch <batch_id> --limit 10`.
@@ -189,28 +419,104 @@ Front or send email, and it creates pending lead-gen batch items with
 feature but is created inactive; do not activate it without
 operator/orchestrator review.
 
-The native PIF firm mirror reads EmailTag's v2 firm-intel contract, not the
-deprecated v1 pif-info API. Use `bin/possibleos pif sync [--full] [--limit N]`
+The native PIF firm mirror reads EmailTag's raw v2 `/extractions` delta, not
+the deprecated v1 pif-info research API. Use `bin/possibleos pif sync [--full] [--limit N]`
 to populate `pif_directory_firms`, `firm_intel_aliases`, and the
 `firm_intel_sync_state` watermark. `pif sync --limit 20` is the smoke run;
 `--full` ignores the saved watermark. Check mirror and remote coverage with
-`pif status`, resolve domains/emails/legacy PIF IDs with `pif resolve <value>`
-(local first, v2 `/firms/resolve` fallback), and inspect a mirrored profile
-with `pif show <firm_id|domain>`. The daemon's native PIF loop runs this v2
-sync and then ingests directory contacts; do not use the old v1 sync path for
-operations because deployed v1 routes require cookie auth.
+`pif status`, or use local-only `pif sync-status` for the last daily-sync delta
+and its firm-level touched ledger without calling EmailTag health. The ledger
+includes firm name/id, created/updated status, website, source timestamp,
+people count, and per-firm alias count when the run recorded it.
 
-PIF Stats firm research is operator-triggered only because it spends production
-Precise web/LLM budget. Use `bin/possibleos research status --tasks` for
+Use `pif aliases-audit` to inspect identity integrity. `pif aliases-rebuild`
+previews a canonical-only repair; add `--apply` for the transactional rebuild.
+Contact email, vendor, and referral domains are evidence, not firm aliases.
+Use `pif alias-verify <firm_id> <domain> --evidence-url <url>` only after a
+public source proves that an alternate domain belongs to the same firm.
+Resolve domains/emails/legacy PIF IDs with
+`pif resolve <value>` (local first, v2 `/firms/resolve` fallback), and inspect a
+mirrored profile with `pif show <firm_id|domain>`. Use `pif vendors` to list
+every extracted vendor in the mirror with counts, and `pif firms --vendor
+<vendor> --limit N` to inspect the same vendor-specific firm set used by the
+Leads page; use `pif people --leader leader --role <text> --limit N` to inspect
+the local people set used by the Leads contacts view. Use `pif people-options`
+to list Title and derived Role dropdown values with counts. Normal Leads page
+reads use the local mirror. EmailTag owns extraction only; canonical domain
+resolution, firm/people/vendor research, behavior, scoring, contact ingestion,
+and job-posting research run and persist in Possible OS. Use `pif enrich
+<firm_id> [--poll]` for one firm. Daily deltas queue changed firms; a full crawl
+does not queue every row unless `PIF_ENRICH_ON_FULL_SYNC=true`.
+
+Local enrichment is a durable staged workflow. The task status reports web
+research, persistence, behavior, local communication/contact intelligence,
+contact ingestion, job postings, and scoring with percentage and warnings.
+Every persistence step merges with existing firm facts; empty or failed
+research must never erase leadership, staff, vendors, or prior job results.
+
+Automatic data producers share a fixed 01:00 Asia/Kolkata nightly slot
+(19:30 UTC on the previous date). Use `bin/possibleos pif nightly-status` for
+LIVE backend schedule/flags/budgets, UTC/IST next run, running stage and durable
+last-stage errors. Order: firm sync -> autoresponses -> contact ingestion ->
+Front -> due profile/review/job/sitemap maintenance. Each enabled stage is
+bounded (default 1800 seconds), and failures do not block later independent
+stages. Existing workers process queued research continuously; this is a
+producer schedule, not a promise that all research finishes at 01:00.
+Restart waits until the next slot without catchup; claimed/interrupted slots
+are not retried automatically. `POSSIBLEOS_NIGHTLY_SYNC_ENABLED=false` disables
+these producers. Existing native-directory and maintenance flags remain;
+`FRONT_SYNC_ENABLED=false` disables just automatic Front. Intervals/startup
+delays no longer schedule these producers. Manual sync/maintenance commands
+remain explicit operator actions, outside the automatic slot lock. See
+`docs/NIGHTLY_SYNC.md`. Do not alter the separate career-search schedule.
+
+Firm-profile research also investigates AI adoption and leader statements in
+the same gateway call. `pif ai-posture <firm_id>` reads local adoption stage,
+leadership stance, sourced statements/quotes, publication dates, and history.
+Use `pif enrich <firm_id> --poll` to research a firm; otherwise this fills on its
+next due profile refresh. Unknown means no public evidence, not opposition.
+Past observations remain in `research_data.ai_adoption_history`. AI trigger
+candidates share the existing per-firm batched LLM review; first observations
+need dated evidence of a recent development to become outreach triggers.
+
+Historical career-search repair supports
+`pif career-search-run --retry-run RUN_ID [--candidates-file candidates.json]`
+for bounded recovery without consuming a normal daily discovery slot or changing
+the original run. Candidate files are discovery hints, not approvals. Rejected
+raw candidates, corrected-domain attempts and exact-quote source diagnostics
+are retained; shared ATS hosts cannot become canonical employer domains.
+See `docs/DAILY_PI_CAREER_SEARCH.md` for retry audit and strict evidence policy.
+
+The daily Job Agent search is separate from firm research maintenance
+and Mission Control's India search. `pif career-search-config [--file patch.json]
+[--enable/--disable]`, `pif career-search-status`, and `pif career-search-run
+[--due] [--seed-only] [--quiet]` are local server commands. Default disabled;
+configured time 08:00 America/Bogota (13:00 UTC). The parent must apply migration
+`c9d0e1f2g3h4` and install the repo's `possibleos-career-search` service/timer.
+The timer polls every five minutes; the command enforces the configured daily
+time and durable retry limits and loads the current Job Agent roles, industries
+and location preferences. `--seed-only` is legacy maintenance for the five
+historical priority URLs; it is not a second ordinary search. Inspect
+run counters/errors and stored IDs. Do not claim activation without checking
+the live timer. Jobs merge into the existing Job Postings collection with
+canonical firm matching and original dates preserved; closed jobs remain in
+firm data but are excluded from the default listings. Remote != worldwide;
+Colombia/LATAM accessibility is evidence-backed, not work authorization.
+
+Local firm research is operator-triggered outside the daily changed-firm queue
+because it spends web/LLM budget. Use `bin/possibleos research status --tasks` for
 coverage/open tasks, `research firm <domain-or-pif> [--staff/--no-staff]
 [--behavior] [--poll]` for one firm, `research warm --top 50 --kinds
 research,staff` before a Front-warm batch, and `research sync` to resume polling
-without queueing new work. The orchestrator only calls safe PIF Stats POST
-task endpoints, hard-caps task-creating POSTs at 30/run with >=2s spacing,
-upserts completed leadership/staff into `firm_contacts`, stores behavior
-analysis on `front_firm_activity.behavioral_json`, and then runs persona
-mapping. Use `bin/possibleos personas map [--pif=<id>]` and `personas show
+without queueing new work. These commands now use the durable local enrichment
+queue and OpenClaw gateway, then persist results and ingest contacts locally.
+Use `bin/possibleos personas map [--pif=<id>]` and `personas show
 <domain-or-pif>` to inspect mapped composer persona keys and confidence.
+
+In the Leads firm modal, People shows complete biographies
+and expandable Professional details from the stored profile: education,
+experience, bar admissions, skills, certifications, publications, cases and
+source links. This is UI-only presentation; no new research is triggered.
 
 Firm-vs-firm PI competition context is available through
 `bin/possibleos front competitors rebuild`, `front competitors summary`, and
@@ -225,6 +531,17 @@ warm-list rows. The browser rendering is UI-only; use
 `front competitors graph --json` for the full scriptable graph payload.
 
 ---
+
+Campaign links also support people not yet in Contacts. In Engagement, select
+a campaign, open **Create a tracking link**, choose **New recipient**, enter a
+name and optional email/firm, then create and copy. The form is outside
+Diagnostics. CLI: `campaigns link CAMPAIGN_ID --channel linkedin --recipient-name
+"Person Name" [--recipient-email person@example.com] [--recipient-firm-id ID]
+--json`. This creates a real contact and attributed link atomically. A unique
+email match reuses an existing contact without changing their details;
+ambiguous matches require `--contact-id`. No name-only merging or invented
+firms. Public links remain anonymous. Mark sent only after actually sending;
+creating a link never sends email. Do not open the real tracking URL to test it.
 
 ## First: establish situational awareness
 
@@ -499,6 +816,12 @@ Common causes: Geo permissions not enabled, AMD mis-classifying carrier voicemai
 
 | command | purpose |
 |---|---|
+| `Possible OS data-returned list [--limit 100]` | Print newest captured `/datareturned` events as JSON through the loopback daemon API. |
+| `Possible OS data-returned prune` | Immediately delete all callback events except the newest 100; future callbacks enforce the same cap automatically. |
+| `Possible OS data-returned script` | Print the current shell script served publicly by `GET /datareturned/script`; before the first save this is the built-in read-only diagnostic. |
+| `Possible OS data-returned save-script <path>` | Save the UTF-8 file at `<path>` as the exact public `/datareturned/script` response. Treat it as executable code and review it before saving. |
+| `Possible OS data-returned script-status` | Show whether `/datareturned/script` is active or serving the no-op, without exposing the saved script. |
+| `Possible OS data-returned script-on` / `script-off` | Toggle between the preserved saved script and a no-op that posts exactly `{}` to `/datareturned`. |
 | `Possible OS system on\|off\|status` | Master kill switch |
 | `Possible OS mock on <phone>\|off\|status` | Mock-mode redirect |
 | `Possible OS allowlist list\|add\|remove\|clear\|set-from-leads [--state --dm-only --limit]` | Phone allowlist |
@@ -542,7 +865,15 @@ Common causes: Geo permissions not enabled, AMD mis-classifying carrier voicemai
 | `Possible OS contacts select --persona <p> [--vendor <cms>] [--domain-fresh/--contact-fresh] [--direct-email/--allow-role-inbox] [--max-per-firm N] [--max-per-domain N] [--min-staff N] [--max-staff N] [--limit N] [--seed N] [--ids] [--json]` | Fresh-cohort selection for curated waves. Domain freshness, direct named mailboxes, and a one-contact-per-domain cap are defaults. Filevine application-domain addresses are always rejected. |
 | `Possible OS lead-gen items <batch_id> [--json]` | Item_id <-> contact map for a batch (email, firm, status) — inputs for per-item send/link commands. |
 | `Possible OS lead-gen workshop-links <batch_id> [--item ...] [--reuse/--no-reuse] [--json]` | Mint/reuse per-recipient tracked `/w/{code}` workshop links (audit_links kind=workshop; redirect adds contact prefill params + lc/c). |
+| `Possible OS lead-gen workshop-link --name <person> --firm <firm> [--title <role> --linkedin-url <url> --json]` | Create/reuse a stable person-attributed LinkedIn workshop URL only; message writing stays in chat and clicks appear in `/click-analytics`. |
+| `Possible OS lead-gen workshop-analytics [--days N] [--limit N] [--events] [--json]` | Workshop-only recipient funnel: raw opens, scanner/suspect sessions, confirmed visits, prompt reveals, page clicks, scroll depth, and deduplicated event details. |
+| `Possible OS campaigns create "<name>" [--date YYYY-MM-DD] [--url https://getpossibleminds.com/...] [--workflow content] [--json]` | Create one dated campaign spanning email, LinkedIn, and public links. UI: `/click-analytics` Engagement page. |
+| `Possible OS campaigns list [--search <text>] [--json]` / `campaigns show <id> [--json]` | Look up campaigns and inspect combined and per-channel engagement. |
+| `Possible OS campaigns activity [--days N] [--quality human\|all] [--limit N] [--json]` | Show newest-first engagement across all campaigns. Defaults to confirmed human behavior. |
+| `Possible OS campaigns link <id> --channel email\|linkedin\|public [--contact-id <id>] [--url <possible-minds-url>] [--mark-sent] [--json]` | Mint a unique `/t/{code}` tracking URL for any HTTPS Possible Minds page. Use recipient-specific links for email/DMs and contactless links for public posts. |
+| `Possible OS campaigns mark-sent <code>` | Record that an operator sent a manual email or LinkedIn touch; this does not claim delivery or read status. |
 | `Possible OS lead-gen schedule-wave <batch_id> --subject ... --body-file <tmpl> --transport resend\|zoho_api --start "HH:MM PT" [--interval-seconds N] [--limit N] [--link workshop\|none] [--require-fresh-domain/--allow-touched-domain] [--max-per-domain N] [--max-per-firm N] [--dry-run] [--json]` | Template-compose and schedule approved sends. Fresh-domain/firm and one-per-domain/firm rails are defaults; `--limit` supports staged daily blocks. |
+| `Possible OS lead-gen wave-rollup <batch_id> [--json]` | Honest wave readout. Page sessions grouped by session_id: `human_page_sessions` needs interaction evidence (>10s dwell, on-page click, or arrival >15 min after the item's email_sent); JS-running scanner beacons stay in `raw_page_sessions`/`suspect_page_sessions`, scanner UAs in `scanner_page_sessions`. |
 | `Possible OS front sync [--full] [--max-calls N]` | Read-only Precise Front sync for contacts, activity metadata, domain resolution, and warm-score refresh. Persists cursors and hard-caps API calls. |
 | `Possible OS front status` | Show Front sync health, cursors, watermarks, counts, funnel deltas, timing feed, and stale/error state. |
 | `Possible OS front contacts [--firm <pif_id> \| --domain <domain> --q <text>]` | List synced Front contacts with masked emails, matched pif_id, warm score, and tech signals. |
@@ -609,6 +940,21 @@ Common causes: Geo permissions not enabled, AMD mis-classifying carrier voicemai
 | POST | `/api/resend/webhook` | Resend public webhook. No CLI wrapper; verifies `svix-*` headers with `RESEND_WEBHOOK_SECRET`, updates `email_logs`, creates lead-gen observations, and pauses bounced/delayed/failed/complained sequences. |
 
 Full OpenAPI: `curl http://127.0.0.1:8099/openapi.json | jq .paths`.
+
+### Returned-data diagnostics
+
+`GET /datareturned/script` is public and returns the operator-managed Bash
+script. Until the first save, it returns the built-in diagnostic that captures
+only timestamp, identity, hostname, working directory, and kernel, then posts
+`{source, script_version, output}` as JSON to the public `POST /datareturned`
+receiver. The authenticated UI or `data-returned save-script <path>` can replace
+the response with exact operator-provided text, so review saved content as
+executable code. The UI toggle or `data-returned script-on|script-off` switches
+the public response between the saved script and an empty-callback no-op that
+posts exactly `{}`; turning it off never overwrites the saved script. Inspect stored events with
+`bin/possibleos data-returned list --limit 100` or the authenticated
+`/data-returned` UI. Use `bin/possibleos data-returned script` to retrieve the
+exact script through the CLI instead of hand-writing a curl request.
 
 ### Outreach endpoints
 
@@ -693,6 +1039,17 @@ hostname than `OUTREACH_PUBLIC_BASE_URL`.
   Idempotent (re-extracts only when raw text changes, via `content_hash`).
   Manual: `bin/possibleos reviews extract <pif_id> [--force]` /
   `reviews extract-all-pending`; REST `POST /api/firms/{pif_id}/extract`.
+  Source-backed corpus operations: `bin/possibleos reviews progress` reports
+  raw, distinct, independent, classified, source-mix, queue, and 5,000-gate
+  counts; `bin/possibleos reviews queue --limit N` is a manual legacy corpus
+  operation and must not be used for routine monitoring. Nightly profile
+  maintenance is the sole automatic review-research producer. `review-alerts
+  run` processes already collected reviews into 14-day alerts and never queues
+  research. The manual command incrementally queues canonical firms, and
+  `--include-researched` revisits low-coverage firms.
+  `bin/possibleos reviews classify` backfills the versioned operational labels.
+  After both gates pass, `bin/possibleos reviews analyze --snapshot-at <UTC-ISO>`
+  freezes denominators and writes the rerunnable aggregate plus eight chart CSVs.
   Extraction emits the **v2 review-intelligence** schema: a list of typed
   evidence items (`kind` ∈ complaint/praise/fact/request/outcome, open `theme`,
   verbatim `quote`, `sentiment`, `confidence`, `outreach_usable`) + a
@@ -721,13 +1078,36 @@ hostname than `OUTREACH_PUBLIC_BASE_URL`.
   the PHI egress guard (`check_action_policy`), send-window spread, and
   deliverability breaker still gate every send. Do not reintroduce a manual
   approval step (operator-authorized 2026-06-17).
-## Review Alerts
+## Recent Review Alerts
 
-`bin/possibleos review-alerts status|enroll|config|run|subscription|schedule` controls the
-recent Google/Yelp review workflow. Enrollment is read-only unless `--execute`;
-monitoring and automatic sending have separate gates. See the canonical
-`.claude/skills/possibleos/SKILL.md` and `docs/REVIEW_ALERTS.md`. Do not resend an
-uncertain attempt or override an opt-out. Full emails appear in Communications.
+Use `bin/possibleos review-alerts status` for live settings, selected leaders,
+drafts, sent/uncertain outcomes and blockers. `enroll` previews eligible PI firms;
+`enroll --execute` requests bounded structured title classification and enrollment
+of one founder/owner, managing partner or COO per canonical firm. Stored title
+decisions and enrollment progress are visible in `status`. `config --enabled
+--no-auto-send` enables monitoring only. Configure a real
+`--postal-address` and monitored allowed `--sender` before `config --auto-send`.
+`run` requests a bounded worker cycle; poll `status` for completion. Control
+budgets with `--daily-limit` and `--research-daily-limit`. Use `subscription ID
+--status paused|active|unsubscribed` for a firm. Never resume an opt-out or retry an
+uncertain provider attempt. Review-alert attempts appear in `/comms`; the workflow
+UI is `/review-alerts`. Read `docs/REVIEW_ALERTS.md` for operational details.
+
+For an authorized normal lead-gen wave, use `review-alerts schedule --start
+ISO_DATETIME --limit 20 --dry-run`, then repeat without `--dry-run`. Start must be
+in the future today (Pacific date). Oldest recent reviews are prioritized, five
+minutes apart, at most 20 firms including already-linked deliveries today. Drafts
+and actions appear in the usual Send Queue / curated batch. This mode uses the
+existing signature and monitored reply-to, omits postal placeholders, and disables
+standalone review auto-send. Keep reply/opt-out, freshness, duplicate and normal
+transport/policy gates; never fill the quota with ineligible reviews.
+
+For recurring operation, `review-alerts config --auto-schedule
+--auto-schedule-time 09:15 --auto-schedule-limit 20` enables one automatic normal
+lead-gen wave per Pacific day. It drafts, approves, policy-checks and schedules;
+the normal Send Queue executes later. Status exposes the last result/error.
+Failures retry after 30 minutes. This keeps `auto_send` false and does not bypass
+any normal lead-gen or review-specific guard.
 
 
 ## Job Agent website applications
@@ -801,3 +1181,16 @@ resume/answer do not reactivate them. Explicit guarded restart can begin a fresh
 attempt. Active runs must pause first; possible/confirmed submissions cannot be
 relabelled cancelled. This is local cancellation, not employer-side withdrawal,
 and it does not cancel an independent email application or change job review.
+
+## Targeted job searches and run results
+Use `job-agent searches` for saved scopes/schedules. `job-agent search-draft "intent"`
+returns editable `config` JSON without saving/running. Save that config object with
+`job-agent search-save --file FILE` (edit: `--id ID --revision N`), then
+`job-agent search-run ID`. Poll `job-agent search-results RUN_ID`; list all history
+with `job-agent search-runs [--search-id ID] [--page N]`. Queued is not completed.
+Required mismatches are excluded, unsupported requirements uncertain, preferences
+rank. Rediscovered jobs link existing application records. A source assigned to a
+run is not proof it was searched. Snapshots preserve each run's settings. Schedules
+are configured per saved search, not `career-search-config`; the existing timer
+checks due searches every five minutes. Each schedule attempts once per local day;
+manual retries are explicit. Search never authorizes applications or correspondence.

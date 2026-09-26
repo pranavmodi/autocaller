@@ -1530,3 +1530,22 @@ resume/answer do not reactivate them. Explicit guarded restart can begin a fresh
 attempt. Active runs must pause first; possible/confirmed submissions cannot be
 relabelled cancelled. This is local cancellation, not employer-side withdrawal,
 and it does not cancel an independent email application or change job review.
+
+### Targeted Job Agent searches
+| Command | Purpose |
+| --- | --- |
+| `job-agent searches` | Saved searches, revisions and daily schedules |
+| `job-agent search-draft "description"` | Generate editable JSON settings; no save or run |
+| `job-agent search-save --file config.json` | Create a saved search |
+| `job-agent search-save --id ID --revision N --file config.json` | Edit targeting or schedule with conflict protection |
+| `job-agent search-run ID` | Queue once and return durable run ID |
+| `job-agent search-runs [--search-id ID] [--page N]` | Paginated complete history |
+| `job-agent search-results RUN_ID` | Snapshot, sources, per-job outcomes, queue links and errors |
+
+Recipe: draft settings, review the returned `config` object and save that object
+as a JSON file; `search-save` it, then `search-run ID`. Poll `search-results RUN_ID`.
+`queued` waits for the single research worker. `partial` preserves completed work;
+inspect errors before running again. A saved search's config is the authority for
+its schedule; `pif career-search-run --due` queues all due saved searches. The old
+`job-agent search` queues the migrated broad search (`default`). Search does not
+apply. Existing jobs rediscovered by another search link the same application.

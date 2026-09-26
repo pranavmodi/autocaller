@@ -16,6 +16,16 @@ from app.services.pif_job_posting_research import _research_data_with_status, cl
 from app.services.firm_intel_sync import _preserve_local_job_research
 
 
+@pytest.fixture(autouse=True)
+def isolate_contract_model(monkeypatch):
+    # Contract inference has its own tests. This suite tests discovery and evidence,
+    # and must never call a paid external model or wait for network access.
+    from app.services import job_contract_classification
+    async def classify(rows):
+        return rows, None
+    monkeypatch.setattr(job_contract_classification, 'classify_extracted_postings', classify)
+
+
 def daily_job(**changes):
     return {"id": "career_1", "title": "AI Engineer", "source_url": "https://example.com/jobs/1",
         "source_name": "Verified employer", "posted_date": "2026-08-27", "employer_posted_date": "2026-08-27",
@@ -291,7 +301,7 @@ async def test_manual_search_skips_an_exact_job_found_in_an_earlier_run(monkeypa
     await service.execute("manual", service.SearchConfig(), seed_only=False, audit=audit,
                           search_profile=profile)
     assert len(calls) == 1
-    assert calls[0]["career_sources"] == ["https://remotive.com/feed", "https://remoteok.com/api"]
+    assert set(calls[0]["career_sources"]) == {"https://remotive.com/feed", "https://remoteok.com/api"}
     assert audit["search_source_ids"] == ["remotive", "remoteok"]
     assert audit["candidates"] == 0
     assert audit["duplicates_skipped"] == 1
@@ -1016,6 +1026,7 @@ async def test_status_recovery_success_does_not_complete_normal_daily_slot(monke
         async def __aenter__(self): return self
         async def __aexit__(self, *args): pass
         async def scalars(self, *args): return SimpleNamespace(all=lambda: [row])
+        async def scalar(self, *args): return None  # Saved-search migration not installed.
     monkeypatch.setattr(service, "configuration", config)
     monkeypatch.setattr(service, "AsyncSessionLocal", Session)
     monkeypatch.setattr(service, "now_utc", lambda: now)

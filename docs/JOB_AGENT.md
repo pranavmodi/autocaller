@@ -388,3 +388,51 @@ selection gate; legacy classification_threshold values are ignored. Explicit
 manual categories remain authoritative. Missing/invalid PDFs or failed model
 requests still require correction. Use the existing classify or browser resume
 commands for an individual job; no bulk reclassification is triggered.
+
+## Saved targeted searches (2026-09-26)
+The **Searches** tab is the discovery control surface. Each saved search specifies
+roles, industries, location eligibility, employment type, exclusions, preferences,
+posting age, selected job boards, employer career URLs, candidate/source budgets,
+and its own optional daily time/timezone. Industry/location/employment can be
+required or preferred. Required mismatches are excluded; missing evidence remains
+uncertain; preferences affect result ordering without excluding jobs.
+
+A plain-language description can generate editable settings. It does not save,
+schedule, or run anything. New searches default to manual-only; enabling a daily
+schedule requires saving. The existing broad search and its 08:00 Bogotá schedule
+(or other existing configured time) are preserved exactly on first migration.
+Global Settings search fields now supply defaults for new searches; existing
+searches are edited in Searches. The old Search now button queues `default`.
+
+Each run is persisted before work starts and snapshots the complete settings and
+revision. One database advisory lock serializes research across workers. Queued
+runs survive restarts; interrupted active runs retain partial findings and can be
+run again manually. Repeated Run now clicks for the same pending search return
+the same run. The existing five-minute systemd timer now enqueues due saved
+searches; the backend worker drains them. Each enabled search gets one scheduled
+attempt per local day, including failed attempts; manual retries are separate.
+No separate PI-only schedule executes. Legacy `career-search-config` is retained
+for transport/retry defaults and initial migration only; use saved search settings
+for current schedules.
+
+Run history is paginated with no total history cap, including earlier legacy runs.
+Details show immutable settings, generated/reported queries, assigned sources,
+researcher-reported source checks, findings and processing errors. Earlier runs
+cannot reconstruct evidence that was never recorded and are labelled accordingly.
+A source being assigned does not prove it was checked. Partial results remain
+visible during failures. Default ordering puts matches first, then uncertainty,
+with supported preferences breaking ties.
+
+Rediscovered jobs are verified again and appear in this run, labelled **Already
+in your queue**. Canonical employer-scoped URL/requisition deduplication remains
+unchanged; the same candidate/application record is linked. Excluded new jobs
+are retained in run history without entering the application queue. Search never
+classifies resumes, prepares emails, contacts employers or submits applications.
+Current processing budgets are explicitly editable: 1–100 candidates and 1–30
+sources per run, with a 30-minute execution budget. Those are not exhaustive-search
+claims. Source selection rotates by day.
+
+Storage: `job_agent_saved_searches` holds revisioned configuration;
+`career_search_runs` holds queued/running/completed/partial/failed/interrupted runs,
+settings snapshots, and per-job observations linked to canonical candidate IDs.
+`g2060926a001` is the additive migration; startup also creates the table if absent.
