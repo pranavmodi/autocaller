@@ -57,6 +57,8 @@ class CommItem(BaseModel):
     call_id: Optional[str] = None
     duration_seconds: Optional[int] = None
     message_type: Optional[str] = None
+    source_type: Optional[str] = None
+    source_id: Optional[str] = None
 
 
 class CommsResponse(BaseModel):
@@ -144,6 +146,7 @@ async def _emails_to_items(
                 EmailLogRow.recipient_name.ilike(pattern),
                 EmailLogRow.subject.ilike(pattern),
                 EmailLogRow.body_excerpt.ilike(pattern),
+                EmailLogRow.firm_name.ilike(pattern),
                 EmailLogRow.pif_id.in_(matching_firm_ids),
             ))
         rows = (await session.execute(q)).scalars().all()
@@ -199,7 +202,8 @@ async def _emails_to_items(
             occurred_at=r.sent_at.astimezone(timezone.utc).isoformat(),
             pif_id=r.pif_id,
             firm_name=(
-                pif_firm_map.get(r.pif_id or "")
+                r.firm_name
+                or pif_firm_map.get(r.pif_id or "")
                 or firm_map.get(r.call_id or "")
                 or str(trace_context.get("firm_name") or "")
                 or None
@@ -211,6 +215,8 @@ async def _emails_to_items(
             body_excerpt=body,
             call_id=r.call_id,
             message_type=r.message_type,
+            source_type=r.source_type,
+            source_id=r.source_id,
         ))
     return items
 

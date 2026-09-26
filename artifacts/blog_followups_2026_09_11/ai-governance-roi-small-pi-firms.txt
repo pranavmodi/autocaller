@@ -1,0 +1,194 @@
+A small PI firm rarely thinks of itself as having an information-governance problem. It has cases, emails, medical records, photographs, demands, text messages, intake notes, bills, liens, and old files. Each item made sense when someone created or received it.
+Over time, the same matter acquires several versions of a document. Important information lives in an employee's inbox. A closed file remains in premium storage. Nobody knows whether a shared folder is authoritative. A former vendor still holds data. The firm keeps everything because deleting anything feels dangerous.
+That arrangement may remain tolerable while people search manually and rely on memory. It becomes a serious constraint when the firm wants AI to find a fact, summarize a matter, draft an update, identify a missing record, or act across systems.
+Why AI needs governance at all
+AI governance is the broader system for deciding which AI tools the firm may use, what they may access, what they may do, who checks their work, and how the firm responds to failure. It protects client information and preserves human accountability. It also keeps spending and experimentation tied to useful work.
+Information governance is one part of that larger system, but it is often the first practical layer. Before choosing whether an AI assistant may search a repository, the owner needs to know what the repository contains, whether access is appropriate, and which version of the information should be trusted.
+AI governance
+Controls the tool, use case, authority, review, and accountability.
+Information governance
+Controls the information lifecycle, from creation and access through retention and disposal.
+Why it comes first
+AI cannot be governed well when the firm cannot describe the information it will use.
+Chris Giles, founder and CEO of LegalRM
+, puts the principle plainly: “You can't really do AI well without good information governance first.”
+The
+NIST AI Risk Management Framework
+similarly begins with governance and asks organizations to map the context, measure performance and risk, and manage what they learn. The scale can be tailored. A solo or small firm does not need an enterprise committee to make its first useful decisions.
+Information governance is the lifecycle of a firm's memory
+For every important category of information, a firm should eventually be able to answer seven questions:
+01
+What is it?
+A medical record, intake note, signed agreement, draft demand, client message, accounting record, or another defined type.
+02
+Where is it?
+The system or physical location where it can be found.
+03
+Who owns it?
+The person or role responsible for its accuracy and lifecycle.
+04
+Who may access it?
+The people, vendors, and software permitted to see or change it.
+05
+Which version controls?
+The authoritative record when duplicates or drafts exist.
+06
+How long is it kept?
+The policy, event, or obligation that determines retention.
+07
+How does it leave?
+Transfer, archive, return, deletion, or destruction with appropriate evidence.
+A firm will not answer every question for every file on day one. The point is to move from accidental retention and informal ownership toward repeatable decisions.
+The case-management system is not the whole file
+A small PI firm's information rarely lives in one repository. The case-management system may be the center of the matter, but it is seldom the whole record.
+Location
+What may be there
+The owner's question
+Intake and case management
+Contacts, facts, statuses, notes, tasks, deadlines, and matter history
+Is this the authoritative record, and are permissions current?
+Email, text, and chat
+Client instructions, negotiations, attachments, and decisions
+What should be captured in the matter, and what remains stranded?
+Shared drives and document systems
+Records, drafts, demands, pleadings, photographs, and duplicate versions
+Which structure and version should people and AI trust?
+Accounting and vendor portals
+Costs, bills, liens, payments, records requests, and external status information
+Who owns access, export, retention, and termination?
+Paper and off-site storage
+Originals, legacy case files, and boxes retained under old practices
+What exists, what rule applies, and what is the continuing cost?
+Full integration is not always necessary. Sometimes a pointer, ownership record, and review date create enough visibility. Building an expensive connection to every system can cost more than the problem warrants.
+The official document or case-management system may contain only part of the firm's working record. OneDrive, SharePoint, email, collaboration tools, personal folders, and AI products can become a hidden attic of drafts, copies, and client information nobody is actively managing.
+ROT is expensive before it becomes risky
+Records professionals use a useful term for this material:
+ROT
+, meaning redundant, obsolete, and trivial information. It is what a firm keeps because nobody has decided whether it still deserves to exist.
+01
+Redundant
+Duplicate medical records, repeated email attachments, copied matter folders, and multiple versions stored without a clear controlling record.
+02
+Obsolete
+Superseded drafts, expired instructions, old contact lists, former-vendor exports, and workflow documents that no longer describe how the firm works.
+03
+Trivial
+Temporary downloads, test files, transitory notices, and convenience copies that have no continuing legal or business value.
+ROT makes ordinary work slower. People search through more files, storage and migrations cost more, and sensitive information remains exposed longer than necessary. AI magnifies the problem: duplicates can give one fact artificial weight, obsolete instructions can produce the wrong answer, and trivial material consumes retrieval and review time without improving the work.
+ROT is a review category, not permission to delete. A duplicate may contain unique annotations, an old draft may matter to a dispute, and a seemingly trivial message may be subject to a hold. Identify candidates first; apply retention rules, exceptions, review, and approval before disposal.
+Start with visibility, not a perfect policy
+The first step is simple: know what you have, where it is, and who is responsible. Without that visibility, governance is guesswork.
+Begin with one information map. It can be a spreadsheet with a row for each major repository and columns for the owner, information categories, active users, connected vendors, authoritative source, retention basis, known holds, export method, and next review date.
+Do not begin by cataloging every document. Begin by identifying the systems and places that contain important information, then choose one manageable body of records for deeper review.
+A useful first target might be a group of older closed matters, one shared drive, one former employee's mailbox, or one off-site storage list. The target should be large enough to matter and small enough to finish.
+What makes information ready for AI
+AI-ready does not mean uploading the whole firm into a model. It means the information used for an approved workflow is sufficiently trustworthy, understandable, and controlled.
+01
+Relevant
+The system receives the information needed for the task, not every file the firm possesses.
+02
+Authoritative
+The firm knows which record or version should control.
+03
+Classified
+Information is connected to the right client, matter, type, stage, sensitivity, and retention rule.
+04
+Current
+Superseded drafts and obsolete instructions do not silently compete with the latest record.
+05
+Permissioned
+A user or agent can reach only the matters and actions required for the workflow.
+06
+Traceable
+Material answers can be checked against their source, and important actions can be reconstructed.
+Poor information does not merely create compliance risk. It makes AI less useful. The system may retrieve an old demand, treat duplicates as corroboration, expose a restricted matter, or produce an answer that takes longer to verify than the original task.
+Classification also needs supervision. Software can identify predictable patterns such as phone numbers more easily than it can determine whether a document is authoritative, privileged, superseded, or connected to the right legal issue. Automated classification can produce both false positives and false negatives. A practical system begins with examples and rules supplied by people, uses the machine to assist, and samples the result before relying on it at scale.
+Keeping everything is also a decision
+Many firms retain information indefinitely because deletion feels risky. But over-retention has costs: storage, vendor overages, search noise, migration effort, security exposure, and a larger body of material for AI to search incorrectly.
+The alternative is defensible disposal: remove information only under established rules, proper review, documented approval, and any required waiting period.
+01
+Apply the rule
+Identify the retention policy and the event that starts the period, such as matter closure.
+02
+Check exceptions
+Confirm legal holds, open disputes, client instructions, insurance requirements, and other reasons to preserve.
+03
+Obtain approval
+Record who reviewed the proposed group and who authorized the action.
+04
+Use a recovery window
+Where the system permits, move records to a controlled recycle or holding area before permanent destruction.
+05
+Complete disposal
+Delete, destroy, transfer, return, or archive the approved information through the defined process.
+06
+Keep the evidence
+Retain the policy, scope, approvals, exceptions, dates, and proof of the final action.
+Do not infer a retention period or authorize deletion from this article. Requirements vary by jurisdiction, matter, client commitment, court rule, contract, and circumstance. The firm should establish its policy with qualified guidance.
+A written policy is not proof that it was followed
+A policy says what should happen. An audit trail shows what did happen. That distinction is central to defensibility.
+For an important retention or disposal action, preserve the information group affected, policy and trigger applied, reviewer and approver, holds or overrides, action date, and evidence of completion.
+This same principle matters once AI enters the workflow. For consequential work, the firm may need to reconstruct which sources were used, what the system produced, who reviewed it, what changed, and what was ultimately sent or entered into the case system.
+AI also creates information. Prompts, uploaded files, generated answers, downloaded work product, evaluations, and conversation histories can become a second unmanaged repository. The firm should decide which of those records it needs, where they belong, who may access them, and how long they should remain, instead of allowing every product to retain them by default.
+Where the business return comes from
+Information governance is often described as defensive work. It can also produce a measurable return.
+Direct costs
+Lower storage, physical-record, overage, migration, and duplicate-vendor costs.
+Search effort
+Less staff time spent locating the right file or deciding which version controls.
+AI quality
+Less irrelevant material to retrieve, summarize, compare, and verify.
+Risk exposure
+Less unnecessary sensitive information available to users, vendors, attackers, or mistaken workflows.
+Measure the starting point. Record storage volume and cost, boxes held off-site, duplicate or obsolete material identified, time required to find representative documents, and correction effort for an AI-assisted task. Then measure the same things after the controlled cleanup.
+Include AI usage itself. Large document collections can generate substantial processing and model charges. A governed project limits the initial corpus, assigns a budget owner, monitors usage, and learns the cost per useful outcome before the firm connects another repository.
+The return is not simply that the firm deleted files. It is that people and systems can find the right information faster, with less noise and less unnecessary exposure.
+A practical first 30 days
+Week 1
+Map the repositories
+List where case and firm information lives, who owns each location, who can access it, and which vendors connect to it.
+Week 2
+Find the ROT
+Select one closed-matter group, shared folder, mailbox, or storage list. Sample it for redundant, obsolete, and trivial material, then separate clear candidates from records that need legal or operational judgment.
+Week 3
+Apply the rules
+Confirm the relevant retention policy, triggers, holds, approvals, and exceptions. Define what may be corrected, archived, transferred, or proposed for disposal.
+Week 4
+Complete one controlled action
+Carry out an approved cleanup, preserve the audit record, measure the result, and decide what the next manageable group should be.
+Do not let perfection prevent useful progress. Choose one overdue or clearly defined group, get the right approval, complete the work, and make the result visible. A finished, defensible improvement creates more confidence than an ambitious policy that changes nothing.
+For an initial pilot, one matter is not too small and one practice group is not too large. Start where people already work, show them what the information review found, and use a visible result to recruit the next internal champion.
+Your first AI-readiness project may not involve an AI model at all. It may be learning what your firm knows, where that knowledge lives, and which parts can be trusted.
+Research basis
+This article is primarily based on two Global Information Governance Day discussions:
+From Information Governance to Governed Intelligence for Trustworthy AI
+, with Chris Giles, and
+Tony Forde on AI Governance, Dark Data, and ROT Disposal
+. Together, they cover visibility, AI-ready information, dark data, human-assisted classification, defensible disposal, cross-platform governance, auditability, usage costs, adoption, and practical first steps.
+The broader framing also draws on the
+NIST AI RMF Playbook
+and the UK Information Commissioner's
+AI and data-protection risk toolkit
+. For the wider controls governing tools and workflows, see our
+AI Governance 101 guide for small PI firms
+.
+The podcasts include vendor perspectives and product experience. Treat examples as illustrations, not independent benchmarks. This article provides an operating framework, not legal advice.
+Frequently asked questions
+What is information governance in a personal injury law firm?
+Information governance is the system for knowing what information the firm has, where it is stored, who owns it, who may access it, how long it should be kept, and how retention or disposal decisions are documented.
+Why does information governance matter for AI?
+AI relies on the information it can reach. If that information is duplicated, outdated, misclassified, incomplete, or available to the wrong people, AI can amplify those problems. Governance creates a smaller and more trustworthy information base.
+What is ROT information in a law firm?
+ROT means redundant, obsolete, and trivial information. In a PI firm, that can include duplicate medical records, superseded drafts and instructions, temporary downloads, test files, convenience copies, and other material that no longer has a business or legal purpose. Whether information is truly ROT must be determined under the firm's retention rules, legal holds, client obligations, and the context of the matter.
+Does AI-ready information mean connecting AI to every firm system?
+No. AI should receive only the information and access required for an approved workflow. Sometimes a limited integration, export, or reference to where information is stored is safer and more economical than a connection to an entire repository.
+Can a PI firm delete old case files before adopting AI?
+Not casually. The firm must consider applicable retention duties, legal holds, client commitments, court rules, insurance requirements, and other obligations. Disposal should follow an approved policy and leave evidence of the decision and action.
+What is defensible disposal?
+Defensible disposal is the controlled deletion or destruction of information under documented rules. The firm can show what policy applied, who approved the action, what exceptions were checked, and when disposal occurred.
+How should a small PI firm begin information governance?
+Begin with one repository or defined group of closed matters. Inventory it, assign ownership, identify retention rules and holds, resolve obvious classification problems, complete one approved cleanup, and record the result before expanding.
+Start with visibility
+Prepare one body of firm information for responsible AI use.
+Possible Minds helps PI firms map information, ownership, permissions, workflow requirements, and practical controls before connecting AI to firm systems.
+Request an information-governance diagnostic

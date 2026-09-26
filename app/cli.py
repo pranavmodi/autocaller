@@ -49,6 +49,7 @@ prompts_app = typer.Typer(help="Prompt-style selector (current | minimal). Paral
 email_app = typer.Typer(help="Outbound email — config check + manual sends (test, one-pager, VM follow-up, consult).", no_args_is_help=True)
 pif_app = typer.Typer(help="Native PI-firm directory — pull EmailTag firm-intel v2 into possibleos.", no_args_is_help=True)
 reviews_app = typer.Typer(help="Collect, classify, and analyze source-backed public firm reviews.", no_args_is_help=True)
+review_alerts_app = typer.Typer(help="Monitor recent reviews and notify one leader per firm.", no_args_is_help=True)
 decisions_app = typer.Typer(help="Append/read the repo decision log (docs/decisions/<UTC-date>.md). Format: docs/decisions/README.md.", no_args_is_help=True)
 comms_app = typer.Typer(help="Outbound communications dashboard — calls, voicemails, SMS, emails (read-only).", no_args_is_help=True)
 contacts_app = typer.Typer(help="Per-firm contact roster (backfill from PIF Stats + patients).", no_args_is_help=True)
@@ -98,6 +99,7 @@ app.add_typer(prompts_app, name="prompts")
 app.add_typer(email_app, name="email")
 app.add_typer(pif_app, name="pif")
 app.add_typer(reviews_app, name="reviews")
+app.add_typer(review_alerts_app, name="review-alerts")
 app.add_typer(decisions_app, name="decisions")
 app.add_typer(comms_app, name="comms")
 app.add_typer(contacts_app, name="contacts")
@@ -955,7 +957,7 @@ def leads_backfill_names(
         from app.services.llm_gateway import call_skill_json
 
         skill_path = _Path(__file__).resolve().parent / "skills/lead-name-classifier/SKILL.md"
-        nav_model = os.getenv("LEAD_NAME_CLASSIFIER_MODEL", "openclaw/proxy")
+        nav_model = os.getenv("LEAD_NAME_CLASSIFIER_MODEL", "openclaw/neo")
 
         async with AsyncSessionLocal() as session:
             result = await session.execute(select(PatientRow))
@@ -975,6 +977,8 @@ def leads_backfill_names(
                         required_fields=["is_person"],
                         model=nav_model,
                         max_tokens=int(os.getenv("LEAD_NAME_CLASSIFIER_MAX_TOKENS", "60")),
+                        lane=os.getenv("OPENCLAW_RPC_BATCH_LANE", "possibleos-batch"),
+                        allow_tools=False,
                     )
                     return pid, bool(result.parsed.get("is_person", True))
                 except Exception as e:
@@ -2009,10 +2013,9 @@ def _prep_search_query(context: dict[str, Any], term: str) -> str:
 
 
 async def _render_listening_prep(context: dict[str, Any], insights: list[dict[str, Any]]) -> str:
-    from app.services.llm_gateway import DEFAULT_GATEWAY_URL, extract_json, gateway_token, require_fields
+    from app.services.llm_gateway import call_skill_json
 
-    url = os.getenv("OPENCLAW_GATEWAY_URL", DEFAULT_GATEWAY_URL)
-    model = os.getenv("LISTENING_PREP_MODEL", os.getenv("OPENCLAW_DEFAULT_MODEL", "openclaw/proxy"))
+    model = os.getenv("LISTENING_PREP_MODEL", os.getenv("OPENCLAW_DEFAULT_MODEL", "openclaw/main"))
     payload = {
         "firm_context": context,
         "matched_insights": insights[:8],
@@ -2021,38 +2024,19 @@ async def _render_listening_prep(context: dict[str, Any], insights: list[dict[st
             "Return JSON with markdown, persona, expected_objections, and vocabulary."
         ),
     }
-    body = {
-        "model": model,
-        "messages": [
-            {
-                "role": "system",
-                "content": (
-                    "You prepare practical sales-call prep for Possible Minds. "
-                    "Use only the provided firm context and listening insights. "
-                    "Return JSON only: {\"markdown\": string, \"persona\": string, "
-                    "\"expected_objections\": [string], \"vocabulary\": [string]}."
-                ),
-            },
-            {"role": "user", "content": json.dumps(payload, indent=2)},
-        ],
-        "max_tokens": 1100,
-    }
-    timeout_s = float(os.getenv("LISTENING_PREP_TIMEOUT_S", "240"))
-    async with httpx.AsyncClient(timeout=timeout_s, verify=False) as client:
-        resp = await client.post(
-            url,
-            headers={
-                "Authorization": f"Bearer {gateway_token()}",
-                "Content-Type": "application/json",
-            },
-            json=body,
-        )
-    resp.raise_for_status()
-    data = resp.json()
-    content = data["choices"][0]["message"]["content"]
-    parsed = extract_json(content)
-    require_fields(parsed, ["markdown", "persona", "expected_objections", "vocabulary"])
-    return str(parsed["markdown"]).strip()
+    result = await call_skill_json(
+        skill_path=Path(__file__).resolve().parent / "skills/listening-prep/SKILL.md",
+        payload=payload,
+        required_fields=["markdown", "persona", "expected_objections", "vocabulary"],
+        model=model,
+        timeout_s=int(float(os.getenv("LISTENING_PREP_TIMEOUT_S", "240"))),
+        max_tokens=1100,
+        retries=1,
+        schema_repair_retries=1,
+        lane=os.getenv("OPENCLAW_RPC_INTERACTIVE_LANE", "possibleos-interactive"),
+        allow_tools=False,
+    )
+    return str(result.parsed["markdown"]).strip()
 
 
 @listening_app.command("prep")
@@ -3047,6 +3031,7 @@ def comms_show(
                     "id": row.id,
                     "pif_id": row.pif_id,
                     "call_id": row.call_id,
+                    "firm_name": row.firm_name,
                     "recipient_email": row.recipient_email,
                     "recipient_name": row.recipient_name,
                     "subject": row.subject,
@@ -3057,6 +3042,8 @@ def comms_show(
                     "status": row.status,
                     "error": row.error,
                     "sent_at": row.sent_at.isoformat() if row.sent_at else None,
+                    "source_type": row.source_type,
+                    "source_id": row.source_id,
                 }
             if kind == "sms":
                 row = (await session.execute(
@@ -8238,6 +8225,9 @@ def campaigns_link(
     channel: str = typer.Option(..., "--channel", help="email | linkedin | public"),
     url: str = typer.Option("", "--url", help="Override the campaign destination."),
     contact_id: str = typer.Option("", "--contact-id", help="Optional recipient contact ID."),
+    recipient_name: str = typer.Option("", "--recipient-name", help="Create a named recipient inline instead of selecting a contact."),
+    recipient_email: str = typer.Option("", "--recipient-email", help="Optional email; reuse an unambiguous existing contact."),
+    recipient_firm_id: str = typer.Option("", "--recipient-firm-id", help="Optional existing firm ID for the new recipient."),
     label: str = typer.Option("", "--label"),
     advisor_briefing: str = typer.Option("", "--advisor-briefing", help="Private, operator-approved context for Mira."),
     mark_sent: bool = typer.Option(False, "--mark-sent"),
@@ -8254,6 +8244,9 @@ def campaigns_link(
             "channel": clean_channel,
             "destination_url": url,
             "contact_id": contact_id,
+            "recipient_name": recipient_name,
+            "recipient_email": recipient_email,
+            "recipient_firm_id": recipient_firm_id,
             "label": label,
             "advisor_briefing": advisor_briefing,
             "mark_sent": mark_sent,
@@ -8918,6 +8911,103 @@ def pif_firms(
     })
 
 
+@pif_app.command("job-postings")
+def pif_job_postings(
+    search: str | None = typer.Option(None, "--search"),
+    contract: str | None = typer.Option(None, "--contract", help="contract, non_contract, or unknown"),
+    role_category: str | None = typer.Option(None, "--category"),
+    remote_scope: str | None = typer.Option(None, "--remote-scope"),
+    order: str = typer.Option("posted_desc", "--order"),
+    page: int = typer.Option(1, "--page", min=1),
+    page_size: int = typer.Option(25, "--page-size", min=1, max=100),
+):
+    """List Leads job postings using the same filters as the web view."""
+    if contract not in {None, "contract", "non_contract", "unknown"}:
+        raise typer.BadParameter("--contract must be contract, non_contract, or unknown")
+    console.print_json(data=_get(
+        "/api/pif/job-postings",
+        search=search,
+        contract_status=contract,
+        role_category=role_category,
+        remote_scope=remote_scope,
+        order=order,
+        page=page,
+        page_size=page_size,
+    ))
+
+
+@pif_app.command("priority")
+def pif_priority_firms(
+    event: List[str] = typer.Option([], "--event", help="Trigger event type; repeat to match several."),
+    category: List[str] = typer.Option([], "--category", help="Trigger category; repeat to match several."),
+    within_days: int = typer.Option(30, "--within-days", min=1, max=3650),
+    min_score: int = typer.Option(0, "--min-score", min=0, max=100),
+    min_confidence: float = typer.Option(0.0, "--min-confidence", min=0.0, max=1.0),
+    vendor: str | None = typer.Option(None, "--vendor", help="Require an active vendor relationship."),
+    icp_tier: str | None = typer.Option(None, "--icp-tier"),
+    entity_type: str | None = typer.Option(None, "--entity-type"),
+    sort_by: str = typer.Option("priority", "--sort", help="priority, newest, or fit."),
+    limit: int = typer.Option(25, "--limit", min=1, max=100),
+):
+    """List firms with recent, evidence-backed GTM trigger events."""
+    params: list[tuple[str, str]] = [
+        ("within_days", str(within_days)),
+        ("min_score", str(min_score)),
+        ("min_confidence", str(min_confidence)),
+        ("sort_by", sort_by),
+        ("page_size", str(limit)),
+    ]
+    params.extend(("event_type", value) for value in event)
+    params.extend(("category", value) for value in category)
+    if vendor:
+        params.append(("vendor", vendor))
+    if icp_tier:
+        params.append(("icp_tier", icp_tier))
+    if entity_type:
+        params.append(("entity_type", entity_type))
+    query = str(httpx.QueryParams(params))
+    console.print_json(data=_get(f"/api/pif/priority-firms?{query}"))
+
+
+@pif_app.command("firm-triggers")
+def pif_firm_triggers(
+    firm_id: str = typer.Argument(..., help="Mirrored firm UUID."),
+    limit: int = typer.Option(100, "--limit", min=1, max=500),
+):
+    """Show one firm's trigger timeline, vendor history, and research freshness."""
+    console.print_json(data=_get(
+        f"/api/pif/firms/{quote(firm_id, safe='')}/triggers?limit={limit}"
+    ))
+
+
+@pif_app.command("trigger-baseline")
+def pif_trigger_baseline(
+    limit: int = typer.Option(500, "--limit", min=1, max=5000),
+):
+    """Create non-alerting change-detection baselines from stored research."""
+    console.print_json(data=_post(
+        f"/api/pif/triggers/backfill?limit={limit}",
+        json_body=None,
+        timeout=900.0,
+    ))
+
+
+@pif_app.command("triggers-revalidate")
+def pif_triggers_revalidate(
+    firm_id: str | None = typer.Option(None, "--firm-id", help="Limit revalidation to one firm."),
+    limit: int = typer.Option(250, "--limit", min=1, max=2000),
+):
+    """Rejudge active GTM triggers with the batched structured LLM detector."""
+    params = [("limit", str(limit))]
+    if firm_id:
+        params.append(("firm_id", firm_id))
+    console.print_json(data=_post(
+        f"/api/pif/triggers/revalidate?{httpx.QueryParams(params)}",
+        json_body=None,
+        timeout=1800.0,
+    ))
+
+
 @pif_app.command("people")
 def pif_people(
     name: str | None = typer.Option(None, "--name", help="Filter by contact name."),
@@ -9072,7 +9162,7 @@ def pif_research_sitemap(
 
 @pif_app.command("maintenance-status")
 def pif_maintenance_status():
-    """Show due and queued 30-day job-posting and sitemap maintenance."""
+    """Show due profile, review, job-posting, and sitemap maintenance."""
     console.print_json(data=_get("/api/pif/research-maintenance/status"))
 
 
@@ -9086,7 +9176,7 @@ def pif_nightly_status():
 def pif_maintenance_queue(
     limit: int = typer.Option(175, "--limit", min=1, max=1000, help="Firms per research kind."),
 ):
-    """Queue today's due job-posting and sitemap maintenance cohorts."""
+    """Queue today's due profile, review, job-posting, and sitemap cohorts."""
     result = _post(
         f"/api/pif/research-maintenance/queue?limit={limit}",
         json_body=None,
@@ -9217,12 +9307,134 @@ def pif_show(value: str = typer.Argument(..., help="Mirrored firm ID, domain, em
     console.print_json(data={"vendor_stack": summary.get("vendor_stack") or {}})
 
 
+@pif_app.command("ai-posture")
+def pif_ai_posture(firm_id: str = typer.Argument(..., help="Local mirrored firm ID.")):
+    """Show locally stored AI adoption evidence and previous observations."""
+    from urllib.parse import quote
+
+    firm = _get(f"/api/pif/firms/{quote(firm_id, safe='')}")
+    research = firm.get("research_data") or {}
+    console.print_json(data={
+        "firm_id": firm.get("id"),
+        "firm_name": firm.get("firm_name"),
+        "ai_adoption": research.get("ai_adoption"),
+        "history": research.get("ai_adoption_history") or [],
+    })
+
+
+@pif_app.command("career-search-run")
+def pif_career_search_run(
+    due: bool = typer.Option(False, "--due", help="Respect enabled flag, daily schedule and retry limits."),
+    seed_only: bool = typer.Option(False, "--seed-only", help="Verify the five priority sources; skip broad discovery."),
+    quiet: bool = typer.Option(False, "--quiet", help="No output for successful zero-new runs or routine skips."),
+    retry_run: Optional[str] = typer.Option(None, "--retry-run", help="Retry failed candidates in a finished run; preserves original audit and daily slot."),
+    candidates_file: Optional[Path] = typer.Option(None, "--candidates-file", exists=True, dir_okay=False, help="With --retry-run: verified discovery inputs for historical missing candidates; still requires live verification."),
+):
+    """Run bounded daily career discovery on this server, with durable DB audit."""
+    from app.services.daily_career_search import run
+    if retry_run and (due or seed_only):
+        raise typer.BadParameter("--retry-run cannot be combined with --due or --seed-only")
+    if candidates_file and not retry_run:
+        raise typer.BadParameter("--candidates-file requires --retry-run")
+    kwargs = {"due_only": due, "seed_only": seed_only}
+    if retry_run:
+        kwargs["retry_run"] = retry_run
+    if candidates_file:
+        payload = json.loads(candidates_file.read_text())
+        rows = payload.get("candidates") if isinstance(payload, dict) else payload
+        if not isinstance(rows, list):
+            raise typer.BadParameter("candidate file must contain a candidates array")
+        kwargs["retry_candidates"] = rows
+    result = asyncio.run(run(**kwargs))
+    silent = result["status"] in {"not_due", "busy", "backoff"} or (
+        result["status"] == "completed" and not result["result"]["new_jobs"]
+    )
+    if not quiet or not silent:
+        console.print_json(data=result)
+    if result["status"] in {"failed", "partial", "retry_limit"}:
+        raise typer.Exit(1)
+
+
+@pif_app.command("career-search-status")
+def pif_career_search_status():
+    """Read configuration, next due time, run counts, stored IDs and errors locally."""
+    from app.services.daily_career_search import status
+    console.print_json(data=asyncio.run(status()))
+
+
+@pif_app.command("career-search-config")
+def pif_career_search_config(
+    file: Optional[Path] = typer.Option(None, "--file", help="JSON configuration patch; omitted reads current config."),
+    enabled: Optional[bool] = typer.Option(None, "--enable/--disable"),
+):
+    """Configure this separate scheduler; does not install or start the timer."""
+    from app.services.daily_career_search import configuration
+    changes = json.loads(file.read_text()) if file else {}
+    if enabled is not None:
+        changes["enabled"] = enabled
+    console.print_json(data=asyncio.run(configuration(changes)).model_dump(mode="json"))
+
+
 @pif_app.command("ingest-contacts")
 def pif_ingest_contacts():
     """Populate firm_contacts from the directory's titled contacts + leadership,
     then map personas. Local-only; this is the lead-supply unlock (titles ->
     personas, firm names) that lifts daily eligible leads."""
     console.print_json(data=_post("/api/pif/ingest-contacts", json_body=None, timeout=600.0))
+
+
+@review_alerts_app.command("status")
+def review_alerts_status():
+    """Show live configuration, selected leaders, full drafts and delivery history."""
+    console.print_json(data=_get("/api/review-alerts"))
+
+
+@review_alerts_app.command("enroll")
+def review_alerts_enroll(execute: bool = typer.Option(False, "--execute")):
+    """Preview eligible PI firms; --execute enrolls one top leader per canonical firm."""
+    console.print_json(data=_post(f"/api/review-alerts/enroll?dry_run={'false' if execute else 'true'}", timeout=180))
+
+
+@review_alerts_app.command("config")
+def review_alerts_config(
+    enabled: Optional[bool] = typer.Option(None, "--enabled/--disabled"),
+    auto_send: Optional[bool] = typer.Option(None, "--auto-send/--no-auto-send"),
+    daily_limit: Optional[int] = typer.Option(None, min=1, max=100),
+    postal_address: Optional[str] = typer.Option(None),
+    sender: Optional[str] = typer.Option(None),
+    auto_schedule: Optional[bool] = typer.Option(None, "--auto-schedule/--no-auto-schedule"),
+    auto_schedule_time: Optional[str] = typer.Option(None, help="Daily Pacific start time, HH:MM"),
+    auto_schedule_limit: Optional[int] = typer.Option(None, min=1, max=20),
+):
+    """Configure monitoring and explicit sending gates. Never bypass reply/address checks."""
+    data = {k: v for k, v in locals().items() if v is not None}
+    console.print_json(data=_post("/api/review-alerts/config", data) if data else _get("/api/review-alerts")["config"])
+
+
+@review_alerts_app.command("run")
+def review_alerts_run():
+    """Process stored nightly reviews into alerts; does not research firms."""
+    console.print_json(data=_post("/api/review-alerts/run"))
+
+
+@review_alerts_app.command("schedule")
+def review_alerts_schedule(
+    start: str = typer.Option(..., "--start", help="Today's future start, with timezone; e.g. 2026-09-20T12:15:00-07:00"),
+    limit: int = typer.Option(20, min=1, max=20),
+    dry_run: bool = typer.Option(False, "--dry-run"),
+    actor: str = typer.Option("operator"),
+):
+    """Draft and schedule in the normal lead-gen Send Queue, expiring reviews first."""
+    from app.services.scheduled_time import parse_scheduled_time
+    console.print_json(data=_post("/api/review-alerts/schedule", {
+        "start_at": parse_scheduled_time(start).isoformat(), "limit": limit,
+        "dry_run": dry_run, "actor": actor,
+    }, timeout=300))
+
+
+@review_alerts_app.command("subscription")
+def review_alerts_subscription(pif_id: str, status: str = typer.Option(..., help="active, paused, or unsubscribed")):
+    console.print_json(data=_post(f"/api/review-alerts/subscriptions/{pif_id}", {"status": status}))
 
 
 @reviews_app.command("extract")

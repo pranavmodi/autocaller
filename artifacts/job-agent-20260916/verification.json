@@ -1,0 +1,16 @@
+{
+  "url": "https://possibleos.getpossibleminds.com/job-agent",
+  "counts": {
+    "new": 100,
+    "shortlisted": 0,
+    "needs_info": 0,
+    "skipped": 0
+  },
+  "frontend_build": "passed",
+  "backend_tests": 14,
+  "settings_save": "passed",
+  "desktop_pagination": "passed",
+  "mobile_scroll_and_layout": "passed",
+  "javascript_errors": [],
+  "mode": "review_only"
+}

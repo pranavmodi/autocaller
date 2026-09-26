@@ -1,0 +1,276 @@
+[
+  {
+    "email": "brendan@delaneylawllc.com",
+    "pif_id": "065ec091-1c29-4d80-ae55-dc51a179bc94",
+    "successes": 1,
+    "latest": "2026-09-10T20:10:29.506155+00:00",
+    "firm_latest": "2026-09-10T20:10:29.506155+00:00",
+    "non_success": null,
+    "inbound": null,
+    "negative": null,
+    "pending": null
+  },
+  {
+    "email": "imjurylaw@dunnion.com",
+    "pif_id": "15d674b0-c22b-4a1a-a18c-35c5eda34cd4",
+    "successes": 0,
+    "latest": null,
+    "firm_latest": null,
+    "non_success": null,
+    "inbound": null,
+    "negative": null,
+    "pending": null
+  },
+  {
+    "email": "efarah@farahandfarah.com",
+    "pif_id": "19bddaeb-7d25-4ff8-b4fc-582402ad38ec",
+    "successes": 2,
+    "latest": "2026-09-15T16:40:10.450671+00:00",
+    "firm_latest": "2026-09-15T16:40:10.450671+00:00",
+    "non_success": null,
+    "inbound": null,
+    "negative": null,
+    "pending": null
+  },
+  {
+    "email": "pf@thefinchfirm.com",
+    "pif_id": "e2879f4d-53e2-4358-a35a-d058c2f9298b",
+    "successes": 0,
+    "latest": null,
+    "firm_latest": null,
+    "non_success": null,
+    "inbound": null,
+    "negative": null,
+    "pending": null
+  },
+  {
+    "email": "nathan@hanningsacchetto.com",
+    "pif_id": "7cb7df02-e007-434f-baf0-1544beeee996",
+    "successes": 0,
+    "latest": null,
+    "firm_latest": null,
+    "non_success": null,
+    "inbound": null,
+    "negative": null,
+    "pending": null
+  },
+  {
+    "email": "michael@hanningsacchetto.com",
+    "pif_id": "7cb7df02-e007-434f-baf0-1544beeee996",
+    "successes": 0,
+    "latest": null,
+    "firm_latest": null,
+    "non_success": null,
+    "inbound": null,
+    "negative": null,
+    "pending": null
+  },
+  {
+    "email": "john@hernandezlaw.co",
+    "pif_id": "fbeb9cfa-9e52-48a3-b661-616127884e18",
+    "successes": 0,
+    "latest": null,
+    "firm_latest": null,
+    "non_success": null,
+    "inbound": null,
+    "negative": null,
+    "pending": null
+  },
+  {
+    "email": "rdohan@dohanlaw.com",
+    "pif_id": "95d509b4-be6d-428b-9bb9-1433f5964cae",
+    "successes": 0,
+    "latest": null,
+    "firm_latest": "2026-09-07T16:20:18.331845+00:00",
+    "non_success": null,
+    "inbound": null,
+    "negative": null,
+    "pending": null
+  },
+  {
+    "email": "david@dohlaw.com",
+    "pif_id": "95d509b4-be6d-428b-9bb9-1433f5964cae",
+    "successes": 1,
+    "latest": "2026-09-07T16:20:18.331845+00:00",
+    "firm_latest": "2026-09-07T16:20:18.331845+00:00",
+    "non_success": null,
+    "inbound": null,
+    "negative": null,
+    "pending": null
+  },
+  {
+    "email": "barry@hinden.net",
+    "pif_id": "ea8db863-46fe-490f-b2b7-41852d6280cc",
+    "successes": 1,
+    "latest": "2026-09-02T16:10:11.257044+00:00",
+    "firm_latest": "2026-09-02T16:10:11.257044+00:00",
+    "non_success": null,
+    "inbound": null,
+    "negative": null,
+    "pending": null
+  },
+  {
+    "email": "yckubota@kubotacraig.com",
+    "pif_id": "fb08aa8d-cba7-463d-a632-fc29eafac2d6",
+    "successes": 0,
+    "latest": null,
+    "firm_latest": "2026-09-08T17:30:13.354696+00:00",
+    "non_success": [
+      {
+        "status": "bounced",
+        "date": "2026-08-14T16:38:02.069624+00:00"
+      }
+    ],
+    "inbound": null,
+    "negative": [
+      {
+        "type": "email_bounce",
+        "outcome": "bounce"
+      }
+    ],
+    "pending": null
+  },
+  {
+    "email": "ccraig@kubotacraig.com",
+    "pif_id": "fb08aa8d-cba7-463d-a632-fc29eafac2d6",
+    "successes": 3,
+    "latest": "2026-09-08T17:30:13.354696+00:00",
+    "firm_latest": "2026-09-08T17:30:13.354696+00:00",
+    "non_success": null,
+    "inbound": null,
+    "negative": [
+      {
+        "type": "email_bounce",
+        "outcome": "bounce"
+      }
+    ],
+    "pending": null
+  },
+  {
+    "email": "josh@jcslawyers.com",
+    "pif_id": "337a8ad2-3f94-4e3c-9e07-f9f83825e29e",
+    "successes": 0,
+    "latest": null,
+    "firm_latest": null,
+    "non_success": null,
+    "inbound": null,
+    "negative": null,
+    "pending": null
+  },
+  {
+    "email": "elena@steerslawfirm.com",
+    "pif_id": "8e98e41e-120d-4252-96f5-1f80c9bbf4c8",
+    "successes": 0,
+    "latest": null,
+    "firm_latest": null,
+    "non_success": null,
+    "inbound": null,
+    "negative": null,
+    "pending": null
+  },
+  {
+    "email": "rodney@mesriani.com",
+    "pif_id": "3ef738bf-5e9a-43ee-9aca-6272e7743abb",
+    "successes": 3,
+    "latest": "2026-09-08T22:35:22.022279+00:00",
+    "firm_latest": "2026-09-08T22:35:22.022279+00:00",
+    "non_success": null,
+    "inbound": null,
+    "negative": null,
+    "pending": null
+  },
+  {
+    "email": "rrex@parris.com",
+    "pif_id": "37f5d03d-1d36-4d8c-8eda-e9413e9a9c01",
+    "successes": 2,
+    "latest": "2026-08-15T00:15:19.705283+00:00",
+    "firm_latest": "2026-08-15T00:25:20.970392+00:00",
+    "non_success": null,
+    "inbound": null,
+    "negative": null,
+    "pending": null
+  },
+  {
+    "email": "trevor@quirklawyers.com",
+    "pif_id": "207f726c-b6d6-4a25-ba57-f01843608c72",
+    "successes": 1,
+    "latest": "2026-09-10T19:00:23.877162+00:00",
+    "firm_latest": "2026-09-10T19:00:23.877162+00:00",
+    "non_success": null,
+    "inbound": null,
+    "negative": null,
+    "pending": null
+  },
+  {
+    "email": "robert@roberthindinlaw.com",
+    "pif_id": "a53e65d6-c430-4229-ba05-452ad389fed8",
+    "successes": 0,
+    "latest": null,
+    "firm_latest": null,
+    "non_success": null,
+    "inbound": null,
+    "negative": null,
+    "pending": null
+  },
+  {
+    "email": "rafael@rslawoffices.com",
+    "pif_id": "3fadd790-0202-4b8b-b341-617de90313d1",
+    "successes": 2,
+    "latest": "2026-07-03T07:01:37.290922+00:00",
+    "firm_latest": "2026-07-03T07:01:37.290922+00:00",
+    "non_success": null,
+    "inbound": null,
+    "negative": null,
+    "pending": [
+      {
+        "id": "action_ea39def9692e468385d3fa52",
+        "status": "approved",
+        "at": null
+      }
+    ]
+  },
+  {
+    "email": "jude@redkeygordonlaw.com",
+    "pif_id": "961af1c4-fd75-40f7-a566-3baa864c43f7",
+    "successes": 0,
+    "latest": null,
+    "firm_latest": null,
+    "non_success": null,
+    "inbound": null,
+    "negative": null,
+    "pending": null
+  },
+  {
+    "email": "robert@redkeygordonlaw.com",
+    "pif_id": "961af1c4-fd75-40f7-a566-3baa864c43f7",
+    "successes": 0,
+    "latest": null,
+    "firm_latest": null,
+    "non_success": null,
+    "inbound": null,
+    "negative": null,
+    "pending": null
+  },
+  {
+    "email": "dchoyce@choycelawfirm.com",
+    "pif_id": "3ba229d8-8dfc-47ff-a586-acb1c487ad3b",
+    "successes": 3,
+    "latest": "2026-09-17T16:40:21.286463+00:00",
+    "firm_latest": "2026-09-17T16:40:21.286463+00:00",
+    "non_success": null,
+    "inbound": null,
+    "negative": null,
+    "pending": null
+  },
+  {
+    "email": "wclark@walterclark.com",
+    "pif_id": "e6c80251-9db3-4e43-946d-d0633f34cfe9",
+    "successes": 0,
+    "latest": null,
+    "firm_latest": null,
+    "non_success": null,
+    "inbound": null,
+    "negative": null,
+    "pending": null
+  }
+]

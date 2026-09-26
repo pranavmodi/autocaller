@@ -1,0 +1,303 @@
+{
+  "checked_at": "2026-09-15T10:37:11.791180+00:00",
+  "coverage": [
+    {
+      "folder": "\"INBOX\"",
+      "since": "2026-05-01",
+      "messages": 226
+    },
+    {
+      "folder": "\"Drafts\"",
+      "since": "2026-05-01",
+      "messages": 8
+    },
+    {
+      "folder": "\"Templates\"",
+      "since": "2026-05-01",
+      "messages": 0
+    },
+    {
+      "folder": "\"Snoozed\"",
+      "since": "2026-05-01",
+      "messages": 0
+    },
+    {
+      "folder": "\"Sent\"",
+      "since": "2026-05-01",
+      "messages": 555
+    },
+    {
+      "folder": "\"Spam\"",
+      "since": "2026-05-01",
+      "messages": 2
+    },
+    {
+      "folder": "\"Trash\"",
+      "since": "2026-05-01",
+      "messages": 0
+    },
+    {
+      "folder": "\"Notification\"",
+      "since": "2026-05-01",
+      "messages": 24
+    },
+    {
+      "folder": "\"Newsletter\"",
+      "since": "2026-05-01",
+      "messages": 62
+    },
+    {
+      "folder": "\"Archive\"",
+      "since": "2026-05-01",
+      "messages": 0
+    }
+  ],
+  "errors": [],
+  "matches": {
+    "farid@downtownlalaw.com": [
+      {
+        "folder": "\"Sent\"",
+        "uid": "500",
+        "from": "pranav@possiblemindshq.com",
+        "to": "farid@downtownlalaw.com",
+        "subject": "Precise Imaging status updates",
+        "date": "Tue, 02 Jun 2026 21:48:08 +0530",
+        "message_id": "<19e8920cbb0.701f12f551650.5863819362169649799@possiblemindshq.com>",
+        "in_reply_to": "",
+        "references": "",
+        "bounce": false
+      }
+    ],
+    "lear@centurylawgroup.com": [
+      {
+        "folder": "\"Sent\"",
+        "uid": "690",
+        "from": "pranav@possiblemindshq.com",
+        "to": "lear@centurylawgroup.com",
+        "subject": "ai readiness at 10x law",
+        "date": "Wed, 24 Jun 2026 22:35:12 +0530",
+        "message_id": "<19efa97cbd3.76bc7908244804.1797630552654916023@possiblemindshq.com>",
+        "in_reply_to": "",
+        "references": "",
+        "bounce": false
+      }
+    ],
+    "alon@avalonlaw.com": [],
+    "rrex@parris.com": [],
+    "becker@beckerlawgroup.com": [],
+    "dimitri@oconnorhurt.com": [
+      {
+        "folder": "\"Sent\"",
+        "uid": "957",
+        "from": "pranav@possiblemindshq.com",
+        "to": "dimitri@oconnorhurt.com",
+        "subject": "Re: Is Lead Docket at O'Connor & Hurt tying marketing spend to signed cases?",
+        "date": "Tue, 25 Aug 2026 21:35:20 +0530",
+        "message_id": "<1a039ab4493.801ec87c54946.6501548808148515321@possiblemindshq.com>",
+        "in_reply_to": "<0100019ff82fa925-e042288e-5687-489f-b345-91e32ed86f78-000000@email.amazonses.com>",
+        "references": "<0100019ff82fa925-e042288e-5687-489f-b345-91e32ed86f78-000000@email.amazonses.com>",
+        "bounce": false
+      }
+    ],
+    "shawn@hakakianlaw.com": [
+      {
+        "folder": "\"Sent\"",
+        "uid": "961",
+        "from": "pranav@possiblemindshq.com",
+        "to": "shawn@hakakianlaw.com",
+        "subject": "Re: Is Lead Docket at Hakakian Law Group, PC tying marketing spend to signed cases?",
+        "date": "Tue, 25 Aug 2026 22:15:31 +0530",
+        "message_id": "<1a039d00c5f.5084f62b6311.387906433646508708@possiblemindshq.com>",
+        "in_reply_to": "<0100019ff810062e-c412b5b6-7df2-45b1-92ac-1f4c452be64d-000000@email.amazonses.com>",
+        "references": "<0100019ff810062e-c412b5b6-7df2-45b1-92ac-1f4c452be64d-000000@email.amazonses.com>",
+        "bounce": false
+      }
+    ],
+    "gurgen@ympklaw.com": [],
+    "kendrick@kebradleylaw.com": [
+      {
+        "folder": "\"Sent\"",
+        "uid": "935",
+        "from": "pranav@possiblemindshq.com",
+        "to": "kendrick@kebradleylaw.com",
+        "subject": "Precise imaging - quick question",
+        "date": "Thu, 20 Aug 2026 23:30:14 +0530",
+        "message_id": "<1a02054aab3.1fa52de221066.3143278410572891490@possiblemindshq.com>",
+        "in_reply_to": "",
+        "references": "",
+        "bounce": false
+      }
+    ],
+    "jbeahm@beahmlaw.com": [],
+    "romel@raandassociates.com": [],
+    "efarah@farahandfarah.com": [],
+    "mike@mweiserlaw.com": [],
+    "abe@accidentabe.com": [],
+    "cj@cyruslegal.com": [],
+    "kjacobson@quillarrowlaw.com": [],
+    "robert@moetlaw.com": [],
+    "tsamuels@thesamuelslawgroup.com": [],
+    "beloryan@bmsllp.com": [
+      {
+        "folder": "\"Sent\"",
+        "uid": "497",
+        "from": "pranav@possiblemindshq.com",
+        "to": "beloryan@bmsllp.com",
+        "subject": "Precise Imaging status updates",
+        "date": "Tue, 02 Jun 2026 21:46:51 +0530",
+        "message_id": "<19e891fa045.818e8cef49247.4201485773208715883@possiblemindshq.com>",
+        "in_reply_to": "",
+        "references": "",
+        "bounce": false
+      }
+    ],
+    "alex@alexhelp.com": [
+      {
+        "folder": "\"Sent\"",
+        "uid": "507",
+        "from": "pranav@possiblemindshq.com",
+        "to": "alex@alexhelp.com",
+        "subject": "Precise Imaging status updates",
+        "date": "Tue, 02 Jun 2026 21:53:59 +0530",
+        "message_id": "<19e892625c2.1199652850449.7651487774046708989@possiblemindshq.com>",
+        "in_reply_to": "",
+        "references": "",
+        "bounce": false
+      }
+    ],
+    "narimon@pishlaw.com": [
+      {
+        "folder": "\"Sent\"",
+        "uid": "513",
+        "from": "pranav@possiblemindshq.com",
+        "to": "narimon@pishlaw.com",
+        "subject": "Precise Imaging status updates",
+        "date": "Wed, 03 Jun 2026 00:37:55 +0530",
+        "message_id": "<19e89bc3c4a.28b428ef50740.8318035115808353446@possiblemindshq.com>",
+        "in_reply_to": "",
+        "references": "",
+        "bounce": false
+      }
+    ],
+    "aaron@nealefhima.com": [
+      {
+        "folder": "\"Sent\"",
+        "uid": "718",
+        "from": "pranav@possiblemindshq.com",
+        "to": "aaron@nealefhima.com",
+        "subject": "ai readiness at neale & fhima",
+        "date": "Fri, 26 Jun 2026 21:48:49 +0530",
+        "message_id": "<19f04ba0d41.7e1d8bfb41982.39929416904144284@possiblemindshq.com>",
+        "in_reply_to": "",
+        "references": "",
+        "bounce": false
+      }
+    ],
+    "kian@smlawca.com": [
+      {
+        "folder": "\"Sent\"",
+        "uid": "697",
+        "from": "pranav@possiblemindshq.com",
+        "to": "kian@smlawca.com",
+        "subject": "missed calls and the map pack",
+        "date": "Thu, 25 Jun 2026 22:35:36 +0530",
+        "message_id": "<19effbe84cb.3f04f8db43896.427292135382092918@possiblemindshq.com>",
+        "in_reply_to": "",
+        "references": "",
+        "bounce": false
+      }
+    ],
+    "wgs@sayeghlaw.com": [
+      {
+        "folder": "\"INBOX\"",
+        "uid": "416",
+        "from": "mailer-daemon@mail.zoho.in",
+        "to": "pranav@possiblemindshq.com",
+        "subject": "Undelivered Mail Returned to Sender",
+        "date": "Wed, 24 Jun 2026 22:40:21 +0530",
+        "message_id": "<19efa9c81af.6b01daf7-7587635.-61782118546699254@zohomail.in>",
+        "in_reply_to": "<19efa9c6729.72b5d2d322298.4704021169077803665@possiblemindshq.com>",
+        "references": "<19efa9c6729.72b5d2d322298.4704021169077803665@possiblemindshq.com>",
+        "body_excerpt": "This message was created automatically by mail delivery software.\r\n A message that you sent could not be delivered to one or more of its recipients. This is a permanent error. \r\n\r\nwgs@sayeghlaw.com, ERROR CODE :550 - permanent failure for one or more recipients (wgs@sayeghlaw.com:blocked)\r\n\r\n\r\n\r\n\n\n\n",
+        "bounce": true
+      },
+      {
+        "folder": "\"Sent\"",
+        "uid": "691",
+        "from": "pranav@possiblemindshq.com",
+        "to": "wgs@sayeghlaw.com",
+        "subject": "sayegh law ai readiness",
+        "date": "Wed, 24 Jun 2026 22:40:14 +0530",
+        "message_id": "<19efa9c6729.72b5d2d322298.4704021169077803665@possiblemindshq.com>",
+        "in_reply_to": "",
+        "references": "",
+        "bounce": false
+      }
+    ],
+    "deepak@singhahluwalia.com": [],
+    "gohar@hhtcorp.com": [
+      {
+        "folder": "\"Sent\"",
+        "uid": "715",
+        "from": "pranav@possiblemindshq.com",
+        "to": "gohar@hhtcorp.com",
+        "subject": "Precise Imaging and AI readiness",
+        "date": "Fri, 26 Jun 2026 21:36:55 +0530",
+        "message_id": "<19f04af2856.5820ac2e63522.843589605723073613@possiblemindshq.com>",
+        "in_reply_to": "",
+        "references": "",
+        "bounce": false
+      }
+    ],
+    "amir@protectionlawgroup.com": [],
+    "joseph.r@elitelawgroup.com": [
+      {
+        "folder": "\"Drafts\"",
+        "uid": "105",
+        "from": "Pranav Modi <pranav@possiblemindshq.com>",
+        "to": "josephr <joseph.r@elitelawgroup.com>",
+        "subject": "Precise Imaging - quick question",
+        "date": "Fri, 21 Aug 2026 14:51:51 +0530",
+        "message_id": "<1a023a06e76.89a03f94653440.6030636458782450325@possiblemindshq.com>",
+        "in_reply_to": "",
+        "references": "",
+        "bounce": false
+      }
+    ],
+    "acampano@campanolaw.com": [
+      {
+        "folder": "\"Sent\"",
+        "uid": "933",
+        "from": "pranav@possiblemindshq.com",
+        "to": "acampano@campanolaw.com",
+        "subject": "Precise imaging - quick question",
+        "date": "Thu, 20 Aug 2026 22:45:30 +0530",
+        "message_id": "<1a0202bb40d.1fe3aefa20089.7714261828498340837@possiblemindshq.com>",
+        "in_reply_to": "",
+        "references": "",
+        "bounce": false
+      }
+    ],
+    "matt@alipour.law": [],
+    "arnak@azaklaw.com": [],
+    "caroleen@ctalawfirm.com": [],
+    "george@paijuklaw.com": [],
+    "jamil@sbinjurylawyers.com": [],
+    "brad@thehayeslawfirmapc.com": [],
+    "ara@aranajarian.com": [],
+    "pedram@pedramlaw.com": [],
+    "ssoliman@thesolimanfirm.com": [],
+    "dgonor@shaffergonorlaw.com": [],
+    "alla@teninalaw.com": [],
+    "edna@ednafelix.law": [],
+    "gil@arbelegal.com": [],
+    "st@thetafirm.com": [],
+    "prahgozar@rahgozarlaw.com": [],
+    "elliot@zarabilaw.com": [],
+    "kfasoro@fasorolaw.com": [],
+    "richarda@ralawllp.com": [],
+    "lesly@leslyblaw.com": [],
+    "barry@hinden.net": [],
+    "lewis@khashanlaw.com": []
+  }
+}

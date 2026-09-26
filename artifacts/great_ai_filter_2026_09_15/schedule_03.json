@@ -1,0 +1,130 @@
+{
+  "action": {
+    "id": "action_f32162a466034454a9e15a2c",
+    "action_type": "send_approved_lead_gen_draft",
+    "status": "approved",
+    "risk_level": "high",
+    "requested_by": "codex",
+    "approved_by": "codex",
+    "entity_type": "lead_gen_batch_item",
+    "entity_id": "458e055067bb4865830737148179d3f9",
+    "input": {
+      "body": "Hi Shawn,\n\nFollowing my note about the path from a lead to a retained case, I wanted to share a short article on getting real value from AI.\n\nThe main point is simple: automating one step helps less if the team still works around gaps between systems. At Possible Minds, we're focusing on how the whole process changes.\n\nhttps://getpossibleminds.com/t/9RAUPaXzbQ\n\nAt Hakakian Law Group, would the harder part be choosing the technology or getting everyone working the same way? I'd appreciate your view.\n\nBest,\nPranav\nFounder, Possible Minds",
+      "subject": "Re: Is Lead Docket at Hakakian Law Group, PC tying marketing spend to signed cases?",
+      "approval": {
+        "references": "<0100019ff810062e-c412b5b6-7df2-45b1-92ac-1f4c452be64d-000000@email.amazonses.com> <1a039d00c5f.5084f62b6311.387906433646508708@possiblemindshq.com>",
+        "approved_at": "2026-09-15T10:40:33.680161+00:00",
+        "approved_by": "codex",
+        "body_sha256": "d1452f5ec8509e75df19e69ceb0f72fd065bd54fa549426012917e2812b8e36b",
+        "in_reply_to": "<1a039d00c5f.5084f62b6311.387906433646508708@possiblemindshq.com>",
+        "subject_sha256": "3c7fc533524996ad5fb3462044123f2a2393122dc640c62ff762b4760932be4b"
+      },
+      "transport": "resend",
+      "references": "<0100019ff810062e-c412b5b6-7df2-45b1-92ac-1f4c452be64d-000000@email.amazonses.com> <1a039d00c5f.5084f62b6311.387906433646508708@possiblemindshq.com>",
+      "skill_path": null,
+      "body_sha256": "d1452f5ec8509e75df19e69ceb0f72fd065bd54fa549426012917e2812b8e36b",
+      "in_reply_to": "<1a039d00c5f.5084f62b6311.387906433646508708@possiblemindshq.com>",
+      "skill_sha256": null,
+      "batch_item_id": "458e055067bb4865830737148179d3f9",
+      "brief_version": null,
+      "subject_sha256": "3c7fc533524996ad5fb3462044123f2a2393122dc640c62ff762b4760932be4b",
+      "composer_variant_key": null,
+      "lead_gen_action_type": "follow_up",
+      "composer_experiment_key": null
+    },
+    "policy_result": {},
+    "execution_result": {},
+    "error": null,
+    "trace_id": null,
+    "scheduled_for": "2026-09-15T15:50:00+00:00",
+    "started_at": null,
+    "completed_at": null,
+    "created_at": "2026-09-15T10:40:33.697272+00:00",
+    "updated_at": "2026-09-15T10:40:33.697279+00:00"
+  },
+  "created": true,
+  "updated_existing": false,
+  "executed": false,
+  "scheduled_for_pt": "2026-09-15 08:50 PDT",
+  "scheduled_for_utc": "2026-09-15 15:50:00 UTC",
+  "final_policy": {
+    "allowed": true,
+    "reason": "allowed",
+    "checks": [
+      {
+        "name": "status_allows_execution",
+        "passed": true,
+        "detail": "approved"
+      },
+      {
+        "name": "human_approval_present",
+        "passed": true,
+        "detail": "codex"
+      },
+      {
+        "name": "subject_present",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "body_present",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "subject_hash_matches_approval",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "body_hash_matches_approval",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "in_reply_to_matches_approval",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "references_match_approval",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "lead_gen_transport_available",
+        "passed": true,
+        "detail": "zoho_api 1/0 configured=True; resend 0/50 configured=True"
+      },
+      {
+        "name": "no_patient_data_in_outreach",
+        "passed": true,
+        "detail": "llm_guard_disabled"
+      },
+      {
+        "name": "batch_item_exists",
+        "passed": true,
+        "detail": "458e055067bb4865830737148179d3f9"
+      },
+      {
+        "name": "batch_item_not_already_started",
+        "passed": true,
+        "detail": "approved"
+      },
+      {
+        "name": "contact_email_present",
+        "passed": true,
+        "detail": "shawn@hakakianlaw.com"
+      },
+      {
+        "name": "no_prior_successful_action_for_item",
+        "passed": true,
+        "detail": ""
+      }
+    ],
+    "risk_level": "high",
+    "requires_human_approval": true,
+    "action_type": "send_approved_lead_gen_draft",
+    "contact_email": "shawn@hakakianlaw.com"
+  }
+}

@@ -34,6 +34,7 @@ export interface PifContact {
   email: string;
   phone: string;
   extension: string;
+  linkedin?: string | null;
 }
 
 export interface LeadershipMember {
@@ -102,6 +103,14 @@ export interface JobPostingsResearch {
 }
 
 export interface PifJobPostingResult {
+  first_seen_at?: string;
+  last_checked_at?: string;
+  ats_created_at?: string;
+  ats_updated_at?: string;
+  recency_label?: string;
+  colombia_eligibility?: string;
+  status?: string;
+  job_id?: string;
   firm_id: string;
   firm_name: string;
   entity_type: string | null;
@@ -126,6 +135,18 @@ export interface PifJobPostingResult {
   global_remote: boolean;
   global_remote_evidence: string[];
   global_remote_confidence: number | null;
+  contract_status: "contract" | "non_contract" | "unknown";
+  contract_classification: {
+    state: "completed" | "error";
+    version: string;
+    provider: "typesafe";
+    model?: string | null;
+    confidence?: number | null;
+    probabilities?: Record<string, number>;
+    classified_at: string;
+    input_sha256: string;
+    error?: string;
+  } | null;
 }
 
 export interface PifJobPostingsListParams {
@@ -134,6 +155,8 @@ export interface PifJobPostingsListParams {
   trigger_tag?: string;
   technology?: string;
   gtm_relevance?: "high" | "medium" | "low";
+  remote_scope?: "remote" | "global" | "not_global";
+  contract_status?: "contract" | "non_contract" | "unknown";
   global_remote?: boolean;
   posted_within_days?: number;
   order?: "posted_desc" | "found_desc";
@@ -171,7 +194,30 @@ export interface PifJobResearchDailyStatsResponse {
   generated_at: string;
 }
 
+export interface AIAdoptionPosture {
+  adoption_stage: "unknown" | "exploring" | "piloting" | "adopted" | "scaling" | "restricted";
+  leadership_stance: "unknown" | "supportive" | "cautious" | "opposed" | "mixed";
+  summary: string;
+  confidence: number;
+  checked_at?: string;
+  searched_sources: string[];
+  statements: {
+    speaker_name: string | null;
+    speaker_title: string | null;
+    source_url: string;
+    source_type: string;
+    published_at: string | null;
+    quote: string | null;
+    summary: string;
+    scope: "firm_adoption" | "personal_opinion" | "industry_commentary";
+    tools: string[];
+    use_cases: string[];
+  }[];
+}
+
 export interface ResearchData {
+  ai_adoption?: AIAdoptionPosture;
+  ai_adoption_history?: AIAdoptionPosture[];
   practice_areas: string[];
   founded_year: string | null;
   firm_size: string | null;
@@ -427,26 +473,37 @@ export interface PifInfoListParams {
   sort_by?: PifSortBy;
   research_status?: string;
   icp_tier?: PifTier;
+  icp_tiers?: PifTier[];
   entity_type?: string;
+  entity_types?: string[];
   recently_researched?: number;
   contact_email_min?: number;
   contact_email_max?: number;
+  contact_email_ranges?: string[];
   staff_count_min?: number;
   staff_count_max?: number;
+  staff_count_ranges?: string[];
   autorespond_window?: string;
   autorespond_type?: string;
+  autorespond_types?: string[];
   website_presence?: "any" | "has" | "missing" | "resolved" | "unresolved";
   research_presence?: "any" | "completed" | "missing" | "queued_or_running" | "failed";
+  research_presences?: string[];
   staff_presence?: "any" | "completed" | "missing" | "queued_or_running" | "failed";
+  staff_presences?: string[];
   job_postings_presence?: "any" | "has" | "none" | "not_researched" | "queued_or_running" | "failed";
+  job_postings_presences?: string[];
   job_posting_role?: "intake" | "marketing" | "case_operations" | "firm_operations" | "technology";
+  job_posting_roles?: string[];
   job_posting_tag?: string;
+  job_posting_tags?: string[];
   job_posting_query?: string;
   job_posted_within_days?: number;
   behavior_presence?: "any" | "has" | "missing";
   icp_presence?: "any" | "has" | "missing";
   vendor_presence?: "any" | "has" | "missing";
   vendor?: string;
+  vendors?: string[];
   manually_added?: boolean;
   first_contacted_from?: string;
   first_contacted_to?: string;
@@ -545,29 +602,36 @@ export interface SavedLeadSearch {
 export interface SavedFirmTriggerSearchCriteria {
   search?: string;
   sort_by: PifSortBy;
-  icp_tier?: PifTier | "";
-  entity_type?: string;
+  icp_tier?: PifTier[];
+  entity_type?: string[];
   recently_researched?: string;
-  contact_email_range?: string;
-  staff_count_range?: string;
+  contact_email_range?: string[];
+  staff_count_range?: string[];
   autorespond_window: string;
-  autorespond_type?: string;
+  autorespond_type?: string[];
   website_presence: NonNullable<PifInfoListParams["website_presence"]>;
-  research_presence: NonNullable<PifInfoListParams["research_presence"]>;
-  staff_presence: NonNullable<PifInfoListParams["staff_presence"]>;
-  job_postings_presence: NonNullable<PifInfoListParams["job_postings_presence"]>;
-  job_posting_role?: string;
-  job_posting_tag?: string;
+  research_presence: string[];
+  staff_presence: string[];
+  job_postings_presence: string[];
+  job_posting_role?: string[];
+  job_posting_tag?: string[];
   job_posting_query?: string;
   job_posted_within_days?: string;
   behavior_presence: NonNullable<PifInfoListParams["behavior_presence"]>;
   icp_presence: NonNullable<PifInfoListParams["icp_presence"]>;
   vendor_presence: NonNullable<PifInfoListParams["vendor_presence"]>;
-  vendor?: string;
+  vendor?: string[];
   record_origin: "any" | "manual" | "synced";
   first_contact_period: "any" | "last_1_month" | "last_6_months" | "custom";
   first_contacted_from?: string;
   first_contacted_to?: string;
+  trigger_event_types: string[];
+  trigger_categories: string[];
+  trigger_within_days: string;
+  trigger_min_score: string;
+  trigger_min_confidence: string;
+  trigger_match_mode: "any" | "all";
+  priority_sort: "priority" | "newest" | "fit";
   active_only: boolean;
 }
 
@@ -581,6 +645,110 @@ export interface SavedFirmTriggerSearch {
   updated_by: string;
   created_at: string | null;
   updated_at: string | null;
+}
+
+export interface FirmTriggerEvent {
+  id: string;
+  pif_id: string;
+  event_type: string;
+  category: string;
+  title: string;
+  summary: string | null;
+  old_value: Record<string, unknown>;
+  new_value: Record<string, unknown>;
+  evidence: Array<{
+    source?: string | null;
+    source_url?: string | null;
+    published_at?: string | null;
+    excerpt?: string | null;
+    confidence?: number | null;
+  }>;
+  source_date: string | null;
+  detected_at: string | null;
+  expires_at: string | null;
+  confidence: number;
+  severity: number;
+  score: number;
+  active: boolean;
+}
+
+export interface FirmResearchFreshness {
+  module: string;
+  status: string;
+  last_attempt_at: string | null;
+  last_success_at: string | null;
+  next_due_at: string | null;
+  fresh: boolean;
+  failure_count: number;
+  last_error: string | null;
+}
+
+export interface PriorityFirmResult {
+  firm: {
+    id: string;
+    firm_name: string;
+    entity_type: string;
+    website: string | null;
+    metro: string | null;
+    staff_count: number;
+    icp_score: number | null;
+    icp_tier: string | null;
+    leadership: LeadershipMember[];
+    emails: string[];
+    phones: string[];
+  };
+  fit_score: number;
+  trigger_score: number;
+  priority_score: number;
+  latest_trigger_at: string;
+  triggers: FirmTriggerEvent[];
+  freshness: {
+    fresh_modules: number;
+    total_modules: number;
+    percent: number;
+    modules: FirmResearchFreshness[];
+  };
+  vendors: Array<{
+    vendor: string;
+    product: string;
+    first_seen_at: string;
+    last_seen_at: string;
+    confidence: number;
+  }>;
+}
+
+export interface PriorityFirmsListParams {
+  search?: string;
+  event_types?: string[];
+  categories?: string[];
+  within_days?: number;
+  min_score?: number;
+  min_confidence?: number;
+  match_mode?: "any" | "all";
+  icp_tiers?: string[];
+  entity_types?: string[];
+  staff_count_min?: number;
+  staff_count_max?: number;
+  staff_count_ranges?: string[];
+  vendors?: string[];
+  sort_by?: "priority" | "newest" | "fit";
+  page?: number;
+  page_size?: number;
+}
+
+export interface PriorityFirmsListResponse {
+  items: PriorityFirmResult[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+  within_days: number;
+  generated_at: string;
+}
+
+export interface TriggerFilterOptions {
+  categories: Array<{ value: string; count: number }>;
+  event_types: Array<{ value: string; category: string; count: number }>;
 }
 
 export interface PifPersonResult {
@@ -784,33 +952,74 @@ export function listMirroredPifInfo(params: PifInfoListParams = {}): Promise<Pif
       page_size: params.page_size ?? 25,
       sort_by: params.sort_by,
       research_status: params.research_status,
-      icp_tier: params.icp_tier,
-      entity_type: params.entity_type,
+      icp_tier: params.icp_tiers,
+      entity_type: params.entity_types,
       recently_researched: params.recently_researched,
       contact_email_min: params.contact_email_min,
       contact_email_max: params.contact_email_max,
+      contact_email_range: params.contact_email_ranges,
       staff_count_min: params.staff_count_min,
       staff_count_max: params.staff_count_max,
+      staff_count_range: params.staff_count_ranges,
       autorespond_window: params.autorespond_window,
-      autorespond_type: params.autorespond_type,
+      autorespond_type: params.autorespond_types,
       website_presence: params.website_presence,
-      research_presence: params.research_presence,
-      staff_presence: params.staff_presence,
-      job_postings_presence: params.job_postings_presence,
-      job_posting_role: params.job_posting_role,
-      job_posting_tag: params.job_posting_tag,
+      research_presence: params.research_presences,
+      staff_presence: params.staff_presences,
+      job_postings_presence: params.job_postings_presences,
+      job_posting_role: params.job_posting_roles,
+      job_posting_tag: params.job_posting_tags,
       job_posting_query: params.job_posting_query,
       job_posted_within_days: params.job_posted_within_days,
       behavior_presence: params.behavior_presence,
       icp_presence: params.icp_presence,
       vendor_presence: params.vendor_presence,
-      vendor: params.vendor,
+      vendor: params.vendors,
       manually_added: params.manually_added,
       first_contacted_from: params.first_contacted_from,
       first_contacted_to: params.first_contacted_to,
       active_only: params.active_only,
     }),
   );
+}
+
+export function listPriorityPifFirms(
+  params: PriorityFirmsListParams = {},
+): Promise<PriorityFirmsListResponse> {
+  return possibleFetch<PriorityFirmsListResponse>(
+    appendParams("/api/pif/priority-firms", {
+      search: params.search,
+      event_type: params.event_types,
+      category: params.categories,
+      within_days: params.within_days ?? 30,
+      min_score: params.min_score,
+      min_confidence: params.min_confidence,
+      match_mode: params.match_mode,
+      icp_tier: params.icp_tiers,
+      entity_type: params.entity_types,
+      staff_count_min: params.staff_count_min,
+      staff_count_max: params.staff_count_max,
+      staff_count_range: params.staff_count_ranges,
+      vendor: params.vendors,
+      sort_by: params.sort_by,
+      page: params.page ?? 1,
+      page_size: params.page_size ?? 25,
+    }),
+  );
+}
+
+export function getPifTriggerOptions(): Promise<TriggerFilterOptions> {
+  return possibleFetch<TriggerFilterOptions>("/api/pif/trigger-options");
+}
+
+export function getPifFirmTriggers(pifId: string): Promise<{
+  pif_id: string;
+  firm_name: string;
+  events: FirmTriggerEvent[];
+  research_freshness: FirmResearchFreshness[];
+  vendor_history: Array<Record<string, unknown>>;
+}> {
+  return possibleFetch(`/api/pif/firms/${encodeURIComponent(pifId)}/triggers`);
 }
 
 export function listMirroredPifJobPostings(
@@ -823,6 +1032,8 @@ export function listMirroredPifJobPostings(
       trigger_tag: params.trigger_tag,
       technology: params.technology,
       gtm_relevance: params.gtm_relevance,
+      remote_scope: params.remote_scope,
+      contract_status: params.contract_status,
       global_remote: params.global_remote,
       posted_within_days: params.posted_within_days,
       order: params.order,
@@ -852,6 +1063,15 @@ export function getFirm(pifId: string): Promise<PifInfoResponse> {
 
 export function getMirroredFirm(pifId: string): Promise<PifInfoResponse> {
   return possibleFetch<PifInfoResponse>(`/api/pif/firms/${encodeURIComponent(pifId)}`);
+}
+
+export function getCareerSearchStatus(): Promise<{
+  schedule_enabled: boolean;
+  next_due_at: string | null;
+  config: { local_time: string; timezone: string };
+  runs: { id: string; status: string; started_at: string; result: { new_jobs: number; verified: number; errors: { error: string }[]; candidate_rejections?: { source_url?: string; reason: string }[] } }[];
+}> {
+  return possibleFetch("/api/pif/career-search/status");
 }
 
 export function getFirmSitemapHistory(pifId: string): Promise<SitemapHistoryResponse> {

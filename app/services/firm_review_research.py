@@ -429,6 +429,7 @@ async def research_public_reviews(
     firm_name: str,
     website: str | None,
     address: str | None,
+    *, include_yelp: bool = False,
 ) -> dict[str, Any]:
     google_result: dict[str, Any] | None = None
     try:
@@ -436,7 +437,7 @@ async def research_public_reviews(
     except Exception:
         logger.exception("Direct Google Maps review research failed for %s", firm_name)
 
-    if os.getenv("FIRM_REVIEW_OPENCLAW_FALLBACK", "false").strip().lower() not in {"1", "true", "yes", "on"}:
+    if not include_yelp and os.getenv("FIRM_REVIEW_OPENCLAW_FALLBACK", "false").strip().lower() not in {"1", "true", "yes", "on"}:
         return google_result or {
             "sources": [],
             "review_count": 0,
@@ -462,6 +463,8 @@ async def research_public_reviews(
         max_tokens=int(os.getenv("FIRM_REVIEW_RESEARCH_MAX_TOKENS", "20000")),
         retries=1,
         gateway_user=f"firm-review-research:{session_key}:{uuid.uuid4().hex[:8]}",
+        prompt_cache_key="possibleos:firm-review-research:v1",
+        lane=os.getenv("OPENCLAW_RPC_BATCH_LANE", "possibleos-batch"),
     )
     sources = normalize_review_sources(result.parsed.get("sources"))
     supplemental = {
@@ -483,7 +486,7 @@ async def research_public_reviews(
     return merged
 
 
-async def start_firm_review_research(pif_id: str) -> dict[str, Any]:
+async def start_firm_review_research(pif_id: str, *, include_yelp: bool = False) -> dict[str, Any]:
     async with AsyncSessionLocal() as session:
         firm = await session.get(PifFirmRow, pif_id)
         if firm is None:
@@ -498,6 +501,9 @@ async def start_firm_review_research(pif_id: str) -> dict[str, Any]:
             .limit(1)
         )).scalar_one_or_none()
         if task is not None:
+            if include_yelp and task.status == "queued":
+                task.result_summary = {**(task.result_summary or {}), "include_yelp": True}
+                await session.commit()
             return {
                 "task_id": task.task_id,
                 "pif_id": pif_id,
@@ -515,12 +521,19 @@ async def start_firm_review_research(pif_id: str) -> dict[str, Any]:
             pif_id=pif_id,
             status="queued",
             requested_at=_utcnow(),
+            result_summary={"include_yelp": True} if include_yelp else None,
         ))
         review_row.review_research_status = "queued"
         review_row.review_research_provider = LOCAL_RESEARCH_PROVIDER
         review_row.review_research_error = None
         review_row.updated_at = _utcnow()
         await session.commit()
+    try:
+        from app.services.pif_change_detection import MODULE_REVIEWS, mark_research_status
+
+        await mark_research_status(pif_id, MODULE_REVIEWS, "queued", metadata={"task_id": task_id})
+    except Exception:
+        logger.exception("Could not update review research queue state for %s", pif_id)
     return {
         "task_id": task_id,
         "pif_id": pif_id,
@@ -673,7 +686,8 @@ async def get_review_corpus_progress() -> dict[str, Any]:
     task_counts: dict[str, int] = {}
     reviews_added = 0
     for task in tasks:
-        task_counts[task.status] = task_counts.get(task.status, 0) + 1
+        display_status = _review_task_display_status(task.status, task.result_summary)
+        task_counts[display_status] = task_counts.get(display_status, 0) + 1
         if isinstance(task.result_summary, dict):
             reviews_added += int(task.result_summary.get("reviews_added") or 0)
     distinct_count = len(distinct_keys)
@@ -695,6 +709,11 @@ async def get_review_corpus_progress() -> dict[str, Any]:
         "gate_met": distinct_count >= 5_000,
         "generated_at": _utcnow().isoformat(),
     }
+
+
+def _review_task_display_status(status: str, result_summary: Any) -> str:
+    summary = result_summary if isinstance(result_summary, dict) else {}
+    return "cancelled" if status == "failed" and summary.get("cancelled") is True else status
 
 
 async def get_firm_review_research_status(task_id: str) -> dict[str, Any]:
@@ -731,17 +750,26 @@ async def _claim_next_task() -> tuple[str, str] | None:
             review_row.review_research_status = "in_progress"
             review_row.updated_at = _utcnow()
         await session.commit()
+        try:
+            from app.services.pif_change_detection import MODULE_REVIEWS, mark_research_status
+
+            await mark_research_status(task.pif_id, MODULE_REVIEWS, "in_progress", metadata={"task_id": task.task_id})
+        except Exception:
+            logger.exception("Could not update review research running state for %s", task.pif_id)
         return task.task_id, task.pif_id
 
 
 async def _finish_task(task_id: str, *, result: dict[str, Any] | None = None, error: str | None = None) -> None:
     now = _utcnow()
+    completed_payload: dict[str, Any] | None = None
+    target_pif_id: str | None = None
     async with AsyncSessionLocal() as session:
         task = await session.get(FirmReviewResearchTaskRow, task_id)
         if task is None:
             return
         review_row = await session.get(FirmReviewRow, task.pif_id)
         firm = await session.get(PifFirmRow, task.pif_id)
+        target_pif_id = task.pif_id
         if result is not None:
             task.status = "completed"
             task.result_summary = {
@@ -759,6 +787,7 @@ async def _finish_task(task_id: str, *, result: dict[str, Any] | None = None, er
                 review_row.review_research_error = None
                 review_row.updated_at = now
                 task.result_summary.update(merge_summary)
+                completed_payload = merged
         else:
             task.status = "failed"
             task.result_summary = {"firm_name": firm.firm_name if firm else None, "message": error or "Public review research failed"}
@@ -768,10 +797,38 @@ async def _finish_task(task_id: str, *, result: dict[str, Any] | None = None, er
                 review_row.updated_at = now
         task.completed_at = now
         await session.commit()
+    if target_pif_id:
+        try:
+            from app.services.pif_change_detection import (
+                MODULE_REVIEWS,
+                mark_research_failure,
+                record_research_snapshot,
+            )
+
+            if completed_payload is not None:
+                change_summary = await record_research_snapshot(
+                    target_pif_id,
+                    MODULE_REVIEWS,
+                    completed_payload,
+                    captured_at=now,
+                )
+                async with AsyncSessionLocal() as session:
+                    task = await session.get(FirmReviewResearchTaskRow, task_id)
+                    if task is not None:
+                        summary = dict(task.result_summary) if isinstance(task.result_summary, dict) else {}
+                        summary["change_detection"] = change_summary
+                        task.result_summary = summary
+                        await session.commit()
+            elif error:
+                await mark_research_failure(target_pif_id, MODULE_REVIEWS, error, attempted_at=now)
+        except Exception:
+            logger.exception("Review change detection failed for %s", target_pif_id)
 
 
 async def _run_task(task_id: str, pif_id: str) -> None:
     async with AsyncSessionLocal() as session:
+        task = await session.get(FirmReviewResearchTaskRow, task_id)
+        include_yelp = bool(task and (task.result_summary or {}).get("include_yelp"))
         firm = await session.get(PifFirmRow, pif_id)
         if firm is None:
             await _finish_task(task_id, error="Firm record is missing")
@@ -783,7 +840,8 @@ async def _run_task(task_id: str, pif_id: str) -> None:
         await _finish_task(task_id, error="Firm name is missing")
         return
     try:
-        result = await research_public_reviews(firm_name, website, str(address) if address else None)
+        kwargs = {"include_yelp": True} if include_yelp else {}
+        result = await research_public_reviews(firm_name, website, str(address) if address else None, **kwargs)
     except Exception as exc:
         logger.exception("Public review research failed for %s", pif_id)
         await _finish_task(task_id, error=str(exc)[:500])

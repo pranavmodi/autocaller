@@ -14,6 +14,7 @@ from .api import dashboard_router, websocket_router, settings_router, dispatcher
 from .api.agents import router as agents_router
 from .api.pif import router as pif_router
 from .api.job_agent import router as job_agent_router
+from .api.review_alerts import router as review_alerts_router
 from .api.auth import router as auth_router, SESSION_COOKIE, verify_session_token, auth_configured
 from .services.dispatcher import get_dispatcher
 from .services.daily_report_service import daily_report_loop
@@ -144,6 +145,8 @@ async def lifespan(app: FastAPI):
         asyncio.create_task(firm_review_research_loop())
         for _ in range(max(1, int(os.getenv("FIRM_REVIEW_RESEARCH_WORKERS", "1"))))
     ]
+    from .services.review_alerts import review_alert_loop
+    review_alert_task = asyncio.create_task(review_alert_loop())
     from .services.pif_local_enrichment import (
         local_enrichment_loop,
         recover_interrupted_local_enrichment,
@@ -165,6 +168,8 @@ async def lifespan(app: FastAPI):
     job_agent_collection_task = asyncio.create_task(collection_loop())
     from .services.job_agent_processing import processing_loop
     job_agent_processing_task = asyncio.create_task(processing_loop())
+    from .services.job_browser import worker as job_browser_worker
+    job_browser_task = asyncio.create_task(job_browser_worker())
     yield
     # Shutdown: stop the dispatcher, cancel background tasks, dispose engine
     get_dispatcher().stop()
@@ -178,23 +183,40 @@ async def lifespan(app: FastAPI):
         nightly_sync_task,
         job_agent_collection_task,
         job_agent_processing_task,
+        job_browser_task,
         lead_gen_daily_task,
         reconciler_task,
         *job_research_workers,
         *review_research_workers,
+        review_alert_task,
         *local_enrichment_workers,
         *lead_finder_recovery_tasks,
     ]
     tasks_to_cancel.append(master_heartbeat_task)
     if master_subagent_runner_task is not None:
         tasks_to_cancel.append(master_subagent_runner_task)
-    for t in tasks_to_cancel:
-        t.cancel()
-        try:
-            await t
-        except (asyncio.CancelledError, Exception):
-            pass
-    await async_engine.dispose()
+    # Signal every worker before waiting. Sequential cancel-and-wait lets an
+    # early gateway cleanup consume the whole systemd stop budget while later
+    # workers are still running.
+    for task in tasks_to_cancel:
+        task.cancel()
+    _, pending_workers = await asyncio.wait(tasks_to_cancel, timeout=10)
+    if pending_workers:
+        logger.warning(
+            "Leaving %s slow background workers cancelled during shutdown",
+            len(pending_workers),
+        )
+    from .services.llm_gateway import close_gateway_rpc_clients
+    rpc_close_task = asyncio.create_task(close_gateway_rpc_clients())
+    _, pending_rpc_close = await asyncio.wait({rpc_close_task}, timeout=5)
+    if pending_rpc_close:
+        logger.warning("OpenClaw RPC connection did not close within 5 seconds")
+        rpc_close_task.cancel()
+    engine_close_task = asyncio.create_task(async_engine.dispose())
+    _, pending_engine_close = await asyncio.wait({engine_close_task}, timeout=5)
+    if pending_engine_close:
+        logger.warning("Database engine did not dispose within 5 seconds")
+        engine_close_task.cancel()
 
 
 app = FastAPI(title="AI Outbound Voice Orchestrator", version="0.2.0", lifespan=lifespan)
@@ -412,6 +434,7 @@ app.include_router(front_inbox_router)
 app.include_router(agents_router)
 app.include_router(pif_router)
 app.include_router(job_agent_router)
+app.include_router(review_alerts_router)
 
 # Legacy static (kept for compatibility)
 STATIC_DIR = Path("static")

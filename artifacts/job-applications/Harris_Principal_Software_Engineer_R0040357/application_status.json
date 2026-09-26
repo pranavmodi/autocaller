@@ -1,0 +1,47 @@
+{
+  "checked_at": "2026-09-25T12:00:08.307771+00:00",
+  "job_id": "R0040357",
+  "title": "Principal Software Engineer",
+  "company": "Altera Digital Health (India) LLP / Harris",
+  "status": "submitted_under_review",
+  "submitted": true,
+  "resume_uploaded": true,
+  "selected_existing_resume": "/home/pranav/resume/job-agent/resumes/Pranav_Modi_Engineering_Leadership.pdf",
+  "user_instruction": "Apply for this job instead; proceed despite unverified Microsoft stack experience.",
+  "pending": [],
+  "unsupported_claims_to_avoid": [
+    "C#/.NET expertise",
+    "Azure expertise"
+  ],
+  "completed": [
+    "Signed in",
+    "Resume uploaded",
+    "Personal information saved",
+    "Five recent roles and education corrected and saved"
+  ],
+  "selected_preferences": {
+    "travel": "25-50%",
+    "relocation": "Yes",
+    "desired_annual_compensation": 6000000,
+    "currency_assumption": "INR",
+    "salary_explicitly_confirmed_by_user": true
+  },
+  "screening": {
+    "extensive_work_travel": "Yes; user reported McKinsey travel four days per week",
+    "known_harris_customer_employment": "No; interpreted from user no-conflicts answer",
+    "conflicting_noncompete": "No; user confirmed no conflicts",
+    "india_work_authorized": "Yes; prior verified user fact",
+    "india_sponsorship_required": "No; prior verified user fact",
+    "languages": "English - Advanced; Hindi - Advanced."
+  },
+  "submitted_at": "2026-09-25T12:20:17.562162+00:00",
+  "portal_confirmation": "Application Submitted; Thank You For Your Application, Your Application Is Under Review.",
+  "consent": "User explicitly authorized required privacy and accuracy terms before acceptance.",
+  "other_observed_application": {
+    "title": "AI Innovation Specialist",
+    "requisition": "R0046787",
+    "status": "Under Review",
+    "submission_date": "September 25, 2026",
+    "origin": "Not established; observed on candidate dashboard after current application submission."
+  }
+}

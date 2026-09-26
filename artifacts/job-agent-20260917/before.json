@@ -1,0 +1,617 @@
+{
+  "config": {
+    "search": "",
+    "import_limit": 100,
+    "remote_scope": "any",
+    "target_roles": "Applied AI, AI agents, workflow automation, engineering and product leadership",
+    "application_notes": "Founder-led, concise applications. Use verified experience. Reuse the best suitable one-page PDF resume. Do not call it 'tailored' in emails.",
+    "collection_enabled": true,
+    "posted_within_days": null,
+    "location_preferences": "Remote from Bengaluru, India; planning to move to Medell\u00edn, Colombia (UTC-5). Verify country-specific eligibility.",
+    "preferred_industries": "Legal technology, personal injury firms, healthcare operations",
+    "prefer_overseas_employers": true
+  },
+  "source_total": 567,
+  "candidates": [
+    {
+      "id": "02bb2c18e502af8a92402174440aa53544439120",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "048a5c8ce9d73c3d259fb61057bdf9165359d262",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "0ae397d85a7209dc27dd4995a880f99caf8f1a77",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "0d4cf87f56f716f9c809ca0b51c8981bcebb4403",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "0dded33a8a63f4fe485ccbb212a566e48c5b2542",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "0df0a4c4f919d2da8c729af0f5d35097bc9e8005",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "104c5a798882ac227b542c0835a3bee4ba242caa",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "114e5d2e3e761cb1c50c7d1a1cff47ee72383499",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "128557554896f7efe1f305e2fabbbfc349280263",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "1ba4522d42d519f8537c2c45b01018b578d07f36",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "1e3657f5786ed202460339768a9de918652a15a9",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "20d6ea69a88c60a8cefd09ce899f7da5eafe8a98",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "22f9f91f0691d272a916c658624eb5f9d960d88f",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "2664608efa7315b98e278dee4b3f32ea216ad6f7",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "28862c234471363899ef187d0f8e6dd353fbe4bb",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "2915913466503f5c5ca7bd53c412bd1550ab2938",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "2c6412d4fd07c1d5e55cbfddeefd0cfd900bfa0a",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "304492814af9293e1363fa21a8bd6ee951578489",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "35ebbde73e4e38af82eb3b9125ab9f67fdbbea84",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "363728a51c2fed3998df4e43d1c0c7a09081bc1f",
+      "status": "new",
+      "note": "",
+      "revision": 3
+    },
+    {
+      "id": "3a2435c7758b96a0561db66520562581d1eea358",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "460fff3075652edfc9b145be953b2e1f2e3f4808",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "47b2c9e59cccfc48d1b7ed43bc1e0fac525300f1",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "47dc2564fe563395bef1c66bd8ff892366a550d2",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "499e143e7d60f6980dd642eda252237a8598aac2",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "4cab8db29ae6cb1078332584f850f760a047a465",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "4cabc389021417e838f8679a8ae63212b088dff4",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "4f9e71cccf55f60109bd37f2bbcbc3b95290948f",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "52698603ce351c84403bf2af930e1bcad66a5e5b",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "54c5061126719cce8d1d92cdd9c473ff940c105c",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "56e1ee19d808ca44d8366c1570b8aac9aba0f41e",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "580c5441fe54632157078a29524c102b8d5fdd36",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "60b81028d5b15a946b0e141d3535295c642e8323",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "61e168182cce14f4311cbf1d5d696bdcbb99599b",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "622ff03d8ce1578ab6febc2c0737210cc76ad2a7",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "62aae9ed0024a588326056fc7d1fb2c33459ea91",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "6a5798a2e35f7152098006bf00e8dd4244af1efc",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "73325eea581e6d6c6acd8c3436cfa74a3eadfe42",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "7464bf16e0eb29517e266e9e377286d042026ac3",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "75db35b88cad4247cb0480313787595e9f68d0f1",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "763a48904eabec7fc9fdf975fc9eadc42239b1ea",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "795123e0d041bad32101c3794db20f1e34da40b1",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "7c8e60f548df7d3261fda2178322da7aa42469a2",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "7cf60e9ba519d7e87590b20585d23ed3738c6894",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "7eaa6e6f092bae9512b75c4d23410edf8db1b0e2",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "8183af027ed4c72cd79ddf8dc59e18edfb8dfac1",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "865aa485d82ec3fc47479b60dc5efd9060fb3e32",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "8782da27ae7202b1b612950ffae23d8f3754c85e",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "892b4f31db11e054983de9d385f21a52b7d12589",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "905974f09e88ae2b15c183c75c707b81fc06e5fc",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "96642cf9fea1b9d6fb529a0171b8a5b29cb4d382",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "966e1b716db5a6552ba7b7dbaefd7e8a6bd1229f",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "977f64b4562f12acb0f4df3f4171b872ef3617bf",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "9b04c8b049948fb018212d8c515fc0fb16d5cb39",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "9de00e330c2bc9630cb1f44ef37b51d68fad0386",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "9fe37f3595c20304d1d7bfe6ca7e5975bc34e87c",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "a02a1e8dabbfa12a871217ca00d5322a030e6a8a",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "a05783cdb2ffe994996d0c5a3af15bd688b37f27",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "a2abfb9a07c3cfbfbdccdfc73d016bcbe0df4466",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "a678180aaa6f89df7ea97dab4ffbe11d382b27bc",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "a7874638e71d0202ea2b12b75209220284ddaa1f",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "a81a732200f44568db5cf3ef849eb5086d9cd400",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "a8297e3c886d19495858ac33b7ea5d4b5051cb53",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "a8da3f2b85dc2a4d3d70701767f1fc073784c592",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "a9b00398df0db55ed38e50988eeb269e6a57554b",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "ae24cf0e1066d994d66354486ac77d3e71c14a0a",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "b090ec59c3769d12264337d86739e5c4ebf4f8c9",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "b340d154f80414e12a29a2127053ab1478f21574",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "b8d2b85043277a783a0512dd09a2467c95c8bd73",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "be0ac03e269e4345fe014e6d3cf82cda5b133f15",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "bea7314aa110fa394c3397f3dba9a9e91bb47c26",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "bef12dc0fb1fb7dcbed39f20c4f3affaa55173e2",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "bfc87fba0ff6e097f20f0ea0aa5125be9a3ffc59",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "c06f29f34ef77295a209b42a6f59834cc1576960",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "c12952fc18a92de372baef2e865ef6efea2f9646",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "c6113cb727fcd4ff5a10c55ef481de43d90fea5d",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "c8284e958e392e0dba10a17c3afc36b347c915bc",
+      "status": "new",
+      "note": "",
+      "revision": 3
+    },
+    {
+      "id": "cc60e79650c64c85a935b9d2891fafd695ad262f",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "cd9e7cb5e123e98e6c1c34f7d6e79758990fbb00",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "cdf1d2a1e00d8dbfffa3de4d21006005f21ad5c8",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "ce244659fd1ea7b7d9cea522fea779d59c7eb0b7",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "d104b658e3859fc8f38c32441b68cf07fb22ecfe",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "d49c302b184cb35df2d710730b33a1ec6cf2e5fa",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "d6ae41c88b8946621f38a2432c7e6593e1a630d2",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "d81363ccf2c0db80517a3990bfbbb8f72e8ca8ca",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "dbf637a30776103b33dd0d9dfceb9c34b8a15d05",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "dd139f1e3bff4c84a1caa44e5a097f09e7918433",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "e03684906fb31ba57f8af84cf53b85cb4503e112",
+      "status": "new",
+      "note": "",
+      "revision": 2
+    },
+    {
+      "id": "e192178485188b02a7eb83ee864d4d5faea0c681",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "e5bd6a79a7abad2fb9d3dedaff45aa6b8da07087",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "eb563ea389edfe8da9f5be4ac1684c9853c6bbd0",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "eb5776d6d000398fc29823090bd90b5da3eac338",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "ec366c442767affd310f688465367e8daa4514cf",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "eca994d0a36f0b420b41704a14e913c2d17fa9aa",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "f31d42c84d40e3e52a72784f14573a38882de1a9",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "f34f2a0bc8d36b8a8bdd7e454af366e4fec5212e",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "f39959788ad9451b6da734cf5c0708340395b6a6",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "f3e9918a83d7660fcabb21b63f927fa17347d322",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "f4cf8ec8e4dc7ddf8128b12d0a71a127d6ba868b",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    },
+    {
+      "id": "f7ad95b529bce41b4b104c3e4c2d4eb694478c88",
+      "status": "new",
+      "note": "",
+      "revision": 1
+    }
+  ]
+}

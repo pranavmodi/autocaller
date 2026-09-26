@@ -9,6 +9,18 @@ A FastAPI daemon + Typer CLI that cold-calls US personal-injury attorneys, runs 
 
 Full reference: `docs/cli.md` (read it for anything not covered here).
 
+Job-agent workspace (`/job-agent`): the canonical `.claude/skills/possibleos/SKILL.md`
+and `docs/JOB_AGENT.md` document automatic uncapped collection, durable progress,
+newest-posted ordering, paginated history, and `bin/possibleos job-agent status`, `config`,
+`configure --file`, `collect`, `jobs`, `review`, and `events`. Classification is
+on demand per selected job by default and maps categories to resumes. See the canonical skill
+for `resumes`, `show`, `classify`, `category`, `prepare`, `apply`, and `verify-sent`.
+Only an explicit apply action authorizes an application email through Zoho CLI.
+The default ontology includes narrow career-transition categories for PI case
+management, entry-level paralegal/legal-assistant and PI intake roles. On-demand
+classification uses TypeSafe System One `jev-latest` Choice judgments with no
+OpenClaw fallback.
+
 Lead-generation work has a living concept document:
 `docs/CYBERNETIC_LEAD_GEN_CONCEPT.md`. If you add or change a lead-gen feedback
 source, learning step, policy lever, suppression rule, sequence behavior,
@@ -709,3 +721,83 @@ hostname than `OUTREACH_PUBLIC_BASE_URL`.
   the PHI egress guard (`check_action_policy`), send-window spread, and
   deliverability breaker still gate every send. Do not reintroduce a manual
   approval step (operator-authorized 2026-06-17).
+## Review Alerts
+
+`bin/possibleos review-alerts status|enroll|config|run|subscription|schedule` controls the
+recent Google/Yelp review workflow. Enrollment is read-only unless `--execute`;
+monitoring and automatic sending have separate gates. See the canonical
+`.claude/skills/possibleos/SKILL.md` and `docs/REVIEW_ALERTS.md`. Do not resend an
+uncertain attempt or override an opt-out. Full emails appear in Communications.
+
+
+## Job Agent website applications
+
+Website submission has a separate Playwright worker and status from Zoho email.
+After importing/resolving and classifying the exact job, inspect `job-agent show ID`.
+`job-agent browser-start ID --revision PROCESSING_REVISION --authorize-submit`
+requires user authorization for a website application. Monitor `browser-status ID`
+or list `browser-applications`. Respond to its pending question using
+`browser-control ID --action answer --revision BROWSER_REVISION --question-id Q
+--answer-file FILE`; never invent credentials or eligibility. Other actions are
+pause, resume (pre-submit only), verify (read-only), and release (close inactive
+browser). `browser-screenshot ID --output FILE` copies the saved screenshot.
+`submission_uncertain` must never be restarted/resubmitted; `submitted` requires
+saved visible confirmation and does not imply email sent. Login/CAPTCHA can block;
+there is no remote interactive desktop. Full runbook:
+`/home/pranav/possibleos/docs/JOB_BROWSER_APPLICATIONS.md`.
+
+
+Website AI transport: `job-agent browser-provider gateway|openai [--model MODEL]`
+saves defaults. `browser-start` and `browser-control` (resume/answer/verify) accept
+`--provider gateway|openai` for the selected run. Read the latest browser revision
+before controls. Switching provider does not clear uncertain submission or permit
+resubmitting. Direct API uses server OPENAI_API_KEY, never expose its value; the
+model must support Responses structured outputs. This option only changes website
+applications, not search/email/Jev. No implicit fallback. See the website runbook.
+
+### Automatic application resume selection
+`job-agent prepare`, `apply`, and `browser-start` accept unclassified saved jobs. The authorized worker runs Jev for that job, reuses valid selections, and preserves manual categories before continuing. No separate `classify` command is required. Missing PDFs or matching failures stop for review. Opening a modal and searching do not classify jobs.
+
+### Reusable applicant information
+Before asking for an application fact, read `job-agent profile` and use the `possibleos-job-applicant-context` skill. `profile-save --file FILE` adds/edits question/answer/scope records (include id/revision for edits); `profile-remove ID --revision N` stops future reuse; `profile-import-answers` imports older browser answers. Browser answers are remembered automatically; `browser-control --this-application-only` opts out of cross-application reuse. Preserve country, role, compensation units, and current-versus-planned location distinctions. See `/home/pranav/possibleos/docs/JOB_APPLICANT_PROFILE.md`.
+
+Browser clean restart: inspect `job-agent browser-status JOB_ID` for `can_restart` and `restart_blocked_reason`, then use `job-agent browser-control JOB_ID --action restart --revision N` when authorized. This starts a fresh browser with saved answers/resume and preserves prior attempt history. It cannot bypass an uncertain or confirmed submission.
+
+
+Browser sessions live in `possibleos-browser.service`, independent of the backend.
+`job-agent browser-status ID` reports live browser_session_status and availability.
+Use `browser-control ID --action reconnect --revision N` for stopped runs; it
+attaches without navigation or submission. Resume pre-submit work, answer pending
+questions, or verify uncertain submission read-only. Backend restart preserves new
+forms; browser-service restart or host reboot does not. Never restart the browser
+service as worker recovery. Release closes the form; guarded restart is required
+for a fresh attempt. Legacy sessions cannot be adopted. A lost browser never
+authorizes a duplicate submission.
+
+
+Resume selection uses Jev's highest-ranked category with an assigned PDF, even
+when No clear match wins overall. The raw probabilities remain visible; closest
+match does not establish qualifications. Confidence is informational, never a
+selection gate; legacy classification_threshold values are ignored. Explicit
+manual categories remain authoritative. Missing/invalid PDFs or failed model
+requests still require correction. Use the existing classify or browser resume
+commands for an individual job; no bulk reclassification is triggered.
+
+
+### Quit a website application
+
+`job-agent browser-quit-reasons ID` suggests editable reasons using the run's AI
+provider and the job / current question / blocker; it does not save answers or
+quit. Suggestions are possibilities, not established applicant facts. Custom
+reasons and quitting without a reason remain available if inference fails.
+`job-agent browser-control ID --action quit --revision N --reason "Not willing to relocate"`
+stops a waiting/paused/blocked pre-submit run as `cancelled` (UI: Quit by you).
+The modal offers this beside Save answer and continue, then shows suggested
+reasons and an editable optional reason with a confirmation button.
+History, the pending-question snapshot and saved answers remain; the reason is
+not added to the applicant profile. Browser closure is best-effort and can be
+retried with release if unavailable. Worker recovery leaves cancelled runs alone;
+resume/answer do not reactivate them. Explicit guarded restart can begin a fresh
+attempt. Active runs must pause first; possible/confirmed submissions cannot be
+relabelled cancelled. This is local cancellation, not employer-side withdrawal,
+and it does not cancel an independent email application or change job review.

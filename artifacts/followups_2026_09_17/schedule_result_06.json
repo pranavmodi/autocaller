@@ -1,0 +1,130 @@
+{
+  "action": {
+    "id": "action_56cef51ff4394136a18d7955",
+    "action_type": "send_approved_lead_gen_draft",
+    "status": "approved",
+    "risk_level": "high",
+    "requested_by": "codex",
+    "approved_by": "codex",
+    "entity_type": "lead_gen_batch_item",
+    "entity_id": "4bd6241b76344d4cbeb1a349b554e945",
+    "input": {
+      "body": "Hi Siamak,\n\nMy earlier note jumped straight to a possible systems migration. A better starting point is what you would actually want to improve for your team, regardless of the software involved.\n\nI'm Pranav, founder of Possible Minds. We help PI firms adopt AI, and I'm trying to understand where it would genuinely help before building around assumptions.\n\nFrom your perspective leading the firm, is the bigger opportunity making case information easier to trust, or cutting down on repeated data entry? Even a brief answer would help, and I'd appreciate your time.\n\nBest,\nPranav\nFounder, Possible Minds",
+      "subject": "Re: Vaziri Law Group + AbacusLaw migration",
+      "approval": {
+        "references": "<010001a001a42393-980bfd4b-c511-4132-ae0f-58e4d98ba92d-000000@email.amazonses.com>",
+        "approved_at": "2026-09-17T09:51:20.947433+00:00",
+        "approved_by": "codex",
+        "body_sha256": "cc20bc75db69da97edeb33612436b87725a665337fbaf3efd2282f025f320b86",
+        "in_reply_to": "<010001a001a42393-980bfd4b-c511-4132-ae0f-58e4d98ba92d-000000@email.amazonses.com>",
+        "subject_sha256": "ee0474b17a78adde804c45779a47c4138e06f1426e9d318c815ee02e8a3e6847"
+      },
+      "transport": "resend",
+      "references": "<010001a001a42393-980bfd4b-c511-4132-ae0f-58e4d98ba92d-000000@email.amazonses.com>",
+      "skill_path": null,
+      "body_sha256": "cc20bc75db69da97edeb33612436b87725a665337fbaf3efd2282f025f320b86",
+      "in_reply_to": "<010001a001a42393-980bfd4b-c511-4132-ae0f-58e4d98ba92d-000000@email.amazonses.com>",
+      "skill_sha256": null,
+      "batch_item_id": "4bd6241b76344d4cbeb1a349b554e945",
+      "brief_version": null,
+      "subject_sha256": "ee0474b17a78adde804c45779a47c4138e06f1426e9d318c815ee02e8a3e6847",
+      "composer_variant_key": null,
+      "lead_gen_action_type": "follow_up",
+      "composer_experiment_key": null
+    },
+    "policy_result": {},
+    "execution_result": {},
+    "error": null,
+    "trace_id": null,
+    "scheduled_for": "2026-09-17T16:50:00+00:00",
+    "started_at": null,
+    "completed_at": null,
+    "created_at": "2026-09-17T09:51:20.953700+00:00",
+    "updated_at": "2026-09-17T09:51:20.953705+00:00"
+  },
+  "created": true,
+  "updated_existing": false,
+  "executed": false,
+  "scheduled_for_pt": "2026-09-17 09:50 PDT",
+  "scheduled_for_utc": "2026-09-17 16:50:00 UTC",
+  "policy": {
+    "allowed": true,
+    "reason": "allowed",
+    "checks": [
+      {
+        "name": "status_allows_execution",
+        "passed": true,
+        "detail": "approved"
+      },
+      {
+        "name": "human_approval_present",
+        "passed": true,
+        "detail": "codex"
+      },
+      {
+        "name": "subject_present",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "body_present",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "subject_hash_matches_approval",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "body_hash_matches_approval",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "in_reply_to_matches_approval",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "references_match_approval",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "lead_gen_transport_available",
+        "passed": true,
+        "detail": "zoho_api 0/0 configured=True; resend 0/50 configured=True"
+      },
+      {
+        "name": "no_patient_data_in_outreach",
+        "passed": true,
+        "detail": "llm_guard_disabled"
+      },
+      {
+        "name": "batch_item_exists",
+        "passed": true,
+        "detail": "4bd6241b76344d4cbeb1a349b554e945"
+      },
+      {
+        "name": "batch_item_not_already_started",
+        "passed": true,
+        "detail": "approved"
+      },
+      {
+        "name": "contact_email_present",
+        "passed": true,
+        "detail": "svaziri@vazirilaw.com"
+      },
+      {
+        "name": "no_prior_successful_action_for_item",
+        "passed": true,
+        "detail": ""
+      }
+    ],
+    "risk_level": "high",
+    "requires_human_approval": true,
+    "action_type": "send_approved_lead_gen_draft",
+    "contact_email": "svaziri@vazirilaw.com"
+  }
+}

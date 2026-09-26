@@ -1,0 +1,130 @@
+{
+  "action": {
+    "id": "action_2d03477a88a84484a8eb0ab6",
+    "action_type": "send_approved_lead_gen_draft",
+    "status": "approved",
+    "risk_level": "high",
+    "requested_by": "codex",
+    "approved_by": "codex",
+    "entity_type": "lead_gen_batch_item",
+    "entity_id": "61bac85ea1464f32a78461d783459a42",
+    "input": {
+      "body": "Hi Romel,\n\nFollowing the intake-to-document example I sent, I wanted to share a short article on the organizational side of AI.\n\nA tool can handle its part well while the next step still depends on someone's memory. Making ownership and human review clear is just as important as the technology. That's guiding our work at Possible Minds.\n\nhttps://getpossibleminds.com/t/nspin7u0QA\n\nFrom your managing partner's perspective at RA & Associates, which needs more attention: the tools or the way responsibilities are shared? I'd value your view.\n\nBest,\nPranav\nFounder, Possible Minds",
+      "subject": "Re: where AI could compound at RA & Associates, APC",
+      "approval": {
+        "references": "<0100019ffc88584b-835e78bf-397c-4eb0-b52e-30017f9256a6-000000@email.amazonses.com>",
+        "approved_at": "2026-09-15T10:40:49.039190+00:00",
+        "approved_by": "codex",
+        "body_sha256": "1063c5ad6f0f10af25416f10fe50d715af5cb306f3c3e044cfaa28b76bb68d3a",
+        "in_reply_to": "<0100019ffc88584b-835e78bf-397c-4eb0-b52e-30017f9256a6-000000@email.amazonses.com>",
+        "subject_sha256": "333e41286c6b92993460c1297021db532e7918bd45e79dd7b6b1b6b0c3c6e925"
+      },
+      "transport": "resend",
+      "references": "<0100019ffc88584b-835e78bf-397c-4eb0-b52e-30017f9256a6-000000@email.amazonses.com>",
+      "skill_path": null,
+      "body_sha256": "1063c5ad6f0f10af25416f10fe50d715af5cb306f3c3e044cfaa28b76bb68d3a",
+      "in_reply_to": "<0100019ffc88584b-835e78bf-397c-4eb0-b52e-30017f9256a6-000000@email.amazonses.com>",
+      "skill_sha256": null,
+      "batch_item_id": "61bac85ea1464f32a78461d783459a42",
+      "brief_version": null,
+      "subject_sha256": "333e41286c6b92993460c1297021db532e7918bd45e79dd7b6b1b6b0c3c6e925",
+      "composer_variant_key": null,
+      "lead_gen_action_type": "follow_up",
+      "composer_experiment_key": null
+    },
+    "policy_result": {},
+    "execution_result": {},
+    "error": null,
+    "trace_id": null,
+    "scheduled_for": "2026-09-15T16:30:00+00:00",
+    "started_at": null,
+    "completed_at": null,
+    "created_at": "2026-09-15T10:40:49.046513+00:00",
+    "updated_at": "2026-09-15T10:40:49.046519+00:00"
+  },
+  "created": true,
+  "updated_existing": false,
+  "executed": false,
+  "scheduled_for_pt": "2026-09-15 09:30 PDT",
+  "scheduled_for_utc": "2026-09-15 16:30:00 UTC",
+  "final_policy": {
+    "allowed": true,
+    "reason": "allowed",
+    "checks": [
+      {
+        "name": "status_allows_execution",
+        "passed": true,
+        "detail": "approved"
+      },
+      {
+        "name": "human_approval_present",
+        "passed": true,
+        "detail": "codex"
+      },
+      {
+        "name": "subject_present",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "body_present",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "subject_hash_matches_approval",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "body_hash_matches_approval",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "in_reply_to_matches_approval",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "references_match_approval",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "lead_gen_transport_available",
+        "passed": true,
+        "detail": "zoho_api 1/0 configured=True; resend 0/50 configured=True"
+      },
+      {
+        "name": "no_patient_data_in_outreach",
+        "passed": true,
+        "detail": "llm_guard_disabled"
+      },
+      {
+        "name": "batch_item_exists",
+        "passed": true,
+        "detail": "61bac85ea1464f32a78461d783459a42"
+      },
+      {
+        "name": "batch_item_not_already_started",
+        "passed": true,
+        "detail": "approved"
+      },
+      {
+        "name": "contact_email_present",
+        "passed": true,
+        "detail": "romel@raandassociates.com"
+      },
+      {
+        "name": "no_prior_successful_action_for_item",
+        "passed": true,
+        "detail": ""
+      }
+    ],
+    "risk_level": "high",
+    "requires_human_approval": true,
+    "action_type": "send_approved_lead_gen_draft",
+    "contact_email": "romel@raandassociates.com"
+  }
+}

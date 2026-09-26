@@ -1,0 +1,636 @@
+{
+  "leadership": [
+    {
+      "bio": "Experienced radiologist and CEO of Valley MRI & Radiology, Inc.; skilled in diagnostic imaging across modalities and practice leadership.",
+      "name": "Charles A. Stillman, DO, FACR",
+      "email": "info@valleymri.com",
+      "phone": "(209) 467‑1000",
+      "title": "CEO / Radiologist (Board Certified)",
+      "persona": null,
+      "linkedin": "https://www.linkedin.com/in/charles-stillman-72772432",
+      "freshness": {
+        "source": "research",
+        "last_seen_at": null
+      },
+      "person_id": "30a21e36-5e5e-5625-9a49-e8b68ac87db3",
+      "confidence": 0.85,
+      "publications": [],
+      "cases_handled": [],
+      "bar_admissions": [],
+      "is_decision_maker": true,
+      "research_checked_at": "2026-09-21T11:22:37.198Z",
+      "source_urls": [
+        "https://valleymri.com/contact/",
+        "https://valleymri.com/",
+        "https://www.linkedin.com/company/valley-mri-%26-radiology-inc-",
+        "https://www.linkedin.com/in/charles-stillman-72772432"
+      ],
+      "email_verification": "Existing Possible OS leadership contact; official Valley MRI contact page publishes info@valleymri.com",
+      "linkedin_verification": "Personal profile matches Valley MRI & Radiology Inc.",
+      "founder_status": "not_verified"
+    },
+    {
+      "bio": "Served five decades in the U.S. Army, including one combat tour where he earned the Bronze Star. Retired as a full-bird Colonel in 2021. Joined Valley MRI in 2010 and took over the practice in 2016.",
+      "name": "Charles A. Stillman, DO",
+      "email": null,
+      "phone": "209-467-1000",
+      "title": "CEO, Owner, and Board-Certified Radiologist",
+      "skills": [
+        "Diagnostic radiology",
+        "Medical imaging",
+        "Healthcare operations"
+      ],
+      "linkedin": "https://www.linkedin.com/in/charles-stillman-72772432",
+      "education": [
+        "Kirksville College of Osteopathic Medicine"
+      ],
+      "confidence": 0.8,
+      "experience": [
+        "U.S. Army radiologist",
+        "Valley MRI radiologist since 2010",
+        "Owner and CEO since 2016"
+      ],
+      "source_url": "https://valleymri.com/about-us/",
+      "certifications": [
+        "Board-certified radiologist",
+        "FACR"
+      ],
+      "research_checked_at": "2026-09-21T11:22:37.198Z",
+      "source_urls": [
+        "https://valleymri.com/contact/",
+        "https://valleymri.com/",
+        "https://www.linkedin.com/company/valley-mri-%26-radiology-inc-",
+        "https://www.linkedin.com/in/charles-stillman-72772432"
+      ],
+      "email_verification": "Existing Possible OS leadership contact; official Valley MRI contact page publishes info@valleymri.com",
+      "linkedin_verification": "Personal profile matches Valley MRI & Radiology Inc.",
+      "founder_status": "not_verified"
+    },
+    {
+      "bio": "Board-certified radiologist who has been with Valley MRI since 2008.",
+      "name": "Daniel S. Dietrich, MD",
+      "email": null,
+      "phone": "209-467-1000",
+      "title": "Board-Certified Radiologist",
+      "skills": [
+        "Diagnostic radiology"
+      ],
+      "linkedin": null,
+      "confidence": 0.8,
+      "experience": [
+        "Valley MRI radiologist since 2008"
+      ],
+      "source_url": "https://valleymri.com/about-us/",
+      "certifications": [
+        "Board-certified radiologist"
+      ],
+      "research_checked_at": "2026-09-21T11:22:37.198Z",
+      "source_urls": [
+        "https://valleymri.com/about-us/",
+        "https://valleymri.com/contact/",
+        "https://www.healthcare4ppl.com/physician/california/stockton/daniel-s-dietrich-1053341669.html"
+      ],
+      "email_status": "not_found_publicly",
+      "linkedin_status": "not_verified"
+    }
+  ],
+  "staff": [
+    {
+      "bio": null,
+      "name": "Sabrina Montoya",
+      "email": "Sabrina.Montoya@valleymri.com",
+      "phone": "",
+      "title": "",
+      "persona": "intake",
+      "linkedin": null,
+      "freshness": {
+        "source": "sender",
+        "last_seen_at": "2026-01-30T21:54:39.272527"
+      },
+      "person_id": "a8cc14e3-da90-5956-83e6-117c67457ce4",
+      "confidence": 0.7,
+      "publications": [],
+      "cases_handled": [],
+      "bar_admissions": [],
+      "is_decision_maker": false
+    },
+    {
+      "bio": null,
+      "name": "Veronica Lara",
+      "email": "Veronica@valleymri.com",
+      "phone": "",
+      "title": "",
+      "persona": "paralegal",
+      "linkedin": null,
+      "freshness": {
+        "source": "sender",
+        "last_seen_at": "2026-08-05T16:18:53.058361"
+      },
+      "person_id": "0c5bed8a-0ac9-538e-b0de-057079549277",
+      "confidence": 0.7,
+      "publications": [],
+      "cases_handled": [],
+      "bar_admissions": [],
+      "is_decision_maker": false
+    },
+    {
+      "bio": null,
+      "name": "Adrian Garcia",
+      "email": "Adrian@valleymri.com",
+      "phone": "",
+      "title": "",
+      "persona": null,
+      "linkedin": null,
+      "freshness": {
+        "source": "extraction",
+        "last_seen_at": null
+      },
+      "person_id": "0f4fbed0-cf51-5554-a5bd-8d0715809d55",
+      "confidence": 0.7,
+      "publications": [],
+      "cases_handled": [],
+      "bar_admissions": [],
+      "is_decision_maker": false
+    },
+    {
+      "bio": null,
+      "name": "Ashley Gamboa",
+      "email": "Ashley@valleymri.com",
+      "phone": "",
+      "title": "",
+      "persona": "unknown",
+      "linkedin": null,
+      "freshness": {
+        "source": "sender",
+        "last_seen_at": "2026-05-29T17:49:57.424555"
+      },
+      "person_id": "61c255b4-0d55-50fa-966b-fb85d9ae01c1",
+      "confidence": 0.7,
+      "publications": [],
+      "cases_handled": [],
+      "bar_admissions": [],
+      "is_decision_maker": false
+    },
+    {
+      "bio": null,
+      "name": "Maria Perez (Toni)",
+      "email": "maria.perez@valleymri.com",
+      "phone": "209-467-1000",
+      "title": "Scheduler",
+      "persona": "unknown",
+      "linkedin": null,
+      "freshness": {
+        "source": "sender",
+        "last_seen_at": "2026-04-08T16:46:31.724853"
+      },
+      "person_id": "c45d587e-c817-5e15-aaad-b6a84df178b0",
+      "confidence": 0.7,
+      "publications": [],
+      "cases_handled": [],
+      "bar_admissions": [],
+      "is_decision_maker": false
+    },
+    {
+      "bio": null,
+      "name": "Dana Fernandez",
+      "email": "dana@valleymri.com",
+      "phone": "",
+      "title": "",
+      "persona": null,
+      "linkedin": null,
+      "freshness": {
+        "source": "extraction",
+        "last_seen_at": null
+      },
+      "person_id": "5bba2ba1-61f1-5c5b-89e5-d52ec3eb4269",
+      "confidence": 0.7,
+      "publications": [],
+      "cases_handled": [],
+      "bar_admissions": [],
+      "is_decision_maker": false
+    },
+    {
+      "bio": null,
+      "name": "Sabrina Khalsa",
+      "email": "sabrina@valleymri.com",
+      "phone": "",
+      "title": "",
+      "persona": null,
+      "linkedin": null,
+      "freshness": {
+        "source": "extraction",
+        "last_seen_at": null
+      },
+      "person_id": "08b43051-60b4-503d-a32a-48d17f339fd4",
+      "confidence": 0.7,
+      "publications": [],
+      "cases_handled": [],
+      "bar_admissions": [],
+      "is_decision_maker": false
+    },
+    {
+      "bio": null,
+      "name": "Tracy Arciniega",
+      "email": "tracy@valleymri.com",
+      "phone": "",
+      "title": "",
+      "persona": null,
+      "linkedin": null,
+      "freshness": {
+        "source": "extraction",
+        "last_seen_at": null
+      },
+      "person_id": "62a5f2f7-d238-5471-bca2-03ec03ee1925",
+      "confidence": 0.7,
+      "publications": [],
+      "cases_handled": [],
+      "bar_admissions": [],
+      "is_decision_maker": false
+    },
+    {
+      "bio": null,
+      "name": "Becky Vignoli",
+      "email": "becky@valleymri.com",
+      "phone": "",
+      "title": "",
+      "persona": null,
+      "linkedin": null,
+      "freshness": {
+        "source": "extraction",
+        "last_seen_at": null
+      },
+      "person_id": "9d69c3ac-6258-5c59-b9b8-f3645e287a7b",
+      "confidence": 0.7,
+      "publications": [],
+      "cases_handled": [],
+      "bar_admissions": [],
+      "is_decision_maker": false
+    },
+    {
+      "bio": null,
+      "name": "Antoinette Camarena",
+      "email": "antoinette@valleymri.com",
+      "phone": "",
+      "title": "",
+      "persona": null,
+      "linkedin": null,
+      "freshness": {
+        "source": "extraction",
+        "last_seen_at": null
+      },
+      "person_id": "46025f75-d4db-5346-9718-be17a6fdef35",
+      "confidence": 0.7,
+      "publications": [],
+      "cases_handled": [],
+      "bar_admissions": [],
+      "is_decision_maker": false
+    },
+    {
+      "bio": null,
+      "name": "maria8",
+      "email": "maria8@valleymri.com",
+      "phone": "209-467-1000",
+      "title": "Scheduler",
+      "persona": "unknown",
+      "linkedin": null,
+      "freshness": {
+        "source": "sender",
+        "last_seen_at": "2026-05-04T16:00:34.791036"
+      },
+      "person_id": "275c588b-db11-5ea5-9972-8cc59de45532",
+      "confidence": 0.65,
+      "publications": [],
+      "cases_handled": [],
+      "bar_admissions": [],
+      "is_decision_maker": false
+    },
+    {
+      "bio": null,
+      "name": "westfaxff",
+      "email": "westfaxff@westfax.com",
+      "phone": "",
+      "title": "",
+      "persona": "unknown",
+      "linkedin": null,
+      "freshness": {
+        "source": "sender",
+        "last_seen_at": "2026-08-08T15:13:04.987720"
+      },
+      "person_id": "f9131872-ddda-5677-8064-46a27962a3d8",
+      "confidence": 0.65,
+      "publications": [],
+      "cases_handled": [],
+      "bar_admissions": [],
+      "is_decision_maker": false
+    },
+    {
+      "bio": null,
+      "name": "postmaster",
+      "email": "postmaster@precisemri.com",
+      "phone": "",
+      "title": "",
+      "persona": "unknown",
+      "linkedin": null,
+      "freshness": {
+        "source": "sender",
+        "last_seen_at": "2026-06-04T04:14:12.107845"
+      },
+      "person_id": "7396a119-59cd-5b84-b73e-3f781d734d66",
+      "confidence": 0.65,
+      "publications": [],
+      "cases_handled": [],
+      "bar_admissions": [],
+      "is_decision_maker": false
+    }
+  ],
+  "emails": [
+    "adrian@valleymri.com",
+    "ashley@valleymri.com",
+    "veronica@valleymri.com",
+    "sabrina.montoya@valleymri.com",
+    "dana@valleymri.com",
+    "maria.perez@valleymri.com",
+    "sabrina@valleymri.com",
+    "becky@valleymri.com",
+    "tracy@valleymri.com",
+    "antoinette@valleymri.com",
+    "maria8@valleymri.com",
+    "info@valleymri.com",
+    "westfaxff@westfax.com",
+    "postmaster@precisemri.com"
+  ],
+  "phones": [
+    "(575) 247-6652",
+    "(531) 278-2391",
+    "(804) 554-5589",
+    "209-467-1000",
+    "(646) 481-8974",
+    "(605) 646-2142",
+    "(610) 477-1437",
+    "(816) 659-3808",
+    "(504) 334-8302",
+    "(539) 263-9953",
+    "(617) 465-3147",
+    "(551) 244-1678",
+    "(505) 539-3411",
+    "(803) 881-8224",
+    "(541) 249-9772",
+    "(303) 209-9620",
+    "(701) 506-0966",
+    "(951) 291-0948",
+    "(469) 473-3291",
+    "(209) 467‑1000"
+  ],
+  "contact_profiles": {
+    "dana@valleymri.com": {
+      "name": "Dana Fernandez",
+      "email": "dana@valleymri.com",
+      "sources": [
+        "extracted_contact",
+        "web_staff"
+      ],
+      "updated_at": "2026-08-27T14:14:16.762445+00:00",
+      "communications": {
+        "inbound_count": 0,
+        "outbound_count": 0,
+        "last_inbound_at": null,
+        "last_outbound_at": null
+      }
+    },
+    "info@valleymri.com": {
+      "name": "Charles A. Stillman, DO, FACR",
+      "email": "info@valleymri.com",
+      "phone": "(209) 467‑1000",
+      "title": "CEO / Radiologist (Board Certified)",
+      "sources": [
+        "web_leadership"
+      ],
+      "linkedin": "https://www.linkedin.com/in/charles-stillman-72772432",
+      "updated_at": "2026-08-27T14:14:16.762445+00:00",
+      "communications": {
+        "inbound_count": 0,
+        "outbound_count": 0,
+        "last_inbound_at": null,
+        "last_outbound_at": null
+      }
+    },
+    "becky@valleymri.com": {
+      "name": "Becky Vignoli",
+      "email": "becky@valleymri.com",
+      "sources": [
+        "extracted_contact",
+        "web_staff"
+      ],
+      "updated_at": "2026-08-27T14:14:16.762445+00:00",
+      "communications": {
+        "inbound_count": 0,
+        "outbound_count": 0,
+        "last_inbound_at": null,
+        "last_outbound_at": null
+      }
+    },
+    "tracy@valleymri.com": {
+      "name": "Tracy Arciniega",
+      "email": "tracy@valleymri.com",
+      "sources": [
+        "extracted_contact",
+        "web_staff"
+      ],
+      "updated_at": "2026-08-27T14:14:16.762445+00:00",
+      "communications": {
+        "inbound_count": 0,
+        "outbound_count": 0,
+        "last_inbound_at": null,
+        "last_outbound_at": null
+      }
+    },
+    "adrian@valleymri.com": {
+      "name": "Adrian Garcia",
+      "email": "adrian@valleymri.com",
+      "sources": [
+        "extracted_contact",
+        "web_staff"
+      ],
+      "updated_at": "2026-08-27T14:14:16.762445+00:00",
+      "communications": {
+        "inbound_count": 0,
+        "outbound_count": 0,
+        "last_inbound_at": null,
+        "last_outbound_at": null
+      }
+    },
+    "ashley@valleymri.com": {
+      "name": "Ashley Gamboa",
+      "email": "ashley@valleymri.com",
+      "sources": [
+        "extracted_contact",
+        "web_staff"
+      ],
+      "updated_at": "2026-08-27T14:14:16.762445+00:00",
+      "communications": {
+        "inbound_count": 0,
+        "outbound_count": 0,
+        "last_inbound_at": null,
+        "last_outbound_at": null
+      }
+    },
+    "maria8@valleymri.com": {
+      "name": "Maria Perez (Toni)",
+      "email": "maria8@valleymri.com",
+      "phone": "209-467-1000",
+      "title": "Scheduler",
+      "sources": [
+        "extracted_contact",
+        "web_staff"
+      ],
+      "updated_at": "2026-08-27T14:14:16.762445+00:00",
+      "communications": {
+        "inbound_count": 0,
+        "outbound_count": 0,
+        "last_inbound_at": null,
+        "last_outbound_at": null
+      }
+    },
+    "sabrina@valleymri.com": {
+      "name": "Sabrina Khalsa",
+      "email": "sabrina@valleymri.com",
+      "sources": [
+        "extracted_contact",
+        "web_staff"
+      ],
+      "updated_at": "2026-08-27T14:14:16.762445+00:00",
+      "communications": {
+        "inbound_count": 0,
+        "outbound_count": 0,
+        "last_inbound_at": null,
+        "last_outbound_at": null
+      }
+    },
+    "westfaxff@westfax.com": {
+      "name": "westfaxff",
+      "email": "westfaxff@westfax.com",
+      "sources": [
+        "web_staff"
+      ],
+      "updated_at": "2026-08-27T14:14:16.762445+00:00",
+      "communications": {
+        "inbound_count": 0,
+        "outbound_count": 0,
+        "last_inbound_at": null,
+        "last_outbound_at": null
+      }
+    },
+    "veronica@valleymri.com": {
+      "name": "Veronica Lara",
+      "email": "veronica@valleymri.com",
+      "sources": [
+        "extracted_contact",
+        "web_staff"
+      ],
+      "updated_at": "2026-08-27T14:14:16.762445+00:00",
+      "communications": {
+        "inbound_count": 0,
+        "outbound_count": 0,
+        "last_inbound_at": null,
+        "last_outbound_at": null
+      }
+    },
+    "antoinette@valleymri.com": {
+      "name": "Antoinette Camarena",
+      "email": "antoinette@valleymri.com",
+      "sources": [
+        "extracted_contact",
+        "web_staff"
+      ],
+      "updated_at": "2026-08-27T14:14:16.762445+00:00",
+      "communications": {
+        "inbound_count": 0,
+        "outbound_count": 0,
+        "last_inbound_at": null,
+        "last_outbound_at": null
+      }
+    },
+    "maria.perez@valleymri.com": {
+      "name": "Maria Perez (Toni)",
+      "email": "maria.perez@valleymri.com",
+      "phone": "209-467-1000",
+      "title": "Scheduler",
+      "sources": [
+        "extracted_contact",
+        "web_staff"
+      ],
+      "updated_at": "2026-08-27T14:14:16.762445+00:00",
+      "communications": {
+        "inbound_count": 0,
+        "outbound_count": 0,
+        "last_inbound_at": null,
+        "last_outbound_at": null
+      }
+    },
+    "postmaster@precisemri.com": {
+      "name": "postmaster",
+      "email": "postmaster@precisemri.com",
+      "sources": [
+        "web_staff"
+      ],
+      "updated_at": "2026-08-27T14:14:16.762445+00:00",
+      "communications": {
+        "inbound_count": 0,
+        "outbound_count": 0,
+        "last_inbound_at": null,
+        "last_outbound_at": null
+      }
+    },
+    "name:daniel s. dietrich, md": {
+      "name": "Daniel S. Dietrich, MD",
+      "email": null,
+      "phone": "209-467-1000",
+      "title": "Board-Certified Radiologist",
+      "sources": [
+        "web_leadership"
+      ],
+      "source_url": "https://valleymri.com/about-us/",
+      "updated_at": "2026-08-27T14:14:16.762445+00:00",
+      "verified_at": "2026-09-21T11:22:37.198Z",
+      "email_status": "not_found_publicly",
+      "linkedin_status": "not_verified",
+      "source_urls": [
+        "https://valleymri.com/about-us/",
+        "https://valleymri.com/contact/"
+      ]
+    },
+    "name:charles a. stillman, do": {
+      "name": "Charles A. Stillman, DO",
+      "email": null,
+      "phone": "209-467-1000",
+      "title": "CEO, Owner, and Board-Certified Radiologist",
+      "sources": [
+        "web_leadership"
+      ],
+      "linkedin": "https://www.linkedin.com/in/charles-stillman-72772432",
+      "source_url": "https://valleymri.com/about-us/",
+      "updated_at": "2026-08-27T14:14:16.762445+00:00",
+      "verified_at": "2026-09-21T11:22:37.198Z",
+      "source_urls": [
+        "https://valleymri.com/contact/",
+        "https://www.linkedin.com/in/charles-stillman-72772432"
+      ],
+      "email_verification": "info@valleymri.com is published on official contact page"
+    },
+    "sabrina.montoya@valleymri.com": {
+      "name": "Sabrina Montoya",
+      "email": "sabrina.montoya@valleymri.com",
+      "sources": [
+        "extracted_contact",
+        "web_staff"
+      ],
+      "updated_at": "2026-08-27T14:14:16.762445+00:00",
+      "communications": {
+        "inbound_count": 0,
+        "outbound_count": 0,
+        "last_inbound_at": null,
+        "last_outbound_at": null
+      }
+    }
+  }
+}

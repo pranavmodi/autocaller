@@ -1,0 +1,130 @@
+{
+  "action": {
+    "id": "action_55837f6a3772426789771103",
+    "action_type": "send_approved_lead_gen_draft",
+    "status": "approved",
+    "risk_level": "high",
+    "requested_by": "codex",
+    "approved_by": "codex",
+    "entity_type": "lead_gen_batch_item",
+    "entity_id": "5b242a143d9d44b8a96cc3d2ff6013e8",
+    "input": {
+      "body": "Hi Jamil,\n\nMy earlier note asked about recurring document work at Shaaban Biedgoly. I wrote a short article on why improving one task doesn't always improve the whole process.\n\nAI can speed up preparation while review and follow-up stay the same. The bigger opportunity is changing how those steps work together. That's shaping our work with PI firms at Possible Minds.\n\nhttps://getpossibleminds.com/t/QmZDz0g9Dg\n\nAs managing partner, would the tools or the team's established routines be harder to change? I'd appreciate even a quick take.\n\nBest,\nPranav\nFounder, Possible Minds",
+      "subject": "Re: where AI could compound at Shaaban Biedgoly Injury Lawyers",
+      "approval": {
+        "references": "<0100019ffd288874-509177f6-47b6-4cb1-b0d8-937a318643f6-000000@email.amazonses.com>",
+        "approved_at": "2026-09-15T10:41:28.641317+00:00",
+        "approved_by": "codex",
+        "body_sha256": "a804f3ca4bd7f59cedbdecba97fbf328c91ea7d576cd0b2b579e923bf5d4105a",
+        "in_reply_to": "<0100019ffd288874-509177f6-47b6-4cb1-b0d8-937a318643f6-000000@email.amazonses.com>",
+        "subject_sha256": "385a605a463d21f787c7b9118d20025d494c90bf80da1f23f63a352aaffffe32"
+      },
+      "transport": "resend",
+      "references": "<0100019ffd288874-509177f6-47b6-4cb1-b0d8-937a318643f6-000000@email.amazonses.com>",
+      "skill_path": null,
+      "body_sha256": "a804f3ca4bd7f59cedbdecba97fbf328c91ea7d576cd0b2b579e923bf5d4105a",
+      "in_reply_to": "<0100019ffd288874-509177f6-47b6-4cb1-b0d8-937a318643f6-000000@email.amazonses.com>",
+      "skill_sha256": null,
+      "batch_item_id": "5b242a143d9d44b8a96cc3d2ff6013e8",
+      "brief_version": null,
+      "subject_sha256": "385a605a463d21f787c7b9118d20025d494c90bf80da1f23f63a352aaffffe32",
+      "composer_variant_key": null,
+      "lead_gen_action_type": "follow_up",
+      "composer_experiment_key": null
+    },
+    "policy_result": {},
+    "execution_result": {},
+    "error": null,
+    "trace_id": null,
+    "scheduled_for": "2026-09-15T18:20:00+00:00",
+    "started_at": null,
+    "completed_at": null,
+    "created_at": "2026-09-15T10:41:28.645724+00:00",
+    "updated_at": "2026-09-15T10:41:28.645733+00:00"
+  },
+  "created": true,
+  "updated_existing": false,
+  "executed": false,
+  "scheduled_for_pt": "2026-09-15 11:20 PDT",
+  "scheduled_for_utc": "2026-09-15 18:20:00 UTC",
+  "final_policy": {
+    "allowed": true,
+    "reason": "allowed",
+    "checks": [
+      {
+        "name": "status_allows_execution",
+        "passed": true,
+        "detail": "approved"
+      },
+      {
+        "name": "human_approval_present",
+        "passed": true,
+        "detail": "codex"
+      },
+      {
+        "name": "subject_present",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "body_present",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "subject_hash_matches_approval",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "body_hash_matches_approval",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "in_reply_to_matches_approval",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "references_match_approval",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "lead_gen_transport_available",
+        "passed": true,
+        "detail": "zoho_api 1/0 configured=True; resend 0/50 configured=True"
+      },
+      {
+        "name": "no_patient_data_in_outreach",
+        "passed": true,
+        "detail": "llm_guard_disabled"
+      },
+      {
+        "name": "batch_item_exists",
+        "passed": true,
+        "detail": "5b242a143d9d44b8a96cc3d2ff6013e8"
+      },
+      {
+        "name": "batch_item_not_already_started",
+        "passed": true,
+        "detail": "approved"
+      },
+      {
+        "name": "contact_email_present",
+        "passed": true,
+        "detail": "jamil@sbinjurylawyers.com"
+      },
+      {
+        "name": "no_prior_successful_action_for_item",
+        "passed": true,
+        "detail": ""
+      }
+    ],
+    "risk_level": "high",
+    "requires_human_approval": true,
+    "action_type": "send_approved_lead_gen_draft",
+    "contact_email": "jamil@sbinjurylawyers.com"
+  }
+}

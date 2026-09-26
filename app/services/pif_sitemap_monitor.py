@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import ipaddress
+import logging
 import os
 import socket
 import uuid
@@ -19,6 +20,7 @@ from app.db import AsyncSessionLocal
 from app.db.models import FirmSitemapSnapshotRow, PifFirmRow
 
 
+logger = logging.getLogger(__name__)
 USER_AGENT = "PossibleOS-Sitemap-Monitor/1.0"
 MAX_SITEMAPS = max(1, int(os.getenv("PIF_SITEMAP_MAX_FILES", "30")))
 MAX_URLS = max(100, int(os.getenv("PIF_SITEMAP_MAX_URLS", "20000")))
@@ -225,7 +227,7 @@ async def monitor_firm_sitemap(pif_id: str) -> dict[str, Any]:
     snapshot_id = previous_id if previous_id and changed is False else uuid.uuid4().hex
 
     async with AsyncSessionLocal() as session:
-        firm = await session.get(PifFirmRow, pif_id)
+        firm = await session.get(PifFirmRow, pif_id, with_for_update=True)
         if firm is None:
             raise ValueError("Firm record not found")
         if changed is not False:
@@ -264,6 +266,29 @@ async def monitor_firm_sitemap(pif_id: str) -> dict[str, Any]:
         firm.research_data = research
         firm.updated_at = now
         await session.commit()
+        try:
+            from app.services.pif_change_detection import (
+                MODULE_SITEMAP,
+                mark_research_failure,
+                record_research_snapshot,
+            )
+
+            if status == "completed":
+                summary["change_detection"] = await record_research_snapshot(
+                    pif_id,
+                    MODULE_SITEMAP,
+                    {"website": website, "urls": urls},
+                    captured_at=now,
+                )
+            else:
+                await mark_research_failure(
+                    pif_id,
+                    MODULE_SITEMAP,
+                    error or "Sitemap research did not complete",
+                    attempted_at=now,
+                )
+        except Exception:
+            logger.exception("Sitemap change detection failed for %s", pif_id)
         return summary
 
 

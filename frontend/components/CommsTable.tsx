@@ -81,6 +81,12 @@ export function CommsTable({
                             {it.message_type}
                           </div>
                         )}
+                        {it.source_type && (
+                          <div>
+                            <span className="text-neutral-400">source</span>{" "}
+                            {it.source_type.replaceAll("_", " ")}
+                          </div>
+                        )}
                         {it.duration_seconds != null && (
                           <div>
                             <span className="text-neutral-400">duration</span>{" "}
@@ -142,14 +148,16 @@ function StatusPill({
 }) {
   const s = (status ?? "").toLowerCase();
   let bg = "bg-neutral-100", fg = "text-neutral-700";
-  if (s === "sent" || s === "completed" || s === "demo_scheduled") {
+  if (s === "sent" || s === "sent_verified" || s === "completed" || s === "demo_scheduled") {
     bg = "bg-emerald-50"; fg = "text-emerald-700";
+  } else if (s === "accepted" || s === "unverified") {
+    bg = "bg-amber-50"; fg = "text-amber-700";
   } else if (s === "failed" || s === "no_answer" || s === "disconnected") {
     bg = "bg-red-50"; fg = "text-red-700";
   } else if (s === "in_progress" || s === "live") {
     bg = "bg-blue-50"; fg = "text-blue-700";
   }
-  const label = status || (channel === "voicemail" ? "vm left" : "—");
+  const label = (status || (channel === "voicemail" ? "vm left" : "—")).replaceAll("_", " ");
   return (
     <span
       className={cn(

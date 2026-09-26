@@ -43,6 +43,9 @@ class CampaignLinkCreateRequest(BaseModel):
     channel: Literal["email", "linkedin", "public"]
     destination_url: str = Field(default="", max_length=2048)
     contact_id: str = Field(default="", max_length=64)
+    recipient_name: str = Field(default="", max_length=255)
+    recipient_email: str = Field(default="", max_length=320)
+    recipient_firm_id: str = Field(default="", max_length=64)
     label: str = Field(default="", max_length=255)
     advisor_briefing: str = Field(default="", max_length=4000)
     mark_sent: bool = False
@@ -127,6 +130,9 @@ async def create_campaign_link_endpoint(campaign_id: str, req: CampaignLinkCreat
             channel=req.channel,
             destination_url=req.destination_url,
             contact_id=req.contact_id,
+            recipient_name=req.recipient_name,
+            recipient_email=req.recipient_email,
+            recipient_firm_id=req.recipient_firm_id,
             label=req.label,
             advisor_briefing=req.advisor_briefing,
             mark_sent=req.mark_sent,

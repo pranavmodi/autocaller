@@ -1,0 +1,130 @@
+{
+  "action": {
+    "id": "action_d05d7f1d0b304a77b2c0eab9",
+    "action_type": "send_approved_lead_gen_draft",
+    "status": "approved",
+    "risk_level": "high",
+    "requested_by": "codex",
+    "approved_by": "codex",
+    "entity_type": "lead_gen_batch_item",
+    "entity_id": "5d87bf40b3fd409382e67a4a611da84a",
+    "input": {
+      "body": "Hi Dionne,\n\nMy earlier note was about information governance. With your work spanning personal injury and criminal defense, I wondered whether a narrower starting point would be more useful than another broad AI discussion.\n\nI'm Pranav, founder of Possible Minds. We help PI firms adopt AI, and I'm trying to understand where it would genuinely help before building around assumptions.\n\nFor the injury side of your practice, would a review-ready case summary or a list of outstanding next steps save your team more time? Even a brief answer would help, and I'd appreciate your time.\n\nBest,\nPranav\nFounder, Possible Minds",
+      "subject": "Re: Precise imaging - quick question",
+      "approval": {
+        "references": "<010001a022da0d66-e030a615-7304-49cc-8d1b-88837608dbfe-000000@email.amazonses.com>",
+        "approved_at": "2026-09-17T09:51:08.552268+00:00",
+        "approved_by": "codex",
+        "body_sha256": "5620c12de934b4ac01cd38df7f7305f2901ce64492ae0241d79cfb2445376bcd",
+        "in_reply_to": "<010001a022da0d66-e030a615-7304-49cc-8d1b-88837608dbfe-000000@email.amazonses.com>",
+        "subject_sha256": "33c4a9f4cdf693fef572bdb035992fdd54bba1ba6646132ab20f775703e2b3a1"
+      },
+      "transport": "resend",
+      "references": "<010001a022da0d66-e030a615-7304-49cc-8d1b-88837608dbfe-000000@email.amazonses.com>",
+      "skill_path": null,
+      "body_sha256": "5620c12de934b4ac01cd38df7f7305f2901ce64492ae0241d79cfb2445376bcd",
+      "in_reply_to": "<010001a022da0d66-e030a615-7304-49cc-8d1b-88837608dbfe-000000@email.amazonses.com>",
+      "skill_sha256": null,
+      "batch_item_id": "5d87bf40b3fd409382e67a4a611da84a",
+      "brief_version": null,
+      "subject_sha256": "33c4a9f4cdf693fef572bdb035992fdd54bba1ba6646132ab20f775703e2b3a1",
+      "composer_variant_key": null,
+      "lead_gen_action_type": "follow_up",
+      "composer_experiment_key": null
+    },
+    "policy_result": {},
+    "execution_result": {},
+    "error": null,
+    "trace_id": null,
+    "scheduled_for": "2026-09-17T16:40:00+00:00",
+    "started_at": null,
+    "completed_at": null,
+    "created_at": "2026-09-17T09:51:08.561198+00:00",
+    "updated_at": "2026-09-17T09:51:08.561205+00:00"
+  },
+  "created": true,
+  "updated_existing": false,
+  "executed": false,
+  "scheduled_for_pt": "2026-09-17 09:40 PDT",
+  "scheduled_for_utc": "2026-09-17 16:40:00 UTC",
+  "policy": {
+    "allowed": true,
+    "reason": "allowed",
+    "checks": [
+      {
+        "name": "status_allows_execution",
+        "passed": true,
+        "detail": "approved"
+      },
+      {
+        "name": "human_approval_present",
+        "passed": true,
+        "detail": "codex"
+      },
+      {
+        "name": "subject_present",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "body_present",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "subject_hash_matches_approval",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "body_hash_matches_approval",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "in_reply_to_matches_approval",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "references_match_approval",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "lead_gen_transport_available",
+        "passed": true,
+        "detail": "zoho_api 0/0 configured=True; resend 0/50 configured=True"
+      },
+      {
+        "name": "no_patient_data_in_outreach",
+        "passed": true,
+        "detail": "llm_guard_disabled"
+      },
+      {
+        "name": "batch_item_exists",
+        "passed": true,
+        "detail": "5d87bf40b3fd409382e67a4a611da84a"
+      },
+      {
+        "name": "batch_item_not_already_started",
+        "passed": true,
+        "detail": "approved"
+      },
+      {
+        "name": "contact_email_present",
+        "passed": true,
+        "detail": "dchoyce@choycelawfirm.com"
+      },
+      {
+        "name": "no_prior_successful_action_for_item",
+        "passed": true,
+        "detail": ""
+      }
+    ],
+    "risk_level": "high",
+    "requires_human_approval": true,
+    "action_type": "send_approved_lead_gen_draft",
+    "contact_email": "dchoyce@choycelawfirm.com"
+  }
+}

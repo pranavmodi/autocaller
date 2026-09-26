@@ -1,0 +1,50 @@
+{
+  "leadership": [
+    {
+      "name": "Jackie Esquivel",
+      "email": "jackie@11med.com",
+      "phone": "+18183961683",
+      "title": "Director of Funding",
+      "is_decision_maker": false,
+      "confidence": 0.55,
+      "research_checked_at": "2026-09-21T11:48:00Z",
+      "source_urls": [
+        "https://11med.com/",
+        "https://11med.com/legal-disclaimer/"
+      ],
+      "role_verification": "Existing Possible OS roster only; no public leadership page or independent public profile verified",
+      "business_email_status": "Existing Possible OS roster email; company-domain address",
+      "linkedin_status": "No company-matched public LinkedIn profile verified"
+    },
+    {
+      "name": "Christina Cortez",
+      "email": "christina@11med.com",
+      "phone": "+18182876838",
+      "title": "Manager of MRI Scheduling",
+      "is_decision_maker": false,
+      "confidence": 0.55,
+      "research_checked_at": "2026-09-21T11:48:00Z",
+      "source_urls": [
+        "https://11med.com/"
+      ],
+      "role_verification": "Existing Possible OS roster only; operational title is not independently published on the public site",
+      "business_email_status": "Existing Possible OS roster email; company-domain address",
+      "linkedin_status": "No company-matched public LinkedIn profile verified"
+    },
+    {
+      "name": "Tina Adame",
+      "email": "tina@11med.com",
+      "phone": "+18188262643",
+      "title": "Lead, Medical Records",
+      "is_decision_maker": false,
+      "confidence": 0.5,
+      "research_checked_at": "2026-09-21T11:48:00Z",
+      "source_urls": [
+        "https://11med.com/"
+      ],
+      "role_verification": "Existing Possible OS roster only; operational title is not independently published on the public site",
+      "business_email_status": "Existing Possible OS roster email; company-domain address",
+      "linkedin_status": "No company-matched public LinkedIn profile verified"
+    }
+  ]
+}

@@ -1,0 +1,615 @@
+{
+  "leadership": [
+    {
+      "bio": null,
+      "name": "Gloria Ruiz",
+      "email": "scheduling@onsyteimaging.com",
+      "phone": "888-466-7983",
+      "title": "Administrator",
+      "persona": "intake",
+      "linkedin": null,
+      "freshness": {
+        "source": "sender",
+        "last_seen_at": "2026-08-15T23:56:13.299102"
+      },
+      "person_id": "532e9107-ded6-59d2-b7ab-44a5b364d468",
+      "confidence": 0.7,
+      "publications": [],
+      "cases_handled": [],
+      "bar_admissions": [],
+      "is_decision_maker": true
+    },
+    {
+      "bio": "Medical Director of Onsyte Imaging Inc., overseeing clinical imaging operations.",
+      "name": "Francis Riegler, M.D.",
+      "email": null,
+      "phone": "(888) 466‑7983",
+      "title": "Medical Director",
+      "persona": null,
+      "linkedin": null,
+      "freshness": {
+        "source": "research",
+        "last_seen_at": null
+      },
+      "person_id": "68a0390d-71e8-5209-b9f7-0abcb70e8bf4",
+      "confidence": 0.85,
+      "experience": [
+        "Medical Director at Onsyte Imaging Inc."
+      ],
+      "source_url": "https://onsyteimaginginc.com/contact-us",
+      "publications": [],
+      "cases_handled": [],
+      "bar_admissions": [],
+      "is_decision_maker": true,
+      "additional_source_url": "https://www.bizprofile.net/ca/west-covina/onsyte-imaging-inc",
+      "additional_role": "CEO/CFO/Secretary/Director per secondary corporate filing mirror; founder not independently confirmed",
+      "research_checked_at": "2026-09-21T11:12:52.054Z",
+      "linkedin_status": "not_verified",
+      "founder_status": "not_verified"
+    },
+    {
+      "bio": null,
+      "name": "gruiz",
+      "email": "gruiz@onsyteimaging.com",
+      "phone": "888-466-7983",
+      "title": "Administrator",
+      "persona": "coo_ops",
+      "linkedin": null,
+      "freshness": {
+        "source": "sender",
+        "last_seen_at": "2026-08-17T12:44:09.288027"
+      },
+      "person_id": "8685bf6d-59bb-5a50-8f46-9975d6dfc6f3",
+      "confidence": 0.65,
+      "publications": [],
+      "cases_handled": [],
+      "bar_admissions": [],
+      "is_decision_maker": true
+    },
+    {
+      "bio": "Listed as the NPI authorized official and manager, and identified in California business records as registered agent for Onsyte Imaging entities.",
+      "name": "Lance Jackson",
+      "email": "ljackson@onsyteimaging.com",
+      "phone": "1-888-466-7983",
+      "title": "Manager; Authorized Official; Registered Agent",
+      "linkedin": null,
+      "confidence": 0.8,
+      "experience": [
+        "Manager and authorized official of Onsyte Imaging Inc.",
+        "Registered agent for Onsyte Imaging Inc. and Onsyte Imaging LLC."
+      ],
+      "source_url": "https://npino.com/medical-supplies/1831850361-onsyte-imaging-inc/",
+      "email_source": "Possible OS firm_contacts fc_9a694eaff3834dd1b6d33fc0 (Front)",
+      "research_checked_at": "2026-09-21T11:12:52.054Z",
+      "linkedin_status": "not_verified",
+      "founder_status": "not_verified"
+    }
+  ],
+  "staff": [
+    {
+      "bio": null,
+      "name": "Mirna",
+      "email": "",
+      "phone": "",
+      "title": "",
+      "persona": null,
+      "linkedin": null,
+      "freshness": {
+        "source": "extraction",
+        "last_seen_at": null
+      },
+      "person_id": "f6446687-30bc-5b6c-8989-19b1c22163ea",
+      "confidence": 0.7,
+      "publications": [],
+      "cases_handled": [],
+      "bar_admissions": [],
+      "is_decision_maker": false
+    },
+    {
+      "bio": null,
+      "name": "Audrey",
+      "email": "",
+      "phone": "1-888-466-7983",
+      "title": "Scheduling Coordinator",
+      "persona": null,
+      "linkedin": null,
+      "freshness": {
+        "source": "extraction",
+        "last_seen_at": null
+      },
+      "person_id": "19894070-47f9-59ea-b457-fcacca3d4dc4",
+      "confidence": 0.7,
+      "publications": [],
+      "cases_handled": [],
+      "bar_admissions": [],
+      "is_decision_maker": false
+    },
+    {
+      "bio": null,
+      "name": "Aaron",
+      "email": "",
+      "phone": "1-888-466-7983",
+      "title": "Scheduling Coordinator",
+      "persona": null,
+      "linkedin": null,
+      "freshness": {
+        "source": "extraction",
+        "last_seen_at": null
+      },
+      "person_id": "8be0ba60-20b5-5e20-8481-73c3edbfc88c",
+      "confidence": 0.7,
+      "publications": [],
+      "cases_handled": [],
+      "bar_admissions": [],
+      "is_decision_maker": false
+    },
+    {
+      "bio": null,
+      "name": "Aida",
+      "email": "",
+      "phone": "1-888-466-7983",
+      "title": "Scheduling Coordinator",
+      "persona": null,
+      "linkedin": null,
+      "freshness": {
+        "source": "extraction",
+        "last_seen_at": null
+      },
+      "person_id": "536cb992-fc7d-5ed3-b37d-8492937546a1",
+      "confidence": 0.7,
+      "publications": [],
+      "cases_handled": [],
+      "bar_admissions": [],
+      "is_decision_maker": false
+    },
+    {
+      "bio": null,
+      "name": "Liz",
+      "email": "",
+      "phone": "1-888-466-7983",
+      "title": "Records Clerk",
+      "persona": null,
+      "linkedin": null,
+      "freshness": {
+        "source": "extraction",
+        "last_seen_at": null
+      },
+      "person_id": "dd5f3ea6-6da7-5c38-89c1-80e997863fa4",
+      "confidence": 0.7,
+      "publications": [],
+      "cases_handled": [],
+      "bar_admissions": [],
+      "is_decision_maker": false
+    },
+    {
+      "bio": null,
+      "name": "Angie",
+      "email": "",
+      "phone": "1-888-466-7983",
+      "title": "Scheduling Coordinator",
+      "persona": null,
+      "linkedin": null,
+      "freshness": {
+        "source": "extraction",
+        "last_seen_at": null
+      },
+      "person_id": "1e747b34-5b12-55c1-a330-35e0f1d1b43a",
+      "confidence": 0.7,
+      "publications": [],
+      "cases_handled": [],
+      "bar_admissions": [],
+      "is_decision_maker": false
+    },
+    {
+      "bio": null,
+      "name": "Ximena",
+      "email": "",
+      "phone": "1-888-466-7983",
+      "title": "Scheduling Coordinator",
+      "persona": null,
+      "linkedin": null,
+      "freshness": {
+        "source": "extraction",
+        "last_seen_at": null
+      },
+      "person_id": "705e09d5-a51b-5817-9c06-aaeaa31e681c",
+      "confidence": 0.7,
+      "publications": [],
+      "cases_handled": [],
+      "bar_admissions": [],
+      "is_decision_maker": false
+    },
+    {
+      "bio": null,
+      "name": "Ali",
+      "email": "",
+      "phone": "1-888-466-7983",
+      "title": "Scheduling Coordinator",
+      "persona": null,
+      "linkedin": null,
+      "freshness": {
+        "source": "extraction",
+        "last_seen_at": null
+      },
+      "person_id": "d633b421-9687-5eab-a040-a35092f51ae7",
+      "confidence": 0.7,
+      "publications": [],
+      "cases_handled": [],
+      "bar_admissions": [],
+      "is_decision_maker": false
+    },
+    {
+      "bio": null,
+      "name": "Jenny D. Samples",
+      "email": "jsamples@onsyteimaging.com",
+      "phone": "(626) 415-9064",
+      "title": "Human Resources & Operations Manager",
+      "persona": null,
+      "linkedin": null,
+      "freshness": {
+        "source": "extraction",
+        "last_seen_at": null
+      },
+      "person_id": "35d888a1-9de9-5713-bbd5-5e4ec0ef21a9",
+      "confidence": 0.7,
+      "publications": [],
+      "cases_handled": [],
+      "bar_admissions": [],
+      "is_decision_maker": false,
+      "email_source": "Possible OS firm_contacts fc_db324ad5d10a4fe9855bbde8 (Front, Jenny Samples)",
+      "source_url": "https://www.imbpo.com/quote",
+      "research_checked_at": "2026-09-21T11:12:52.054Z",
+      "linkedin_status": "not_verified",
+      "founder_status": "not_verified"
+    },
+    {
+      "bio": "Lance Jackson serves as the Manager and Authorized Official for Onsyte Imaging Inc.",
+      "name": "Lance Jackson",
+      "email": "ljackson@onsyteimaging.com",
+      "phone": "(888) 466-7983",
+      "title": "Manager; Authorized Official; Registered Agent",
+      "persona": "office_manager",
+      "linkedin": null,
+      "freshness": {
+        "source": "research_staff",
+        "last_seen_at": null
+      },
+      "person_id": "56acd9f8-2d6d-5d8e-8fb2-d088a41e4b8f",
+      "confidence": 0.75,
+      "publications": [],
+      "cases_handled": [],
+      "bar_admissions": [],
+      "is_decision_maker": false,
+      "email_source": "Possible OS firm_contacts fc_9a694eaff3834dd1b6d33fc0 (Front)",
+      "source_url": "https://npino.com/medical-supplies/1831850361-onsyte-imaging-inc/",
+      "research_checked_at": "2026-09-21T11:12:52.054Z",
+      "linkedin_status": "not_verified",
+      "founder_status": "not_verified"
+    },
+    {
+      "bio": null,
+      "name": "postmaster",
+      "email": "postmaster@precisemri.com",
+      "phone": "",
+      "title": "",
+      "persona": "records",
+      "linkedin": null,
+      "freshness": {
+        "source": "sender",
+        "last_seen_at": "2026-05-21T18:56:06.792587"
+      },
+      "person_id": "cdfea110-5dad-5023-b529-7b4492843bcf",
+      "confidence": 0.65,
+      "publications": [],
+      "cases_handled": [],
+      "bar_admissions": [],
+      "is_decision_maker": false
+    },
+    {
+      "bio": null,
+      "name": "records",
+      "email": "records@onsyteimaging.com",
+      "phone": "1-888-466-7983",
+      "title": "Records Clerk",
+      "persona": "records",
+      "linkedin": null,
+      "freshness": {
+        "source": "sender",
+        "last_seen_at": "2026-08-05T18:53:25.107096"
+      },
+      "person_id": "764b5d59-c97f-503b-b763-15530d158715",
+      "confidence": 0.65,
+      "publications": [],
+      "cases_handled": [],
+      "bar_admissions": [],
+      "is_decision_maker": false
+    },
+    {
+      "bio": "ARRT-certified Magnetic Resonance Imaging technologist with Onsyte Imaging experience.",
+      "name": "Christian Hansen",
+      "email": null,
+      "phone": null,
+      "title": "MRI Technologist",
+      "skills": [
+        "Magnetic resonance imaging"
+      ],
+      "linkedin": null,
+      "education": [
+        "Career Networks Institute, 2020-2022"
+      ],
+      "confidence": 0.8,
+      "source_url": "https://www.linkedin.com/in/christian-hansen-b4348359",
+      "certifications": [
+        "ARRT certification"
+      ]
+    },
+    {
+      "bio": "MRI technologist associated with Onsyte Imaging.",
+      "name": "Desmond Perry",
+      "email": null,
+      "phone": null,
+      "title": "MRI Technologist",
+      "skills": [
+        "Magnetic resonance imaging"
+      ],
+      "linkedin": null,
+      "education": [
+        "National Polytechnic College, 2014-2015"
+      ],
+      "confidence": 0.8,
+      "source_url": "https://www.linkedin.com/in/desmond-perry-4b22864b"
+    }
+  ],
+  "emails": [
+    "liens@onsyteimaging.com",
+    "jsamples@onsyteimaging.com",
+    "subpoenas@onsyteimaging.com",
+    "gruiz@onsyteimaging.com",
+    "scheduling@onsyteimaging.com",
+    "jestrada@onsyteimaging.com",
+    "records@onsyteimaging.com",
+    "toliens@onsyteimaging.com",
+    "gsamples@onsyteimaging.com",
+    "postmaster@precisemri.com",
+    "ljackson@onsyteimaging.com"
+  ],
+  "phones": [
+    "1-888-466-7983",
+    "888-466-7983",
+    "562-458-2020",
+    "323-717-5524",
+    "(626) 415-9064",
+    "(626) 260-9775",
+    "(888) 466‑7983",
+    "(888) 466-7983"
+  ],
+  "contact_profiles": {
+    "name:ali": {
+      "name": "Ali",
+      "email": null,
+      "phone": "1-888-466-7983",
+      "title": "Scheduling Coordinator",
+      "sources": [
+        "extracted_contact",
+        "web_staff"
+      ],
+      "updated_at": "2026-08-26T15:19:02.125529+00:00"
+    },
+    "name:liz": {
+      "name": "Liz",
+      "email": null,
+      "phone": "1-888-466-7983",
+      "title": "Records Clerk",
+      "sources": [
+        "extracted_contact",
+        "web_staff"
+      ],
+      "updated_at": "2026-08-26T15:19:02.125529+00:00"
+    },
+    "name:aida": {
+      "name": "Aida",
+      "email": null,
+      "phone": "1-888-466-7983",
+      "title": "Scheduling Coordinator",
+      "sources": [
+        "extracted_contact",
+        "web_staff"
+      ],
+      "updated_at": "2026-08-26T15:19:02.125529+00:00"
+    },
+    "name:aaron": {
+      "name": "Aaron",
+      "email": null,
+      "phone": "1-888-466-7983",
+      "title": "Scheduling Coordinator",
+      "sources": [
+        "extracted_contact",
+        "web_staff"
+      ],
+      "updated_at": "2026-08-26T15:19:02.125529+00:00"
+    },
+    "name:angie": {
+      "name": "Angie",
+      "email": null,
+      "phone": "1-888-466-7983",
+      "title": "Scheduling Coordinator",
+      "sources": [
+        "extracted_contact",
+        "web_staff"
+      ],
+      "updated_at": "2026-08-26T15:19:02.125529+00:00"
+    },
+    "name:mirna": {
+      "name": "Mirna",
+      "email": null,
+      "sources": [
+        "extracted_contact",
+        "web_staff"
+      ],
+      "updated_at": "2026-08-26T15:19:02.125529+00:00"
+    },
+    "name:audrey": {
+      "name": "Audrey",
+      "email": null,
+      "phone": "1-888-466-7983",
+      "title": "Scheduling Coordinator",
+      "sources": [
+        "extracted_contact",
+        "web_staff"
+      ],
+      "updated_at": "2026-08-26T15:19:02.125529+00:00"
+    },
+    "name:ximena": {
+      "name": "Ximena",
+      "email": null,
+      "phone": "1-888-466-7983",
+      "title": "Scheduling Coordinator",
+      "sources": [
+        "extracted_contact",
+        "web_staff"
+      ],
+      "updated_at": "2026-08-26T15:19:02.125529+00:00"
+    },
+    "name:desmond perry": {
+      "name": "Desmond Perry",
+      "email": null,
+      "title": "MRI Technologist",
+      "sources": [
+        "web_staff"
+      ],
+      "source_url": "https://www.linkedin.com/in/desmond-perry-4b22864b",
+      "updated_at": "2026-08-26T15:19:02.125529+00:00"
+    },
+    "name:lance jackson": {
+      "name": "Lance Jackson",
+      "email": "ljackson@onsyteimaging.com",
+      "phone": "1-888-466-7983",
+      "title": "Manager; Authorized Official; Registered Agent",
+      "sources": [
+        "web_leadership",
+        "web_staff"
+      ],
+      "source_url": "https://npino.com/medical-supplies/1831850361-onsyte-imaging-inc/",
+      "updated_at": "2026-08-26T15:19:02.125529+00:00",
+      "email_source": "Possible OS firm_contacts fc_9a694eaff3834dd1b6d33fc0 (Front)",
+      "research_checked_at": "2026-09-21T11:12:52.054Z",
+      "linkedin_status": "not_verified",
+      "founder_status": "not_verified"
+    },
+    "name:christian hansen": {
+      "name": "Christian Hansen",
+      "email": null,
+      "title": "MRI Technologist",
+      "sources": [
+        "web_staff"
+      ],
+      "source_url": "https://www.linkedin.com/in/christian-hansen-b4348359",
+      "updated_at": "2026-08-26T15:19:02.125529+00:00"
+    },
+    "name:jenny d. samples": {
+      "name": "Jenny D. Samples",
+      "email": "jsamples@onsyteimaging.com",
+      "phone": "(626) 415-9064",
+      "title": "Human Resources & Operations Manager",
+      "sources": [
+        "extracted_contact",
+        "web_staff"
+      ],
+      "extension": "164",
+      "updated_at": "2026-08-26T15:19:02.125529+00:00",
+      "email_source": "Possible OS firm_contacts fc_db324ad5d10a4fe9855bbde8 (Front, Jenny Samples)",
+      "source_url": "https://www.imbpo.com/quote",
+      "research_checked_at": "2026-09-21T11:12:52.054Z",
+      "linkedin_status": "not_verified",
+      "founder_status": "not_verified"
+    },
+    "gruiz@onsyteimaging.com": {
+      "name": "gruiz",
+      "email": "gruiz@onsyteimaging.com",
+      "phone": "888-466-7983",
+      "title": "Administrator",
+      "sources": [
+        "web_leadership"
+      ],
+      "updated_at": "2026-08-26T15:19:02.125529+00:00",
+      "communications": {
+        "inbound_count": 0,
+        "outbound_count": 0,
+        "last_inbound_at": null,
+        "last_outbound_at": null
+      }
+    },
+    "postmaster@precisemri.com": {
+      "name": "postmaster",
+      "email": "postmaster@precisemri.com",
+      "sources": [
+        "web_staff"
+      ],
+      "updated_at": "2026-08-26T15:19:02.125529+00:00",
+      "communications": {
+        "inbound_count": 0,
+        "outbound_count": 0,
+        "last_inbound_at": null,
+        "last_outbound_at": null
+      }
+    },
+    "records@onsyteimaging.com": {
+      "name": "records",
+      "email": "records@onsyteimaging.com",
+      "phone": "1-888-466-7983",
+      "title": "Records Clerk",
+      "sources": [
+        "web_staff"
+      ],
+      "updated_at": "2026-08-26T15:19:02.125529+00:00",
+      "communications": {
+        "inbound_count": 0,
+        "outbound_count": 0,
+        "last_inbound_at": null,
+        "last_outbound_at": null
+      }
+    },
+    "name:francis riegler, m.d.": {
+      "name": "Francis Riegler, M.D.",
+      "email": null,
+      "phone": "(888) 466‑7983",
+      "title": "Medical Director",
+      "sources": [
+        "web_leadership"
+      ],
+      "source_url": "https://onsyteimaginginc.com/contact-us",
+      "updated_at": "2026-08-26T15:19:02.125529+00:00",
+      "additional_source_url": "https://www.bizprofile.net/ca/west-covina/onsyte-imaging-inc",
+      "additional_role": "CEO/CFO/Secretary/Director per secondary corporate filing mirror; founder not independently confirmed",
+      "research_checked_at": "2026-09-21T11:12:52.054Z",
+      "linkedin_status": "not_verified",
+      "founder_status": "not_verified"
+    },
+    "scheduling@onsyteimaging.com": {
+      "name": "Gloria Ruiz",
+      "email": "scheduling@onsyteimaging.com",
+      "phone": "888-466-7983",
+      "title": "Administrator",
+      "sources": [
+        "extracted_contact",
+        "web_leadership"
+      ],
+      "updated_at": "2026-08-26T15:19:02.125529+00:00",
+      "communications": {
+        "inbound_count": 0,
+        "outbound_count": 0,
+        "last_inbound_at": null,
+        "last_outbound_at": null
+      }
+    }
+  },
+  "provenance": {
+    "leadership_contact_research": {
+      "checked_at": "2026-09-21T11:12:52.054Z",
+      "actor": "codex",
+      "scope": "User-requested leader email and LinkedIn enrichment",
+      "email_evidence": "Existing named Front-sourced Possible OS roster; not independently deliverability-tested",
+      "linkedin_result": "No confidently verified personal LinkedIn URL found; no guessed URL saved"
+    }
+  }
+}

@@ -2,7 +2,7 @@
 from datetime import date, datetime, timezone
 from sqlalchemy import (
     String, Integer, BigInteger, Boolean, Text, Float, Date, Index, CheckConstraint,
-    ForeignKey, UniqueConstraint,
+    ForeignKey, UniqueConstraint, text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, TIMESTAMP
 from sqlalchemy.orm import Mapped, mapped_column
@@ -1007,6 +1007,65 @@ class FirmReviewResearchTaskRow(Base):
     )
 
 
+class ReviewAlertSubscriptionRow(Base):
+    __tablename__ = "review_alert_subscriptions"
+
+    pif_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    domain: Mapped[str] = mapped_column(String(512), unique=True)
+    firm_name: Mapped[str] = mapped_column(String(512))
+    contact_id: Mapped[str] = mapped_column(String(64))
+    recipient_email: Mapped[str] = mapped_column(String(320), unique=True)
+    recipient_name: Mapped[str] = mapped_column(String(255))
+    title: Mapped[str] = mapped_column(String(255))
+    status: Mapped[str] = mapped_column(String(32), default="active")
+    reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    last_queued_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow)
+
+
+class ReviewAlertDeliveryRow(Base):
+    __tablename__ = "review_alert_deliveries"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    pif_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    day: Mapped[str] = mapped_column(String(10))
+    recipient_email: Mapped[str] = mapped_column(String(320))
+    recipient_name: Mapped[str] = mapped_column(String(255))
+    subject: Mapped[str] = mapped_column(Text)
+    body: Mapped[str] = mapped_column(Text)
+    reviews: Mapped[list] = mapped_column(JSONB, default=list)
+    status: Mapped[str] = mapped_column(String(32), default="queued", index=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    message_id: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    lead_gen_action_id: Mapped[str | None] = mapped_column(String(64), nullable=True, unique=True)
+    lead_gen_item_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    scheduled_for: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow)
+    started_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    sent_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+
+    __table_args__ = (UniqueConstraint("pif_id", "day", name="uq_review_alert_firm_day"),)
+
+
+class ReviewAlertItemRow(Base):
+    __tablename__ = "review_alert_items"
+
+    pif_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    review_key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    delivery_id: Mapped[str] = mapped_column(String(64), ForeignKey("review_alert_deliveries.id"))
+
+
+class ReviewAlertReplyRow(Base):
+    __tablename__ = "review_alert_replies"
+
+    inbound_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    pif_id: Mapped[str] = mapped_column(String(64), index=True)
+    outcome: Mapped[str] = mapped_column(String(64), default="needs_human_review")
+    decision: Mapped[dict] = mapped_column(JSONB, default=dict)
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow)
+
+
 class EmailLogRow(Base):
     """Outbound-email send log. One row per `_send_email` call that
     reached the provider (success or failure). Calls live in
@@ -1028,6 +1087,9 @@ class EmailLogRow(Base):
     status: Mapped[str] = mapped_column(String(16), default="sent")
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     brief_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    firm_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    source_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    source_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     sent_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), default=_utcnow,
     )
@@ -1036,6 +1098,8 @@ class EmailLogRow(Base):
         Index("ix_email_logs_pif_id", "pif_id"),
         Index("ix_email_logs_call_id", "call_id"),
         Index("ix_email_logs_sent_at", "sent_at"),
+        Index("ux_email_logs_source", "source_type", "source_id", unique=True,
+              postgresql_where=text("source_type IS NOT NULL AND source_id IS NOT NULL")),
     )
 
 
@@ -1472,7 +1536,7 @@ class OutreachCampaignRow(Base):
     sender_email: Mapped[str] = mapped_column(String(320), nullable=False)
     sender_title: Mapped[str | None] = mapped_column(String(128), nullable=True)
     bcc_email: Mapped[str | None] = mapped_column(String(320), nullable=True)
-    composer_model: Mapped[str] = mapped_column(String(64), nullable=False, default="openclaw/proxy")
+    composer_model: Mapped[str] = mapped_column(String(64), nullable=False, default="openclaw/neo")
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_by: Mapped[str | None] = mapped_column(String(128), nullable=True)
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow)
@@ -2035,6 +2099,143 @@ class FirmSitemapSnapshotRow(Base):
             name="ck_firm_sitemap_snapshots_status",
         ),
         Index("ix_firm_sitemap_snapshots_pif_fetched", "pif_id", "fetched_at"),
+    )
+
+
+class FirmResearchStateRow(Base):
+    """Freshness and retry state for one firm research module."""
+    __tablename__ = "firm_research_states"
+
+    id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    pif_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    module: Mapped[str] = mapped_column(String(32), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="completed")
+    last_attempt_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    last_success_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    next_due_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    failure_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    snapshot_fingerprint: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    metadata_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), default=_utcnow, onupdate=_utcnow,
+    )
+
+    __table_args__ = (
+        UniqueConstraint("pif_id", "module", name="uq_firm_research_states_pif_module"),
+        Index("ix_firm_research_states_module_due", "module", "next_due_at"),
+        Index("ix_firm_research_states_pif_id", "pif_id"),
+    )
+
+
+class FirmResearchSnapshotRow(Base):
+    """Versioned normalized output used for deterministic firm change detection."""
+    __tablename__ = "firm_research_snapshots"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    pif_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    module: Mapped[str] = mapped_column(String(32), nullable=False)
+    fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    payload_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    captured_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow)
+
+    __table_args__ = (
+        Index("ix_firm_research_snapshots_pif_module_time", "pif_id", "module", "captured_at"),
+    )
+
+
+class FirmVendorRelationshipRow(Base):
+    """Current vendor state derived from successive source-backed snapshots."""
+    __tablename__ = "firm_vendor_relationships"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    pif_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    vendor: Mapped[str] = mapped_column(String(128), nullable=False)
+    product: Mapped[str] = mapped_column(String(128), nullable=False, default="")
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="active")
+    first_seen_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow)
+    last_seen_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow)
+    removed_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    absent_scans: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    confidence: Mapped[float] = mapped_column(Float, nullable=False, default=0.5)
+    evidence_json: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), default=_utcnow, onupdate=_utcnow,
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('active', 'suspected_removed', 'removed')",
+            name="ck_firm_vendor_relationships_status",
+        ),
+        UniqueConstraint(
+            "pif_id", "vendor", "product",
+            name="uq_firm_vendor_relationships_pif_vendor_product",
+        ),
+        Index("ix_firm_vendor_relationships_vendor_status", "vendor", "status"),
+        Index("ix_firm_vendor_relationships_pif_id", "pif_id"),
+    )
+
+
+class FirmTriggerEventRow(Base):
+    """A dated, source-backed GTM-relevant change detected for a firm."""
+    __tablename__ = "firm_trigger_events"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    pif_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    event_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    category: Mapped[str] = mapped_column(String(32), nullable=False)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    old_value: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    new_value: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    evidence_json: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    decision_metadata: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    source_date: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    detected_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow)
+    expires_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    confidence: Mapped[float] = mapped_column(Float, nullable=False, default=0.5)
+    severity: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    score: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    dedupe_key: Mapped[str] = mapped_column(String(64), nullable=False)
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("dedupe_key", name="uq_firm_trigger_events_dedupe_key"),
+        Index("ix_firm_trigger_events_pif_detected", "pif_id", "detected_at"),
+        Index("ix_firm_trigger_events_active_detected", "active", "detected_at"),
+        Index("ix_firm_trigger_events_category_type", "category", "event_type"),
+        Index("ix_firm_trigger_events_score", "score"),
+    )
+
+
+class FirmEvidenceRow(Base):
+    """Normalized provenance for trigger events and current firm claims."""
+    __tablename__ = "firm_evidence"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    pif_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    event_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    claim_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    claim_key: Mapped[str] = mapped_column(String(255), nullable=False)
+    source_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    source_url: Mapped[str] = mapped_column(String(2000), nullable=False)
+    source_published_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    first_seen_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow)
+    last_seen_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow)
+    content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    excerpt: Mapped[str | None] = mapped_column(Text, nullable=True)
+    confidence: Mapped[float] = mapped_column(Float, nullable=False, default=0.5)
+    raw_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+
+    __table_args__ = (
+        UniqueConstraint(
+            "pif_id", "claim_type", "claim_key", "content_hash",
+            name="uq_firm_evidence_claim_content",
+        ),
+        Index("ix_firm_evidence_pif_claim", "pif_id", "claim_type"),
+        Index("ix_firm_evidence_event_id", "event_id"),
     )
 
 

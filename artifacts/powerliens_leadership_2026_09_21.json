@@ -1,0 +1,117 @@
+{
+  "leadership": [
+    {
+      "name": "Pejman \"P.J.\" Javaheri, Esq.",
+      "email": "",
+      "phone": "+13106943084",
+      "title": "Founder & Chief Executive Officer; Attorney",
+      "is_decision_maker": true,
+      "confidence": 0.9,
+      "research_checked_at": "2026-09-21T11:45:00Z",
+      "source_urls": [
+        "https://www.linkedin.com/company/power-liens",
+        "https://www.crunchbase.com/organization/power-liens",
+        "https://www.linkedin.com/in/pejman-javaheri-4a450714"
+      ],
+      "role_verification": "Power Liens' company profile identifies the business as founded by a personal-injury attorney; Crunchbase identifies Pejman Javaheri as founder. His personal LinkedIn currently emphasizes Axia Associates, so the company affiliation is recorded from the company profile and founder source.",
+      "business_email_status": "No direct public email verified",
+      "linkedin_status": "Personal profile found, but current Power Liens affiliation is not explicit"
+    },
+    {
+      "name": "Naz Yari",
+      "email": "naz@powerliens.com",
+      "phone": "+18006805526",
+      "title": "President, Co-Chairman of the Board",
+      "is_decision_maker": true,
+      "confidence": 0.8,
+      "research_checked_at": "2026-09-21T11:45:00Z",
+      "source_urls": [
+        "https://www.linkedin.com/company/power-liens",
+        "https://theorg.com/org/power-liens"
+      ],
+      "role_verification": "Existing Possible OS leadership roster; The Org lists Naz Yari as President and the company profile identifies Power Liens' leadership context",
+      "business_email_status": "Existing Possible OS roster email; not published on the official company page",
+      "linkedin_status": "No company-matched personal LinkedIn profile verified"
+    },
+    {
+      "name": "Erik Litmanovich",
+      "email": "",
+      "phone": "",
+      "title": "CEO, Co-Vice-Chairman of the Board",
+      "is_decision_maker": true,
+      "confidence": 0.75,
+      "research_checked_at": "2026-09-21T11:45:00Z",
+      "source_urls": [
+        "https://www.crunchbase.com/person/erik-litmanovich",
+        "https://www.linkedin.com/company/power-liens"
+      ],
+      "role_verification": "Crunchbase lists Erik Litmanovich as CEO and board member of Power Liens; no direct company email was verified",
+      "business_email_status": "No direct public email verified",
+      "linkedin_status": "No company-matched personal LinkedIn URL verified"
+    },
+    {
+      "name": "Emil Babadjov",
+      "email": "emil@powerliens.com",
+      "phone": "+13109549784",
+      "title": "Head of Growth / Director of Client Relations",
+      "is_decision_maker": true,
+      "confidence": 0.9,
+      "research_checked_at": "2026-09-21T11:45:00Z",
+      "source_urls": [
+        "https://www.linkedin.com/in/emilbusiness",
+        "https://www.linkedin.com/company/power-liens",
+        "https://powerliens.com/"
+      ],
+      "role_verification": "Personal LinkedIn identifies Emil Babadjov with Power Liens; the company roster and existing Possible OS record identify him as Head of Growth / Director of Client Relations",
+      "business_email_status": "Existing Possible OS roster email; company-domain address",
+      "linkedin_verification": "Personal profile explicitly lists Power Liens"
+    },
+    {
+      "name": "Christopher Jones",
+      "email": "chris@powerliens.com",
+      "phone": "",
+      "title": "Director of Operations",
+      "is_decision_maker": true,
+      "confidence": 0.7,
+      "research_checked_at": "2026-09-21T11:45:00Z",
+      "source_urls": [
+        "https://powerliens.com/",
+        "https://www.linkedin.com/company/power-liens"
+      ],
+      "role_verification": "Existing Possible OS leadership roster; the public company page does not publish an individual operations directory",
+      "business_email_status": "Existing Possible OS roster email; company-domain address",
+      "linkedin_status": "No company-matched personal LinkedIn profile verified"
+    },
+    {
+      "name": "Rachel Keating",
+      "email": "",
+      "phone": "",
+      "title": "Account Manager / Sales",
+      "is_decision_maker": true,
+      "confidence": 0.65,
+      "research_checked_at": "2026-09-21T11:45:00Z",
+      "source_urls": [
+        "https://www.linkedin.com/company/power-liens"
+      ],
+      "role_verification": "Power Liens' company profile lists Rachel Keating among its employees; the account-manager/sales title comes from the existing Possible OS roster",
+      "business_email_status": "No direct public email verified",
+      "linkedin_status": "Company page lists Rachel Keating; no personal profile verified"
+    },
+    {
+      "name": "Bryann Foronda",
+      "email": "info@powerliens.com",
+      "phone": "+18006805526",
+      "title": "Director of Client Relations (roster-only attribution)",
+      "is_decision_maker": true,
+      "confidence": 0.45,
+      "research_checked_at": "2026-09-21T11:45:00Z",
+      "source_urls": [
+        "https://www.linkedin.com/company/power-liens",
+        "https://powerliens.com/"
+      ],
+      "role_verification": "Existing Possible OS contact roster only; individual attribution is not independently verified",
+      "business_email_status": "Official shared mailbox, not a personal address",
+      "linkedin_status": "No company-matched personal LinkedIn profile verified"
+    }
+  ]
+}

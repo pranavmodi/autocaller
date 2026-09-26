@@ -1,0 +1,154 @@
+{
+  "recipients": [
+    {
+      "name": "Eran Lagstein",
+      "email": "eran@lagsteinlawfirm.com",
+      "contact_id": "fc_a1326745fa324e23b05c4508",
+      "pif_id": "601d1563-64e7-45ad-ba49-65246fa3080f",
+      "firm": "Lagstein Law Firm",
+      "subject": "Considering Clio or Filevine?",
+      "action_type": "first_touch",
+      "link": {
+        "code": "EogRC1ZS2Q",
+        "campaign_id": "cmp_ki-WF9eCn7bGJ01C",
+        "contact_id": "fc_a1326745fa324e23b05c4508",
+        "pif_id": "601d1563-64e7-45ad-ba49-65246fa3080f",
+        "channel": "email",
+        "label": "Migration expansion - 2026-09-18",
+        "destination_url": "https://getpossibleminds.com/services/case-management-migration",
+        "advisor_briefing": null,
+        "tracking_url": "https://getpossibleminds.com/t/EogRC1ZS2Q",
+        "sent_at": null,
+        "created_at": "2026-09-18T09:26:26.304518+00:00"
+      },
+      "item_id": "0d7e25475cda4ff8af4ef22e7902d97b",
+      "time": "2026-09-18T10:20:00-07:00",
+      "file": "artifacts/legacy_migration_2026_09_18/expansion/draft_7.txt",
+      "body": "Hi Eran,\n\nYou've built a practice spanning California and Nevada, so keeping case information usable across matters and jurisdictions matters as much as choosing new software.\n\nI'm Pranav, founder of Possible Minds, previously at McKinsey and Expedia. We built Precise Imaging's email-handling system, which processes over 600 emails daily, routes requests and sends automated status responses.\n\nIf a change of case-management system is on the table, we can help migrate your records, documents and workflows to Clio or Filevine, with careful mapping and validation so they're better connected for AI and automation.\n\nHere's how we approach migration:\nhttps://getpossibleminds.com/t/EogRC1ZS2Q\n\nWould a brief outline of what a move could involve be useful? I'd appreciate your thoughts.\n\nBest,\nPranav\nFounder, Possible Minds",
+      "role_source": "https://losangeles-personalinjuryattorney.com/the-team/eran-lagstein/",
+      "email_source": "Possible OS front contact plus https://docs.justia.com/cases/federal/district-courts/nevada/nvdce/2%3A2024cv00785/168295/58",
+      "vendor_evidence": "Smokeball message mention, confidence 0.6; not named in copy; no migration status asserted."
+    },
+    {
+      "name": "Domingo Castillo",
+      "email": "castillolaw2000@aol.com",
+      "contact_id": "c0ed0352ef4e45f3aeb0a16442530a5b",
+      "pif_id": "0eaa168c-4f87-418d-a3c3-bd1a898fb483",
+      "firm": "Castillo & Montes",
+      "subject": "Quick question about Precise Imaging status updates",
+      "action_type": "follow_up",
+      "link": {
+        "code": "1BvpmLj1IA",
+        "campaign_id": "cmp_ki-WF9eCn7bGJ01C",
+        "contact_id": "c0ed0352ef4e45f3aeb0a16442530a5b",
+        "pif_id": "0eaa168c-4f87-418d-a3c3-bd1a898fb483",
+        "channel": "email",
+        "label": "Migration expansion - 2026-09-18",
+        "destination_url": "https://getpossibleminds.com/services/case-management-migration",
+        "advisor_briefing": null,
+        "tracking_url": "https://getpossibleminds.com/t/1BvpmLj1IA",
+        "sent_at": null,
+        "created_at": "2026-09-18T09:26:51.162986+00:00"
+      },
+      "item_id": "7c8e0808edc24078b00fbc4a281fe56e",
+      "time": "2026-09-18T10:30:00-07:00",
+      "file": "artifacts/legacy_migration_2026_09_18/expansion/draft_8.txt",
+      "body": "Hi Domingo,\n\nMy earlier note was about automating records follow-up and client communication. With your team working across several offices, the case-management system underneath those workflows is another part worth considering.\n\nIf you're weighing a move from A-1 Law, we can help migrate records, documents and workflows to Clio or Filevine, checking that the case history and fields your team relies on carry over properly. That creates a better foundation for connected AI workflows, rather than another disconnected tool.\n\nHere's our approach:\nhttps://getpossibleminds.com/t/1BvpmLj1IA\n\nWould a brief outline of what a move could involve be useful? I'd appreciate your thoughts.\n\nBest,\nPranav\nFounder, Possible Minds",
+      "in_reply_to": "<19e838b0ea9.214cd13628299.4707045211943265619@possiblemindshq.com>",
+      "references": "<19e838b0ea9.214cd13628299.4707045211943265619@possiblemindshq.com>",
+      "thread_source": "Zoho Sent UID 476, exact recipient and subject checked with BODY.PEEK[], original 2026-06-01",
+      "role_source": "https://www.castillolaw.us/meet-the-team/",
+      "email_source": "Possible OS patients_dm plus https://ww3.workcompcentral.com/visibleuser/index/id/189",
+      "vendor_evidence": "A-1 Law, firm-specific LinkedIn job posting https://www.linkedin.com/jobs/view/workers-compensation-specialist-at-castillo-montes-attorneys-at-law-4436591310"
+    },
+    {
+      "name": "Robert Vetchtein",
+      "email": "robert@vetchteinlaw.com",
+      "contact_id": "fc_236cd5254b484a948d685e95",
+      "pif_id": "5dc60d29-6918-4c3d-8736-6e1f35fc558c",
+      "firm": "Vetchtein Law",
+      "subject": "Considering Clio or Filevine?",
+      "action_type": "first_touch",
+      "link": {
+        "code": "HF-KpcCjQw",
+        "campaign_id": "cmp_ki-WF9eCn7bGJ01C",
+        "contact_id": "fc_236cd5254b484a948d685e95",
+        "pif_id": "5dc60d29-6918-4c3d-8736-6e1f35fc558c",
+        "channel": "email",
+        "label": "Migration expansion - 2026-09-18",
+        "destination_url": "https://getpossibleminds.com/services/case-management-migration",
+        "advisor_briefing": null,
+        "tracking_url": "https://getpossibleminds.com/t/HF-KpcCjQw",
+        "sent_at": null,
+        "created_at": "2026-09-18T09:26:54.330660+00:00"
+      },
+      "item_id": "9ac4a86560b54109868050c2c31fa396",
+      "time": "2026-09-18T10:40:00-07:00",
+      "file": "artifacts/legacy_migration_2026_09_18/expansion/draft_9.txt",
+      "body": "Hi Robert,\n\nAs the founder working with a COO and case-management team, you'd want a software change to improve coordination without losing the case history everyone depends on.\n\nI'm Pranav, founder of Possible Minds, previously at McKinsey and Expedia. We built Precise Imaging's email-handling system, which processes over 600 emails daily, routes requests and sends automated status responses.\n\nIf you're considering a move from MerusCase, we can help migrate your records, documents and workflows to Clio or Filevine, with careful mapping and validation so they're better connected for AI and automation.\n\nHere's how we approach migration:\nhttps://getpossibleminds.com/t/HF-KpcCjQw\n\nWould a brief outline of what a move could involve be useful? I'd appreciate your thoughts.\n\nBest,\nPranav\nFounder, Possible Minds",
+      "role_source": "https://www.vetchteinlaw.com/our-firm/our-team/",
+      "email_source": "Possible OS exact named front contact fc_236cd5254b484a948d685e95",
+      "vendor_evidence": "Merus, firm staff profile https://us.bold.pro/my/yased-puentes confidence 0.85; conditional migration language."
+    }
+  ],
+  "preflight": [
+    {
+      "email": "rblock@blockllp.com",
+      "pif_id": "8524971b-6d5b-44bf-bdd6-cbba57ee0677",
+      "personal_touches": 1,
+      "firm_latest": "2026-08-11T17:30:18.482882+00:00",
+      "inbound": 3,
+      "holds": 0,
+      "pending": 2
+    },
+    {
+      "email": "eran@lagsteinlawfirm.com",
+      "pif_id": "601d1563-64e7-45ad-ba49-65246fa3080f",
+      "personal_touches": 0,
+      "firm_latest": null,
+      "inbound": 0,
+      "holds": 0,
+      "pending": 0
+    },
+    {
+      "email": "castillolaw2000@aol.com",
+      "pif_id": "0eaa168c-4f87-418d-a3c3-bd1a898fb483",
+      "personal_touches": 1,
+      "firm_latest": "2026-09-03T16:00:14.041265+00:00",
+      "inbound": 0,
+      "holds": 0,
+      "pending": 0
+    },
+    {
+      "email": "robert@vetchteinlaw.com",
+      "pif_id": "5dc60d29-6918-4c3d-8736-6e1f35fc558c",
+      "personal_touches": 0,
+      "firm_latest": null,
+      "inbound": 0,
+      "holds": 0,
+      "pending": 0
+    }
+  ],
+  "mailbox": {
+    "checked_at": "2026-09-18T09:23:43.170802+00:00",
+    "coverage": "All 10 Zoho folders, read-only BODY.PEEK, since 2026-05-01",
+    "errors": [],
+    "matches": {
+      "eran@lagsteinlawfirm.com": [],
+      "robert@vetchteinlaw.com": [],
+      "castillolaw2000@aol.com": [
+        {
+          "folder": "Sent",
+          "uid": "476",
+          "from": "pranav@possiblemindshq.com",
+          "to": "castillolaw2000@aol.com",
+          "subject": "Quick question about Precise Imaging status updates",
+          "date": "2026-06-01T14:16:29Z",
+          "message_id": "<19e838b0ea9.214cd13628299.4707045211943265619@possiblemindshq.com>",
+          "in_reply_to": "",
+          "references": ""
+        }
+      ]
+    }
+  }
+}

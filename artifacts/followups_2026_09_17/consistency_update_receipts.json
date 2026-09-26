@@ -1,0 +1,1762 @@
+[
+  {
+    "rank": 1,
+    "email": "ssoliman@thesolimanfirm.com",
+    "action_id": "action_aa0fdb6ca2db4a769736eff3",
+    "updated_existing": true,
+    "scheduled_for": "2026-09-17T16:00:00+00:00",
+    "policy": {
+      "allowed": true,
+      "reason": "allowed",
+      "checks": [
+        {
+          "name": "status_allows_execution",
+          "passed": true,
+          "detail": "approved"
+        },
+        {
+          "name": "human_approval_present",
+          "passed": true,
+          "detail": "codex"
+        },
+        {
+          "name": "subject_present",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "body_present",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "subject_hash_matches_approval",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "body_hash_matches_approval",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "in_reply_to_matches_approval",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "references_match_approval",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "lead_gen_transport_available",
+          "passed": true,
+          "detail": "zoho_api 0/0 configured=True; resend 0/50 configured=True"
+        },
+        {
+          "name": "no_patient_data_in_outreach",
+          "passed": true,
+          "detail": "llm_guard_disabled"
+        },
+        {
+          "name": "batch_item_exists",
+          "passed": true,
+          "detail": "1324b9c317144045b4fed2157405cdfd"
+        },
+        {
+          "name": "batch_item_not_already_started",
+          "passed": true,
+          "detail": "approved"
+        },
+        {
+          "name": "contact_email_present",
+          "passed": true,
+          "detail": "ssoliman@thesolimanfirm.com"
+        },
+        {
+          "name": "no_prior_successful_action_for_item",
+          "passed": true,
+          "detail": ""
+        }
+      ],
+      "risk_level": "high",
+      "requires_human_approval": true,
+      "action_type": "send_approved_lead_gen_draft",
+      "contact_email": "ssoliman@thesolimanfirm.com"
+    },
+    "body_sha256": "31f11e130a24f9187f1b723ad76fe973b84f51421acd3122375923da5b1f9113"
+  },
+  {
+    "rank": 2,
+    "email": "ethan@esqlegalgroup.com",
+    "action_id": "action_336668c6c95443cb9d6ddfd0",
+    "updated_existing": true,
+    "scheduled_for": "2026-09-17T16:10:00+00:00",
+    "policy": {
+      "allowed": true,
+      "reason": "allowed",
+      "checks": [
+        {
+          "name": "status_allows_execution",
+          "passed": true,
+          "detail": "approved"
+        },
+        {
+          "name": "human_approval_present",
+          "passed": true,
+          "detail": "codex"
+        },
+        {
+          "name": "subject_present",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "body_present",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "subject_hash_matches_approval",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "body_hash_matches_approval",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "in_reply_to_matches_approval",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "references_match_approval",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "lead_gen_transport_available",
+          "passed": true,
+          "detail": "zoho_api 0/0 configured=True; resend 0/50 configured=True"
+        },
+        {
+          "name": "no_patient_data_in_outreach",
+          "passed": true,
+          "detail": "llm_guard_disabled"
+        },
+        {
+          "name": "batch_item_exists",
+          "passed": true,
+          "detail": "bb5542be5f3343eb841464dfee1836bb"
+        },
+        {
+          "name": "batch_item_not_already_started",
+          "passed": true,
+          "detail": "approved"
+        },
+        {
+          "name": "contact_email_present",
+          "passed": true,
+          "detail": "ethan@esqlegalgroup.com"
+        },
+        {
+          "name": "no_prior_successful_action_for_item",
+          "passed": true,
+          "detail": ""
+        }
+      ],
+      "risk_level": "high",
+      "requires_human_approval": true,
+      "action_type": "send_approved_lead_gen_draft",
+      "contact_email": "ethan@esqlegalgroup.com"
+    },
+    "body_sha256": "657f3cfe5f538876605b60267275f5b06e87a31c317d961db54fdb4927ccb60a"
+  },
+  {
+    "rank": 3,
+    "email": "estelaricheda@earthlink.net",
+    "action_id": "action_29059b1471964de9abb31045",
+    "updated_existing": true,
+    "scheduled_for": "2026-09-17T16:20:00+00:00",
+    "policy": {
+      "allowed": true,
+      "reason": "allowed",
+      "checks": [
+        {
+          "name": "status_allows_execution",
+          "passed": true,
+          "detail": "approved"
+        },
+        {
+          "name": "human_approval_present",
+          "passed": true,
+          "detail": "codex"
+        },
+        {
+          "name": "subject_present",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "body_present",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "subject_hash_matches_approval",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "body_hash_matches_approval",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "in_reply_to_matches_approval",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "references_match_approval",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "lead_gen_transport_available",
+          "passed": true,
+          "detail": "zoho_api 0/0 configured=True; resend 0/50 configured=True"
+        },
+        {
+          "name": "no_patient_data_in_outreach",
+          "passed": true,
+          "detail": "llm_guard_disabled"
+        },
+        {
+          "name": "batch_item_exists",
+          "passed": true,
+          "detail": "fd138f3ab5cf4df989c8ca87dc90a367"
+        },
+        {
+          "name": "batch_item_not_already_started",
+          "passed": true,
+          "detail": "approved"
+        },
+        {
+          "name": "contact_email_present",
+          "passed": true,
+          "detail": "estelaricheda@earthlink.net"
+        },
+        {
+          "name": "no_prior_successful_action_for_item",
+          "passed": true,
+          "detail": ""
+        }
+      ],
+      "risk_level": "high",
+      "requires_human_approval": true,
+      "action_type": "send_approved_lead_gen_draft",
+      "contact_email": "estelaricheda@earthlink.net"
+    },
+    "body_sha256": "f64102896ea004fb9b504e195edc829212e704dc826c1d16772fadcb7a01a361"
+  },
+  {
+    "rank": 4,
+    "email": "daniel.kim@dklaw.com",
+    "action_id": "action_333855c9367d491d8ee8c09b",
+    "updated_existing": true,
+    "scheduled_for": "2026-09-17T16:30:00+00:00",
+    "policy": {
+      "allowed": true,
+      "reason": "allowed",
+      "checks": [
+        {
+          "name": "status_allows_execution",
+          "passed": true,
+          "detail": "approved"
+        },
+        {
+          "name": "human_approval_present",
+          "passed": true,
+          "detail": "codex"
+        },
+        {
+          "name": "subject_present",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "body_present",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "subject_hash_matches_approval",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "body_hash_matches_approval",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "in_reply_to_matches_approval",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "references_match_approval",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "lead_gen_transport_available",
+          "passed": true,
+          "detail": "zoho_api 0/0 configured=True; resend 0/50 configured=True"
+        },
+        {
+          "name": "no_patient_data_in_outreach",
+          "passed": true,
+          "detail": "llm_guard_disabled"
+        },
+        {
+          "name": "batch_item_exists",
+          "passed": true,
+          "detail": "8776a8282367499790335d516c447e3e"
+        },
+        {
+          "name": "batch_item_not_already_started",
+          "passed": true,
+          "detail": "approved"
+        },
+        {
+          "name": "contact_email_present",
+          "passed": true,
+          "detail": "daniel.kim@dklaw.com"
+        },
+        {
+          "name": "no_prior_successful_action_for_item",
+          "passed": true,
+          "detail": ""
+        }
+      ],
+      "risk_level": "high",
+      "requires_human_approval": true,
+      "action_type": "send_approved_lead_gen_draft",
+      "contact_email": "daniel.kim@dklaw.com"
+    },
+    "body_sha256": "485d0464a2ba8a2d6348a26b3a83763b7f274ccebb1dfe02200d463998c2e1db"
+  },
+  {
+    "rank": 5,
+    "email": "dchoyce@choycelawfirm.com",
+    "action_id": "action_d05d7f1d0b304a77b2c0eab9",
+    "updated_existing": true,
+    "scheduled_for": "2026-09-17T16:40:00+00:00",
+    "policy": {
+      "allowed": true,
+      "reason": "allowed",
+      "checks": [
+        {
+          "name": "status_allows_execution",
+          "passed": true,
+          "detail": "approved"
+        },
+        {
+          "name": "human_approval_present",
+          "passed": true,
+          "detail": "codex"
+        },
+        {
+          "name": "subject_present",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "body_present",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "subject_hash_matches_approval",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "body_hash_matches_approval",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "in_reply_to_matches_approval",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "references_match_approval",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "lead_gen_transport_available",
+          "passed": true,
+          "detail": "zoho_api 0/0 configured=True; resend 0/50 configured=True"
+        },
+        {
+          "name": "no_patient_data_in_outreach",
+          "passed": true,
+          "detail": "llm_guard_disabled"
+        },
+        {
+          "name": "batch_item_exists",
+          "passed": true,
+          "detail": "5d87bf40b3fd409382e67a4a611da84a"
+        },
+        {
+          "name": "batch_item_not_already_started",
+          "passed": true,
+          "detail": "approved"
+        },
+        {
+          "name": "contact_email_present",
+          "passed": true,
+          "detail": "dchoyce@choycelawfirm.com"
+        },
+        {
+          "name": "no_prior_successful_action_for_item",
+          "passed": true,
+          "detail": ""
+        }
+      ],
+      "risk_level": "high",
+      "requires_human_approval": true,
+      "action_type": "send_approved_lead_gen_draft",
+      "contact_email": "dchoyce@choycelawfirm.com"
+    },
+    "body_sha256": "32ef133de8ec9acfe01e77f74c958a02236be0cd5ed96b20a8c8fc6086059f6b"
+  },
+  {
+    "rank": 6,
+    "email": "svaziri@vazirilaw.com",
+    "action_id": "action_56cef51ff4394136a18d7955",
+    "updated_existing": true,
+    "scheduled_for": "2026-09-17T16:50:00+00:00",
+    "policy": {
+      "allowed": true,
+      "reason": "allowed",
+      "checks": [
+        {
+          "name": "status_allows_execution",
+          "passed": true,
+          "detail": "approved"
+        },
+        {
+          "name": "human_approval_present",
+          "passed": true,
+          "detail": "codex"
+        },
+        {
+          "name": "subject_present",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "body_present",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "subject_hash_matches_approval",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "body_hash_matches_approval",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "in_reply_to_matches_approval",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "references_match_approval",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "lead_gen_transport_available",
+          "passed": true,
+          "detail": "zoho_api 0/0 configured=True; resend 0/50 configured=True"
+        },
+        {
+          "name": "no_patient_data_in_outreach",
+          "passed": true,
+          "detail": "llm_guard_disabled"
+        },
+        {
+          "name": "batch_item_exists",
+          "passed": true,
+          "detail": "4bd6241b76344d4cbeb1a349b554e945"
+        },
+        {
+          "name": "batch_item_not_already_started",
+          "passed": true,
+          "detail": "approved"
+        },
+        {
+          "name": "contact_email_present",
+          "passed": true,
+          "detail": "svaziri@vazirilaw.com"
+        },
+        {
+          "name": "no_prior_successful_action_for_item",
+          "passed": true,
+          "detail": ""
+        }
+      ],
+      "risk_level": "high",
+      "requires_human_approval": true,
+      "action_type": "send_approved_lead_gen_draft",
+      "contact_email": "svaziri@vazirilaw.com"
+    },
+    "body_sha256": "28c641c0f29a8fd8fc06743b3e42e58885226d5ac57a457b55bf91480ab3c302"
+  },
+  {
+    "rank": 7,
+    "email": "rogerb@bonakdarlawfirm.com",
+    "action_id": "action_5936cbd82f5142b182f83ea2",
+    "updated_existing": true,
+    "scheduled_for": "2026-09-17T17:00:00+00:00",
+    "policy": {
+      "allowed": true,
+      "reason": "allowed",
+      "checks": [
+        {
+          "name": "status_allows_execution",
+          "passed": true,
+          "detail": "approved"
+        },
+        {
+          "name": "human_approval_present",
+          "passed": true,
+          "detail": "codex"
+        },
+        {
+          "name": "subject_present",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "body_present",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "subject_hash_matches_approval",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "body_hash_matches_approval",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "in_reply_to_matches_approval",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "references_match_approval",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "lead_gen_transport_available",
+          "passed": true,
+          "detail": "zoho_api 0/0 configured=True; resend 0/50 configured=True"
+        },
+        {
+          "name": "no_patient_data_in_outreach",
+          "passed": true,
+          "detail": "llm_guard_disabled"
+        },
+        {
+          "name": "batch_item_exists",
+          "passed": true,
+          "detail": "9d014efa645341268bcf28c9193f59d9"
+        },
+        {
+          "name": "batch_item_not_already_started",
+          "passed": true,
+          "detail": "approved"
+        },
+        {
+          "name": "contact_email_present",
+          "passed": true,
+          "detail": "rogerb@bonakdarlawfirm.com"
+        },
+        {
+          "name": "no_prior_successful_action_for_item",
+          "passed": true,
+          "detail": ""
+        }
+      ],
+      "risk_level": "high",
+      "requires_human_approval": true,
+      "action_type": "send_approved_lead_gen_draft",
+      "contact_email": "rogerb@bonakdarlawfirm.com"
+    },
+    "body_sha256": "d4771aba6f1ed8e1a9a5bc73235163b9a4187870740d162e08f0509060a5bcd5"
+  },
+  {
+    "rank": 8,
+    "email": "daniel@setarehfirm.com",
+    "action_id": "action_616fc608507043f3b3c5eb7f",
+    "updated_existing": true,
+    "scheduled_for": "2026-09-17T17:10:00+00:00",
+    "policy": {
+      "allowed": true,
+      "reason": "allowed",
+      "checks": [
+        {
+          "name": "status_allows_execution",
+          "passed": true,
+          "detail": "approved"
+        },
+        {
+          "name": "human_approval_present",
+          "passed": true,
+          "detail": "codex"
+        },
+        {
+          "name": "subject_present",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "body_present",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "subject_hash_matches_approval",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "body_hash_matches_approval",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "in_reply_to_matches_approval",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "references_match_approval",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "lead_gen_transport_available",
+          "passed": true,
+          "detail": "zoho_api 0/0 configured=True; resend 0/50 configured=True"
+        },
+        {
+          "name": "no_patient_data_in_outreach",
+          "passed": true,
+          "detail": "llm_guard_disabled"
+        },
+        {
+          "name": "batch_item_exists",
+          "passed": true,
+          "detail": "7b83a12a4bfc417caadf1c20cdcd5245"
+        },
+        {
+          "name": "batch_item_not_already_started",
+          "passed": true,
+          "detail": "approved"
+        },
+        {
+          "name": "contact_email_present",
+          "passed": true,
+          "detail": "daniel@setarehfirm.com"
+        },
+        {
+          "name": "no_prior_successful_action_for_item",
+          "passed": true,
+          "detail": ""
+        }
+      ],
+      "risk_level": "high",
+      "requires_human_approval": true,
+      "action_type": "send_approved_lead_gen_draft",
+      "contact_email": "daniel@setarehfirm.com"
+    },
+    "body_sha256": "ad7f0402a6bfc745590ca83600d041a41ea2391810b6f7f1116a7f174d2521f6"
+  },
+  {
+    "rank": 9,
+    "email": "dcarter@carterlawgroup.com",
+    "action_id": "action_39572b0a81f44b80ac4cf481",
+    "updated_existing": true,
+    "scheduled_for": "2026-09-17T17:20:00+00:00",
+    "policy": {
+      "allowed": true,
+      "reason": "allowed",
+      "checks": [
+        {
+          "name": "status_allows_execution",
+          "passed": true,
+          "detail": "approved"
+        },
+        {
+          "name": "human_approval_present",
+          "passed": true,
+          "detail": "codex"
+        },
+        {
+          "name": "subject_present",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "body_present",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "subject_hash_matches_approval",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "body_hash_matches_approval",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "in_reply_to_matches_approval",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "references_match_approval",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "lead_gen_transport_available",
+          "passed": true,
+          "detail": "zoho_api 0/0 configured=True; resend 0/50 configured=True"
+        },
+        {
+          "name": "no_patient_data_in_outreach",
+          "passed": true,
+          "detail": "llm_guard_disabled"
+        },
+        {
+          "name": "batch_item_exists",
+          "passed": true,
+          "detail": "d6eeafb048144b04b8dccea20dcd7e33"
+        },
+        {
+          "name": "batch_item_not_already_started",
+          "passed": true,
+          "detail": "approved"
+        },
+        {
+          "name": "contact_email_present",
+          "passed": true,
+          "detail": "dcarter@carterlawgroup.com"
+        },
+        {
+          "name": "no_prior_successful_action_for_item",
+          "passed": true,
+          "detail": ""
+        }
+      ],
+      "risk_level": "high",
+      "requires_human_approval": true,
+      "action_type": "send_approved_lead_gen_draft",
+      "contact_email": "dcarter@carterlawgroup.com"
+    },
+    "body_sha256": "b7fa0145adab6968c7c35797cbacbcce0785af71d00f16506477394cf88e4f6b"
+  },
+  {
+    "rank": 10,
+    "email": "reina@resnikpersonalinjury.com",
+    "action_id": "action_e96e026fbec8425eabe0f4c5",
+    "updated_existing": true,
+    "scheduled_for": "2026-09-17T17:30:00+00:00",
+    "policy": {
+      "allowed": true,
+      "reason": "allowed",
+      "checks": [
+        {
+          "name": "status_allows_execution",
+          "passed": true,
+          "detail": "approved"
+        },
+        {
+          "name": "human_approval_present",
+          "passed": true,
+          "detail": "codex"
+        },
+        {
+          "name": "subject_present",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "body_present",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "subject_hash_matches_approval",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "body_hash_matches_approval",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "in_reply_to_matches_approval",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "references_match_approval",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "lead_gen_transport_available",
+          "passed": true,
+          "detail": "zoho_api 0/0 configured=True; resend 0/50 configured=True"
+        },
+        {
+          "name": "no_patient_data_in_outreach",
+          "passed": true,
+          "detail": "llm_guard_disabled"
+        },
+        {
+          "name": "batch_item_exists",
+          "passed": true,
+          "detail": "2dbd3b80607a483ca7c5a774af31cbee"
+        },
+        {
+          "name": "batch_item_not_already_started",
+          "passed": true,
+          "detail": "approved"
+        },
+        {
+          "name": "contact_email_present",
+          "passed": true,
+          "detail": "reina@resnikpersonalinjury.com"
+        },
+        {
+          "name": "no_prior_successful_action_for_item",
+          "passed": true,
+          "detail": ""
+        }
+      ],
+      "risk_level": "high",
+      "requires_human_approval": true,
+      "action_type": "send_approved_lead_gen_draft",
+      "contact_email": "reina@resnikpersonalinjury.com"
+    },
+    "body_sha256": "5d3126f97c6e56fa20150da3d59326516e79ff92054c23294894c2fe669ef93f"
+  },
+  {
+    "rank": 11,
+    "email": "silvia@silviaereynosolaw.com",
+    "action_id": "action_0682215db05e49649e033e22",
+    "updated_existing": true,
+    "scheduled_for": "2026-09-17T17:40:00+00:00",
+    "policy": {
+      "allowed": true,
+      "reason": "allowed",
+      "checks": [
+        {
+          "name": "status_allows_execution",
+          "passed": true,
+          "detail": "approved"
+        },
+        {
+          "name": "human_approval_present",
+          "passed": true,
+          "detail": "codex"
+        },
+        {
+          "name": "subject_present",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "body_present",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "subject_hash_matches_approval",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "body_hash_matches_approval",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "in_reply_to_matches_approval",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "references_match_approval",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "lead_gen_transport_available",
+          "passed": true,
+          "detail": "zoho_api 0/0 configured=True; resend 0/50 configured=True"
+        },
+        {
+          "name": "no_patient_data_in_outreach",
+          "passed": true,
+          "detail": "llm_guard_disabled"
+        },
+        {
+          "name": "batch_item_exists",
+          "passed": true,
+          "detail": "747a4d3580a540a69bb1f995c08b914d"
+        },
+        {
+          "name": "batch_item_not_already_started",
+          "passed": true,
+          "detail": "approved"
+        },
+        {
+          "name": "contact_email_present",
+          "passed": true,
+          "detail": "silvia@silviaereynosolaw.com"
+        },
+        {
+          "name": "no_prior_successful_action_for_item",
+          "passed": true,
+          "detail": ""
+        }
+      ],
+      "risk_level": "high",
+      "requires_human_approval": true,
+      "action_type": "send_approved_lead_gen_draft",
+      "contact_email": "silvia@silviaereynosolaw.com"
+    },
+    "body_sha256": "a3a61a38ebd75d5db6b8a3f3d0fc64967aafdca5adce5ae5413ba1bdd5abc1fd"
+  },
+  {
+    "rank": 12,
+    "email": "richarda@ralawllp.com",
+    "action_id": "action_d82c966cdfde480299cf0ed5",
+    "updated_existing": true,
+    "scheduled_for": "2026-09-17T17:50:00+00:00",
+    "policy": {
+      "allowed": true,
+      "reason": "allowed",
+      "checks": [
+        {
+          "name": "status_allows_execution",
+          "passed": true,
+          "detail": "approved"
+        },
+        {
+          "name": "human_approval_present",
+          "passed": true,
+          "detail": "codex"
+        },
+        {
+          "name": "subject_present",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "body_present",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "subject_hash_matches_approval",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "body_hash_matches_approval",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "in_reply_to_matches_approval",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "references_match_approval",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "lead_gen_transport_available",
+          "passed": true,
+          "detail": "zoho_api 0/0 configured=True; resend 0/50 configured=True"
+        },
+        {
+          "name": "no_patient_data_in_outreach",
+          "passed": true,
+          "detail": "llm_guard_disabled"
+        },
+        {
+          "name": "batch_item_exists",
+          "passed": true,
+          "detail": "c97a4de0d4184bc894aff5d1104d7891"
+        },
+        {
+          "name": "batch_item_not_already_started",
+          "passed": true,
+          "detail": "approved"
+        },
+        {
+          "name": "contact_email_present",
+          "passed": true,
+          "detail": "richarda@ralawllp.com"
+        },
+        {
+          "name": "no_prior_successful_action_for_item",
+          "passed": true,
+          "detail": ""
+        }
+      ],
+      "risk_level": "high",
+      "requires_human_approval": true,
+      "action_type": "send_approved_lead_gen_draft",
+      "contact_email": "richarda@ralawllp.com"
+    },
+    "body_sha256": "8a222dabdcc145a0557b5d3954a206cf0f9ae0fbb5f0237c1075a865906ea016"
+  },
+  {
+    "rank": 13,
+    "email": "acohen@actslaw.com",
+    "action_id": "action_79656093861c4106b8b9a365",
+    "updated_existing": true,
+    "scheduled_for": "2026-09-17T18:00:00+00:00",
+    "policy": {
+      "allowed": true,
+      "reason": "allowed",
+      "checks": [
+        {
+          "name": "status_allows_execution",
+          "passed": true,
+          "detail": "approved"
+        },
+        {
+          "name": "human_approval_present",
+          "passed": true,
+          "detail": "codex"
+        },
+        {
+          "name": "subject_present",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "body_present",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "subject_hash_matches_approval",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "body_hash_matches_approval",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "in_reply_to_matches_approval",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "references_match_approval",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "lead_gen_transport_available",
+          "passed": true,
+          "detail": "zoho_api 0/0 configured=True; resend 0/50 configured=True"
+        },
+        {
+          "name": "no_patient_data_in_outreach",
+          "passed": true,
+          "detail": "llm_guard_disabled"
+        },
+        {
+          "name": "batch_item_exists",
+          "passed": true,
+          "detail": "5cc35551ec0045f8a5c1f92791dd8367"
+        },
+        {
+          "name": "batch_item_not_already_started",
+          "passed": true,
+          "detail": "approved"
+        },
+        {
+          "name": "contact_email_present",
+          "passed": true,
+          "detail": "acohen@actslaw.com"
+        },
+        {
+          "name": "no_prior_successful_action_for_item",
+          "passed": true,
+          "detail": ""
+        }
+      ],
+      "risk_level": "high",
+      "requires_human_approval": true,
+      "action_type": "send_approved_lead_gen_draft",
+      "contact_email": "acohen@actslaw.com"
+    },
+    "body_sha256": "1adcb1b6fd9d13c3c8a6fbb7821cc75b4c9e4f9226336b0b8c8e71fd021a212d"
+  },
+  {
+    "rank": 14,
+    "email": "abraham@abginlaw.com",
+    "action_id": "action_4b8068479dee4940afa2503e",
+    "updated_existing": true,
+    "scheduled_for": "2026-09-17T18:10:00+00:00",
+    "policy": {
+      "allowed": true,
+      "reason": "allowed",
+      "checks": [
+        {
+          "name": "status_allows_execution",
+          "passed": true,
+          "detail": "approved"
+        },
+        {
+          "name": "human_approval_present",
+          "passed": true,
+          "detail": "codex"
+        },
+        {
+          "name": "subject_present",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "body_present",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "subject_hash_matches_approval",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "body_hash_matches_approval",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "in_reply_to_matches_approval",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "references_match_approval",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "lead_gen_transport_available",
+          "passed": true,
+          "detail": "zoho_api 0/0 configured=True; resend 0/50 configured=True"
+        },
+        {
+          "name": "no_patient_data_in_outreach",
+          "passed": true,
+          "detail": "llm_guard_disabled"
+        },
+        {
+          "name": "batch_item_exists",
+          "passed": true,
+          "detail": "1beeaa9e2a7744688c1b549d2f448c3c"
+        },
+        {
+          "name": "batch_item_not_already_started",
+          "passed": true,
+          "detail": "approved"
+        },
+        {
+          "name": "contact_email_present",
+          "passed": true,
+          "detail": "abraham@abginlaw.com"
+        },
+        {
+          "name": "no_prior_successful_action_for_item",
+          "passed": true,
+          "detail": ""
+        }
+      ],
+      "risk_level": "high",
+      "requires_human_approval": true,
+      "action_type": "send_approved_lead_gen_draft",
+      "contact_email": "abraham@abginlaw.com"
+    },
+    "body_sha256": "f37a1934c71ec13f0acfdffa9f34934473e14d183534842a900ddc8e58d857a6"
+  },
+  {
+    "rank": 15,
+    "email": "kfasoro@fasorolaw.com",
+    "action_id": "action_368f0bc6ff864af8944e1a4c",
+    "updated_existing": true,
+    "scheduled_for": "2026-09-17T18:20:00+00:00",
+    "policy": {
+      "allowed": true,
+      "reason": "allowed",
+      "checks": [
+        {
+          "name": "status_allows_execution",
+          "passed": true,
+          "detail": "approved"
+        },
+        {
+          "name": "human_approval_present",
+          "passed": true,
+          "detail": "codex"
+        },
+        {
+          "name": "subject_present",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "body_present",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "subject_hash_matches_approval",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "body_hash_matches_approval",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "in_reply_to_matches_approval",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "references_match_approval",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "lead_gen_transport_available",
+          "passed": true,
+          "detail": "zoho_api 0/0 configured=True; resend 0/50 configured=True"
+        },
+        {
+          "name": "no_patient_data_in_outreach",
+          "passed": true,
+          "detail": "llm_guard_disabled"
+        },
+        {
+          "name": "batch_item_exists",
+          "passed": true,
+          "detail": "b1fafad1193c4cfc9b52dbe342603880"
+        },
+        {
+          "name": "batch_item_not_already_started",
+          "passed": true,
+          "detail": "approved"
+        },
+        {
+          "name": "contact_email_present",
+          "passed": true,
+          "detail": "kfasoro@fasorolaw.com"
+        },
+        {
+          "name": "no_prior_successful_action_for_item",
+          "passed": true,
+          "detail": ""
+        }
+      ],
+      "risk_level": "high",
+      "requires_human_approval": true,
+      "action_type": "send_approved_lead_gen_draft",
+      "contact_email": "kfasoro@fasorolaw.com"
+    },
+    "body_sha256": "cc972f3cc352353a5a62127b565321a7425b760101030f48a9019f805f91a616"
+  },
+  {
+    "rank": 16,
+    "email": "robert@robertmontanezlaw.com",
+    "action_id": "action_e4de0ce6834242eb93188bf3",
+    "updated_existing": true,
+    "scheduled_for": "2026-09-17T18:30:00+00:00",
+    "policy": {
+      "allowed": true,
+      "reason": "allowed",
+      "checks": [
+        {
+          "name": "status_allows_execution",
+          "passed": true,
+          "detail": "approved"
+        },
+        {
+          "name": "human_approval_present",
+          "passed": true,
+          "detail": "codex"
+        },
+        {
+          "name": "subject_present",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "body_present",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "subject_hash_matches_approval",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "body_hash_matches_approval",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "in_reply_to_matches_approval",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "references_match_approval",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "lead_gen_transport_available",
+          "passed": true,
+          "detail": "zoho_api 0/0 configured=True; resend 0/50 configured=True"
+        },
+        {
+          "name": "no_patient_data_in_outreach",
+          "passed": true,
+          "detail": "llm_guard_disabled"
+        },
+        {
+          "name": "batch_item_exists",
+          "passed": true,
+          "detail": "44cb3fdec0e7456294a48e8ea3d91e5a"
+        },
+        {
+          "name": "batch_item_not_already_started",
+          "passed": true,
+          "detail": "approved"
+        },
+        {
+          "name": "contact_email_present",
+          "passed": true,
+          "detail": "robert@robertmontanezlaw.com"
+        },
+        {
+          "name": "no_prior_successful_action_for_item",
+          "passed": true,
+          "detail": ""
+        }
+      ],
+      "risk_level": "high",
+      "requires_human_approval": true,
+      "action_type": "send_approved_lead_gen_draft",
+      "contact_email": "robert@robertmontanezlaw.com"
+    },
+    "body_sha256": "1402276c948f21a6ede55d0a8633c504f8af695b8aa7816fcb8878d70d4f73e1"
+  },
+  {
+    "rank": 17,
+    "email": "elliot@zarabilaw.com",
+    "action_id": "action_4fdf352518b245699dea1f47",
+    "updated_existing": true,
+    "scheduled_for": "2026-09-17T18:40:00+00:00",
+    "policy": {
+      "allowed": true,
+      "reason": "allowed",
+      "checks": [
+        {
+          "name": "status_allows_execution",
+          "passed": true,
+          "detail": "approved"
+        },
+        {
+          "name": "human_approval_present",
+          "passed": true,
+          "detail": "codex"
+        },
+        {
+          "name": "subject_present",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "body_present",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "subject_hash_matches_approval",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "body_hash_matches_approval",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "in_reply_to_matches_approval",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "references_match_approval",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "lead_gen_transport_available",
+          "passed": true,
+          "detail": "zoho_api 0/0 configured=True; resend 0/50 configured=True"
+        },
+        {
+          "name": "no_patient_data_in_outreach",
+          "passed": true,
+          "detail": "llm_guard_disabled"
+        },
+        {
+          "name": "batch_item_exists",
+          "passed": true,
+          "detail": "36a4752af0e041a68e000d4394f1fb6e"
+        },
+        {
+          "name": "batch_item_not_already_started",
+          "passed": true,
+          "detail": "approved"
+        },
+        {
+          "name": "contact_email_present",
+          "passed": true,
+          "detail": "elliot@zarabilaw.com"
+        },
+        {
+          "name": "no_prior_successful_action_for_item",
+          "passed": true,
+          "detail": ""
+        }
+      ],
+      "risk_level": "high",
+      "requires_human_approval": true,
+      "action_type": "send_approved_lead_gen_draft",
+      "contact_email": "elliot@zarabilaw.com"
+    },
+    "body_sha256": "208dcd09fe29b99cf3dd78476edcdbb05582d05e46cae685c20b13fde5c49910"
+  },
+  {
+    "rank": 18,
+    "email": "jura@jhartleylawapc.com",
+    "action_id": "action_e411aa2139e3475db7f34509",
+    "updated_existing": true,
+    "scheduled_for": "2026-09-17T18:50:00+00:00",
+    "policy": {
+      "allowed": true,
+      "reason": "allowed",
+      "checks": [
+        {
+          "name": "status_allows_execution",
+          "passed": true,
+          "detail": "approved"
+        },
+        {
+          "name": "human_approval_present",
+          "passed": true,
+          "detail": "codex"
+        },
+        {
+          "name": "subject_present",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "body_present",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "subject_hash_matches_approval",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "body_hash_matches_approval",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "in_reply_to_matches_approval",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "references_match_approval",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "lead_gen_transport_available",
+          "passed": true,
+          "detail": "zoho_api 0/0 configured=True; resend 0/50 configured=True"
+        },
+        {
+          "name": "no_patient_data_in_outreach",
+          "passed": true,
+          "detail": "llm_guard_disabled"
+        },
+        {
+          "name": "batch_item_exists",
+          "passed": true,
+          "detail": "58e927afa1004e0fb83cde27503e8dcf"
+        },
+        {
+          "name": "batch_item_not_already_started",
+          "passed": true,
+          "detail": "approved"
+        },
+        {
+          "name": "contact_email_present",
+          "passed": true,
+          "detail": "jura@jhartleylawapc.com"
+        },
+        {
+          "name": "no_prior_successful_action_for_item",
+          "passed": true,
+          "detail": ""
+        }
+      ],
+      "risk_level": "high",
+      "requires_human_approval": true,
+      "action_type": "send_approved_lead_gen_draft",
+      "contact_email": "jura@jhartleylawapc.com"
+    },
+    "body_sha256": "b0e428ea6470595d9a1c4baa35e802df9639fe96560329eb53b93a6c05247f3d"
+  },
+  {
+    "rank": 19,
+    "email": "edna@ednafelix.law",
+    "action_id": "action_1ecae4cbda204e458e40384a",
+    "updated_existing": true,
+    "scheduled_for": "2026-09-17T19:00:00+00:00",
+    "policy": {
+      "allowed": true,
+      "reason": "allowed",
+      "checks": [
+        {
+          "name": "status_allows_execution",
+          "passed": true,
+          "detail": "approved"
+        },
+        {
+          "name": "human_approval_present",
+          "passed": true,
+          "detail": "codex"
+        },
+        {
+          "name": "subject_present",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "body_present",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "subject_hash_matches_approval",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "body_hash_matches_approval",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "in_reply_to_matches_approval",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "references_match_approval",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "lead_gen_transport_available",
+          "passed": true,
+          "detail": "zoho_api 0/0 configured=True; resend 0/50 configured=True"
+        },
+        {
+          "name": "no_patient_data_in_outreach",
+          "passed": true,
+          "detail": "llm_guard_disabled"
+        },
+        {
+          "name": "batch_item_exists",
+          "passed": true,
+          "detail": "8cb0af03343e4a0e9c432ab8fe3e5bb3"
+        },
+        {
+          "name": "batch_item_not_already_started",
+          "passed": true,
+          "detail": "approved"
+        },
+        {
+          "name": "contact_email_present",
+          "passed": true,
+          "detail": "edna@ednafelix.law"
+        },
+        {
+          "name": "no_prior_successful_action_for_item",
+          "passed": true,
+          "detail": ""
+        }
+      ],
+      "risk_level": "high",
+      "requires_human_approval": true,
+      "action_type": "send_approved_lead_gen_draft",
+      "contact_email": "edna@ednafelix.law"
+    },
+    "body_sha256": "19154140229739579db948aedab1dc17d601392bb4b56995b1b40f0f26b4d186"
+  },
+  {
+    "rank": 20,
+    "email": "alla@teninalaw.com",
+    "action_id": "action_b23c51ebac02403192025dba",
+    "updated_existing": true,
+    "scheduled_for": "2026-09-17T19:10:00+00:00",
+    "policy": {
+      "allowed": true,
+      "reason": "allowed",
+      "checks": [
+        {
+          "name": "status_allows_execution",
+          "passed": true,
+          "detail": "approved"
+        },
+        {
+          "name": "human_approval_present",
+          "passed": true,
+          "detail": "codex"
+        },
+        {
+          "name": "subject_present",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "body_present",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "subject_hash_matches_approval",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "body_hash_matches_approval",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "in_reply_to_matches_approval",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "references_match_approval",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "lead_gen_transport_available",
+          "passed": true,
+          "detail": "zoho_api 0/0 configured=True; resend 0/50 configured=True"
+        },
+        {
+          "name": "no_patient_data_in_outreach",
+          "passed": true,
+          "detail": "llm_guard_disabled"
+        },
+        {
+          "name": "batch_item_exists",
+          "passed": true,
+          "detail": "7ab9fdec054c4b4caa800fce27569458"
+        },
+        {
+          "name": "batch_item_not_already_started",
+          "passed": true,
+          "detail": "approved"
+        },
+        {
+          "name": "contact_email_present",
+          "passed": true,
+          "detail": "alla@teninalaw.com"
+        },
+        {
+          "name": "no_prior_successful_action_for_item",
+          "passed": true,
+          "detail": ""
+        }
+      ],
+      "risk_level": "high",
+      "requires_human_approval": true,
+      "action_type": "send_approved_lead_gen_draft",
+      "contact_email": "alla@teninalaw.com"
+    },
+    "body_sha256": "51f34716e4915c09f1023221733de2bc39f34f829b160c45388c55e5159ad1c0"
+  }
+]

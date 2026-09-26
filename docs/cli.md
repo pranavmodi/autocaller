@@ -106,33 +106,44 @@ Every command accepts `--help`. Exit code is `0` on success, `1` on any error
 ### New-command reference (v1.1)
 
 Job application workspace: `job-agent status`, `config`, `configure --file`,
-`search`, `collect`, `jobs`, `review`, and `events`. See [Job agent](JOB_AGENT.md) for the
+`search`, `collect`, `jobs`, `applications`, `review`, and `events`. See [Job agent](JOB_AGENT.md) for the
 full contract. Classification maps jobs to reusable resumes and runs on demand for
 the selected job by default; applications are sent only through explicit
 `job-agent apply` / UI actions using Zoho CLI.
 
 | command | purpose |
 |---|---|
-| `job-agent status / config / events [--page 1]` | Inspect the Job agent workspace, saved preferences, search results and audit trail. |
+| `job-agent status / config / sources / events [--page 1]` | Inspect the Job agent workspace, saved preferences, configured source catalog, search results and audit trail. `sources` distinguishes enabled feeds/APIs/public pages from unavailable or account-gated boards. |
 | `job-agent configure --file preferences.json` | Merge validated preferences with revision conflict protection. |
-| `job-agent search` | Run the same non-sending search profile used by the daily timer: configured target roles, employer industries and location preferences. Verified jobs are deduplicated and verified recruiting/routing contacts are shared through the firm record. |
-| `job-agent collect / jobs [--status shortlisted --search AI --page 1 --order posted_desc\|contact_desc --source external_search\|possibleos --legal-degree exclude\|all\|required]` | Queue/resume uncapped sync, or read/filter the queue. Legal-degree roles are excluded by default and sort last when all are shown. `contact_desc` puts firms with a known email first, then newest. `external_search` means Job Agent/public search; `possibleos` means the wider stored firm listings. |
+| `job-agent search` | Run the same non-sending search profile used by the daily timer: configured target roles, employer industries, location preferences and enabled job-board sources. The source budget rotates across enabled boards. Verified jobs are deduplicated and verified recruiting/routing contacts are shared through the firm record. |
+| `job-agent collect / jobs [--status shortlisted --search AI --page 1 --order posted_desc\|contact_desc --source external_search\|possibleos --legal-degree exclude\|all\|required --contract all\|contract\|non_contract\|unknown]` | Queue/resume uncapped sync, or read/filter the queue. Legal-degree roles are excluded by default and sort last when all are shown. Contract status is the saved extraction-time Jev judgment; listing filters never invoke the model. `contact_desc` puts firms with a known email first, then newest. `external_search` means Job Agent/public search; `possibleos` means the wider stored firm listings. |
+| `job-agent backfill-contract-status [--batch-size 20 --limit N --force]` | Resumably classify existing Job Agent listings as contract, non-contract or unknown with batched TypeSafe Jev Choice requests. Saves the full probability distribution, confidence, model and input hash on the candidate and matching Leads job-listing record. |
+| `pif job-postings [--contract contract\|non_contract\|unknown --search TEXT --category KEY --remote-scope remote\|global\|not_global --order posted_desc\|found_desc --page 1]` | Read the same source-backed Leads job-listing collection and contract-status filters shown in the web view. |
+| `job-agent applications [--status ready --search Array --page 1 --order updated_desc\|firm_asc\|role_asc]` | List every started application workflow, including research failures, drafts, queued or uncertain sends, and Sent-verified applications. Read-only; it never prepares or sends. |
 | `job-agent open-listing --firm-id ID --source-url URL --title TITLE [--job-id ID --location LOCATION]` | Resolve a canonical Leads job listing into the shared Job Agent record; never prepares or sends. |
+| `job-agent import-url URL` | Fetch one operator-supplied public job URL, verify the exact employer, role and live status, create or reuse the firm/job records, and return the Job Agent candidate ID. When the board page lacks an official employer identity, one bounded enrichment pass first tries direct OpenClaw tool RPC and falls back to one provider-native search turn when the generic search tool is unavailable; all returned pages are freshly fetched and validated. Start, stop and completion records appear in `job-agent events` with the run ID. This never classifies, prepares or sends. |
 | `job-agent review ID --revision N --status shortlisted --note "…"` | Record an operator review; never sends or submits an application. |
 | `job-agent resumes / resume-download PATH --output FILE / show ID` | List the CV catalog with email/category context, copy one PDF locally, or inspect category, resume and application state. |
 | `job-agent classify ID / category ID --category KEY --revision N` | Request TypeSafe Jev Choice classification only for this job, or manually override its category. |
 | `job-agent prepare ID --revision N` | Research the company and role, check published and eligible Possible OS firm contacts, then compose without sending. |
 | `job-agent apply ID --revision N` | Explicitly authorize one application email via Zoho CLI. |
 | `job-agent verify-sent ID` | Check the Sent copy and attachment hash; never resends. |
+| `job-agent browser-provider gateway\|openai [--model MODEL]` | Save the default website-controller provider and API model. Does not change active runs. Start/control also accept `--provider` when starting/resuming/answering/verifying. |
+| `job-agent browser-applications / browser-status ID [--after CURSOR]` | List/monitor website applications separately from email; status includes browser revision, question, screenshot availability and confirmation. Events paginate without a retention cap. |
+| `job-agent browser-start ID --revision N --authorize-submit` | Authorize one website submission using the selected category PDF. N is processing_revision from show; repeated starts return the existing run. |
+| `job-agent browser-control ID --action pause\|resume\|answer\|verify\|release\|restart\|reconnect --revision N [--question-id ID --answer-file FILE]` | Control a website run using its browser revision. Answer resumes the saved form; verify is read-only after uncertainty; release closes an inactive browser. |
+| `job-agent browser-quit-reasons ID / browser-control ID --action quit --revision N [--reason TEXT]` | Suggest contextual reasons or quit a stopped pre-submit website run; never changes profile facts. |
+| `job-agent browser-screenshot ID --output FILE` | Copy the saved application screenshot on the server; refuses to overwrite an existing file. |
 | `job-agent sync-comms` | Idempotently backfill or repair Communications rows for attempted Job Agent emails; never sends. |
 | `reviews progress` | Show live raw, distinct, independent, classified, source-mix, firm-coverage, queue, and progress-to-5,000 review counts. |
+| `review-alerts status / enroll [--execute] / config / run / subscription` | Turn reviews collected by nightly firm maintenance into 14-day alerts, classify leader titles, enroll one recipient per firm, inspect drafts and Comms outcomes, and enforce reply opt-outs. `run` processes stored reviews and never starts research. |
 | `reviews queue [--limit N] [--include-researched]` | Incrementally bulk-queue canonical PI firms, prioritizing never-researched firms and low existing review counts without replacing prior evidence. |
 | `reviews classify [--force]` | Classify every source-backed review against the current versioned PI operational taxonomy. |
 | `reviews analyze --snapshot-at <UTC-ISO> [--output-dir PATH]` | Freeze the gated corpus and export versioned aggregate JSON plus eight chart-ready CSV datasets. Exits nonzero below 5,000 distinct reviews or with incomplete classification. |
 | `campaigns create "<name>" [--date YYYY-MM-DD] [--url https://getpossibleminds.com/...] [--workflow content] [--timezone UTC] [--json]` | Create one dated campaign that can span email, LinkedIn DMs, and public links. The destination is optional at campaign creation and, when supplied, must be HTTPS on `getpossibleminds.com` or a subdomain. |
 | `campaigns list [--search <text>] [--limit N] [--json]` / `campaigns show <campaign_id> [--json]` | Look up campaigns and inspect combined/channel-level links, raw clicks, confirmed visits, meaningful actions, and engaged people. |
 | `campaigns activity [--days N] [--quality human\|all] [--limit N] [--json]` | Show newest-first engagement across every campaign. Human quality is the default; use `all` to include scanner and unconfirmed redirect traffic. |
-| `campaigns link <campaign_id> --channel email\|linkedin\|public [--url <possible-minds-url>] [--contact-id <id>] [--label <text>] [--mark-sent] [--json]` | Mint a new `/t/{code}` URL for any page on the Possible Minds website. Email and LinkedIn links may be recipient-specific; public links remain campaign-level. Each invocation creates a new link so daily/channel attribution is not reused. |
+| `campaigns link <campaign_id> --channel email\|linkedin\|public [--url <possible-minds-url>] [--contact-id <id> OR --recipient-name <name> --recipient-email <email> --recipient-firm-id <id>] [--label <text>] [--mark-sent] [--json]` | Mint a new `/t/{code}` URL. New recipients need a name; email and existing firm ID are optional. An unambiguous existing email is reused without overwriting contact data; ambiguous matches require contact selection. Public links remain anonymous. |
 | `campaigns mark-sent <code> [--json]` | Mark an operator-sent email or LinkedIn touch as sent. Link clicks and page behavior are recorded automatically. |
 | `data-returned list [--limit 100]` | Print the newest captured `/datareturned` events as JSON. The daemon read endpoint remains session-gated externally; the CLI uses loopback. |
 | `data-returned prune` | Immediately delete all callback events except the newest 100. New callbacks enforce the same hard retention cap automatically. |
@@ -152,10 +163,20 @@ the selected job by default; applications are sent only through explicit
 | `pif update <firm_id\|domain> --file <patch.json> [--dry-run]` | Partially update writable firm, contact, research, and vendor fields while rebuilding the firm's domain aliases. |
 | `pif delete <firm_id\|domain> [--dry-run] [--force] [-y]` | Delete the directory row and its aliases while preserving operational history. Upstream-synced records require `--force` because a later sync may recreate them. |
 | `pif firms [--vendor <vendor>] [--search <text>] [--source all\|manual\|synced] [--limit N]` | List local firms, optionally filtered by vendor and record origin. Every result includes `manually_added`; `--source manual` returns operator-created firms and `--source synced` returns sync-origin firms. |
+| `pif priority [--event <type>] [--category <category>] [--within-days N] [--min-score N] [--min-confidence N] [--vendor <vendor>] [--icp-tier A] [--entity-type pi_law_firm] [--sort priority\|newest\|fit] [--limit N]` | List firms with recent source-backed changes, ranked by trigger strength, recency, and ICP fit. Repeat `--event` or `--category` to select several signals. |
+| `pif firm-triggers <firm_id> [--limit N]` | Show one firm's change timeline, active and removed vendor history, evidence, and freshness state for profile, sitemap, jobs, and reviews. |
+| `pif trigger-baseline [--limit N]` | Seed non-alerting baselines from research already stored locally. Later successful research runs compare against these snapshots and emit only real changes. |
+| `pif triggers-revalidate [--firm-id <id>] [--limit N]` | Rejudge active trigger candidates with the structured LLM detector, batching related events by firm and research module and retiring false positives. |
+| `pif maintenance-status` / `pif maintenance-queue [--limit N]` | Inspect or queue due profile, review, job-posting, and sitemap research. Defaults are 30 days for all firms and 7 days for fast-moving Tier A/B signals; failures use bounded retry scheduling. |
 | `pif nightly-status` | Read the live backend's fixed 01:00 Asia/Kolkata pipeline: next slot in UTC/IST, enabled stages and budgets, running state, durable last slot, stage outcomes/errors. Does not sync or queue work. |
 | `pif people [--firm <text>] [--name <text>] [--title <text>] [--role <text>] [--source all\|leadership\|staff\|contacts] [--leader any\|leader\|non_leader] [--limit N]` | List people extracted into the local mirrored firm directory. This is the CLI counterpart to the Leads contacts view. |
 | `pif people-options` | List every Title and derived Role dropdown value available in the local mirrored people directory, with contact counts for each value. |
-| `pif enrich <firm_id> [--poll]` | Queue the durable local pipeline for canonical domain, firm profile, leadership/staff, vendor evidence, behavior, local leadership communication/contact profiles, contacts, job postings, and ICP score. Status includes the current stage, percentage, per-stage messages, and warnings. Existing researched facts are merged and never replaced by empty results. No EmailTag research call is made. |
+| `pif enrich <firm_id> [--poll]` | Queue the durable local pipeline for canonical domain, firm profile (including AI adoption and sourced leadership statements), leadership/staff, vendor evidence, behavior, local leadership communication/contact profiles, contacts, job postings, and ICP score. Status includes the current stage, percentage, per-stage messages, and warnings. Existing researched facts are merged; previous AI observations are archived when replaced. No EmailTag research call is made. |
+| `pif ai-posture <firm_id>` | Read local AI adoption stage, leadership stance, dated statements, source URLs, and prior observations. Missing research is `null`; researched with no public evidence is `unknown`. Included in the existing firm-profile research pass and freshness cadence, not an additional scheduled job. Existing firms populate on their next actual research run. |
+| `pif career-search-run [--due] [--seed-only] [--quiet]` | Independent server-side daily PI technology discovery and live verification. Merges into existing Job Postings. `--due` respects the enabled flag, local schedule, daily attempt cap and backoff; without it an operator explicitly runs now. `--seed-only` re-verifies the five priority jobs, not a blind import. `--quiet` suppresses successful zero-new runs and ordinary skips. Partial/failure exits nonzero. |
+| `pif career-search-status` | Local DB configuration, next due timestamp, latest ten durable runs, counters, stored firm/job IDs, decisions and errors. Does not claim the external timer is installed. |
+| `pif career-search-run --retry-run RUN_ID [--candidates-file candidates.json]` | Retry failed candidates in a new audited run, preserving original history. Optional discovery-schema input recovers old missing raw candidates; all jobs still require fresh exact-source verification. Otherwise legacy failures use bounded affected-employer rediscovery. No unrelated rechecks, schedule changes or daily-slot consumption. Cannot combine with `--due` or `--seed-only`. |
+| `pif career-search-config [--file patch.json] [--enable/--disable]` | Read or patch configuration: timezone, local_time, max_candidates, max_rechecks, max_sources, max_attempts, source_urls. Defaults disabled, 08:00 America/Bogota (13:00 UTC), 10 new candidates and 8 tracked rechecks. Installation/activation is a separate parent operation. |
 | `pif research-job-postings <firm_id> [--poll]` | Queue only local job-posting web research through the Possible OS gateway. |
 | `pif resolve <domain\|email\|url\|legacy_pif_id>` | Resolve locally through `firm_intel_aliases` and mirrored websites; if no local hit, fall back to EmailTag v2 `/firms/resolve`. Prints `firm_id`, `firm_name`, and source. |
 | `pif show <firm_id\|domain>` | Print the mirrored v2 profile summary for a firm: name, website, metro, ICP tier, warm score, decision-makers with emails, and vendor stack. Local-only; no upstream HTTP. |
@@ -1239,7 +1260,23 @@ contention visible instead of hiding it inside model time.
 
 ---
 
+### Recipe: apply through an employer website
+
+Import and classify the exact job, read `processing_revision` from `job-agent show ID`,
+then run `job-agent browser-start ID --revision N --authorize-submit` when website
+submission is authorized. Poll `browser-status ID`; answer pending questions with
+`browser-control --action answer --revision BROWSER_REVISION --question-id Q
+--answer-file answer.txt`. Do not retry a submission marked uncertain. See
+[Website application operations](JOB_BROWSER_APPLICATIONS.md) for recovery,
+installation, all states, and browser limitations. Website status is distinct from
+Zoho email status.
+
 ## 11. REST API (used by the CLI — agents can call directly)
+
+The firm modal's People tab shows complete biographies and expandable
+Professional details (education, experience, bar admissions, skills,
+certifications, publications, cases and source links when stored). This is
+UI-only presentation of the existing firm JSON, with no research or data mutation.
 
 Base URL: `http://127.0.0.1:${BACKEND_PORT:-8000}` (or `PUBLIC_BASE_URL` externally).
 
@@ -1413,3 +1450,83 @@ until you've done at least one successful live demo-booking call end-to-end
 
 When asking the user to commit, describe the change concretely ("added X
 command"; don't say "updated CLI").
+
+### Job agent PDF preview
+
+Inline PDF preview is browser-only presentation. `job-agent resumes` and `show ID`
+return the same library-relative PDF paths under `/home/pranav/resume`; headless
+operators can read or copy those files directly. No separate send authority is
+granted by previewing or downloading a resume.
+## Review Alert Commands
+
+| Command | Purpose |
+| --- | --- |
+| `review-alerts status` | Live configuration, blockers, leader subscriptions, full drafts and delivery counts |
+| `review-alerts enroll [--execute]` | Preview/enroll one eligible leader per canonical PI firm |
+| `review-alerts config --enabled/--disabled --auto-send/--no-auto-send` | Separate research and send gates |
+| `review-alerts config --auto-schedule/--no-auto-schedule --auto-schedule-time HH:MM --auto-schedule-limit N` | Configure one bounded normal lead-gen wave per Pacific day (default 09:15, maximum 20) |
+| `review-alerts config --postal-address TEXT --sender EMAIL --daily-limit N --research-daily-limit N` | Sender, footer and daily budgets |
+| `review-alerts run` | Request a bounded server cycle; poll status for results |
+| `review-alerts schedule --start ISO_DATETIME --limit 20 [--dry-run]` | Draft and schedule today's oldest qualifying reviews in normal lead-gen / Send Queue; maximum 20 firms, five-minute spacing |
+| `review-alerts subscription FIRM_ID --status active/paused/unsubscribed` | Pause/resume or permanently exclude a firm |
+
+See [Review Alerts](REVIEW_ALERTS.md). Enrollment never sends by itself. Standalone automatic
+sending requires a monitored reply mailbox and a real postal address. The authorized
+`schedule` command instead uses the existing lead-gen signature, sender, monitored
+reply-to and policies, and disables standalone auto-send. Full sent
+emails and uncertain attempts appear in Communications. Never retry an uncertain
+send without reconciling the real Sent mailbox.
+
+### Automatic resume selection in applications
+Website start and email prepare/apply now include category matching and one-page PDF selection as the first saved worker step. Existing valid selections and manual categories are reused. CLI commands and APIs accept unclassified jobs without an extra classification call. Opening a job does not start work. The modal shows a shared resume card with optional category controls, a website workflow with three progress stages, and an expandable email workflow. Missing resume mappings and classification failures remain actionable blockers.
+
+### Reusable applicant profile
+Answers to website application questions are saved automatically for contextual reuse. Manage them in the Applicant profile tab or inside the application modal. CLI: `job-agent profile`, `profile-save --file FILE`, `profile-remove ID --revision N`, `profile-import-answers`. `browser-control --action answer` defaults to remembering; `--this-application-only` limits reuse. See [JOB_APPLICANT_PROFILE.md](JOB_APPLICANT_PROFILE.md) for scope, provenance, snapshot and conflict behavior.
+
+Job website clean restart: `bin/possibleos job-agent browser-control JOB_ID --action restart --revision N [--provider openai|gateway]`.
+Read `browser-status` first: `can_restart` and `restart_blocked_reason` explain availability.
+A restart retains resume/answers and archives the previous attempt; it cannot reset
+confirmed submissions or unresolved interactions that may have submitted.
+
+Browser validation repair is automatic: `job-agent browser-status JOB_ID` shows
+Correcting the form before submission and `audit_feedback`; events include
+`audit_repair` and `audit_repair_stopped`. Existing browser-control resume restarts
+a stopped correction segment. It does not bypass hard audits or submit locks.
+
+
+Browser worker recovery: `job-agent browser-status JOB_ID` reports live browser
+availability separately from application status. `job-agent browser-control
+JOB_ID --action reconnect --revision N` attaches a stopped run to its preserved
+page without navigation or submission. Then resume pre-submit work, answer a
+pending question, or verify an uncertain submission. Restarting only the backend
+keeps new sessions alive in possibleos-browser.service; restarting the browser
+service or host does not. After release, use guarded restart for a fresh attempt.
+See [JOB_BROWSER_APPLICATIONS.md](JOB_BROWSER_APPLICATIONS.md).
+
+
+Resume selection uses Jev's highest-ranked category with an assigned PDF, even
+when No clear match wins overall. The raw probabilities remain visible; closest
+match does not establish qualifications. Confidence is informational, never a
+selection gate; legacy classification_threshold values are ignored. Explicit
+manual categories remain authoritative. Missing/invalid PDFs or failed model
+requests still require correction. Use the existing classify or browser resume
+commands for an individual job; no bulk reclassification is triggered.
+
+
+### Quit a website application
+
+`job-agent browser-quit-reasons ID` suggests editable reasons using the run's AI
+provider and the job / current question / blocker; it does not save answers or
+quit. Suggestions are possibilities, not established applicant facts. Custom
+reasons and quitting without a reason remain available if inference fails.
+`job-agent browser-control ID --action quit --revision N --reason "Not willing to relocate"`
+stops a waiting/paused/blocked pre-submit run as `cancelled` (UI: Quit by you).
+The modal offers this beside Save answer and continue, then shows suggested
+reasons and an editable optional reason with a confirmation button.
+History, the pending-question snapshot and saved answers remain; the reason is
+not added to the applicant profile. Browser closure is best-effort and can be
+retried with release if unavailable. Worker recovery leaves cancelled runs alone;
+resume/answer do not reactivate them. Explicit guarded restart can begin a fresh
+attempt. Active runs must pause first; possible/confirmed submissions cannot be
+relabelled cancelled. This is local cancellation, not employer-side withdrawal,
+and it does not cancel an independent email application or change job review.

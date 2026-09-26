@@ -1,0 +1,96 @@
+{
+  "checked_at": "2026-09-17T09:36:09.305980+00:00",
+  "coverage": [
+    {
+      "folder": "\"INBOX\"",
+      "since": "2026-05-01",
+      "messages": 246
+    },
+    {
+      "folder": "\"Drafts\"",
+      "since": "2026-05-01",
+      "messages": 9
+    },
+    {
+      "folder": "\"Templates\"",
+      "since": "2026-05-01",
+      "messages": 0
+    },
+    {
+      "folder": "\"Snoozed\"",
+      "since": "2026-05-01",
+      "messages": 0
+    },
+    {
+      "folder": "\"Sent\"",
+      "since": "2026-05-01",
+      "messages": 562
+    },
+    {
+      "folder": "\"Spam\"",
+      "since": "2026-05-01",
+      "messages": 1
+    },
+    {
+      "folder": "\"Trash\"",
+      "since": "2026-05-01",
+      "messages": 0
+    },
+    {
+      "folder": "\"Notification\"",
+      "since": "2026-05-01",
+      "messages": 27
+    },
+    {
+      "folder": "\"Newsletter\"",
+      "since": "2026-05-01",
+      "messages": 63
+    },
+    {
+      "folder": "\"Archive\"",
+      "since": "2026-05-01",
+      "messages": 0
+    }
+  ],
+  "errors": [],
+  "matches": {
+    "blalezari@redefinelawfirm.com": [],
+    "jamal@jsminjuryfirm.com": [],
+    "kris@peeralilaw.com": [],
+    "gohar@abelianlawfirm.com": [],
+    "hgk@keosianlaw.com": [],
+    "david@greylaw.com": [],
+    "david@pourati.com": [],
+    "sj@jarulaw.com": [],
+    "hyp@hyplaw.com": [],
+    "lillian@sedlawgroup.com": [],
+    "ethan@esqlegalgroup.com": [],
+    "estelaricheda@earthlink.net": [],
+    "daniel.kim@dklaw.com": [],
+    "aslan.petrosyan@petrosyanlawpc.com": [],
+    "ajordan@josejordan.com": [],
+    "dchoyce@choycelawfirm.com": [],
+    "svaziri@vazirilaw.com": [],
+    "william@hillstonelaw.com": [],
+    "will@sgwlawyers.com": [],
+    "werner@meissnerlawfirm.com": [],
+    "tina@alvandigroup.com": [],
+    "stephan@sfalaw.com": [],
+    "spencer@seyblaw.com": [],
+    "sa@tridentlegal.com": [],
+    "ryan@sargentlawfirm.com": [],
+    "ross@jurewitz.com": [],
+    "rivasinjurylaw@outlook.com": [],
+    "randal@ramoslaw.com": [],
+    "psharma@wingertlaw.com": [],
+    "orlanmarie@slegal.com": [],
+    "mike@oakwoodlegal.com": [],
+    "michaelpark@parklawgroup.com": [],
+    "michael@thetitanlaw.com": [],
+    "michael@ghozlandlawfirm.com": [],
+    "mahsa@bdinjury.com": [],
+    "liz@accidentjustice.com": [],
+    "kramirez@ramirezlaw.com": [],
+    "kirill@pacificwestinjury.com": []
+  }
+}

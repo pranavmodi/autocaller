@@ -18,6 +18,16 @@ from app.services import job_agent as core, job_agent_processing as processing
 from app.services import job_agent_mail as mail, job_agent_research as research, job_agent_resumes as resumes
 
 
+@pytest.fixture
+def verified_job_identity(monkeypatch):
+    verifier = AsyncMock(return_value={
+        'provider': 'typesafe', 'model': 'jev-test', 'probability': 0.97,
+        'threshold': 0.8, 'usage': {},
+    })
+    monkeypatch.setattr(research, 'verify_job_identity_with_jev', verifier)
+    return verifier
+
+
 def test_category_config_requires_unique_ids():
     category = resumes.default_categories()[0]
     with pytest.raises(ValidationError):
@@ -112,7 +122,10 @@ async def test_job_agent_classification_uses_one_jev_choice_request(monkeypatch)
 
     decisions = await processing.classify_with_jev(jobs, categories)
 
-    assert [decision.category_id for decision in decisions] == [categories[0].id, None]
+    assert [decision.category_id for decision in decisions] == [categories[0].id, categories[0].id]
+    assert 'Closest available resume' in decisions[1].reason
+    assert decisions[1].confidence == 0.03
+    assert decisions[1].probabilities[processing.JEV_NO_MATCH] == 0.95
     assert decisions[0].model == 'jev-1.13.0'
     assert decisions[0].probabilities[categories[0].id] == 0.97
     assert '97% category probability' in decisions[0].reason
@@ -383,6 +396,21 @@ def test_evidence_accepts_exact_fragments_and_email_in_different_page_order():
         research.validate_evidence(invented, [page], 'Contact evidence')
 
 
+def test_evidence_url_identity_ignores_tracking_fragment_and_trailing_slash():
+    page = {
+        'requested_url': 'https://example.com/careers/?utm_source=linkedin',
+        'final_url': 'https://example.com/careers/',
+        'http_status': 200,
+        'content': 'Example Systems careers and jobs@example.com',
+    }
+    evidence = research.Evidence(
+        source_url='https://example.com/careers#open-roles',
+        text='Example Systems careers',
+    )
+
+    assert research.validate_evidence(evidence, [page]) is page
+
+
 def test_recipient_email_is_checked_against_fetched_page_not_short_excerpt():
     content = ('Denise Figueiredo, Director of Human Resources. Responsible for '
                'recruiting top talent. Contact dfigueiredo@example.com.')
@@ -414,7 +442,7 @@ def test_possibleos_contacts_require_employer_domain_and_suitable_routing_role()
 
 
 @pytest.mark.asyncio
-async def test_research_can_use_verified_possibleos_routing_contact(monkeypatch):
+async def test_research_can_use_verified_possibleos_routing_contact(monkeypatch, verified_job_identity):
     company = 'https://example.com'
     job = 'https://jobs.example.com/personal-injury-assistant'
     contact = {
@@ -477,24 +505,99 @@ async def test_research_can_use_verified_possibleos_routing_contact(monkeypatch)
     assert result['evidence']['possibleos_contact_error'] is None
 
 
-def test_alternate_job_page_requires_trusted_host_and_matching_identity():
-    assert research.trusted_job_host('https://jobs.example.com/role', 'example.com')
-    assert research.trusted_job_host('https://ca.linkedin.com/jobs/view/123', 'example.com')
-    assert not research.trusted_job_host('https://unrelated.example.net/role', 'example.com')
-    posting = {'title': 'AI & Cloud Infrastructure Specialist', 'firm_name': 'Example Systems LLP'}
-    page = {'content': 'Example Systems LLP — AI & Cloud Infrastructure Specialist — Apply'}
-    assert research.validate_job_page(page, posting) is page
-    with pytest.raises(ValueError, match='same employer'):
-        research.validate_job_page({'content': 'Another Firm — AI & Cloud Infrastructure Specialist'}, posting)
-    with pytest.raises(ValueError, match='same job title'):
-        research.validate_job_page({'content': 'Example Systems LLP — Office Manager'}, posting)
+@pytest.mark.asyncio
+async def test_job_identity_verification_uses_jev_noul(monkeypatch):
+    captured = {}
+
+    class Client:
+        def __init__(self, **kwargs):
+            captured['client'] = kwargs
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return None
+
+        async def post(self, url, **kwargs):
+            captured['url'], captured['request'] = url, kwargs
+            return httpx.Response(200, request=httpx.Request('POST', url), json={
+                'model': 'jev-1.13.0',
+                'answers': {
+                    'same_job_identity_0': {'type': 'noul', 'noul': 0.81},
+                    'same_job_identity_1': {'type': 'noul', 'noul': 0.96},
+                },
+                'usage': {'input_tokens': 200, 'output_tokens': 12},
+            })
+
+    monkeypatch.setattr(research.httpx, 'AsyncClient', Client)
+    monkeypatch.setenv('TYPESAFE_API_KEY', 'secret-test-key')
+    posting = {'title': 'Forward Deployed Engineer - Remote', 'firm_name': 'Kake'}
+    page = {'requested_url': 'https://kake.co/jobs/role', 'final_url': 'https://kake.co/jobs/role',
+            'content': 'Forward Deployed Engineer | Kake. Kake is a remote-first company.'}
+    corroborating = {
+        'requested_url': 'https://www.linkedin.com/jobs/view/123',
+        'final_url': 'https://www.linkedin.com/jobs/view/123',
+        'content': 'Kake is hiring a Forward Deployed Engineer.',
+    }
+
+    decision = await research.verify_job_identity_with_jev(
+        page, posting, corroborating_pages=[corroborating]
+    )
+
+    assert decision == {'provider': 'typesafe', 'model': 'jev-1.13.0', 'probability': 0.96,
+                        'selected_source_url': 'https://www.linkedin.com/jobs/view/123',
+                        'source_probabilities': [
+                            {'source_url': 'https://kake.co/jobs/role', 'probability': 0.81},
+                            {'source_url': 'https://www.linkedin.com/jobs/view/123', 'probability': 0.96},
+                        ], 'source_count': 2,
+                        'usage': {'input_tokens': 200, 'output_tokens': 12}}
+    request = captured['request']['json']
+    assert captured['url'] == research.TYPESAFE_SYSTEM_ONE_URL
+    assert request['model'] == 'jev-latest'
+    assert request['questions']['same_job_identity_0']['type'] == 'noul'
+    assert request['questions']['same_job_identity_1']['type'] == 'noul'
+    assert request['state']['saved_job']['title'] == 'Forward Deployed Engineer - Remote'
+    assert request['state']['candidate_sources'] == [{
+        'url': 'https://kake.co/jobs/role',
+        'content': 'Forward Deployed Engineer | Kake. Kake is a remote-first company.',
+    }, {
+        'url': 'https://www.linkedin.com/jobs/view/123',
+        'content': 'Kake is hiring a Forward Deployed Engineer.',
+    }]
 
 
 @pytest.mark.asyncio
-async def test_research_uses_verified_alternate_job_page_when_canonical_fetch_fails(monkeypatch):
+async def test_job_identity_uses_best_available_source_without_a_fixed_threshold(monkeypatch):
+    class Client:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return None
+
+        async def post(self, url, **_kwargs):
+            return httpx.Response(200, request=httpx.Request('POST', url), json={
+                'model': 'jev-1.13.0',
+                'answers': {'same_job_identity_0': {'type': 'noul', 'noul': 0.22}},
+            })
+
+    monkeypatch.setattr(research.httpx, 'AsyncClient', lambda **_kwargs: Client())
+    monkeypatch.setenv('TYPESAFE_API_KEY', 'secret-test-key')
+    decision = await research.verify_job_identity_with_jev(
+        {'requested_url': 'https://example.com/job', 'content': 'Example Office Manager'},
+        {'title': 'AI Engineer', 'firm_name': 'Example'},
+    )
+    assert decision['probability'] == 0.22
+    assert decision['selected_source_url'] == 'https://example.com/job'
+
+
+@pytest.mark.asyncio
+async def test_research_uses_verified_alternate_job_page_when_canonical_fetch_fails(
+        monkeypatch, verified_job_identity):
     canonical = 'https://jobs.example.invalid/ai-cloud'
     company = 'https://example.com/careers'
-    alternate = 'https://www.linkedin.com/jobs/view/123'
+    alternate = 'https://regional-recruiter.example.net/jobs/ai-cloud'
     application = {
         'posting': {'title': 'AI & Cloud Infrastructure Specialist', 'firm_name': 'Example Systems LLP',
                     'website': 'example.com', 'source_url': canonical},
@@ -515,7 +618,9 @@ async def test_research_uses_verified_alternate_job_page_when_canonical_fetch_fa
         if mode == 'discover_contacts':
             return {'company_url': company, 'contact_urls': [company], 'job_urls': [alternate], 'summary': 'Example'}
         if mode == 'compose':
-            assert {page['requested_url'] for page in payload['pages']} == {company, alternate}
+            assert {page['requested_url'] for page in payload['pages']} == {
+                company, 'https://example.com/', alternate,
+            }
             assert payload['source_fetch_failures'][0]['requested_url'] == canonical
             return {'blocked_reason': None, 'packet': {
                 'company_summary': 'Example builds software.',
@@ -540,10 +645,13 @@ async def test_research_uses_verified_alternate_job_page_when_canonical_fetch_fa
 
     monkeypatch.setattr(research, 'fetch_page', fetch)
     result = await research.research_application(application, model, update_phase)
-    assert phases == [('auditing', 'Draft created; checking every claim against the resume and sources')]
+    assert [phase for phase, _stage in phases] == [
+        'discovering_contacts', 'fetching_sources', 'checking_contacts', 'drafting',
+        'verifying_sources', 'auditing']
     assert result['evidence']['job']['source_url'] == alternate
     assert result['evidence']['canonical_job_url'] == canonical
     assert result['evidence']['verified_job_url'] == alternate
+    assert result['evidence']['job_identity_verification']['probability'] == 0.97
     assert alternate in result['email']['body_text']
     assert canonical not in result['email']['body_text']
     assert result['evidence']['source_fetch_failures'][0]['requested_url'] == canonical
@@ -579,7 +687,8 @@ async def test_research_reports_job_fetch_failures_before_composition(monkeypatc
 
 
 @pytest.mark.asyncio
-async def test_research_uses_official_job_subdomain_when_company_page_redirects_elsewhere(monkeypatch):
+async def test_research_uses_official_job_subdomain_when_company_page_redirects_elsewhere(
+        monkeypatch, verified_job_identity):
     job = 'https://jobs.example.com/architect'
     company = 'https://example.com'
     application = {
@@ -622,7 +731,8 @@ async def test_research_uses_official_job_subdomain_when_company_page_redirects_
 
 
 @pytest.mark.asyncio
-async def test_research_prefers_saved_canonical_homepage_over_redirected_discovery(monkeypatch):
+async def test_research_prefers_saved_canonical_homepage_over_redirected_discovery(
+        monkeypatch, verified_job_identity):
     job = 'https://ats.example.net/data-architect'
     discovered_company = 'https://example.com/old-about'
     canonical_company = 'https://example.com/'
@@ -666,6 +776,151 @@ async def test_research_prefers_saved_canonical_homepage_over_redirected_discove
     monkeypatch.setattr(research, 'load_possibleos_contacts', AsyncMock(return_value=[]))
     result = await research.research_application(application, model)
     assert result['evidence']['company']['source_url'] == canonical_company
+
+
+@pytest.mark.asyncio
+async def test_research_accepts_a_different_official_company_page_than_discovery(
+        monkeypatch, verified_job_identity):
+    job = 'https://nodesk.co/remote-jobs/example-business-process-engineer/'
+    company = 'https://example.com/'
+    about = 'https://example.com/about'
+    contact = 'https://example.com/contact'
+    application = {
+        'posting': {
+            'firm_id': 'firm-1', 'title': 'Business Process Engineer',
+            'firm_name': 'Example Systems', 'website': 'example.com',
+            'source_url': job, 'employer_evidence_url': about,
+            'role_evidence': {
+                'source_url': job,
+                'text': 'Example Systems — Business Process Engineer — Apply now',
+            },
+        },
+        'resume': {'text': 'PRANAV MODI\nFounder, Possible Minds'},
+        'preferences': {},
+    }
+
+    async def fetch(url, **_kwargs):
+        content = {
+            job: 'Example Systems — Business Process Engineer — Apply now',
+            company: 'Example Systems official website',
+            about: 'Example Systems builds healthcare workflow software.',
+            contact: 'Contact Example Systems at hello@example.com',
+        }[url]
+        return {'requested_url': url, 'final_url': url, 'http_status': 200, 'content': content}
+
+    async def model(mode, payload, _fields):
+        if mode == 'discover_contacts':
+            return {'company_url': company, 'contact_urls': [contact],
+                    'job_urls': [], 'summary': 'Example'}
+        if mode == 'compose':
+            return {'blocked_reason': None, 'packet': {
+                'company_summary': 'Example Systems builds healthcare workflow software.',
+                'company_evidence': {
+                    'source_url': about,
+                    'text': 'Example Systems builds healthcare workflow software.',
+                },
+                'job_evidence': {
+                    'source_url': job,
+                    'text': 'Example Systems is hiring a business-process specialist.',
+                },
+                'recipient': {
+                    'email': 'hello@example.com', 'name': 'Example Systems',
+                    'kind': 'routing',
+                    'evidence': {
+                        'source_type': 'public_page', 'source_url': contact,
+                        'text': 'Contact Example Systems at hello@example.com',
+                        'contact_id': None, 'source_name': None, 'observed_at': None,
+                    },
+                    'reason': 'Published official routing inbox.',
+                },
+                'subject': 'Application: Business Process Engineer - Pranav Modi',
+                'body_text': (
+                    'Hello, I am applying for the Business Process Engineer role. '
+                    f'My resume is attached.\n\nRole: {job}'
+                ),
+                'fit_reason': 'Relevant workflow automation experience.', 'gaps': [],
+            }}
+        assert mode == 'audit_email'
+        return {'approved': True, 'reason': 'Evidence is complete.'}
+
+    monkeypatch.setattr(research, 'fetch_page', fetch)
+    monkeypatch.setattr(research, 'load_possibleos_contacts', AsyncMock(return_value=[]))
+
+    result = await research.research_application(application, model)
+
+    assert result['evidence']['company']['source_url'] == about
+    assert result['evidence']['job']['text'] == (
+        'Example Systems — Business Process Engineer — Apply now'
+    )
+    assert result['evidence']['stored_evidence_recoveries'] == ['job']
+    assert result['recipient']['email'] == 'hello@example.com'
+
+
+@pytest.mark.asyncio
+async def test_research_uses_imported_company_evidence_when_homepage_is_blocked(
+        monkeypatch, verified_job_identity):
+    job = 'https://www.linkedin.com/jobs/view/123'
+    discovered_company = 'https://example.com'
+    canonical_company = 'https://example.com/'
+    imported_evidence = (
+        'https://example.com/wp-json/wp/v2/pages?slug=about&_fields=link%2Ctitle%2Ccontent'
+    )
+    contact = {
+        'contact_id': 'contact-1', 'firm_id': 'firm-1', 'email': 'recruiting@example.com',
+        'name': 'Example Recruiting', 'title': 'Recruiting', 'kind': 'recruiting',
+        'source': 'job_search', 'observed_at': '2026-09-23T00:00:00+00:00', 'score': 100,
+        'evidence': {
+            'source_type': 'possibleos_contact',
+            'source_url': 'possibleos://firm-contacts/contact-1',
+            'text': 'Example Recruiting | Recruiting | recruiting@example.com',
+            'contact_id': 'contact-1', 'source_name': 'job_search',
+            'observed_at': '2026-09-23T00:00:00+00:00',
+        },
+    }
+    application = {
+        'posting': {'firm_id': 'firm-1', 'title': 'Senior Product Manager',
+                    'firm_name': 'Example Systems', 'website': 'example.com',
+                    'source_url': job, 'employer_evidence_url': imported_evidence},
+        'resume': {'text': 'PRANAV MODI\nFounder, Possible Minds'},
+        'preferences': {},
+    }
+
+    async def fetch(url, **_kwargs):
+        if url in {discovered_company, canonical_company}:
+            raise RuntimeError('unverified HTTP 403')
+        if url == imported_evidence:
+            return {'requested_url': url, 'final_url': url, 'http_status': 200,
+                    'content': 'Example Systems official company page'}
+        return {'requested_url': url, 'final_url': url, 'http_status': 200,
+                'content': 'Example Systems — Senior Product Manager — Apply now'}
+
+    async def model(mode, payload, _fields):
+        if mode == 'discover_contacts':
+            return {'company_url': discovered_company, 'contact_urls': [],
+                    'job_urls': [], 'summary': 'Example'}
+        if mode == 'compose':
+            assert payload['company_url'] == imported_evidence
+            assert payload['possibleos_contacts'] == [contact]
+            return {'blocked_reason': None, 'packet': {
+                'company_summary': 'Example Systems builds software.',
+                'company_evidence': {'source_url': imported_evidence,
+                                     'text': 'Example Systems official company page'},
+                'job_evidence': {'source_url': job,
+                                 'text': 'Example Systems — Senior Product Manager — Apply now'},
+                'recipient': {'email': contact['email'], 'name': contact['name'],
+                              'kind': 'recruiting', 'evidence': contact['evidence'],
+                              'reason': 'Verified employer-domain recruiting contact.'},
+                'subject': 'Application: Senior Product Manager - Pranav Modi',
+                'body_text': f'Hello, I am applying for this role. My resume is attached.\n\nRole: {job}',
+                'fit_reason': 'Relevant product leadership experience.', 'gaps': []}}
+        assert mode == 'audit_email'
+        return {'approved': True, 'reason': 'Evidence is complete.'}
+
+    monkeypatch.setattr(research, 'fetch_page', fetch)
+    monkeypatch.setattr(research, 'load_possibleos_contacts', AsyncMock(return_value=[contact]))
+    result = await research.research_application(application, model)
+    assert result['evidence']['company']['source_url'] == imported_evidence
+    assert result['recipient']['email'] == 'recruiting@example.com'
 
 
 @pytest.mark.asyncio
@@ -780,3 +1035,26 @@ async def test_classification_override_and_prepare_send_intent(monkeypatch, tmp_
         async with async_engine.begin() as connection:
             await connection.execute(text(f'DROP SCHEMA "{schema}" CASCADE'))
         await async_engine.dispose()
+
+
+def test_resume_selection_ignores_legacy_confidence_threshold():
+    from types import SimpleNamespace
+    from app.services.job_agent import JobAgentConfig
+    config = JobAgentConfig(classification_threshold=1.0)
+    row = SimpleNamespace(classification_status='classified', classification={
+        'source':'model', 'category_id':config.resume_categories[0].id, 'confidence':0.01})
+    assert processing.classification_view(row, config)['status'] == 'classified'
+
+
+def test_best_resume_skips_unmapped_category_and_preserves_ranking():
+    categories = resumes.default_categories()[:2]
+    categories[0].resume_path = ''
+    response = {'model':'jev-test','answers':{'job_0':{
+        'type':'choice', 'choice':categories[0].id, 'confidence':0.7,
+        'probabilities':{categories[0].id:0.7,categories[1].id:0.2,processing.JEV_NO_MATCH:0.1}}}}
+    result = processing._parse_jev_decisions(response, ['job'], categories)[0]
+    assert result.category_id == categories[1].id
+    assert 'Closest available resume' in result.reason
+    categories[1].resume_path = ''
+    with pytest.raises(ValueError, match='Assign a resume PDF'):
+        processing._parse_jev_decisions(response, ['job'], categories)

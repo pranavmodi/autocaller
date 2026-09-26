@@ -1,0 +1,132 @@
+{
+  "action": {
+    "id": "action_5936cbd82f5142b182f83ea2",
+    "action_type": "send_approved_lead_gen_draft",
+    "status": "approved",
+    "risk_level": "high",
+    "requested_by": "codex",
+    "approved_by": "codex",
+    "entity_type": "lead_gen_batch_item",
+    "entity_id": "9d014efa645341268bcf28c9193f59d9",
+    "input": {
+      "body": "Hi Roger,\n\nThe intake example I sent left me thinking about the point where automation should stop and your judgment should take over. As the attorney leading the practice, you are the person who has to trust that handoff.\n\nI'm Pranav, founder of Possible Minds. We help PI firms adopt AI, and I'm trying to understand where it would genuinely help before building around assumptions.\n\nWould a review-ready intake summary or a clearer list of who owns each follow-up be more useful to you? Even a brief answer would help, and I'd appreciate your time.\n\nBest,\nPranav\nFounder, Possible Minds",
+      "subject": "precise imaging and ai readiness",
+      "approval": {
+        "references": "<19f04b82758.1e3748a252715.5961745942063573649@possiblemindshq.com>",
+        "approved_at": "2026-09-17T09:52:11.379534+00:00",
+        "approved_by": "codex",
+        "body_sha256": "9b509333ed603fce388f6f74a6b3ec48cc6d144ae2ab15c0c9916e8509cc2438",
+        "in_reply_to": "<19f04b82758.1e3748a252715.5961745942063573649@possiblemindshq.com>",
+        "subject_sha256": "5c357b37a8778a798fc9e11f324ed5c03c0d8e8c7752c76e4528c12e3d93cfe3"
+      },
+      "transport": "resend",
+      "references": "<19f04b82758.1e3748a252715.5961745942063573649@possiblemindshq.com>",
+      "skill_path": null,
+      "body_sha256": "9b509333ed603fce388f6f74a6b3ec48cc6d144ae2ab15c0c9916e8509cc2438",
+      "in_reply_to": "<19f04b82758.1e3748a252715.5961745942063573649@possiblemindshq.com>",
+      "skill_sha256": null,
+      "batch_item_id": "9d014efa645341268bcf28c9193f59d9",
+      "brief_version": null,
+      "subject_sha256": "5c357b37a8778a798fc9e11f324ed5c03c0d8e8c7752c76e4528c12e3d93cfe3",
+      "composer_variant_key": null,
+      "lead_gen_action_type": "follow_up",
+      "composer_experiment_key": null
+    },
+    "policy_result": {},
+    "execution_result": {},
+    "error": null,
+    "trace_id": null,
+    "scheduled_for": "2026-09-17T17:00:00+00:00",
+    "started_at": null,
+    "completed_at": null,
+    "created_at": "2026-09-17T09:52:11.385933+00:00",
+    "updated_at": "2026-09-17T09:52:11.385939+00:00"
+  },
+  "created": true,
+  "updated_existing": false,
+  "executed": false,
+  "scheduled_for_pt": "2026-09-17 10:00 PDT",
+  "scheduled_for_utc": "2026-09-17 17:00:00 UTC",
+  "policy": {
+    "allowed": true,
+    "reason": "allowed",
+    "checks": [
+      {
+        "name": "status_allows_execution",
+        "passed": true,
+        "detail": "approved"
+      },
+      {
+        "name": "human_approval_present",
+        "passed": true,
+        "detail": "codex"
+      },
+      {
+        "name": "subject_present",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "body_present",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "subject_hash_matches_approval",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "body_hash_matches_approval",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "in_reply_to_matches_approval",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "references_match_approval",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "lead_gen_transport_available",
+        "passed": true,
+        "detail": "zoho_api 0/0 configured=True; resend 0/50 configured=True"
+      },
+      {
+        "name": "no_patient_data_in_outreach",
+        "passed": true,
+        "detail": "llm_guard_disabled"
+      },
+      {
+        "name": "batch_item_exists",
+        "passed": true,
+        "detail": "9d014efa645341268bcf28c9193f59d9"
+      },
+      {
+        "name": "batch_item_not_already_started",
+        "passed": true,
+        "detail": "approved"
+      },
+      {
+        "name": "contact_email_present",
+        "passed": true,
+        "detail": "rogerb@bonakdarlawfirm.com"
+      },
+      {
+        "name": "no_prior_successful_action_for_item",
+        "passed": true,
+        "detail": ""
+      }
+    ],
+    "risk_level": "high",
+    "requires_human_approval": true,
+    "action_type": "send_approved_lead_gen_draft",
+    "contact_email": "rogerb@bonakdarlawfirm.com"
+  },
+  "rank": 7,
+  "email": "rogerb@bonakdarlawfirm.com"
+}

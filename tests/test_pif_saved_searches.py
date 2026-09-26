@@ -55,13 +55,49 @@ def test_normalize_firm_trigger_search_criteria_keeps_trigger_filters():
         "active_only": True,
     })
 
-    assert normalized["entity_type"] == "pi_law_firm"
-    assert normalized["vendor"] == "filevine"
-    assert normalized["job_posting_role"] == "intake"
-    assert normalized["job_posting_tag"] == "lead_conversion"
+    assert normalized["entity_type"] == ["pi_law_firm"]
+    assert normalized["vendor"] == ["filevine"]
+    assert normalized["job_postings_presence"] == ["has"]
+    assert normalized["job_posting_role"] == ["intake"]
+    assert normalized["job_posting_tag"] == ["lead_conversion"]
     assert normalized["job_posting_query"] == "lead conversion CRM"
     assert normalized["job_posted_within_days"] == "30"
+    assert normalized["staff_count_range"] == ["11-25"]
     assert normalized["active_only"] is True
+
+
+def test_normalize_firm_trigger_search_criteria_keeps_multiple_count_ranges():
+    normalized = normalize_firm_trigger_search_criteria({
+        "contact_email_range": ["1-5", "11-25", "1-5"],
+        "staff_count_range": ["0-0", "51-100"],
+    })
+
+    assert normalized["contact_email_range"] == ["1-5", "11-25"]
+    assert normalized["staff_count_range"] == ["0-0", "51-100"]
+
+
+def test_normalize_firm_trigger_search_criteria_keeps_multiple_categorical_filters():
+    normalized = normalize_firm_trigger_search_criteria({
+        "icp_tier": ["A", "B"],
+        "entity_type": ["pi_law_firm", "law_firm"],
+        "autorespond_type": ["bill_offer", "medical_records"],
+        "research_presence": ["completed", "failed"],
+        "staff_presence": ["missing", "queued_or_running"],
+        "job_postings_presence": ["has", "failed"],
+        "job_posting_role": ["intake", "technology"],
+        "job_posting_tag": ["lead_conversion", "crm_management"],
+        "vendor": ["Filevine", "Clio"],
+    })
+
+    assert normalized["icp_tier"] == ["A", "B"]
+    assert normalized["entity_type"] == ["pi_law_firm", "law_firm"]
+    assert normalized["autorespond_type"] == ["bill_offer", "medical_records"]
+    assert normalized["research_presence"] == ["completed", "failed"]
+    assert normalized["staff_presence"] == ["missing", "queued_or_running"]
+    assert normalized["job_postings_presence"] == ["has", "failed"]
+    assert normalized["job_posting_role"] == ["intake", "technology"]
+    assert normalized["job_posting_tag"] == ["lead_conversion", "crm_management"]
+    assert normalized["vendor"] == ["filevine", "clio"]
 
 
 def test_normalize_firm_trigger_search_criteria_rejects_unknown_role():

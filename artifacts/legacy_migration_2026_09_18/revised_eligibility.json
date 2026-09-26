@@ -1,0 +1,127 @@
+{
+  "checked_at": "2026-09-18T08:56:43.501745+00:00",
+  "scope": "PI firms with named software signals excluding Filevine, CASEpeer, Clio and Litify; founders, owners, COO or managing partner; one per firm",
+  "raw_firm_records": 44,
+  "direct_founder_candidate_firms_before_quality_checks": 19,
+  "first_touch_candidates": [
+    {
+      "firm": "Hanning & Sacchetto",
+      "name": "Nathan Hanning",
+      "email": "nathan@hanningsacchetto.com",
+      "software": "MerusCase"
+    },
+    {
+      "firm": "Hernandez Law",
+      "name": "John Hernandez",
+      "email": "john@hernandezlaw.co",
+      "software": "MerusCase"
+    },
+    {
+      "firm": "JCS Law Firm",
+      "name": "Joshua Cohen Slatkin",
+      "email": "josh@jcslawyers.com",
+      "software": "Law Ruler"
+    },
+    {
+      "firm": "Steers & Associates",
+      "name": "Elena Steers",
+      "email": "elena@steerslawfirm.com",
+      "software": "Smokeball"
+    },
+    {
+      "firm": "Redkey Gordon Law",
+      "name": "Jude Redkey",
+      "email": "jude@redkeygordonlaw.com",
+      "software": "Smokeball"
+    },
+    {
+      "firm": "Walter Clark Legal Group",
+      "name": "Walter Clark",
+      "email": "wclark@walterclark.com",
+      "software": "SmartAdvocate"
+    }
+  ],
+  "follow_up_candidates_pending_rfc": [
+    {
+      "firm": "Delaney Law",
+      "email": "brendan@delaneylawllc.com",
+      "last_touch": "2026-09-10",
+      "reason": "No reply, bounce or pending conflict found; RFC ancestry not recovered"
+    },
+    {
+      "firm": "Quirk Law Firm",
+      "email": "trevor@quirklawyers.com",
+      "last_touch": "2026-09-10",
+      "reason": "No reply, bounce or pending conflict found; RFC ancestry not recovered"
+    },
+    {
+      "firm": "PARRIS",
+      "email": "rrex@parris.com",
+      "last_touch": "2026-08-15",
+      "reason": "Two previous sends; previously held for unrecoverable RFC ancestry"
+    }
+  ],
+  "held": [
+    {
+      "firm": "Farah & Farah",
+      "reason": "Last touch September 15, within 7-day quiet period"
+    },
+    {
+      "firm": "Choyce",
+      "reason": "Last touch September 17"
+    },
+    {
+      "firm": "RS Law Offices",
+      "reason": "Existing approved unscheduled action action_ea39def9692e468385d3fa52"
+    },
+    {
+      "firm": "Kubota & Craig",
+      "reason": "Yoshi bounced; Cynthia already has three sends; do not route around a bounced contact"
+    },
+    {
+      "firm": "Mesriani",
+      "reason": "Three existing sends, requires cadence review before another nudge"
+    },
+    {
+      "firm": "Hinden & Breslavsky",
+      "reason": "Founder bio records retirement in 2025; current authority needs confirmation"
+    },
+    {
+      "firm": "Finch",
+      "reason": "Vendor/firm identity conflation between Finch software provider and The Finch Firm"
+    },
+    {
+      "firm": "Hernandez Law Offices",
+      "reason": "Contact roster contains different-firm identities; canonical person/email needs resolution"
+    },
+    {
+      "firm": "RHA",
+      "reason": "MyCase label based only on lien-negotiation activity, not defensible vendor evidence"
+    },
+    {
+      "firm": "Dunnion",
+      "reason": "imjurylaw mailbox not yet verified as direct founder-owned rather than shared"
+    },
+    {
+      "firm": "Primo Law",
+      "reason": "Direct founder email discovered through managing-attorney row, but primolaw.filevineapp.com evidence excludes firm"
+    }
+  ],
+  "limitations": [
+    "Software signals are not proof of AI unreadiness.",
+    "Six first-touch candidates pass current stored and live mailbox exclusion checks, not final approved send-policy checks.",
+    "Follow-ups cannot schedule until RFC ancestry is verified.",
+    "No new drafts, links, actions or schedules created by this eligibility audit."
+  ],
+  "transport": {
+    "strategy": "resend_first_then_zoho",
+    "resend_cap": 50,
+    "zoho_cap": 0,
+    "daily_budget": 50
+  },
+  "scheduler": {
+    "running": true,
+    "error": null,
+    "pending_count": 0
+  }
+}

@@ -1,0 +1,130 @@
+{
+  "action": {
+    "id": "action_1b6272f2cd714e1b956967da",
+    "action_type": "send_approved_lead_gen_draft",
+    "status": "approved",
+    "risk_level": "high",
+    "requested_by": "codex",
+    "approved_by": "codex",
+    "entity_type": "lead_gen_batch_item",
+    "entity_id": "a158c73580004507983fae7bf8d8eefe",
+    "input": {
+      "body": "Hi Caroleen,\n\nI previously asked which recurring document bottleneck you'd remove at CTA Law. This article takes a step back and looks at what makes an AI improvement last.\n\nThe main idea is that the team needs clear responsibilities and a shared review process, not just a faster drafting tool. That's shaping our approach to AI adoption at Possible Minds.\n\nhttps://getpossibleminds.com/t/XE55BYEdLg\n\nFrom your managing attorney's perspective, what seems harder: choosing the AI or changing how work moves through the team? I'd value a quick reply.\n\nBest,\nPranav\nFounder, Possible Minds",
+      "subject": "Re: where AI could compound at CTA Law, APLC",
+      "approval": {
+        "references": "<0100019ffcf60ddf-ac9d2a16-bc77-48f0-93b7-e6128dd7af38-000000@email.amazonses.com>",
+        "approved_at": "2026-09-15T10:41:21.543330+00:00",
+        "approved_by": "codex",
+        "body_sha256": "ebfc44f81c8ab5ec9794d16849fc12e5fb66a3acdeacce5510c39004a63c6e65",
+        "in_reply_to": "<0100019ffcf60ddf-ac9d2a16-bc77-48f0-93b7-e6128dd7af38-000000@email.amazonses.com>",
+        "subject_sha256": "37b7e81537b17203620943d0a54abb38e2c25a96e09486756aa122a2188ecf64"
+      },
+      "transport": "resend",
+      "references": "<0100019ffcf60ddf-ac9d2a16-bc77-48f0-93b7-e6128dd7af38-000000@email.amazonses.com>",
+      "skill_path": null,
+      "body_sha256": "ebfc44f81c8ab5ec9794d16849fc12e5fb66a3acdeacce5510c39004a63c6e65",
+      "in_reply_to": "<0100019ffcf60ddf-ac9d2a16-bc77-48f0-93b7-e6128dd7af38-000000@email.amazonses.com>",
+      "skill_sha256": null,
+      "batch_item_id": "a158c73580004507983fae7bf8d8eefe",
+      "brief_version": null,
+      "subject_sha256": "37b7e81537b17203620943d0a54abb38e2c25a96e09486756aa122a2188ecf64",
+      "composer_variant_key": null,
+      "lead_gen_action_type": "follow_up",
+      "composer_experiment_key": null
+    },
+    "policy_result": {},
+    "execution_result": {},
+    "error": null,
+    "trace_id": null,
+    "scheduled_for": "2026-09-15T18:00:00+00:00",
+    "started_at": null,
+    "completed_at": null,
+    "created_at": "2026-09-15T10:41:21.549060+00:00",
+    "updated_at": "2026-09-15T10:41:21.549066+00:00"
+  },
+  "created": true,
+  "updated_existing": false,
+  "executed": false,
+  "scheduled_for_pt": "2026-09-15 11:00 PDT",
+  "scheduled_for_utc": "2026-09-15 18:00:00 UTC",
+  "final_policy": {
+    "allowed": true,
+    "reason": "allowed",
+    "checks": [
+      {
+        "name": "status_allows_execution",
+        "passed": true,
+        "detail": "approved"
+      },
+      {
+        "name": "human_approval_present",
+        "passed": true,
+        "detail": "codex"
+      },
+      {
+        "name": "subject_present",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "body_present",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "subject_hash_matches_approval",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "body_hash_matches_approval",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "in_reply_to_matches_approval",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "references_match_approval",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "lead_gen_transport_available",
+        "passed": true,
+        "detail": "zoho_api 1/0 configured=True; resend 0/50 configured=True"
+      },
+      {
+        "name": "no_patient_data_in_outreach",
+        "passed": true,
+        "detail": "llm_guard_disabled"
+      },
+      {
+        "name": "batch_item_exists",
+        "passed": true,
+        "detail": "a158c73580004507983fae7bf8d8eefe"
+      },
+      {
+        "name": "batch_item_not_already_started",
+        "passed": true,
+        "detail": "approved"
+      },
+      {
+        "name": "contact_email_present",
+        "passed": true,
+        "detail": "caroleen@ctalawfirm.com"
+      },
+      {
+        "name": "no_prior_successful_action_for_item",
+        "passed": true,
+        "detail": ""
+      }
+    ],
+    "risk_level": "high",
+    "requires_human_approval": true,
+    "action_type": "send_approved_lead_gen_draft",
+    "contact_email": "caroleen@ctalawfirm.com"
+  }
+}

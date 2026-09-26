@@ -10,23 +10,14 @@ literal `{{TRACKED_POST_URL}}` placeholder, and the send pipeline swaps
 it in just before send. This keeps the LLM honest about what it produced
 and lets the operator preview the exact body that will go out.
 
-Gateway URL + token are read from the openclaw config when not set in
-the environment. Mission Control follows the same pattern."""
+All model work goes through the shared native OpenClaw RPC client."""
 from __future__ import annotations
 
-import asyncio
-import json
-import logging
 import os
-import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
 
-import httpx
-
-
-logger = logging.getLogger(__name__)
+from app.services.llm_gateway import LLMGatewayError, call_skill_json, clear_skill_cache
 
 
 # --- Config ----------------------------------------------------------------
@@ -34,10 +25,7 @@ logger = logging.getLogger(__name__)
 DEFAULT_SKILL_PATH = Path(__file__).resolve().parents[2] / ".claude/skills/blog-outreach-composer/SKILL.md"
 SKILL_PATH = Path(os.getenv("BLOG_OUTREACH_SKILL_PATH", str(DEFAULT_SKILL_PATH)))
 
-GATEWAY_URL = os.getenv("OPENCLAW_GATEWAY_URL", "http://127.0.0.1:18789/v1/chat/completions")
-OPENCLAW_CONFIG_PATH = Path(os.getenv("OPENCLAW_CONFIG_PATH", "/root/.openclaw/openclaw.json"))
-
-COMPOSER_MODEL = os.getenv("BLOG_OUTREACH_MODEL", "openclaw/proxy")
+COMPOSER_MODEL = os.getenv("BLOG_OUTREACH_MODEL", "openclaw/main")
 COMPOSER_TIMEOUT_S = int(os.getenv("BLOG_OUTREACH_TIMEOUT_S", "180"))
 COMPOSER_MAX_TOKENS = int(os.getenv("BLOG_OUTREACH_MAX_TOKENS", "2000"))
 COMPOSER_RETRIES = int(os.getenv("BLOG_OUTREACH_RETRIES", "3"))
@@ -85,88 +73,10 @@ class ComposerError(Exception):
     pass
 
 
-# --- Gateway token ---------------------------------------------------------
-
-_token_cache: Optional[str] = None
-
-
-def _gateway_token() -> str:
-    """Resolve the openclaw gateway bearer token.
-
-    Order: OPENCLAW_GATEWAY_TOKEN env > gateway.auth.token in openclaw.json.
-    Cached after first read."""
-    global _token_cache
-    if _token_cache:
-        return _token_cache
-    env_tok = os.getenv("OPENCLAW_GATEWAY_TOKEN", "").strip()
-    if env_tok:
-        _token_cache = env_tok
-        return env_tok
-    try:
-        with open(OPENCLAW_CONFIG_PATH, "r") as f:
-            cfg = json.load(f)
-        tok = cfg.get("gateway", {}).get("auth", {}).get("token", "").strip()
-        if not tok:
-            raise ComposerError(
-                f"No gateway.auth.token in {OPENCLAW_CONFIG_PATH} and "
-                "OPENCLAW_GATEWAY_TOKEN env not set"
-            )
-        _token_cache = tok
-        return tok
-    except FileNotFoundError as e:
-        raise ComposerError(
-            f"openclaw config not found at {OPENCLAW_CONFIG_PATH} — "
-            "set OPENCLAW_GATEWAY_TOKEN env"
-        ) from e
-
-
-# --- Skill loader ----------------------------------------------------------
-
-_skill_cache: Optional[str] = None
-
-
-def _load_skill() -> str:
-    global _skill_cache
-    if _skill_cache:
-        return _skill_cache
-    try:
-        with open(SKILL_PATH, "r", encoding="utf-8") as f:
-            _skill_cache = f.read()
-        return _skill_cache
-    except FileNotFoundError as e:
-        raise ComposerError(f"SKILL.md not found at {SKILL_PATH}") from e
-
-
 def reload_skill() -> None:
     """Force the skill file to be re-read on next compose call. Useful
     when iterating on the SKILL.md without restarting the daemon."""
-    global _skill_cache
-    _skill_cache = None
-
-
-# --- JSON extraction -------------------------------------------------------
-
-_JSON_FENCE_RE = re.compile(r"```(?:json)?\s*([\s\S]*?)```", re.MULTILINE)
-
-
-def _extract_json(content: str) -> dict:
-    """LLMs sometimes wrap JSON in ``` fences despite being told not to.
-    Strip those, then parse."""
-    raw = content.strip()
-    if raw.startswith("```"):
-        m = _JSON_FENCE_RE.search(raw)
-        if m:
-            raw = m.group(1).strip()
-    # Some models prepend a sentence — find the first { and the matching last }.
-    if not raw.startswith("{"):
-        first = raw.find("{")
-        last = raw.rfind("}")
-        if first >= 0 and last > first:
-            raw = raw[first : last + 1]
-    try:
-        return json.loads(raw)
-    except json.JSONDecodeError as e:
-        raise ComposerError(f"Composer returned non-JSON: {e}; first 200 chars: {raw[:200]!r}")
+    clear_skill_cache()
 
 
 _REQUIRED_FIELDS = ("subject", "preheader", "body_html", "plaintext")
@@ -205,67 +115,33 @@ async def compose(payload: ComposerInput, *, model: str | None = None) -> Compos
     Returns a ComposedEmail with placeholder URLs still embedded — the
     caller is responsible for substituting `{{TRACKED_POST_URL}}` before
     sending."""
-    skill = _load_skill()
     model_id = model or COMPOSER_MODEL
-    user_payload = json.dumps(payload.to_dict(), indent=2, ensure_ascii=False)
-
-    messages = [
-        {"role": "system", "content": skill},
-        {"role": "user", "content": user_payload},
-    ]
-    body = {
-        "model": model_id,
-        "messages": messages,
-        "max_tokens": COMPOSER_MAX_TOKENS,
-    }
-
-    last_error: Exception | None = None
-    for attempt in range(1, COMPOSER_RETRIES + 1):
-        try:
-            async with httpx.AsyncClient(timeout=COMPOSER_TIMEOUT_S, verify=False) as client:
-                resp = await client.post(
-                    GATEWAY_URL,
-                    headers={
-                        "Authorization": f"Bearer {_gateway_token()}",
-                        "Content-Type": "application/json",
-                    },
-                    json=body,
-                )
-            if resp.status_code in (502, 503, 504):
-                raise httpx.HTTPStatusError(
-                    f"gateway transient {resp.status_code}",
-                    request=resp.request, response=resp,
-                )
-            resp.raise_for_status()
-            data = resp.json()
-            content = data["choices"][0]["message"]["content"].strip()
-            if not content:
-                raise ComposerError("gateway returned empty content")
-            parsed = _extract_json(content)
-            _validate(parsed, payload)
-            return ComposedEmail(
-                subject=parsed["subject"].strip(),
-                preheader=parsed["preheader"].strip(),
-                body_html=parsed["body_html"],
-                plaintext=parsed["plaintext"],
-                reasoning=(parsed.get("reasoning") or "").strip(),
-                model=model_id,
-                raw_response=content,
-            )
-        except (httpx.HTTPStatusError, httpx.ReadTimeout, httpx.ConnectError,
-                httpx.RemoteProtocolError) as e:
-            last_error = e
-            logger.warning("compose attempt %d failed (network): %s", attempt, e)
-            if attempt < COMPOSER_RETRIES:
-                await asyncio.sleep(2 ** (attempt - 1))
-        except ComposerError as e:
-            # Validation / format errors aren't usually fixed by retrying the
-            # same prompt, but we try once more in case the LLM was sloppy.
-            last_error = e
-            logger.warning("compose attempt %d failed (format): %s", attempt, e)
-            if attempt < COMPOSER_RETRIES:
-                await asyncio.sleep(1)
-    raise ComposerError(f"compose failed after {COMPOSER_RETRIES} attempts: {last_error}")
+    try:
+        result = await call_skill_json(
+            skill_path=SKILL_PATH,
+            payload=payload.to_dict(),
+            required_fields=list(_REQUIRED_FIELDS),
+            model=model_id,
+            timeout_s=COMPOSER_TIMEOUT_S,
+            max_tokens=COMPOSER_MAX_TOKENS,
+            retries=COMPOSER_RETRIES,
+            schema_repair_retries=1,
+            lane=os.getenv("OPENCLAW_RPC_INTERACTIVE_LANE", "possibleos-interactive"),
+            allow_tools=False,
+        )
+    except LLMGatewayError as exc:
+        raise ComposerError(str(exc)) from exc
+    parsed = result.parsed
+    _validate(parsed, payload)
+    return ComposedEmail(
+        subject=parsed["subject"].strip(),
+        preheader=parsed["preheader"].strip(),
+        body_html=parsed["body_html"],
+        plaintext=parsed["plaintext"],
+        reasoning=(parsed.get("reasoning") or "").strip(),
+        model=model_id,
+        raw_response=result.raw_response,
+    )
 
 
 def substitute_tracked_url(body: str, tracked_url: str) -> str:

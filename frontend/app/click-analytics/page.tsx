@@ -26,13 +26,11 @@ import {
 } from "lucide-react";
 import {
   createEngagementCampaign,
-  createEngagementCampaignLink,
   getEngagementAnalytics,
   getEngagementCampaign,
   getLatestEngagementCampaignActivity,
   listEngagementCampaigns,
   markEngagementCampaignLinkSent,
-  searchEngagementCampaignContacts,
   type EngagementActivity,
   type EngagementCampaign,
   type EngagementCampaignActivity,
@@ -42,6 +40,7 @@ import {
   type LatestEngagementCampaignActivity,
 } from "@/lib/api";
 import { ENGAGEMENT_DESKTOP_NOTIFICATIONS_KEY } from "@/components/EngagementNotificationPopup";
+import { CampaignTrackingLinkForm } from "@/components/CampaignTrackingLinkForm";
 import { cn } from "@/lib/utils";
 
 const WINDOWS = [
@@ -549,12 +548,6 @@ function CampaignWorkspace() {
   const [campaignDate, setCampaignDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [destination, setDestination] = useState("");
   const [workflow, setWorkflow] = useState("content");
-  const [linkChannel, setLinkChannel] = useState<"email" | "linkedin" | "public">("email");
-  const [linkDestination, setLinkDestination] = useState("");
-  const [linkLabel, setLinkLabel] = useState("");
-  const [contactSearch, setContactSearch] = useState("");
-  const [contactId, setContactId] = useState("");
-  const [markSentOnCreate, setMarkSentOnCreate] = useState(false);
 
   const campaigns = useQuery({
     queryKey: ["engagement-campaigns", search],
@@ -565,11 +558,6 @@ function CampaignWorkspace() {
     queryFn: () => getEngagementCampaign(selectedId),
     enabled: Boolean(selectedId),
     refetchInterval: selectedId ? 30_000 : false,
-  });
-  const contacts = useQuery({
-    queryKey: ["engagement-campaign-contacts", contactSearch],
-    queryFn: () => searchEngagementCampaignContacts(contactSearch, 30),
-    enabled: linkChannel !== "public",
   });
 
   const createCampaign = useMutation({
@@ -586,22 +574,6 @@ function CampaignWorkspace() {
       setName("");
       setDestination("");
       setShowCreate(false);
-    },
-  });
-  const createLink = useMutation({
-    mutationFn: () => createEngagementCampaignLink(selectedId, {
-      channel: linkChannel,
-      destination_url: linkDestination.trim(),
-      contact_id: linkChannel === "public" ? "" : contactId,
-      label: linkLabel.trim(),
-      mark_sent: linkChannel !== "public" && markSentOnCreate,
-    }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["engagement-campaign", selectedId] });
-      queryClient.invalidateQueries({ queryKey: ["engagement-campaigns"] });
-      setContactId("");
-      setContactSearch("");
-      setLinkLabel("");
     },
   });
   const markSent = useMutation({
@@ -684,6 +656,8 @@ function CampaignWorkspace() {
             <Metric label="Read 50%+" value={readersAtFifty} note="people reaching article midpoint" icon={Activity} />
           </div>
 
+          <CampaignTrackingLinkForm key={data.campaign.id} campaignId={data.campaign.id} destination={data.campaign.destination_url || ""} />
+
           <div className="flex flex-wrap gap-1 border-b border-neutral-200">
             {([
               { key: "engaged", label: `Engaged (${summary?.engaged_people ?? 0})` },
@@ -751,31 +725,6 @@ function CampaignWorkspace() {
                   <tbody>{data.channels.map((channel) => <tr key={channel.channel} className="border-t border-neutral-100"><td className="px-3 py-3"><CampaignChannel channel={channel.channel} /></td><td className="px-3 py-3 text-right text-sm">{channel.tracked_links}</td><td className="px-3 py-3 text-right text-sm">{channel.tracked_people}</td><td className="px-3 py-3 text-right text-sm">{channel.sent}</td><td className="px-3 py-3 text-right text-sm">{channel.raw_clicks}</td><td className="px-3 py-3 text-right text-sm">{channel.confirmed_visits}</td><td className="px-3 py-3 text-right text-sm">{channel.engaged_people}</td></tr>)}</tbody>
                 </table>
               </div>
-
-              <details className="border-y border-neutral-100 py-3">
-                <summary className="cursor-pointer text-sm font-semibold text-neutral-800">Create a tracking link</summary>
-                <form onSubmit={(event) => { event.preventDefault(); createLink.mutate(); }} className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-[150px_1.4fr_1.2fr_1fr_auto]">
-                  <select value={linkChannel} onChange={(event) => { setLinkChannel(event.target.value as "email" | "linkedin" | "public"); setContactId(""); }} className="h-9 rounded-md border border-neutral-200 bg-white px-3 text-sm outline-none focus:border-neutral-400">
-                    <option value="email">Email</option><option value="linkedin">LinkedIn</option><option value="public">Public post</option>
-                  </select>
-                  <input value={linkDestination} onChange={(event) => setLinkDestination(event.target.value)} placeholder={data.campaign.destination_url || "https://getpossibleminds.com/..."} className="h-9 rounded-md border border-neutral-200 px-3 text-sm outline-none focus:border-neutral-400" />
-                  {linkChannel === "public" ? (
-                    <input value={linkLabel} onChange={(event) => setLinkLabel(event.target.value)} placeholder="Link label" className="h-9 rounded-md border border-neutral-200 px-3 text-sm outline-none focus:border-neutral-400" />
-                  ) : (
-                    <div className="grid grid-cols-[1fr_auto] gap-2">
-                      <input value={contactSearch} onChange={(event) => { setContactSearch(event.target.value); setContactId(""); }} placeholder="Search contact or firm" className="h-9 min-w-0 rounded-md border border-neutral-200 px-3 text-sm outline-none focus:border-neutral-400" />
-                      <select required value={contactId} onChange={(event) => setContactId(event.target.value)} className="h-9 max-w-52 rounded-md border border-neutral-200 bg-white px-2 text-xs outline-none focus:border-neutral-400">
-                        <option value="">Select</option>
-                        {(contacts.data?.contacts ?? []).map((contact) => <option key={contact.id} value={contact.id}>{contact.name} · {contact.firm_name || contact.email}</option>)}
-                      </select>
-                    </div>
-                  )}
-                  <label className="flex h-9 items-center gap-2 text-xs text-neutral-600"><input type="checkbox" checked={markSentOnCreate} disabled={linkChannel === "public"} onChange={(event) => setMarkSentOnCreate(event.target.checked)} /> Mark sent now</label>
-                  <button type="submit" disabled={createLink.isPending || (linkChannel !== "public" && !contactId)} className="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-blue-700 px-4 text-xs font-medium text-white hover:bg-blue-800 disabled:opacity-50"><Link2 className="h-3.5 w-3.5" />{createLink.isPending ? "Creating..." : "Create link"}</button>
-                  {createLink.isSuccess ? <div className="flex items-center gap-2 text-xs text-emerald-700 md:col-span-full"><CheckCircle2 className="h-3.5 w-3.5" /> Tracking URL created.</div> : null}
-                  {createLink.isError ? <div className="text-xs text-red-600 md:col-span-full">Could not create link. Use a getpossibleminds.com destination and a valid contact.</div> : null}
-                </form>
-              </details>
 
               <details className="border-y border-neutral-100 py-3">
                 <summary className="cursor-pointer text-sm font-semibold text-neutral-800">Tracking links ({data.links.length})</summary>

@@ -1,0 +1,267 @@
+{
+  "checked_at": "2026-09-12T05:34:27.175484+00:00",
+  "retry": {
+    "id": "4adeee65624740b4851a591a365bd960",
+    "scheduled_day": "2026-09-12",
+    "status": "completed",
+    "started_at": "2026-09-12T05:31:36.008237+00:00",
+    "completed_at": "2026-09-12T05:32:52.473505+00:00",
+    "result": {
+      "usage": [
+        {
+          "total_tokens": 48560,
+          "prompt_tokens": 47112,
+          "completion_tokens": 1448
+        }
+      ],
+      "closed": 0,
+      "errors": [],
+      "stored": [
+        {
+          "added": 0,
+          "job_id": "career_d339ccd951486f6b721d5ee4",
+          "firm_id": "5883a96d-fd10-4d45-98c3-9996ec6b7cf8",
+          "source_url": "https://jobs.jobvite.com/jacobyandmeyerscareers/job/oQoIAfwg"
+        }
+      ],
+      "new_jobs": 0,
+      "rejected": 1,
+      "retry_of": "694785565250440a8db98729e2f8062c",
+      "verified": 1,
+      "decisions": [
+        {
+          "decision": {
+            "title": "Application Software Engineer, Applied AI",
+            "reason": "The Jobvite page is live, includes an Apply action, and describes a genuine applied-AI engineering role within Jacoby & Meyers' personal-injury law firm.",
+            "status": "active",
+            "location": "Los Angeles, CA; fully remote",
+            "posted_date": "2026-08-27",
+            "ats_provider": "Jobvite",
+            "candidate_id": "0",
+            "remote_scope": "unclear",
+            "trigger_tags": [
+              "applied_ai",
+              "llm",
+              "agentic_systems",
+              "full_stack",
+              "legal_technology",
+              "remote"
+            ],
+            "date_evidence": {
+              "text": "\"datePosted\": \"2026-08-27\"",
+              "source_url": "https://jobs.jobvite.com/jacobyandmeyerscareers/job/oQoIAfwg"
+            },
+            "role_category": "technology_data",
+            "role_evidence": {
+              "text": "We're the technology team inside one of the country's preeminent personal-injury law firms",
+              "source_url": "https://jobs.jobvite.com/jacobyandmeyerscareers/job/oQoIAfwg"
+            },
+            "ats_created_at": null,
+            "ats_updated_at": null,
+            "geography_note": "The role says Fully Remote but identifies Los Angeles, California. No source text expressly permits Colombia or unrestricted worldwide work, and work authorization is not specified.",
+            "qualifications": [
+              "Bachelor's degree in computer science, engineering, math, or a scientific discipline, or 2+ years of professional software experience",
+              "Strong full-stack development experience",
+              "Production software delivery experience",
+              "Experience with AI-assisted development tools",
+              "Experience with CI/CD and modern testing"
+            ],
+            "requisition_id": "oQoIAfwg",
+            "employment_type": "Full-Time",
+            "status_evidence": {
+              "text": "Apply",
+              "source_url": "https://jobs.jobvite.com/jacobyandmeyerscareers/job/oQoIAfwg"
+            },
+            "technology_role": true,
+            "responsibilities": [
+              "Build AI-powered tools and agentic systems for case-management and litigation teams",
+              "Own systems from design and prototype through deployment, monitoring, and iteration",
+              "Architect tool-use, multi-agent orchestration, and retrieval systems",
+              "Build evaluation and observability for AI quality, safety, latency, and cost",
+              "Maintain documentation, CI/CD, and testing practices"
+            ],
+            "work_arrangement": "remote",
+            "employer_evidence": {
+              "text": "Jacoby & Meyers Injury Lawyers",
+              "source_url": "https://www.jacobyandmeyers.com/careers/"
+            },
+            "direct_pi_employer": true,
+            "geography_evidence": {
+              "text": "Location: Fully Remote",
+              "source_url": "https://jobs.jobvite.com/jacobyandmeyerscareers/job/oQoIAfwg"
+            },
+            "description_summary": "Build and operate AI-powered tools, agentic systems, retrieval systems, evaluations, observability, CI/CD, and full-stack applications supporting case-management and litigation teams.",
+            "technology_mentions": [
+              "large language models",
+              "agentic systems",
+              "multi-agent orchestration",
+              "retrieval",
+              "LLM evaluation",
+              "observability",
+              "CI/CD",
+              "Cursor",
+              "Claude Code",
+              "Copilot",
+              "Codex"
+            ],
+            "colombia_eligibility": "unknown"
+          },
+          "candidate": {
+            "title": "Application Software Engineer, Applied AI",
+            "firm_name": "Jacoby and Meyers",
+            "source_url": "https://jobs.jobvite.com/jacobyandmeyerscareers/job/oQoIAfwg",
+            "canonical_domain": "jacobyandmeyers.com",
+            "employer_evidence_url": "https://www.jacobyandmeyers.com/careers/"
+          }
+        },
+        {
+          "decision": {
+            "title": "Salesforce Developer",
+            "reason": "The Jobvite page is live, includes an Apply action, and describes a genuine Salesforce development role for Jacoby & Meyers, a personal-injury law firm.",
+            "status": "active",
+            "location": "Los Angeles, CA; remote",
+            "posted_date": "2026-02-17",
+            "ats_provider": "Jobvite",
+            "candidate_id": "1",
+            "remote_scope": "unclear",
+            "trigger_tags": [
+              "salesforce",
+              "software_development",
+              "integrations",
+              "api",
+              "ci_cd",
+              "remote"
+            ],
+            "date_evidence": {
+              "text": "\"datePosted\": \"2026-02-17\"",
+              "source_url": "https://jobs.jobvite.com/jacobyandmeyerscareers/job/ovuGzfwY"
+            },
+            "role_category": "technology_data",
+            "role_evidence": {
+              "text": "We are currently seeking a smart and determined Salesforce Developer",
+              "source_url": "https://jobs.jobvite.com/jacobyandmeyerscareers/job/ovuGzfwY"
+            },
+            "ats_created_at": null,
+            "ats_updated_at": null,
+            "geography_note": "The role says Remote but identifies Los Angeles, California. No source text expressly permits Colombia or unrestricted worldwide work, and work authorization is not specified.",
+            "qualifications": [
+              "Bachelor's degree in software engineering, computer science, or related field",
+              "3-5 years of software development experience",
+              "Proficiency with the Salesforce data model and custom code",
+              "Experience with web APIs, REST, JSON, Web Sockets, and web technologies",
+              "Ability to communicate technical concepts to technical and non-technical stakeholders"
+            ],
+            "requisition_id": "ovuGzfwY",
+            "employment_type": "Full-Time",
+            "status_evidence": {
+              "text": "Apply",
+              "source_url": "https://jobs.jobvite.com/jacobyandmeyerscareers/job/ovuGzfwY"
+            },
+            "technology_role": true,
+            "responsibilities": [
+              "Design, develop, and implement Salesforce customizations",
+              "Participate in requirements, design, coding, testing, and deployment",
+              "Maintain Salesforce applications and integrations",
+              "Create technical documentation",
+              "Troubleshoot integrations, flows, customizations, and code",
+              "Participate in code reviews"
+            ],
+            "work_arrangement": "remote",
+            "employer_evidence": {
+              "text": "Jacoby & Meyers Injury Lawyers",
+              "source_url": "https://www.jacobyandmeyers.com/careers/"
+            },
+            "direct_pi_employer": true,
+            "geography_evidence": {
+              "text": "Location: Remote",
+              "source_url": "https://jobs.jobvite.com/jacobyandmeyerscareers/job/ovuGzfwY"
+            },
+            "description_summary": "Design, develop, maintain, and integrate Salesforce customizations and applications using Apex, Visualforce, Lightning Components, APIs, and CI/CD practices.",
+            "technology_mentions": [
+              "Salesforce",
+              "Apex",
+              "Visualforce",
+              "Lightning Components",
+              "REST",
+              "JSON",
+              "Web Sockets",
+              "HTML",
+              "CSS",
+              "JavaScript",
+              "jQuery",
+              "CI/CD"
+            ],
+            "colombia_eligibility": "unknown"
+          },
+          "candidate": {
+            "title": "Salesforce Developer",
+            "firm_name": "Jacoby & Meyers",
+            "source_url": "https://jobs.jobvite.com/jacobyandmeyerscareers/job/ovuGzfwY",
+            "canonical_domain": "jacobyandmeyers.com",
+            "employer_evidence_url": "https://www.jacobyandmeyers.com/careers/"
+          }
+        }
+      ],
+      "llm_calls": 1,
+      "seed_only": false,
+      "candidates": 2,
+      "attempt_errors": [],
+      "discovery_candidates": [
+        {
+          "title": "Application Software Engineer, Applied AI",
+          "firm_name": "Jacoby and Meyers",
+          "source_url": "https://jobs.jobvite.com/jacobyandmeyerscareers/job/oQoIAfwg",
+          "canonical_domain": "jacobyandmeyers.com",
+          "employer_evidence_url": "https://www.jacobyandmeyers.com/careers/"
+        },
+        {
+          "title": "Application Software Engineer, Applied AI",
+          "firm_name": "Jacoby & Meyers",
+          "source_url": "https://jobs.jobvite.com/jacobyandmeyerscareers/job/oQoIAfwg",
+          "canonical_domain": "jacobyandmeyers.com",
+          "employer_evidence_url": "https://www.jacobyandmeyers.com/careers/"
+        },
+        {
+          "title": "Salesforce Developer",
+          "firm_name": "Jacoby & Meyers",
+          "source_url": "https://jobs.jobvite.com/jacobyandmeyerscareers/job/ovuGzfwY",
+          "canonical_domain": "jacobyandmeyers.com",
+          "employer_evidence_url": "https://www.jacobyandmeyers.com/careers/"
+        }
+      ],
+      "prompt_cache_metrics": [
+        {
+          "status": "miss",
+          "input_tokens": 47112,
+          "cached_tokens": 0,
+          "hit_rate_percent": 0.0,
+          "cache_write_tokens": null
+        }
+      ],
+      "operator_retry_candidates": [
+        {
+          "title": "Application Software Engineer, Applied AI",
+          "firm_name": "Jacoby & Meyers",
+          "source_url": "https://jobs.jobvite.com/jacobyandmeyerscareers/job/oQoIAfwg",
+          "canonical_domain": "jacobyandmeyers.com",
+          "employer_evidence_url": "https://www.jacobyandmeyers.com/careers/"
+        },
+        {
+          "title": "Salesforce Developer",
+          "firm_name": "Jacoby & Meyers",
+          "source_url": "https://jobs.jobvite.com/jacobyandmeyerscareers/job/ovuGzfwY",
+          "canonical_domain": "jacobyandmeyers.com",
+          "employer_evidence_url": "https://www.jacobyandmeyers.com/careers/"
+        }
+      ]
+    }
+  },
+  "original_run_unchanged": true,
+  "next_due_at": "2026-09-12T13:00:00+00:00",
+  "backend_restarted_at": "2026-09-12T05:32:18+00:00",
+  "prompt_commit": "cdc05ed",
+  "prompt_version": "v1.69",
+  "focused_tests_passed": 59,
+  "applied_ai_db_row_verified": true,
+  "salesforce_excluded_reason": "Posted 2026-02-17, outside 30-day discovery window"
+}

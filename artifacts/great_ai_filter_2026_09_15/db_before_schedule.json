@@ -1,0 +1,3298 @@
+{
+  "checked_at": "2026-09-15T10:39:30.599015+00:00",
+  "candidates": [
+    {
+      "firm": "Downtown L.A. Law Group",
+      "name": "Farid Yaghoubtil",
+      "rank": 1,
+      "email": "farid@downtownlalaw.com",
+      "title": "Founding Partner, Attorney",
+      "persona": "founder_owner",
+      "contact_id": "864c2e7a6a144509a5da1d20121752e0",
+      "days_since": 100,
+      "canonical_firm_id": "f2d0b677-0b15-4091-91e9-30aee5e96816",
+      "normalized_domain": "downtownlalaw.com",
+      "prior_article_slugs": [],
+      "article_match_status": "pending_final40_and_mailbox_audit",
+      "vendor_case_management": "filevine",
+      "last_successful_outbound": "2026-06-02T16:18:08.683913+00:00",
+      "lifetime_successful_touch_count": 2,
+      "fresh_evidence": {
+        "contact": {
+          "id": "864c2e7a6a144509a5da1d20121752e0",
+          "pif_id": "f2d0b677-0b15-4091-91e9-30aee5e96816",
+          "full_name": "Farid Yaghoubtil",
+          "first_name": "Farid",
+          "email": "farid@downtownlalaw.com",
+          "phone": "+13107707309",
+          "title": "Founding Partner, Attorney",
+          "linkedin_url": "https://www.linkedin.com/in/farid-yaghoubtil-89379b1a",
+          "source": "pif_leadership",
+          "created_at": "2026-06-16T05:54:58.327905+00:00",
+          "updated_at": "2026-06-16T05:55:34.964058+00:00",
+          "front_contact_id": null,
+          "front_last_seen": null,
+          "tech_signals": null,
+          "persona": "founder_owner",
+          "persona_source": "title_keyword",
+          "persona_confidence": 0.9,
+          "research_title": null
+        },
+        "history": [
+          {
+            "id": "721b9177b8c742e687f738683d7a3845",
+            "recipient_email": "farid@downtownlalaw.com",
+            "subject": "Precise Imaging status updates",
+            "body_excerpt": "Hi Farid,\n\nPranav from Possible Minds. If Downtown LA Law refers clients to Precise Imaging, you've seen the automated status replies they send, we built that system.\n\nWhat is probably more relevant on your side: for a Southern California plaintiff firm about your size, we built an AI that calls every web lead back in under 90 seconds, day or night, qualifies the case over a real conversation, and hands it to intake ready to sign. It helped drive 34% more signed cases while cutting intake time f",
+            "status": "sent",
+            "sent_at": "2026-06-02T16:18:08.683913+00:00",
+            "transport": "zoho_api",
+            "message_id": "1780417088523130300"
+          },
+          {
+            "id": "37017074a06d4151bf7b689fea61396b",
+            "recipient_email": "farid@downtownlalaw.com",
+            "subject": "Precise Imaging -- quick records question",
+            "status": "sent",
+            "sent_at": "2026-05-27T16:06:48.398681+00:00",
+            "transport": "resend",
+            "message_id": "240c8a28-094d-4e1d-afdb-65a5fd2a64ad"
+          }
+        ],
+        "firm_latest": "2026-08-24T16:05:36.755159+00:00",
+        "inbound": 0,
+        "negative": 0,
+        "pending": 0
+      },
+      "hold_reasons": []
+    },
+    {
+      "name": "William H. Dailey",
+      "email": "william@driverslegaldefense.com",
+      "hold_reasons": [
+        "touch_count_not_1_or_2",
+        "firm_contact_within_7_days"
+      ]
+    },
+    {
+      "name": "Jeffrey L. Fayngor",
+      "email": "jeff@jlffirm.com",
+      "hold_reasons": [
+        "touch_count_not_1_or_2",
+        "firm_contact_within_7_days"
+      ]
+    },
+    {
+      "name": "Warren Paboojian",
+      "email": "wrp@paboojianlaw.com",
+      "hold_reasons": [
+        "touch_count_not_1_or_2",
+        "firm_contact_within_7_days"
+      ]
+    },
+    {
+      "name": "Nima Haddadi",
+      "email": "nima@thehlawgroup.com",
+      "hold_reasons": [
+        "firm_contact_within_7_days"
+      ]
+    },
+    {
+      "name": "Gary K. Walch",
+      "email": "gary@walchlaw.com",
+      "hold_reasons": [
+        "firm_contact_within_7_days"
+      ]
+    },
+    {
+      "name": "P. Ryan Banafshe",
+      "email": "bana@banalaw.com",
+      "hold_reasons": [
+        "firm_contact_within_7_days"
+      ]
+    },
+    {
+      "name": "Sam Ryan Heidari",
+      "email": "sam@heidarilawgroup.com",
+      "hold_reasons": [
+        "touch_count_not_1_or_2",
+        "firm_contact_within_7_days"
+      ]
+    },
+    {
+      "name": "Oganes Gegamyan",
+      "email": "oganes@kglegalgroup.com",
+      "hold_reasons": [
+        "touch_count_not_1_or_2",
+        "firm_contact_within_7_days"
+      ]
+    },
+    {
+      "firm": "10x Law",
+      "name": "Edward O. Lear",
+      "rank": 10,
+      "email": "lear@centurylawgroup.com",
+      "title": "Founder",
+      "persona": "founder_owner",
+      "contact_id": "5a548f587df142dcae0a647f2b6e940a",
+      "days_since": 70,
+      "canonical_firm_id": "47a4183b-9333-496e-91f1-7fba01e4aace",
+      "normalized_domain": "10xlaw.com",
+      "prior_article_slugs": [],
+      "article_match_status": "pending_final40_and_mailbox_audit",
+      "vendor_case_management": "filevine",
+      "last_successful_outbound": "2026-07-03T07:01:39.29597+00:00",
+      "lifetime_successful_touch_count": 2,
+      "fresh_evidence": {
+        "contact": {
+          "id": "5a548f587df142dcae0a647f2b6e940a",
+          "pif_id": "47a4183b-9333-496e-91f1-7fba01e4aace",
+          "full_name": "Edward O. Lear",
+          "first_name": "Edward",
+          "email": "lear@centurylawgroup.com",
+          "phone": "+85573450823106426900",
+          "title": "Founder",
+          "linkedin_url": "https://www.linkedin.com/in/edward-o-lear-03a6a41b",
+          "source": "pif_leadership",
+          "created_at": "2026-06-16T05:54:58.318676+00:00",
+          "updated_at": "2026-06-16T05:55:34.96314+00:00",
+          "front_contact_id": null,
+          "front_last_seen": null,
+          "tech_signals": null,
+          "persona": "founder_owner",
+          "persona_source": "title_keyword",
+          "persona_confidence": 0.9,
+          "research_title": null
+        },
+        "history": [
+          {
+            "id": "27ebd74e3919449eafc28ec5db5fb7f5",
+            "recipient_email": "lear@centurylawgroup.com",
+            "subject": "ai readiness at 10x law",
+            "body_excerpt": "Hi Edward,\n\nMost firms that buy AI never see results because they were not set up to benefit.\nI built a short AI-readiness audit for PI firms, about 14 questions that score where your firm stands and what is blocking value.\n\nHere it is - about 10 minutes: https://aiaudit.getpossibleminds.com/a/rSCXvx1E\n\n-- Pranav\nFounder, Possible Minds\nBook a consult: https://aiaudit.getpossibleminds.com/c/6UUOUfiU",
+            "status": "sent",
+            "sent_at": "2026-07-03T07:01:39.29597+00:00",
+            "transport": "resend",
+            "message_id": "3820a531-d085-47d1-a11e-dbfc9ffc5c69"
+          },
+          {
+            "id": "3ab0c0bed4b046f59b8a552d2706ce19",
+            "recipient_email": "lear@centurylawgroup.com",
+            "subject": "ai readiness at 10x law",
+            "status": "sent",
+            "sent_at": "2026-06-24T17:05:12.957049+00:00",
+            "transport": "zoho_api",
+            "message_id": "1782320712773108000"
+          }
+        ],
+        "firm_latest": "2026-08-12T23:45:08.148958+00:00",
+        "inbound": 0,
+        "negative": 0,
+        "pending": 0
+      },
+      "hold_reasons": []
+    },
+    {
+      "firm": "Avalon Law Firm, APC",
+      "name": "Alon Aliav",
+      "rank": 11,
+      "email": "alon@avalonlaw.com",
+      "title": "Principal Attorney and Founding Partner",
+      "persona": "founder_owner",
+      "contact_id": "fc_96f5deb3e0e04ff7bdca9096",
+      "days_since": 29,
+      "canonical_firm_id": "f006436b-2454-4bb7-9e4d-dc7b582c41f7",
+      "normalized_domain": "avalonlaw.com",
+      "prior_article_slugs": [
+        "personal-injury-marketing-attribution"
+      ],
+      "article_match_status": "pending_final40_and_mailbox_audit",
+      "vendor_case_management": "filevine",
+      "last_successful_outbound": "2026-08-12T17:05:05.705276+00:00",
+      "lifetime_successful_touch_count": 2,
+      "fresh_evidence": {
+        "contact": {
+          "id": "fc_96f5deb3e0e04ff7bdca9096",
+          "pif_id": "f006436b-2454-4bb7-9e4d-dc7b582c41f7",
+          "full_name": "Alon Aliav",
+          "first_name": "Alon",
+          "email": "alon@avalonlaw.com",
+          "phone": "+18182518080",
+          "title": "Principal Attorney and Founding Partner",
+          "linkedin_url": null,
+          "source": "front",
+          "created_at": "2026-06-12T06:20:47.109295+00:00",
+          "updated_at": "2026-08-14T03:31:22.410315+00:00",
+          "front_contact_id": "crd_1w7nxtt",
+          "front_last_seen": "2026-07-14T00:45:51.103+00:00",
+          "tech_signals": {},
+          "persona": "founder_owner",
+          "persona_source": "title_keyword",
+          "persona_confidence": 0.9,
+          "research_title": null
+        },
+        "history": [
+          {
+            "id": "02d0c0fc6abc4e1e8a2fc813a45479e3",
+            "recipient_email": "alon@avalonlaw.com",
+            "subject": "Can Avalon Law see kept-case CAC by source?",
+            "body_excerpt": "Hi Alon,\n\nA quick follow-up on the attribution framework I sent.\n\nCan Avalon Law currently trace each marketing source beyond leads and signed retainers to kept cases and collected fees, or does that still require manually reconciling Lead Docket and Filevine?\n\nI can send you the one-page owner scorecard we use to identify the reporting gaps.\n\nRegards,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+            "status": "delivered",
+            "sent_at": "2026-08-12T17:05:05.705276+00:00",
+            "transport": "resend",
+            "message_id": "568e2230-52e4-4956-844c-d642c5f49449"
+          },
+          {
+            "id": "98e600147b0a479eb60472257e884609",
+            "recipient_email": "alon@avalonlaw.com",
+            "subject": "Is Lead Docket at Avalon Law tying marketing spend to signed cases?",
+            "status": "delivered",
+            "sent_at": "2026-08-11T17:55:21.693381+00:00",
+            "transport": "resend",
+            "message_id": "83bbb234-c4f5-4813-839b-bb429412a41d"
+          }
+        ],
+        "firm_latest": "2026-08-12T17:05:05.705276+00:00",
+        "inbound": 0,
+        "negative": 0,
+        "pending": 0
+      },
+      "hold_reasons": []
+    },
+    {
+      "firm": "PARRIS",
+      "name": "R. Rex Parris",
+      "rank": 12,
+      "email": "rrex@parris.com",
+      "title": "Founder; Managing Partner",
+      "persona": "founder_owner",
+      "contact_id": "f63a46e757874f1b89d2c43922357684",
+      "days_since": 27,
+      "canonical_firm_id": "37f5d03d-1d36-4d8c-8eda-e9413e9a9c01",
+      "normalized_domain": "parris.com",
+      "prior_article_slugs": [],
+      "article_match_status": "pending_final40_and_mailbox_audit",
+      "vendor_case_management": "ProLaw",
+      "last_successful_outbound": "2026-08-15T00:15:19.705283+00:00",
+      "lifetime_successful_touch_count": 2,
+      "fresh_evidence": {
+        "contact": {
+          "id": "f63a46e757874f1b89d2c43922357684",
+          "pif_id": "37f5d03d-1d36-4d8c-8eda-e9413e9a9c01",
+          "full_name": "R. Rex Parris",
+          "first_name": "R.",
+          "email": "rrex@parris.com",
+          "phone": "+16619492595",
+          "title": "Founder; Managing Partner",
+          "linkedin_url": "https://www.linkedin.com/in/r-rex-parris-a66b3512",
+          "source": "pif_leadership",
+          "created_at": "2026-06-16T05:54:58.332268+00:00",
+          "updated_at": "2026-06-16T05:55:34.968348+00:00",
+          "front_contact_id": null,
+          "front_last_seen": null,
+          "tech_signals": null,
+          "persona": "founder_owner",
+          "persona_source": "title_keyword",
+          "persona_confidence": 0.9,
+          "research_title": null
+        },
+        "history": [
+          {
+            "id": "98cb7057314140bf8c13f2d942e29ab2",
+            "recipient_email": "rrex@parris.com",
+            "subject": "Marie Williams submitted a Google review about PARRIS",
+            "body_excerpt": "Hi Rex,\n\nIn a Google review from 5 months ago, Marie Williams wrote, \"No one called to follow up or get more details\"\n\nVisible communication complaints can make prospective clients question whether their own calls will be returned. We built a system for Precise Imaging that processes roughly 600 emails daily and flags missed callbacks, aging inquiries, and unresolved messages.\n\nI'd be glad to walk you through what we built for Precise and learn how your team currently handles these communication workflows. You can choose a 30-minute time here:\n\nhttps://getpossibleminds.com/t/XPBDCiJkMg\n\nRegards,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+            "status": "delivered",
+            "sent_at": "2026-08-15T00:15:19.705283+00:00",
+            "transport": "resend",
+            "message_id": "446a031a-fbd3-403e-b8a9-7d46e5f90a92"
+          },
+          {
+            "id": "bf6a28a729c847b4a3d25b584578b56e",
+            "recipient_email": "rrex@parris.com",
+            "subject": "Jonathan L. submitted a Yelp review about PARRIS",
+            "status": "delivered",
+            "sent_at": "2026-07-23T17:30:13.253529+00:00",
+            "transport": "resend",
+            "message_id": "4d7eef26-fac7-4b72-a609-e77ed513b149"
+          }
+        ],
+        "firm_latest": "2026-08-15T00:25:20.970392+00:00",
+        "inbound": 0,
+        "negative": 0,
+        "pending": 0
+      },
+      "hold_reasons": []
+    },
+    {
+      "name": "Mark R. Kiran, Esq.",
+      "email": "mark@broadwaylaw.com",
+      "hold_reasons": [
+        "touch_count_not_1_or_2",
+        "firm_contact_within_7_days"
+      ]
+    },
+    {
+      "name": "Della Shaker, Esq.",
+      "email": "della@shakerlawgroup.com",
+      "hold_reasons": [
+        "touch_count_not_1_or_2",
+        "firm_contact_within_7_days"
+      ]
+    },
+    {
+      "firm": "Becker Law Group",
+      "name": "Todd B. Becker",
+      "rank": 15,
+      "email": "becker@beckerlawgroup.com",
+      "title": "Founder & Senior Partner",
+      "persona": "founder_owner",
+      "contact_id": "307dc6837fcb45778bff3d63823382e6",
+      "days_since": 17,
+      "canonical_firm_id": "65c6eefc-c9a6-4432-bd8d-abaa69c53bf7",
+      "normalized_domain": "beckerlawgroup.com",
+      "prior_article_slugs": [],
+      "article_match_status": "pending_final40_and_mailbox_audit",
+      "vendor_case_management": "filevine",
+      "last_successful_outbound": "2026-08-24T18:45:17.156233+00:00",
+      "lifetime_successful_touch_count": 2,
+      "fresh_evidence": {
+        "contact": {
+          "id": "307dc6837fcb45778bff3d63823382e6",
+          "pif_id": "65c6eefc-c9a6-4432-bd8d-abaa69c53bf7",
+          "full_name": "Todd B. Becker",
+          "first_name": "Todd",
+          "email": "becker@beckerlawgroup.com",
+          "phone": "+16267777700",
+          "title": "Founder & Senior Partner",
+          "linkedin_url": "https://www.linkedin.com/in/todd-becker-122a294a",
+          "source": "pif_leadership",
+          "created_at": "2026-07-09T06:33:14.913485+00:00",
+          "updated_at": "2026-07-09T06:34:20.478323+00:00",
+          "front_contact_id": null,
+          "front_last_seen": null,
+          "tech_signals": null,
+          "persona": "founder_owner",
+          "persona_source": "title_keyword",
+          "persona_confidence": 0.9,
+          "research_title": null
+        },
+        "history": [
+          {
+            "id": "f82aec13534c46beb78fefb69076d469",
+            "recipient_email": "becker@beckerlawgroup.com",
+            "subject": "Precise Imaging - quick question",
+            "body_excerpt": "Hi Todd,\n\nI'm Pranav, the founder of Possible Minds. You may have seen the immediate status-update responses from Precise Imaging. We're the firm that built that system. It processes more than 600 emails daily and saves the Precise team many hours of manual work.\n\nWith Becker handling large wildfire and mass-tort caseloads across a specialized team, I'm curious whether Precise's imaging updates reach the right Filevine matter and case manager automatically, or whether staff still have to route them manually.\n\nWould you have 15 minutes to share your experience? I'd genuinely appreciate your perspective. \n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+            "status": "delivered",
+            "sent_at": "2026-08-24T18:45:17.156233+00:00",
+            "transport": "resend",
+            "message_id": "b323a81a-fc3d-4295-b1e4-c7d4a9ad5c74"
+          },
+          {
+            "id": "4def8b998a9d44fa89b97a7df7239ed9",
+            "recipient_email": "becker@beckerlawgroup.com",
+            "subject": "Is Lead Docket at Becker Law Group tying marketing spend to signed cases?",
+            "status": "delivered",
+            "sent_at": "2026-08-12T21:30:20.438373+00:00",
+            "transport": "resend",
+            "message_id": "045d6127-7434-4152-a469-04078eb6fc6e"
+          }
+        ],
+        "firm_latest": "2026-08-24T18:45:17.156233+00:00",
+        "inbound": 0,
+        "negative": 0,
+        "pending": 0
+      },
+      "hold_reasons": []
+    },
+    {
+      "firm": "O'Connor & Hurt",
+      "name": "Dimitri D. Hurt, Esq.",
+      "rank": 16,
+      "email": "dimitri@oconnorhurt.com",
+      "title": "Founder & Managing Partner",
+      "persona": "founder_owner",
+      "contact_id": "fc_7fc57ec71f624df19b75602a",
+      "days_since": 16,
+      "canonical_firm_id": "77e6d22c-447b-438d-bc6b-d55e146e0003",
+      "normalized_domain": "thehurtlawfirm.com",
+      "prior_article_slugs": [],
+      "article_match_status": "pending_final40_and_mailbox_audit",
+      "vendor_case_management": "filevine",
+      "last_successful_outbound": "2026-08-25T16:05:21.092804+00:00",
+      "lifetime_successful_touch_count": 2,
+      "fresh_evidence": {
+        "contact": {
+          "id": "fc_7fc57ec71f624df19b75602a",
+          "pif_id": "77e6d22c-447b-438d-bc6b-d55e146e0003",
+          "full_name": "Dimitri D. Hurt, Esq.",
+          "first_name": "Dimitri",
+          "email": "dimitri@oconnorhurt.com",
+          "phone": "+13107427600",
+          "title": "Founder & Managing Partner",
+          "linkedin_url": "https://www.linkedin.com/in/dhurt",
+          "source": "front",
+          "created_at": "2026-06-17T10:38:52.51491+00:00",
+          "updated_at": "2026-09-14T19:58:13.849085+00:00",
+          "front_contact_id": "crd_1y3jfr5",
+          "front_last_seen": "2026-05-12T00:37:43.881+00:00",
+          "tech_signals": {},
+          "persona": "founder_owner",
+          "persona_source": "title_keyword",
+          "persona_confidence": 0.9,
+          "research_title": null
+        },
+        "history": [
+          {
+            "id": "883106b0369246619f2f3c3822e60f41",
+            "recipient_email": "dimitri@oconnorhurt.com",
+            "subject": "Re: Is Lead Docket at O'Connor & Hurt tying marketing spend to signed cases?",
+            "body_excerpt": "Hi Dimitri,\n\nJust following up on my earlier note. From the founder and managing partner seat, can you see which lead sources ultimately become retained Filevine matters, or does your team still reconcile Lead Docket and case data manually?\n\nThat system handoff is what interested me, since we solved a similar visibility problem behind Precise's automated status replies.\n\nWould you have 15 minutes to compare notes? I'd genuinely appreciate your perspective.\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+            "status": "sent",
+            "sent_at": "2026-08-25T16:05:21.092804+00:00",
+            "transport": "zoho_api",
+            "message_id": "1787673920855119300"
+          },
+          {
+            "id": "55b0735b79124d13841ab88841bbd4c6",
+            "recipient_email": "dimitri@oconnorhurt.com",
+            "subject": "Is Lead Docket at O'Connor & Hurt tying marketing spend to signed cases?",
+            "status": "delivered",
+            "sent_at": "2026-08-12T22:55:00.617321+00:00",
+            "transport": "resend",
+            "message_id": "69743a72-4490-4bfd-8e40-0d8828918f59"
+          }
+        ],
+        "firm_latest": "2026-08-25T16:05:21.092804+00:00",
+        "inbound": 0,
+        "negative": 0,
+        "pending": 0
+      },
+      "hold_reasons": []
+    },
+    {
+      "firm": "Hakakian Law Group, PC",
+      "name": "Shawn Hakakian",
+      "rank": 17,
+      "email": "shawn@hakakianlaw.com",
+      "title": "Founder & Principal Attorney",
+      "persona": "founder_owner",
+      "contact_id": "fc_d87b33750a264713b2c84d47",
+      "days_since": 16,
+      "canonical_firm_id": "1c4c3c3a-26f7-4614-ac23-749893c41ee7",
+      "normalized_domain": "hakakianlaw.com",
+      "prior_article_slugs": [],
+      "article_match_status": "pending_final40_and_mailbox_audit",
+      "vendor_case_management": "filevine",
+      "last_successful_outbound": "2026-08-25T16:45:31.563473+00:00",
+      "lifetime_successful_touch_count": 2,
+      "fresh_evidence": {
+        "contact": {
+          "id": "fc_d87b33750a264713b2c84d47",
+          "pif_id": "1c4c3c3a-26f7-4614-ac23-749893c41ee7",
+          "full_name": "Shawn Hakakian",
+          "first_name": "Shawn",
+          "email": "shawn@hakakianlaw.com",
+          "phone": "+13107599663",
+          "title": "Founder & Principal Attorney",
+          "linkedin_url": "https://www.linkedin.com/in/shawn‑hakakian‑70976986",
+          "source": "front",
+          "created_at": "2026-06-12T04:41:12.7443+00:00",
+          "updated_at": "2026-09-08T18:52:19.478614+00:00",
+          "front_contact_id": "crd_25xib29",
+          "front_last_seen": "2026-08-19T00:21:14.804+00:00",
+          "tech_signals": {},
+          "persona": "founder_owner",
+          "persona_source": "title_keyword",
+          "persona_confidence": 0.9,
+          "research_title": null
+        },
+        "history": [
+          {
+            "id": "ef0d211bbd3f48cd89cb4774614f7c2a",
+            "recipient_email": "shawn@hakakianlaw.com",
+            "subject": "Re: Is Lead Docket at Hakakian Law Group, PC tying marketing spend to signed cases?",
+            "body_excerpt": "Hi Shawn,\n\nFollowing up on my earlier question. As Hakakian Law Group's founder and principal attorney, can you see the path from original lead source to retained Filevine matter without your team reconciling Lead Docket and case data manually?\n\nThat cross-system handoff is the kind of operational gap we worked through when building Precise's automated status replies.\n\nWould you have 15 minutes to compare notes? I'd genuinely appreciate your perspective.\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+            "status": "sent",
+            "sent_at": "2026-08-25T16:45:31.563473+00:00",
+            "transport": "zoho_api",
+            "message_id": "1787676331356130300"
+          },
+          {
+            "id": "72e7e0e2f03545d7a4d7731bffc0cd80",
+            "recipient_email": "shawn@hakakianlaw.com",
+            "subject": "Is Lead Docket at Hakakian Law Group, PC tying marketing spend to signed cases?",
+            "status": "delivered",
+            "sent_at": "2026-08-12T22:20:27.280051+00:00",
+            "transport": "resend",
+            "message_id": "3423a0b9-4fe1-4329-ba0c-2e5d31fd9ee2"
+          }
+        ],
+        "firm_latest": "2026-08-25T16:45:31.563473+00:00",
+        "inbound": 0,
+        "negative": 0,
+        "pending": 0
+      },
+      "hold_reasons": []
+    },
+    {
+      "firm": "YMPK Law Group, LLP",
+      "name": "Gurgen Mkrtchyan",
+      "rank": 18,
+      "email": "gurgen@ympklaw.com",
+      "title": "Founding Partner; Attorney",
+      "persona": "founder_owner",
+      "contact_id": "fc_ceac37ba886e442391773d56",
+      "days_since": 16,
+      "canonical_firm_id": "c449fd52-c812-49f3-8a79-0e422dd2f54c",
+      "normalized_domain": "ympklaw.com",
+      "prior_article_slugs": [],
+      "article_match_status": "pending_final40_and_mailbox_audit",
+      "vendor_case_management": "filevine",
+      "last_successful_outbound": "2026-08-25T18:15:24.253399+00:00",
+      "lifetime_successful_touch_count": 2,
+      "fresh_evidence": {
+        "contact": {
+          "id": "fc_ceac37ba886e442391773d56",
+          "pif_id": "c449fd52-c812-49f3-8a79-0e422dd2f54c",
+          "full_name": "Gurgen Mkrtchyan",
+          "first_name": "Gurgen",
+          "email": "gurgen@ympklaw.com",
+          "phone": "+13239994903",
+          "title": "Founding Partner; Attorney",
+          "linkedin_url": "https://www.linkedin.com/in/gurgen-mkrtchyan-a6b1177b",
+          "source": "front",
+          "created_at": "2026-06-12T07:18:10.092653+00:00",
+          "updated_at": "2026-09-14T19:44:12.489599+00:00",
+          "front_contact_id": "crd_1ocpjb5",
+          "front_last_seen": "2026-08-25T21:08:48.363+00:00",
+          "tech_signals": {},
+          "persona": "founder_owner",
+          "persona_source": "title_keyword",
+          "persona_confidence": 0.9,
+          "research_title": null
+        },
+        "history": [
+          {
+            "id": "893311a7972d41c5bfb6a2f07160d7f2",
+            "recipient_email": "gurgen@ympklaw.com",
+            "subject": "Re: Is Lead Docket at YMPK Law Group, LLP tying marketing spend to signed cases?",
+            "body_excerpt": "Hi Gurgen,\n\nFollowing up on my earlier question. As a founding partner, do you have a reliable view of which lead sources ultimately become retained Filevine matters, or is that still pieced together between Lead Docket and the case system?\n\nThat system handoff is similar to the workflow challenge we solved behind Precise's automated status replies.\n\nWould you have 15 minutes to compare notes? I'd genuinely appreciate your perspective.\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+            "status": "delivered",
+            "sent_at": "2026-08-25T18:15:24.253399+00:00",
+            "transport": "resend",
+            "message_id": "35990e48-d313-45d7-bc09-cbc741c9e9db"
+          },
+          {
+            "id": "a21765a20db645f988e7e0fa70a59f6d",
+            "recipient_email": "gurgen@ympklaw.com",
+            "subject": "Is Lead Docket at YMPK Law Group, LLP tying marketing spend to signed cases?",
+            "status": "delivered",
+            "sent_at": "2026-08-12T23:40:07.144687+00:00",
+            "transport": "resend",
+            "message_id": "fa8e1a46-e48d-480e-a43f-5cd9719b9119"
+          }
+        ],
+        "firm_latest": "2026-08-25T18:15:24.253399+00:00",
+        "inbound": 0,
+        "negative": 0,
+        "pending": 0
+      },
+      "hold_reasons": []
+    },
+    {
+      "firm": "K. E. Bradley & Associates, PLLC (DBA) K. E. Bradley Law",
+      "name": "Kendrick E. Bradley",
+      "rank": 19,
+      "email": "kendrick@kebradleylaw.com",
+      "title": "Founder & Managing Attorney",
+      "persona": "founder_owner",
+      "contact_id": "462aaebc95da4890bb0dfd64e6921e53",
+      "days_since": 15,
+      "canonical_firm_id": "48e6509b-8608-405e-99be-6ebc377e6b4e",
+      "normalized_domain": "kebradleylaw.com",
+      "prior_article_slugs": [
+        "ai-for-small-personal-injury-law-firms"
+      ],
+      "article_match_status": "pending_final40_and_mailbox_audit",
+      "vendor_case_management": "filevine",
+      "last_successful_outbound": "2026-08-26T16:45:21.294229+00:00",
+      "lifetime_successful_touch_count": 2,
+      "fresh_evidence": {
+        "contact": {
+          "id": "462aaebc95da4890bb0dfd64e6921e53",
+          "pif_id": "48e6509b-8608-405e-99be-6ebc377e6b4e",
+          "full_name": "Kendrick E. Bradley",
+          "first_name": "Kendrick",
+          "email": "kendrick@kebradleylaw.com",
+          "phone": "+18324400585",
+          "title": "Founder & Managing Attorney",
+          "linkedin_url": "https://www.linkedin.com/in/kendrick-bradley-3b544249",
+          "source": "pif_leadership",
+          "created_at": "2026-08-19T13:31:44.636939+00:00",
+          "updated_at": "2026-09-14T19:49:35.533466+00:00",
+          "front_contact_id": "crd_4z53itu",
+          "front_last_seen": "2026-08-18T21:58:27.984+00:00",
+          "tech_signals": {},
+          "persona": "founder_owner",
+          "persona_source": "title_keyword",
+          "persona_confidence": 0.9,
+          "research_title": null
+        },
+        "history": [
+          {
+            "id": "0eb2c60d3eb448638f81efe7fcacde6d",
+            "recipient_email": "kendrick@kebradleylaw.com",
+            "subject": "Re: Precise imaging - quick question",
+            "body_excerpt": "Hi Kendrick,\n\nThought you might find this useful. I wrote up how a small PI firm turned recurring work into reusable AI workflows. Its assistants went from roughly 5 to 7 review-ready documents a day to 12 to 15, while medical records stayed in a protected workflow and every consequential output still came back to the lawyer.\n\nhttps://getpossibleminds.com/t/BaGWee3R9g\n\nIf you could remove one recurring document bottleneck at K. E. Bradley Law, which would you start with?\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+            "status": "delivered",
+            "sent_at": "2026-08-26T16:45:21.294229+00:00",
+            "transport": "resend",
+            "message_id": "d972ddd9-e90d-4207-848d-5deb2fcea7fd"
+          },
+          {
+            "id": "950b4baed874473aab39b65e43d80f99",
+            "recipient_email": "kendrick@kebradleylaw.com",
+            "subject": "Precise imaging - quick question",
+            "status": "sent",
+            "sent_at": "2026-08-20T18:00:15.532332+00:00",
+            "transport": "zoho_api",
+            "message_id": "1787248815064130100"
+          }
+        ],
+        "firm_latest": "2026-08-26T16:45:21.294229+00:00",
+        "inbound": 0,
+        "negative": 0,
+        "pending": 0
+      },
+      "hold_reasons": []
+    },
+    {
+      "firm": "Beahm Law",
+      "name": "Jason Beahm",
+      "rank": 20,
+      "email": "jbeahm@beahmlaw.com",
+      "title": "Founder & President; Lead Trial Attorney",
+      "persona": "founder_owner",
+      "contact_id": "a99897784ac44944911173ac5ffb466b",
+      "days_since": 10,
+      "canonical_firm_id": "167a6f39-78aa-4ada-a777-7f4c3e556a73",
+      "normalized_domain": "beahmlaw.com",
+      "prior_article_slugs": [
+        "claude-clio-ai-intake-solo-pi-lawyer",
+        "first-mover-ai-personal-injury-firms"
+      ],
+      "article_match_status": "pending_final40_and_mailbox_audit",
+      "vendor_case_management": "powerliens",
+      "last_successful_outbound": "2026-08-31T16:00:26.791453+00:00",
+      "lifetime_successful_touch_count": 2,
+      "fresh_evidence": {
+        "contact": {
+          "id": "a99897784ac44944911173ac5ffb466b",
+          "pif_id": "167a6f39-78aa-4ada-a777-7f4c3e556a73",
+          "full_name": "Jason Beahm",
+          "first_name": "Jason",
+          "email": "jbeahm@beahmlaw.com",
+          "phone": "+14154938677",
+          "title": "Founder & President; Lead Trial Attorney",
+          "linkedin_url": "https://www.linkedin.com/in/jasonbeahm",
+          "source": "pif_contacts",
+          "created_at": "2026-06-16T05:54:58.320072+00:00",
+          "updated_at": "2026-09-14T19:58:13.258061+00:00",
+          "front_contact_id": "crd_4x9549e",
+          "front_last_seen": "2026-06-11T19:05:03.606+00:00",
+          "tech_signals": {},
+          "persona": "founder_owner",
+          "persona_source": "title_keyword",
+          "persona_confidence": 0.9,
+          "research_title": null
+        },
+        "history": [
+          {
+            "id": "99a2c7369dcc4cc7b16821c74c4cfaef",
+            "recipient_email": "jbeahm@beahmlaw.com",
+            "subject": "Re: where AI could compound at Beahm Law",
+            "body_excerpt": "Hi Jason,\n\nThought this might be useful alongside my earlier note about where AI could compound at your firm.\n\nI wrote up how a solo PI lawyer used Claude and Clio to turn dictated intake facts into a structured matter, document packet, and task list, while keeping the lawyer in control of the consequential work:\n\nhttps://getpossibleminds.com/t/8LRh9mppkg\n\nDifferent systems, but the same operational question: where can the handoff be automated without losing control? Which part feels most relevant at Beahm Law?\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+            "status": "sent",
+            "sent_at": "2026-08-31T16:00:26.791453+00:00",
+            "transport": "resend",
+            "message_id": "40aacaf5-00b8-4bc4-91d5-019ed02e6ade"
+          },
+          {
+            "id": "2a5df65ed0084c5bac04e3eb6650629a",
+            "recipient_email": "jbeahm@beahmlaw.com",
+            "subject": "where AI could compound at Beahm Law",
+            "status": "delivered",
+            "sent_at": "2026-08-13T19:55:30.098632+00:00",
+            "transport": "resend",
+            "message_id": "dc31f89c-c58c-440c-88ef-5b2ead368999"
+          }
+        ],
+        "firm_latest": "2026-08-31T16:00:26.791453+00:00",
+        "inbound": 0,
+        "negative": 0,
+        "pending": 0
+      },
+      "hold_reasons": []
+    },
+    {
+      "firm": "RA & Associates, APC",
+      "name": "Romel Ambarchyan",
+      "rank": 21,
+      "email": "romel@raandassociates.com",
+      "title": "Founding Partner; Managing Attorney (Managing Partner)",
+      "persona": "founder_owner",
+      "contact_id": "377d3ed18cbd454cb3fc96b0437cfc76",
+      "days_since": 10,
+      "canonical_firm_id": "c46019d9-4d32-4cf8-9ee8-e8c8344fd621",
+      "normalized_domain": "raandassociates.com",
+      "prior_article_slugs": [
+        "claude-clio-ai-intake-solo-pi-lawyer",
+        "first-mover-ai-personal-injury-firms"
+      ],
+      "article_match_status": "pending_final40_and_mailbox_audit",
+      "vendor_case_management": "casepeer",
+      "last_successful_outbound": "2026-08-31T16:50:26.240929+00:00",
+      "lifetime_successful_touch_count": 2,
+      "fresh_evidence": {
+        "contact": {
+          "id": "377d3ed18cbd454cb3fc96b0437cfc76",
+          "pif_id": "c46019d9-4d32-4cf8-9ee8-e8c8344fd621",
+          "full_name": "Romel Ambarchyan",
+          "first_name": "Romel",
+          "email": "romel@raandassociates.com",
+          "phone": "+18182303220",
+          "title": "Founding Partner; Managing Attorney (Managing Partner)",
+          "linkedin_url": "https://www.linkedin.com/in/romelambarchyan",
+          "source": "pif_leadership",
+          "created_at": "2026-07-09T06:33:14.910722+00:00",
+          "updated_at": "2026-07-09T06:34:20.478364+00:00",
+          "front_contact_id": null,
+          "front_last_seen": null,
+          "tech_signals": null,
+          "persona": "founder_owner",
+          "persona_source": "title_keyword",
+          "persona_confidence": 0.9,
+          "research_title": null
+        },
+        "history": [
+          {
+            "id": "0d11d2f96e3c4beb8c46ed1f4d90287e",
+            "recipient_email": "romel@raandassociates.com",
+            "subject": "Re: where AI could compound at RA & Associates, APC",
+            "body_excerpt": "Hi Romel,\n\nThought this might be useful alongside my earlier note about where AI could compound at your firm.\n\nI wrote up how a solo PI lawyer used Claude and Clio to turn dictated intake facts into a structured matter, document packet, and task list, while keeping the lawyer in control of the consequential work:\n\nhttps://getpossibleminds.com/t/xJToGKgaNw\n\nDifferent systems, but the same operational question: where can the handoff be automated without losing control? Which part feels most relevant at RA & Associates?\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+            "status": "delivered",
+            "sent_at": "2026-08-31T16:50:26.240929+00:00",
+            "transport": "resend",
+            "message_id": "4412fdce-359e-4052-8792-4d10f8722411"
+          },
+          {
+            "id": "c6718c4c475842e18da5766099cf4b12",
+            "recipient_email": "romel@raandassociates.com",
+            "subject": "where AI could compound at RA & Associates, APC",
+            "status": "delivered",
+            "sent_at": "2026-08-13T19:10:21.475555+00:00",
+            "transport": "resend",
+            "message_id": "733a9550-101a-400c-bcb6-d0f99c2e8e0e"
+          }
+        ],
+        "firm_latest": "2026-08-31T16:50:26.240929+00:00",
+        "inbound": 0,
+        "negative": 0,
+        "pending": 0
+      },
+      "hold_reasons": []
+    },
+    {
+      "firm": "Farah & Farah",
+      "name": "Eddie Farah",
+      "rank": 22,
+      "email": "efarah@farahandfarah.com",
+      "title": "Founding Partner & Personal Injury Lawyer",
+      "persona": "founder_owner",
+      "contact_id": "3a4fd50d0b2645f69c7ee057ffe7a0aa",
+      "days_since": 9,
+      "canonical_firm_id": "19bddaeb-7d25-4ff8-b4fc-582402ad38ec",
+      "normalized_domain": "farahandfarah.com",
+      "prior_article_slugs": [
+        "pi-law-firm-reviews-client-trust"
+      ],
+      "article_match_status": "pending_final40_and_mailbox_audit",
+      "vendor_case_management": "smartadvocate",
+      "last_successful_outbound": "2026-09-01T17:20:08.052018+00:00",
+      "lifetime_successful_touch_count": 1,
+      "fresh_evidence": {
+        "contact": {
+          "id": "3a4fd50d0b2645f69c7ee057ffe7a0aa",
+          "pif_id": "19bddaeb-7d25-4ff8-b4fc-582402ad38ec",
+          "full_name": "Eddie Farah",
+          "first_name": "Eddie",
+          "email": "efarah@farahandfarah.com",
+          "phone": "+19045496434",
+          "title": "Founding Partner & Personal Injury Lawyer",
+          "linkedin_url": "https://www.linkedin.com/in/eddie-farah-2227b315",
+          "source": "pif_leadership",
+          "created_at": "2026-07-09T06:33:14.910171+00:00",
+          "updated_at": "2026-07-09T06:34:20.478372+00:00",
+          "front_contact_id": null,
+          "front_last_seen": null,
+          "tech_signals": null,
+          "persona": "founder_owner",
+          "persona_source": "title_keyword",
+          "persona_confidence": 0.9,
+          "research_title": null
+        },
+        "history": [
+          {
+            "id": "959430f8b7ce49ecbc83aa2a800f7592",
+            "recipient_email": "efarah@farahandfarah.com",
+            "subject": "What 7,383 PI reviews revealed",
+            "body_excerpt": "Hi Eddie,\n\nFarah & Farah has been serving injured clients since 1979, so you have seen client expectations change across generations.\n\nI analyzed 7,383 PI-firm reviews and found that silence, limited access, and unclear case movement were strongly associated with broken client trust. This section summarizes the complaints: https://getpossibleminds.com/t/_xTV8EF1dg\n\nWhich of those three is hardest for a large firm to eliminate consistently?\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+            "status": "delivered",
+            "sent_at": "2026-09-01T17:20:08.052018+00:00",
+            "transport": "resend",
+            "message_id": "f83dec4e-a697-41b6-abbb-8fb4b0963742"
+          }
+        ],
+        "firm_latest": "2026-09-01T17:20:08.052018+00:00",
+        "inbound": 0,
+        "negative": 0,
+        "pending": 0
+      },
+      "hold_reasons": []
+    },
+    {
+      "firm": "MW Law Firm",
+      "name": "Michael Weiser",
+      "rank": 23,
+      "email": "mike@mweiserlaw.com",
+      "title": "Founder and Attorney",
+      "persona": "founder_owner",
+      "contact_id": "7d6f3d3b25624ee38582c7f9124b013d",
+      "days_since": 9,
+      "canonical_firm_id": "02d03d9f-2af9-4da0-b0b6-c0abdc34cc0c",
+      "normalized_domain": "mweiserlaw.com",
+      "prior_article_slugs": [
+        "pi-law-firm-reviews-client-trust"
+      ],
+      "article_match_status": "pending_final40_and_mailbox_audit",
+      "vendor_case_management": "salesforce",
+      "last_successful_outbound": "2026-09-01T18:40:57.467263+00:00",
+      "lifetime_successful_touch_count": 1,
+      "fresh_evidence": {
+        "contact": {
+          "id": "7d6f3d3b25624ee38582c7f9124b013d",
+          "pif_id": "02d03d9f-2af9-4da0-b0b6-c0abdc34cc0c",
+          "full_name": "Michael Weiser",
+          "first_name": "Michael",
+          "email": "mike@mweiserlaw.com",
+          "phone": "+18554529100",
+          "title": "Founder and Attorney",
+          "linkedin_url": null,
+          "source": "pif_leadership",
+          "created_at": "2026-08-28T08:04:27.31644+00:00",
+          "updated_at": "2026-08-28T08:04:27.424559+00:00",
+          "front_contact_id": null,
+          "front_last_seen": null,
+          "tech_signals": null,
+          "persona": "founder_owner",
+          "persona_source": "title_keyword",
+          "persona_confidence": 0.9,
+          "research_title": null
+        },
+        "history": [
+          {
+            "id": "79a9c825583f4534946ed7270e4ca525",
+            "recipient_email": "mike@mweiserlaw.com",
+            "subject": "A client-trust question for MW Law",
+            "body_excerpt": "Hi Michael,\n\nSince founding MW Law in 2015, you have had to keep the experience personal while building repeatable ways to move cases forward.\n\nI analyzed 7,383 PI-firm reviews and found that silence, limited access, and unclear case movement were strongly associated with broken client trust. The complaint patterns are here: https://getpossibleminds.com/t/5DvtcgDUkg\n\nWhich of those three is hardest to prevent consistently?\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+            "status": "delivered",
+            "sent_at": "2026-09-01T18:40:57.467263+00:00",
+            "transport": "resend",
+            "message_id": "c53093cf-5e7f-431b-b9a2-ed9e3e117f4c"
+          }
+        ],
+        "firm_latest": "2026-09-01T18:40:57.467263+00:00",
+        "inbound": 0,
+        "negative": 0,
+        "pending": 0
+      },
+      "hold_reasons": []
+    },
+    {
+      "firm": "Accident Abe",
+      "name": "Ibrahim N. Muhtaseb",
+      "rank": 24,
+      "email": "abe@accidentabe.com",
+      "title": "Founder & Principal Attorney",
+      "persona": "founder_owner",
+      "contact_id": "d809ab4d40e449d9abd18c4a4813932d",
+      "days_since": 8,
+      "canonical_firm_id": "eaba03cb-a0a2-4ab8-91f0-22dd4c488f65",
+      "normalized_domain": "accidentabe.com",
+      "prior_article_slugs": [],
+      "article_match_status": "pending_final40_and_mailbox_audit",
+      "vendor_case_management": "clio",
+      "last_successful_outbound": "2026-09-02T15:30:05.956615+00:00",
+      "lifetime_successful_touch_count": 1,
+      "fresh_evidence": {
+        "contact": {
+          "id": "d809ab4d40e449d9abd18c4a4813932d",
+          "pif_id": "eaba03cb-a0a2-4ab8-91f0-22dd4c488f65",
+          "full_name": "Ibrahim N. Muhtaseb",
+          "first_name": "Ibrahim",
+          "email": "abe@accidentabe.com",
+          "phone": "+19517043475",
+          "title": "Founder & Principal Attorney",
+          "linkedin_url": null,
+          "source": "pif_leadership",
+          "created_at": "2026-04-30T19:20:53.713924+00:00",
+          "updated_at": "2026-09-13T19:53:31.760308+00:00",
+          "front_contact_id": "crd_21eqse9",
+          "front_last_seen": "2026-06-03T22:00:47.352+00:00",
+          "tech_signals": {},
+          "persona": "founder_owner",
+          "persona_source": "title_keyword",
+          "persona_confidence": 0.9,
+          "research_title": null
+        },
+        "history": [
+          {
+            "id": "2b89569b71784a9084e13add1be3cb1e",
+            "recipient_email": "abe@accidentabe.com",
+            "subject": "jelassi rahma submitted a Google review about Accident Abe",
+            "body_excerpt": "Hi Ibrahim,\n\nIn a Google review from February 11, 2026, jelassi rahma wrote, \"He then assigned his case manager, Sarah, but communication was very poor. She rarely responded, and the attorney himself was always busy.\"\n\nA review like this can make prospective clients question whether their own calls will be returned. We built a system for Precise Imaging that processes roughly 600 emails daily and flags missed callbacks, aging inquiries, and unresolved messages.\n\nI'd be glad to walk you through what we built for Precise and learn how your team currently handles these communication workflows. You can choose a 30-minute time here:\n\nhttps://getpossibleminds.com/t/rSF9mvxmaw\n\nRegards,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+            "status": "delivered",
+            "sent_at": "2026-09-02T15:30:05.956615+00:00",
+            "transport": "resend",
+            "message_id": "3ebccdd8-4e66-4e72-8c78-da3c469c498a"
+          }
+        ],
+        "firm_latest": "2026-09-02T15:30:05.956615+00:00",
+        "inbound": 0,
+        "negative": 0,
+        "pending": 0
+      },
+      "hold_reasons": []
+    },
+    {
+      "firm": "Law Offices of Cyrus Jamehdo",
+      "name": "Cyrus Amir Jamehdor",
+      "rank": 25,
+      "email": "cj@cyruslegal.com",
+      "title": "Founder",
+      "persona": "founder_owner",
+      "contact_id": "9f8dbf8e5e704526b8e252335190d7c0",
+      "days_since": 8,
+      "canonical_firm_id": "3c3ded55-f0e1-4752-9b81-9c3a42018cde",
+      "normalized_domain": "cyruslegal.com",
+      "prior_article_slugs": [],
+      "article_match_status": "pending_final40_and_mailbox_audit",
+      "vendor_case_management": "case-status",
+      "last_successful_outbound": "2026-09-02T17:00:15.633015+00:00",
+      "lifetime_successful_touch_count": 1,
+      "fresh_evidence": {
+        "contact": {
+          "id": "9f8dbf8e5e704526b8e252335190d7c0",
+          "pif_id": "3c3ded55-f0e1-4752-9b81-9c3a42018cde",
+          "full_name": "Cyrus Amir Jamehdor",
+          "first_name": "Cyrus",
+          "email": "cj@cyruslegal.com",
+          "phone": "+12132324959",
+          "title": "Founder",
+          "linkedin_url": null,
+          "source": "pif_leadership",
+          "created_at": "2026-08-21T10:12:24.845622+00:00",
+          "updated_at": "2026-09-14T19:50:43.124163+00:00",
+          "front_contact_id": "crd_242w1s1",
+          "front_last_seen": "2024-07-19T21:15:13.05+00:00",
+          "tech_signals": {},
+          "persona": "founder_owner",
+          "persona_source": "title_keyword",
+          "persona_confidence": 0.9,
+          "research_title": null
+        },
+        "history": [
+          {
+            "id": "ee3a4226249a42e783432b695d75eb03",
+            "recipient_email": "cj@cyruslegal.com",
+            "subject": "Nick J submitted a Google review about Law Offices of Cyrus Jamehdo",
+            "body_excerpt": "Hi Cyrus,\n\nIn a Google review from June 16, 2026, Nick J wrote, \"In many instances, my calls went unanswered and I had difficulty obtaining information about important matters affecting my case.\"\n\nA review like this can make prospective clients question whether their own calls will be returned. We built a system for Precise Imaging that processes roughly 600 emails daily and flags missed callbacks, aging inquiries, and unresolved messages.\n\nI'd be glad to walk you through what we built for Precise and learn how your team currently handles these communication workflows. You can choose a 30-minute time here:\n\nhttps://getpossibleminds.com/t/IA_WjhiZ7A\n\nRegards,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+            "status": "delivered",
+            "sent_at": "2026-09-02T17:00:15.633015+00:00",
+            "transport": "resend",
+            "message_id": "45807dc1-1f47-457d-afbe-366ba2e721be"
+          }
+        ],
+        "firm_latest": "2026-09-02T17:00:15.633015+00:00",
+        "inbound": 0,
+        "negative": 0,
+        "pending": 0
+      },
+      "hold_reasons": []
+    },
+    {
+      "firm": "Quill & Arrow, LLP",
+      "name": "Kevin Y. Jacobson, Esq.",
+      "rank": 26,
+      "email": "kjacobson@quillarrowlaw.com",
+      "title": "Partner; Founding/Co-founder",
+      "persona": "founder_owner",
+      "contact_id": "3817b131c2634101963adaf6b6eacb38",
+      "days_since": 8,
+      "canonical_firm_id": "4e85db6f-217d-4212-8d1f-09d3d1993fcd",
+      "normalized_domain": "quillarrowlaw.com",
+      "prior_article_slugs": [],
+      "article_match_status": "pending_final40_and_mailbox_audit",
+      "vendor_case_management": "clio",
+      "last_successful_outbound": "2026-09-02T17:50:12.176974+00:00",
+      "lifetime_successful_touch_count": 1,
+      "fresh_evidence": {
+        "contact": {
+          "id": "3817b131c2634101963adaf6b6eacb38",
+          "pif_id": "4e85db6f-217d-4212-8d1f-09d3d1993fcd",
+          "full_name": "Kevin Y. Jacobson, Esq.",
+          "first_name": "Kevin",
+          "email": "kjacobson@quillarrowlaw.com",
+          "phone": "+13109334271",
+          "title": "Partner; Founding/Co-founder",
+          "linkedin_url": null,
+          "source": "pif_leadership",
+          "created_at": "2026-06-16T05:54:58.327799+00:00",
+          "updated_at": "2026-06-16T05:55:34.962476+00:00",
+          "front_contact_id": null,
+          "front_last_seen": null,
+          "tech_signals": null,
+          "persona": "founder_owner",
+          "persona_source": "title_keyword",
+          "persona_confidence": 0.9,
+          "research_title": null
+        },
+        "history": [
+          {
+            "id": "6ebcd882da484674939157085f36080d",
+            "recipient_email": "kjacobson@quillarrowlaw.com",
+            "subject": "M C submitted a Google review about Quill & Arrow",
+            "body_excerpt": "Hi Kevin,\n\nIn a Google review from July 23, 2026, M C wrote, \"I constantly reach out to Quill and Arrow inquiring information about the case and no new resolution has been set.\"\n\nA review like this can make prospective clients question whether their own calls will be returned. We built a system for Precise Imaging that processes roughly 600 emails daily and flags missed callbacks, aging inquiries, and unresolved messages.\n\nI'd be glad to walk you through what we built for Precise and learn how your team currently handles these communication workflows. You can choose a 30-minute time here:\n\nhttps://getpossibleminds.com/t/yEUVHpEPmg\n\nRegards,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+            "status": "delivered",
+            "sent_at": "2026-09-02T17:50:12.176974+00:00",
+            "transport": "resend",
+            "message_id": "01a0633e-2496-77a7-9eba-0a1822522ecf"
+          }
+        ],
+        "firm_latest": "2026-09-02T17:50:12.176974+00:00",
+        "inbound": 0,
+        "negative": 0,
+        "pending": 0
+      },
+      "hold_reasons": []
+    },
+    {
+      "firm": "Moet Law Group",
+      "name": "Robert Moghadam",
+      "rank": 27,
+      "email": "robert@moetlaw.com",
+      "title": "Founding Partner; Managing Attorney",
+      "persona": "founder_owner",
+      "contact_id": "8a8b931a60884296963735b5e5129531",
+      "days_since": 108,
+      "canonical_firm_id": "ae3c0340-b1d5-40a8-8f07-93bc48af547c",
+      "normalized_domain": "moetlaw.com",
+      "prior_article_slugs": [
+        "musk-algorithm-ai-pi-firm"
+      ],
+      "article_match_status": "pending_final40_and_mailbox_audit",
+      "vendor_case_management": null,
+      "last_successful_outbound": "2026-05-25T13:51:15.374522+00:00",
+      "lifetime_successful_touch_count": 1,
+      "fresh_evidence": {
+        "contact": {
+          "id": "8a8b931a60884296963735b5e5129531",
+          "pif_id": "ae3c0340-b1d5-40a8-8f07-93bc48af547c",
+          "full_name": "Robert Moghadam",
+          "first_name": "Robert",
+          "email": "robert@moetlaw.com",
+          "phone": "+18668067425",
+          "title": "Founding Partner; Managing Attorney",
+          "linkedin_url": null,
+          "source": "pif_leadership",
+          "created_at": "2026-07-22T11:09:25.601583+00:00",
+          "updated_at": "2026-07-22T11:10:26.653973+00:00",
+          "front_contact_id": null,
+          "front_last_seen": null,
+          "tech_signals": null,
+          "persona": "founder_owner",
+          "persona_source": "title_keyword",
+          "persona_confidence": 0.9,
+          "research_title": null
+        },
+        "history": [
+          {
+            "id": "49e9efcdeebb44528be6de5c12f6e8c7",
+            "recipient_email": "robert@moetlaw.com",
+            "subject": "Why most PI firm AI stalls",
+            "body_excerpt": "Hi Robert,\n\nI wrote something you may appreciate as a founding partner: most AI projects in PI firms fail not because the tools are weak, but because they get added to a workflow that was never redesigned in the first place.\n\nThe post takes Musk's 5-step engineering algorithm and applies it to PI operations. The core idea is that requirements, deletion, simplification, and acceleration have to happen before automation — otherwise the firm just gets a faster version of a bad process.\n\nIt's a cont",
+            "status": "sent",
+            "sent_at": "2026-05-25T13:51:15.374522+00:00",
+            "transport": "resend",
+            "message_id": "444fe780-7edd-4456-806d-6b00751f32ea"
+          }
+        ],
+        "firm_latest": "2026-05-25T13:56:41.683595+00:00",
+        "inbound": 0,
+        "negative": 0,
+        "pending": 0
+      },
+      "hold_reasons": []
+    },
+    {
+      "firm": "Samuels Law Group",
+      "name": "Todd Craig Samuels",
+      "rank": 28,
+      "email": "tsamuels@thesamuelslawgroup.com",
+      "title": "Attorney; Founder / Lead Counsel, The Samuels Law Group (San Diego, CA)",
+      "persona": "founder_owner",
+      "contact_id": "21baccdef8364282bef1ec2b96fd00d7",
+      "days_since": 106,
+      "canonical_firm_id": "491613e0-adc0-471d-9bf6-4481430e546a",
+      "normalized_domain": "thesamuelslawgroup.com",
+      "prior_article_slugs": [],
+      "article_match_status": "pending_final40_and_mailbox_audit",
+      "vendor_case_management": null,
+      "last_successful_outbound": "2026-05-27T16:17:50.958037+00:00",
+      "lifetime_successful_touch_count": 1,
+      "fresh_evidence": {
+        "contact": {
+          "id": "21baccdef8364282bef1ec2b96fd00d7",
+          "pif_id": "491613e0-adc0-471d-9bf6-4481430e546a",
+          "full_name": "Todd Craig Samuels",
+          "first_name": "Todd",
+          "email": "tsamuels@thesamuelslawgroup.com",
+          "phone": "+18583690188",
+          "title": "Attorney; Founder / Lead Counsel, The Samuels Law Group (San Diego, CA)",
+          "linkedin_url": "https://www.linkedin.com/in/todd-samuels-9b26335",
+          "source": "pif_leadership",
+          "created_at": "2026-05-04T19:22:02.053863+00:00",
+          "updated_at": "2026-09-14T19:44:57.089559+00:00",
+          "front_contact_id": "crd_228xzb5",
+          "front_last_seen": "2025-11-05T00:02:06.046+00:00",
+          "tech_signals": {},
+          "persona": "founder_owner",
+          "persona_source": "title_keyword",
+          "persona_confidence": 0.9,
+          "research_title": null
+        },
+        "history": [
+          {
+            "id": "4185264e85224687b1ca8a09b39b98ce",
+            "recipient_email": "tsamuels@thesamuelslawgroup.com",
+            "subject": "Precise Imaging -- quick records question",
+            "body_excerpt": "Hi Todd,\n\nPranav from Possible Minds. We're the team behind the automated email replies and imaging-status updates your team may have seen from Precise Imaging.\n\nI'm reaching out to PI firms with a Precise connection to understand where records requests, imaging updates, missing docs, and follow-up loops still eat staff time.\n\nWould it be worth a 20-minute records workflow audit for Samuels Law Group, or is there someone else on your team who owns that process?\n\n-- Pranav\nFounder, Possible Minds",
+            "status": "sent",
+            "sent_at": "2026-05-27T16:17:50.958037+00:00",
+            "transport": "resend",
+            "message_id": "1131a60a-5e6f-46e3-b6fc-f09ba13ba07f"
+          }
+        ],
+        "firm_latest": "2026-05-27T16:17:50.958037+00:00",
+        "inbound": 0,
+        "negative": 0,
+        "pending": 0
+      },
+      "hold_reasons": []
+    },
+    {
+      "firm": "Beloryan & Manukyan LLP",
+      "name": "Haik Armen Beloryan",
+      "rank": 29,
+      "email": "beloryan@bmsllp.com",
+      "title": "Founding Partner",
+      "persona": "founder_owner",
+      "contact_id": "43e9d30a45944c169265723073fb504b",
+      "days_since": 100,
+      "canonical_firm_id": "fb9a54b8-83f3-44fa-aef8-c7547af649f4",
+      "normalized_domain": "bmsllp.com",
+      "prior_article_slugs": [],
+      "article_match_status": "pending_final40_and_mailbox_audit",
+      "vendor_case_management": null,
+      "last_successful_outbound": "2026-06-02T16:16:52.017633+00:00",
+      "lifetime_successful_touch_count": 2,
+      "fresh_evidence": {
+        "contact": {
+          "id": "43e9d30a45944c169265723073fb504b",
+          "pif_id": "fb9a54b8-83f3-44fa-aef8-c7547af649f4",
+          "full_name": "Haik Armen Beloryan",
+          "first_name": "Haik",
+          "email": "beloryan@bmsllp.com",
+          "phone": "+17474444444",
+          "title": "Founding Partner",
+          "linkedin_url": "https://www.linkedin.com/in/haik-beloryan-b64aa57a",
+          "source": "pif_leadership",
+          "created_at": "2026-05-04T19:22:20.479332+00:00",
+          "updated_at": "2026-07-24T16:59:45.565349+00:00",
+          "front_contact_id": "crd_262zf9d",
+          "front_last_seen": "2026-06-11T20:53:48.086+00:00",
+          "tech_signals": {},
+          "persona": "founder_owner",
+          "persona_source": "title_keyword",
+          "persona_confidence": 0.9,
+          "research_title": null
+        },
+        "history": [
+          {
+            "id": "afd191425433478c8491a6a4c3c5366d",
+            "recipient_email": "beloryan@bmsllp.com",
+            "subject": "Precise Imaging status updates",
+            "body_excerpt": "Hi Haik,\n\nPranav from Possible Minds. If Beloryan & Manukyan refers clients to Precise Imaging, you've seen the automated status replies they send: we built that system.\n\nWhat's more relevant to you: for a Southern California plaintiff firm about your size, we built an AI that calls every web lead back in under 90 seconds, day or night, qualifies the case over a real conversation, and hands it to intake ready to sign. It led to 34% more signed cases, much faster intake, and fewer bad-fit matters",
+            "status": "sent",
+            "sent_at": "2026-06-02T16:16:52.017633+00:00",
+            "transport": "zoho_api",
+            "message_id": "1780417011866119300"
+          },
+          {
+            "id": "126ddb4f38d248b8917f6686622c86fd",
+            "recipient_email": "beloryan@bmsllp.com",
+            "subject": "Precise Imaging -- quick records question",
+            "status": "sent",
+            "sent_at": "2026-05-27T16:25:53.519751+00:00",
+            "transport": "resend",
+            "message_id": "bb361e3c-ab3e-495e-9349-bd75d5626eeb"
+          }
+        ],
+        "firm_latest": "2026-06-02T16:16:52.017633+00:00",
+        "inbound": 0,
+        "negative": 0,
+        "pending": 0
+      },
+      "hold_reasons": []
+    },
+    {
+      "firm": "Law Offices of Alex Poberesky, P.A.",
+      "name": "Alex Poberesky, Esq.",
+      "rank": 30,
+      "email": "alex@alexhelp.com",
+      "title": "Founder & Senior Attorney",
+      "persona": "founder_owner",
+      "contact_id": "04d63bc2dff341efae645aff0d917f8b",
+      "days_since": 100,
+      "canonical_firm_id": "27ae9c5a-30e2-4436-969c-007b4f9a9699",
+      "normalized_domain": "alexhelp.com",
+      "prior_article_slugs": [],
+      "article_match_status": "pending_final40_and_mailbox_audit",
+      "vendor_case_management": null,
+      "last_successful_outbound": "2026-06-02T16:23:59.546557+00:00",
+      "lifetime_successful_touch_count": 2,
+      "fresh_evidence": {
+        "contact": {
+          "id": "04d63bc2dff341efae645aff0d917f8b",
+          "pif_id": "27ae9c5a-30e2-4436-969c-007b4f9a9699",
+          "full_name": "Alex Poberesky, Esq.",
+          "first_name": "Alex",
+          "email": "alex@alexhelp.com",
+          "phone": "+14104840400",
+          "title": "Founder & Senior Attorney",
+          "linkedin_url": "https://www.linkedin.com/in/alex-poberesky-esq-9b55161",
+          "source": "pif_leadership",
+          "created_at": "2026-04-30T19:20:26.64896+00:00",
+          "updated_at": "2026-06-12T10:13:52.999931+00:00",
+          "front_contact_id": null,
+          "front_last_seen": null,
+          "tech_signals": null,
+          "persona": "founder_owner",
+          "persona_source": "title_keyword",
+          "persona_confidence": 0.9,
+          "research_title": null
+        },
+        "history": [
+          {
+            "id": "02dda3ee7c194e8eae3ac2c4d5e6f6a4",
+            "recipient_email": "alex@alexhelp.com",
+            "subject": "Precise Imaging status updates",
+            "body_excerpt": "Hi Alex,\n\nPranav from Possible Minds. If Law Offices of Alex Poberesky, P.A. refers clients to Precise Imaging, you've seen the automated status replies they send, we built that system.\n\nWhat is usually more relevant for PI firms, though, is intake speed. For a Southern California plaintiff firm about your size, we built an AI that calls every web lead back in under 90 seconds, day or night, qualifies the case over a real conversation, and hands it to intake ready to sign. It helped drive 34% mo",
+            "status": "sent",
+            "sent_at": "2026-06-02T16:23:59.546557+00:00",
+            "transport": "zoho_api",
+            "message_id": "1780417439385130100"
+          },
+          {
+            "id": "47501a40d3e84231a292efb615ca81cb",
+            "recipient_email": "alex@alexhelp.com",
+            "subject": "Precise Imaging -- quick records question",
+            "status": "sent",
+            "sent_at": "2026-05-27T16:11:49.488746+00:00",
+            "transport": "resend",
+            "message_id": "86cb2d17-d458-4464-ba74-512390b365f1"
+          }
+        ],
+        "firm_latest": "2026-06-02T16:23:59.546557+00:00",
+        "inbound": 0,
+        "negative": 0,
+        "pending": 0
+      },
+      "hold_reasons": []
+    },
+    {
+      "firm": "Pishnamaz Law Firm",
+      "name": "Narimon Pishnamaz",
+      "rank": 31,
+      "email": "narimon@pishlaw.com",
+      "title": "Founding Partner",
+      "persona": "founder_owner",
+      "contact_id": "2c98df2d8f8a420c8ee399d89b3b49b9",
+      "days_since": 100,
+      "canonical_firm_id": "da7e7991-de44-41de-b75c-9885366100b8",
+      "normalized_domain": "pishlaw.com",
+      "prior_article_slugs": [],
+      "article_match_status": "pending_final40_and_mailbox_audit",
+      "vendor_case_management": null,
+      "last_successful_outbound": "2026-06-02T19:07:55.714748+00:00",
+      "lifetime_successful_touch_count": 2,
+      "fresh_evidence": {
+        "contact": {
+          "id": "2c98df2d8f8a420c8ee399d89b3b49b9",
+          "pif_id": "da7e7991-de44-41de-b75c-9885366100b8",
+          "full_name": "Narimon Pishnamaz",
+          "first_name": "Narimon",
+          "email": "narimon@pishlaw.com",
+          "phone": "+19098504885",
+          "title": "Founding Partner",
+          "linkedin_url": "https://www.linkedin.com/in/narimon-pishnamaz-0a4aa89b",
+          "source": "pif_leadership",
+          "created_at": "2026-05-04T19:22:15.01882+00:00",
+          "updated_at": "2026-07-18T07:18:32.701998+00:00",
+          "front_contact_id": null,
+          "front_last_seen": null,
+          "tech_signals": null,
+          "persona": "founder_owner",
+          "persona_source": "title_keyword",
+          "persona_confidence": 0.9,
+          "research_title": null
+        },
+        "history": [
+          {
+            "id": "1939caece92541578f9ea9dc9940c192",
+            "recipient_email": "narimon@pishlaw.com",
+            "subject": "Precise Imaging status updates",
+            "body_excerpt": "Hi Narimon,\n\nPranav from Possible Minds. If Pishnamaz Law Firm refers clients to Precise Imaging, you've seen the automated status replies they send, we built that system.\n\nWhat is probably more relevant to you is where plaintiff firms usually feel the revenue leak: web leads that come in after hours, or while intake is buried, and sign with whoever calls back first. For a Southern California plaintiff firm about your size, we built an AI that called every web lead back in under 90 seconds, qual",
+            "status": "sent",
+            "sent_at": "2026-06-02T19:07:55.714748+00:00",
+            "transport": "zoho_api",
+            "message_id": "1780427275551119300"
+          },
+          {
+            "id": "0493fc34e74d454c8f4e1b0e079bb1bc",
+            "recipient_email": "narimon@pishlaw.com",
+            "subject": "Precise Imaging -- quick records question",
+            "status": "sent",
+            "sent_at": "2026-05-27T16:33:56.137236+00:00",
+            "transport": "resend",
+            "message_id": "8a096a06-bc34-40dd-a6bd-f75ecb072244"
+          }
+        ],
+        "firm_latest": "2026-06-02T19:07:55.714748+00:00",
+        "inbound": 0,
+        "negative": 0,
+        "pending": 0
+      },
+      "hold_reasons": []
+    },
+    {
+      "firm": "Neale & Fhima APC",
+      "name": "Aaron Fhima",
+      "rank": 32,
+      "email": "aaron@nealefhima.com",
+      "title": "Principal Attorney",
+      "persona": "founder_owner",
+      "contact_id": "fc_dda7035c18224e75875ff53d",
+      "days_since": 76,
+      "canonical_firm_id": "54ca112d-2313-4a56-bc7c-2f6cf4323157",
+      "normalized_domain": "nealefhima.com",
+      "prior_article_slugs": [],
+      "article_match_status": "pending_final40_and_mailbox_audit",
+      "vendor_case_management": null,
+      "last_successful_outbound": "2026-06-26T16:18:50.727643+00:00",
+      "lifetime_successful_touch_count": 1,
+      "fresh_evidence": {
+        "contact": {
+          "id": "fc_dda7035c18224e75875ff53d",
+          "pif_id": "54ca112d-2313-4a56-bc7c-2f6cf4323157",
+          "full_name": "Aaron Fhima",
+          "first_name": "Aaron",
+          "email": "aaron@nealefhima.com",
+          "phone": "+19496611007",
+          "title": "Principal Attorney",
+          "linkedin_url": "https://www.linkedin.com/in/aaron-fhima-ab590750",
+          "source": "front",
+          "created_at": "2026-06-12T05:28:16.7973+00:00",
+          "updated_at": "2026-07-05T07:10:32.741342+00:00",
+          "front_contact_id": "crd_1xrna0x",
+          "front_last_seen": "2025-07-18T23:14:12.837+00:00",
+          "tech_signals": {},
+          "persona": "founder_owner",
+          "persona_source": "title_keyword",
+          "persona_confidence": 0.9,
+          "research_title": null
+        },
+        "history": [
+          {
+            "id": "a862589ba51e4758bf7139069f45f2fd",
+            "recipient_email": "aaron@nealefhima.com",
+            "subject": "ai readiness at neale & fhima",
+            "body_excerpt": "Hi Aaron,\n\nMost firms that buy AI never see results because they weren't set up to benefit.\nSo I built a short AI-readiness audit for PI firms: a handful of questions that score where your firm stands and what's blocking value.\n\nHere it is - about 10 minutes: https://aiaudit.getpossibleminds.com/a/1Pdx_BVI\n\n-- Pranav\nFounder, Possible Minds\nBook a consult: https://aiaudit.getpossibleminds.com/c/NlYqHw5f",
+            "status": "sent",
+            "sent_at": "2026-06-26T16:18:50.727643+00:00",
+            "transport": "zoho_api",
+            "message_id": "1782490730029130300"
+          }
+        ],
+        "firm_latest": "2026-07-03T07:00:39.621609+00:00",
+        "inbound": 0,
+        "negative": 0,
+        "pending": 0
+      },
+      "hold_reasons": []
+    },
+    {
+      "firm": "SM Law CA",
+      "name": "Kian Mottahedeh",
+      "rank": 33,
+      "email": "kian@smlawca.com",
+      "title": "Partner; Founder",
+      "persona": "founder_owner",
+      "contact_id": "fc_b4acf98a14d9485cbb98210f",
+      "days_since": 73,
+      "canonical_firm_id": "bc6fa284-e5f6-4e99-92af-3e2465b297f5",
+      "normalized_domain": "smlawca.com",
+      "prior_article_slugs": [],
+      "article_match_status": "pending_final40_and_mailbox_audit",
+      "vendor_case_management": null,
+      "last_successful_outbound": "2026-06-29T17:54:17.318803+00:00",
+      "lifetime_successful_touch_count": 2,
+      "fresh_evidence": {
+        "contact": {
+          "id": "fc_b4acf98a14d9485cbb98210f",
+          "pif_id": "bc6fa284-e5f6-4e99-92af-3e2465b297f5",
+          "full_name": "Kian Mottahedeh",
+          "first_name": "Kian",
+          "email": "kian@smlawca.com",
+          "phone": "+18188555950",
+          "title": "Partner; Founder",
+          "linkedin_url": "https://www.linkedin.com/in/kian-mottahedeh-b9b03524",
+          "source": "front",
+          "created_at": "2026-06-17T16:01:47.879619+00:00",
+          "updated_at": "2026-08-20T12:40:10.567757+00:00",
+          "front_contact_id": "crd_24ii0n5",
+          "front_last_seen": "2026-04-07T23:19:09.812+00:00",
+          "tech_signals": {},
+          "persona": "founder_owner",
+          "persona_source": "title_keyword",
+          "persona_confidence": 0.9,
+          "research_title": null
+        },
+        "history": [
+          {
+            "id": "651be26fe51d4a48b23794dad3fe654a",
+            "recipient_email": "kian@smlawca.com",
+            "subject": "after-hours cases slipping away",
+            "body_excerpt": "Hi Kian,\n\nPranav from Possible Minds. If SM LAW GROUP refers clients to Precise Imaging, you've seen the automated status replies they send: we built that system, along with Precise's email triage, intake voice line, and website chat.\n\nA serious caller after hours is not Miss Havisham, sitting patiently by the phone in bridal decay. They will call the next firm.\n\nThe expensive question is whether your intake system catches that moment well enough to protect signed-case economics. The browser dem",
+            "status": "sent",
+            "sent_at": "2026-06-29T17:54:17.318803+00:00",
+            "transport": "resend",
+            "message_id": "06885122-313c-4e11-a9b0-27d7a7f76917"
+          },
+          {
+            "id": "11461603ad4e40808c4a121222b9d34f",
+            "recipient_email": "kian@smlawca.com",
+            "subject": "missed calls and the map pack",
+            "status": "sent",
+            "sent_at": "2026-06-25T17:05:37.148813+00:00",
+            "transport": "zoho_api",
+            "message_id": "1782407136957119300"
+          }
+        ],
+        "firm_latest": "2026-06-29T17:54:17.318803+00:00",
+        "inbound": 0,
+        "negative": 0,
+        "pending": 0
+      },
+      "hold_reasons": []
+    },
+    {
+      "firm": "Sayegh Law Firm",
+      "name": "William G. Sayegh",
+      "rank": 34,
+      "email": "wgs@sayeghlaw.com",
+      "title": "Founder; President & Sr. Attorney",
+      "persona": "founder_owner",
+      "contact_id": "d6764e1d37054cb29504004bec786827",
+      "days_since": 73,
+      "canonical_firm_id": "6b35afff-6a77-4e2c-ad67-cd0442097237",
+      "normalized_domain": "willsayeghlaw.com",
+      "prior_article_slugs": [],
+      "article_match_status": "pending_final40_and_mailbox_audit",
+      "vendor_case_management": null,
+      "last_successful_outbound": "2026-06-29T18:01:17.961803+00:00",
+      "lifetime_successful_touch_count": 2,
+      "fresh_evidence": {
+        "contact": {
+          "id": "d6764e1d37054cb29504004bec786827",
+          "pif_id": "6b35afff-6a77-4e2c-ad67-cd0442097237",
+          "full_name": "William G. Sayegh",
+          "first_name": "William",
+          "email": "wgs@sayeghlaw.com",
+          "phone": "+18452284200",
+          "title": "Founder; President & Sr. Attorney",
+          "linkedin_url": "https://www.linkedin.com/in/william-sayegh-13374a47",
+          "source": "pif_leadership",
+          "created_at": "2026-06-16T05:54:58.313688+00:00",
+          "updated_at": "2026-06-16T05:55:34.966701+00:00",
+          "front_contact_id": null,
+          "front_last_seen": null,
+          "tech_signals": null,
+          "persona": "founder_owner",
+          "persona_source": "title_keyword",
+          "persona_confidence": 0.9,
+          "research_title": null
+        },
+        "history": [
+          {
+            "id": "79cee64753a841b2865e9af6b3c568b6",
+            "recipient_email": "wgs@sayeghlaw.com",
+            "subject": "the caller who does not wait",
+            "body_excerpt": "Hi William,\n\nPranav from Possible Minds. If Sayegh Law refers clients to Precise Imaging, you've seen the automated status replies they send: we built that system, along with Precise's email triage, intake voice line, and website chat.\n\nA serious caller after hours is not Miss Havisham, sitting patiently by the phone in bridal decay. They will call the next firm.\n\nFor a founder, that is not just a responsiveness issue. It is signed-case leakage. The browser demo gives you a quick way to judge wh",
+            "status": "sent",
+            "sent_at": "2026-06-29T18:01:17.961803+00:00",
+            "transport": "resend",
+            "message_id": "97e78d1e-fa5f-43af-a9b4-d764937ee2c4"
+          },
+          {
+            "id": "e1b5bb6b3b664ede8ef50a6138378a4c",
+            "recipient_email": "wgs@sayeghlaw.com",
+            "subject": "sayegh law ai readiness",
+            "status": "sent",
+            "sent_at": "2026-06-24T17:10:15.067266+00:00",
+            "transport": "zoho_api",
+            "message_id": "1782321014901119300"
+          }
+        ],
+        "firm_latest": "2026-06-29T18:01:17.961803+00:00",
+        "inbound": 0,
+        "negative": 0,
+        "pending": 0
+      },
+      "hold_reasons": []
+    },
+    {
+      "firm": "Singh Ahluwalia",
+      "name": "Deepak Ahluwalia",
+      "rank": 35,
+      "email": "deepak@singhahluwalia.com",
+      "title": "Founder/Managing Partner",
+      "persona": "founder_owner",
+      "contact_id": "fc_252c2ea9604c4866b6177d15",
+      "days_since": 70,
+      "canonical_firm_id": "51ee7c1e-dd53-4319-ba8a-f17f605b0afb",
+      "normalized_domain": "singhahluwalia.com",
+      "prior_article_slugs": [],
+      "article_match_status": "pending_final40_and_mailbox_audit",
+      "vendor_case_management": null,
+      "last_successful_outbound": "2026-07-02T16:45:27.39287+00:00",
+      "lifetime_successful_touch_count": 2,
+      "fresh_evidence": {
+        "contact": {
+          "id": "fc_252c2ea9604c4866b6177d15",
+          "pif_id": "51ee7c1e-dd53-4319-ba8a-f17f605b0afb",
+          "full_name": "Deepak Ahluwalia",
+          "first_name": "Deepak",
+          "email": "deepak@singhahluwalia.com",
+          "phone": "+15598784958",
+          "title": "Founder/Managing Partner",
+          "linkedin_url": null,
+          "source": "front",
+          "created_at": "2026-06-12T03:47:13.347862+00:00",
+          "updated_at": "2026-09-14T19:49:57.544849+00:00",
+          "front_contact_id": "crd_4sn6bo2",
+          "front_last_seen": "2026-07-10T18:09:10.208+00:00",
+          "tech_signals": {},
+          "persona": "founder_owner",
+          "persona_source": "title_keyword",
+          "persona_confidence": 0.9,
+          "research_title": null
+        },
+        "history": [
+          {
+            "id": "d8f04dd9c762464ab71f7ab134b022fe",
+            "recipient_email": "deepak@singhahluwalia.com",
+            "subject": "ai readiness at singh ahluwalia",
+            "body_excerpt": "Hi Deepak,\n\nMost firms that buy AI never see results because they were never set up to benefit from it. I put together a short AI-readiness audit for PI firms: about 14 questions that score where your firm stands and what is blocking value.\n\nHere it is - about 10 minutes: https://aiaudit.getpossibleminds.com/a/9g_IM4ix\n\n-- Pranav\nFounder, Possible Minds\nEx-McKinsey\nLinkedIn: https://in.linkedin.com/in/pranav-modi-5a3a9b7\nBook a consult: https://getpossibleminds.com/c/4vEbBwUI",
+            "status": "sent",
+            "sent_at": "2026-07-02T16:45:27.39287+00:00",
+            "transport": "resend",
+            "message_id": "2b29b2a8-475b-47b6-8b51-6b3e28cbe75e"
+          },
+          {
+            "id": "6fd904b97f444085b8c69719291d7b62",
+            "recipient_email": "deepak@singhahluwalia.com",
+            "subject": "ai readiness for singh ahluwalia",
+            "status": "sent",
+            "sent_at": "2026-06-25T18:02:39.035006+00:00",
+            "transport": "resend",
+            "message_id": "398f5ec7-b2d5-4ddd-963a-09fcedef1820"
+          }
+        ],
+        "firm_latest": "2026-07-02T16:45:27.39287+00:00",
+        "inbound": 0,
+        "negative": 0,
+        "pending": 0
+      },
+      "hold_reasons": []
+    },
+    {
+      "firm": "HHT Corp",
+      "name": "Gohar Tatevossian",
+      "rank": 36,
+      "email": "gohar@hhtcorp.com",
+      "title": "Partner Attorney (Co-Founder, Managing Attorney)",
+      "persona": "founder_owner",
+      "contact_id": "250850b26453426c8bfd0746911005c6",
+      "days_since": 70,
+      "canonical_firm_id": "109851e3-0899-4377-b901-640db286975d",
+      "normalized_domain": "hht-law.com",
+      "prior_article_slugs": [],
+      "article_match_status": "pending_final40_and_mailbox_audit",
+      "vendor_case_management": null,
+      "last_successful_outbound": "2026-07-03T07:01:29.768644+00:00",
+      "lifetime_successful_touch_count": 2,
+      "fresh_evidence": {
+        "contact": {
+          "id": "250850b26453426c8bfd0746911005c6",
+          "pif_id": "109851e3-0899-4377-b901-640db286975d",
+          "full_name": "Gohar Tatevossian",
+          "first_name": "Gohar",
+          "email": "gohar@hhtcorp.com",
+          "phone": "+18189889121",
+          "title": "Partner Attorney (Co-Founder, Managing Attorney)",
+          "linkedin_url": "https://www.linkedin.com/in/gohar-tatevossian-40947313b",
+          "source": "pif_leadership",
+          "created_at": "2026-06-16T05:54:58.313666+00:00",
+          "updated_at": "2026-06-16T05:55:34.962074+00:00",
+          "front_contact_id": null,
+          "front_last_seen": null,
+          "tech_signals": null,
+          "persona": "founder_owner",
+          "persona_source": "title_keyword",
+          "persona_confidence": 0.9,
+          "research_title": null
+        },
+        "history": [
+          {
+            "id": "0c1368792d9f464c87605d4071c126ab",
+            "recipient_email": "gohar@hhtcorp.com",
+            "subject": "ai readiness at hht",
+            "body_excerpt": "Hi Gohar,\n\nMost firms that buy AI never see results because they were not set up to benefit. I built a short AI-readiness audit for PI firms, 14 questions that score where HHT stands and what is blocking value.\n\nHere it is - about 10 minutes: https://aiaudit.getpossibleminds.com/a/L-ElQsnU\n\n-- Pranav\nFounder, Possible Minds\nEx-McKinsey\nLinkedIn: https://in.linkedin.com/in/pranav-modi-5a3a9b7\nBook a consult: https://getpossibleminds.com/c/mdo-wTij",
+            "status": "sent",
+            "sent_at": "2026-07-03T07:01:29.768644+00:00",
+            "transport": "resend",
+            "message_id": "f40508ba-fb81-4562-adb0-89cecd5ad705"
+          },
+          {
+            "id": "ee3efd5863af45e58d119c78d7c4996d",
+            "recipient_email": "gohar@hhtcorp.com",
+            "subject": "Precise Imaging and AI readiness",
+            "status": "sent",
+            "sent_at": "2026-06-26T16:06:56.320866+00:00",
+            "transport": "zoho_api",
+            "message_id": "1782490016094119300"
+          }
+        ],
+        "firm_latest": "2026-07-03T07:01:29.768644+00:00",
+        "inbound": 0,
+        "negative": 0,
+        "pending": 0
+      },
+      "hold_reasons": []
+    },
+    {
+      "firm": "Protection Law Group, LLP",
+      "name": "Amir Nayebdadash",
+      "rank": 37,
+      "email": "amir@protectionlawgroup.com",
+      "title": "Partner (founding partner)",
+      "persona": "founder_owner",
+      "contact_id": "dce3362245e24af79c3ea0f36850dae9",
+      "days_since": 27,
+      "canonical_firm_id": "d11a380e-1ef6-439e-824c-e19bd07002cf",
+      "normalized_domain": "protectionlawgroup.com",
+      "prior_article_slugs": [],
+      "article_match_status": "pending_final40_and_mailbox_audit",
+      "vendor_case_management": null,
+      "last_successful_outbound": "2026-08-14T23:15:12.212485+00:00",
+      "lifetime_successful_touch_count": 2,
+      "fresh_evidence": {
+        "contact": {
+          "id": "dce3362245e24af79c3ea0f36850dae9",
+          "pif_id": "d11a380e-1ef6-439e-824c-e19bd07002cf",
+          "full_name": "Amir Nayebdadash",
+          "first_name": "Amir",
+          "email": "amir@protectionlawgroup.com",
+          "phone": "+14242903095",
+          "title": "Partner (founding partner)",
+          "linkedin_url": "https://www.linkedin.com/in/protectionlawgroup",
+          "source": "pif_leadership",
+          "created_at": "2026-06-16T05:54:58.329391+00:00",
+          "updated_at": "2026-09-14T19:51:02.30423+00:00",
+          "front_contact_id": "crd_4u5plxu",
+          "front_last_seen": "2026-08-11T21:34:15.53+00:00",
+          "tech_signals": {},
+          "persona": "founder_owner",
+          "persona_source": "title_keyword",
+          "persona_confidence": 0.9,
+          "research_title": null
+        },
+        "history": [
+          {
+            "id": "56eb6fcc27f246b58aaffa289674d6a8",
+            "recipient_email": "amir@protectionlawgroup.com",
+            "subject": "Kathryn Lousen submitted a Google review about Protection Law Group, LLP",
+            "body_excerpt": "Hi Amir,\n\nIn a Google review from 2 months ago, Kathryn Lousen wrote, \"I followed up the following day, with no response.\"\n\nVisible communication complaints can make prospective clients question whether their own calls will be returned. We built a system for Precise Imaging that processes roughly 600 emails daily and flags missed callbacks, aging inquiries, and unresolved messages.\n\nI'd be glad to walk you through what we built for Precise and learn how your team currently handles these communication workflows. You can choose a 30-minute time here:\n\nhttps://getpossibleminds.com/t/mDJLDNf-Fg\n\nRegards,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+            "status": "delivered",
+            "sent_at": "2026-08-14T23:15:12.212485+00:00",
+            "transport": "resend",
+            "message_id": "a70e702d-133e-4e27-8a7c-97edea028a19"
+          },
+          {
+            "id": "d6fc2539526b41b29524a23444a5aca9",
+            "recipient_email": "amir@protectionlawgroup.com",
+            "subject": "Belen D. submitted a Yelp review about Protection Law Group",
+            "status": "delivered",
+            "sent_at": "2026-07-23T16:30:04.719913+00:00",
+            "transport": "resend",
+            "message_id": "063e99fc-ef2c-4283-829f-c280631d9111"
+          }
+        ],
+        "firm_latest": "2026-08-14T23:25:12.944362+00:00",
+        "inbound": 0,
+        "negative": 0,
+        "pending": 0
+      },
+      "hold_reasons": []
+    },
+    {
+      "firm": "Elite Law Group LA",
+      "name": "Joseph David Ryan",
+      "rank": 38,
+      "email": "joseph.r@elitelawgroup.com",
+      "title": "Founder / Principal Attorney, Elite Law Group LA, PC",
+      "persona": "founder_owner",
+      "contact_id": "f9afbe6e7ae141639c99cd2a47ce95e8",
+      "days_since": 20,
+      "canonical_firm_id": "0e88a97f-8d03-48ed-bc0e-89ee44e21813",
+      "normalized_domain": "elitelawgroup.com",
+      "prior_article_slugs": [],
+      "article_match_status": "pending_final40_and_mailbox_audit",
+      "vendor_case_management": null,
+      "last_successful_outbound": "2026-08-21T16:25:25.045508+00:00",
+      "lifetime_successful_touch_count": 1,
+      "fresh_evidence": {
+        "contact": {
+          "id": "f9afbe6e7ae141639c99cd2a47ce95e8",
+          "pif_id": "0e88a97f-8d03-48ed-bc0e-89ee44e21813",
+          "full_name": "Joseph David Ryan",
+          "first_name": "Joseph",
+          "email": "joseph.r@elitelawgroup.com",
+          "phone": "+12138077777",
+          "title": "Founder / Principal Attorney, Elite Law Group LA, PC",
+          "linkedin_url": null,
+          "source": "pif_leadership",
+          "created_at": "2026-08-12T09:58:49.745252+00:00",
+          "updated_at": "2026-08-12T10:04:15.957255+00:00",
+          "front_contact_id": null,
+          "front_last_seen": null,
+          "tech_signals": null,
+          "persona": "founder_owner",
+          "persona_source": "title_keyword",
+          "persona_confidence": 0.9,
+          "research_title": null
+        },
+        "history": [
+          {
+            "id": "98fa0c20004a4956a46ad4e6d493606d",
+            "recipient_email": "joseph.r@elitelawgroup.com",
+            "subject": "Precise imaging - quick question",
+            "body_excerpt": "Hi Joseph,\n\nAfter more than four decades handling PI matters, you have probably seen how quickly a case can lose momentum when updates are scattered between staff, providers, and the case file.\n\nYou may have seen the immediate status-update responses from Precise Imaging. I'm the founder of Possible Minds, the firm that built that system. It processes more than 600 emails daily and saves the Precise team many hours of manual work.\n\nI noticed your firm uses Filevine, and I'm curious how well it supports your team's day-to-day workflows and where manual work still remains.\n\nWould you have 15 minutes to share your experience? I'd genuinely appreciate your perspective, this isn't a sales pitch.\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+            "status": "delivered",
+            "sent_at": "2026-08-21T16:25:25.045508+00:00",
+            "transport": "resend",
+            "message_id": "c5451361-38de-465b-a1ed-39f0b372e24f"
+          }
+        ],
+        "firm_latest": "2026-08-21T16:25:25.045508+00:00",
+        "inbound": 0,
+        "negative": 0,
+        "pending": 0
+      },
+      "hold_reasons": []
+    },
+    {
+      "firm": "Campano Law Group, APC",
+      "name": "Angelo F. Campano",
+      "rank": 39,
+      "email": "acampano@campanolaw.com",
+      "title": "Founder & Attorney",
+      "persona": "founder_owner",
+      "contact_id": "6530a58903a84c8a9e94ebeb204c104f",
+      "days_since": 15,
+      "canonical_firm_id": "d00af024-ce27-43ef-8988-ec7fb231579d",
+      "normalized_domain": "campanolaw.com",
+      "prior_article_slugs": [
+        "ai-for-small-personal-injury-law-firms"
+      ],
+      "article_match_status": "pending_final40_and_mailbox_audit",
+      "vendor_case_management": null,
+      "last_successful_outbound": "2026-08-26T16:35:20.37095+00:00",
+      "lifetime_successful_touch_count": 2,
+      "fresh_evidence": {
+        "contact": {
+          "id": "6530a58903a84c8a9e94ebeb204c104f",
+          "pif_id": "d00af024-ce27-43ef-8988-ec7fb231579d",
+          "full_name": "Angelo F. Campano",
+          "first_name": "Angelo",
+          "email": "acampano@campanolaw.com",
+          "phone": "+16619455300",
+          "title": "Founder & Attorney",
+          "linkedin_url": "https://www.linkedin.com/in/angelo-campano-120a9422",
+          "source": "pif_leadership",
+          "created_at": "2026-08-20T06:16:03.177032+00:00",
+          "updated_at": "2026-09-14T19:46:20.43554+00:00",
+          "front_contact_id": "crd_1u94e2p",
+          "front_last_seen": "2026-08-19T22:32:11.368+00:00",
+          "tech_signals": {},
+          "persona": "founder_owner",
+          "persona_source": "title_keyword",
+          "persona_confidence": 0.9,
+          "research_title": null
+        },
+        "history": [
+          {
+            "id": "a16aeef440a9487ebd521a9cc7a3f69f",
+            "recipient_email": "acampano@campanolaw.com",
+            "subject": "Re: Precise imaging - quick question",
+            "body_excerpt": "Hi Angelo,\n\nThought you might find this useful. I wrote up how a small PI firm turned recurring work into reusable AI workflows. Its assistants went from roughly 5 to 7 review-ready documents a day to 12 to 15, while medical records stayed in a protected workflow and every consequential output still came back to the lawyer.\n\nhttps://getpossibleminds.com/t/1jhZSsrw6w\n\nIf you could remove one recurring document bottleneck at Campano Law Group, which would you start with?\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+            "status": "delivered",
+            "sent_at": "2026-08-26T16:35:20.37095+00:00",
+            "transport": "resend",
+            "message_id": "e87f9753-d9d7-4fae-ad3a-7d192e19065a"
+          },
+          {
+            "id": "bdb93193245b4f2bb3cdef6fe1f99e9c",
+            "recipient_email": "acampano@campanolaw.com",
+            "subject": "Precise imaging - quick question",
+            "status": "sent",
+            "sent_at": "2026-08-20T17:15:31.090118+00:00",
+            "transport": "zoho_api",
+            "message_id": "1787246130584119300"
+          }
+        ],
+        "firm_latest": "2026-08-26T16:35:20.37095+00:00",
+        "inbound": 0,
+        "negative": 0,
+        "pending": 0
+      },
+      "hold_reasons": []
+    },
+    {
+      "firm": "Alipour Law Group",
+      "name": "Matt Milad Alipour, Esq.",
+      "rank": 40,
+      "email": "matt@alipour.law",
+      "title": "Founding Attorney / Founder & Principal Attorney",
+      "persona": "founder_owner",
+      "contact_id": "824f09b64a96479583c9cf24d88658db",
+      "days_since": 15,
+      "canonical_firm_id": "960c2133-e36b-4316-a82e-86a712046913",
+      "normalized_domain": "alipour.law",
+      "prior_article_slugs": [
+        "ai-for-small-personal-injury-law-firms",
+        "first-mover-ai-personal-injury-firms"
+      ],
+      "article_match_status": "pending_final40_and_mailbox_audit",
+      "vendor_case_management": null,
+      "last_successful_outbound": "2026-08-26T17:25:16.601283+00:00",
+      "lifetime_successful_touch_count": 2,
+      "fresh_evidence": {
+        "contact": {
+          "id": "824f09b64a96479583c9cf24d88658db",
+          "pif_id": "960c2133-e36b-4316-a82e-86a712046913",
+          "full_name": "Matt Milad Alipour, Esq.",
+          "first_name": "Matt",
+          "email": "matt@alipour.law",
+          "phone": "+19499979999",
+          "title": "Founding Attorney / Founder & Principal Attorney",
+          "linkedin_url": "https://www.linkedin.com/in/miladalipour",
+          "source": "pif_leadership",
+          "created_at": "2026-08-06T10:33:09.985432+00:00",
+          "updated_at": "2026-08-06T10:34:18.294372+00:00",
+          "front_contact_id": null,
+          "front_last_seen": null,
+          "tech_signals": null,
+          "persona": "founder_owner",
+          "persona_source": "title_keyword",
+          "persona_confidence": 0.9,
+          "research_title": null
+        },
+        "history": [
+          {
+            "id": "1898d0aa28ed4373a74920c10d68065d",
+            "recipient_email": "matt@alipour.law",
+            "subject": "Re: where AI could compound at Alipour Law Group",
+            "body_excerpt": "Hi Matt,\n\nThought you might find this useful. I wrote up how a small PI firm turned recurring work into reusable AI workflows. Its assistants went from roughly 5 to 7 review-ready documents a day to 12 to 15, while medical records stayed in a protected workflow and every consequential output still came back to the lawyer.\n\nhttps://getpossibleminds.com/t/StSGCR_Kog\n\nIf you could remove one recurring document bottleneck at Alipour Law Group, which would you start with?\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+            "status": "delivered",
+            "sent_at": "2026-08-26T17:25:16.601283+00:00",
+            "transport": "resend",
+            "message_id": "8eb8b55b-7fa1-4a61-95c2-f8507cf07742"
+          },
+          {
+            "id": "f07a8b624e0b493eb57209bc76636b91",
+            "recipient_email": "matt@alipour.law",
+            "subject": "where AI could compound at Alipour Law Group",
+            "status": "delivered",
+            "sent_at": "2026-08-13T21:45:15.851987+00:00",
+            "transport": "resend",
+            "message_id": "cea95ce9-25c1-4e2a-8d3b-04cf90f7bbf0"
+          }
+        ],
+        "firm_latest": "2026-08-26T17:25:16.601283+00:00",
+        "inbound": 0,
+        "negative": 0,
+        "pending": 0
+      },
+      "hold_reasons": []
+    },
+    {
+      "firm": "Azaryan Law",
+      "name": "Arnak Azaryan",
+      "rank": 41,
+      "email": "arnak@azaklaw.com",
+      "title": "Founder & Principal Attorney",
+      "persona": "founder_owner",
+      "contact_id": "217726713658477daf4bb4acc8b654d8",
+      "days_since": 15,
+      "canonical_firm_id": "51dddb4e-5223-46bc-b9d9-1c893c0e62e6",
+      "normalized_domain": "azaklaw.com",
+      "prior_article_slugs": [
+        "ai-for-small-personal-injury-law-firms",
+        "first-mover-ai-personal-injury-firms"
+      ],
+      "article_match_status": "pending_final40_and_mailbox_audit",
+      "vendor_case_management": null,
+      "last_successful_outbound": "2026-08-26T17:35:17.443996+00:00",
+      "lifetime_successful_touch_count": 2,
+      "fresh_evidence": {
+        "contact": {
+          "id": "217726713658477daf4bb4acc8b654d8",
+          "pif_id": "51dddb4e-5223-46bc-b9d9-1c893c0e62e6",
+          "full_name": "Arnak Azaryan",
+          "first_name": "Arnak",
+          "email": "arnak@azaklaw.com",
+          "phone": "+18183343958",
+          "title": "Founder & Principal Attorney",
+          "linkedin_url": "https://www.linkedin.com/in/arnak-azaryan-09a79336",
+          "source": "pif_leadership",
+          "created_at": "2026-08-06T10:33:09.985272+00:00",
+          "updated_at": "2026-09-14T19:49:25.233491+00:00",
+          "front_contact_id": "crd_18iphxd",
+          "front_last_seen": "2019-07-11T19:44:54.772+00:00",
+          "tech_signals": {},
+          "persona": "founder_owner",
+          "persona_source": "title_keyword",
+          "persona_confidence": 0.9,
+          "research_title": null
+        },
+        "history": [
+          {
+            "id": "bc918365a71546e1a35540c527e80d70",
+            "recipient_email": "arnak@azaklaw.com",
+            "subject": "Re: where AI could compound at Azaryan Law",
+            "body_excerpt": "Hi Arnak,\n\nThought you might find this useful. I wrote up how a small PI firm turned recurring work into reusable AI workflows. Its assistants went from roughly 5 to 7 review-ready documents a day to 12 to 15, while medical records stayed in a protected workflow and every consequential output still came back to the lawyer.\n\nhttps://getpossibleminds.com/t/PAQmHBZiLQ\n\nIf you could remove one recurring document bottleneck at Azaryan Law, which would you start with?\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+            "status": "delivered",
+            "sent_at": "2026-08-26T17:35:17.443996+00:00",
+            "transport": "resend",
+            "message_id": "33778374-668e-46f5-8f4b-aff28c4f8fc2"
+          },
+          {
+            "id": "43eb057b555f4e4ebe55b5ee03f288e6",
+            "recipient_email": "arnak@azaklaw.com",
+            "subject": "where AI could compound at Azaryan Law",
+            "status": "delivered",
+            "sent_at": "2026-08-13T22:25:21.899767+00:00",
+            "transport": "resend",
+            "message_id": "e73d988b-2b12-4d6a-828a-868ec1f7a238"
+          }
+        ],
+        "firm_latest": "2026-08-26T17:35:17.443996+00:00",
+        "inbound": 0,
+        "negative": 0,
+        "pending": 0
+      },
+      "hold_reasons": []
+    },
+    {
+      "firm": "CTA Law, APLC",
+      "name": "Caroleen Torossian Arslanian, Esq.",
+      "rank": 42,
+      "email": "caroleen@ctalawfirm.com",
+      "title": "Founder and Managing Attorney",
+      "persona": "founder_owner",
+      "contact_id": "21a043327b8b4af9960e61f8cf987cb0",
+      "days_since": 15,
+      "canonical_firm_id": "be0bb252-5d03-48d3-af92-a703ab1ed274",
+      "normalized_domain": "ctalawfirm.com",
+      "prior_article_slugs": [
+        "ai-for-small-personal-injury-law-firms",
+        "first-mover-ai-personal-injury-firms"
+      ],
+      "article_match_status": "pending_final40_and_mailbox_audit",
+      "vendor_case_management": null,
+      "last_successful_outbound": "2026-08-26T17:55:18.613569+00:00",
+      "lifetime_successful_touch_count": 2,
+      "fresh_evidence": {
+        "contact": {
+          "id": "21a043327b8b4af9960e61f8cf987cb0",
+          "pif_id": "be0bb252-5d03-48d3-af92-a703ab1ed274",
+          "full_name": "Caroleen Torossian Arslanian, Esq.",
+          "first_name": "Caroleen",
+          "email": "caroleen@ctalawfirm.com",
+          "phone": "+18182825652",
+          "title": "Founder and Managing Attorney",
+          "linkedin_url": "https://www.linkedin.com/in/caroleen-torossian-esq-53062348",
+          "source": "pif_contacts",
+          "created_at": "2026-06-16T05:54:58.328756+00:00",
+          "updated_at": "2026-09-14T19:53:15.527932+00:00",
+          "front_contact_id": "crd_1yyk3cx",
+          "front_last_seen": "2024-03-15T21:11:22.113+00:00",
+          "tech_signals": {},
+          "persona": "founder_owner",
+          "persona_source": "title_keyword",
+          "persona_confidence": 0.9,
+          "research_title": null
+        },
+        "history": [
+          {
+            "id": "fba0deb85e5f4670b18685066f4b4481",
+            "recipient_email": "caroleen@ctalawfirm.com",
+            "subject": "Re: where AI could compound at CTA Law, APLC",
+            "body_excerpt": "Hi Caroleen,\n\nThought you might find this useful. I wrote up how a small PI firm turned recurring work into reusable AI workflows. Its assistants went from roughly 5 to 7 review-ready documents a day to 12 to 15, while medical records stayed in a protected workflow and every consequential output still came back to the lawyer.\n\nhttps://getpossibleminds.com/t/p9jjfIG38w\n\nIf you could remove one recurring document bottleneck at CTA Law, which would you start with?\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+            "status": "delivered",
+            "sent_at": "2026-08-26T17:55:18.613569+00:00",
+            "transport": "resend",
+            "message_id": "62f13bf8-0b22-469c-b769-f0e5619641a0"
+          },
+          {
+            "id": "b75716b3a94b47fd8f5f380b8af82e66",
+            "recipient_email": "caroleen@ctalawfirm.com",
+            "subject": "where AI could compound at CTA Law, APLC",
+            "status": "delivered",
+            "sent_at": "2026-08-13T21:10:11.38511+00:00",
+            "transport": "resend",
+            "message_id": "10e31ea1-c482-470b-9c24-79aaa1f23896"
+          }
+        ],
+        "firm_latest": "2026-08-26T17:55:18.613569+00:00",
+        "inbound": 0,
+        "negative": 0,
+        "pending": 0
+      },
+      "hold_reasons": []
+    },
+    {
+      "firm": "PAIJUKLAW, PC",
+      "name": "George Paijuk",
+      "rank": 43,
+      "email": "george@paijuklaw.com",
+      "title": "Founder & CEO",
+      "persona": "founder_owner",
+      "contact_id": "fc_cc9f3c7c77c746dabe5d6eec",
+      "days_since": 15,
+      "canonical_firm_id": "18db5020-0750-4734-a8af-6a43cc037cd5",
+      "normalized_domain": "paijuklaw.com",
+      "prior_article_slugs": [
+        "ai-for-small-personal-injury-law-firms",
+        "first-mover-ai-personal-injury-firms"
+      ],
+      "article_match_status": "pending_final40_and_mailbox_audit",
+      "vendor_case_management": null,
+      "last_successful_outbound": "2026-08-26T18:15:21.449167+00:00",
+      "lifetime_successful_touch_count": 2,
+      "fresh_evidence": {
+        "contact": {
+          "id": "fc_cc9f3c7c77c746dabe5d6eec",
+          "pif_id": "18db5020-0750-4734-a8af-6a43cc037cd5",
+          "full_name": "George Paijuk",
+          "first_name": "George",
+          "email": "george@paijuklaw.com",
+          "phone": "+18185321890",
+          "title": "Founder & CEO",
+          "linkedin_url": null,
+          "source": "front",
+          "created_at": "2026-06-12T08:11:13.319221+00:00",
+          "updated_at": "2026-09-14T19:55:57.21236+00:00",
+          "front_contact_id": "crd_19xu6bl",
+          "front_last_seen": "2024-03-15T21:29:47.144+00:00",
+          "tech_signals": {},
+          "persona": "founder_owner",
+          "persona_source": "title_keyword",
+          "persona_confidence": 0.9,
+          "research_title": null
+        },
+        "history": [
+          {
+            "id": "42c2dfcbead948fd84882a7e23ad86df",
+            "recipient_email": "george@paijuklaw.com",
+            "subject": "Re: where AI could compound at PAIJUKLAW, PC",
+            "body_excerpt": "Hi George,\n\nThought you might find this useful. I wrote up how a small PI firm turned recurring work into reusable AI workflows. Its assistants went from roughly 5 to 7 review-ready documents a day to 12 to 15, while medical records stayed in a protected workflow and every consequential output still came back to the lawyer.\n\nhttps://getpossibleminds.com/t/FtsOo9UZBA\n\nIf you could remove one recurring document bottleneck at PAIJUKLAW, which would you start with?\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+            "status": "delivered",
+            "sent_at": "2026-08-26T18:15:21.449167+00:00",
+            "transport": "resend",
+            "message_id": "a833060d-9835-46ae-b815-d2324e292cce"
+          },
+          {
+            "id": "a546a818060c4cde8aef656fe382066e",
+            "recipient_email": "george@paijuklaw.com",
+            "subject": "where AI could compound at PAIJUKLAW, PC",
+            "status": "delivered",
+            "sent_at": "2026-08-13T21:50:16.617023+00:00",
+            "transport": "resend",
+            "message_id": "2e5ed2e4-9ea0-4cff-86fa-07e3011f36a1"
+          }
+        ],
+        "firm_latest": "2026-08-26T18:15:21.449167+00:00",
+        "inbound": 0,
+        "negative": 0,
+        "pending": 0
+      },
+      "hold_reasons": []
+    },
+    {
+      "firm": "Shaaban Biedgoly Injury Lawyers",
+      "name": "Jamil W. Shaaban",
+      "rank": 44,
+      "email": "jamil@sbinjurylawyers.com",
+      "title": "Founder and Managing Partner",
+      "persona": "founder_owner",
+      "contact_id": "0bf5e0d097944332874fb493cbfb5742",
+      "days_since": 15,
+      "canonical_firm_id": "7febfc18-ac6d-4356-b40e-12c66798016b",
+      "normalized_domain": "shaabanbiedgoly.com",
+      "prior_article_slugs": [
+        "ai-for-small-personal-injury-law-firms",
+        "first-mover-ai-personal-injury-firms"
+      ],
+      "article_match_status": "pending_final40_and_mailbox_audit",
+      "vendor_case_management": null,
+      "last_successful_outbound": "2026-08-26T18:25:24.372559+00:00",
+      "lifetime_successful_touch_count": 2,
+      "fresh_evidence": {
+        "contact": {
+          "id": "0bf5e0d097944332874fb493cbfb5742",
+          "pif_id": "7febfc18-ac6d-4356-b40e-12c66798016b",
+          "full_name": "Jamil W. Shaaban",
+          "first_name": "Jamil",
+          "email": "jamil@sbinjurylawyers.com",
+          "phone": "+19169362688",
+          "title": "Founder and Managing Partner",
+          "linkedin_url": "https://www.linkedin.com/in/jamilshaaban",
+          "source": "pif_leadership",
+          "created_at": "2026-07-21T18:35:27.606687+00:00",
+          "updated_at": "2026-09-14T19:47:45.779265+00:00",
+          "front_contact_id": "crd_4ytvlhu",
+          "front_last_seen": "2026-08-05T22:33:30.095+00:00",
+          "tech_signals": {},
+          "persona": "founder_owner",
+          "persona_source": "title_keyword",
+          "persona_confidence": 0.9,
+          "research_title": null
+        },
+        "history": [
+          {
+            "id": "b83926af273a47ffb54ca8a3bf31eac6",
+            "recipient_email": "jamil@sbinjurylawyers.com",
+            "subject": "Re: where AI could compound at Shaaban Biedgoly Injury Lawyers",
+            "body_excerpt": "Hi Jamil,\n\nThought you might find this useful. I wrote up how a small PI firm turned recurring work into reusable AI workflows. Its assistants went from roughly 5 to 7 review-ready documents a day to 12 to 15, while medical records stayed in a protected workflow and every consequential output still came back to the lawyer.\n\nhttps://getpossibleminds.com/t/sHzdqMCYMA\n\nIf you could remove one recurring document bottleneck at Shaaban Biedgoly, which would you start with?\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+            "status": "delivered",
+            "sent_at": "2026-08-26T18:25:24.372559+00:00",
+            "transport": "resend",
+            "message_id": "ce872778-4819-4c50-b3d5-ff2a986ea218"
+          },
+          {
+            "id": "4f336c0cb6db46adaf7e491874d6bff7",
+            "recipient_email": "jamil@sbinjurylawyers.com",
+            "subject": "where AI could compound at Shaaban Biedgoly Injury Lawyers",
+            "status": "delivered",
+            "sent_at": "2026-08-13T22:05:19.590227+00:00",
+            "transport": "resend",
+            "message_id": "3aad06a6-80e2-4d62-9727-768a8caa541e"
+          }
+        ],
+        "firm_latest": "2026-08-26T18:25:24.372559+00:00",
+        "inbound": 0,
+        "negative": 0,
+        "pending": 0
+      },
+      "hold_reasons": []
+    },
+    {
+      "firm": "The Hayes Law Firm, APC",
+      "name": "'Bradley Hayes'",
+      "rank": 45,
+      "email": "brad@thehayeslawfirmapc.com",
+      "title": "Founder & Lead Attorney",
+      "persona": "founder_owner",
+      "contact_id": "fc_a57caab487e5456ba84c1dcd",
+      "days_since": 15,
+      "canonical_firm_id": "d8d5add2-9d40-4d5f-9cb2-f4e0651bd6c5",
+      "normalized_domain": "hayeslawfirm.law",
+      "prior_article_slugs": [
+        "ai-for-small-personal-injury-law-firms",
+        "first-mover-ai-personal-injury-firms"
+      ],
+      "article_match_status": "pending_final40_and_mailbox_audit",
+      "vendor_case_management": null,
+      "last_successful_outbound": "2026-08-26T18:35:25.026137+00:00",
+      "lifetime_successful_touch_count": 2,
+      "fresh_evidence": {
+        "contact": {
+          "id": "fc_a57caab487e5456ba84c1dcd",
+          "pif_id": "d8d5add2-9d40-4d5f-9cb2-f4e0651bd6c5",
+          "full_name": "'Bradley Hayes'",
+          "first_name": "'Bradley",
+          "email": "brad@thehayeslawfirmapc.com",
+          "phone": "+13234771415",
+          "title": "Founder & Lead Attorney",
+          "linkedin_url": "https://www.linkedin.com/in/brad-hayes-46173544",
+          "source": "front",
+          "created_at": "2026-06-12T07:18:15.148967+00:00",
+          "updated_at": "2026-09-14T19:47:05.513287+00:00",
+          "front_contact_id": "crd_1bz15z5",
+          "front_last_seen": "2026-04-14T17:56:32.839+00:00",
+          "tech_signals": {},
+          "persona": "founder_owner",
+          "persona_source": "title_keyword",
+          "persona_confidence": 0.9,
+          "research_title": null
+        },
+        "history": [
+          {
+            "id": "eb58d26f0f644da6a5b628f547c4d3c7",
+            "recipient_email": "brad@thehayeslawfirmapc.com",
+            "subject": "Re: where AI could compound at The Hayes Law Firm, APC",
+            "body_excerpt": "Hi Bradley,\n\nThought you might find this useful. I wrote up how a small PI firm turned recurring work into reusable AI workflows. Its assistants went from roughly 5 to 7 review-ready documents a day to 12 to 15, while medical records stayed in a protected workflow and every consequential output still came back to the lawyer.\n\nhttps://getpossibleminds.com/t/HNKpEeBM6g\n\nIf you could remove one recurring document bottleneck at The Hayes Law Firm, which would you start with?\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+            "status": "delivered",
+            "sent_at": "2026-08-26T18:35:25.026137+00:00",
+            "transport": "resend",
+            "message_id": "9f2bd9d3-bc53-43bc-9223-6144a7c62c8a"
+          },
+          {
+            "id": "3ad108cd462a47a6a665315f727d5ccd",
+            "recipient_email": "brad@thehayeslawfirmapc.com",
+            "subject": "where AI could compound at The Hayes Law Firm, APC",
+            "status": "delivered",
+            "sent_at": "2026-08-13T21:30:13.765264+00:00",
+            "transport": "resend",
+            "message_id": "a16a6688-569a-4786-a2df-9fa9a5665c2b"
+          }
+        ],
+        "firm_latest": "2026-08-26T18:35:25.026137+00:00",
+        "inbound": 0,
+        "negative": 0,
+        "pending": 0
+      },
+      "hold_reasons": []
+    },
+    {
+      "firm": "The Law Offices of Ara Najarian",
+      "name": "Ara J. Najarian",
+      "rank": 46,
+      "email": "ara@aranajarian.com",
+      "title": "Founder / Attorney",
+      "persona": "founder_owner",
+      "contact_id": "3e9bd45ecedc47a3b5d7fbd588634c2d",
+      "days_since": 15,
+      "canonical_firm_id": "ef5d6ecb-140b-4658-a027-c620f0ef6bb0",
+      "normalized_domain": "aranajarianlaw.com",
+      "prior_article_slugs": [
+        "ai-for-small-personal-injury-law-firms",
+        "first-mover-ai-personal-injury-firms"
+      ],
+      "article_match_status": "pending_final40_and_mailbox_audit",
+      "vendor_case_management": null,
+      "last_successful_outbound": "2026-08-26T18:45:25.635353+00:00",
+      "lifetime_successful_touch_count": 2,
+      "fresh_evidence": {
+        "contact": {
+          "id": "3e9bd45ecedc47a3b5d7fbd588634c2d",
+          "pif_id": "ef5d6ecb-140b-4658-a027-c620f0ef6bb0",
+          "full_name": "Ara J. Najarian",
+          "first_name": "Ara",
+          "email": "ara@aranajarian.com",
+          "phone": "+18185490808",
+          "title": "Founder / Attorney",
+          "linkedin_url": "https://www.linkedin.com/in/aranajarian",
+          "source": "pif_leadership",
+          "created_at": "2026-07-25T17:03:41.236457+00:00",
+          "updated_at": "2026-07-25T17:04:41.266151+00:00",
+          "front_contact_id": null,
+          "front_last_seen": null,
+          "tech_signals": null,
+          "persona": "founder_owner",
+          "persona_source": "title_keyword",
+          "persona_confidence": 0.9,
+          "research_title": null
+        },
+        "history": [
+          {
+            "id": "33822159a57644ef92f57fa8d68642fe",
+            "recipient_email": "ara@aranajarian.com",
+            "subject": "Re: where AI could compound at The Law Offices of Ara Najarian",
+            "body_excerpt": "Hi Ara,\n\nThought you might find this useful. I wrote up how a small PI firm turned recurring work into reusable AI workflows. Its assistants went from roughly 5 to 7 review-ready documents a day to 12 to 15, while medical records stayed in a protected workflow and every consequential output still came back to the lawyer.\n\nhttps://getpossibleminds.com/t/1S4rEoTSzQ\n\nIf you could remove one recurring document bottleneck at your firm, which would you start with?\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+            "status": "delivered",
+            "sent_at": "2026-08-26T18:45:25.635353+00:00",
+            "transport": "resend",
+            "message_id": "dddeb50c-188f-40bf-bb63-7a05121f6488"
+          },
+          {
+            "id": "ca0d5d10cbb542e4992e606ab7e34acd",
+            "recipient_email": "ara@aranajarian.com",
+            "subject": "where AI could compound at The Law Offices of Ara Najarian",
+            "status": "delivered",
+            "sent_at": "2026-08-13T22:10:20.134952+00:00",
+            "transport": "resend",
+            "message_id": "34145a38-18f2-4d0b-8095-18647a699f48"
+          }
+        ],
+        "firm_latest": "2026-08-26T18:45:25.635353+00:00",
+        "inbound": 0,
+        "negative": 0,
+        "pending": 0
+      },
+      "hold_reasons": []
+    },
+    {
+      "firm": "Pedram Law",
+      "name": "nima pedram",
+      "rank": 47,
+      "email": "pedram@pedramlaw.com",
+      "title": "Founding Partner; Senior Attorney",
+      "persona": "founder_owner",
+      "contact_id": "fc_d61e5c5a48a34feebe9ed386",
+      "days_since": 14,
+      "canonical_firm_id": "1962a44e-ecaf-44d1-8630-f3f8103de61c",
+      "normalized_domain": "pedramlaw.com",
+      "prior_article_slugs": [
+        "ai-for-small-personal-injury-law-firms",
+        "first-mover-ai-personal-injury-firms"
+      ],
+      "article_match_status": "pending_final40_and_mailbox_audit",
+      "vendor_case_management": null,
+      "last_successful_outbound": "2026-08-27T16:05:25.415558+00:00",
+      "lifetime_successful_touch_count": 2,
+      "fresh_evidence": {
+        "contact": {
+          "id": "fc_d61e5c5a48a34feebe9ed386",
+          "pif_id": "1962a44e-ecaf-44d1-8630-f3f8103de61c",
+          "full_name": "nima pedram",
+          "first_name": "nima",
+          "email": "pedram@pedramlaw.com",
+          "phone": "+14242652626",
+          "title": "Founding Partner; Senior Attorney",
+          "linkedin_url": "https://www.linkedin.com/in/nimapedram",
+          "source": "front",
+          "created_at": "2026-06-16T08:50:14.381206+00:00",
+          "updated_at": "2026-09-14T19:54:20.722415+00:00",
+          "front_contact_id": "crd_1a4a6v5",
+          "front_last_seen": "2026-04-15T22:53:22.329+00:00",
+          "tech_signals": {},
+          "persona": "founder_owner",
+          "persona_source": "title_keyword",
+          "persona_confidence": 0.9,
+          "research_title": null
+        },
+        "history": [
+          {
+            "id": "966e35f807c14694956fb1399b18c217",
+            "recipient_email": "pedram@pedramlaw.com",
+            "subject": "Re: where AI could compound at Pedram Law",
+            "body_excerpt": "Hi Nima,\n\nThought you might find this useful. I wrote up how a small PI firm turned recurring work into reusable AI workflows. Its assistants went from roughly 5 to 7 review-ready documents a day to 12 to 15, while medical records stayed in a protected workflow and every consequential output still came back to the lawyer.\n\nhttps://getpossibleminds.com/t/2WO3Pswtqw\n\nIf you could remove one recurring document bottleneck at Pedram Law, which would you start with?\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+            "status": "sent",
+            "sent_at": "2026-08-27T16:05:25.415558+00:00",
+            "transport": "resend",
+            "message_id": "12580fb1-a49d-4e2b-89d7-7588655a07cc"
+          },
+          {
+            "id": "f11766d04c1d44e9a676ab15b1f5e3c2",
+            "recipient_email": "pedram@pedramlaw.com",
+            "subject": "where AI could compound at Pedram Law",
+            "status": "delivered",
+            "sent_at": "2026-08-13T21:25:13.060301+00:00",
+            "transport": "resend",
+            "message_id": "3c17526b-1ac5-41be-805b-e5844cdba072"
+          }
+        ],
+        "firm_latest": "2026-08-27T16:05:25.415558+00:00",
+        "inbound": 0,
+        "negative": 0,
+        "pending": 0
+      },
+      "hold_reasons": []
+    },
+    {
+      "firm": "The Soliman Firm, PLC",
+      "name": "Steven Soliman",
+      "rank": 48,
+      "email": "ssoliman@thesolimanfirm.com",
+      "title": "Founder & Attorney",
+      "persona": "founder_owner",
+      "contact_id": "e4f0a8a3a7254b61b1c01397a51997a6",
+      "days_since": 14,
+      "canonical_firm_id": "d0aa0fb7-97cb-4cae-ae2b-238e65c33607",
+      "normalized_domain": "thesolimanfirm.com",
+      "prior_article_slugs": [
+        "ai-for-small-personal-injury-law-firms",
+        "first-mover-ai-personal-injury-firms"
+      ],
+      "article_match_status": "pending_final40_and_mailbox_audit",
+      "vendor_case_management": null,
+      "last_successful_outbound": "2026-08-27T16:25:27.698149+00:00",
+      "lifetime_successful_touch_count": 2,
+      "fresh_evidence": {
+        "contact": {
+          "id": "e4f0a8a3a7254b61b1c01397a51997a6",
+          "pif_id": "d0aa0fb7-97cb-4cae-ae2b-238e65c33607",
+          "full_name": "Steven Soliman",
+          "first_name": "Steven",
+          "email": "ssoliman@thesolimanfirm.com",
+          "phone": "+17144914111",
+          "title": "Founder & Attorney",
+          "linkedin_url": null,
+          "source": "pif_leadership",
+          "created_at": "2026-04-30T19:20:50.266601+00:00",
+          "updated_at": "2026-09-14T19:56:08.084049+00:00",
+          "front_contact_id": "crd_1a3l535",
+          "front_last_seen": "2019-05-14T23:25:38.073+00:00",
+          "tech_signals": {},
+          "persona": "founder_owner",
+          "persona_source": "title_keyword",
+          "persona_confidence": 0.9,
+          "research_title": null
+        },
+        "history": [
+          {
+            "id": "4afb15f7ddb24a7b90377ae14d49d63a",
+            "recipient_email": "ssoliman@thesolimanfirm.com",
+            "subject": "Re: where AI could compound at The Soliman Firm, PLC",
+            "body_excerpt": "Hi Steven,\n\nThought you might find this useful. I wrote up how a small PI firm turned recurring work into reusable AI workflows. Its assistants went from roughly 5 to 7 review-ready documents a day to 12 to 15, while medical records stayed in a protected workflow and every consequential output still came back to the lawyer.\n\nhttps://getpossibleminds.com/t/MsnFRUEg_w\n\nIf you could remove one recurring document bottleneck at The Soliman Firm, which would you start with?\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+            "status": "delivered",
+            "sent_at": "2026-08-27T16:25:27.698149+00:00",
+            "transport": "resend",
+            "message_id": "2f5c58e3-5b48-48a8-974f-6f53e4af006f"
+          },
+          {
+            "id": "9c340d5a71454bf3a8b694d5a0d31f17",
+            "recipient_email": "ssoliman@thesolimanfirm.com",
+            "subject": "where AI could compound at The Soliman Firm, PLC",
+            "status": "delivered",
+            "sent_at": "2026-08-13T21:00:09.944785+00:00",
+            "transport": "resend",
+            "message_id": "a675d056-45a5-4770-b7fe-85c24681275f"
+          }
+        ],
+        "firm_latest": "2026-08-27T16:25:27.698149+00:00",
+        "inbound": 0,
+        "negative": 0,
+        "pending": 0
+      },
+      "hold_reasons": []
+    },
+    {
+      "firm": "Shaffer & Gonor",
+      "name": "David Gonor",
+      "rank": 49,
+      "email": "dgonor@shaffergonorlaw.com",
+      "title": "Founding Partner",
+      "persona": "founder_owner",
+      "contact_id": "fc_de17bd0d92b54aa394abb0d7",
+      "days_since": 14,
+      "canonical_firm_id": "2a1ce63d-6f37-47c7-9eb9-341bfef768c3",
+      "normalized_domain": "shaffergonorlaw.com",
+      "prior_article_slugs": [
+        "ai-for-small-personal-injury-law-firms",
+        "first-mover-ai-personal-injury-firms"
+      ],
+      "article_match_status": "pending_final40_and_mailbox_audit",
+      "vendor_case_management": null,
+      "last_successful_outbound": "2026-08-27T16:35:28.292534+00:00",
+      "lifetime_successful_touch_count": 2,
+      "fresh_evidence": {
+        "contact": {
+          "id": "fc_de17bd0d92b54aa394abb0d7",
+          "pif_id": "2a1ce63d-6f37-47c7-9eb9-341bfef768c3",
+          "full_name": "David Gonor",
+          "first_name": "David",
+          "email": "dgonor@shaffergonorlaw.com",
+          "phone": "+18187833333",
+          "title": "Founding Partner",
+          "linkedin_url": null,
+          "source": "front",
+          "created_at": "2026-06-12T08:11:17.814699+00:00",
+          "updated_at": "2026-09-12T19:45:50.917504+00:00",
+          "front_contact_id": "crd_1a3k535",
+          "front_last_seen": "2026-02-02T17:18:08.993+00:00",
+          "tech_signals": {},
+          "persona": "founder_owner",
+          "persona_source": "title_keyword",
+          "persona_confidence": 0.9,
+          "research_title": null
+        },
+        "history": [
+          {
+            "id": "dcda115976c1494e83939765312617bd",
+            "recipient_email": "dgonor@shaffergonorlaw.com",
+            "subject": "Re: where AI could compound at Shaffer & Gonor",
+            "body_excerpt": "Hi David,\n\nThought you might find this useful. I wrote up how a small PI firm turned recurring work into reusable AI workflows. Its assistants went from roughly 5 to 7 review-ready documents a day to 12 to 15, while medical records stayed in a protected workflow and every consequential output still came back to the lawyer.\n\nhttps://getpossibleminds.com/t/mvTRzes4zw\n\nIf you could remove one recurring document bottleneck at Shaffer & Gonor, which would you start with?\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+            "status": "delivered",
+            "sent_at": "2026-08-27T16:35:28.292534+00:00",
+            "transport": "resend",
+            "message_id": "a8adb70f-38a7-44c4-9b12-f6dd94881ccd"
+          },
+          {
+            "id": "987492bb9eae4dd59e94b17ea8aa00c4",
+            "recipient_email": "dgonor@shaffergonorlaw.com",
+            "subject": "where AI could compound at Shaffer & Gonor",
+            "status": "delivered",
+            "sent_at": "2026-08-13T20:55:09.334561+00:00",
+            "transport": "resend",
+            "message_id": "7997f67f-d7fc-4066-9076-aaf82c5c50a3"
+          }
+        ],
+        "firm_latest": "2026-08-27T16:35:28.292534+00:00",
+        "inbound": 0,
+        "negative": 0,
+        "pending": 0
+      },
+      "hold_reasons": []
+    },
+    {
+      "firm": "Tenina Law, APC",
+      "name": "Alla Tenina",
+      "rank": 50,
+      "email": "alla@teninalaw.com",
+      "title": "Founder, Tenina Law, APC (Tenina Law, Inc.)",
+      "persona": "founder_owner",
+      "contact_id": "fc_66e076cef46e4ccaad25aba7",
+      "days_since": 14,
+      "canonical_firm_id": "7d176b75-5a12-4d43-8a6b-0bdbcb307066",
+      "normalized_domain": "teninalaw.com",
+      "prior_article_slugs": [
+        "ai-for-small-personal-injury-law-firms",
+        "first-mover-ai-personal-injury-firms"
+      ],
+      "article_match_status": "pending_final40_and_mailbox_audit",
+      "vendor_case_management": null,
+      "last_successful_outbound": "2026-08-27T17:05:18.897681+00:00",
+      "lifetime_successful_touch_count": 2,
+      "fresh_evidence": {
+        "contact": {
+          "id": "fc_66e076cef46e4ccaad25aba7",
+          "pif_id": "7d176b75-5a12-4d43-8a6b-0bdbcb307066",
+          "full_name": "Alla Tenina",
+          "first_name": "Alla",
+          "email": "alla@teninalaw.com",
+          "phone": "+12135960265",
+          "title": "Founder, Tenina Law, APC (Tenina Law, Inc.)",
+          "linkedin_url": "https://www.linkedin.com/in/alla-tenina-b767472b",
+          "source": "front",
+          "created_at": "2026-06-16T10:42:47.51707+00:00",
+          "updated_at": "2026-09-13T19:54:13.10603+00:00",
+          "front_contact_id": "crd_1z7llz5",
+          "front_last_seen": "2026-09-01T22:42:05.182+00:00",
+          "tech_signals": {},
+          "persona": "founder_owner",
+          "persona_source": "title_keyword",
+          "persona_confidence": 0.9,
+          "research_title": null
+        },
+        "history": [
+          {
+            "id": "705f0eb668454119a783516f12145126",
+            "recipient_email": "alla@teninalaw.com",
+            "subject": "Re: where AI could compound at Tenina Law, APC",
+            "body_excerpt": "Hi Alla,\n\nThought you might find this useful. I wrote up how a small PI firm turned recurring work into reusable AI workflows. Its assistants went from roughly 5 to 7 review-ready documents a day to 12 to 15, while medical records stayed in a protected workflow and every consequential output still came back to the lawyer.\n\nhttps://getpossibleminds.com/t/j8yIAhVY5A\n\nIf you could remove one recurring document bottleneck at Tenina Law, which would you start with?\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+            "status": "delivered",
+            "sent_at": "2026-08-27T17:05:18.897681+00:00",
+            "transport": "resend",
+            "message_id": "bb9930b3-7bab-4c71-aca9-4c3b44c59b9c"
+          },
+          {
+            "id": "6adae33264c34602b0cd3ad0db434e3d",
+            "recipient_email": "alla@teninalaw.com",
+            "subject": "where AI could compound at Tenina Law, APC",
+            "status": "delivered",
+            "sent_at": "2026-08-13T20:10:03.754448+00:00",
+            "transport": "resend",
+            "message_id": "20d08491-2fd2-421d-a8aa-cd5e6604b548"
+          }
+        ],
+        "firm_latest": "2026-08-27T17:05:18.897681+00:00",
+        "inbound": 0,
+        "negative": 0,
+        "pending": 0
+      },
+      "hold_reasons": []
+    },
+    {
+      "firm": "Edna Felix Law",
+      "name": "Edna Felix",
+      "rank": 51,
+      "email": "edna@ednafelix.law",
+      "title": "Founder & Attorney",
+      "persona": "founder_owner",
+      "contact_id": "fc_4982fe37fd154bae92e22929",
+      "days_since": 14,
+      "canonical_firm_id": "51928ec8-51a8-4946-85e0-7f75a6ee5241",
+      "normalized_domain": "ednafelix.law",
+      "prior_article_slugs": [
+        "ai-for-small-personal-injury-law-firms",
+        "first-mover-ai-personal-injury-firms"
+      ],
+      "article_match_status": "pending_final40_and_mailbox_audit",
+      "vendor_case_management": null,
+      "last_successful_outbound": "2026-08-27T17:15:19.607194+00:00",
+      "lifetime_successful_touch_count": 2,
+      "fresh_evidence": {
+        "contact": {
+          "id": "fc_4982fe37fd154bae92e22929",
+          "pif_id": "51928ec8-51a8-4946-85e0-7f75a6ee5241",
+          "full_name": "Edna Felix",
+          "first_name": "Edna",
+          "email": "edna@ednafelix.law",
+          "phone": "+18185336571",
+          "title": "Founder & Attorney",
+          "linkedin_url": null,
+          "source": "front",
+          "created_at": "2026-06-12T05:28:12.635984+00:00",
+          "updated_at": "2026-09-14T19:57:28.575256+00:00",
+          "front_contact_id": "crd_1yfj2gx",
+          "front_last_seen": "2026-08-31T20:29:07.997+00:00",
+          "tech_signals": {},
+          "persona": "founder_owner",
+          "persona_source": "title_keyword",
+          "persona_confidence": 0.9,
+          "research_title": null
+        },
+        "history": [
+          {
+            "id": "dff19d29e54044cbabd319d1d77ae86e",
+            "recipient_email": "edna@ednafelix.law",
+            "subject": "Re: where AI could compound at Edna Felix Law",
+            "body_excerpt": "Hi Edna,\n\nThought you might find this useful. I wrote up how a small PI firm turned recurring work into reusable AI workflows. Its assistants went from roughly 5 to 7 review-ready documents a day to 12 to 15, while medical records stayed in a protected workflow and every consequential output still came back to the lawyer.\n\nhttps://getpossibleminds.com/t/uYoOJ-pG2w\n\nIf you could remove one recurring document bottleneck at Edna Felix Law, which would you start with?\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+            "status": "delivered",
+            "sent_at": "2026-08-27T17:15:19.607194+00:00",
+            "transport": "resend",
+            "message_id": "b0b7ce69-13ed-4278-b366-9a313eff876d"
+          },
+          {
+            "id": "0fe5a4dbc2fc4a549f513a100a2ab7ca",
+            "recipient_email": "edna@ednafelix.law",
+            "subject": "where AI could compound at Edna Felix Law",
+            "status": "delivered",
+            "sent_at": "2026-08-13T20:05:02.274381+00:00",
+            "transport": "resend",
+            "message_id": "88cfee38-0aef-41d1-b4ea-68504917dccd"
+          }
+        ],
+        "firm_latest": "2026-08-27T17:15:19.607194+00:00",
+        "inbound": 0,
+        "negative": 0,
+        "pending": 0
+      },
+      "hold_reasons": []
+    },
+    {
+      "firm": "Law Office of Gil L. Arbel",
+      "name": "Gil Arbel",
+      "rank": 52,
+      "email": "gil@arbelegal.com",
+      "title": "Founder & Owner; Supervising Attorney",
+      "persona": "founder_owner",
+      "contact_id": "fc_5d1819f8e9e846bba737cc97",
+      "days_since": 14,
+      "canonical_firm_id": "a3d6a370-7e55-4e02-bf4b-8237dacdef65",
+      "normalized_domain": "arbelegal.com",
+      "prior_article_slugs": [
+        "ai-for-small-personal-injury-law-firms",
+        "first-mover-ai-personal-injury-firms"
+      ],
+      "article_match_status": "pending_final40_and_mailbox_audit",
+      "vendor_case_management": null,
+      "last_successful_outbound": "2026-08-27T17:55:21.891699+00:00",
+      "lifetime_successful_touch_count": 2,
+      "fresh_evidence": {
+        "contact": {
+          "id": "fc_5d1819f8e9e846bba737cc97",
+          "pif_id": "a3d6a370-7e55-4e02-bf4b-8237dacdef65",
+          "full_name": "Gil Arbel",
+          "first_name": "Gil",
+          "email": "gil@arbelegal.com",
+          "phone": "+18189687149",
+          "title": "Founder & Owner; Supervising Attorney",
+          "linkedin_url": "https://www.linkedin.com/in/gil-lee-arbel",
+          "source": "front",
+          "created_at": "2026-07-05T07:12:07.905638+00:00",
+          "updated_at": "2026-09-14T19:57:24.780237+00:00",
+          "front_contact_id": "crd_1wxa9xd",
+          "front_last_seen": "2025-08-11T22:04:43.93+00:00",
+          "tech_signals": {},
+          "persona": "founder_owner",
+          "persona_source": "title_keyword",
+          "persona_confidence": 0.9,
+          "research_title": null
+        },
+        "history": [
+          {
+            "id": "18851bd6959e4a359b7fbcfb27ef2c80",
+            "recipient_email": "gil@arbelegal.com",
+            "subject": "Re: where AI could compound at Law Office of Gil L. Arbel",
+            "body_excerpt": "Hi Gil,\n\nThought you might find this useful. I wrote up how a small PI firm turned recurring work into reusable AI workflows. Its assistants went from roughly 5 to 7 review-ready documents a day to 12 to 15, while medical records stayed in a protected workflow and every consequential output still came back to the lawyer.\n\nhttps://getpossibleminds.com/t/ECTc3DWAyw\n\nIf you could remove one recurring document bottleneck at your firm, which would you start with?\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+            "status": "delivered",
+            "sent_at": "2026-08-27T17:55:21.891699+00:00",
+            "transport": "resend",
+            "message_id": "ec3ed428-fea0-4b74-9adc-fe2e313d4a2f"
+          },
+          {
+            "id": "198ce0dc5ef54754a3a9959c16df28eb",
+            "recipient_email": "gil@arbelegal.com",
+            "subject": "where AI could compound at Law Office of Gil L. Arbel",
+            "status": "delivered",
+            "sent_at": "2026-08-13T19:05:14.935389+00:00",
+            "transport": "resend",
+            "message_id": "9c8687e4-3763-43f4-b6dc-4294ec4dec60"
+          }
+        ],
+        "firm_latest": "2026-08-27T17:55:21.891699+00:00",
+        "inbound": 0,
+        "negative": 0,
+        "pending": 0
+      },
+      "hold_reasons": []
+    },
+    {
+      "firm": "Theta Law Firm, LLP",
+      "name": "Soheyl Tahsildoost",
+      "rank": 53,
+      "email": "st@thetafirm.com",
+      "title": "Founding Partner",
+      "persona": "founder_owner",
+      "contact_id": "d7f1449900a540b894edaa42d2488069",
+      "days_since": 14,
+      "canonical_firm_id": "b78783a4-ad6e-42bc-91f3-721bedbfdc6d",
+      "normalized_domain": "thetafirm.com",
+      "prior_article_slugs": [
+        "ai-for-small-personal-injury-law-firms",
+        "first-mover-ai-personal-injury-firms"
+      ],
+      "article_match_status": "pending_final40_and_mailbox_audit",
+      "vendor_case_management": null,
+      "last_successful_outbound": "2026-08-27T18:05:22.708103+00:00",
+      "lifetime_successful_touch_count": 2,
+      "fresh_evidence": {
+        "contact": {
+          "id": "d7f1449900a540b894edaa42d2488069",
+          "pif_id": "b78783a4-ad6e-42bc-91f3-721bedbfdc6d",
+          "full_name": "Soheyl Tahsildoost",
+          "first_name": "Soheyl",
+          "email": "st@thetafirm.com",
+          "phone": "+14242973103",
+          "title": "Founding Partner",
+          "linkedin_url": "https://www.linkedin.com/in/soheyl",
+          "source": "pif_leadership",
+          "created_at": "2026-08-11T07:10:36.985995+00:00",
+          "updated_at": "2026-08-11T07:11:52.628942+00:00",
+          "front_contact_id": null,
+          "front_last_seen": null,
+          "tech_signals": null,
+          "persona": "founder_owner",
+          "persona_source": "title_keyword",
+          "persona_confidence": 0.9,
+          "research_title": null
+        },
+        "history": [
+          {
+            "id": "06fa76e166354db8af1d3833c0532b8d",
+            "recipient_email": "st@thetafirm.com",
+            "subject": "Re: where AI could compound at Theta Law Firm, LLP",
+            "body_excerpt": "Hi Soheyl,\n\nThought you might find this useful. I wrote up how a small PI firm turned recurring work into reusable AI workflows. Its assistants went from roughly 5 to 7 review-ready documents a day to 12 to 15, while medical records stayed in a protected workflow and every consequential output still came back to the lawyer.\n\nhttps://getpossibleminds.com/t/08m-ixIACA\n\nIf you could remove one recurring document bottleneck at Theta Law Firm, which would you start with?\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+            "status": "delivered",
+            "sent_at": "2026-08-27T18:05:22.708103+00:00",
+            "transport": "resend",
+            "message_id": "110d20ff-eb14-42c5-8b5c-9d4d4bf3f738"
+          },
+          {
+            "id": "f2ed5c683de44098a541a81b6730c614",
+            "recipient_email": "st@thetafirm.com",
+            "subject": "where AI could compound at Theta Law Firm, LLP",
+            "status": "delivered",
+            "sent_at": "2026-08-13T18:55:13.60581+00:00",
+            "transport": "resend",
+            "message_id": "30ed0640-b739-46ad-b3ba-99de08a1e0d4"
+          }
+        ],
+        "firm_latest": "2026-08-27T18:05:22.708103+00:00",
+        "inbound": 0,
+        "negative": 0,
+        "pending": 0
+      },
+      "hold_reasons": []
+    },
+    {
+      "firm": "Rahgozar Law Firm, PLLC",
+      "name": "Pegah Rahgozar",
+      "rank": 54,
+      "email": "prahgozar@rahgozarlaw.com",
+      "title": "Founding Partner",
+      "persona": "founder_owner",
+      "contact_id": "077e369939a54b4a8ddf3e8c65b1ec07",
+      "days_since": 10,
+      "canonical_firm_id": "9695c5a1-8c71-4bff-823f-969898e22fd6",
+      "normalized_domain": "rahgozarlaw.com",
+      "prior_article_slugs": [
+        "claude-clio-ai-intake-solo-pi-lawyer",
+        "first-mover-ai-personal-injury-firms"
+      ],
+      "article_match_status": "pending_final40_and_mailbox_audit",
+      "vendor_case_management": null,
+      "last_successful_outbound": "2026-08-31T14:30:25.289371+00:00",
+      "lifetime_successful_touch_count": 2,
+      "fresh_evidence": {
+        "contact": {
+          "id": "077e369939a54b4a8ddf3e8c65b1ec07",
+          "pif_id": "9695c5a1-8c71-4bff-823f-969898e22fd6",
+          "full_name": "Pegah Rahgozar",
+          "first_name": "Pegah",
+          "email": "prahgozar@rahgozarlaw.com",
+          "phone": "+832792363621040061117134498157",
+          "title": "Founding Partner",
+          "linkedin_url": "https://www.linkedin.com/in/pegah-rahgozar-houston-personal-injury-attorney-1a211629",
+          "source": "pif_leadership",
+          "created_at": "2026-08-02T10:21:16.200713+00:00",
+          "updated_at": "2026-09-14T19:49:39.582526+00:00",
+          "front_contact_id": "crd_1yqhksh",
+          "front_last_seen": "2025-01-10T18:44:39.809+00:00",
+          "tech_signals": {},
+          "persona": "founder_owner",
+          "persona_source": "title_keyword",
+          "persona_confidence": 0.9,
+          "research_title": null
+        },
+        "history": [
+          {
+            "id": "1080ae4731de4a9a9597195c01904a3e",
+            "recipient_email": "prahgozar@rahgozarlaw.com",
+            "subject": "Re: where AI could compound at Rahgozar Law Firm, PLLC",
+            "body_excerpt": "Hi Pegah,\n\nThought this might be useful alongside my earlier note about where AI could compound at your firm.\n\nI wrote up how a solo PI lawyer used Claude and Clio to turn dictated intake facts into a structured matter, document packet, and task list, while keeping the lawyer in control of the consequential work:\n\nhttps://getpossibleminds.com/t/T40lvabtqw\n\nDifferent systems, but the same operational question: where can the handoff be automated without losing control? Which part feels most relevant at Rahgozar Law Firm?\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+            "status": "delivered",
+            "sent_at": "2026-08-31T14:30:25.289371+00:00",
+            "transport": "resend",
+            "message_id": "1bb5b7d7-e4bb-4b26-915a-43e56dc0678f"
+          },
+          {
+            "id": "f409316666f24d01a6329ce5129eb7e3",
+            "recipient_email": "prahgozar@rahgozarlaw.com",
+            "subject": "where AI could compound at Rahgozar Law Firm, PLLC",
+            "status": "delivered",
+            "sent_at": "2026-08-13T21:55:17.418831+00:00",
+            "transport": "resend",
+            "message_id": "22108871-319f-443e-a01f-1ace5bd11fe7"
+          }
+        ],
+        "firm_latest": "2026-08-31T14:30:25.289371+00:00",
+        "inbound": 0,
+        "negative": 0,
+        "pending": 0
+      },
+      "hold_reasons": []
+    },
+    {
+      "firm": "The Zarabi Firm APC",
+      "name": "Elliot Zarabi",
+      "rank": 55,
+      "email": "elliot@zarabilaw.com",
+      "title": "Founder & Lead Attorney",
+      "persona": "founder_owner",
+      "contact_id": "fc_459a78490e5443938f71ac08",
+      "days_since": 10,
+      "canonical_firm_id": "455022b6-d428-4ecc-8527-e226a7b80b97",
+      "normalized_domain": "zarabilaw.com",
+      "prior_article_slugs": [
+        "claude-clio-ai-intake-solo-pi-lawyer",
+        "first-mover-ai-personal-injury-firms"
+      ],
+      "article_match_status": "pending_final40_and_mailbox_audit",
+      "vendor_case_management": null,
+      "last_successful_outbound": "2026-08-31T14:40:26.185284+00:00",
+      "lifetime_successful_touch_count": 2,
+      "fresh_evidence": {
+        "contact": {
+          "id": "fc_459a78490e5443938f71ac08",
+          "pif_id": "455022b6-d428-4ecc-8527-e226a7b80b97",
+          "full_name": "Elliot Zarabi",
+          "first_name": "Elliot",
+          "email": "elliot@zarabilaw.com",
+          "phone": "+12137842524",
+          "title": "Founder & Lead Attorney",
+          "linkedin_url": "https://www.linkedin.com/in/elliot-zarabi-b5745936",
+          "source": "front",
+          "created_at": "2026-06-12T07:18:07.940441+00:00",
+          "updated_at": "2026-09-14T19:49:15.173829+00:00",
+          "front_contact_id": "crd_1ozmpq9",
+          "front_last_seen": "2026-06-10T16:51:24.457+00:00",
+          "tech_signals": {},
+          "persona": "founder_owner",
+          "persona_source": "title_keyword",
+          "persona_confidence": 0.9,
+          "research_title": null
+        },
+        "history": [
+          {
+            "id": "47fe6e565e0e4595a4dad2eb870a2348",
+            "recipient_email": "elliot@zarabilaw.com",
+            "subject": "Re: where AI could compound at The Zarabi Firm APC",
+            "body_excerpt": "Hi Elliot,\n\nThought this might be useful alongside my earlier note about where AI could compound at your firm.\n\nI wrote up how a solo PI lawyer used Claude and Clio to turn dictated intake facts into a structured matter, document packet, and task list, while keeping the lawyer in control of the consequential work:\n\nhttps://getpossibleminds.com/t/WIruL_H5ng\n\nDifferent systems, but the same operational question: where can the handoff be automated without losing control? Which part feels most relevant at The Zarabi Firm?\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+            "status": "delivered",
+            "sent_at": "2026-08-31T14:40:26.185284+00:00",
+            "transport": "resend",
+            "message_id": "42992ee5-88df-474e-ba4f-91b148edf2d4"
+          },
+          {
+            "id": "7a4deeb311eb4dfc8fcf4edd0600574a",
+            "recipient_email": "elliot@zarabilaw.com",
+            "subject": "where AI could compound at The Zarabi Firm APC",
+            "status": "delivered",
+            "sent_at": "2026-08-13T21:40:14.993659+00:00",
+            "transport": "resend",
+            "message_id": "231a141e-817d-4034-8d31-ebd75f6594bc"
+          }
+        ],
+        "firm_latest": "2026-08-31T14:40:26.185284+00:00",
+        "inbound": 0,
+        "negative": 0,
+        "pending": 0
+      },
+      "hold_reasons": []
+    },
+    {
+      "firm": "Fasoro Law",
+      "name": "Ayokunle O. 'Kunle' Fasoro",
+      "rank": 56,
+      "email": "kfasoro@fasorolaw.com",
+      "title": "Founding Partner",
+      "persona": "founder_owner",
+      "contact_id": "f5465286088944d2b19a23cdac6a6e3c",
+      "days_since": 10,
+      "canonical_firm_id": "7200be7e-f517-4cc7-a1e5-fa65754889c5",
+      "normalized_domain": "fasorolaw.com",
+      "prior_article_slugs": [
+        "claude-clio-ai-intake-solo-pi-lawyer",
+        "first-mover-ai-personal-injury-firms"
+      ],
+      "article_match_status": "pending_final40_and_mailbox_audit",
+      "vendor_case_management": null,
+      "last_successful_outbound": "2026-08-31T15:00:33.298291+00:00",
+      "lifetime_successful_touch_count": 2,
+      "fresh_evidence": {
+        "contact": {
+          "id": "f5465286088944d2b19a23cdac6a6e3c",
+          "pif_id": "7200be7e-f517-4cc7-a1e5-fa65754889c5",
+          "full_name": "Ayokunle O. 'Kunle' Fasoro",
+          "first_name": "Ayokunle",
+          "email": "kfasoro@fasorolaw.com",
+          "phone": "+12147053475",
+          "title": "Founding Partner",
+          "linkedin_url": null,
+          "source": "pif_leadership",
+          "created_at": "2026-08-12T09:58:49.745226+00:00",
+          "updated_at": "2026-08-12T10:04:15.957251+00:00",
+          "front_contact_id": null,
+          "front_last_seen": null,
+          "tech_signals": null,
+          "persona": "founder_owner",
+          "persona_source": "title_keyword",
+          "persona_confidence": 0.9,
+          "research_title": null
+        },
+        "history": [
+          {
+            "id": "17a3f70ef7754935acbdf61bc9222382",
+            "recipient_email": "kfasoro@fasorolaw.com",
+            "subject": "Re: where AI could compound at Fasoro Law",
+            "body_excerpt": "Hi Kunle,\n\nThought this might be useful alongside my earlier note about where AI could compound at your firm.\n\nI wrote up how a solo PI lawyer used Claude and Clio to turn dictated intake facts into a structured matter, document packet, and task list, while keeping the lawyer in control of the consequential work:\n\nhttps://getpossibleminds.com/t/TcyesqVakA\n\nDifferent systems, but the same operational question: where can the handoff be automated without losing control? Which part feels most relevant at Fasoro Law?\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+            "status": "sent",
+            "sent_at": "2026-08-31T15:00:33.298291+00:00",
+            "transport": "resend",
+            "message_id": "5d21dcf5-04f0-44e6-9d66-eedd565c632c"
+          },
+          {
+            "id": "96af98e93742485195eda4bea2d190cb",
+            "recipient_email": "kfasoro@fasorolaw.com",
+            "subject": "where AI could compound at Fasoro Law",
+            "status": "delivered",
+            "sent_at": "2026-08-13T21:05:10.689148+00:00",
+            "transport": "resend",
+            "message_id": "f13a3625-ce93-4cca-a52a-f335326e6b37"
+          }
+        ],
+        "firm_latest": "2026-08-31T15:00:33.298291+00:00",
+        "inbound": 0,
+        "negative": 0,
+        "pending": 0
+      },
+      "hold_reasons": []
+    },
+    {
+      "firm": "Rodriguez Apodaca Law Firm LLP",
+      "name": "Richard A. Apodaca",
+      "rank": 57,
+      "email": "richarda@ralawllp.com",
+      "title": "Partner; Founding Partner; Employment & Personal Injury Attorney",
+      "persona": "founder_owner",
+      "contact_id": "21c502f3c45e4241b8a2de773fa4660a",
+      "days_since": 10,
+      "canonical_firm_id": "9a1f3c50-63a9-4196-9d08-3a5735c77535",
+      "normalized_domain": "ralawllp.com",
+      "prior_article_slugs": [
+        "claude-clio-ai-intake-solo-pi-lawyer",
+        "first-mover-ai-personal-injury-firms"
+      ],
+      "article_match_status": "pending_final40_and_mailbox_audit",
+      "vendor_case_management": null,
+      "last_successful_outbound": "2026-08-31T15:40:21.679504+00:00",
+      "lifetime_successful_touch_count": 2,
+      "fresh_evidence": {
+        "contact": {
+          "id": "21c502f3c45e4241b8a2de773fa4660a",
+          "pif_id": "9a1f3c50-63a9-4196-9d08-3a5735c77535",
+          "full_name": "Richard A. Apodaca",
+          "first_name": "Richard",
+          "email": "richarda@ralawllp.com",
+          "phone": "+19099443777",
+          "title": "Partner; Founding Partner; Employment & Personal Injury Attorney",
+          "linkedin_url": "https://www.linkedin.com/in/richard-apodaca-2a692254",
+          "source": "pif_leadership",
+          "created_at": "2026-07-27T17:08:08.400117+00:00",
+          "updated_at": "2026-07-27T17:09:11.705847+00:00",
+          "front_contact_id": null,
+          "front_last_seen": null,
+          "tech_signals": null,
+          "persona": "founder_owner",
+          "persona_source": "title_keyword",
+          "persona_confidence": 0.9,
+          "research_title": null
+        },
+        "history": [
+          {
+            "id": "8f26c046b292461884b61568abf6c673",
+            "recipient_email": "richarda@ralawllp.com",
+            "subject": "Re: where AI could compound at Rodriguez Apodaca Law Firm LLP",
+            "body_excerpt": "Hi Richard,\n\nThought this might be useful alongside my earlier note about where AI could compound at your firm.\n\nI wrote up how a solo PI lawyer used Claude and Clio to turn dictated intake facts into a structured matter, document packet, and task list, while keeping the lawyer in control of the consequential work:\n\nhttps://getpossibleminds.com/t/YN5v5oR2AA\n\nDifferent systems, but the same operational question: where can the handoff be automated without losing control? Which part feels most relevant at Rodriguez Apodaca?\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+            "status": "delivered",
+            "sent_at": "2026-08-31T15:40:21.679504+00:00",
+            "transport": "resend",
+            "message_id": "f6eb76b7-c7cb-49b9-b591-69f6169b66fc"
+          },
+          {
+            "id": "21bab00638164b209519a688b147a1cf",
+            "recipient_email": "richarda@ralawllp.com",
+            "subject": "where AI could compound at Rodriguez Apodaca Law Firm LLP",
+            "status": "delivered",
+            "sent_at": "2026-08-13T20:15:04.493834+00:00",
+            "transport": "resend",
+            "message_id": "eace5187-03f9-4292-9932-38652a97591b"
+          }
+        ],
+        "firm_latest": "2026-08-31T15:40:21.679504+00:00",
+        "inbound": 0,
+        "negative": 0,
+        "pending": 0
+      },
+      "hold_reasons": []
+    },
+    {
+      "firm": "Benavides Law Firm",
+      "name": "Lesly Benavides",
+      "rank": 58,
+      "email": "lesly@leslyblaw.com",
+      "title": "Founder & CEO (CEO & Lawyer) - Benavides Law Firm APC",
+      "persona": "founder_owner",
+      "contact_id": "0d870fa68cdc4ee786014456a40ff09f",
+      "days_since": 9,
+      "canonical_firm_id": "19f4142d-6c74-4999-81c7-ccf530689b0a",
+      "normalized_domain": "leslyblaw.com",
+      "prior_article_slugs": [
+        "pi-law-firm-reviews-client-trust"
+      ],
+      "article_match_status": "pending_final40_and_mailbox_audit",
+      "vendor_case_management": null,
+      "last_successful_outbound": "2026-09-01T17:10:06.791817+00:00",
+      "lifetime_successful_touch_count": 1,
+      "fresh_evidence": {
+        "contact": {
+          "id": "0d870fa68cdc4ee786014456a40ff09f",
+          "pif_id": "19f4142d-6c74-4999-81c7-ccf530689b0a",
+          "full_name": "Lesly Benavides",
+          "first_name": "Lesly",
+          "email": "lesly@leslyblaw.com",
+          "phone": "+18882458002",
+          "title": "Founder & CEO (CEO & Lawyer) - Benavides Law Firm APC",
+          "linkedin_url": "https://www.linkedin.com/in/lesly-benavides-55512183",
+          "source": "pif_leadership",
+          "created_at": "2026-07-15T08:23:41.123524+00:00",
+          "updated_at": "2026-07-15T08:24:20.689227+00:00",
+          "front_contact_id": null,
+          "front_last_seen": null,
+          "tech_signals": null,
+          "persona": "founder_owner",
+          "persona_source": "title_keyword",
+          "persona_confidence": 0.9,
+          "research_title": null
+        },
+        "history": [
+          {
+            "id": "220711929c3e4e23afb519fba38becf6",
+            "recipient_email": "lesly@leslyblaw.com",
+            "subject": "A client-trust question",
+            "body_excerpt": "Hi Lesly,\n\nBuilding Benavides Law from its early stage gives you a rare chance to design the client experience before habits become fixed.\n\nI analyzed 7,383 PI-firm reviews and found that silence, limited access, and unclear case movement were strongly associated with broken client trust. The complaint patterns are here: https://getpossibleminds.com/t/NdnCoDLLVg\n\nWhich of those three would you most want to prevent by design?\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+            "status": "delivered",
+            "sent_at": "2026-09-01T17:10:06.791817+00:00",
+            "transport": "resend",
+            "message_id": "37213703-e5fd-4110-81e3-bb7293e842b6"
+          }
+        ],
+        "firm_latest": "2026-09-01T17:10:06.791817+00:00",
+        "inbound": 0,
+        "negative": 0,
+        "pending": 0
+      },
+      "hold_reasons": []
+    },
+    {
+      "firm": "Hinden & Breslavsky",
+      "name": "Barry Hinden",
+      "rank": 59,
+      "email": "barry@hinden.net",
+      "title": "Founding Partner / Managing Partner",
+      "persona": "founder_owner",
+      "contact_id": "3e9e598db1784d278ced2d8d244d2e2e",
+      "days_since": 8,
+      "canonical_firm_id": "ea8db863-46fe-490f-b2b7-41852d6280cc",
+      "normalized_domain": "hinden.net",
+      "prior_article_slugs": [],
+      "article_match_status": "pending_final40_and_mailbox_audit",
+      "vendor_case_management": null,
+      "last_successful_outbound": "2026-09-02T16:10:11.257044+00:00",
+      "lifetime_successful_touch_count": 1,
+      "fresh_evidence": {
+        "contact": {
+          "id": "3e9e598db1784d278ced2d8d244d2e2e",
+          "pif_id": "ea8db863-46fe-490f-b2b7-41852d6280cc",
+          "full_name": "Barry Hinden",
+          "first_name": "Barry",
+          "email": "barry@hinden.net",
+          "phone": "+13239541800",
+          "title": "Founding Partner / Managing Partner",
+          "linkedin_url": "https://www.linkedin.com/in/barry-hinden-a9091b167",
+          "source": "pif_leadership",
+          "created_at": "2026-08-08T10:39:38.018264+00:00",
+          "updated_at": "2026-08-08T10:40:50.167298+00:00",
+          "front_contact_id": null,
+          "front_last_seen": null,
+          "tech_signals": null,
+          "persona": "founder_owner",
+          "persona_source": "title_keyword",
+          "persona_confidence": 0.9,
+          "research_title": null
+        },
+        "history": [
+          {
+            "id": "c20a9da41051490a80bc8d4f1f6db839",
+            "recipient_email": "barry@hinden.net",
+            "subject": "Harley submitted a Google review about Hinden & Breslavsky",
+            "body_excerpt": "Hi Barry,\n\nIn a Google review from June 12, 2026, Harley wrote, \"If your attorney is refusing to provide you paperwork\"\n\nA review like this can make prospective clients question whether their own calls will be returned. We built a system for Precise Imaging that processes roughly 600 emails daily and flags missed callbacks, aging inquiries, and unresolved messages.\n\nI'd be glad to walk you through what we built for Precise and learn how your team currently handles these communication workflows. You can choose a 30-minute time here:\n\nhttps://getpossibleminds.com/t/0flMbXeKqw\n\nRegards,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+            "status": "sent",
+            "sent_at": "2026-09-02T16:10:11.257044+00:00",
+            "transport": "resend",
+            "message_id": "176d2f0a-3fa4-48ab-8c02-905d887b5810"
+          }
+        ],
+        "firm_latest": "2026-09-02T16:10:11.257044+00:00",
+        "inbound": 0,
+        "negative": 0,
+        "pending": 0
+      },
+      "hold_reasons": []
+    },
+    {
+      "firm": "Khashan Law Firm, APC",
+      "name": "Lewis Khashan",
+      "rank": 60,
+      "email": "lewis@khashanlaw.com",
+      "title": "Founder / Attorney at Law",
+      "persona": "founder_owner",
+      "contact_id": "fc_586f36da79374dbaaa5d8fec",
+      "days_since": 8,
+      "canonical_firm_id": "dd324b50-b355-49fb-bd00-0839a950dfd6",
+      "normalized_domain": "khashanlaw.com",
+      "prior_article_slugs": [],
+      "article_match_status": "pending_final40_and_mailbox_audit",
+      "vendor_case_management": null,
+      "last_successful_outbound": "2026-09-02T16:50:15.112956+00:00",
+      "lifetime_successful_touch_count": 1,
+      "fresh_evidence": {
+        "contact": {
+          "id": "fc_586f36da79374dbaaa5d8fec",
+          "pif_id": "dd324b50-b355-49fb-bd00-0839a950dfd6",
+          "full_name": "Lewis Khashan",
+          "first_name": "Lewis",
+          "email": "lewis@khashanlaw.com",
+          "phone": "+9514612387203",
+          "title": "Founder / Attorney at Law",
+          "linkedin_url": "https://www.linkedin.com/in/lewis-khashan-01446066",
+          "source": "front",
+          "created_at": "2026-06-12T05:27:55.134841+00:00",
+          "updated_at": "2026-09-14T19:52:27.954413+00:00",
+          "front_contact_id": "crd_20vf3b5",
+          "front_last_seen": "2026-04-10T15:15:24.242+00:00",
+          "tech_signals": {},
+          "persona": "founder_owner",
+          "persona_source": "title_keyword",
+          "persona_confidence": 0.9,
+          "research_title": null
+        },
+        "history": [
+          {
+            "id": "87893e5a5e914588811ffa4370c62723",
+            "recipient_email": "lewis@khashanlaw.com",
+            "subject": "George Ortega submitted a Google review about Khashan Law Firm",
+            "body_excerpt": "Hi Lewis,\n\nIn a Google review from December 22, 2025, George Ortega wrote, \"If you aren’t constantly calling them to get moving on your case they won’t do anything.\"\n\nA review like this can make prospective clients question whether their own calls will be returned. We built a system for Precise Imaging that processes roughly 600 emails daily and flags missed callbacks, aging inquiries, and unresolved messages.\n\nI'd be glad to walk you through what we built for Precise and learn how your team currently handles these communication workflows. You can choose a 30-minute time here:\n\nhttps://getpossibleminds.com/t/91lKy35PpQ\n\nRegards,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+            "status": "delivered",
+            "sent_at": "2026-09-02T16:50:15.112956+00:00",
+            "transport": "resend",
+            "message_id": "c268b32b-69a8-409e-a2b5-cad49615f806"
+          }
+        ],
+        "firm_latest": "2026-09-02T16:50:15.112956+00:00",
+        "inbound": 0,
+        "negative": 0,
+        "pending": 0
+      },
+      "hold_reasons": []
+    }
+  ]
+}

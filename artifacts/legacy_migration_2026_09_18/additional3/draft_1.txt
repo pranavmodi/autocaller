@@ -1,0 +1,19 @@
+Subject: Considering Clio or Filevine?
+
+Hi Michael,
+
+You've built a PI practice where your team handles both litigation and clients' medical coordination. As the owner, you'd want a software change to make those handoffs easier, without disrupting active cases.
+
+I'm Pranav, founder of Possible Minds, previously at McKinsey and Expedia. We built Precise Imaging's email-handling system, which processes over 600 emails daily, routes requests and sends automated status responses.
+
+If you're weighing a move from PracticeMaster to Clio or Filevine, we can help migrate your records, documents and workflows, with careful mapping and validation so they're better connected for AI and automation.
+
+Here's how we approach migration:
+https://getpossibleminds.com/t/S7TGwIYR6g
+
+Would a brief outline of what a move could involve be useful? I'd appreciate your thoughts.
+
+Best,
+Pranav
+Founder, Possible Minds
+

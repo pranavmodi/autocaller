@@ -1,0 +1,16 @@
+Subject: Re: where AI could compound at Pirnia Law Group
+
+Hi Ardy,
+
+Thought this might be useful alongside my earlier note about where AI could compound at your firm.
+
+I wrote up how a solo PI lawyer used Claude and Clio to turn dictated intake facts into a structured matter, document packet, and task list, while keeping the lawyer in control of the consequential work:
+
+https://getpossibleminds.com/t/EAHYbrPXpA
+
+Different systems, but the same operational question: where can the handoff be automated without losing control? Which part feels most relevant at Pirnia Law Group?
+
+Best,
+Pranav
+Founder, Possible Minds
+https://getpossibleminds.com

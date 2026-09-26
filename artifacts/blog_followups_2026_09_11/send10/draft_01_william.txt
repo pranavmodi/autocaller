@@ -1,0 +1,14 @@
+Subject: Question from the team behind Precise Imaging updates
+
+Hi William,
+
+My earlier note was about intake and follow-up. I wrote up a solo PI lawyer's workflow using Claude and Clio: he dictates the client facts, and it prepares the matter, documents and next tasks for review. He reports cutting that intake work by roughly 90%, with the lawyer still checking the result.
+
+https://getpossibleminds.com/t/NKUMY07WLA
+
+Would reducing repeated intake entry be more useful at Drivers Legal Defense, or is after-hours follow-up the bigger time sink?
+
+Best,
+Pranav
+Founder, Possible Minds
+

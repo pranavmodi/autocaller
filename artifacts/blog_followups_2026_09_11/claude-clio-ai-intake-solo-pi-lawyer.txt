@@ -1,0 +1,82 @@
+A new personal injury client calls. The lawyer listens, asks questions, takes notes, creates the contact and matter, enters the accident and insurance details, prepares the retainer package, sends representation letters, and assigns the next tasks.
+None of this is intellectually difficult. Together, however, it consumes a meaningful part of the day.
+In a recent workflow demonstration, New York solo personal injury lawyer Dan Sinsky showed how he uses Claude, firm-specific skills, and Clio to compress that sequence. His estimate that intake time fell by roughly 90% is self-reported, not an independently measured benchmark. What makes the example valuable is the system behind the number.
+He did not ask a chatbot to “handle intake.” He described the firm's process, connected the tools, supplied examples, and kept people responsible for the final work.
+What the AI-assisted workflow does
+Sinsky begins by dictating what he learned from the prospective client: contact information, accident facts, insurance details, injuries, medical providers, and other relevant information.
+Claude structures those facts and asks follow-up questions when required information appears to be missing. With the authorized Clio integration, the workflow can then:
+Create the contact and matter in Clio.
+Populate the firm's preferred matter fields.
+Generate a personal injury retainer agreement.
+Prepare New York no-fault documents, including the NF-2.
+Create HIPAA authorizations and carrier correspondence.
+Draft a summons and complaint when the matter moves into litigation.
+Create filing, service, and follow-up tasks.
+Upload generated documents to the appropriate Clio matter.
+The same operating layer can support a daily dashboard of matters by stage, unfinished tasks, outstanding records, and approaching limitation dates. For a solo lawyer handling more than 100 active matters with one paralegal, the gain is larger than faster drafting. It is less time spent carrying the same facts between a conversation, a form, a document, and a case-management system.
+How Claude and Clio work together
+Clio is the system of record. Claude is the reasoning and workflow layer. The firm's instructions, templates, and review standards make the combination specific enough to be useful.
+The firm first defined what a completed motor-vehicle intake should contain: the facts to collect, the Clio fields to populate, the documents to create, and the next tasks to assign. That process became a reusable Claude skill, effectively a detailed operating procedure the model reads before beginning the work.
+Claude
+Interprets the intake, finds missing information, applies instructions, and prepares outputs.
+Clio
+Stores the contact, matter, fields, documents, and tasks as the firm's operational record.
+The firm
+Supplies examples, permissions, exception rules, and the human approval boundary.
+This is the difference between a prompt and a working system. A draft in a chat window may save a few minutes. A governed workflow that moves verified information into the right matter can reduce repeated data entry, document assembly, file organization, and task creation.
+It is also why the
+workflow is the right unit of AI transformation
+. The model matters, but the operating path determines whether the firm gets durable value.
+Why examples matter more than a clever prompt
+Sinsky gave Claude examples of documents the firm had already prepared. For relatively standardized work, such as retainers and representation letters, a few representative examples established the preferred structure.
+More variable documents required examples for different factual patterns. A premises-liability complaint may differ depending on whether the incident involves a sidewalk, municipality, private property owner, falling object, or dangerous interior condition.
+His working rule was roughly three examples for each meaningful variation, followed by more examples when the system encountered a new pattern. This was not one-shot configuration. An early version repeated the firm's letterhead on every page. Correcting that created a spacing problem, which required another revision.
+That iteration is not a side issue. It is how the firm turns its own work product into a reusable operating asset. The system improves because the lawyer can say what is wrong, show what good looks like, and encode the correction for the next matter.
+What still requires human review
+The demonstration also showed why the workflow should not run without supervision. Claude missed the accident time in one field and failed to populate a date of birth. Some insurance information remained blank. The lawyer had to inspect the matter and correct the omissions.
+AI can prepare the work. The lawyer remains responsible for what is sent, signed, relied upon, or filed.
+Sinsky described reviewing an AI-assisted legal argument that captured a case's general meaning but placed words inside quotation marks that the court had not stated verbatim. The proposition was directionally similar. The quotation was still wrong.
+Human review should verify:
+Names, dates, addresses, and claim numbers
+Matter fields created in Clio
+Insurance and medical information
+Every citation and quoted passage
+Jurisdiction-specific allegations
+Filing requirements and deadlines
+Documents before sending or filing
+Exceptions the workflow could not resolve
+Confidentiality requires its own design. A firm must evaluate the specific Claude product, contract, data-retention terms, security controls, permissions, and applicable professional or privacy obligations before client information enters the system. Consumer access to an AI tool is not, by itself, authorization to upload confidential or regulated data.
+Firms should establish these controls as part of
+derisking AI adoption
+, not after a workflow is already handling live matters.
+The mindset that made adoption work
+The most useful part of Sinsky's example may be that he did not consider himself technically sophisticated. He looked for help connecting the tools, then stayed involved by reviewing outputs and explaining what needed to change.
+Start with one workflow
+Do not begin with “transform the firm with AI.” Begin with motor-vehicle intake, a representation package, a medical chronology, or another recurring process with clear inputs and outputs.
+Treat workflow knowledge as the valuable input
+Claude does not inherently know how your firm prefers to open a matter, organize a complaint, assign tasks, or escalate an unusual case. Your templates, field definitions, examples, and review standards supply that knowledge.
+Expect the first version to be imperfect
+A repeated letterhead or omitted field does not necessarily mean the idea failed. It reveals an incomplete instruction, mapping, or validation rule. Correct it, test again, and retain the lesson.
+Treat AI like a fast junior associate
+The comparison used in the conversation was a young associate who works quickly but still needs instruction and review. That is healthier than treating AI as either an infallible authority or a useless novelty.
+Measure the whole workflow
+Drafting speed is only one part of the value. Measure how much time the firm stops spending on repeated entry, assembly, filing preparation, task creation, corrections, and switching between systems.
+Why this matters for small firms
+Large firms can distribute administrative work across specialized teams. A solo or small firm cannot. Saving several hours does not merely improve an abstract efficiency metric. It gives the lawyer more capacity to speak with clients, evaluate cases, negotiate, prepare for litigation, or accept additional matters.
+The goal is not to remove the lawyer or paralegal. It is to let Claude prepare and organize the work, let Clio preserve the operational record, and let people spend their time on judgment, relationships, and advocacy.
+The strongest AI workflow is not the one that operates without lawyers. It is the one that gives good lawyers more time to be lawyers.
+Frequently asked questions
+Can Claude create matters and documents directly in Clio?
+Claude can work with Clio through an authorized API integration that has appropriate permissions. The integration should be narrowly scoped, tested, monitored, and designed so consequential actions remain reviewable.
+What PI documents can an AI-assisted Clio workflow prepare?
+The demonstrated workflow prepared a retainer agreement, New York no-fault documents, HIPAA authorizations, carrier letters, and a summons and complaint. The exact document set depends on the firm's jurisdiction, templates, and review rules.
+Does an AI intake workflow replace the lawyer or paralegal?
+No. It can structure information, populate fields, assemble documents, and create tasks. People still verify facts, resolve exceptions, handle sensitive conversations, exercise legal judgment, and approve consequential work.
+How many examples should a law firm give Claude?
+A few representative examples may be enough for standardized documents. Variable documents need examples covering the firm's major factual and procedural patterns, followed by continued correction and testing.
+Can lawyers put confidential client information into any Claude account?
+No. A firm must evaluate the specific product, contract, data-retention terms, security controls, and applicable confidentiality or privacy obligations before submitting client information. Access to a consumer AI product is not the same as approval for client data.
+Build around the way your firm actually works
+Choose one workflow worth improving.
+Possible Minds helps PI firm owners map a workflow, decide what can safely be delegated to AI, connect the existing systems, and keep human judgment at the consequential decisions.
+Discuss a firm-owned workflow

@@ -12,6 +12,7 @@ import {
   BarChart3,
   Bookmark,
   Briefcase,
+  Building2,
   Check,
   ChevronDown,
   ChevronLeft,
@@ -24,7 +25,10 @@ import {
   Filter,
   Globe,
   Loader2,
+  Linkedin,
   Mail,
+  MapPin,
+  PanelRightOpen,
   PhoneCall,
   Play,
   RefreshCw,
@@ -38,8 +42,17 @@ import {
   X,
 } from "lucide-react";
 import { CommsTable } from "@/components/CommsTable";
+import { JobApplicationControls } from "@/components/JobApplicationControls";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
+import { jobAgentRequest, type Candidate, type JobAgentConfig } from "@/lib/job-agent";
 import {
   deleteFirm,
   getFirmCalls,
@@ -64,15 +77,18 @@ import {
   detectVendors,
   downloadEmailtagExport,
   getFullEnrichmentStatus,
+  getCareerSearchStatus,
   getFirmSitemapHistory,
   getMirroredFirm,
   getPifJobResearchDailyStats,
+  getPifTriggerOptions,
   getPifPeopleFilterOptions,
   getPifSyncStatus,
   getResearchStatus,
   getProxiedResearchStatus,
   listMirroredPifInfo,
   listMirroredPifJobPostings,
+  listPriorityPifFirms,
   listPifPeople,
   listPifVendors,
   listSavedFirmTriggerSearches,
@@ -85,6 +101,7 @@ import {
   updateSavedLeadSearch,
   updateSavedFirmTriggerSearch,
   type EmailPresence,
+  type AIAdoptionPosture,
   type ExportFormat,
   type PifInfoListParams,
   type PifInfoListResponse,
@@ -94,6 +111,9 @@ import {
   type PifJobPostingsListParams,
   type PifJobResearchDailyStat,
   type JobPostingsResearch,
+  type PriorityFirmResult,
+  type PriorityFirmsListParams,
+  type PriorityFirmsListResponse,
   type PifAddress,
   type PifPeopleListParams,
   type PifPeopleFilterOption,
@@ -106,6 +126,7 @@ import {
   type SavedLeadSearchCriteria,
   type SavedFirmTriggerSearch,
   type SavedFirmTriggerSearchCriteria,
+  type TriggerFilterOptions,
 } from "@/lib/emailtag";
 
 const PAGE_SIZE = 25;
@@ -117,11 +138,10 @@ const TERMINAL_TASK_STATUSES = new Set(["completed", "failed", "error", "success
 
 type SortBy = NonNullable<PifInfoListParams["sort_by"]>;
 type WebsitePresence = NonNullable<PifInfoListParams["website_presence"]>;
-type StatusPresence = NonNullable<PifInfoListParams["research_presence"]>;
 type SimplePresence = NonNullable<PifInfoListParams["behavior_presence"]>;
 type PeopleSource = NonNullable<PifPeopleListParams["source"]>;
 type LeaderFilter = NonNullable<PifPeopleListParams["leader"]>;
-type LeadsView = "firms" | "contacts" | "job_listings";
+type LeadsView = "priority" | "firms" | "contacts" | "job_listings";
 type FirstContactPeriod = "any" | "last_1_month" | "last_6_months" | "custom";
 type RecordOrigin = "any" | "manual" | "synced";
 type WorkflowStepState = "completed" | "running" | "failed" | "waiting" | "skipped";
@@ -169,58 +189,72 @@ type ExtractedReviews = {
 interface FiltersState {
   search: string;
   sort_by: SortBy;
-  icp_tier: "" | PifTier;
-  entity_type: string;
+  icp_tier: PifTier[];
+  entity_type: string[];
   recently_researched: string;
-  contact_email_range: string;
-  staff_count_range: string;
+  contact_email_range: string[];
+  staff_count_range: string[];
   autorespond_window: string;
-  autorespond_type: string;
+  autorespond_type: string[];
   website_presence: WebsitePresence;
-  research_presence: StatusPresence;
-  staff_presence: StatusPresence;
-  job_postings_presence: "any" | "has" | "none" | "not_researched" | "queued_or_running" | "failed";
-  job_posting_role: "" | "intake" | "marketing" | "case_operations" | "firm_operations" | "technology";
-  job_posting_tag: string;
+  research_presence: string[];
+  staff_presence: string[];
+  job_postings_presence: string[];
+  job_posting_role: string[];
+  job_posting_tag: string[];
   job_posting_query: string;
   job_posted_within_days: string;
   behavior_presence: SimplePresence;
   icp_presence: SimplePresence;
   vendor_presence: SimplePresence;
-  vendor: string;
+  vendor: string[];
   record_origin: RecordOrigin;
   first_contact_period: FirstContactPeriod;
   first_contacted_from: string;
   first_contacted_to: string;
+  trigger_event_types: string[];
+  trigger_categories: string[];
+  trigger_within_days: string;
+  trigger_min_score: string;
+  trigger_min_confidence: string;
+  trigger_match_mode: "any" | "all";
+  priority_sort: "priority" | "newest" | "fit";
   active_only: boolean;
 }
 
 const DEFAULT_FILTERS: FiltersState = {
   search: "",
   sort_by: "updated_at",
-  icp_tier: "",
-  entity_type: "",
+  icp_tier: [],
+  entity_type: [],
   recently_researched: "",
-  contact_email_range: "",
-  staff_count_range: "",
+  contact_email_range: [],
+  staff_count_range: [],
   autorespond_window: "any",
-  autorespond_type: "",
+  autorespond_type: [],
   website_presence: "any",
-  research_presence: "any",
-  staff_presence: "any",
-  job_postings_presence: "any",
-  job_posting_role: "",
-  job_posting_tag: "",
+  research_presence: [],
+  staff_presence: [],
+  job_postings_presence: [],
+  job_posting_role: [],
+  job_posting_tag: [],
   job_posting_query: "",
   job_posted_within_days: "",
   behavior_presence: "any",
   icp_presence: "any",
   vendor_presence: "any",
-  vendor: "",
+  vendor: [],
   record_origin: "any",
   first_contact_period: "any",
   first_contacted_from: "",
   first_contacted_to: "",
+  trigger_event_types: [],
+  trigger_categories: [],
+  trigger_within_days: "30",
+  trigger_min_score: "0",
+  trigger_min_confidence: "0",
+  trigger_match_mode: "any",
+  priority_sort: "priority",
   active_only: true,
 };
 
@@ -368,11 +402,11 @@ function safeLinkedInUrl(value: string | null | undefined) {
   return null;
 }
 
-function linkedInSearchUrl(person: PifPersonResult) {
+function linkedInSearchUrl(person: { name?: string | null; firm_name?: string | null }) {
   const query = [
+    "site:linkedin.com/in",
     person.name,
     person.firm_name,
-    "LinkedIn",
   ].filter(Boolean).join(" ");
   return `https://www.google.com/search?q=${encodeURIComponent(query)}`;
 }
@@ -551,29 +585,25 @@ function firstContactRange(filters: FiltersState) {
 function filtersToParams(filters: FiltersState, page: number): PifInfoListParams {
   const recently = Number(filters.recently_researched);
   const firstContact = firstContactRange(filters);
-  const contactEmailRange = countRange(filters.contact_email_range);
-  const staffCountRange = countRange(filters.staff_count_range);
   return {
     search: filters.search.trim() || undefined,
     page,
     page_size: PAGE_SIZE,
     sort_by: filters.sort_by,
-    icp_tier: filters.icp_tier || undefined,
-    entity_type: filters.entity_type.trim() || undefined,
+    icp_tiers: filters.icp_tier,
+    entity_types: filters.entity_type,
     recently_researched:
       filters.recently_researched.trim() && Number.isFinite(recently) ? recently : undefined,
-    contact_email_min: contactEmailRange.min,
-    contact_email_max: contactEmailRange.max,
-    staff_count_min: staffCountRange.min,
-    staff_count_max: staffCountRange.max,
+    contact_email_ranges: filters.contact_email_range,
+    staff_count_ranges: filters.staff_count_range,
     autorespond_window: filters.autorespond_window,
-    autorespond_type: filters.autorespond_type || undefined,
+    autorespond_types: filters.autorespond_type,
     website_presence: filters.website_presence,
-    research_presence: filters.research_presence,
-    staff_presence: filters.staff_presence,
-    job_postings_presence: filters.job_postings_presence,
-    job_posting_role: filters.job_posting_role || undefined,
-    job_posting_tag: filters.job_posting_tag || undefined,
+    research_presences: filters.research_presence,
+    staff_presences: filters.staff_presence,
+    job_postings_presences: filters.job_postings_presence,
+    job_posting_roles: filters.job_posting_role,
+    job_posting_tags: filters.job_posting_tag,
     job_posting_query: filters.job_posting_query.trim() || undefined,
     job_posted_within_days:
       filters.job_posted_within_days && Number.isFinite(Number(filters.job_posted_within_days))
@@ -581,8 +611,8 @@ function filtersToParams(filters: FiltersState, page: number): PifInfoListParams
         : undefined,
     behavior_presence: filters.behavior_presence,
     icp_presence: filters.icp_presence,
-    vendor_presence: filters.vendor === "__missing" ? "missing" : filters.vendor.trim() ? "has" : filters.vendor_presence,
-    vendor: filters.vendor && filters.vendor !== "__missing" ? filters.vendor.trim() : undefined,
+    vendor_presence: filters.vendor.length ? "any" : filters.vendor_presence,
+    vendors: filters.vendor,
     manually_added:
       filters.record_origin === "manual" ? true : filters.record_origin === "synced" ? false : undefined,
     first_contacted_from: firstContact.from,
@@ -595,23 +625,55 @@ function criteriaFromFirmFilters(filters: FiltersState): SavedFirmTriggerSearchC
   return { ...filters };
 }
 
+function filtersToPriorityParams(filters: FiltersState, page: number): PriorityFirmsListParams {
+  return {
+    search: filters.search.trim() || undefined,
+    event_types: filters.trigger_event_types,
+    categories: filters.trigger_categories,
+    within_days: Math.max(1, Number(filters.trigger_within_days) || 30),
+    min_score: Math.max(0, Number(filters.trigger_min_score) || 0),
+    min_confidence: Math.max(0, Math.min(1, Number(filters.trigger_min_confidence) || 0)),
+    match_mode: filters.trigger_match_mode,
+    icp_tiers: filters.icp_tier,
+    entity_types: filters.entity_type,
+    staff_count_ranges: filters.staff_count_range,
+    vendors: filters.vendor,
+    sort_by: filters.priority_sort,
+    page,
+    page_size: PAGE_SIZE,
+  };
+}
+
 function firmFiltersFromSavedTrigger(search: SavedFirmTriggerSearch): FiltersState {
   return {
     ...DEFAULT_FILTERS,
     ...search.criteria,
-    icp_tier: (search.criteria.icp_tier ?? "") as FiltersState["icp_tier"],
-    job_posting_role: (search.criteria.job_posting_role ?? "") as FiltersState["job_posting_role"],
+    icp_tier: selectedStringValues(search.criteria.icp_tier) as PifTier[],
+    entity_type: selectedStringValues(search.criteria.entity_type),
+    research_presence: selectedStringValues(search.criteria.research_presence),
+    staff_presence: selectedStringValues(search.criteria.staff_presence),
+    job_postings_presence: selectedStringValues(search.criteria.job_postings_presence),
+    job_posting_role: selectedStringValues(search.criteria.job_posting_role),
+    job_posting_tag: selectedStringValues(search.criteria.job_posting_tag),
+    vendor: selectedStringValues(search.criteria.vendor),
+    contact_email_range: selectedCountRanges(search.criteria.contact_email_range),
+    staff_count_range: selectedCountRanges(search.criteria.staff_count_range),
+    autorespond_type: selectedStringValues(search.criteria.autorespond_type),
   };
 }
 
-function countRange(value: string): { min?: number; max?: number } {
-  if (!value) return {};
-  if (value.endsWith("+")) return { min: Number(value.slice(0, -1)) };
-  const [min, max] = value.split("-").map(Number);
-  return Number.isFinite(min) && Number.isFinite(max) ? { min, max } : {};
+function selectedStringValues(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.filter((item): item is string => typeof item === "string" && item.length > 0);
+  }
+  return typeof value === "string" && value ? [value] : [];
 }
 
+const selectedCountRanges = selectedStringValues;
+
 const COUNT_RANGES = ["0-0", "1-5", "6-10", "11-25", "26-50", "51-100", "101+"] as const;
+const COUNT_RANGE_OPTIONS = COUNT_RANGES.map((value) => ({ value }));
+const formatCountRange = (value: string) => value === "0-0" ? "0" : value;
 const JOB_TRIGGER_TAGS = [
   "rapid_lead_followup",
   "lead_conversion",
@@ -654,6 +716,30 @@ const AUTORESPOND_TYPES = [
   "case_updates",
   "unknown_sig_lien",
 ] as const;
+const AUTORESPOND_TYPE_OPTIONS = AUTORESPOND_TYPES.map((value) => ({ value }));
+const ICP_TIER_OPTIONS = (["A", "B", "C", "D"] as const).map((value) => ({ value }));
+const ENTITY_TYPE_OPTIONS = ENTITY_TYPES.map((value) => ({
+  value,
+  label: ENTITY_TYPE_LABELS[value] ?? formatLabel(value),
+}));
+const STATUS_FILTER_OPTIONS = STATUS_PRESENCE
+  .filter((value) => value !== "any")
+  .map((value) => ({ value }));
+const JOB_POSTING_PRESENCE_OPTIONS = [
+  { value: "has", label: "Has recent openings" },
+  { value: "none", label: "No recent openings" },
+  { value: "not_researched", label: "Not researched" },
+  { value: "queued_or_running", label: "Queued or running" },
+  { value: "failed", label: "Failed" },
+];
+const JOB_POSTING_ROLE_OPTIONS = [
+  { value: "intake", label: "Intake and reception" },
+  { value: "marketing", label: "Marketing and growth" },
+  { value: "case_operations", label: "Case operations" },
+  { value: "firm_operations", label: "Firm operations" },
+  { value: "technology", label: "Technology and systems" },
+];
+const JOB_TRIGGER_TAG_OPTIONS = JOB_TRIGGER_TAGS.map((value) => ({ value }));
 
 function useDebouncedValue<T>(value: T, delayMs: number): T {
   const [debouncedValue, setDebouncedValue] = useState(value);
@@ -695,10 +781,11 @@ function EmailtagFirmsContent() {
   const [jobPostingResearchRun, setJobPostingResearchRun] = useState<BatchResearchRun | null>(null);
   const [filters, setFilters] = useState<FiltersState>(DEFAULT_FILTERS);
   const [page, setPage] = useState(1);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [view, setView] = useState<LeadsView>(() => {
     const requestedView = searchParams.get("view");
-    return requestedView === "contacts" || requestedView === "job_listings" ? requestedView : "firms";
+    return requestedView === "contacts" || requestedView === "job_listings" || requestedView === "firms"
+      ? requestedView
+      : "priority";
   });
   const [activeTriggerSearchId, setActiveTriggerSearchId] = useState("");
   const [activeSavedSearchId, setActiveSavedSearchId] = useState(searchParams.get("saved") ?? "");
@@ -713,10 +800,7 @@ function EmailtagFirmsContent() {
   const debouncedPeopleFilters = useDebouncedValue(peopleFilters, 250);
 
   const listParams = useMemo(() => filtersToParams(filters, page), [filters, page]);
-
-  useEffect(() => {
-    if (selectedFirmId) setExpandedId(selectedFirmId);
-  }, [selectedFirmId]);
+  const priorityParams = useMemo(() => filtersToPriorityParams(filters, page), [filters, page]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -727,6 +811,10 @@ function EmailtagFirmsContent() {
       else params.delete("saved");
     } else if (view === "job_listings") {
       params.set("view", "job_listings");
+      params.delete("saved");
+      CONTACT_QUERY_KEYS.forEach((key) => params.delete(key));
+    } else if (view === "firms") {
+      params.set("view", "firms");
       params.delete("saved");
       CONTACT_QUERY_KEYS.forEach((key) => params.delete(key));
     } else {
@@ -750,13 +838,27 @@ function EmailtagFirmsContent() {
     const query = params.toString();
     const basePath = pathname?.startsWith("/leads") ? "/leads" : "/emailtag-firms";
     router.push(query ? `${basePath}?${query}` : basePath);
-    setExpandedId(pifId);
   };
 
   const firmsQuery = useQuery({
     queryKey: ["emailtag", "firms", listParams],
     queryFn: () => listMirroredPifInfo(listParams),
+    enabled: view === "firms",
     refetchInterval: 60_000,
+  });
+
+  const priorityQuery = useQuery({
+    queryKey: ["pif", "priority-firms", priorityParams],
+    queryFn: () => listPriorityPifFirms(priorityParams),
+    enabled: view === "priority",
+    refetchInterval: 60_000,
+  });
+
+  const triggerOptionsQuery = useQuery<TriggerFilterOptions>({
+    queryKey: ["pif", "trigger-options"],
+    queryFn: getPifTriggerOptions,
+    enabled: view === "priority",
+    staleTime: 5 * 60_000,
   });
 
   const reviewCorpusQuery = useQuery<ReviewCorpusProgress>({
@@ -1107,12 +1209,12 @@ function EmailtagFirmsContent() {
     setFilters(firmFiltersFromSavedTrigger(search));
     setPage(1);
     setActiveTriggerSearchId(search.id);
-    setView("firms");
+    setView("priority");
   }
 
   const data = firmsQuery.data;
+  const priorityData = priorityQuery.data;
   const firms = data?.items ?? [];
-  const selectedFirmOnPage = Boolean(selectedFirmId && firms.some((firm) => firm.id === selectedFirmId));
   const totalPages = data?.total_pages ?? 1;
   const peopleData = peopleQuery.data;
   const peopleTotalPages = peopleData?.total_pages ?? 1;
@@ -1123,83 +1225,165 @@ function EmailtagFirmsContent() {
   const refreshLeads = () => {
     if (view === "contacts") return peopleQuery.refetch();
     if (view === "job_listings") return queryClient.invalidateQueries({ queryKey: ["pif", "job-postings"] });
+    if (view === "priority") return priorityQuery.refetch();
     return firmsQuery.refetch();
   };
-  const refreshing = view === "contacts" ? peopleQuery.isFetching : view === "firms" ? firmsQuery.isFetching : false;
+  const refreshing = view === "contacts"
+    ? peopleQuery.isFetching
+    : view === "firms"
+      ? firmsQuery.isFetching
+      : view === "priority"
+        ? priorityQuery.isFetching
+        : false;
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-        <div>
-          <h1 className="text-xl font-semibold">Leads</h1>
-          <p className="text-sm text-neutral-500">
-            {view === "contacts"
-              ? `${peopleData?.total?.toLocaleString() ?? "—"} contacts from the local EmailTag mirror.`
-              : view === "job_listings"
-                ? "Job listings from the local EmailTag mirror."
-                : `${data?.total?.toLocaleString() ?? "—"} firms from the local EmailTag mirror.`}
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={() => void refreshLeads()}
-            disabled={refreshing}
-            className="inline-flex items-center gap-1.5 rounded-md border border-neutral-200 bg-white px-3 py-1.5 text-xs font-medium text-neutral-700 hover:bg-neutral-50 disabled:opacity-40"
-          >
-            {refreshing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-            Refresh
-          </button>
-          <button
-            type="button"
-            onClick={() => exportAll.mutate("json")}
-            disabled={exportAll.isPending}
-            className="inline-flex items-center gap-1.5 rounded-md border border-neutral-200 bg-white px-3 py-1.5 text-xs font-medium text-neutral-700 hover:bg-neutral-50 disabled:opacity-40"
-          >
-            <FileJson className="h-3.5 w-3.5" />
-            Export all JSON
-          </button>
-          <button
-            type="button"
-            onClick={() => exportAll.mutate("csv")}
-            disabled={exportAll.isPending}
-            className="inline-flex items-center gap-1.5 rounded-md border border-neutral-200 bg-white px-3 py-1.5 text-xs font-medium text-neutral-700 hover:bg-neutral-50 disabled:opacity-40"
-          >
-            <Download className="h-3.5 w-3.5" />
-            Export all CSV
-          </button>
-        </div>
-      </div>
-      {reviewCorpusQuery.data && (
-        <section aria-label="Review corpus progress" className="border-y border-neutral-200 py-3">
-          <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-            <div className="font-medium text-neutral-800">
-              Review corpus: {reviewCorpusQuery.data.distinct_reviews.toLocaleString()} / {reviewCorpusQuery.data.target_distinct_reviews.toLocaleString()} distinct
+    <div className="-mx-3 -my-4 min-h-screen bg-[#f3f6f7] px-3 py-4 sm:-mx-4 sm:px-4 md:-mx-8 md:-my-6 md:px-8 md:py-6">
+      <div className="mx-auto max-w-[1600px] space-y-4">
+        <header className="overflow-hidden rounded-lg border border-[#d8e1e5] bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_rgba(15,23,42,0.04)]">
+          <div className="flex h-1" aria-hidden="true">
+            <div className="w-[38%] bg-[#176b70]" />
+            <div className="w-[24%] bg-[#2f6fca]" />
+            <div className="w-[20%] bg-[#e5a424]" />
+            <div className="flex-1 bg-[#cf5b65]" />
+          </div>
+          <div className="flex flex-col gap-4 px-4 py-4 sm:px-5 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-[#164e52] text-white shadow-sm">
+                <Activity className="h-5 w-5" />
+              </div>
+              <div className="min-w-0">
+                <div className="text-[10px] font-semibold uppercase text-[#567079]">Lead intelligence</div>
+                <h1 className="text-xl font-semibold text-[#12272d]">Leads</h1>
+                <p className="truncate text-sm text-[#61757c]">
+                  {view === "contacts"
+                    ? `${peopleData?.total?.toLocaleString() ?? "—"} contacts from the local EmailTag mirror.`
+                    : view === "job_listings"
+                      ? "Job listings from the local EmailTag mirror."
+                      : view === "priority"
+                        ? `${priorityData?.total?.toLocaleString() ?? "—"} firms with timely GTM triggers.`
+                        : `${data?.total?.toLocaleString() ?? "—"} firms from the local EmailTag mirror.`}
+                </p>
+              </div>
             </div>
-            <div className="text-neutral-500">
-              {reviewCorpusQuery.data.firms_with_reviews.toLocaleString()} firms · {reviewCorpusQuery.data.classified_reviews.toLocaleString()} classified · {(reviewCorpusQuery.data.task_counts.queued ?? 0).toLocaleString()} queued · {(reviewCorpusQuery.data.task_counts.in_progress ?? 0).toLocaleString()} running
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => void refreshLeads()}
+                disabled={refreshing}
+                className="inline-flex items-center gap-1.5 rounded-md border border-[#b8d2d3] bg-[#edf7f6] px-3 py-2 text-xs font-semibold text-[#165c61] hover:bg-[#dff0ef] disabled:opacity-40"
+              >
+                {refreshing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                Refresh
+              </button>
+              <button
+                type="button"
+                onClick={() => exportAll.mutate("json")}
+                disabled={exportAll.isPending}
+                className="inline-flex items-center gap-1.5 rounded-md border border-[#d6e0e4] bg-white px-3 py-2 text-xs font-medium text-[#40565e] hover:border-[#aebfc5] hover:bg-[#f7fafb] disabled:opacity-40"
+              >
+                <FileJson className="h-3.5 w-3.5 text-[#2f6fca]" />
+                Export JSON
+              </button>
+              <button
+                type="button"
+                onClick={() => exportAll.mutate("csv")}
+                disabled={exportAll.isPending}
+                className="inline-flex items-center gap-1.5 rounded-md border border-[#d6e0e4] bg-white px-3 py-2 text-xs font-medium text-[#40565e] hover:border-[#aebfc5] hover:bg-[#f7fafb] disabled:opacity-40"
+              >
+                <Download className="h-3.5 w-3.5 text-[#b37a0e]" />
+                Export CSV
+              </button>
             </div>
           </div>
-          <div className="mt-2 h-2 overflow-hidden rounded-full bg-neutral-100" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={reviewCorpusQuery.data.progress_percent}>
-            <div className="h-full bg-emerald-600 transition-[width]" style={{ width: `${reviewCorpusQuery.data.progress_percent}%` }} />
-          </div>
-        </section>
-      )}
+        </header>
+
+        {reviewCorpusQuery.data && (
+          <section aria-label="Review corpus progress" className="overflow-hidden rounded-lg border border-[#bfe4d3] bg-white shadow-sm">
+            <div className="grid gap-4 p-4 lg:grid-cols-[minmax(260px,0.9fr)_minmax(420px,1.1fr)] lg:items-center">
+              <div className="flex min-w-0 items-center gap-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-[#e7f7ef] text-[#18734f]">
+                  <Star className="h-4 w-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <div className="text-xs font-semibold text-[#25443a]">Review intelligence corpus</div>
+                    <div className="text-[11px] font-medium text-[#348065]">
+                      {reviewCorpusQuery.data.distinct_reviews.toLocaleString()} / {reviewCorpusQuery.data.target_distinct_reviews.toLocaleString()} distinct
+                    </div>
+                  </div>
+                  <div className="mt-2 h-2 overflow-hidden rounded-full bg-[#e1f1e9]" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={reviewCorpusQuery.data.progress_percent}>
+                    <div className="h-full bg-[#21a46e] transition-[width]" style={{ width: `${Math.min(100, reviewCorpusQuery.data.progress_percent)}%` }} />
+                  </div>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 divide-x divide-[#d7e9df] rounded-md bg-[#f3faf6] sm:grid-cols-4">
+                <CorpusStat label="Firms" value={reviewCorpusQuery.data.firms_with_reviews} />
+                <CorpusStat label="Classified" value={reviewCorpusQuery.data.classified_reviews} />
+                <CorpusStat label="Queued" value={reviewCorpusQuery.data.task_counts.queued ?? 0} />
+                <CorpusStat label="Running" value={reviewCorpusQuery.data.task_counts.in_progress ?? 0} />
+              </div>
+            </div>
+          </section>
+        )}
 
       {view === "firms" && (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <MetricTile icon={<Database className="h-4 w-4" />} label="Matching firms" value={data?.total ?? 0} />
-          <MetricTile icon={<SlidersHorizontal className="h-4 w-4" />} label="Showing" value={visibleRange(data)} />
-          <MetricTile icon={<Globe className="h-4 w-4" />} label="Missing websites on page" value={pageSummary.missingWebsite} />
-          <MetricTile icon={<BarChart3 className="h-4 w-4" />} label="Scored on page" value={pageSummary.scored} />
+          <MetricTile tone="blue" icon={<Database className="h-4 w-4" />} label="Matching firms" value={data?.total ?? 0} />
+          <MetricTile tone="teal" icon={<SlidersHorizontal className="h-4 w-4" />} label="Showing" value={visibleRange(data)} />
+          <MetricTile tone="amber" icon={<Globe className="h-4 w-4" />} label="Missing websites on page" value={pageSummary.missingWebsite} />
+          <MetricTile tone="green" icon={<BarChart3 className="h-4 w-4" />} label="Scored on page" value={pageSummary.scored} />
         </div>
       )}
 
       <SyncStatusPanel status={syncStatusQuery.data} loading={syncStatusQuery.isLoading} />
 
-      <LeadsViewTabs value={view} onChange={setView} />
+      <LeadsViewTabs
+        value={view}
+        onChange={setView}
+      />
 
-      {view === "firms" ? (
+      {view === "priority" ? (
+        <PriorityFirmsView
+          data={priorityData}
+          loading={priorityQuery.isLoading}
+          error={priorityQuery.error}
+          filters={filters}
+          updateFilter={updateFilter}
+          clearFilters={() => {
+            setFilters(DEFAULT_FILTERS);
+            setActiveTriggerSearchId("");
+            setPage(1);
+          }}
+          options={triggerOptionsQuery.data}
+          vendorOptions={vendorOptionsQuery.data?.vendors ?? []}
+          savedSearches={triggerSearchesQuery.data?.saved_searches ?? []}
+          activeSearchId={activeTriggerSearchId}
+          onApplySearch={applyTriggerSearch}
+          onCreateSearch={(name) => createTriggerSearchMutation.mutate(name)}
+          onUpdateSearch={() => {
+            if (activeTriggerSearchId) updateTriggerSearchMutation.mutate(activeTriggerSearchId);
+          }}
+          onDeleteSearch={() => {
+            if (activeTriggerSearchId) deleteTriggerSearchMutation.mutate(activeTriggerSearchId);
+          }}
+          savedSearchPending={
+            triggerSearchesQuery.isLoading
+            || createTriggerSearchMutation.isPending
+            || updateTriggerSearchMutation.isPending
+            || deleteTriggerSearchMutation.isPending
+          }
+          savedSearchError={
+            triggerSearchesQuery.error
+            || createTriggerSearchMutation.error
+            || updateTriggerSearchMutation.error
+            || deleteTriggerSearchMutation.error
+          }
+          page={priorityData?.page ?? page}
+          totalPages={priorityData?.total_pages ?? 1}
+          onPageChange={setPage}
+          onOpenFirm={setSelectedFirm}
+        />
+      ) : view === "firms" ? (
         <>
           <BatchResearchPanel
             title="Queue missing firm research"
@@ -1261,15 +1445,7 @@ function EmailtagFirmsContent() {
             polling={jobPostingStatusQuery.isFetching}
           />
 
-          {selectedFirmId && !selectedFirmOnPage && (
-            <SelectedFirmPanel
-              pifId={selectedFirmId}
-              onClear={() => setSelectedFirm(null)}
-              onAuthError={() => undefined}
-            />
-          )}
-
-          <div className="overflow-hidden rounded-xl border border-neutral-200 bg-white">
+          <div className="overflow-hidden rounded-lg border border-[#cfdde2] bg-white shadow-sm">
             {firmsQuery.isLoading && (
               <div className="px-5 py-8 text-center text-xs text-neutral-400">Loading leads...</div>
             )}
@@ -1284,7 +1460,7 @@ function EmailtagFirmsContent() {
             {firms.length > 0 && (
               <div className="mobile-table-card overflow-hidden">
                 <table className="w-full table-fixed divide-y divide-neutral-100 text-sm">
-                  <thead className="bg-neutral-50 text-left text-[11px] uppercase text-neutral-500">
+                  <thead className="bg-[#edf3f5] text-left text-[11px] uppercase text-[#5a717a]">
                     <tr>
                       <th className="w-[3%] px-2 py-2" />
                       <th className="w-[15%] px-2 py-2 font-medium">Firm</th>
@@ -1304,11 +1480,7 @@ function EmailtagFirmsContent() {
                       <FirmTableRows
                         key={firm.id}
                         firm={firm}
-                        expanded={expandedId === firm.id || selectedFirmId === firm.id}
-                        onToggle={() => {
-                          const open = expandedId === firm.id || selectedFirmId === firm.id;
-                          setSelectedFirm(open ? null : firm.id);
-                        }}
+                        onOpen={() => setSelectedFirm(firm.id)}
                         onViewContacts={() => showFirmContacts(firm)}
                         onAuthError={() => undefined}
                       />
@@ -1384,6 +1556,22 @@ function EmailtagFirmsContent() {
       ) : (
         <JobListingsView />
       )}
+
+        <FirmDetailModal
+          pifId={selectedFirmId}
+          onClose={() => setSelectedFirm(null)}
+          onAuthError={() => undefined}
+        />
+      </div>
+    </div>
+  );
+}
+
+function CorpusStat({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="min-w-0 px-3 py-2 text-center">
+      <div className="truncate text-[10px] font-semibold uppercase text-[#668178]">{label}</div>
+      <div className="mt-0.5 text-sm font-semibold text-[#173d31]">{value.toLocaleString()}</div>
     </div>
   );
 }
@@ -1408,23 +1596,28 @@ function SyncStatusPanel({
   const syncItems = last.items ?? [];
 
   return (
-    <section className="overflow-hidden rounded-lg border border-neutral-200 bg-white">
+    <section className="overflow-hidden rounded-lg border border-[#cbdde9] bg-white shadow-sm">
       <button
         type="button"
         onClick={() => setExpanded((current) => !current)}
-        className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-neutral-50"
+        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-[#f4f8fb]"
       >
-        <div className="min-w-0">
-          <div className="text-[11px] font-semibold uppercase text-neutral-400">Mirror sync</div>
-          <div className="mt-0.5 truncate text-sm text-neutral-800">
-            {loading ? "Loading sync status..." : `Last synced ${formatDateTime(lastSynced)}`}
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-[#e9f2fb] text-[#2f6fca]">
+            <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
+          </div>
+          <div className="min-w-0">
+            <div className="text-[10px] font-semibold uppercase text-[#58768b]">Mirror sync</div>
+            <div className="mt-0.5 truncate text-sm font-medium text-[#203b4b]">
+              {loading ? "Loading sync status..." : `Last synced ${formatDateTime(lastSynced)}`}
+            </div>
           </div>
         </div>
-        <div className="flex shrink-0 items-center gap-3 text-xs text-neutral-500">
+        <div className="flex shrink-0 items-center gap-3 text-xs text-[#5b7180]">
           {status && (
             <>
-              <span>{status.total_firms.toLocaleString()} firms</span>
-              <span>{fetched.toLocaleString()} pulled</span>
+              <span className="hidden sm:inline"><strong className="font-semibold text-[#263f4e]">{status.total_firms.toLocaleString()}</strong> firms</span>
+              <span className="rounded-full bg-[#edf4fa] px-2 py-1 font-medium text-[#2f6f90]">{fetched.toLocaleString()} pulled</span>
             </>
           )}
           <ChevronDown className={cn("h-4 w-4 transition", expanded && "rotate-180")} />
@@ -1528,9 +1721,430 @@ function SyncStatusPanel({
 
 function SyncStat({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-md border border-neutral-100 bg-neutral-50 px-3 py-2">
-      <div className="text-[10px] font-semibold uppercase text-neutral-400">{label}</div>
-      <div className="mt-0.5 text-sm font-semibold text-neutral-900">{value.toLocaleString()}</div>
+    <div className="rounded-md border border-[#d9e7f0] bg-[#f4f8fb] px-3 py-2">
+      <div className="text-[10px] font-semibold uppercase text-[#718998]">{label}</div>
+      <div className="mt-0.5 text-sm font-semibold text-[#203b4b]">{value.toLocaleString()}</div>
+    </div>
+  );
+}
+
+function PriorityFirmsView({
+  data,
+  loading,
+  error,
+  filters,
+  updateFilter,
+  clearFilters,
+  options,
+  vendorOptions,
+  savedSearches,
+  activeSearchId,
+  onApplySearch,
+  onCreateSearch,
+  onUpdateSearch,
+  onDeleteSearch,
+  savedSearchPending,
+  savedSearchError,
+  page,
+  totalPages,
+  onPageChange,
+  onOpenFirm,
+}: {
+  data?: PriorityFirmsListResponse;
+  loading: boolean;
+  error: unknown;
+  filters: FiltersState;
+  updateFilter: <K extends keyof FiltersState>(key: K, value: FiltersState[K]) => void;
+  clearFilters: () => void;
+  options?: TriggerFilterOptions;
+  vendorOptions: PifVendorOption[];
+  savedSearches: SavedFirmTriggerSearch[];
+  activeSearchId: string;
+  onApplySearch: (search: SavedFirmTriggerSearch) => void;
+  onCreateSearch: (name: string) => void;
+  onUpdateSearch: () => void;
+  onDeleteSearch: () => void;
+  savedSearchPending: boolean;
+  savedSearchError: unknown;
+  page: number;
+  totalPages: number;
+  onPageChange: (page: number | ((current: number) => number)) => void;
+  onOpenFirm: (firmId: string) => void;
+}) {
+  const queryClient = useQueryClient();
+  const items = useMemo(() => data?.items ?? [], [data?.items]);
+  const [selectedId, setSelectedId] = useState("");
+  const [researchTaskId, setResearchTaskId] = useState("");
+  const selected = items.find((item) => item.firm.id === selectedId) ?? items[0] ?? null;
+  const research = useMutation({
+    mutationFn: (firmId: string) => startFullEnrichment(firmId),
+    onSuccess: async (result) => {
+      setResearchTaskId(result.task_id);
+      await queryClient.invalidateQueries({ queryKey: ["pif", "priority-firms"] });
+    },
+  });
+  const researchStatus = useQuery({
+    queryKey: ["pif", "priority-enrichment-status", researchTaskId],
+    queryFn: () => getFullEnrichmentStatus(researchTaskId),
+    enabled: Boolean(researchTaskId),
+    refetchInterval: (query) => TERMINAL_TASK_STATUSES.has(query.state.data?.status ?? "") ? false : 3_000,
+  });
+  useEffect(() => {
+    if (researchStatus.data && TERMINAL_TASK_STATUSES.has(researchStatus.data.status)) {
+      void queryClient.invalidateQueries({ queryKey: ["pif", "priority-firms"] });
+    }
+  }, [queryClient, researchStatus.data]);
+  useEffect(() => {
+    if (items.length > 0 && !items.some((item) => item.firm.id === selectedId)) {
+      setSelectedId(items[0].firm.id);
+      setResearchTaskId("");
+      research.reset();
+    }
+  }, [items, research, selectedId]);
+  const averageFreshness = items.length
+    ? Math.round(items.reduce((total, item) => total + item.freshness.percent, 0) / items.length)
+    : 0;
+  const bestContact = selected?.firm.leadership.find((person) => person.email)
+    ?? selected?.firm.leadership[0]
+    ?? null;
+  const selectPriorityFirm = (firmId: string) => {
+    if (firmId !== selected?.firm.id) {
+      setResearchTaskId("");
+      research.reset();
+    }
+    setSelectedId(firmId);
+  };
+
+  return (
+    <div className="space-y-3">
+      <TriggerSearchBar
+        savedSearches={savedSearches}
+        activeSearchId={activeSearchId}
+        qualifyingCount={data?.total ?? 0}
+        onApply={onApplySearch}
+        onCreate={onCreateSearch}
+        onUpdate={onUpdateSearch}
+        onDelete={onDeleteSearch}
+        pending={savedSearchPending}
+        error={savedSearchError}
+      />
+
+      <section className="space-y-3 rounded-lg border border-[#cbdde9] bg-[#f7fafc] p-3 shadow-sm">
+        <div className="flex flex-col gap-2 lg:flex-row">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#3f78a3]" />
+            <input
+              value={filters.search}
+              onChange={(event) => updateFilter("search", event.target.value)}
+              placeholder="Search firm or trigger evidence..."
+              className="w-full rounded-md border border-[#c8d9e3] bg-white py-2 pl-9 pr-3 text-sm text-[#20343b] placeholder:text-[#81939a] focus:border-[#4f88b2] focus:outline-none focus:ring-1 focus:ring-[#4f88b2]"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={clearFilters}
+            className="inline-flex items-center justify-center gap-1.5 rounded-md border border-[#c8d9e3] bg-white px-3 py-2 text-xs font-medium text-[#526a74] hover:bg-[#edf4f8]"
+          >
+            <Filter className="h-3.5 w-3.5" />
+            Clear filters
+          </button>
+        </div>
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
+          <SearchableMultiSelectField
+            label="Trigger categories"
+            values={filters.trigger_categories}
+            options={options?.categories ?? []}
+            emptyLabel="Any category"
+            searchPlaceholder="Search categories..."
+            formatValue={formatLabel}
+            onChange={(values) => updateFilter("trigger_categories", values)}
+          />
+          <SearchableMultiSelectField
+            label="Specific signals"
+            values={filters.trigger_event_types}
+            options={options?.event_types ?? []}
+            emptyLabel="Any signal"
+            searchPlaceholder="Search signals..."
+            formatValue={formatLabel}
+            onChange={(values) => updateFilter("trigger_event_types", values)}
+          />
+          <SelectField label="Detected" value={filters.trigger_within_days} onChange={(value) => updateFilter("trigger_within_days", value)}>
+            <option value="7">Last 7 days</option>
+            <option value="14">Last 14 days</option>
+            <option value="30">Last 30 days</option>
+            <option value="60">Last 60 days</option>
+            <option value="90">Last 90 days</option>
+          </SelectField>
+          <SelectField label="Minimum strength" value={filters.trigger_min_score} onChange={(value) => updateFilter("trigger_min_score", value)}>
+            <option value="0">Any strength</option>
+            <option value="50">50+</option>
+            <option value="65">65+</option>
+            <option value="75">75+</option>
+            <option value="85">85+</option>
+          </SelectField>
+          <SelectField label="Confidence" value={filters.trigger_min_confidence} onChange={(value) => updateFilter("trigger_min_confidence", value)}>
+            <option value="0">Any confidence</option>
+            <option value="0.6">60%+</option>
+            <option value="0.75">75%+</option>
+            <option value="0.9">90%+</option>
+          </SelectField>
+          <SelectField label="Match" value={filters.trigger_match_mode} onChange={(value) => updateFilter("trigger_match_mode", value as FiltersState["trigger_match_mode"])}>
+            <option value="any">Any selected signal</option>
+            <option value="all">All selected signals</option>
+          </SelectField>
+          <SelectField label="Order" value={filters.priority_sort} onChange={(value) => updateFilter("priority_sort", value as FiltersState["priority_sort"])}>
+            <option value="priority">Best opportunity</option>
+            <option value="newest">Newest trigger</option>
+            <option value="fit">Best ICP fit</option>
+          </SelectField>
+          <SearchableMultiSelectField
+            label="ICP tier"
+            values={filters.icp_tier}
+            options={ICP_TIER_OPTIONS}
+            emptyLabel="Any tier"
+            searchPlaceholder="Search tiers..."
+            onChange={(values) => updateFilter("icp_tier", values as PifTier[])}
+          />
+          <SearchableMultiSelectField
+            label="Entity type"
+            values={filters.entity_type}
+            options={ENTITY_TYPE_OPTIONS}
+            emptyLabel="Any entity"
+            searchPlaceholder="Search entities..."
+            onChange={(values) => updateFilter("entity_type", values)}
+          />
+          <SearchableMultiSelectField
+            label="Staff count"
+            values={filters.staff_count_range}
+            options={COUNT_RANGE_OPTIONS}
+            emptyLabel="Any count"
+            searchPlaceholder="Search ranges..."
+            formatValue={formatCountRange}
+            onChange={(values) => updateFilter("staff_count_range", values)}
+          />
+          <SearchableMultiSelectField
+            label="Current vendor"
+            values={filters.vendor}
+            options={[
+              { value: "__missing", label: "No vendors detected" },
+              ...vendorOptions.map((option) => ({ value: option.vendor, label: option.label, count: option.count })),
+            ]}
+            emptyLabel="Any vendor"
+            searchPlaceholder="Search vendors..."
+            onChange={(values) => updateFilter("vendor", values)}
+          />
+        </div>
+      </section>
+
+      <div className="grid gap-3 sm:grid-cols-3">
+        <MetricTile tone="amber" icon={<Activity className="h-4 w-4" />} label="Qualifying firms" value={data?.total ?? 0} />
+        <MetricTile tone="blue" icon={<Sparkles className="h-4 w-4" />} label="Signals on page" value={items.reduce((total, item) => total + item.triggers.length, 0)} />
+        <MetricTile tone="green" icon={<RefreshCw className="h-4 w-4" />} label="Research freshness" value={`${averageFreshness}%`} />
+      </div>
+
+      {loading ? (
+        <div className="rounded-lg border border-neutral-200 bg-white px-5 py-12 text-center text-sm text-neutral-500">
+          <Loader2 className="mr-2 inline h-4 w-4 animate-spin" />
+          Ranking firms...
+        </div>
+      ) : error ? (
+        <div className="rounded-lg border border-rose-200 bg-rose-50 px-5 py-8 text-center text-sm text-rose-700">
+          {errorMessage(error) ?? "Priority firms failed to load"}
+        </div>
+      ) : items.length === 0 ? (
+        <div className="rounded-lg border border-dashed border-neutral-300 bg-white px-5 py-12 text-center">
+          <Activity className="mx-auto h-5 w-5 text-neutral-400" />
+          <div className="mt-2 text-sm font-medium text-neutral-800">No qualifying changes yet</div>
+          <div className="mt-1 text-xs text-neutral-500">Change alerts begin after a firm has two successful research snapshots to compare.</div>
+        </div>
+      ) : (
+        <div className="grid min-h-[560px] overflow-hidden rounded-lg border border-[#cfdde2] bg-white shadow-sm xl:grid-cols-[minmax(0,1.7fr)_minmax(340px,0.8fr)]">
+          <div className="overflow-x-auto xl:border-r xl:border-[#d7e2e6]">
+            <table className="w-full table-fixed divide-y divide-neutral-100 text-sm">
+              <thead className="bg-[#edf3f5] text-left text-[11px] uppercase text-[#5a717a]">
+                <tr>
+                  <th className="w-[25%] px-3 py-2 font-medium">Firm</th>
+                  <th className="w-[38%] px-3 py-2 font-medium">Why now</th>
+                  <th className="w-[14%] px-3 py-2 font-medium">Priority</th>
+                  <th className="w-[12%] px-3 py-2 font-medium">Freshness</th>
+                  <th className="w-[11%] px-3 py-2 font-medium">Signal date</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-neutral-100">
+                {items.map((item) => {
+                  const leadTrigger = item.triggers[0];
+                  const active = selected?.firm.id === item.firm.id;
+                  return (
+                    <tr
+                      key={item.firm.id}
+                      onClick={() => selectPriorityFirm(item.firm.id)}
+                      className={cn(
+                        "cursor-pointer align-top transition-colors hover:bg-[#f3f8fa]",
+                        active && "bg-[#fff8e8] shadow-[inset_3px_0_0_#e1a62c]",
+                      )}
+                    >
+                      <td className="px-3 py-3">
+                        <button type="button" className="block max-w-full text-left" onClick={() => selectPriorityFirm(item.firm.id)}>
+                          <span className="block truncate font-semibold text-neutral-900">{item.firm.firm_name}</span>
+                          <span className="mt-1 block truncate text-[11px] text-neutral-500">
+                            {item.firm.icp_tier ? `Tier ${item.firm.icp_tier}` : "Unscored"} · {item.firm.staff_count} staff
+                          </span>
+                        </button>
+                      </td>
+                      <td className="px-3 py-3">
+                        <div className="truncate font-medium text-neutral-800">{leadTrigger?.title ?? "Recent change"}</div>
+                        <div className="mt-1 line-clamp-2 text-xs text-neutral-500">{leadTrigger?.summary ?? formatLabel(leadTrigger?.category ?? "signal")}</div>
+                      </td>
+                      <td className="px-3 py-3">
+                        <span className={cn(
+                          "inline-flex min-w-10 justify-center rounded-md px-2 py-1 text-xs font-semibold",
+                          item.priority_score >= 75 ? "bg-emerald-100 text-emerald-800" : item.priority_score >= 55 ? "bg-amber-100 text-amber-800" : "bg-neutral-100 text-neutral-700",
+                        )}>{item.priority_score}</span>
+                        <div className="mt-1 text-[10px] text-neutral-400">Trigger {item.trigger_score}</div>
+                      </td>
+                      <td className="px-3 py-3">
+                        <div className="text-xs font-medium text-neutral-700">{item.freshness.percent}%</div>
+                        <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-neutral-100">
+                          <div className="h-full bg-blue-600" style={{ width: `${item.freshness.percent}%` }} />
+                        </div>
+                      </td>
+                      <td className="px-3 py-3 text-[11px] text-neutral-500">{formatDateTime(item.latest_trigger_at)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {selected && (
+            <aside className="min-w-0 bg-[#f5f9fa] p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="truncate text-base font-semibold text-neutral-900">{selected.firm.firm_name}</div>
+                  <div className="mt-1 text-xs text-neutral-500">
+                    Priority {selected.priority_score} · Fit {selected.fit_score} · Trigger {selected.trigger_score}
+                  </div>
+                </div>
+                {selected.firm.website && (
+                  <a href={safeWebsiteUrl(selected.firm.website) ?? undefined} target="_blank" rel="noreferrer" title="Open firm website" className="rounded-md border border-neutral-200 bg-white p-2 text-neutral-500 hover:text-neutral-900">
+                    <ExternalLink className="h-4 w-4" />
+                  </a>
+                )}
+              </div>
+
+              <div className="mt-4 border-t border-[#d9e4e7] pt-3">
+                <div className="text-[11px] font-semibold uppercase text-[#8a650f]">Evidence timeline</div>
+                <div className="mt-2 space-y-3">
+                  {selected.triggers.map((trigger) => (
+                    <div key={trigger.id} className="border-l-2 border-[#e4b553] pl-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="text-xs font-semibold text-neutral-900">{trigger.title}</div>
+                        <span className="shrink-0 text-[10px] font-medium text-neutral-400">{Math.round(trigger.confidence * 100)}%</span>
+                      </div>
+                      {trigger.summary && <div className="mt-1 text-xs leading-5 text-neutral-600">{trigger.summary}</div>}
+                      <div className="mt-1 flex flex-wrap items-center gap-2 text-[10px] text-neutral-400">
+                        <span>{formatLabel(trigger.category)}</span>
+                        <span>{formatDateTime(trigger.source_date ?? trigger.detected_at)}</span>
+                        {trigger.evidence.map((evidence, index) => evidence.source_url ? (
+                          <a key={`${trigger.id}-${index}`} href={evidence.source_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-blue-600 hover:underline">
+                            Source <ExternalLink className="h-3 w-3" />
+                          </a>
+                        ) : null)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="mt-4 border-t border-[#d9e4e7] pt-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="text-[11px] font-semibold uppercase text-neutral-400">Research freshness</div>
+                  <span className="text-xs font-semibold text-neutral-700">{selected.freshness.fresh_modules}/{selected.freshness.total_modules} current</span>
+                </div>
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  {(["firm_profile", "sitemap", "job_postings", "reviews"] as const).map((module) => {
+                    const state = selected.freshness.modules.find((item) => item.module === module);
+                    return (
+                      <div key={module} className="rounded-md border border-[#d7e3e7] bg-white px-2 py-2 shadow-sm">
+                        <div className="flex items-center gap-1.5 text-[11px] font-medium text-neutral-700">
+                          <span className={cn("h-1.5 w-1.5 rounded-full", state?.fresh ? "bg-emerald-500" : state?.status === "failed" ? "bg-rose-500" : "bg-amber-400")} />
+                          {formatLabel(module)}
+                        </div>
+                        <div className="mt-1 truncate text-[10px] text-neutral-400" title={state?.last_error ?? undefined}>
+                          {state?.last_success_at ? formatDateTime(state.last_success_at) : formatLabel(state?.status ?? "not researched")}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="mt-4 border-t border-[#d9e4e7] pt-3">
+                <div className="text-[11px] font-semibold uppercase text-[#28735b]">Contact path</div>
+                <div className="mt-2 text-sm font-medium text-neutral-800">{bestContact?.name ?? "No leadership contact identified"}</div>
+                {bestContact?.title && <div className="text-xs text-neutral-500">{bestContact.title}</div>}
+                <div className="mt-2 flex flex-wrap gap-2 text-xs">
+                  {(bestContact?.email ?? selected.firm.emails[0]) && (
+                    <a href={`mailto:${bestContact?.email ?? selected.firm.emails[0]}`} className="inline-flex items-center gap-1.5 rounded-md border border-neutral-200 bg-white px-2.5 py-1.5 text-neutral-700 hover:bg-neutral-100">
+                      <Mail className="h-3.5 w-3.5" />
+                      {bestContact?.email ?? selected.firm.emails[0]}
+                    </a>
+                  )}
+                  {(bestContact?.phone ?? selected.firm.phones[0]) && (
+                    <a href={`tel:${bestContact?.phone ?? selected.firm.phones[0]}`} className="inline-flex items-center gap-1.5 rounded-md border border-neutral-200 bg-white px-2.5 py-1.5 text-neutral-700 hover:bg-neutral-100">
+                      <PhoneCall className="h-3.5 w-3.5" />
+                      {bestContact?.phone ?? selected.firm.phones[0]}
+                    </a>
+                  )}
+                </div>
+              </div>
+
+              <div className="mt-4 flex flex-wrap gap-2 border-t border-[#d9e4e7] pt-3">
+                <button
+                  type="button"
+                  onClick={() => research.mutate(selected.firm.id)}
+                  disabled={research.isPending}
+                  className="inline-flex items-center gap-1.5 rounded-md bg-[#176b70] px-3 py-2 text-xs font-medium text-white hover:bg-[#135b60] disabled:opacity-40"
+                >
+                  {research.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                  Research now
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onOpenFirm(selected.firm.id)}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-neutral-200 bg-white px-3 py-2 text-xs font-medium text-neutral-700 hover:bg-neutral-100"
+                >
+                  <Database className="h-3.5 w-3.5" />
+                  Full profile
+                </button>
+              </div>
+              {researchTaskId && (
+                <TaskStatus
+                  label="Full enrichment"
+                  status={researchStatus.data?.status ?? research.data?.status}
+                  message={researchStatus.data?.message ?? research.data?.message}
+                  progress={researchStatus.data?.progress_percent}
+                  currentStage={researchStatus.data?.current_stage ?? undefined}
+                  compact
+                />
+              )}
+              {research.error && <div className="mt-2 text-xs text-rose-600">{errorMessage(research.error)}</div>}
+            </aside>
+          )}
+        </div>
+      )}
+
+      <div className="flex items-center justify-between text-xs text-neutral-500">
+        <span>Page {page} of {totalPages || 1} ({data?.total?.toLocaleString() ?? 0} firms)</span>
+        <div className="flex items-center gap-2">
+          <button type="button" onClick={() => onPageChange((current) => Math.max(1, current - 1))} disabled={page <= 1} className="inline-flex items-center gap-1 rounded-md border border-neutral-300 px-2.5 py-1 font-medium disabled:opacity-30">
+            <ChevronLeft className="h-3 w-3" /> Prev
+          </button>
+          <button type="button" onClick={() => onPageChange((current) => Math.min(totalPages, current + 1))} disabled={page >= totalPages || totalPages === 0} className="inline-flex items-center gap-1 rounded-md border border-neutral-300 px-2.5 py-1 font-medium disabled:opacity-30">
+            Next <ChevronRight className="h-3 w-3" />
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -1559,9 +2173,9 @@ function TriggerSearchBar({
   const [name, setName] = useState("");
 
   return (
-    <section className="rounded-lg border border-neutral-200 bg-white p-3">
+    <section className="rounded-lg border border-[#ead8ad] bg-[#fffbf2] p-3 shadow-sm">
       <div className="flex flex-wrap items-end gap-2">
-        <label className="min-w-64 flex-1 text-[11px] font-medium uppercase tracking-wide text-neutral-400">
+        <label className="min-w-64 flex-1 text-[11px] font-semibold uppercase text-[#7b641f]">
           Trigger search
           <select
             value={activeSearchId}
@@ -1570,7 +2184,7 @@ function TriggerSearchBar({
               if (search) onApply(search);
             }}
             disabled={pending}
-            className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-2 py-1.5 text-sm normal-case tracking-normal text-neutral-800 focus:border-neutral-400 focus:outline-none focus:ring-1 focus:ring-neutral-400"
+            className="mt-1 w-full rounded-md border border-[#dfcea4] bg-white px-2 py-1.5 text-sm normal-case text-[#3d331c] focus:border-[#b98724] focus:outline-none focus:ring-1 focus:ring-[#b98724]"
           >
             <option value="">Select saved trigger search</option>
             {savedSearches.map((search) => (
@@ -1578,18 +2192,18 @@ function TriggerSearchBar({
             ))}
           </select>
         </label>
-        <label className="min-w-64 flex-1 text-[11px] font-medium uppercase tracking-wide text-neutral-400">
+        <label className="min-w-64 flex-1 text-[11px] font-semibold uppercase text-[#7b641f]">
           New search name
           <input
             value={name}
             onChange={(event) => setName(event.target.value)}
             placeholder="Intake hiring, Filevine firms..."
-            className="mt-1 w-full rounded-md border border-neutral-200 px-2 py-1.5 text-sm normal-case tracking-normal text-neutral-800 placeholder:text-neutral-400 focus:border-neutral-400 focus:outline-none focus:ring-1 focus:ring-neutral-400"
+            className="mt-1 w-full rounded-md border border-[#dfcea4] bg-white px-2 py-1.5 text-sm normal-case text-[#3d331c] placeholder:text-[#a59672] focus:border-[#b98724] focus:outline-none focus:ring-1 focus:ring-[#b98724]"
           />
         </label>
-        <div className="flex h-8 items-center gap-1.5 rounded-md border border-neutral-200 bg-neutral-50 px-3 text-xs text-neutral-600">
-          <Briefcase className="h-3.5 w-3.5" />
-          <strong className="font-semibold text-neutral-900">{qualifyingCount.toLocaleString()}</strong>
+        <div className="flex h-8 items-center gap-1.5 rounded-md border border-[#e6ce96] bg-[#fff5dc] px-3 text-xs text-[#795818]">
+          <Briefcase className="h-3.5 w-3.5 text-[#b17b16]" />
+          <strong className="font-semibold text-[#5e420d]">{qualifyingCount.toLocaleString()}</strong>
           qualifying
         </div>
         <button
@@ -1601,7 +2215,7 @@ function TriggerSearchBar({
             setName("");
           }}
           disabled={!name.trim() || pending}
-          className="inline-flex h-8 items-center gap-1.5 rounded-md bg-neutral-900 px-3 text-xs font-medium text-white hover:bg-neutral-800 disabled:opacity-40"
+          className="inline-flex h-8 items-center gap-1.5 rounded-md bg-[#a66d08] px-3 text-xs font-medium text-white hover:bg-[#8f5d06] disabled:opacity-40"
         >
           <Bookmark className="h-3.5 w-3.5" />
           Save new
@@ -1649,29 +2263,29 @@ function FilterBar({
   vendorOptions: PifVendorOption[];
 }) {
   return (
-    <div className="space-y-3 rounded-xl border border-neutral-200 bg-white p-3">
+    <div className="space-y-3 rounded-lg border border-[#cbdde9] bg-[#f7fafc] p-3 shadow-sm">
       <div className="flex flex-col gap-2 lg:flex-row">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#3f78a3]" />
           <input
             value={filters.search}
             onChange={(event) => updateFilter("search", event.target.value)}
             placeholder="Search firm, email, phone, or website..."
-            className="w-full rounded-md border border-neutral-200 py-2 pl-9 pr-3 text-sm focus:border-neutral-400 focus:outline-none focus:ring-1 focus:ring-neutral-400"
+            className="w-full rounded-md border border-[#c8d9e3] bg-white py-2 pl-9 pr-3 text-sm text-[#20343b] placeholder:text-[#81939a] focus:border-[#4f88b2] focus:outline-none focus:ring-1 focus:ring-[#4f88b2]"
           />
         </div>
-        <div className="flex items-center gap-2 rounded-md border border-neutral-200 px-3 py-2">
-          <span className="text-xs font-medium text-neutral-500">Active only</span>
+        <div className="flex items-center gap-2 rounded-md border border-[#c6ded9] bg-[#f1f8f6] px-3 py-2">
+          <span className="text-xs font-medium text-[#39705f]">Active only</span>
           <Switch
             checked={filters.active_only}
             onCheckedChange={(checked) => updateFilter("active_only", checked)}
-            className="h-5 w-9 data-[state=checked]:bg-neutral-900 data-[state=unchecked]:bg-neutral-200"
+            className="h-5 w-9 data-[state=checked]:bg-[#248164] data-[state=unchecked]:bg-[#cddbd7]"
           />
         </div>
         <button
           type="button"
           onClick={clearFilters}
-          className="inline-flex items-center justify-center gap-1.5 rounded-md border border-neutral-200 px-3 py-2 text-xs font-medium text-neutral-600 hover:bg-neutral-50"
+          className="inline-flex items-center justify-center gap-1.5 rounded-md border border-[#c8d9e3] bg-white px-3 py-2 text-xs font-medium text-[#526a74] hover:bg-[#edf4f8]"
         >
           <Filter className="h-3.5 w-3.5" />
           Clear filters
@@ -1684,26 +2298,41 @@ function FilterBar({
           <option value="firm_name">Firm name</option>
           <option value="conversation_count">Conversations</option>
         </SelectField>
-        <SelectField label="ICP tier" value={filters.icp_tier} onChange={(value) => updateFilter("icp_tier", value as "" | PifTier)}>
-          <option value="">Any</option>
-          <option value="A">A</option>
-          <option value="B">B</option>
-          <option value="C">C</option>
-          <option value="D">D</option>
-        </SelectField>
-        <SelectField label="Entity type" value={filters.entity_type} onChange={(value) => updateFilter("entity_type", value)}>
-          <option value="">Any entity</option>
-          {ENTITY_TYPES.map((value) => <option key={value} value={value}>{formatLabel(value)}</option>)}
-        </SelectField>
+        <SearchableMultiSelectField
+          label="ICP tier"
+          values={filters.icp_tier}
+          options={ICP_TIER_OPTIONS}
+          emptyLabel="Any tier"
+          searchPlaceholder="Search tiers..."
+          onChange={(values) => updateFilter("icp_tier", values as PifTier[])}
+        />
+        <SearchableMultiSelectField
+          label="Entity type"
+          values={filters.entity_type}
+          options={ENTITY_TYPE_OPTIONS}
+          emptyLabel="Any entity"
+          searchPlaceholder="Search entities..."
+          onChange={(values) => updateFilter("entity_type", values)}
+        />
         <InputField label="Recently researched" value={filters.recently_researched} onChange={(value) => updateFilter("recently_researched", value)} placeholder="days" inputMode="numeric" />
-        <SelectField label="Contact emails" value={filters.contact_email_range} onChange={(value) => updateFilter("contact_email_range", value)}>
-          <option value="">Any count</option>
-          {COUNT_RANGES.map((value) => <option key={value} value={value}>{value === "0-0" ? "0" : value}</option>)}
-        </SelectField>
-        <SelectField label="Staff count" value={filters.staff_count_range} onChange={(value) => updateFilter("staff_count_range", value)}>
-          <option value="">Any count</option>
-          {COUNT_RANGES.map((value) => <option key={value} value={value}>{value === "0-0" ? "0" : value}</option>)}
-        </SelectField>
+        <SearchableMultiSelectField
+          label="Contact emails"
+          values={filters.contact_email_range}
+          options={COUNT_RANGE_OPTIONS}
+          emptyLabel="Any count"
+          searchPlaceholder="Search ranges..."
+          formatValue={formatCountRange}
+          onChange={(values) => updateFilter("contact_email_range", values)}
+        />
+        <SearchableMultiSelectField
+          label="Staff count"
+          values={filters.staff_count_range}
+          options={COUNT_RANGE_OPTIONS}
+          emptyLabel="Any count"
+          searchPlaceholder="Search ranges..."
+          formatValue={formatCountRange}
+          onChange={(values) => updateFilter("staff_count_range", values)}
+        />
         <SelectField label="Autoresponse" value={filters.autorespond_window} onChange={(value) => updateFilter("autorespond_window", value)}>
           <option value="any">Any</option>
           <option value="24h">Sent in last 24 hours</option>
@@ -1713,39 +2342,61 @@ function FilterBar({
           <option value="ever">Ever sent</option>
           <option value="never">Never sent</option>
         </SelectField>
-        <SelectField label="Autoresponse type" value={filters.autorespond_type} onChange={(value) => updateFilter("autorespond_type", value)}>
-          <option value="">Any type</option>
-          {AUTORESPOND_TYPES.map((value) => <option key={value} value={value}>{formatLabel(value)}</option>)}
-        </SelectField>
+        <SearchableMultiSelectField
+          label="Autoresponse type"
+          values={filters.autorespond_type}
+          options={AUTORESPOND_TYPE_OPTIONS}
+          emptyLabel="Any type"
+          searchPlaceholder="Search types..."
+          formatValue={formatLabel}
+          onChange={(values) => updateFilter("autorespond_type", values)}
+        />
         <SelectField label="Website" value={filters.website_presence} onChange={(value) => updateFilter("website_presence", value as WebsitePresence)}>
           {WEBSITE_PRESENCE.map((value) => <option key={value} value={value}>{formatLabel(value)}</option>)}
         </SelectField>
-        <SelectField label="Research" value={filters.research_presence} onChange={(value) => updateFilter("research_presence", value as StatusPresence)}>
-          {STATUS_PRESENCE.map((value) => <option key={value} value={value}>{formatLabel(value)}</option>)}
-        </SelectField>
-        <SelectField label="Staff" value={filters.staff_presence} onChange={(value) => updateFilter("staff_presence", value as StatusPresence)}>
-          {STATUS_PRESENCE.map((value) => <option key={value} value={value}>{formatLabel(value)}</option>)}
-        </SelectField>
-        <SelectField label="Job postings" value={filters.job_postings_presence} onChange={(value) => updateFilter("job_postings_presence", value as FiltersState["job_postings_presence"])}>
-          <option value="any">Any</option>
-          <option value="has">Has recent openings</option>
-          <option value="none">No recent openings</option>
-          <option value="not_researched">Not researched</option>
-          <option value="queued_or_running">Queued or running</option>
-          <option value="failed">Failed</option>
-        </SelectField>
-        <SelectField label="Job trigger" value={filters.job_posting_role} onChange={(value) => updateFilter("job_posting_role", value as FiltersState["job_posting_role"])}>
-          <option value="">Any role</option>
-          <option value="intake">Intake and reception</option>
-          <option value="marketing">Marketing and growth</option>
-          <option value="case_operations">Case operations</option>
-          <option value="firm_operations">Firm operations</option>
-          <option value="technology">Technology and systems</option>
-        </SelectField>
-        <SelectField label="Job signal" value={filters.job_posting_tag} onChange={(value) => updateFilter("job_posting_tag", value)}>
-          <option value="">Any signal</option>
-          {JOB_TRIGGER_TAGS.map((value) => <option key={value} value={value}>{formatLabel(value)}</option>)}
-        </SelectField>
+        <SearchableMultiSelectField
+          label="Research"
+          values={filters.research_presence}
+          options={STATUS_FILTER_OPTIONS}
+          emptyLabel="Any status"
+          searchPlaceholder="Search statuses..."
+          formatValue={formatLabel}
+          onChange={(values) => updateFilter("research_presence", values)}
+        />
+        <SearchableMultiSelectField
+          label="Staff research"
+          values={filters.staff_presence}
+          options={STATUS_FILTER_OPTIONS}
+          emptyLabel="Any status"
+          searchPlaceholder="Search statuses..."
+          formatValue={formatLabel}
+          onChange={(values) => updateFilter("staff_presence", values)}
+        />
+        <SearchableMultiSelectField
+          label="Job postings"
+          values={filters.job_postings_presence}
+          options={JOB_POSTING_PRESENCE_OPTIONS}
+          emptyLabel="Any status"
+          searchPlaceholder="Search statuses..."
+          onChange={(values) => updateFilter("job_postings_presence", values)}
+        />
+        <SearchableMultiSelectField
+          label="Job trigger"
+          values={filters.job_posting_role}
+          options={JOB_POSTING_ROLE_OPTIONS}
+          emptyLabel="Any role"
+          searchPlaceholder="Search roles..."
+          onChange={(values) => updateFilter("job_posting_role", values)}
+        />
+        <SearchableMultiSelectField
+          label="Job signal"
+          values={filters.job_posting_tag}
+          options={JOB_TRIGGER_TAG_OPTIONS}
+          emptyLabel="Any signal"
+          searchPlaceholder="Search signals..."
+          formatValue={formatLabel}
+          onChange={(values) => updateFilter("job_posting_tag", values)}
+        />
         <InputField
           label="Job text"
           value={filters.job_posting_query}
@@ -1765,15 +2416,17 @@ function FilterBar({
         <SelectField label="ICP" value={filters.icp_presence} onChange={(value) => updateFilter("icp_presence", value as SimplePresence)}>
           {PRESENCE.map((value) => <option key={value} value={value}>{formatLabel(value)}</option>)}
         </SelectField>
-        <SelectField label="Vendor" value={filters.vendor} onChange={(value) => updateFilter("vendor", value)}>
-          <option value="">Any vendor</option>
-          <option value="__missing">No vendors detected</option>
-          {vendorOptions.map((option) => (
-            <option key={option.vendor} value={option.vendor}>
-              {option.label} ({option.count})
-            </option>
-          ))}
-        </SelectField>
+        <SearchableMultiSelectField
+          label="Vendor"
+          values={filters.vendor}
+          options={[
+            { value: "__missing", label: "No vendors detected" },
+            ...vendorOptions.map((option) => ({ value: option.vendor, label: option.label, count: option.count })),
+          ]}
+          emptyLabel="Any vendor"
+          searchPlaceholder="Search vendors..."
+          onChange={(values) => updateFilter("vendor", values)}
+        />
         <SelectField label="Record source" value={filters.record_origin} onChange={(value) => updateFilter("record_origin", value as RecordOrigin)}>
           <option value="any">Any source</option>
           <option value="manual">Manually added</option>
@@ -1818,12 +2471,12 @@ function SelectField({
   children: React.ReactNode;
 }) {
   return (
-    <label className="block text-[11px] font-medium uppercase tracking-wide text-neutral-400">
+    <label className="block text-[11px] font-semibold uppercase text-[#61767e]">
       {label}
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-2 py-1.5 text-sm normal-case tracking-normal text-neutral-800 focus:border-neutral-400 focus:outline-none focus:ring-1 focus:ring-neutral-400"
+        className="mt-1 w-full rounded-md border border-[#cfdbdf] bg-white px-2 py-1.5 text-sm normal-case text-[#20343b] focus:border-[#43838a] focus:outline-none focus:ring-1 focus:ring-[#43838a]"
       >
         {children}
       </select>
@@ -1842,7 +2495,7 @@ function SearchableMultiSelectField({
 }: {
   label: string;
   values: string[];
-  options: PifPeopleFilterOption[];
+  options: Array<{ value: string; label?: string; count?: number }>;
   emptyLabel: string;
   searchPlaceholder: string;
   formatValue?: (value: string) => string;
@@ -1851,17 +2504,22 @@ function SearchableMultiSelectField({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const selected = useMemo(() => new Set(values), [values]);
+  const optionLabels = useMemo(
+    () => new Map(options.map((option) => [option.value, option.label ?? formatValue(option.value)])),
+    [formatValue, options],
+  );
+  const labelFor = (value: string) => optionLabels.get(value) ?? formatValue(value);
   const filteredOptions = useMemo(() => {
     const needle = query.trim().toLocaleLowerCase();
     return options
-      .filter((option) => !needle || formatValue(option.value).toLocaleLowerCase().includes(needle))
+      .filter((option) => !needle || (option.label ?? formatValue(option.value)).toLocaleLowerCase().includes(needle))
       .sort((left, right) => Number(selected.has(right.value)) - Number(selected.has(left.value)));
   }, [formatValue, options, query, selected]);
   const visibleOptions = filteredOptions.slice(0, 200);
   const summary = values.length === 0
     ? emptyLabel
     : values.length === 1
-      ? formatValue(values[0])
+      ? labelFor(values[0])
       : `${values.length} selected`;
 
   const close = () => {
@@ -1870,7 +2528,7 @@ function SearchableMultiSelectField({
   };
 
   return (
-    <div className="block text-[11px] font-medium uppercase tracking-wide text-neutral-400">
+    <div className="block text-[11px] font-semibold uppercase text-[#61767e]">
       <div>{label}</div>
       <div
         className="relative mt-1"
@@ -1887,14 +2545,14 @@ function SearchableMultiSelectField({
             if (open) close();
             else setOpen(true);
           }}
-          className="flex w-full items-center justify-between gap-2 rounded-md border border-neutral-200 bg-white px-2 py-1.5 text-left text-sm font-normal normal-case tracking-normal text-neutral-800 focus:border-neutral-400 focus:outline-none focus:ring-1 focus:ring-neutral-400"
-          title={values.length ? values.map(formatValue).join(", ") : undefined}
+          className="flex w-full items-center justify-between gap-2 rounded-md border border-[#cfdbdf] bg-white px-2 py-1.5 text-left text-sm font-normal normal-case text-[#20343b] focus:border-[#43838a] focus:outline-none focus:ring-1 focus:ring-[#43838a]"
+          title={values.length ? values.map(labelFor).join(", ") : undefined}
         >
           <span className={cn("truncate", values.length === 0 && "text-neutral-500")}>{summary}</span>
           <ChevronDown className={cn("h-3.5 w-3.5 shrink-0 text-neutral-400 transition", open && "rotate-180")} />
         </button>
         {open && (
-          <div className="absolute left-0 z-40 mt-1 w-full min-w-72 overflow-hidden rounded-md border border-neutral-200 bg-white shadow-lg">
+          <div className="absolute left-0 z-40 mt-1 w-full min-w-72 overflow-hidden rounded-md border border-[#cbdadd] bg-white shadow-lg">
             <div className="flex items-center gap-2 border-b border-neutral-100 p-2">
               <Search className="h-3.5 w-3.5 shrink-0 text-neutral-400" />
               <input
@@ -1938,14 +2596,16 @@ function SearchableMultiSelectField({
                   >
                     <span className={cn(
                       "flex h-4 w-4 shrink-0 items-center justify-center rounded border",
-                      checked ? "border-neutral-900 bg-neutral-900 text-white" : "border-neutral-300 bg-white",
+                      checked ? "border-[#176b70] bg-[#176b70] text-white" : "border-neutral-300 bg-white",
                     )}>
                       {checked && <Check className="h-3 w-3" />}
                     </span>
                     <span className="min-w-0 flex-1 truncate text-sm font-normal text-neutral-800">
-                      {formatValue(option.value)}
+                      {option.label ?? formatValue(option.value)}
                     </span>
-                    <span className="shrink-0 text-[11px] text-neutral-400">{option.count.toLocaleString()}</span>
+                    {option.count !== undefined && (
+                      <span className="shrink-0 text-[11px] text-neutral-400">{option.count.toLocaleString()}</span>
+                    )}
                   </button>
                 );
               })}
@@ -1983,7 +2643,7 @@ function InputField({
   type?: React.HTMLInputTypeAttribute;
 }) {
   return (
-    <label className="block text-[11px] font-medium uppercase tracking-wide text-neutral-400">
+    <label className="block text-[11px] font-semibold uppercase text-[#61767e]">
       {label}
       <input
         type={type}
@@ -1991,7 +2651,7 @@ function InputField({
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
         inputMode={inputMode}
-        className="mt-1 w-full rounded-md border border-neutral-200 px-2 py-1.5 text-sm normal-case tracking-normal text-neutral-800 placeholder:text-neutral-400 focus:border-neutral-400 focus:outline-none focus:ring-1 focus:ring-neutral-400"
+        className="mt-1 w-full rounded-md border border-[#cfdbdf] bg-white px-2 py-1.5 text-sm normal-case text-[#20343b] placeholder:text-[#8a9aa0] focus:border-[#43838a] focus:outline-none focus:ring-1 focus:ring-[#43838a]"
       />
     </label>
   );
@@ -2057,7 +2717,7 @@ function ContactLookupField({
   const options = optionsQuery.data ?? [];
 
   return (
-    <label className="relative block text-[11px] font-medium uppercase tracking-wide text-neutral-400">
+    <label className="relative block text-[11px] font-semibold uppercase text-[#61767e]">
       {label}
       <div className="relative mt-1">
         <input
@@ -2078,7 +2738,7 @@ function ContactLookupField({
           aria-autocomplete="list"
           aria-controls={`${kind}-contact-options`}
           placeholder={kind === "name" ? "Search names..." : "Search firms..."}
-          className="w-full rounded-md border border-neutral-200 py-1.5 pl-2 pr-8 text-sm normal-case tracking-normal text-neutral-800 placeholder:text-neutral-400 focus:border-neutral-400 focus:outline-none focus:ring-1 focus:ring-neutral-400"
+          className="w-full rounded-md border border-[#cfdbdf] bg-white py-1.5 pl-2 pr-8 text-sm normal-case text-[#20343b] placeholder:text-[#8a9aa0] focus:border-[#43838a] focus:outline-none focus:ring-1 focus:ring-[#43838a]"
         />
         <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-neutral-400">
           {optionsQuery.isFetching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Search className="h-3.5 w-3.5" />}
@@ -2125,14 +2785,28 @@ function LeadsViewTabs({
   value: LeadsView;
   onChange: (value: LeadsView) => void;
 }) {
+  const baseClassName = "inline-flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2 text-xs font-semibold transition-colors sm:flex-none";
+  const activeClassName = "bg-[#176b70] text-white shadow-sm";
+
   return (
-    <div className="inline-flex w-full rounded-lg border border-neutral-200 bg-white p-1 sm:w-auto">
+    <div className="grid w-full grid-cols-2 rounded-lg border border-[#cfdce0] bg-[#e8eef0] p-1 shadow-inner sm:inline-flex sm:w-auto">
+      <button
+        type="button"
+        onClick={() => onChange("priority")}
+        className={cn(
+          baseClassName,
+          value === "priority" ? activeClassName : "text-[#8a5c08] hover:bg-white/80",
+        )}
+      >
+        <Activity className="h-3.5 w-3.5" />
+        Priority
+      </button>
       <button
         type="button"
         onClick={() => onChange("firms")}
         className={cn(
-          "inline-flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2 text-xs font-semibold sm:flex-none",
-          value === "firms" ? "bg-neutral-900 text-white" : "text-neutral-600 hover:bg-neutral-50",
+          baseClassName,
+          value === "firms" ? activeClassName : "text-[#2f6f9d] hover:bg-white/80",
         )}
       >
         <Database className="h-3.5 w-3.5" />
@@ -2142,8 +2816,8 @@ function LeadsViewTabs({
         type="button"
         onClick={() => onChange("contacts")}
         className={cn(
-          "inline-flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2 text-xs font-semibold sm:flex-none",
-          value === "contacts" ? "bg-neutral-900 text-white" : "text-neutral-600 hover:bg-neutral-50",
+          baseClassName,
+          value === "contacts" ? activeClassName : "text-[#247153] hover:bg-white/80",
         )}
       >
         <Users className="h-3.5 w-3.5" />
@@ -2153,8 +2827,8 @@ function LeadsViewTabs({
         type="button"
         onClick={() => onChange("job_listings")}
         className={cn(
-          "inline-flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2 text-xs font-semibold sm:flex-none",
-          value === "job_listings" ? "bg-neutral-900 text-white" : "text-neutral-600 hover:bg-neutral-50",
+          baseClassName,
+          value === "job_listings" ? activeClassName : "text-[#a9535b] hover:bg-white/80",
         )}
       >
         <Briefcase className="h-3.5 w-3.5" />
@@ -2178,6 +2852,7 @@ const JOB_LISTING_CATEGORIES = [
 ] as const;
 
 function JobListingsView() {
+  const careerSearch = useQuery({ queryKey: ["pif", "career-search"], queryFn: getCareerSearchStatus, refetchInterval: 30_000, retry: false });
   const [filters, setFilters] = useState<PifJobPostingsListParams>({ page: 1, page_size: 25 });
   const debouncedSearch = useDebouncedValue(filters.search ?? "", 250);
   const queryParams = useMemo(() => ({ ...filters, search: debouncedSearch || undefined }), [debouncedSearch, filters]);
@@ -2200,13 +2875,30 @@ function JobListingsView() {
 
   return (
     <section className="space-y-3">
+      {careerSearch.data && <div className="border-y border-neutral-200 px-3 py-3 text-xs text-neutral-600">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+          <strong className="text-neutral-900">Daily PI technology search</strong>
+          <span>{careerSearch.data.schedule_enabled ? `${careerSearch.data.config.local_time} ${careerSearch.data.config.timezone}` : "Disabled"}</span>
+          {careerSearch.data.next_due_at && <span>Next due {formatDateTime(careerSearch.data.next_due_at)}</span>}
+          {careerSearch.data.runs[0] && <span>{formatLabel(careerSearch.data.runs[0].status)} · {careerSearch.data.runs[0].result.new_jobs} new · {careerSearch.data.runs[0].result.verified} verified</span>}
+        </div>
+        {!!careerSearch.data.runs[0]?.result.errors.length && <details className="mt-2 text-rose-700">
+          <summary className="cursor-pointer">{careerSearch.data.runs[0].result.errors.length} processing errors</summary>
+          {careerSearch.data.runs[0].result.errors.map((error, index) => <p key={index} className="mt-1 break-words">{error.error}</p>)}
+        </details>}
+        {!!careerSearch.data.runs[0]?.result.candidate_rejections?.length && <details className="mt-2 text-amber-800">
+          <summary className="cursor-pointer">{careerSearch.data.runs[0].result.candidate_rejections.length} candidates not accepted</summary>
+          {careerSearch.data.runs[0].result.candidate_rejections.map((item, index) => <p key={index} className="mt-1 break-words">{item.reason}</p>)}
+        </details>}
+      </div>}
+      {careerSearch.isError && <p className="text-xs text-amber-700">Daily career search status unavailable</p>}
       <JobResearchDailyDashboard
         data={dailyStatsQuery.data}
         loading={dailyStatsQuery.isLoading}
         error={dailyStatsQuery.error}
       />
-      <div className="rounded-xl border border-neutral-200 bg-white p-3">
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-8">
+      <div className="rounded-lg border border-[#cbdde9] bg-[#f7fafc] p-3 shadow-sm">
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-9">
           <InputField
             label="Search"
             value={filters.search ?? ""}
@@ -2235,12 +2927,23 @@ function JobListingsView() {
           </SelectField>
           <SelectField
             label="Remote scope"
-            value={filters.global_remote === undefined ? "" : String(filters.global_remote)}
-            onChange={(value) => update("global_remote", value ? value === "true" : undefined)}
+            value={filters.remote_scope ?? ""}
+            onChange={(value) => update("remote_scope", value as PifJobPostingsListParams["remote_scope"])}
           >
             <option value="">Any scope</option>
-            <option value="true">Global remote</option>
-            <option value="false">Not global remote</option>
+            <option value="remote">Remote</option>
+            <option value="global">Global remote</option>
+            <option value="not_global">Not global remote</option>
+          </SelectField>
+          <SelectField
+            label="Contract type"
+            value={filters.contract_status ?? ""}
+            onChange={(value) => update("contract_status", value as PifJobPostingsListParams["contract_status"])}
+          >
+            <option value="">Any type</option>
+            <option value="contract">Contract</option>
+            <option value="non_contract">Non-contract</option>
+            <option value="unknown">Unknown</option>
           </SelectField>
           <SelectField label="Posted" value={filters.posted_within_days ? String(filters.posted_within_days) : ""} onChange={(value) => update("posted_within_days", value ? Number(value) : undefined)}>
             <option value="">Any date</option>
@@ -2271,7 +2974,7 @@ function JobListingsView() {
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-neutral-200 bg-white">
+      <div className="overflow-hidden rounded-lg border border-[#cfdde2] bg-white shadow-sm">
         {query.isLoading && <div className="px-5 py-8 text-center text-xs text-neutral-400">Loading job listings...</div>}
         {query.isError && !query.isLoading && (
           <div className="px-5 py-8 text-center text-xs text-rose-600">
@@ -2284,15 +2987,16 @@ function JobListingsView() {
         {items.length > 0 && (
           <div className="mobile-table-card overflow-hidden">
             <table className="w-full table-fixed divide-y divide-neutral-100 text-sm">
-              <thead className="bg-neutral-50 text-left text-[11px] uppercase text-neutral-500">
+              <thead className="bg-[#edf3f5] text-left text-[11px] uppercase text-[#5a717a]">
                 <tr>
-                  <th className="w-[20%] px-3 py-2 font-medium">Role</th>
-                  <th className="w-[17%] px-3 py-2 font-medium">Firm</th>
+                  <th className="w-[18%] px-3 py-2 font-medium">Role</th>
+                  <th className="w-[15%] px-3 py-2 font-medium">Firm</th>
                   <th className="w-[12%] px-3 py-2 font-medium">Posted</th>
-                  <th className="w-[15%] px-3 py-2 font-medium">Category</th>
-                  <th className="w-[20%] px-3 py-2 font-medium">Signals</th>
-                  <th className="w-[10%] px-3 py-2 font-medium">Technology</th>
+                  <th className="w-[14%] px-3 py-2 font-medium">Category</th>
+                  <th className="w-[18%] px-3 py-2 font-medium">Signals</th>
+                  <th className="w-[8%] px-3 py-2 font-medium">Technology</th>
                   <th className="w-[6%] px-3 py-2 font-medium">Source</th>
+                  <th className="w-[9%] px-3 py-2 font-medium">Application</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-neutral-100">
@@ -2334,16 +3038,16 @@ function JobResearchDailyDashboard({
   const maxJobs = Math.max(1, ...recent.map((day) => day.job_postings_found));
 
   return (
-    <section aria-label="Daily job research" className="border-y border-neutral-200 py-4">
+    <section aria-label="Daily job research" className="rounded-lg border border-[#d8cfeb] bg-[#fbf9fd] p-4 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
-          <h2 className="text-sm font-semibold text-neutral-900">Today&apos;s job research</h2>
+          <h2 className="text-sm font-semibold text-[#372c49]">Today&apos;s job research</h2>
           <p className="mt-0.5 text-xs text-neutral-500">
             Firms processed and job postings found on each UTC research day.
           </p>
         </div>
         {data && (
-          <div className="text-xs text-neutral-500">
+          <div className="rounded-full bg-[#eee8f6] px-3 py-1 text-xs font-medium text-[#68557f]">
             {data.queue.in_progress.toLocaleString()} running · {data.queue.queued.toLocaleString()} queued
           </div>
         )}
@@ -2354,15 +3058,15 @@ function JobResearchDailyDashboard({
       {today && (
         <>
           <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <MetricTile icon={<CheckCircle2 className="h-4 w-4" />} label="Firms processed today" value={today.firms_processed} />
-            <MetricTile icon={<Users className="h-4 w-4" />} label="Firms with openings" value={today.firms_with_openings} />
-            <MetricTile icon={<Briefcase className="h-4 w-4" />} label="Job postings found" value={today.job_postings_found} />
-            <MetricTile icon={<AlertTriangle className="h-4 w-4" />} label="Failed today" value={today.firms_failed} />
+            <MetricTile tone="blue" icon={<CheckCircle2 className="h-4 w-4" />} label="Firms processed today" value={today.firms_processed} />
+            <MetricTile tone="green" icon={<Users className="h-4 w-4" />} label="Firms with openings" value={today.firms_with_openings} />
+            <MetricTile tone="amber" icon={<Briefcase className="h-4 w-4" />} label="Job postings found" value={today.job_postings_found} />
+            <MetricTile tone="rose" icon={<AlertTriangle className="h-4 w-4" />} label="Failed today" value={today.firms_failed} />
           </div>
 
           <div className="mt-4 overflow-x-auto">
             <table className="w-full min-w-[620px] text-xs">
-              <thead className="border-b border-neutral-200 text-left text-[11px] uppercase text-neutral-500">
+              <thead className="border-b border-[#ddd3eb] text-left text-[11px] uppercase text-[#6d617c]">
                 <tr>
                   <th className="py-2 pr-3 font-medium">Research day</th>
                   <th className="px-3 py-2 text-right font-medium">Processed</th>
@@ -2393,8 +3097,8 @@ function JobResearchDailyRow({ day, maxJobs }: { day: PifJobResearchDailyStat; m
       <td className="px-3 py-2.5 text-right text-neutral-600">{day.firms_with_openings.toLocaleString()}</td>
       <td className="px-3 py-2.5 text-right font-medium text-neutral-800">{day.job_postings_found.toLocaleString()}</td>
       <td className="py-2.5 pl-4">
-        <div className="h-2 w-full overflow-hidden rounded-sm bg-neutral-100" aria-label={`${day.job_postings_found} postings found`}>
-          <div className="h-full bg-emerald-600" style={{ width: `${width}%` }} />
+        <div className="h-2 w-full overflow-hidden rounded-sm bg-[#ece6f3]" aria-label={`${day.job_postings_found} postings found`}>
+          <div className="h-full bg-[#7c6db0]" style={{ width: `${width}%` }} />
         </div>
       </td>
     </tr>
@@ -2409,9 +3113,30 @@ function formatDailyStatDate(value: string) {
   }).format(new Date(`${value}T00:00:00Z`));
 }
 
+type OpenJobAgentResult = {
+  candidate: Candidate;
+  categories: JobAgentConfig["resume_categories"];
+  created: boolean;
+};
+
 function JobListingRow({ posting }: { posting: PifJobPostingResult }) {
+  const [agentOpen, setAgentOpen] = useState(false);
+  const openAgent = useMutation({
+    mutationFn: () => jobAgentRequest<OpenJobAgentResult>("/listings/open", {
+      firm_id: posting.firm_id,
+      job_id: posting.job_id || null,
+      source_url: posting.source_url,
+      title: posting.title,
+      location: posting.location || null,
+    }),
+  });
+  const launch = () => {
+    setAgentOpen(true);
+    openAgent.mutate();
+  };
   return (
-    <tr className="hover:bg-neutral-50">
+    <>
+    <tr className="transition-colors hover:bg-[#f3f8fa]">
       <td data-label="Role" className="min-w-0 px-3 py-3">
         <div className="line-clamp-2 font-medium text-neutral-900">{display(posting.title)}</div>
         <div className="mt-0.5 truncate text-[11px] text-neutral-500">{[posting.location, posting.employment_type].filter(Boolean).join(" · ") || "—"}</div>
@@ -2421,14 +3146,36 @@ function JobListingRow({ posting }: { posting: PifJobPostingResult }) {
         <div className="truncate text-[11px] text-neutral-400">{formatLabel(posting.entity_type ?? "unknown")}</div>
       </td>
       <td data-label="Posted" className="px-3 py-3 text-xs text-neutral-600">
-        <div>{formatDateOnly(posting.posted_date)}</div>
+        <div>{posting.posted_date ? formatDateOnly(posting.posted_date) : "Publication unknown"}</div>
         <div className="mt-0.5 text-[11px] text-neutral-400">Found {formatDateOnly(posting.found_at)}</div>
+        {posting.ats_created_at && !posting.posted_date && <div className="text-[11px] text-neutral-500">ATS created {formatDateOnly(posting.ats_created_at)}</div>}
+        {posting.last_checked_at && <div className="text-[11px] text-neutral-400">Checked {formatDateOnly(posting.last_checked_at)}</div>}
       </td>
-      <td data-label="Category" className="px-3 py-3"><div className="flex flex-wrap gap-1"><JobTag value={formatLabel(posting.role_category ?? "other")} />{posting.global_remote && <JobTag value="Global remote" emphasis />}{posting.gtm_relevance && <JobTag value={`${formatLabel(posting.gtm_relevance)} GTM`} emphasis={posting.gtm_relevance === "high"} />}</div></td>
+      <td data-label="Category" className="px-3 py-3"><div className="flex flex-wrap gap-1"><JobTag value={formatLabel(posting.role_category ?? "other")} /><JobTag value={posting.contract_status === "contract" ? "Contract" : posting.contract_status === "non_contract" ? "Non-contract" : "Contract unknown"} emphasis={posting.contract_status === "contract"} />{posting.global_remote ? <JobTag value="Global remote" emphasis /> : posting.work_arrangement === "remote" ? <JobTag value="Remote" emphasis /> : null}{posting.colombia_eligibility && <JobTag value={`Colombia: ${formatLabel(posting.colombia_eligibility)}`} />}{posting.gtm_relevance && <JobTag value={`${formatLabel(posting.gtm_relevance)} GTM`} emphasis={posting.gtm_relevance === "high"} />}</div>{posting.remote_eligibility && <p className="mt-1 text-[11px] text-neutral-500">{posting.remote_eligibility}</p>}</td>
       <td data-label="Signals" className="min-w-0 px-3 py-3"><div className="flex flex-wrap gap-1">{posting.trigger_tags.length ? posting.trigger_tags.map((tag) => <JobTag key={tag} value={formatLabel(tag)} />) : <span className="text-xs text-neutral-400">—</span>}</div></td>
       <td data-label="Technology" className="min-w-0 px-3 py-3"><div className="flex flex-wrap gap-1">{posting.technology_mentions.length ? posting.technology_mentions.map((technology) => <JobTag key={technology} value={technology} emphasis />) : <span className="text-xs text-neutral-400">—</span>}</div></td>
       <td data-label="Source" className="px-3 py-3">{posting.source_url ? <a href={posting.source_url} target="_blank" rel="noreferrer" title={posting.source_name} aria-label={`Open source for ${posting.title}`} className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-neutral-200 text-blue-600 hover:bg-blue-50"><ExternalLink className="h-3.5 w-3.5" /></a> : <span className="text-xs text-neutral-400">—</span>}</td>
+      <td data-label="Application" className="px-3 py-3">
+        <button type="button" disabled={!posting.source_url || openAgent.isPending} onClick={launch} className="inline-flex items-center gap-1.5 rounded-md border border-neutral-300 bg-white px-2.5 py-1.5 text-[11px] font-medium text-neutral-700 hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-50">
+          {openAgent.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+          {openAgent.isPending ? "Opening…" : "Job Agent"}
+        </button>
+      </td>
     </tr>
+    <Dialog open={agentOpen} onOpenChange={setAgentOpen}>
+      <DialogContent className="max-h-[92dvh] w-[96vw] max-w-5xl overflow-y-auto">
+        <DialogTitle className="pr-7 leading-snug">{display(posting.title)}</DialogTitle>
+        <DialogDescription>{display(posting.firm_name)} · Opened from Leads / Job listings</DialogDescription>
+        {openAgent.isPending && <div className="flex items-center gap-2 rounded-lg border border-sky-200 bg-sky-50 p-4 text-sm text-sky-900"><Loader2 className="h-4 w-4 animate-spin" />Opening the canonical Job Agent record…</div>}
+        {openAgent.isError && <div role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900"><p>{openAgent.error instanceof Error ? openAgent.error.message : "Could not open this listing in Job Agent."}</p><button type="button" onClick={() => openAgent.mutate()} className="mt-3 rounded-md border border-rose-300 bg-white px-3 py-1.5 text-xs font-medium">Try again</button></div>}
+        {openAgent.data && <>
+          <p className="text-xs leading-relaxed text-neutral-500">This is the same saved application shown in the Job Agent tab. Opening it does not prepare or send an email.</p>
+          <JobApplicationControls job={openAgent.data.candidate} categories={openAgent.data.categories} />
+          <Link href="/job-agent" className="inline-flex text-xs font-medium underline underline-offset-4">Open the full Job Agent workspace</Link>
+        </>}
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
 
@@ -2495,9 +3242,9 @@ function ContactsView({
 
   return (
     <section className="space-y-3">
-      <div className="space-y-3 rounded-xl border border-neutral-200 bg-white p-3">
+      <div className="space-y-3 rounded-lg border border-[#c7ded8] bg-[#f6faf8] p-3 shadow-sm">
         <div className="flex flex-wrap items-end gap-2 border-b border-neutral-100 pb-3">
-          <label className="min-w-64 flex-1 text-[11px] font-medium uppercase text-neutral-400">
+          <label className="min-w-64 flex-1 text-[11px] font-semibold uppercase text-[#4f7468]">
             Saved search
             <select
               value={activeSavedSearchId}
@@ -2506,7 +3253,7 @@ function ContactsView({
                 if (search) onApplySavedSearch(search);
               }}
               disabled={savedSearchPending}
-              className="mt-1 w-full rounded-md border border-neutral-200 bg-white px-2 py-1.5 text-sm normal-case text-neutral-800 focus:border-neutral-400 focus:outline-none focus:ring-1 focus:ring-neutral-400"
+              className="mt-1 w-full rounded-md border border-[#c6dad4] bg-white px-2 py-1.5 text-sm normal-case text-[#203b33] focus:border-[#43836e] focus:outline-none focus:ring-1 focus:ring-[#43836e]"
             >
               <option value="">Select saved search</option>
               {savedSearches.map((search) => (
@@ -2514,13 +3261,13 @@ function ContactsView({
               ))}
             </select>
           </label>
-          <label className="min-w-64 flex-1 text-[11px] font-medium uppercase text-neutral-400">
+          <label className="min-w-64 flex-1 text-[11px] font-semibold uppercase text-[#4f7468]">
             New search name
             <input
               value={newSearchName}
               onChange={(event) => setNewSearchName(event.target.value)}
               placeholder="Name these criteria"
-              className="mt-1 w-full rounded-md border border-neutral-200 px-2 py-1.5 text-sm normal-case text-neutral-800 placeholder:text-neutral-400 focus:border-neutral-400 focus:outline-none focus:ring-1 focus:ring-neutral-400"
+              className="mt-1 w-full rounded-md border border-[#c6dad4] bg-white px-2 py-1.5 text-sm normal-case text-[#203b33] placeholder:text-[#899d96] focus:border-[#43836e] focus:outline-none focus:ring-1 focus:ring-[#43836e]"
             />
           </label>
           <button
@@ -2532,7 +3279,7 @@ function ContactsView({
               setNewSearchName("");
             }}
             disabled={!newSearchName.trim() || savedSearchPending}
-            className="inline-flex h-8 items-center gap-1.5 rounded-md bg-neutral-900 px-3 text-xs font-medium text-white hover:bg-neutral-800 disabled:opacity-40"
+            className="inline-flex h-8 items-center gap-1.5 rounded-md bg-[#176b70] px-3 text-xs font-medium text-white hover:bg-[#135b60] disabled:opacity-40"
           >
             <Bookmark className="h-3.5 w-3.5" />
             Save new
@@ -2624,7 +3371,7 @@ function ContactsView({
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-neutral-200 bg-white">
+      <div className="overflow-hidden rounded-lg border border-[#cfdde2] bg-white shadow-sm">
         {loading && <div className="px-5 py-8 text-center text-xs text-neutral-400">Loading contacts...</div>}
         {Boolean(error) && !loading && (
           <div className="px-5 py-8 text-center text-xs text-rose-600">
@@ -2637,7 +3384,7 @@ function ContactsView({
         {items.length > 0 && (
           <div className="mobile-table-card overflow-hidden">
             <table className="w-full table-fixed divide-y divide-neutral-100 text-sm">
-              <thead className="bg-neutral-50 text-left text-[11px] uppercase text-neutral-500">
+              <thead className="bg-[#edf3f5] text-left text-[11px] uppercase text-[#5a717a]">
                 <tr>
                   <th className="w-[16%] px-3 py-2 font-medium">Contact</th>
                   <th className="w-[17%] px-3 py-2 font-medium">Firm</th>
@@ -2651,7 +3398,7 @@ function ContactsView({
               </thead>
               <tbody className="divide-y divide-neutral-100">
                 {items.map((person, index) => (
-                  <tr key={`${person.firm_id ?? "firm"}-${person.email ?? person.name}-${index}`} className="hover:bg-neutral-50">
+                  <tr key={`${person.firm_id ?? "firm"}-${person.email ?? person.name}-${index}`} className="transition-colors hover:bg-[#f3f8fa]">
                     <td data-label="Contact" className="min-w-0 px-3 py-3">
                       <div className="truncate font-medium text-neutral-900">{display(person.name)}</div>
                       <div className="text-[11px] text-neutral-500">{formatLabel(person.source ?? "contact")}</div>
@@ -2731,8 +3478,26 @@ function ContactsView({
 }
 
 function LinkedInContactAction({ person }: { person: PifPersonResult }) {
-  const linkedInUrl = safeLinkedInUrl(person.linkedin);
-  const href = linkedInUrl || linkedInSearchUrl(person);
+  return (
+    <PersonLinkedInAction
+      name={person.name}
+      firmName={person.firm_name}
+      linkedin={person.linkedin}
+    />
+  );
+}
+
+function PersonLinkedInAction({
+  name,
+  firmName,
+  linkedin,
+}: {
+  name: string;
+  firmName?: string | null;
+  linkedin?: string | null;
+}) {
+  const linkedInUrl = safeLinkedInUrl(linkedin);
+  const href = linkedInUrl || linkedInSearchUrl({ name, firm_name: firmName });
   const label = linkedInUrl ? "Open LinkedIn profile" : "Search Google for LinkedIn profile";
 
   return (
@@ -2747,21 +3512,19 @@ function LinkedInContactAction({ person }: { person: PifPersonResult }) {
         linkedInUrl ? "border-blue-200 text-blue-600" : "border-neutral-200",
       )}
     >
-      {linkedInUrl ? <ExternalLink className="h-3.5 w-3.5" /> : <Search className="h-3.5 w-3.5" />}
+      {linkedInUrl ? <Linkedin className="h-3.5 w-3.5" /> : <Search className="h-3.5 w-3.5" />}
     </a>
   );
 }
 
 function FirmTableRows({
   firm,
-  expanded,
-  onToggle,
+  onOpen,
   onViewContacts,
   onAuthError,
 }: {
   firm: PifInfoResponse;
-  expanded: boolean;
-  onToggle: () => void;
+  onOpen: () => void;
   onViewContacts: () => void;
   onAuthError: () => void;
 }) {
@@ -2846,21 +3609,27 @@ function FirmTableRows({
     || (!jobPostingTaskId && isWorkflowRunning(firm.research_data?.job_postings_research_status));
 
   return (
-    <>
-      <tr className="hover:bg-neutral-50">
+      <tr className="transition-colors hover:bg-[#f3f8fa]">
         <td className="px-2 py-3">
           <button
             type="button"
-            onClick={onToggle}
+            onClick={onOpen}
             className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-neutral-200 text-neutral-500 hover:bg-white"
-            aria-label={expanded ? "Collapse firm details" : "Expand firm details"}
+            aria-label={`Open ${firm.firm_name} details`}
+            title="Open firm details"
           >
-            <ChevronDown className={cn("h-4 w-4 transition", expanded && "rotate-180")} />
+            <PanelRightOpen className="h-4 w-4" />
           </button>
         </td>
         <td data-label="Firm" className="min-w-0 px-2 py-3">
           <div className="flex min-w-0 items-center gap-1.5">
-            <div className="truncate font-medium text-neutral-900">{firm.firm_name}</div>
+            <button
+              type="button"
+              onClick={onOpen}
+              className="min-w-0 truncate text-left font-medium text-neutral-900 hover:text-blue-700 hover:underline"
+            >
+              {firm.firm_name}
+            </button>
             <span className={cn(
               "shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase",
               firm.manually_added ? "bg-amber-50 text-amber-700" : "bg-neutral-100 text-neutral-500",
@@ -2961,14 +3730,6 @@ function FirmTableRows({
           />
         </td>
       </tr>
-      {expanded && (
-        <tr>
-          <td colSpan={11} className="bg-neutral-50 px-4 py-4">
-            <FirmDetail initialFirm={firm} onAuthError={onAuthError} />
-          </td>
-        </tr>
-      )}
-    </>
   );
 }
 
@@ -3006,7 +3767,7 @@ function BatchResearchPanel({
   const remainingCount = run ? Math.max(0, run.requested - completedRows.length) : 0;
 
   return (
-    <div className="rounded-xl border border-neutral-200 bg-white p-3">
+    <div className="rounded-lg border border-[#c8ddd9] bg-[#f8fbfa] p-3 shadow-sm">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <div className="text-sm font-semibold text-neutral-900">{title}</div>
@@ -3023,14 +3784,14 @@ function BatchResearchPanel({
                 setLimit(String(normalized));
               }}
               inputMode="numeric"
-              className="h-8 w-20 rounded-md border border-neutral-200 px-2 text-sm text-neutral-900 outline-none focus:border-neutral-400"
+              className="h-8 w-20 rounded-md border border-[#c8d9d5] bg-white px-2 text-sm text-neutral-900 outline-none focus:border-[#43838a]"
             />
           </label>
           <button
             type="button"
             onClick={onQueue}
             disabled={pending}
-            className="inline-flex items-center gap-1.5 rounded-md bg-neutral-900 px-3 py-2 text-xs font-medium text-white hover:bg-neutral-800 disabled:opacity-40"
+            className="inline-flex items-center gap-1.5 rounded-md bg-[#176b70] px-3 py-2 text-xs font-medium text-white hover:bg-[#135b60] disabled:opacity-40"
           >
             {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
             {buttonLabel}
@@ -3038,7 +3799,7 @@ function BatchResearchPanel({
         </div>
       </div>
       {run && (
-        <div className="mt-3 rounded-md border border-neutral-200 bg-neutral-50">
+        <div className="mt-3 rounded-md border border-[#cfe0dd] bg-[#f2f8f6]">
           <button
             type="button"
             onClick={() => setExpanded((current) => !current)}
@@ -3121,17 +3882,17 @@ function BatchStatusList({
   );
 }
 
-function SelectedFirmPanel({
+function FirmDetailModal({
   pifId,
-  onClear,
+  onClose,
   onAuthError,
 }: {
   pifId: string;
-  onClear: () => void;
+  onClose: () => void;
   onAuthError: () => void;
 }) {
   const firmQuery = useQuery({
-    queryKey: ["emailtag", "selected-firm", pifId],
+    queryKey: ["emailtag", "firm-modal", pifId],
     queryFn: () => getMirroredFirm(pifId),
     enabled: Boolean(pifId),
   });
@@ -3141,37 +3902,39 @@ function SelectedFirmPanel({
   }, [firmQuery.error, onAuthError]);
 
   return (
-    <section className="rounded-xl border border-neutral-200 bg-white">
-      <div className="flex flex-col gap-2 border-b border-neutral-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <div className="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Selected firm</div>
-          <div className="mt-0.5 font-mono text-xs text-neutral-500">{pifId}</div>
+    <Dialog open={Boolean(pifId)} onOpenChange={(open) => {
+      if (!open) onClose();
+    }}>
+      <DialogContent className="h-[94dvh] w-[min(96vw,1500px)] max-w-none gap-0 overflow-hidden border-neutral-200 bg-neutral-50 p-0 shadow-2xl sm:rounded-lg [&>button]:z-20 [&>button]:flex [&>button]:h-8 [&>button]:w-8 [&>button]:items-center [&>button]:justify-center [&>button]:rounded-md [&>button]:border [&>button]:border-neutral-200 [&>button]:bg-white [&>button]:opacity-100 [&>button]:shadow-sm [&>button]:focus:ring-neutral-300">
+        <DialogTitle className="sr-only">{firmQuery.data?.firm_name ?? "Firm details"}</DialogTitle>
+        <DialogDescription className="sr-only">
+          Firm research, people, signals, communications, and operational controls.
+        </DialogDescription>
+        <div className="h-[94dvh] min-h-0 min-w-0 w-full">
+          {firmQuery.isLoading && (
+            <div className="flex h-full items-center justify-center gap-2 text-sm text-neutral-500">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading firm details...
+            </div>
+          )}
+          {firmQuery.isError && !isAuthError(firmQuery.error) && (
+            <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
+              <AlertCircle className="h-6 w-6 text-rose-500" />
+              <div>
+                <div className="text-sm font-semibold text-neutral-900">Firm details could not be loaded</div>
+                <div className="mt-1 text-xs text-neutral-500">
+                  {firmQuery.error instanceof Error ? firmQuery.error.message : "The request failed."}
+                </div>
+              </div>
+              <ActionButton onClick={() => void firmQuery.refetch()} icon={<RefreshCw className="h-3.5 w-3.5" />}>
+                Retry
+              </ActionButton>
+            </div>
+          )}
+          {firmQuery.data && <FirmDetail initialFirm={firmQuery.data} onAuthError={onAuthError} />}
         </div>
-        <button
-          type="button"
-          onClick={onClear}
-          className="inline-flex items-center justify-center rounded-md border border-neutral-200 px-3 py-1.5 text-xs font-medium text-neutral-600 hover:bg-neutral-50"
-        >
-          Back to list
-        </button>
-      </div>
-      {firmQuery.isLoading && (
-        <div className="flex items-center gap-2 px-4 py-6 text-sm text-neutral-500">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          Loading firm detail...
-        </div>
-      )}
-      {firmQuery.isError && !isAuthError(firmQuery.error) && (
-        <div className="px-4 py-6 text-sm text-rose-600">
-          {firmQuery.error instanceof Error ? firmQuery.error.message : "Could not load firm."}
-        </div>
-      )}
-      {firmQuery.data && (
-        <div className="p-4">
-          <FirmDetail initialFirm={firmQuery.data} onAuthError={onAuthError} />
-        </div>
-      )}
-    </section>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -3269,183 +4032,362 @@ function FirmDetail({ initialFirm, onAuthError }: { initialFirm: PifInfoResponse
     firm,
     researchStatus.data?.stages ?? firm.research_data?.local_enrichment?.stages,
   );
+  const entityLabel = ENTITY_TYPE_LABELS[firm.entity_type] ?? formatLabel(firm.entity_type);
+  const addressLabel = firm.addresses?.map(formatAddress).find(Boolean) ?? "";
+  const emailCount = firm.emails?.length ?? 0;
+  const peopleCount = (firm.leadership?.length ?? 0) + (firm.staff?.length ?? 0);
+  const conversationCount = firm.conversation_ids?.length ?? 0;
+  const enrichmentStatus = researchStatus.data?.status
+    ?? firm.research_data?.local_enrichment?.status
+    ?? firm.research_status
+    ?? "unknown";
+  const tabClassName = "mt-0 min-h-0 flex-1 overflow-y-auto p-4 focus-visible:ring-0 focus-visible:ring-offset-0 sm:p-6";
+  const tabTriggerClassName = "h-11 gap-2 rounded-none border-b-2 border-transparent px-3 text-xs text-neutral-500 shadow-none data-[state=active]:border-neutral-900 data-[state=active]:bg-transparent data-[state=active]:text-neutral-900 data-[state=active]:shadow-none sm:px-4";
 
   return (
-    <div className="space-y-4 rounded-xl border border-neutral-200 bg-white p-4">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-        <div>
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="text-base font-semibold text-neutral-900">{firm.firm_name}</div>
-            <span className={cn(
-              "rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase",
-              firm.manually_added ? "bg-amber-50 text-amber-700" : "bg-neutral-100 text-neutral-500",
-            )}>
-              {firm.manually_added ? "Manually added" : "Synced"}
-            </span>
-          </div>
-          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-neutral-500">
-            <span>Updated {formatDateTime(firm.updated_at)}</span>
-            <span>Created {formatDateTime(firm.created_at)}</span>
-            {firm.website_status && <span>{formatLabel(firm.website_status)}</span>}
-          </div>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <ActionButton onClick={() => exportFirm.mutate("json")} pending={exportFirm.isPending} icon={<FileJson className="h-3.5 w-3.5" />}>
-            JSON
-          </ActionButton>
-          <ActionButton onClick={() => exportFirm.mutate("csv")} pending={exportFirm.isPending} icon={<Download className="h-3.5 w-3.5" />}>
-            CSV
-          </ActionButton>
-          {websiteUrl && (
-            <a href={websiteUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-md border border-neutral-200 px-2.5 py-1.5 text-xs font-medium text-neutral-700 hover:bg-neutral-50">
-              <ExternalLink className="h-3.5 w-3.5" />
-              Website
-            </a>
-          )}
-        </div>
-      </div>
-
-      <TaskStatus
-        label="Full enrichment"
-        status={researchStatus.data?.status ?? firm.research_data?.local_enrichment?.status ?? undefined}
-        message={researchStatus.data?.message ?? firm.research_data?.local_enrichment?.message ?? errorMessage(research.error) ?? errorMessage(vendorDetection.error)}
-        progress={researchStatus.data?.progress_percent ?? firm.research_data?.local_enrichment?.progress_percent ?? undefined}
-        currentStage={researchStatus.data?.current_stage ?? firm.research_data?.local_enrichment?.current_stage ?? undefined}
-      />
-
-      <InfoBlock title="Full enrichment workflow">
-        <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
-          {enrichmentSteps.map((step) => (
-            <WorkflowStep key={step.label} {...step} />
-          ))}
-        </div>
-      </InfoBlock>
-
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-        <Metric label="Research" value={firm.research_status ?? "unknown"} detail={formatDateTime(firm.last_researched_at)} />
-        <Metric label="Staff" value={firm.staff_research_status ?? "unknown"} detail={`${firm.staff?.length ?? 0} staff`} />
-        <Metric label="First contacted" value={firm.first_contacted_precise_at ? formatDateTime(firm.first_contacted_precise_at) : "—"} detail="linked external email" />
-        <Metric label="ICP" value={firm.icp_tier ? `Tier ${firm.icp_tier}` : "—"} detail={firm.icp_score == null ? "No score" : `${firm.icp_score}/100`} />
-        <Metric label="Website confidence" value={firm.website_confidence == null ? "—" : `${Math.round(firm.website_confidence * 100)}%`} detail={firm.website_source ?? "No source"} />
-      </div>
-
-      <InfoBlock title="Website resolution">
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          <KeyValue label="Canonical" value={firm.canonical_website ?? "Missing"} />
-          <KeyValue label="Raw website" value={firm.website ?? "Missing"} />
-          <KeyValue label="Status" value={firm.website_status ?? "Missing"} />
-          <KeyValue label="Source" value={firm.website_source ?? "Unknown"} />
-          <KeyValue label="Confidence" value={firm.website_confidence == null ? "Unknown" : `${Math.round(firm.website_confidence * 100)}%`} />
-          <KeyValue label="First contacted" value={formatDateTime(firm.first_contacted_precise_at)} />
-          <KeyValue label="Updated" value={formatDateTime(firm.updated_at)} />
-        </div>
-      </InfoBlock>
-
-      <SitemapMonitorPanel pifId={firm.id} monitor={firm.research_data?.sitemap_monitor} />
-
-      <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
-        <CollapsibleInfoBlock title="Contact data" defaultOpen={false}>
-          <KeyValue label="Emails" value={firm.emails?.join(", ") || "—"} />
-          <KeyValue label="Phones" value={firm.phones?.join(", ") || "—"} />
-          <KeyValue label="Fax" value={firm.fax ?? "—"} />
-          <KeyValue
-            label="Addresses"
-            value={firm.addresses?.map(formatAddress).filter(Boolean).join(" · ") || "—"}
-          />
-          <KeyValue label="Extraction notes" value={firm.extraction_notes ?? "—"} />
-        </CollapsibleInfoBlock>
-
-        <CollapsibleInfoBlock title="Front conversation IDs" count={firm.conversation_ids?.length ?? 0} defaultOpen={false}>
-          {firm.conversation_ids?.length ? (
-            <div className="flex flex-wrap gap-1.5">
-              {firm.conversation_ids.map((id) => (
-                <a
-                  key={id}
-                  href={frontConversationUrl(id)}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-1 rounded-md bg-neutral-100 px-2 py-1 font-mono text-[11px] text-neutral-600 hover:bg-neutral-200 hover:text-neutral-900"
-                  title="Open conversation in Front"
-                >
-                  {id}
-                  <ExternalLink className="h-3 w-3" />
-                </a>
-              ))}
+    <div className="flex h-full min-h-0 min-w-0 flex-col bg-neutral-50">
+      <header className="shrink-0 border-b border-neutral-200 bg-white px-4 py-4 pr-14 sm:px-6 sm:pr-16">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+          <div className="flex min-w-0 items-start gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-neutral-900 text-white">
+              <Building2 className="h-5 w-5" />
             </div>
-          ) : (
-            <div className="text-xs text-neutral-400">No conversation IDs.</div>
-          )}
-        </CollapsibleInfoBlock>
-      </div>
-
-      <InfoBlock
-        title="Vendor Stack"
-        action={
-          <ActionButton
-            onClick={() => vendorDetection.mutate()}
-            pending={fullEnrichmentRunning}
-            icon={<RefreshCw className={cn("h-3.5 w-3.5", fullEnrichmentRunning && "animate-spin")} />}
-          >
-            Run full enrichment
-          </ActionButton>
-        }
-      >
-        {firm.vendor_stack?.length ? (
-          <div className="flex flex-wrap gap-2">
-            {firm.vendor_stack.map((vendor, index) => (
-              <span key={`${vendor.vendor}-${index}`} className="inline-flex items-center gap-1 rounded-full border border-neutral-200 bg-white px-2.5 py-1 text-xs text-neutral-700">
-                <span className="font-medium">{vendor.vendor}</span>
-                <span className="text-neutral-400">{vendor.source}</span>
-                {vendor.confidence && <span className="text-neutral-400">{vendor.confidence}</span>}
-                {vendor.known === false && <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold text-amber-700">NEW</span>}
-              </span>
-            ))}
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="truncate text-lg font-semibold text-neutral-950 sm:text-xl">{firm.firm_name}</h1>
+                <span className={cn(
+                  "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase",
+                  firm.manually_added ? "bg-amber-50 text-amber-700" : "bg-neutral-100 text-neutral-500",
+                )}>
+                  {firm.manually_added ? "Manually added" : "Synced"}
+                </span>
+                <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold", websiteStatusColor(firm.website_status))}>
+                  {firm.website_status ?? "unknown"}
+                </span>
+              </div>
+              <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-neutral-500">
+                <span>{entityLabel}</span>
+                {(firm.canonical_website ?? firm.website) && (
+                  <span className="inline-flex min-w-0 items-center gap-1">
+                    <Globe className="h-3 w-3 shrink-0" />
+                    <span className="truncate">{firm.canonical_website ?? firm.website}</span>
+                  </span>
+                )}
+                {addressLabel && (
+                  <span className="inline-flex min-w-0 items-center gap-1">
+                    <MapPin className="h-3 w-3 shrink-0" />
+                    <span className="truncate">{addressLabel}</span>
+                  </span>
+                )}
+              </div>
+              <div className="mt-1 text-[11px] text-neutral-400">
+                Updated {formatDateTime(firm.updated_at)} · Created {formatDateTime(firm.created_at)}
+              </div>
+            </div>
           </div>
-        ) : (
-          <div className="text-xs text-neutral-400">No vendors detected.</div>
-        )}
-      </InfoBlock>
 
-      <JobPostingsPanel
-        research={firm.research_data?.job_postings}
-        status={firm.research_data?.job_postings_research_status}
-        lastResearchedAt={firm.research_data?.last_job_postings_researched_at}
-      />
+          <div className="flex flex-wrap items-center gap-2">
+            {websiteUrl && (
+              <a
+                href={websiteUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1.5 rounded-md border border-neutral-200 bg-white px-2.5 py-1.5 text-xs font-medium text-neutral-700 hover:bg-neutral-50"
+              >
+                <ExternalLink className="h-3.5 w-3.5" />
+                Website
+              </a>
+            )}
+            <ActionButton onClick={() => exportFirm.mutate("json")} pending={exportFirm.isPending} icon={<FileJson className="h-3.5 w-3.5" />}>
+              JSON
+            </ActionButton>
+            <ActionButton onClick={() => exportFirm.mutate("csv")} pending={exportFirm.isPending} icon={<Download className="h-3.5 w-3.5" />}>
+              CSV
+            </ActionButton>
+            <ActionButton onClick={() => research.mutate("leadership")} pending={fullEnrichmentRunning} icon={<Sparkles className="h-3.5 w-3.5" />}>
+              Run full enrichment
+            </ActionButton>
+            <ActionButton onClick={() => behavior.mutate()} pending={behavior.isPending} icon={<Activity className="h-3.5 w-3.5" />}>
+              Analyze behavior
+            </ActionButton>
+            <ActionButton onClick={() => score.mutate()} pending={score.isPending} icon={<BarChart3 className="h-3.5 w-3.5" />}>
+              Score ICP
+            </ActionButton>
+          </div>
+        </div>
+      </header>
 
-      <div className="grid gap-4 xl:grid-cols-3">
-        <PeopleList title="Leadership" empty="No leadership records." items={firm.leadership ?? []} />
-        <PeopleList title="Staff" empty="No staff records." items={firm.staff ?? []} />
-        <ExtractedContacts contacts={firm.contacts ?? []} />
+      <div className="grid shrink-0 grid-cols-2 divide-x divide-y divide-neutral-200 border-b border-neutral-200 bg-white sm:grid-cols-3 lg:grid-cols-6 lg:divide-y-0">
+        <FirmHeaderMetric
+          icon={<Sparkles className="h-3.5 w-3.5" />}
+          label="Enrichment"
+          value={formatLabel(enrichmentStatus)}
+          detail={researchStatus.data?.current_stage ? formatLabel(researchStatus.data.current_stage) : "Full workflow"}
+        />
+        <FirmHeaderMetric
+          icon={<Star className="h-3.5 w-3.5" />}
+          label="ICP"
+          value={firm.icp_tier ? `Tier ${firm.icp_tier}` : "Not scored"}
+          detail={firm.icp_score == null ? "No score" : `${firm.icp_score}/100`}
+        />
+        <FirmHeaderMetric
+          icon={<Database className="h-3.5 w-3.5" />}
+          label="Research"
+          value={formatLabel(firm.research_status ?? "unknown")}
+          detail={firm.last_researched_at ? formatDateTime(firm.last_researched_at) : "Never researched"}
+        />
+        <FirmHeaderMetric
+          icon={<Users className="h-3.5 w-3.5" />}
+          label="People"
+          value={peopleCount.toLocaleString()}
+          detail={`${firm.leadership?.length ?? 0} leaders · ${firm.staff?.length ?? 0} staff`}
+        />
+        <FirmHeaderMetric
+          icon={<Mail className="h-3.5 w-3.5" />}
+          label="Contact emails"
+          value={emailCount.toLocaleString()}
+          detail={firm.phones?.length ? `${firm.phones.length} phone numbers` : "No phone numbers"}
+        />
+        <FirmHeaderMetric
+          icon={<Activity className="h-3.5 w-3.5" />}
+          label="Conversations"
+          value={conversationCount.toLocaleString()}
+          detail={firm.behavioral_data ? `${firm.behavioral_data.total_email_count ?? 0} emails analyzed` : "Behavior not analyzed"}
+        />
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        <ActionButton onClick={() => research.mutate("leadership")} pending={fullEnrichmentRunning} icon={<Play className="h-3.5 w-3.5" />}>
-          Run full enrichment
-        </ActionButton>
-        <ActionButton onClick={() => behavior.mutate()} pending={behavior.isPending} icon={<Sparkles className="h-3.5 w-3.5" />}>
-          Analyze behavior
-        </ActionButton>
-        <ActionButton onClick={() => score.mutate()} pending={score.isPending} icon={<BarChart3 className="h-3.5 w-3.5" />}>
-          Score ICP
-        </ActionButton>
-      </div>
+      <Tabs defaultValue="overview" className="flex min-h-0 flex-1 flex-col">
+        <div className="shrink-0 overflow-x-auto border-b border-neutral-200 bg-white px-3 sm:px-6">
+          <TabsList className="h-11 w-max min-w-full justify-start rounded-none bg-transparent p-0">
+            <TabsTrigger value="overview" className={tabTriggerClassName}>
+              <Building2 className="h-3.5 w-3.5" />
+              Overview
+            </TabsTrigger>
+            <TabsTrigger value="people" className={tabTriggerClassName}>
+              <Users className="h-3.5 w-3.5" />
+              People
+            </TabsTrigger>
+            <TabsTrigger value="signals" className={tabTriggerClassName}>
+              <Activity className="h-3.5 w-3.5" />
+              Signals
+            </TabsTrigger>
+            <TabsTrigger value="activity" className={tabTriggerClassName}>
+              <Mail className="h-3.5 w-3.5" />
+              Activity
+            </TabsTrigger>
+            <TabsTrigger value="data" className={tabTriggerClassName}>
+              <Database className="h-3.5 w-3.5" />
+              Data
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
-      <FirmReviewsPanel
-        pifId={firm.id}
-        firmName={firm.firm_name}
-        address={firm.addresses?.[0] ?? null}
-      />
+        <TabsContent value="overview" className={tabClassName}>
+          <div className="mx-auto max-w-[1320px] space-y-4">
+            <TaskStatus
+              label="Full enrichment"
+              status={researchStatus.data?.status ?? firm.research_data?.local_enrichment?.status ?? undefined}
+              message={researchStatus.data?.message ?? firm.research_data?.local_enrichment?.message ?? errorMessage(research.error) ?? errorMessage(vendorDetection.error)}
+              progress={researchStatus.data?.progress_percent ?? firm.research_data?.local_enrichment?.progress_percent ?? undefined}
+              currentStage={researchStatus.data?.current_stage ?? firm.research_data?.local_enrichment?.current_stage ?? undefined}
+            />
 
-      <FirmCommunicationsPanel pifId={firm.id} />
-      <FirmCallsPanel pifId={firm.id} />
+            <InfoBlock title="Full enrichment workflow">
+              <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+                {enrichmentSteps.map((step) => (
+                  <WorkflowStep key={step.label} {...step} />
+                ))}
+              </div>
+            </InfoBlock>
 
-      <div className="grid gap-4 xl:grid-cols-2">
-        <JsonViewer title="Research data" value={firm.research_data} />
-        <JsonViewer title="Behavioral data" value={firm.behavioral_data} />
-      </div>
+            <div className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
+              <InfoBlock title="Firm profile">
+                <KeyValue label="Entity type" value={entityLabel} />
+                <KeyValue label="First contacted" value={formatDateTime(firm.first_contacted_precise_at)} />
+                <KeyValue label="Research status" value={firm.research_status ?? "Unknown"} />
+                <KeyValue label="Last researched" value={formatDateTime(firm.last_researched_at)} />
+                <KeyValue label="Staff research" value={firm.staff_research_status ?? "Unknown"} />
+              </InfoBlock>
 
-      <FirmDangerZone pifId={firm.id} firmName={firm.firm_name} />
+              <InfoBlock title="Website resolution">
+                <div className="grid gap-x-5 sm:grid-cols-2">
+                  <KeyValue label="Canonical" value={firm.canonical_website ?? "Missing"} />
+                  <KeyValue label="Raw website" value={firm.website ?? "Missing"} />
+                  <KeyValue label="Status" value={firm.website_status ?? "Missing"} />
+                  <KeyValue label="Source" value={firm.website_source ?? "Unknown"} />
+                  <KeyValue label="Confidence" value={firm.website_confidence == null ? "Unknown" : `${Math.round(firm.website_confidence * 100)}%`} />
+                  <KeyValue label="Updated" value={formatDateTime(firm.updated_at)} />
+                </div>
+              </InfoBlock>
+            </div>
+
+            <AIAdoptionPanel posture={firm.research_data?.ai_adoption} history={firm.research_data?.ai_adoption_history} />
+            <SitemapMonitorPanel pifId={firm.id} monitor={firm.research_data?.sitemap_monitor} />
+          </div>
+        </TabsContent>
+
+        <TabsContent value="people" className={tabClassName}>
+          <div className="mx-auto max-w-[1320px] space-y-4">
+            <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
+              <CollapsibleInfoBlock title="Contact data" defaultOpen={false}>
+                <KeyValue label="Emails" value={firm.emails?.join(", ") || "—"} />
+                <KeyValue label="Phones" value={firm.phones?.join(", ") || "—"} />
+                <KeyValue label="Fax" value={firm.fax ?? "—"} />
+                <KeyValue
+                  label="Addresses"
+                  value={firm.addresses?.map(formatAddress).filter(Boolean).join(" · ") || "—"}
+                />
+                <KeyValue label="Extraction notes" value={firm.extraction_notes ?? "—"} />
+              </CollapsibleInfoBlock>
+
+              <CollapsibleInfoBlock title="Front conversation IDs" count={conversationCount} defaultOpen={false}>
+                {firm.conversation_ids?.length ? (
+                  <div className="flex flex-wrap gap-1.5">
+                    {firm.conversation_ids.map((id) => (
+                      <a
+                        key={id}
+                        href={frontConversationUrl(id)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 rounded-md bg-neutral-100 px-2 py-1 font-mono text-[11px] text-neutral-600 hover:bg-neutral-200 hover:text-neutral-900"
+                        title="Open conversation in Front"
+                      >
+                        {id}
+                        <ExternalLink className="h-3 w-3" />
+                      </a>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-xs text-neutral-400">No conversation IDs.</div>
+                )}
+              </CollapsibleInfoBlock>
+            </div>
+
+            <div className="grid gap-4 xl:grid-cols-3">
+              <PeopleList title="Leadership" empty="No leadership records." items={firm.leadership ?? []} firmName={firm.firm_name} />
+              <PeopleList title="Staff" empty="No staff records." items={firm.staff ?? []} firmName={firm.firm_name} />
+              <ExtractedContacts contacts={firm.contacts ?? []} firmName={firm.firm_name} />
+            </div>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="signals" className={tabClassName}>
+          <div className="mx-auto max-w-[1320px] space-y-4">
+            <InfoBlock
+              title="Vendor stack"
+              action={
+                <ActionButton
+                  onClick={() => vendorDetection.mutate()}
+                  pending={fullEnrichmentRunning}
+                  icon={<RefreshCw className={cn("h-3.5 w-3.5", fullEnrichmentRunning && "animate-spin")} />}
+                >
+                  Refresh vendors
+                </ActionButton>
+              }
+            >
+              {firm.vendor_stack?.length ? (
+                <div className="flex flex-wrap gap-2">
+                  {firm.vendor_stack.map((vendor, index) => (
+                    <span key={`${vendor.vendor}-${index}`} className="inline-flex items-center gap-1 rounded-full border border-neutral-200 bg-white px-2.5 py-1 text-xs text-neutral-700">
+                      <span className="font-medium">{vendor.vendor}</span>
+                      <span className="text-neutral-400">{vendor.source}</span>
+                      {vendor.confidence && <span className="text-neutral-400">{vendor.confidence}</span>}
+                      {vendor.known === false && <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold text-amber-700">NEW</span>}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-xs text-neutral-400">No vendors detected.</div>
+              )}
+            </InfoBlock>
+
+            <JobPostingsPanel
+              research={firm.research_data?.job_postings}
+              status={firm.research_data?.job_postings_research_status}
+              lastResearchedAt={firm.research_data?.last_job_postings_researched_at}
+            />
+
+            <FirmReviewsPanel
+              pifId={firm.id}
+              firmName={firm.firm_name}
+              address={firm.addresses?.[0] ?? null}
+            />
+          </div>
+        </TabsContent>
+
+        <TabsContent value="activity" className={tabClassName}>
+          <div className="mx-auto max-w-[1320px] space-y-4">
+            <FirmCommunicationsPanel pifId={firm.id} />
+            <FirmCallsPanel pifId={firm.id} />
+          </div>
+        </TabsContent>
+
+        <TabsContent value="data" className={tabClassName}>
+          <div className="mx-auto max-w-[1320px] space-y-4">
+            <div className="grid gap-4 xl:grid-cols-2">
+              <JsonViewer title="Research data" value={firm.research_data} />
+              <JsonViewer title="Behavioral data" value={firm.behavioral_data} />
+            </div>
+            <FirmDangerZone pifId={firm.id} firmName={firm.firm_name} />
+          </div>
+        </TabsContent>
+      </Tabs>
     </div>
+  );
+}
+
+function AIAdoptionPanel({ posture, history = [] }: { posture?: AIAdoptionPosture; history?: AIAdoptionPosture[] }) {
+  const evidence = (value: AIAdoptionPosture) => (
+    <div className="divide-y divide-neutral-200">
+      {value.statements.map((statement, index) => (
+        <article key={`${statement.source_url}-${index}`} className="space-y-2 py-3 text-sm">
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div className="min-w-0">
+              <p className="font-medium text-neutral-900">{statement.speaker_name || "Firm statement"}</p>
+              {statement.speaker_title && <p className="text-xs text-neutral-500">{statement.speaker_title}</p>}
+            </div>
+            <a href={statement.source_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs font-medium text-sky-700 hover:underline">
+              {statement.source_type.replaceAll("_", " ")} <ExternalLink className="h-3 w-3" />
+            </a>
+          </div>
+          <p className="text-xs text-neutral-500">{statement.scope.replaceAll("_", " ")} · {statement.published_at || "Publication date unknown"}</p>
+          {statement.quote && <blockquote className="border-l-2 border-teal-500 pl-3 text-neutral-800">{statement.quote}</blockquote>}
+          <p className="leading-relaxed text-neutral-600">{statement.summary}</p>
+          {(statement.tools.length > 0 || statement.use_cases.length > 0) && (
+            <p className="text-xs text-neutral-500">{[...statement.tools, ...statement.use_cases].join(" · ")}</p>
+          )}
+        </article>
+      ))}
+    </div>
+  );
+  return (
+    <section className="border-y border-neutral-200 py-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="flex items-center gap-2 text-sm font-semibold text-neutral-900"><Sparkles className="h-4 w-4 text-teal-600" />AI adoption & leadership stance</h2>
+        {posture?.checked_at && <span className="text-xs text-neutral-500">Checked {formatDateTime(posture.checked_at)}</span>}
+      </div>
+      {!posture ? <p className="mt-3 text-sm text-neutral-500">Not researched yet</p> : <>
+        <div className="my-3 flex flex-wrap gap-2 text-xs">
+          <span className="rounded border border-teal-200 bg-teal-50 px-2 py-1 text-teal-900">Adoption: {posture.adoption_stage}</span>
+          <span className="rounded border border-sky-200 bg-sky-50 px-2 py-1 text-sky-900">Leadership: {posture.leadership_stance}</span>
+          {posture.statements.length > 0 && <span className="py-1 text-neutral-500">Confidence {Math.round(posture.confidence * 100)}%</span>}
+        </div>
+        <p className="text-sm leading-relaxed text-neutral-700">{posture.summary}</p>
+        {evidence(posture)}
+        {posture.searched_sources.length > 0 && <details className="mt-2 text-xs text-neutral-500">
+          <summary className="cursor-pointer">Sources checked ({posture.searched_sources.length})</summary>
+          <ul className="mt-2 space-y-1">{posture.searched_sources.map((url) => <li key={url}><a href={url} target="_blank" rel="noopener noreferrer" className="break-all text-sky-700 hover:underline">{url}</a></li>)}</ul>
+        </details>}
+      </>}
+      {history.length > 0 && <details className="mt-3 text-sm">
+        <summary className="cursor-pointer font-medium text-neutral-600">Previous observations ({history.length})</summary>
+        {[...history].reverse().map((item, index) => <div key={`${item.checked_at}-${index}`} className="mt-3 border-t border-neutral-200 pt-3">
+          <p className="text-xs text-neutral-500">{formatDateTime(item.checked_at)} · {item.adoption_stage} · {item.leadership_stance}</p>
+          <p className="mt-1 text-neutral-700">{item.summary}</p>
+          {evidence(item)}
+        </div>)}
+      </details>}
+    </section>
   );
 }
 
@@ -3454,18 +4396,48 @@ function SitemapMonitorPanel({ pifId, monitor }: { pifId: string; monitor: Sitem
     queryKey: ["firm-sitemap-history", pifId],
     queryFn: () => getFirmSitemapHistory(pifId),
   });
-  if (!monitor) {
+  const latestSnapshot = history.data?.items[0];
+  const effectiveMonitor: SitemapMonitorSummary | undefined = monitor ?? (latestSnapshot ? {
+    status: latestSnapshot.status,
+    checked_at: latestSnapshot.fetched_at,
+    website: latestSnapshot.website,
+    sitemap_urls: latestSnapshot.sitemap_urls,
+    url_count: latestSnapshot.url_count,
+    changed: latestSnapshot.added_count || latestSnapshot.removed_count
+      ? true
+      : history.data && history.data.items.length > 1 ? false : null,
+    added_count: latestSnapshot.added_count,
+    removed_count: latestSnapshot.removed_count,
+    added_urls: latestSnapshot.added_urls,
+    removed_urls: latestSnapshot.removed_urls,
+    truncated: latestSnapshot.truncated,
+    snapshot_id: latestSnapshot.id,
+    error: latestSnapshot.error,
+  } : undefined);
+
+  if (!effectiveMonitor && history.isPending) {
     return (
       <InfoBlock title="Sitemap changes">
-        <div className="text-xs text-neutral-400">No sitemap snapshot yet. It will be checked during full enrichment.</div>
+        <div className="text-xs text-neutral-400">Loading sitemap history...</div>
+      </InfoBlock>
+    );
+  }
+  if (!effectiveMonitor) {
+    return (
+      <InfoBlock title="Sitemap changes">
+        <div className="text-xs text-neutral-400">
+          {history.isError
+            ? "Sitemap history could not be loaded."
+            : "No sitemap snapshot yet. It will be checked during full enrichment."}
+        </div>
       </InfoBlock>
     );
   }
 
-  const changeLabel = monitor.changed == null
+  const changeLabel = effectiveMonitor.changed == null
     ? "Baseline snapshot"
-    : monitor.changed
-      ? `${monitor.added_count ?? 0} added, ${monitor.removed_count ?? 0} removed`
+    : effectiveMonitor.changed
+      ? `${effectiveMonitor.added_count ?? 0} added, ${effectiveMonitor.removed_count ?? 0} removed`
       : "No URL changes";
 
   return (
@@ -3473,17 +4445,17 @@ function SitemapMonitorPanel({ pifId, monitor }: { pifId: string; monitor: Sitem
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-neutral-500">
         <span className="inline-flex items-center gap-1.5 font-medium text-neutral-700">
           <Globe className="h-3.5 w-3.5" />
-          {(monitor.url_count ?? 0).toLocaleString()} indexed URLs
+          {(effectiveMonitor.url_count ?? 0).toLocaleString()} indexed URLs
         </span>
-        <span>{formatLabel(monitor.status)}</span>
+        <span>{formatLabel(effectiveMonitor.status)}</span>
         <span>{changeLabel}</span>
-        {monitor.checked_at && <span>Checked {formatDateTime(monitor.checked_at)}</span>}
-        {monitor.truncated && <span className="font-medium text-amber-700">Snapshot capped</span>}
+        {effectiveMonitor.checked_at && <span>Checked {formatDateTime(effectiveMonitor.checked_at)}</span>}
+        {effectiveMonitor.truncated && <span className="font-medium text-amber-700">Snapshot capped</span>}
       </div>
 
-      {monitor.sitemap_urls?.length ? (
+      {effectiveMonitor.sitemap_urls?.length ? (
         <div className="mt-2 flex flex-wrap gap-2 border-t border-neutral-100 pt-2">
-          {monitor.sitemap_urls.map((url) => (
+          {effectiveMonitor.sitemap_urls.map((url) => (
             <a
               key={url}
               href={url}
@@ -3498,14 +4470,14 @@ function SitemapMonitorPanel({ pifId, monitor }: { pifId: string; monitor: Sitem
         </div>
       ) : null}
 
-      {monitor.error && (
-        <div className="mt-2 border-t border-neutral-100 pt-2 text-xs text-neutral-500">{monitor.error}</div>
+      {effectiveMonitor.error && (
+        <div className="mt-2 border-t border-neutral-100 pt-2 text-xs text-neutral-500">{effectiveMonitor.error}</div>
       )}
 
-      {Boolean(monitor.added_urls?.length || monitor.removed_urls?.length) && (
+      {Boolean(effectiveMonitor.added_urls?.length || effectiveMonitor.removed_urls?.length) && (
         <div className="mt-3 grid gap-3 border-t border-neutral-100 pt-3 lg:grid-cols-2">
-          <SitemapChangeList label="Added URLs" urls={monitor.added_urls ?? []} tone="added" />
-          <SitemapChangeList label="Removed URLs" urls={monitor.removed_urls ?? []} tone="removed" />
+          <SitemapChangeList label="Added URLs" urls={effectiveMonitor.added_urls ?? []} tone="added" />
+          <SitemapChangeList label="Removed URLs" urls={effectiveMonitor.removed_urls ?? []} tone="removed" />
         </div>
       )}
 
@@ -4231,24 +5203,63 @@ function TaskStatus({
   );
 }
 
-function MetricTile({ icon, label, value }: { icon: React.ReactNode; label: string; value: string | number }) {
+type MetricTone = "teal" | "blue" | "green" | "amber" | "rose";
+
+const METRIC_TONE_STYLES: Record<MetricTone, { border: string; icon: string; bar: string }> = {
+  teal: { border: "border-[#b9dcda]", icon: "bg-[#e5f4f2] text-[#176b70]", bar: "bg-[#289296]" },
+  blue: { border: "border-[#c7d9ef]", icon: "bg-[#eaf1fb] text-[#2f6fca]", bar: "bg-[#4c82d1]" },
+  green: { border: "border-[#bfe2d1]", icon: "bg-[#e7f6ee] text-[#21734f]", bar: "bg-[#32a66f]" },
+  amber: { border: "border-[#ead7ad]", icon: "bg-[#fbf2dc] text-[#9a680b]", bar: "bg-[#dfa72f]" },
+  rose: { border: "border-[#edc8cc]", icon: "bg-[#fbedef] text-[#ae4b55]", bar: "bg-[#cf6570]" },
+};
+
+function MetricTile({
+  icon,
+  label,
+  value,
+  tone = "teal",
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string | number;
+  tone?: MetricTone;
+}) {
+  const styles = METRIC_TONE_STYLES[tone];
   return (
-    <div className="rounded-md border border-neutral-200 bg-white px-4 py-3">
-      <div className="flex items-center gap-2 text-[10px] font-medium uppercase text-neutral-400">
-        {icon}
-        {label}
+    <div className={cn("relative overflow-hidden rounded-md border bg-white px-4 py-3 shadow-sm", styles.border)}>
+      <div className={cn("absolute inset-y-0 left-0 w-1", styles.bar)} aria-hidden="true" />
+      <div className="flex items-center gap-3">
+        <div className={cn("flex h-8 w-8 shrink-0 items-center justify-center rounded-md", styles.icon)}>
+          {icon}
+        </div>
+        <div className="min-w-0">
+          <div className="truncate text-[10px] font-semibold uppercase text-[#60737a]">{label}</div>
+          <div className="mt-0.5 truncate text-xl font-semibold text-[#172d34]">{value}</div>
+        </div>
       </div>
-      <div className="mt-2 text-xl font-semibold text-neutral-900">{value}</div>
     </div>
   );
 }
 
-function Metric({ label, value, detail }: { label: string; value: string; detail: string }) {
+function FirmHeaderMetric({
+  icon,
+  label,
+  value,
+  detail,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  detail: string;
+}) {
   return (
-    <div className="rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2">
-      <div className="text-[10px] font-medium uppercase text-neutral-400">{label}</div>
-      <div className="mt-1 text-sm font-semibold text-neutral-900">{value}</div>
-      <div className="mt-0.5 truncate text-xs text-neutral-500">{detail}</div>
+    <div className="min-w-0 bg-white px-4 py-3">
+      <div className="flex items-center gap-1.5 text-[10px] font-medium uppercase text-neutral-400">
+        {icon}
+        <span className="truncate">{label}</span>
+      </div>
+      <div className="mt-1 truncate text-sm font-semibold text-neutral-900" title={value}>{value}</div>
+      <div className="mt-0.5 truncate text-[11px] text-neutral-500" title={detail}>{detail}</div>
     </div>
   );
 }
@@ -4431,33 +5442,99 @@ function KeyValue({ label, value }: { label: string; value: string }) {
   );
 }
 
+type FirmPersonProfile = {
+  name: string;
+  title: string;
+  email: string | null;
+  phone: string | null;
+  linkedin: string | null;
+  bio: string | null;
+  education?: string[];
+  experience?: string[];
+  skills?: string[];
+  certifications?: string[];
+  publications?: string[];
+  cases_handled?: string[];
+  bar_admissions?: string[];
+  source_url?: string | null;
+};
+
+function PersonProfileDetails({ person }: { person: FirmPersonProfile }) {
+  const sections = [
+    ["Education", person.education],
+    ["Experience", person.experience],
+    ["Bar admissions", person.bar_admissions],
+    ["Skills", person.skills],
+    ["Certifications", person.certifications],
+    ["Publications", person.publications],
+    ["Cases handled", person.cases_handled],
+  ] as const;
+  const populated = sections.map(([label, values]) => ({
+    label,
+    values: Array.isArray(values) ? values.filter((value) => typeof value === "string" && value.trim()) : [],
+  })).filter((section) => section.values.length);
+  let sourceUrl: string | null = null;
+  try {
+    const url = new URL(person.source_url ?? "");
+    if (url.protocol === "https:" || url.protocol === "http:") sourceUrl = url.href;
+  } catch { /* Missing or malformed source URLs are not links. */ }
+  if (!populated.length && !sourceUrl) return null;
+
+  return (
+    <details className="group mt-3 border-t border-neutral-200 pt-2 text-xs">
+      <summary className="flex cursor-pointer list-none items-center gap-1.5 rounded text-sky-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-600 [&::-webkit-details-marker]:hidden">
+        <ChevronRight className="h-3.5 w-3.5 shrink-0 transition-transform group-open:rotate-90" />
+        Professional details
+      </summary>
+      <div className="mt-3 space-y-3 break-words text-neutral-700">
+        {populated.map(({ label, values }) => (
+          <section key={label}>
+            <h4 className="mb-1 font-semibold text-neutral-900">{label}</h4>
+            <ul className="list-disc space-y-1 pl-4">
+              {values.map((value, index) => <li key={index}>{value}</li>)}
+            </ul>
+          </section>
+        ))}
+        {sourceUrl && (
+          <a href={sourceUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-sky-700 hover:underline">
+            Profile source <ExternalLink className="h-3 w-3" />
+          </a>
+        )}
+      </div>
+    </details>
+  );
+}
+
 function PeopleList({
   title,
   items,
   empty,
+  firmName,
 }: {
   title: string;
-  items: Array<{ name: string; title: string; email: string | null; phone: string | null; linkedin: string | null; bio: string | null }>;
+  items: FirmPersonProfile[];
   empty: string;
+  firmName: string;
 }) {
   return (
     <InfoBlock title={title}>
       {items.length === 0 && <div className="text-xs text-neutral-400">{empty}</div>}
       <div className="space-y-2">
         {items.map((person, index) => (
-          <div key={`${person.name}-${index}`} className="rounded-md bg-neutral-50 p-2">
-            <div className="text-sm font-medium text-neutral-900">{person.name}</div>
-            <div className="text-xs text-neutral-500">{display(person.title)}</div>
-            <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-neutral-500">
+          <div key={`${person.name}-${index}`} className="min-w-0 rounded-md bg-neutral-50 p-2">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <div className="break-words text-sm font-medium text-neutral-900">{person.name}</div>
+                <div className="break-words text-xs text-neutral-500">{display(person.title)}</div>
+              </div>
+              <PersonLinkedInAction name={person.name} firmName={firmName} linkedin={person.linkedin} />
+            </div>
+            <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 break-all text-[11px] text-neutral-500">
               {person.email && <span>{person.email}</span>}
               {person.phone && <span>{person.phone}</span>}
-              {person.linkedin && (
-                <a href={person.linkedin} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">
-                  LinkedIn
-                </a>
-              )}
             </div>
-            {person.bio && <p className="mt-1 line-clamp-3 text-xs text-neutral-600">{person.bio}</p>}
+            {person.bio && <p className="mt-2 whitespace-pre-wrap break-words text-xs leading-relaxed text-neutral-600">{person.bio}</p>}
+            <PersonProfileDetails person={person} />
           </div>
         ))}
       </div>
@@ -4465,15 +5542,20 @@ function PeopleList({
   );
 }
 
-function ExtractedContacts({ contacts }: { contacts: PifInfoResponse["contacts"] }) {
+function ExtractedContacts({ contacts, firmName }: { contacts: PifInfoResponse["contacts"]; firmName: string }) {
   return (
     <InfoBlock title="Extracted Contacts">
       {contacts.length === 0 && <div className="text-xs text-neutral-400">No extracted contacts.</div>}
       <div className="space-y-2">
         {contacts.map((contact, index) => (
           <div key={`${contact.name}-${index}`} className="rounded-md bg-neutral-50 p-2 text-xs">
-            <div className="font-medium text-neutral-900">{display(contact.name)}</div>
-            <div className="text-neutral-500">{display(contact.title)}</div>
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <div className="truncate font-medium text-neutral-900">{display(contact.name)}</div>
+                <div className="text-neutral-500">{display(contact.title)}</div>
+              </div>
+              <PersonLinkedInAction name={contact.name} firmName={firmName} linkedin={contact.linkedin} />
+            </div>
             <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-neutral-500">
               {contact.email && <span>{contact.email}</span>}
               {contact.phone && <span>{contact.phone}</span>}

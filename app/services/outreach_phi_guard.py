@@ -105,7 +105,7 @@ async def check_no_patient_data_in_outreach(
     try:
         llm = await call_skill_json(
             skill_path=_SKILL_PATH,
-            model=os.getenv("OUTREACH_PHI_GUARD_MODEL", "openclaw/proxy"),
+            model=os.getenv("OUTREACH_PHI_GUARD_MODEL", "openclaw/neo"),
             payload={"subject": subject, "body": body},
             required_fields=["contains_phi", "reason"],
             timeout_s=150,
@@ -113,6 +113,7 @@ async def check_no_patient_data_in_outreach(
             retries=2,
             prompt_cache_key=f"outreach-phi-guard:{digest}",
             prompt_cache_retention="24h",
+            allow_tools=False,
         )
         contains_phi = bool(llm.parsed.get("contains_phi"))
         reason = str(llm.parsed.get("reason") or "").strip()[:500]

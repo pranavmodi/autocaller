@@ -1,0 +1,208 @@
+{
+  "checked_at": "2026-09-21T13:43:36.926845+00:00",
+  "coverage": [
+    {
+      "folder": "\"INBOX\"",
+      "since": "2026-08-01",
+      "messages": 119
+    },
+    {
+      "folder": "\"Drafts\"",
+      "since": "2026-08-01",
+      "messages": 4
+    },
+    {
+      "folder": "\"Templates\"",
+      "since": "2026-08-01",
+      "messages": 0
+    },
+    {
+      "folder": "\"Snoozed\"",
+      "since": "2026-08-01",
+      "messages": 0
+    },
+    {
+      "folder": "\"Sent\"",
+      "since": "2026-08-01",
+      "messages": 129
+    },
+    {
+      "folder": "\"Spam\"",
+      "since": "2026-08-01",
+      "messages": 1
+    },
+    {
+      "folder": "\"Trash\"",
+      "since": "2026-08-01",
+      "messages": 0
+    },
+    {
+      "folder": "\"Notification\"",
+      "since": "2026-08-01",
+      "messages": 10
+    },
+    {
+      "folder": "\"Newsletter\"",
+      "since": "2026-08-01",
+      "messages": 48
+    },
+    {
+      "folder": "\"Archive\"",
+      "since": "2026-08-01",
+      "messages": 0
+    }
+  ],
+  "errors": [],
+  "matches": {
+    "anita@levianlaw.com": [
+      {
+        "folder": "\"Sent\"",
+        "uid": "969",
+        "from": "pranav@possiblemindshq.com",
+        "to": "anita@levianlaw.com",
+        "subject": "Re: Is Lead Docket at Levian Law tying marketing spend to signed cases?",
+        "date": "Tue, 25 Aug 2026 23:25:22 +0530",
+        "message_id": "<1a03a0fffa4.234f48c856163.2096852097442969861@possiblemindshq.com>",
+        "in_reply_to": "<0100019ff89dcefc-66e62110-3456-422f-8fa8-8d0e8e40bd41-000000@email.amazonses.com>",
+        "references": "<0100019ff89dcefc-66e62110-3456-422f-8fa8-8d0e8e40bd41-000000@email.amazonses.com>",
+        "auto_submitted": "",
+        "bounce": false
+      }
+    ],
+    "kevin@primolaw.com": [
+      {
+        "folder": "\"Sent\"",
+        "uid": "968",
+        "from": "pranav@possiblemindshq.com",
+        "to": "kevin@primolaw.com",
+        "subject": "Re: Is Lead Docket at Primo Law, P.C. tying marketing spend to signed cases?",
+        "date": "Tue, 25 Aug 2026 23:20:18 +0530",
+        "message_id": "<1a03a0b5f27.4e8578f356107.8131442006811851643@possiblemindshq.com>",
+        "in_reply_to": "<0100019ff8b0270e-31cdfbf0-aae9-4fb0-8596-4c39eb4d9155-000000@email.amazonses.com>",
+        "references": "<0100019ff8b0270e-31cdfbf0-aae9-4fb0-8596-4c39eb4d9155-000000@email.amazonses.com>",
+        "auto_submitted": "",
+        "bounce": false
+      }
+    ],
+    "ted@ravanlaw.com": [
+      {
+        "folder": "\"Sent\"",
+        "uid": "967",
+        "from": "pranav@possiblemindshq.com",
+        "to": "ted@ravanlaw.com",
+        "subject": "Re: Is Lead Docket at Ravan Law tying marketing spend to signed cases?",
+        "date": "Tue, 25 Aug 2026 23:15:16 +0530",
+        "message_id": "<1a03a06c26d.1ca95d2d9646.7318563776960803105@possiblemindshq.com>",
+        "in_reply_to": "<0100019ff8b4bdce-e885d848-73d0-4c73-a806-9da1ed1f1628-000000@email.amazonses.com>",
+        "references": "<0100019ff8b4bdce-e885d848-73d0-4c73-a806-9da1ed1f1628-000000@email.amazonses.com>",
+        "auto_submitted": "",
+        "bounce": false
+      }
+    ],
+    "gregory.ante@antelaw.com": [
+      {
+        "folder": "\"Sent\"",
+        "uid": "966",
+        "from": "pranav@possiblemindshq.com",
+        "to": "gregory.ante@antelaw.com",
+        "subject": "Re: Is Lead Docket at Ante Law Firm tying marketing spend to signed cases?",
+        "date": "Tue, 25 Aug 2026 23:05:14 +0530",
+        "message_id": "<1a039fd91b9.5dbad36c18414.1193048947069176768@possiblemindshq.com>",
+        "in_reply_to": "<0100019ff7d8f8ad-b55ed4f8-9cb8-471c-8ca9-c6e68e13c0ee-000000@email.amazonses.com>",
+        "references": "<0100019ff7d8f8ad-b55ed4f8-9cb8-471c-8ca9-c6e68e13c0ee-000000@email.amazonses.com>",
+        "auto_submitted": "",
+        "bounce": false
+      }
+    ],
+    "simon@cmplawgroup.com": [
+      {
+        "folder": "\"Sent\"",
+        "uid": "965",
+        "from": "pranav@possiblemindshq.com",
+        "to": "simon@cmplawgroup.com",
+        "subject": "Re: Is Lead Docket at CMP Law Group tying marketing spend to signed cases?",
+        "date": "Tue, 25 Aug 2026 22:55:12 +0530",
+        "message_id": "<1a039f4615d.316f17709424.1389700480112905634@possiblemindshq.com>",
+        "in_reply_to": "<0100019ff7eb50c9-6ce95a8f-8252-408a-87ff-08cf6bad8a85-000000@email.amazonses.com>",
+        "references": "<0100019ff7eb50c9-6ce95a8f-8252-408a-87ff-08cf6bad8a85-000000@email.amazonses.com>",
+        "auto_submitted": "",
+        "bounce": false
+      }
+    ],
+    "kevin@colonylaw.com": [
+      {
+        "folder": "\"Sent\"",
+        "uid": "964",
+        "from": "pranav@possiblemindshq.com",
+        "to": "kevin@colonylaw.com",
+        "subject": "Re: Is Lead Docket at Colony Law tying marketing spend to signed cases?",
+        "date": "Tue, 25 Aug 2026 22:45:09 +0530",
+        "message_id": "<1a039eb3021.7589dc9758551.139318666614308748@possiblemindshq.com>",
+        "in_reply_to": "<0100019ff7f48136-7661cb23-2b80-4fe8-aff1-041853b46a7e-000000@email.amazonses.com>",
+        "references": "<0100019ff7f48136-7661cb23-2b80-4fe8-aff1-041853b46a7e-000000@email.amazonses.com>",
+        "auto_submitted": "",
+        "bounce": false
+      }
+    ],
+    "gabrielfeiz@feizlaw.com": [
+      {
+        "folder": "\"Sent\"",
+        "uid": "963",
+        "from": "pranav@possiblemindshq.com",
+        "to": "gabrielfeiz@feizlaw.com",
+        "subject": "Re: Is Lead Docket at Feiz Law PC tying marketing spend to signed cases?",
+        "date": "Tue, 25 Aug 2026 22:35:07 +0530",
+        "message_id": "<1a039e1fecc.721fdad69169.3951569076527760798@possiblemindshq.com>",
+        "in_reply_to": "<0100019ff7fdaeef-0c21c2d8-d1bd-45c2-90e1-ecc351377566-000000@email.amazonses.com>",
+        "references": "<0100019ff7fdaeef-0c21c2d8-d1bd-45c2-90e1-ecc351377566-000000@email.amazonses.com>",
+        "auto_submitted": "",
+        "bounce": false
+      }
+    ],
+    "ronen@fplpc.com": [
+      {
+        "folder": "\"Sent\"",
+        "uid": "962",
+        "from": "pranav@possiblemindshq.com",
+        "to": "ronen@fplpc.com",
+        "subject": "Re: Is Lead Docket at First Pacific Law tying marketing spend to signed cases?",
+        "date": "Tue, 25 Aug 2026 22:25:04 +0530",
+        "message_id": "<1a039d8ca40.ee1cf4558385.5073634220862915609@possiblemindshq.com>",
+        "in_reply_to": "<0100019ff806d9e3-27b07184-0e6b-48bb-95b0-b2b0c6c47b04-000000@email.amazonses.com>",
+        "references": "<0100019ff806d9e3-27b07184-0e6b-48bb-95b0-b2b0c6c47b04-000000@email.amazonses.com>",
+        "auto_submitted": "",
+        "bounce": false
+      }
+    ],
+    "shawn@hakakianlaw.com": [
+      {
+        "folder": "\"Sent\"",
+        "uid": "961",
+        "from": "pranav@possiblemindshq.com",
+        "to": "shawn@hakakianlaw.com",
+        "subject": "Re: Is Lead Docket at Hakakian Law Group, PC tying marketing spend to signed cases?",
+        "date": "Tue, 25 Aug 2026 22:15:31 +0530",
+        "message_id": "<1a039d00c5f.5084f62b6311.387906433646508708@possiblemindshq.com>",
+        "in_reply_to": "<0100019ff810062e-c412b5b6-7df2-45b1-92ac-1f4c452be64d-000000@email.amazonses.com>",
+        "references": "<0100019ff810062e-c412b5b6-7df2-45b1-92ac-1f4c452be64d-000000@email.amazonses.com>",
+        "auto_submitted": "",
+        "bounce": false
+      }
+    ],
+    "jh@halplaw.com": [
+      {
+        "folder": "\"Sent\"",
+        "uid": "960",
+        "from": "pranav@possiblemindshq.com",
+        "to": "jh@halplaw.com",
+        "subject": "Re: Is Lead Docket at Halpern & Associates tying marketing spend to signed cases?",
+        "date": "Tue, 25 Aug 2026 22:05:28 +0530",
+        "message_id": "<1a039c6daf7.1f308ca517820.4712005396439532448@possiblemindshq.com>",
+        "in_reply_to": "<0100019ff8149c4e-6387a075-2977-4ef5-b40d-a55f0ecb8695-000000@email.amazonses.com>",
+        "references": "<0100019ff8149c4e-6387a075-2977-4ef5-b40d-a55f0ecb8695-000000@email.amazonses.com>",
+        "auto_submitted": "",
+        "bounce": false
+      }
+    ]
+  }
+}

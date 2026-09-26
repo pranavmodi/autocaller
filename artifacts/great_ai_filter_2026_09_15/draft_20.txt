@@ -1,0 +1,16 @@
+Subject: Re: A client-trust question
+
+Hi Lesly,
+
+My earlier note asked about designing client communication as you build Benavides Law. This article looks at a related choice: adding AI to existing routines or designing the routines around it.
+
+The main point is that clear responsibilities and shared information matter as much as the technology. That's shaping our work with PI firms at Possible Minds.
+
+https://getpossibleminds.com/t/KYFvl-g00Q
+
+As founder, would you find it harder to choose the AI or decide how the team should work with it? I'd appreciate a quick take.
+
+Best,
+Pranav
+Founder, Possible Minds
+

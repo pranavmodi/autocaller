@@ -1,0 +1,13 @@
+Subject: missed signed cases after hours
+
+Hi Hadi,
+
+I wanted to share this short note about the AI system we built for Precise Imaging. It explains how the team flags mistakes, reviews them, and tests fixes before they go live.
+
+https://getpossibleminds.com/t/97eAxuT0OA
+
+At Los Angeles City Law, would after-hours intake or client updates be the more useful place to start?
+
+Best,
+Pranav
+Founder, Possible Minds

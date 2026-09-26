@@ -1,0 +1,350 @@
+{
+  "checked_at_utc": "2026-09-11T13:02:24.008037+00:00",
+  "coverage": {
+    "INBOX": 235,
+    "Drafts": 7,
+    "Templates": 0,
+    "Snoozed": 0,
+    "Sent": 537,
+    "Spam": 2,
+    "Trash": 0,
+    "Notification": 38,
+    "Newsletter": 77,
+    "Archive": 0
+  },
+  "errors": {},
+  "rows": [
+    {
+      "rank": 1,
+      "name": "William H. Dailey",
+      "email": "william@driverslegaldefense.com",
+      "firm": "Drivers Legal Defense, P.C.",
+      "contact_id": "593563b335a14ecd8667b3d540d18381",
+      "canonical_firm_id": "e54c383d-f7d9-409b-aad4-cafe80fdc986",
+      "normalized_domain": "driverslegaldefense.com",
+      "recorded_last_outbound_utc": "2026-06-02T16:18:52.162961+00:00",
+      "recorded_prior_subjects": [
+        "Question from the team behind Precise Imaging updates",
+        "Precise Imaging -- quick records question"
+      ],
+      "thread_status": "recovered",
+      "thread_source": {
+        "folder": "Sent",
+        "uid": "502",
+        "date_utc": "2026-06-02T16:18:51+00:00",
+        "from": [
+          "pranav@possiblemindshq.com"
+        ],
+        "to": [
+          "william@driverslegaldefense.com"
+        ],
+        "subject": "Question from the team behind Precise Imaging updates",
+        "message_id": "<19e8921758e.329c165c50410.1089561689003330168@possiblemindshq.com>",
+        "in_reply_to": "",
+        "references": "",
+        "auto_submitted": ""
+      },
+      "in_reply_to": "<19e8921758e.329c165c50410.1089561689003330168@possiblemindshq.com>",
+      "references": "<19e8921758e.329c165c50410.1089561689003330168@possiblemindshq.com>",
+      "preserved_subject": "Question from the team behind Precise Imaging updates",
+      "recent_mailbox_events_since_audit": []
+    },
+    {
+      "rank": 2,
+      "name": "Jeffrey L. Fayngor",
+      "email": "jeff@jlffirm.com",
+      "firm": "The JLF Firm",
+      "contact_id": "51be9ddf203b43c9b709af46cee39039",
+      "canonical_firm_id": "f21b21ac-d952-47e0-bcdc-4e9a5254c9db",
+      "normalized_domain": "jlffirm.com",
+      "recorded_last_outbound_utc": "2026-06-02T16:19:13.737794+00:00",
+      "recorded_prior_subjects": [
+        "PI intake follow-up",
+        "Precise Imaging -- quick records question"
+      ],
+      "thread_status": "recovered",
+      "thread_source": {
+        "folder": "Sent",
+        "uid": "503",
+        "date_utc": "2026-06-02T16:19:13+00:00",
+        "from": [
+          "pranav@possiblemindshq.com"
+        ],
+        "to": [
+          "jeff@jlffirm.com"
+        ],
+        "subject": "PI intake follow-up",
+        "message_id": "<19e8921c95a.66a7eeb749274.8245074753800225435@possiblemindshq.com>",
+        "in_reply_to": "",
+        "references": "",
+        "auto_submitted": ""
+      },
+      "in_reply_to": "<19e8921c95a.66a7eeb749274.8245074753800225435@possiblemindshq.com>",
+      "references": "<19e8921c95a.66a7eeb749274.8245074753800225435@possiblemindshq.com>",
+      "preserved_subject": "PI intake follow-up",
+      "recent_mailbox_events_since_audit": []
+    },
+    {
+      "rank": 3,
+      "name": "Warren Paboojian",
+      "email": "wrp@paboojianlaw.com",
+      "firm": "Paboojian, Inc.",
+      "contact_id": "fc_f5b327b0c7ce45aba589c960",
+      "canonical_firm_id": "65b65220-1332-46e9-9058-8ca721dd9d56",
+      "normalized_domain": "paboojianlaw.com",
+      "recorded_last_outbound_utc": "2026-06-02T19:02:17.42255+00:00",
+      "recorded_prior_subjects": [
+        "Precise Imaging status updates",
+        "Precise Imaging -- quick records question"
+      ],
+      "thread_status": "recovered",
+      "thread_source": {
+        "folder": "Sent",
+        "uid": "511",
+        "date_utc": "2026-06-02T19:02:17+00:00",
+        "from": [
+          "pranav@possiblemindshq.com"
+        ],
+        "to": [
+          "wrp@paboojianlaw.com"
+        ],
+        "subject": "Precise Imaging status updates",
+        "message_id": "<19e89b712c4.833d6c1c47455.8925313654873793698@possiblemindshq.com>",
+        "in_reply_to": "",
+        "references": "",
+        "auto_submitted": ""
+      },
+      "in_reply_to": "<19e89b712c4.833d6c1c47455.8925313654873793698@possiblemindshq.com>",
+      "references": "<19e89b712c4.833d6c1c47455.8925313654873793698@possiblemindshq.com>",
+      "preserved_subject": "Precise Imaging status updates",
+      "recent_mailbox_events_since_audit": []
+    },
+    {
+      "rank": 4,
+      "name": "Nima Haddadi",
+      "email": "nima@thehlawgroup.com",
+      "firm": "The H Law Group",
+      "contact_id": "eea36463877f42d2b98b14e5613da28b",
+      "canonical_firm_id": "88fdabd2-9ea2-43fb-a3a5-b238c1fae96b",
+      "normalized_domain": "thehfirm.com",
+      "recorded_last_outbound_utc": "2026-06-24T16:10:06.430033+00:00",
+      "recorded_prior_subjects": [
+        "Precise Imaging and AI readiness"
+      ],
+      "thread_status": "recovered",
+      "thread_source": {
+        "folder": "Sent",
+        "uid": "676",
+        "date_utc": "2026-06-24T16:10:05+00:00",
+        "from": [
+          "pranav@possiblemindshq.com"
+        ],
+        "to": [
+          "nima@thehlawgroup.com"
+        ],
+        "subject": "Precise Imaging and AI readiness",
+        "message_id": "<19efa6556e3.749c122d21759.1616152948937040099@possiblemindshq.com>",
+        "in_reply_to": "",
+        "references": "",
+        "auto_submitted": ""
+      },
+      "in_reply_to": "<19efa6556e3.749c122d21759.1616152948937040099@possiblemindshq.com>",
+      "references": "<19efa6556e3.749c122d21759.1616152948937040099@possiblemindshq.com>",
+      "preserved_subject": "Precise Imaging and AI readiness",
+      "recent_mailbox_events_since_audit": []
+    },
+    {
+      "rank": 5,
+      "name": "Gary K. Walch",
+      "email": "gary@walchlaw.com",
+      "firm": "Gary K. Walch, A Law Corporation",
+      "contact_id": "5bff7731694b43bb8ebe96bb02b62159",
+      "canonical_firm_id": "08b09d45-ee17-4135-9469-2efab55a9055",
+      "normalized_domain": "walchlaw.com",
+      "recorded_last_outbound_utc": "2026-06-26T16:02:17.276937+00:00",
+      "recorded_prior_subjects": [
+        "walch law's ai readiness"
+      ],
+      "thread_status": "recovered",
+      "thread_source": {
+        "folder": "Sent",
+        "uid": "713",
+        "date_utc": "2026-06-26T16:02:16+00:00",
+        "from": [
+          "pranav@possiblemindshq.com"
+        ],
+        "to": [
+          "gary@walchlaw.com"
+        ],
+        "subject": "walch law's ai readiness",
+        "message_id": "<19f04aae408.560aa6d552600.5645410020255855832@possiblemindshq.com>",
+        "in_reply_to": "",
+        "references": "",
+        "auto_submitted": ""
+      },
+      "in_reply_to": "<19f04aae408.560aa6d552600.5645410020255855832@possiblemindshq.com>",
+      "references": "<19f04aae408.560aa6d552600.5645410020255855832@possiblemindshq.com>",
+      "preserved_subject": "walch law's ai readiness",
+      "recent_mailbox_events_since_audit": []
+    },
+    {
+      "rank": 6,
+      "name": "P. Ryan Banafshe",
+      "email": "bana@banalaw.com",
+      "firm": "Bana Law",
+      "contact_id": "d4e0f8af7f0f46be84977adf04960d75",
+      "canonical_firm_id": "a5828a3b-7a8c-40c3-8945-3b7a041a718a",
+      "normalized_domain": "banalaw.com",
+      "recorded_last_outbound_utc": "2026-06-26T16:05:53.177777+00:00",
+      "recorded_prior_subjects": [
+        "ai readiness at bana law"
+      ],
+      "thread_status": "recovered",
+      "thread_source": {
+        "folder": "Sent",
+        "uid": "714",
+        "date_utc": "2026-06-26T16:05:52+00:00",
+        "from": [
+          "pranav@possiblemindshq.com"
+        ],
+        "to": [
+          "bana@banalaw.com"
+        ],
+        "subject": "ai readiness at bana law",
+        "message_id": "<19f04ae31ac.34e66a29288678.5051230179090542218@possiblemindshq.com>",
+        "in_reply_to": "",
+        "references": "",
+        "auto_submitted": ""
+      },
+      "in_reply_to": "<19f04ae31ac.34e66a29288678.5051230179090542218@possiblemindshq.com>",
+      "references": "<19f04ae31ac.34e66a29288678.5051230179090542218@possiblemindshq.com>",
+      "preserved_subject": "ai readiness at bana law",
+      "recent_mailbox_events_since_audit": []
+    },
+    {
+      "rank": 7,
+      "name": "Sam Ryan Heidari",
+      "email": "sam@heidarilawgroup.com",
+      "firm": "Heidari Law Group",
+      "contact_id": "fc_c78b24c561f340889a2161d5",
+      "canonical_firm_id": "0e4d0b22-c8ce-499b-a26f-c1c45c252f15",
+      "normalized_domain": "heidarilawgroup.com",
+      "recorded_last_outbound_utc": "2026-06-29T16:35:43.003646+00:00",
+      "recorded_prior_subjects": [
+        "missed signed cases after hours",
+        "missed calls and your Google ranking"
+      ],
+      "thread_status": "recovered",
+      "thread_source": {
+        "folder": "Sent",
+        "uid": "746",
+        "date_utc": "2026-06-29T16:35:42+00:00",
+        "from": [
+          "pranav@possiblemindshq.com"
+        ],
+        "to": [
+          "sam@heidarilawgroup.com"
+        ],
+        "subject": "missed signed cases after hours",
+        "message_id": "<19f143c9608.375f592e28485.3950130587893521529@possiblemindshq.com>",
+        "in_reply_to": "",
+        "references": "",
+        "auto_submitted": ""
+      },
+      "in_reply_to": "<19f143c9608.375f592e28485.3950130587893521529@possiblemindshq.com>",
+      "references": "<19f143c9608.375f592e28485.3950130587893521529@possiblemindshq.com>",
+      "preserved_subject": "missed signed cases after hours",
+      "recent_mailbox_events_since_audit": []
+    },
+    {
+      "rank": 8,
+      "name": "Oganes Gegamyan",
+      "email": "oganes@kglegalgroup.com",
+      "firm": "KG Legal Group",
+      "contact_id": "2f5600514b444dd181fabab06feefc66",
+      "canonical_firm_id": "d78e88ec-3f65-4e54-9f0b-6594c705d424",
+      "normalized_domain": "kglegalgroup.com",
+      "recorded_last_outbound_utc": "2026-06-29T16:57:22.655004+00:00",
+      "recorded_prior_subjects": [
+        "not Miss Havisham",
+        "kg legal group and the map pack"
+      ],
+      "thread_status": "recovered",
+      "thread_source": {
+        "folder": "Sent",
+        "uid": "750",
+        "date_utc": "2026-06-29T16:57:22+00:00",
+        "from": [
+          "pranav@possiblemindshq.com"
+        ],
+        "to": [
+          "oganes@kglegalgroup.com"
+        ],
+        "subject": "not Miss Havisham",
+        "message_id": "<19f145069f5.2ff7021929860.845318729195025864@possiblemindshq.com>",
+        "in_reply_to": "",
+        "references": "",
+        "auto_submitted": ""
+      },
+      "in_reply_to": "<19f145069f5.2ff7021929860.845318729195025864@possiblemindshq.com>",
+      "references": "<19f145069f5.2ff7021929860.845318729195025864@possiblemindshq.com>",
+      "preserved_subject": "not Miss Havisham",
+      "recent_mailbox_events_since_audit": []
+    },
+    {
+      "rank": 9,
+      "name": "Alon Aliav",
+      "email": "alon@avalonlaw.com",
+      "firm": "Avalon Law Firm, APC",
+      "contact_id": "fc_96f5deb3e0e04ff7bdca9096",
+      "canonical_firm_id": "f006436b-2454-4bb7-9e4d-dc7b582c41f7",
+      "normalized_domain": "avalonlaw.com",
+      "recorded_last_outbound_utc": "2026-08-12T17:05:05.705276+00:00",
+      "recorded_prior_subjects": [
+        "Can Avalon Law see kept-case CAC by source?",
+        "Is Lead Docket at Avalon Law tying marketing spend to signed cases?"
+      ],
+      "thread_status": "unrecoverable",
+      "thread_source": null,
+      "in_reply_to": null,
+      "references": null,
+      "preserved_subject": "Can Avalon Law see kept-case CAC by source?",
+      "recent_mailbox_events_since_audit": [],
+      "blocker": "Latest successful outbound used Resend, is absent from Zoho mailbox, local records contain only provider UUID, and configured Resend keys are send-only (GET /emails/{id} returns 401). RFC Message-ID cannot be fabricated."
+    },
+    {
+      "rank": 10,
+      "name": "R. Rex Parris",
+      "email": "rrex@parris.com",
+      "firm": "PARRIS",
+      "contact_id": "f63a46e757874f1b89d2c43922357684",
+      "canonical_firm_id": "37f5d03d-1d36-4d8c-8eda-e9413e9a9c01",
+      "normalized_domain": "parris.com",
+      "recorded_last_outbound_utc": "2026-08-15T00:15:19.705283+00:00",
+      "recorded_prior_subjects": [
+        "Marie Williams submitted a Google review about PARRIS",
+        "Jonathan L. submitted a Yelp review about PARRIS"
+      ],
+      "thread_status": "unrecoverable",
+      "thread_source": null,
+      "in_reply_to": null,
+      "references": null,
+      "preserved_subject": "Marie Williams submitted a Google review about PARRIS",
+      "recent_mailbox_events_since_audit": [],
+      "blocker": "Latest successful outbound used Resend, is absent from Zoho mailbox, local records contain only provider UUID, and configured Resend keys are send-only (GET /emails/{id} returns 401). RFC Message-ID cannot be fabricated."
+    }
+  ],
+  "live_conflict_check": {
+    "checked_at_utc": "2026-09-11T13:02:24.008037+00:00",
+    "active_pending_recipient_or_domain_conflicts": 0,
+    "newer_email_logs_since_mailbox_audit": 0,
+    "recent_mailbox_events_since_audit": 0
+  },
+  "counts": {
+    "requested": 10,
+    "thread_recovered": 8,
+    "held_unrecoverable": 2
+  },
+  "mutation_performed": false
+}
+

@@ -14,7 +14,7 @@ DEFAULT_SKILL_PATH = (
     / ".claude/skills/lead-feedback-classifier/SKILL.md"
 )
 SKILL_PATH = Path(os.getenv("LEAD_FEEDBACK_SKILL_PATH", str(DEFAULT_SKILL_PATH)))
-MODEL = os.getenv("LEAD_FEEDBACK_MODEL", "openclaw/proxy")
+MODEL = os.getenv("LEAD_FEEDBACK_MODEL", "openclaw/neo")
 
 OUTCOMES = {
     "booked_qualified_conversation",
@@ -115,6 +115,8 @@ async def classify_feedback_event(
         ],
         model=model or MODEL,
         max_tokens=int(os.getenv("LEAD_FEEDBACK_MAX_TOKENS", "1200")),
+        lane=os.getenv("OPENCLAW_RPC_BATCH_LANE", "possibleos-batch"),
+        allow_tools=False,
     )
     classified = validate_classification(result.parsed)
     classified.model = result.model

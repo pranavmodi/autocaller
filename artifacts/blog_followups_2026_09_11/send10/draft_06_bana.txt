@@ -1,0 +1,14 @@
+Subject: ai readiness at bana law
+
+Hi Ryan,
+
+Following up on the AI-readiness audit. I wrote up how a small PI firm uses Claude to prepare scheduling packets, medical summaries and demand materials for lawyer review. In the lawyer's walkthrough, a first scheduling packet took about ten minutes; he then checked the deadlines and adjusted the documents. It is a useful example of reducing assembly work while keeping review in place.
+
+https://getpossibleminds.com/t/8ROau16aYg
+
+Would document preparation or medical-record summaries be more useful to improve first at Bana Law?
+
+Best,
+Pranav
+Founder, Possible Minds
+

@@ -1,0 +1,16 @@
+Subject: Re: Is Lead Docket at First Law Group tying marketing spend to signed cases?
+
+Hi Dean,
+
+Thought this might be useful alongside my earlier question about Lead Docket and Filevine.
+
+I wrote up how a solo PI lawyer used Claude and Clio to turn dictated intake facts into a structured matter, document packet, and task list, while keeping the lawyer in control of the consequential work:
+
+https://getpossibleminds.com/t/NVFI-e7PrQ
+
+Different systems, but the same operational question: where can the handoff be automated without losing control? I'd be curious which part feels most relevant at First Law Group.
+
+Best,
+Pranav
+Founder, Possible Minds
+https://getpossibleminds.com

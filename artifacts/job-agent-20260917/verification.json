@@ -1,0 +1,37 @@
+{
+  "queue_total": 567,
+  "source_total": 567,
+  "collection": {
+    "id": "774325e7d36248158f253088830ff5be",
+    "status": "completed",
+    "total": 567,
+    "processed": 567,
+    "added": 0,
+    "updated": 0,
+    "invalid": 0,
+    "error": null,
+    "config_revision": 0,
+    "remaining": 0,
+    "started_at": "2026-09-17T08:10:47.599133+00:00",
+    "updated_at": "2026-09-17T08:10:55.842829+00:00",
+    "completed_at": "2026-09-17T08:10:55.842853+00:00"
+  },
+  "preserved_decisions": 100,
+  "unknown_dates": 8,
+  "newest_posted": "2026-09-17",
+  "oldest_posted": "2026-07-29",
+  "events_total": 4,
+  "browser_errors": [],
+  "checks": [
+    "all queue pages",
+    "default newest date",
+    "unknown dates last",
+    "ascending order",
+    "pagination",
+    "activity",
+    "settings",
+    "manual sync",
+    "mobile width",
+    "saved reviews"
+  ]
+}

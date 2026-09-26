@@ -1825,6 +1825,8 @@ async def _compose_human_status_with_llm(
             if os.getenv("MASTER_AGENT_PROMPT_CACHE_PASSTHROUGH", "").strip().lower() in {"1", "true", "yes", "on"}
             else None
         ),
+        lane=os.getenv("OPENCLAW_RPC_BATCH_LANE", "possibleos-batch"),
+        allow_tools=False,
     )
     cached_tokens = _cached_tokens_from_usage(result.usage)
     status = _validate_llm_human_status(result.parsed, fallback_status)

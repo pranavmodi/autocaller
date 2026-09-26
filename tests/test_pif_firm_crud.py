@@ -314,14 +314,19 @@ def test_api_forwards_contact_email_and_staff_count_ranges(monkeypatch):
     client = TestClient(app)
 
     response = client.get(
-        "/api/pif/firms?contact_email_min=6&contact_email_max=10&staff_count_min=26&staff_count_max=50"
+        "/api/pif/firms?contact_email_min=6&contact_email_max=10"
+        "&contact_email_range=1-5&contact_email_range=11-25"
+        "&staff_count_min=26&staff_count_max=50"
+        "&staff_count_range=0-0&staff_count_range=51-100"
     )
 
     assert response.status_code == 200
     assert captured["contact_email_min"] == 6
     assert captured["contact_email_max"] == 10
+    assert captured["contact_email_ranges"] == ["1-5", "11-25"]
     assert captured["staff_count_min"] == 26
     assert captured["staff_count_max"] == 50
+    assert captured["staff_count_ranges"] == ["0-0", "51-100"]
 
 
 def test_api_forwards_job_trigger_filters(monkeypatch):
@@ -337,14 +342,16 @@ def test_api_forwards_job_trigger_filters(monkeypatch):
     client = TestClient(app)
 
     response = client.get(
-        "/api/pif/firms?job_postings_presence=has&job_posting_role=intake&job_posting_tag=lead_conversion"
+        "/api/pif/firms?job_postings_presence=has&job_postings_presence=none"
+        "&job_posting_role=intake&job_posting_role=technology"
+        "&job_posting_tag=lead_conversion&job_posting_tag=crm_management"
         "&job_posting_query=lead%20conversion&job_posted_within_days=30"
     )
 
     assert response.status_code == 200
-    assert captured["job_postings_presence"] == "has"
-    assert captured["job_posting_role"] == "intake"
-    assert captured["job_posting_tag"] == "lead_conversion"
+    assert captured["job_postings_presences"] == ["has", "none"]
+    assert captured["job_posting_roles"] == ["intake", "technology"]
+    assert captured["job_posting_tags"] == ["lead_conversion", "crm_management"]
     assert captured["job_posting_query"] == "lead conversion"
     assert captured["job_posted_within_days"] == 30
 
@@ -364,7 +371,7 @@ def test_api_lists_job_postings_with_posting_level_filters(monkeypatch):
     response = client.get(
         "/api/pif/job-postings?search=intake&role_category=intake_conversion"
         "&trigger_tag=lead_conversion&technology=Filevine&gtm_relevance=high"
-        "&global_remote=true&posted_within_days=30&order=found_desc"
+        "&remote_scope=remote&posted_within_days=30&order=found_desc"
     )
 
     assert response.status_code == 200
@@ -374,7 +381,8 @@ def test_api_lists_job_postings_with_posting_level_filters(monkeypatch):
         "trigger_tag": "lead_conversion",
         "technology": "Filevine",
         "gtm_relevance": "high",
-        "global_remote": True,
+        "remote_scope": "remote",
+        "global_remote": None,
         "posted_within_days": 30,
         "order": "found_desc",
         "page": 1,
@@ -465,8 +473,11 @@ def test_api_forwards_autorespond_filters(monkeypatch):
     app.include_router(pif_api.router)
     client = TestClient(app)
 
-    response = client.get("/api/pif/firms?autorespond_window=7d&autorespond_type=bill_offer")
+    response = client.get(
+        "/api/pif/firms?autorespond_window=7d"
+        "&autorespond_type=bill_offer&autorespond_type=medical_records"
+    )
 
     assert response.status_code == 200
     assert captured["autorespond_window"] == "7d"
-    assert captured["autorespond_type"] == "bill_offer"
+    assert captured["autorespond_types"] == ["bill_offer", "medical_records"]

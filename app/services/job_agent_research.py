@@ -2,42 +2,25 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
+import os
 import re
 import unicodedata
 from datetime import datetime, timezone
 from typing import Literal
 from urllib.parse import urlsplit
 
+import httpx
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.services.career_job_store import source_identity
 from app.services.career_search_web import fetch_page
 
 
 logger = logging.getLogger(__name__)
-
-# Alternate pages may corroborate a role when the imported source blocks a
-# direct fetch. Keep this list to established job platforms; the employer's
-# own domain is accepted separately after company identity is verified.
-TRUSTED_JOB_HOSTS = {
-    'applytojob.com',
-    'ashbyhq.com',
-    'bamboohr.com',
-    'greenhouse.io',
-    'icims.com',
-    'indeed.com',
-    'jobvite.com',
-    'jobs.ca',
-    'lever.co',
-    'linkedin.com',
-    'myworkdayjobs.com',
-    'smartrecruiters.com',
-    'startup.jobs',
-    'ultipro.ca',
-    'workable.com',
-    'workdayjobs.com',
-}
-
+TYPESAFE_SYSTEM_ONE_URL = 'https://api.typesafe.ai/v1/systemone'
+JOB_IDENTITY_QUESTION_ID = 'same_job_identity'
 
 class Evidence(BaseModel):
     model_config = ConfigDict(extra='forbid')
@@ -114,25 +97,122 @@ def normalized(value):
     return ' '.join(re.sub(r'[^a-z0-9]+', ' ', value.casefold()).split())
 
 
-def trusted_job_host(url, official_host):
-    value = host(url)
-    if value == official_host or value.endswith('.' + official_host):
-        return True
-    return any(value == allowed or value.endswith('.' + allowed) for allowed in TRUSTED_JOB_HOSTS)
+def same_source_url(left, right):
+    """Compare mechanical URL identity without requiring presentation equality."""
+    if not left or not right:
+        return False
+    return source_identity(str(left)) == source_identity(str(right))
 
 
-def validate_job_page(page, posting):
-    content = normalized(page['content'])
-    title = normalized(posting['title'])
-    if title not in content:
-        raise ValueError('The corroborating page does not identify the same job title.')
-    firm = str(posting.get('firm_name') or '').split(' - ', 1)[0]
-    ignored = {'llp', 'llc', 'inc', 'limited', 'ltd', 'corp', 'corporation', 'company', 'private', 'plc'}
-    firm_tokens = [token for token in normalized(firm).split() if token not in ignored]
-    required = min(2, len(firm_tokens))
-    if required and sum(token in content.split() for token in firm_tokens) < required:
-        raise ValueError('The corroborating page does not identify the same employer.')
-    return page
+def _parse_job_identity_response(response, source_pages):
+    if not isinstance(response, dict) or not isinstance(response.get('answers'), dict):
+        raise ValueError('TypeSafe response is missing answers.')
+    model = response.get('model')
+    if not isinstance(model, str) or not model:
+        raise ValueError('TypeSafe response is missing its model version.')
+    scores = []
+    for index, page in enumerate(source_pages):
+        question_id = f'{JOB_IDENTITY_QUESTION_ID}_{index}'
+        answer = response['answers'].get(question_id)
+        if not isinstance(answer, dict) or answer.get('type') != 'noul':
+            raise ValueError(f'TypeSafe response is missing job-identity answer {index + 1}.')
+        probability = answer.get('noul')
+        if (isinstance(probability, bool) or not isinstance(probability, (int, float))
+                or not 0 <= probability <= 1):
+            raise ValueError(f'TypeSafe job-identity probability {index + 1} is invalid.')
+        scores.append({
+            'source_url': page.get('requested_url'),
+            'probability': float(probability),
+        })
+    best = max(scores, key=lambda item: item['probability'])
+    return {
+        'provider': 'typesafe',
+        'model': model,
+        'probability': best['probability'],
+        'selected_source_url': best['source_url'],
+        'source_probabilities': scores,
+        'source_count': len(scores),
+        'usage': response.get('usage') if isinstance(response.get('usage'), dict) else {},
+    }
+
+
+async def verify_job_identity_with_jev(page, posting, corroborating_pages=None):
+    """Semantically verify the selected role page with bounded corroborating sources."""
+    api_key = os.getenv('TYPESAFE_API_KEY', '').strip()
+    if not api_key:
+        raise RuntimeError('TYPESAFE_API_KEY is not configured for job identity verification.')
+    corroborating_pages = [candidate for candidate in (corroborating_pages or [])
+                           if not same_source_url(candidate.get('requested_url'), page.get('requested_url'))][:4]
+    source_pages = [page, *corroborating_pages]
+    candidate_sources = [{
+        'url': candidate.get('final_url') or candidate.get('requested_url'),
+        'content': str(candidate.get('content') or '')[:20_000 if index == 0 else 12_000],
+    } for index, candidate in enumerate(source_pages)]
+    questions = {}
+    for index in range(len(source_pages)):
+        questions[f'{JOB_IDENTITY_QUESTION_ID}_{index}'] = {
+            'type': 'noul',
+            'instructions': {
+                'question': (
+                    f'Does `candidate_sources[{index}]` describe the same employer and job role '
+                    'as `saved_job`?'
+                ),
+                'rules': [
+                    'Judge semantic role identity from the employer, function, specialty, seniority, and described work.',
+                    'Allow harmless presentation differences such as punctuation, capitalization, abbreviations, and appended work-mode, employment-type, or location labels.',
+                    'Answer no when the employer, function, specialty, or seniority conflicts, or when the page lacks enough role evidence.',
+                ],
+            },
+            'criteria': {
+                'true': 'The source page identifies the saved employer and materially the same job role.',
+                'false': 'It identifies a different employer or materially different role, or provides insufficient role evidence.',
+            },
+        }
+    request = {
+        'state': {
+            'saved_job': {
+                'title': posting.get('title'),
+                'employer': posting.get('firm_name'),
+                'location': posting.get('location'),
+                'description_summary': posting.get('description_summary'),
+                'responsibilities': posting.get('responsibilities'),
+                'qualifications': posting.get('qualifications'),
+            },
+            'candidate_sources': candidate_sources,
+        },
+        'model': os.getenv('JOB_AGENT_TYPESAFE_MODEL', 'jev-latest'),
+        'questions': questions,
+    }
+    timeout_s = float(os.getenv('JOB_AGENT_IDENTITY_TIMEOUT_S', '30'))
+    url = os.getenv('TYPESAFE_SYSTEM_ONE_URL', TYPESAFE_SYSTEM_ONE_URL)
+    last_error = None
+    for attempt in range(2):
+        try:
+            async with httpx.AsyncClient(timeout=timeout_s, trust_env=False) as client:
+                response = await client.post(url, headers={
+                    'Authorization': f'Bearer {api_key}',
+                    'Content-Type': 'application/json',
+                }, json=request)
+            if response.status_code in {429, 500, 502, 503, 504} and attempt == 0:
+                await asyncio.sleep(0.5)
+                continue
+            response.raise_for_status()
+            return _parse_job_identity_response(response.json(), source_pages)
+        except json.JSONDecodeError as exc:
+            last_error = exc
+            if attempt == 0:
+                await asyncio.sleep(0.5)
+                continue
+            break
+        except ValueError:
+            raise
+        except (httpx.TransportError, httpx.HTTPStatusError) as exc:
+            last_error = exc
+            if attempt == 0:
+                await asyncio.sleep(0.5)
+                continue
+            break
+    raise RuntimeError('TypeSafe Jev job identity verification is temporarily unavailable.') from last_error
 
 
 EMAIL_PATTERN = re.compile(r"[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
@@ -302,7 +382,7 @@ def published_email(address, content):
 
 
 def validate_evidence(evidence, pages, label='Evidence'):
-    page = next((p for p in pages if p['requested_url'] == evidence.source_url), None)
+    page = next((p for p in pages if same_source_url(p['requested_url'], evidence.source_url)), None)
     if not page or page['http_status'] != 200:
         raise ValueError(f'{label} source page could not be verified.')
     if not evidence_present(evidence.text, page['content']):
@@ -310,8 +390,25 @@ def validate_evidence(evidence, pages, label='Evidence'):
     return page
 
 
+def validate_evidence_with_stored_fallback(evidence, stored_evidence, pages, label='Evidence'):
+    """Recover a model paraphrase with a previously verified, freshly rechecked excerpt."""
+    try:
+        return validate_evidence(evidence, pages, label), evidence, False
+    except ValueError as original_error:
+        if 'excerpt could not be verified' not in str(original_error) or not stored_evidence:
+            raise
+        try:
+            fallback = Evidence.model_validate(stored_evidence)
+            page = validate_evidence(fallback, pages, label)
+        except (ValueError, TypeError):
+            raise original_error
+        return page, fallback, True
+
+
 async def research_application(application, ask_model, update_phase=None):
     posting = application['posting']
+    if update_phase:
+        await update_phase('discovering_contacts', 'Searching public web sources for the employer, role and recruiting contacts')
     discoveries = Discovery.model_validate(await ask_model(
         'discover_contacts', {'job': posting}, ['company_url', 'contact_urls', 'job_urls']))
     company_url = discoveries.company_url
@@ -321,9 +418,14 @@ async def research_application(application, ask_model, update_phase=None):
 
     canonical_job_url = posting['source_url']
     canonical_company = canonical_company_url(posting)
+    imported_company_evidence = posting.get('employer_evidence_url')
     job_urls = list(dict.fromkeys([canonical_job_url, *discoveries.job_urls]))
     urls = list(dict.fromkeys([*job_urls, company_url, *([canonical_company] if canonical_company else []),
+                              *([imported_company_evidence] if imported_company_evidence else []),
                               *discoveries.contact_urls]))
+
+    if update_phase:
+        await update_phase('fetching_sources', f'Checking {len(urls)} discovered source page{'' if len(urls) == 1 else 's'}')
 
     async def read(url):
         try:
@@ -345,7 +447,9 @@ async def research_application(application, ask_model, update_phase=None):
         raise ValueError('The job source and corroborating role pages could not be verified.' +
                          (f' Fetch results: {detail}' if detail else ''))
 
-    identity_urls = [company_url, *([canonical_company] if canonical_company else [])]
+    identity_urls = [company_url,
+                     *([imported_company_evidence] if imported_company_evidence else []),
+                     *([canonical_company] if canonical_company else [])]
     fetched_company_page = next((page for requested in identity_urls for page in pages
         if page['requested_url'] == requested and page['http_status'] == 200
         and (not expected_host or official_host_matches(page['final_url'], expected_host))), None)
@@ -362,6 +466,8 @@ async def research_application(application, ask_model, update_phase=None):
     possibleos_contacts = []
     possibleos_contact_error = None
     if fetched_company_page:
+        if update_phase:
+            await update_phase('checking_contacts', 'Checking published contacts and reusable Possible OS firm contacts')
         try:
             possibleos_contacts = await load_possibleos_contacts(
                 posting, host(fetched_company_page.get('final_url') or company_url))
@@ -369,6 +475,8 @@ async def research_application(application, ask_model, update_phase=None):
             logger.warning('Possible OS contact lookup failed for %s: %s', posting.get('firm_id'), exc)
             possibleos_contact_error = f'{type(exc).__name__}: {exc}'[:500]
 
+    if update_phase:
+        await update_phase('drafting', 'Selecting a verified recipient and drafting the application email')
     result = await ask_model('compose', {'job': posting, 'pages': pages, 'company_url': company_url,
         'job_urls': job_urls, 'source_fetch_failures': fetch_failures,
         'possibleos_contacts': possibleos_contacts, 'possibleos_contact_error': possibleos_contact_error,
@@ -376,18 +484,41 @@ async def research_application(application, ask_model, update_phase=None):
     if result.get('blocked_reason') or not result.get('packet'):
         raise ValueError(str(result.get('blocked_reason') or 'No suitable verified application contact was found.'))
     packet = Packet.model_validate(result['packet'])
-    company_page = validate_evidence(packet.company_evidence, pages, 'Company evidence')
-    if expected_host and not official_host_matches(company_page['final_url'], expected_host):
+    evidence_recoveries = []
+    company_page, packet.company_evidence, company_evidence_recovered = (
+        validate_evidence_with_stored_fallback(
+            packet.company_evidence, posting.get('employer_evidence'), pages, 'Company evidence'
+        )
+    )
+    if company_evidence_recovered:
+        evidence_recoveries.append('company')
+    verified_company_host = expected_host or host(
+        (fetched_company_page or {}).get('final_url') or company_url
+    )
+    if not official_host_matches(company_page['final_url'], verified_company_host):
         raise ValueError('The company page redirected to another domain. Verify the employer before applying.')
-    if packet.company_evidence.source_url != company_url:
-        raise ValueError('Company identity must be established by its official page.')
-    role_page = validate_evidence(packet.job_evidence, pages, 'Job evidence')
-    if packet.job_evidence.source_url not in job_urls:
+    # The evidence may come from any freshly fetched page on the verified
+    # employer domain. Requiring the exact discovery URL made an official About
+    # or Careers page fail merely because discovery selected the homepage.
+    packet.company_evidence.source_url = company_page['requested_url']
+    role_page, packet.job_evidence, job_evidence_recovered = validate_evidence_with_stored_fallback(
+        packet.job_evidence, posting.get('role_evidence'), pages, 'Job evidence'
+    )
+    if job_evidence_recovered:
+        evidence_recoveries.append('job')
+    if not any(same_source_url(role_page['requested_url'], url) for url in job_urls):
         raise ValueError('The current job was not established by a researched role page.')
-    if packet.job_evidence.source_url != canonical_job_url and not trusted_job_host(
-            packet.job_evidence.source_url, host(company_page['final_url'])):
-        raise ValueError('The alternate job source is not an employer page or trusted job platform.')
-    validate_job_page(role_page, posting)
+    packet.job_evidence.source_url = role_page['requested_url']
+    # Alternate role sources do not need to belong to a fixed host allowlist.
+    # They still must be freshly fetched, cited by the packet, and accepted by
+    # the semantic identity and evidence checks below.
+    if update_phase:
+        await update_phase('verifying_sources', 'Jev is confirming that the selected page matches this employer and role')
+    corroborating_role_pages = [page for page in successful_job_pages
+                                if not same_source_url(page['requested_url'], role_page['requested_url'])]
+    job_identity_verification = await verify_job_identity_with_jev(
+        role_page, posting, corroborating_pages=corroborating_role_pages
+    )
     official_host = host(company_page['final_url'])
     if packet.recipient.evidence.source_type == 'possibleos_contact':
         local_contact = next((contact for contact in possibleos_contacts
@@ -405,8 +536,10 @@ async def research_application(application, ask_model, update_phase=None):
         packet.recipient.evidence = RecipientEvidence.model_validate(local_contact['evidence'])
     else:
         contact_page = validate_evidence(packet.recipient.evidence, pages, 'Contact evidence')
+        packet.recipient.evidence.source_url = contact_page['requested_url']
         contact_host = host(contact_page['final_url'])
-        if not (contact_host == official_host or contact_host.endswith('.' + official_host) or packet.recipient.evidence.source_url == posting['source_url']):
+        if not (contact_host == official_host or contact_host.endswith('.' + official_host)
+                or same_source_url(contact_page['requested_url'], posting['source_url'])):
             raise ValueError('The recipient must be published on the verified company website.')
         if not published_email(packet.recipient.email, contact_page['content']):
             raise ValueError('The recipient email is not present on its verified source page.')
@@ -416,7 +549,7 @@ async def research_application(application, ask_model, update_phase=None):
     # boards sometimes block fetches after discovery; retaining that inaccessible
     # URL in the draft makes the final audit contradict the verified evidence.
     verified_job_url = packet.job_evidence.source_url
-    if canonical_job_url != verified_job_url:
+    if not same_source_url(canonical_job_url, verified_job_url):
         packet.body_text = packet.body_text.replace(canonical_job_url, verified_job_url)
     if verified_job_url not in packet.body_text:
         packet.body_text += '\n\nRole: ' + verified_job_url
@@ -434,6 +567,8 @@ async def research_application(application, ask_model, update_phase=None):
             'fit_reason': packet.fit_reason, 'gaps': packet.gaps,
             'evidence': {'company': packet.company_evidence.model_dump(), 'job': packet.job_evidence.model_dump(),
                          'canonical_job_url': canonical_job_url, 'verified_job_url': verified_job_url,
+                         'job_identity_verification': job_identity_verification,
+                         'stored_evidence_recoveries': evidence_recoveries,
                          'possibleos_contacts_considered': len(possibleos_contacts),
                          'possibleos_contact_error': possibleos_contact_error,
                          'source_fetch_failures': fetch_failures,

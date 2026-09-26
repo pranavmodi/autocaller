@@ -1,0 +1,14 @@
+[Unit]
+Description=Possible OS bounded daily PI technology career search
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/home/pranav/possibleos
+ExecStart=/home/pranav/possibleos/bin/possibleos pif career-search-run --due --quiet
+TimeoutStartSec=35min
+KillMode=control-group
+StandardOutput=journal
+StandardError=journal

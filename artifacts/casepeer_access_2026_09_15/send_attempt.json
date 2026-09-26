@@ -1,0 +1,224 @@
+{
+  "action": {
+    "id": "action_1b6c7df6117e475eadf62f95",
+    "action_type": "send_email",
+    "status": "blocked",
+    "risk_level": "high",
+    "requested_by": "pranav_authorized_casepeer_escalation_20260915",
+    "approved_by": "pranav_authorized_casepeer_escalation_20260915",
+    "entity_type": "test_email",
+    "entity_id": "support@casepeer.com",
+    "input": {
+      "to": "support@casepeer.com",
+      "body": "Hi CASEpeer team,\n\nThanks for outlining the Zapier and Data Sync options. We still need an evaluation account, so we can't follow the in-account setup steps yet.\n\nCould a human agent connect us with your partnerships or integrations team? We'd like to test how our PI intake and workflow automation can work with CASEpeer. Is a sandbox, trial, or developer account available for this? If testing requires a participating client firm's account, please confirm the process and permissions needed.\n\nPlease escalate case #01478487 and let us know the next step. I appreciate your help.\n\nBest,\nPranav Modi\nFounder, Possible Minds",
+      "mode": "test",
+      "pif_id": null,
+      "subject": "RE: Integration / Sandbox Access Inquiry",
+      "approval": {
+        "recipient": "support@casepeer.com",
+        "references": "<19f80c2e9bf.6c7188c241321.8497235599936179212@possiblemindshq.com> <1ZMnA000000000000000000000000000000000000000000000TIHKD600MS2nGUjbQ86qovmRsQEvOg@sfdc.net>",
+        "approved_at": "2026-09-15T13:13:26.464542+00:00",
+        "approved_by": "pranav_authorized_casepeer_escalation_20260915",
+        "body_sha256": "459f11f89da04a04ae3bb45a46ae34c02a55a236c55f2cb2d666891f14afdd70",
+        "in_reply_to": "<1ZMnA000000000000000000000000000000000000000000000TIHKD600MS2nGUjbQ86qovmRsQEvOg@sfdc.net>",
+        "subject_sha256": "d7264c66b8f4ff8faf29465a0987eeabf93c820d848eebec106d0911d1477ca6"
+      },
+      "firm_name": null,
+      "from_addr": "pranav@possiblemindshq.com",
+      "transport": "zoho_api",
+      "contact_id": null,
+      "references": "<19f80c2e9bf.6c7188c241321.8497235599936179212@possiblemindshq.com> <1ZMnA000000000000000000000000000000000000000000000TIHKD600MS2nGUjbQ86qovmRsQEvOg@sfdc.net>",
+      "skill_path": null,
+      "test_email": true,
+      "attachments": [],
+      "body_sha256": "459f11f89da04a04ae3bb45a46ae34c02a55a236c55f2cb2d666891f14afdd70",
+      "in_reply_to": "<1ZMnA000000000000000000000000000000000000000000000TIHKD600MS2nGUjbQ86qovmRsQEvOg@sfdc.net>",
+      "skill_sha256": null,
+      "batch_item_id": null,
+      "brief_version": null,
+      "subject_sha256": "d7264c66b8f4ff8faf29465a0987eeabf93c820d848eebec106d0911d1477ca6",
+      "composer_variant_key": null,
+      "composer_experiment_key": null
+    },
+    "policy_result": {
+      "mode": "test",
+      "checks": [
+        {
+          "name": "status_allows_execution",
+          "detail": "approved",
+          "passed": true
+        },
+        {
+          "name": "human_approval_present",
+          "detail": "pranav_authorized_casepeer_escalation_20260915",
+          "passed": true
+        },
+        {
+          "name": "email_mode_supported",
+          "detail": "test",
+          "passed": true
+        },
+        {
+          "name": "marked_as_test_email",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "recipient_present",
+          "detail": "support@casepeer.com",
+          "passed": true
+        },
+        {
+          "name": "recipient_matches_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "subject_present",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "body_present",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "subject_hash_matches_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "body_hash_matches_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "in_reply_to_matches_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "references_match_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "email_transport_configured",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "no_prior_successful_test_action_for_recipient",
+          "detail": "action_116f027542f5435fa174e1fe",
+          "passed": false
+        }
+      ],
+      "reason": "no_prior_successful_test_action_for_recipient",
+      "allowed": false,
+      "contact_id": null,
+      "risk_level": "high",
+      "action_type": "send_email",
+      "batch_item_id": null,
+      "recipient_email": "support@casepeer.com",
+      "requires_human_approval": true
+    },
+    "execution_result": {
+      "reason": "no_prior_successful_test_action_for_recipient",
+      "executed": false,
+      "blocked_by_policy": true
+    },
+    "error": "Policy blocked permanently: no_prior_successful_test_action_for_recipient",
+    "trace_id": null,
+    "scheduled_for": null,
+    "started_at": null,
+    "completed_at": "2026-09-15T13:13:26.651917+00:00",
+    "created_at": "2026-09-15T13:13:26.466109+00:00",
+    "updated_at": "2026-09-15T13:13:26.672806+00:00"
+  },
+  "policy": {
+    "allowed": false,
+    "reason": "no_prior_successful_test_action_for_recipient",
+    "checks": [
+      {
+        "name": "status_allows_execution",
+        "passed": true,
+        "detail": "approved"
+      },
+      {
+        "name": "human_approval_present",
+        "passed": true,
+        "detail": "pranav_authorized_casepeer_escalation_20260915"
+      },
+      {
+        "name": "email_mode_supported",
+        "passed": true,
+        "detail": "test"
+      },
+      {
+        "name": "marked_as_test_email",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "recipient_present",
+        "passed": true,
+        "detail": "support@casepeer.com"
+      },
+      {
+        "name": "recipient_matches_approval",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "subject_present",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "body_present",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "subject_hash_matches_approval",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "body_hash_matches_approval",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "in_reply_to_matches_approval",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "references_match_approval",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "email_transport_configured",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "no_prior_successful_test_action_for_recipient",
+        "passed": false,
+        "detail": "action_116f027542f5435fa174e1fe"
+      }
+    ],
+    "risk_level": "high",
+    "requires_human_approval": true,
+    "action_type": "send_email",
+    "mode": "test",
+    "recipient_email": "support@casepeer.com",
+    "contact_id": null,
+    "batch_item_id": null
+  },
+  "executed": false,
+  "blocked": true
+}

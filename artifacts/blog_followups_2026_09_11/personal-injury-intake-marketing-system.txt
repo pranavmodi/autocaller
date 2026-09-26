@@ -1,0 +1,114 @@
+Imagine that your firm pays to put its name in front of an injured person for weeks. She sees a television spot, searches for you after a crash, reads your reviews, and finally submits a form at 9:14 p.m.
+The marketing platform records a conversion. The agency records a lead. An automatic email promises that someone will respond during business hours. The prospect keeps looking and signs another firm before breakfast.
+On paper, marketing worked and intake received the inquiry. In economic terms, the system failed. The firm bought attention but did not convert it into trust, a conversation, or a signed case.
+That is the clearest lesson running through cj Advertising's intake writing: marketing and intake are not adjacent departments. They are one acquisition system. This guide turns that body of work into a sequence a PI firm owner can use to diagnose the current intake path, fix the operating model, and then add automation.
+In plain English
+Personal injury intake is part of marketing because it determines whether paid attention becomes a signed case. A good system connects the source of every inquiry to human response, qualification, signature, case outcome, and eventual fee. AI can make that system faster and more observable, but people should still own empathy, judgment, escalation, and the close.
+Step 1
+Audit 25 recent inquiries
+Do not start with a vendor. Pull inquiries from different sources, hours, and case types. For each one, record when it arrived, when a person responded, whether facts were repeated, whether urgency was escalated, why the lead did or did not sign, and whether it can be traced to its eventual economics.
+The repeated failure is your first project. It may be an unmonitored form, a slow attorney handoff, weak follow-up, or missing attribution.
+Step 2
+Map every lead from source to fee
+Marketing and intake are one acquisition system. A low-cost campaign may produce poor-fit inquiries; a costly campaign may produce the firm's best cases. You cannot know at the lead stage.
+01
+Source
+Campaign or channel
+02
+Inquiry
+Call, form, or chat
+03
+Contact
+Human response
+04
+Wanted
+Fits firm criteria
+05
+Signed
+Retainer complete
+06
+Fee
+Case economics
+One record from first touch to case economics
+Keep one record across all six moments. cj Advertising's
+KPI guidance
+similarly emphasizes wanted leads, signed cases, and case value over lead volume alone.
+Step 3
+Set a human response standard
+An automated text acknowledges the inquiry. It does not replace the reassurance of a prepared person. Micki Love has recommended three-ring call answering and outbound calls within two minutes of a web inquiry. Those are cj's benchmarks, not universal legal standards.
+Use
+human-led AI intake automation
+to recognize the inquiry, structure the facts, flag urgency, and prepare the right closer. The goal is faster human contact, not a longer chatbot conversation. That matters because, as cj's
+analysis of PI buyers
+explains, the prospect is often in pain and making a high-stakes decision for the first time.
+Step 4
+Build an after-hours workflow
+Answering the phone is not enough. The night workflow should capture decisive facts, apply firm criteria, escalate serious injuries, support approved e-signature, and tell the morning team exactly what happened. That is the standard in cj's
+after-hours guidance
+.
+Define who receives urgent alerts, who may authorize a retainer, and which facts require human review. A provider or AI system should execute those rules, not invent them. Start with a documented
+after-hours intake workflow
+.
+Step 5
+Remove friction before signature
+Long forms, repeated questions, unclear next steps, and desktop-only retainers create places for a qualified prospect to leave. Ask only what is needed to begin, explain what happens next, enable remote signature, and move the signed file promptly.
+Test it yourself: submit a mobile inquiry after hours and count every delay and repeated question before a meaningful conversation. cj's
+website analysis
+treats this experience as the first serious evaluation of the firm.
+Step 6
+Assign ownership and measure it
+Name an owner for every inquiry, a backup for every shift, and an attorney for serious-case escalation. cj's
+intake operating guidance
+recommends the same clear chain of command and regular call review.
+One owner scorecard is enough:
+Response
+Time to meaningful human contact, by source and hour
+Reach
+Contact rate and aging of every no-contact inquiry
+Fit
+Wanted-lead rate by campaign, case type, and market
+Conversion
+Wanted leads signed, with the reason for every loss
+Quality
+Call review, escalation accuracy, and avoidable friction
+Economics
+Source to signed case to eventual fee, not cost per lead alone
+Read the measures together. Speed is not a win if quality falls, and low cost per lead is not efficiency if the source produces weak cases.
+Step 7
+Add AI at the right boundaries
+AI can detect inquiries, structure facts, identify missing information, flag urgency, assign response targets, maintain follow-up, and analyze calls. People should own empathy, case acceptance, legal judgment, consequential escalation, and the close.
+Follow the sequence in cj's
+AI evaluation guidance
+: choose one failure, test narrowly, measure the operational result, and scale only after the behavior is reliable.
+Where Intake Agent fits
+Possible Minds
+Intake Agent
+responds to calls, website conversations, and forms around the clock, especially after hours. It captures essential facts, flags urgent or promising inquiries, acknowledges the prospect, and creates an organized lead with the transcript, call recording, follow-up tasks, and issues requiring human attention.
+It does not accept cases or replace the intake team. It gives staff a prepared record so they can follow up personally and win the client.
+Step 8
+Protect the relationship and its data
+Intake may collect injury, medical, insurance, and financial details before an attorney-client relationship exists. Treat that information as sensitive from the start, as cj's
+privacy guidance for PI firms
+recommends. Set access, retention, consent, and vendor controls with qualified counsel and a practical
+vendor-risk framework
+.
+Preserve trust when the firm declines a matter through clear non-engagement and careful referrals, consistent with cj's guidance on
+rejected leads
+. After signature, prompt onboarding and strong
+case management
+create the reviews and referrals that feed the next acquisition cycle.
+Questions PI firm owners ask
+Why is intake part of marketing for a personal injury firm?
+Marketing creates the opportunity, but intake determines whether the firm contacts, qualifies, and signs the right prospect. Intake data also tells marketing which sources produce wanted cases and eventual fees, not merely leads.
+How quickly should a PI firm respond to a new lead?
+The operating goal should be immediate acknowledgment followed by fast human contact. cj Advertising has published a two-minute outbound-call standard after a web inquiry and three-ring call answering as firm benchmarks, not universal legal requirements.
+What should after-hours intake do?
+After-hours intake should do more than record a message. It should follow firm-specific criteria, capture decisive facts, identify urgent or serious matters, escalate to the right person, and support remote signature when the firm authorizes it.
+Which PI intake metrics matter most?
+Track every inquiry by source, time to meaningful human response, contact rate, wanted-lead rate, wanted-lead conversion, pre-signature drop-off, signed cases, and eventual case value or fee. Review quality and escalation accuracy alongside speed.
+How should a PI firm use AI in intake?
+Use AI to detect, structure, route, remind, monitor, and measure. Keep empathy, legal judgment, case acceptance, sensitive conversations, and consequential closing decisions with trained people.
+What does Possible Minds Intake Agent do?
+Intake Agent responds to calls, website conversations, and forms around the clock; captures essential facts; flags urgent inquiries; and creates an organized lead with the transcript, recording, tasks, and review issues. It prepares the intake team to follow up personally rather than replacing staff or making legal decisions.
+Source note
+This essay synthesizes public intake, marketing, AI, and privacy guidance from cj Advertising. Its published benchmarks are identified as cj's recommendations rather than universal industry standards. Possible Minds is not affiliated with cj Advertising.

@@ -385,6 +385,8 @@ async def _classify_batch(firm_name: str, reviews: list[dict[str, Any]], semapho
             max_tokens=int(os.getenv("FIRM_REVIEW_CLASSIFICATION_MAX_TOKENS", "8000")),
             retries=1,
             gateway_user=f"firm-review-classification:{batch_key}:{uuid.uuid4().hex[:8]}",
+            lane=os.getenv("OPENCLAW_RPC_BATCH_LANE", "possibleos-batch"),
+            allow_tools=False,
         )
     raw_rows = result.parsed.get("classifications")
     return [row for row in raw_rows if isinstance(row, dict)] if isinstance(raw_rows, list) else []

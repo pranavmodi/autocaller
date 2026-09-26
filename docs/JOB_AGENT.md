@@ -1,11 +1,27 @@
 # Job agent workspace
 
-The `/job-agent` tab provides a persistent operator review queue, CV library,
-preferences, and collection progress. The Activity tab is hidden for now. Audit
+The `/job-agent` tab provides a persistent operator review queue, a separate
+Applications section, CV library, preferences, and collection progress. The Activity tab is hidden for now. Audit
 history remains available through the CLI/API.
 Jobs can be classified on demand into configurable resume categories. Applications
 are processed only after an explicit operator action. Email delivery uses the
 official Zoho CLI.
+
+## Applications section
+
+Every job whose application workflow has started appears in the separate
+**Applications** section. This includes source/contact research in progress,
+stopped preparations, ready but unsent drafts, authorized sends, uncertain Sent
+verification, and Sent-verified messages. It is newest-update first by default,
+with firm/role/recipient search, status filtering, firm or role ordering,
+pagination, source links, prepared-PDF links, and the shared application detail
+modal. Opening or filtering this section is read-only and never prepares or sends.
+
+The list is backed by the durable `job_agent_processing` record associated with
+each canonical job, so the Review queue, Leads modal, CLI, and Applications section
+show the same current workflow state. `ready` means prepared but not sent;
+`sent_verified` means the exact message and attachment were found in Zoho Sent, not
+recipient delivery or an ATS submission.
 
 ## Collection and ordering
 
@@ -62,6 +78,19 @@ the employer domain and have evidence of a suitable purpose. They are stored onc
 in `firm_contacts`, so every role attached to that firm reuses the same contacts.
 Existing eligible Possible OS contacts are exposed the same way. Searching never
 classifies, prepares, sends, or submits an application.
+
+Settings also contains a curated job-board source catalog derived from the operator's
+remote-job list. The catalog normalizes duplicates (AngelList into Wellfound,
+duplicate Remotees and Remote in Europe entries), corrects stale links and labels
+each source as public API, public feed, public page, indexed-web discovery, or
+unavailable. Account-only marketplaces, subscription-gated boards and sources whose
+current listing surface cannot be verified remain visible but disabled with a reason.
+LinkedIn and Wellfound are searched through public indexed pages; Possible OS does
+not sign in or automate an account. Enabled sources rotate through the daily and
+on-demand source budget, alongside the configured industry/role queries. A board is
+only a discovery lead: employer identity, active status, role fit and geography still
+require fresh source evidence. `job-agent sources` exposes the same catalog to
+headless operators.
 
 The daily timer invokes this same Job Agent search profile. There is no separate
 PI-only discovery path: scheduled and **Search now** runs use the same configured
@@ -121,6 +150,19 @@ option and is off by default. Pending jobs do not consume model calls while it i
 off. Classification does not assess legal work eligibility or authorize
 communication.
 
+Contract status is a separate extraction-time judgment. After a source-backed job
+has been extracted, Possible OS sends its employment type, description,
+responsibilities and qualifications to TypeSafe Jev in one batched Choice request.
+It stores `contract`, `non_contract`, or `unknown` together with all probabilities,
+confidence, the exact model version, an input hash and timestamp. Manual and
+scheduled Job Agent searches, direct URL imports, and firm job-posting research use
+this same hook. Application preparation only reads the stored result and never
+classifies it again. A provider failure remains visible as an error-state `unknown`
+and does not discard an otherwise verified job. Use `job-agent
+backfill-contract-status` for a resumable Jev backfill of older queue rows; it also
+updates the matching Leads job-listing mirror. Both lists expose contract-status
+filters, and missing legacy values appear under Unknown.
+
 The three career-transition categories are deliberately narrow. Case-management
 classification targets assistant, entry-level or trainable PI/pre-litigation work,
 including property-damage claim support performed by a PI case-manager assistant.
@@ -141,6 +183,32 @@ Each job detail offers:
   place. The backend rereads the firm's stored posting by job ID, or by normalized
   source URL plus role and location. Opening never classifies, prepares or sends.
 
+- **Import a URL:** `job-agent import-url URL` accepts a specific public job page
+  that is not already in Possible OS. It fetches the supplied page, uses the
+  evidence-backed career verifier to identify the official employer and exact live
+  role, creates or reuses the firm and job records, stores any source-published
+  recruiting contacts, and returns the normal Job Agent candidate. A per-URL lock
+  makes concurrent retries idempotent without blocking the scheduled search lane.
+  If a prior attempt reached a model decision but stopped on evidence validation,
+  retrying refetches every cited page and revalidates that saved decision before
+  reuse; it does not repeat model work merely because code or transport recovered.
+  If the supplied job-board page identifies the exact employer and role but lacks
+  the employer's official domain, one bounded public-web enrichment pass may find
+  an official identity page for that same employer. It first tries a lightweight
+  direct OpenClaw tool call and, when no generic search provider is configured,
+  records that result and uses one provider-native search turn. Possible OS then freshly
+  fetches and validates the job page and official page before storing anything;
+  an ATS, LinkedIn or search-result page cannot become the employer identity.
+  If the official page blocks ordinary verification fetches, a public same-origin
+  WordPress REST representation of that exact page may be used, but it must still
+  pass structured employer identity and exact quoted-evidence validation.
+  Application preparation reuses this verified employer-evidence URL when a
+  discovered or canonical homepage is blocked, allowing eligible Possible OS
+  recruiting contacts for that canonical firm to reach drafting.
+  Every attempt writes start and terminal activity events, with the career-search
+  run ID and exact stop reason when verification fails. Importing never classifies,
+  prepares or sends.
+
 - **Prepare email:** research the company and role, check public pages and eligible
   Possible OS `firm_contacts`, compose and audit a concise founder-led email using
   the mapped resume, check duplicates, and save a company/role-named PDF and
@@ -155,8 +223,18 @@ Each job detail offers:
   addresses are rejected. Public pages must still verify the employer and open role.
   The imported job page is retried and fetch failures are retained in the packet.
   If that page is inaccessible, a directly fetched employer page or established job
-  platform may corroborate the same exact title and employer; alternate sources must
-  pass trusted-host and exact-quote checks. Closed/unverified jobs, uncertain
+  platform may corroborate the role. TypeSafe Jev scores each fetched role source
+  against the saved job using employer, function, specialty, seniority and role
+  evidence, then records and uses the highest-probability match. There is no fixed
+  confidence cutoff; semantic identity and exact evidence remain the safety gates.
+  Alternate sources do not need to match a fixed host allowlist. They must still be freshly
+  fetched, cited by the packet, and pass semantic employer/role identity and exact-quote checks.
+  Equivalent URL presentations are normalized for fragments, tracking parameters and trailing slashes. Company
+  evidence may cite any freshly fetched page on the verified employer domain rather
+  than only the discovery step's exact page. If composition paraphrases a company or
+  role excerpt, the agent may recover only by freshly rechecking the previously stored
+  verified excerpt on its cited source; it does not accept the paraphrase itself.
+  Closed/unverified jobs, uncertain
   recipients and unsupported claims stop for review.
 - **Check Zoho Sent:** verifies an uncertain send without sending another email.
 
@@ -185,6 +263,26 @@ prepared email and gaps. Application observability is a persisted checkpoint flo
 resume selection, source/contact verification, draft audit, duplicate checking, PDF
 creation, Zoho send, and Sent verification. Each checkpoint is rendered as pending,
 active, completed, stopped or uncertain. Failures retain the phase and exact error.
+Research now exposes public-web discovery, source fetching, Possible OS contact
+checking, recipient selection and drafting as distinct phases. Preparation is capped
+at four minutes by default (`JOB_AGENT_PREPARATION_TIMEOUT_S`); each gateway request
+is capped at 150 seconds (`JOB_AGENT_GATEWAY_TIMEOUT_S`). A timeout becomes a stopped,
+retryable preparation and never authorizes or sends email. If polling fails, the UI
+replaces the activity spinner with a status-refresh error and a manual reload control
+while continuing background status checks.
+
+Structured OpenClaw work uses the native WebSocket RPC `agent` method. Job Agent
+preparation is routed to `possibleos-interactive`; scheduled career search, firm
+enrichment, job-opening research, review research and other maintenance work use
+`possibleos-batch`. Each lane is serialized locally and by OpenClaw, while the two
+lanes can run concurrently. A unique internal session is used for each call and
+deleted after its JSON response is read. `OPENCLAW_GATEWAY_RPC_URL`,
+`OPENCLAW_RPC_INTERACTIVE_LANE` and `OPENCLAW_RPC_BATCH_LANE` override the defaults.
+Job Agent drafting and other supplied-evidence JSON judgments use OpenClaw's raw
+model-run mode without tools or workspace bootstrap; public-source research keeps
+the minimal tool-enabled runtime.
+The retired `/v1/chat/completions` endpoint is not used by this shared client.
+
 Preparation failures can start a new draft-only attempt; duplicate blocks require
 manual review. Once a provider send starts, the UI never offers a preparation retry
 or resend and shows the scheduled or operator-requested read-only Sent checks. `ready`
@@ -210,14 +308,17 @@ inherit daemon authentication. UI overview and queue poll every 15 seconds; the 
 | --- | --- |
 | GET `/api/job-agent/overview` | `job-agent status` |
 | GET `/api/job-agent/config` | `job-agent config` |
+| GET `/api/job-agent/sources` | `job-agent sources` |
 | POST `/api/job-agent/config` | `job-agent configure --file preferences.json` |
 | POST `/api/job-agent/collect` | `job-agent collect` |
 | POST `/api/job-agent/search` | `job-agent search` |
 | POST `/api/job-agent/listings/open` | `job-agent open-listing --firm-id ID --source-url URL --title TITLE [...]` |
+| POST `/api/job-agent/listings/import` | `job-agent import-url URL` |
 | GET `/api/job-agent/jobs` | `job-agent jobs [--status shortlisted --search AI --page 1 --order posted_desc --source external_search]` |
 | POST `/api/job-agent/jobs/{id}/review` | `job-agent review ID --revision N --status shortlisted --note "…"` |
 | GET `/api/job-agent/events?page=1` | `job-agent events --page 1` |
 | GET `/api/job-agent/resumes` | `job-agent resumes` (catalog with category and application-email context) |
+| GET `/api/job-agent/applications` | `job-agent applications [--status ready --search Array --page 1 --order updated_desc]` |
 | GET `/api/job-agent/resume?path=...&download=true` | Preview or download a catalog file; CLI: `job-agent resume-download PATH --output FILE` |
 | GET `/api/job-agent/jobs/{id}` | `job-agent show ID` |
 | POST `/api/job-agent/jobs/{id}/classify` | `job-agent classify ID` |
@@ -257,3 +358,33 @@ classification/overrides, direct and corroborating-source evidence validation,
 explicit send intent, mocked Zoho CLI
 attachment syntax, duplicate blocking, uncertain-send handling, exact Sent/PDF
 verification and a complete prepared-to-sent workflow in an isolated database.
+
+
+## Website applications
+
+The shared application modal now includes **Apply on website**, live browser
+progress, screenshots, application-specific questions, saved answers, pause and
+resume controls. Website runs have independent status and confirmation evidence;
+see [Website application architecture and operations](JOB_BROWSER_APPLICATIONS.md).
+The Applications tab lists website runs and email applications separately.
+
+
+Website applications support a saved OpenClaw gateway/direct OpenAI API choice in
+Settings and a per-run provider selector when starting or resuming. Decisions,
+audits and confirmation use the same selected provider. API keys remain on the
+server; provider changes never unlock uncertain submissions.
+
+### Automatic resume selection in applications
+Website start and email prepare/apply now include category matching and one-page PDF selection as the first saved worker step. Existing valid selections and manual categories are reused. CLI commands and APIs accept unclassified jobs without an extra classification call. Opening a job does not start work. The modal shows a shared resume card with optional category controls, a website workflow with three progress stages, and an expandable email workflow. Missing resume mappings and classification failures remain actionable blockers.
+
+### Reusable applicant profile
+Answers to website application questions are saved automatically for contextual reuse. Manage them in the Applicant profile tab or inside the application modal. CLI: `job-agent profile`, `profile-save --file FILE`, `profile-remove ID --revision N`, `profile-import-answers`. `browser-control --action answer` defaults to remembering; `--this-application-only` limits reuse. See [JOB_APPLICANT_PROFILE.md](JOB_APPLICANT_PROFILE.md) for scope, provenance, snapshot and conflict behavior.
+
+
+Resume selection uses Jev's highest-ranked category with an assigned PDF, even
+when No clear match wins overall. The raw probabilities remain visible; closest
+match does not establish qualifications. Confidence is informational, never a
+selection gate; legacy classification_threshold values are ignored. Explicit
+manual categories remain authoritative. Missing/invalid PDFs or failed model
+requests still require correction. Use the existing classify or browser resume
+commands for an individual job; no bulk reclassification is triggered.

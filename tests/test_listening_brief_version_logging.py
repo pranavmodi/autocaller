@@ -59,9 +59,43 @@ def test_email_log_retains_complete_body(monkeypatch):
     assert engine.connection.params["body"] == body
 
 
+def test_email_log_source_identity_is_stable_and_includes_firm(monkeypatch):
+    engine = _FakeEngine()
+    monkeypatch.setattr(comms_log, "_engine", lambda: engine)
+
+    first = comms_log.log_email(
+        recipient_email="jobs@example.com",
+        subject="Application",
+        body="Attached",
+        message_type="job_application",
+        transport="zoho_cli",
+        status="accepted",
+        firm_name="Example LLP",
+        source_type="job_application",
+        source_id="candidate-1",
+    )
+    second = comms_log.log_email(
+        recipient_email="jobs@example.com",
+        subject="Application",
+        body="Attached",
+        message_type="job_application",
+        transport="zoho_cli",
+        status="sent_verified",
+        firm_name="Example LLP",
+        source_type="job_application",
+        source_id="candidate-1",
+    )
+
+    assert first == second == engine.connection.params["id"]
+    assert engine.connection.params["firm_name"] == "Example LLP"
+    assert engine.connection.params["source_type"] == "job_application"
+    assert engine.connection.params["source_id"] == "candidate-1"
+
+
 def test_listening_brief_version_reaches_email_send_log(monkeypatch):
     calls = []
     monkeypatch.setattr(email_notification_service, "_resolve_sender_address", lambda from_addr: "sender@example.com")
+    monkeypatch.setattr("app.services.review_alerts.outgoing_suppression", lambda *args: False)
     monkeypatch.setattr(email_notification_service, "_choose_email_transport", lambda transport: "zoho_api")
     monkeypatch.setattr(email_notification_service, "_send_via_zoho_api", lambda **kwargs: "msg-1")
     monkeypatch.setattr(email_notification_service, "log_email", lambda **kwargs: calls.append(kwargs))

@@ -1,0 +1,16 @@
+{
+  "draft_count": 20,
+  "unique_recipients": 20,
+  "unique_firms": 20,
+  "unique_domains": 20,
+  "unique_links": 20,
+  "clean_bodies": true,
+  "link_mappings": true,
+  "sent": 0,
+  "raw_clicks": 0,
+  "actions_created": 0,
+  "scheduled": 0,
+  "all_drafts_unapproved": true,
+  "mailbox_errors": 0,
+  "checked_at": "2026-09-15T10:35:15.545Z"
+}

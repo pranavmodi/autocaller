@@ -1,0 +1,56 @@
+Personal injury firms do not need another prediction about how AI will change everything. They need to know whether waiting carries a cost.
+It does. But the cost is not missing one clever feature. It is allowing another firm to begin learning how to respond faster, move files more consistently, and preserve its best people's judgment before you do.
+What first-mover advantage really means
+Buying software first is not an advantage. A competitor can buy the same software next month.
+The durable advantage is beginning the learning loop first. Your firm chooses one workflow, tests it on real situations, records where it fails, improves the rules, and teaches staff how to work with it. Each cycle produces better data and better judgment about what should remain human.
+Six months later, a competitor may have the same model. It will not have your six months of examples, corrections, measurements, and operating habits.
+Consolidation is already starting
+Better-capitalized firms and legal-service platforms are combining money, marketing, technology, and operations. In 2026, private-equity-owned Orion Legal MSO announced a partnership with plaintiff firm Hughes & Coleman. Legal-tech companies have also continued acquiring specialized products to build broader platforms.
+This does not mean every independent PI firm will be absorbed. It means the operational standard will rise. Faster response, cleaner data, better client communication, and more predictable case movement will become normal expectations.
+A focused firm can still win. Local reputation, trial ability, referral trust, and case judgment remain difficult to buy. The opportunity is to give those strengths better systems before scale alone becomes the advantage.
+Sources: the
+National Law Review's analysis of AI-driven legal disruption
+and
+Holland & Knight's announcement of the Orion partnership
+.
+Why AI intake is the right first step
+Intake sits where urgency, revenue, and repetitive work meet. A promising inquiry can arrive at night, while staff are busy, or while the caller is contacting several firms. Every minute before a useful response matters.
+It is also unusually measurable. You can track when an inquiry arrived, when it was acknowledged, when a person made contact, whether the firm wanted the case, and whether it signed. That gives an owner a clear baseline and a fast answer about whether the pilot helped.
+Most importantly, the boundary between AI and people can remain clear. AI handles availability, basic fact collection, intake-system entry, follow-up tasks, and routing. Your team handles empathy, ambiguity, qualification, legal judgment, case acceptance, and the close.
+Start where speed can create revenue, the work repeats, and a human can take over before judgment or trust is at risk.
+Try AI intake in 30 days
+Start small. Use AI only for after-hours or overflow inquiries, where faster response can make an immediate difference.
+Week 1
+Find the missed opportunities
+Review recent after-hours calls and web inquiries. How long did people wait? How many promising leads could not be reached or chose another firm?
+Week 2
+Set up one simple workflow
+Let AI respond immediately, collect basic information, and alert your intake team. Keep qualification, legal decisions, and signing the client with people.
+Week 3
+Test it yourself
+Call the system with realistic situations: an emotional caller, an incomplete story, an unusual accident, and another language. Make sure it knows when to involve a person.
+Week 4
+Run it after hours
+Use it with a small group of leads. Compare response times, promising leads reached, and signed cases with what happened before.
+After 30 days, make one decision
+Did the system help your team reach good prospects faster? If yes, improve it and expand gradually. If not, fix the workflow before buying more AI.
+Based on PI operator discussions about
+starting with intake triage
+and
+testing it on real PI calls
+.
+What a good start looks like
+After 30 days, you do not need an AI strategy deck or a firm-wide rollout. You need a named owner, one mapped intake workflow, a baseline, a set of difficult test calls, clear human-review rules, and evidence about whether qualified prospects reached the right person faster.
+That is enough to begin compounding. It also gives you something more valuable than enthusiasm: the ability to make the next AI decision from experience.
+Do not race to buy AI. Race to learn where it creates a real operating advantage in your firm.
+Common questions
+Starting without overbuilding
+Does a PI firm need to build its own AI model?
+No. The first advantage comes from improving one firm-specific workflow, using existing models and systems where appropriate, and retaining control over the workflow rules, data, and measurements.
+Which AI workflow should a PI firm start with?
+For most PI firms, intake is the strongest first workflow. It is repetitive, time-sensitive, economically important, and easy to measure. AI can acknowledge, collect, organize, and route an inquiry while people retain empathy, qualification, legal judgment, case acceptance, and the close.
+How should a PI firm measure an AI pilot?
+Measure the operating result: response time, completion time, missed work, rework, exceptions, staff time, and downstream outcomes. Do not judge the pilot only by the quality of a demonstration.
+Find the first workflow
+Possible Minds helps PI firms identify one operational leak, define what must remain human, and build a narrow system that can prove its value.
+Request a workflow audit

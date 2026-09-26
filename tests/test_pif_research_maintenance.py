@@ -110,3 +110,45 @@ def test_queue_due_maintenance_only_tops_up_daily_cohort(monkeypatch):
     assert events == [("sitemap", "site-1")]
     assert result["already_queued_job_postings_today"] == 2
     assert result["already_queued_sitemaps_today"] == 1
+
+
+def test_review_research_only_follows_selected_profile_maintenance(monkeypatch):
+    events = []
+
+    async def fake_candidates(*, now):
+        return {
+            "profile_ids": ["law-1", "business-1", "law-2"],
+            "review_ids": ["law-1", "law-2"],
+            "job_ids": [],
+            "sitemap_ids": [],
+            "today_profile_tasks": 0,
+            "today_job_tasks": 0,
+            "today_sitemap_tasks": 0,
+            "today_review_tasks": 999,
+            "refresh_days": 30,
+            "retry_days": 3,
+            "review_collection_mode": "nightly_profile_maintenance",
+            "recent_review_window_days": 14,
+        }
+
+    async def fake_profile(firm_id):
+        events.append(("profile", firm_id))
+        return {"status": "queued"}
+
+    async def fake_review(firm_id):
+        events.append(("review", firm_id))
+        return {"status": "queued"}
+
+    monkeypatch.setattr(service, "_maintenance_candidates", fake_candidates)
+    monkeypatch.setattr(service, "start_local_firm_enrichment", fake_profile)
+    monkeypatch.setattr(service, "start_firm_review_research", fake_review)
+
+    result = asyncio.run(service.queue_due_firm_maintenance(limit=2, now=NOW))
+
+    assert events == [
+        ("profile", "law-1"),
+        ("profile", "business-1"),
+        ("review", "law-1"),
+    ]
+    assert result["review_pif_ids"] == ["law-1"]
+    assert result["review_collection_mode"] == "nightly_profile_maintenance"

@@ -60,7 +60,9 @@ def test_rejects_unsafe_source_links(url):
 
 @pytest.mark.parametrize("changes", [{"import_limit": 501}, {"posted_within_days": 0},
                                     {"remote_scope": "us"}, {"auto_send": True},
-                                    {"collection_enabled": "false"}])
+                                    {"collection_enabled": "false"},
+                                    {"search_source_ids": ["flexjobs"]},
+                                    {"search_source_ids": ["unknown-board"]}])
 def test_configuration_rejects_invalid_or_unimplemented_controls(changes):
     with pytest.raises(ValidationError):
         service.JobAgentConfig(**changes)
@@ -86,6 +88,31 @@ def _career_decision(**changes):
     }
     values.update(changes)
     return career_search.Decision(**values)
+
+
+def test_direct_url_import_verifies_evidence_without_enforcing_search_preferences():
+    decision = _career_decision(
+        preferred_industry_employer=False,
+        matched_preferred_industry=None,
+        target_role_match=False,
+        matched_target_role=None,
+    )
+    with pytest.raises(ValueError, match="configured industry"):
+        career_search.validate_decision(
+            decision, _career_pages(), today=datetime(2026, 9, 23).date(),
+            search_profile=career_search.SearchProfile(
+                target_roles="AI agents", preferred_industries="medical imaging",
+                location_preferences="Remote from Colombia",
+            ),
+        )
+    career_search.validate_decision(
+        decision, _career_pages(), today=datetime(2026, 9, 23).date(),
+        search_profile=career_search.SearchProfile(
+            target_roles="AI agents", preferred_industries="medical imaging",
+            location_preferences="Remote from Colombia",
+        ),
+        direct_import=True,
+    )
 
 
 def test_search_verifier_uses_configured_industries_and_target_roles():
@@ -162,6 +189,34 @@ async def test_daily_search_loads_the_saved_job_agent_profile(monkeypatch):
     assert career_search.target_role_labels(profile) == ["AI agents", "entry-level paralegal"]
     assert career_search.preferred_industry_labels(profile) == ["Legal technology", "medical imaging"]
     assert profile.location_preferences == "Remote from Colombia"
+    assert profile.source_ids == config.search_source_ids
+    assert str(profile.source_urls[0]).startswith("https://")
+
+
+def test_job_agent_search_profile_resolves_only_enabled_catalog_sources():
+    config = service.JobAgentConfig(search_source_ids=["remotive", "remoteok"])
+    profile = career_search.SearchProfile.model_validate(service.search_profile(config))
+    assert profile.source_ids == ["remotive", "remoteok"]
+    assert [str(url) for url in profile.source_urls] == [
+        "https://remotive.com/feed", "https://remoteok.com/api",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_sources_endpoint_marks_enabled_and_unavailable_sources(monkeypatch):
+    config = service.JobAgentConfig(search_source_ids=["remotive"])
+    monkeypatch.setattr(service, "configuration", AsyncMock(return_value={
+        "config": config.model_dump(), "revision": 2,
+    }))
+    app = FastAPI()
+    app.include_router(router)
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url="http://test") as client:
+        response = await client.get("/api/job-agent/sources")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["enabled_count"] == 1
+    assert next(item for item in payload["items"] if item["id"] == "remotive")["enabled"] is True
+    assert next(item for item in payload["items"] if item["id"] == "flexjobs")["available"] is False
 
 
 def test_search_contacts_require_published_employer_domain_and_suitable_purpose():
@@ -242,6 +297,93 @@ async def test_open_leads_listing_uses_job_agent_bridge(monkeypatch):
         response = await client.post("/api/job-agent/listings/open", json=payload)
     assert response.status_code == 200 and response.json() == result
     handler.assert_awaited_once_with(service.ListingSelection(**payload))
+
+
+@pytest.mark.asyncio
+async def test_import_url_endpoint_uses_non_sending_job_agent_bridge(monkeypatch):
+    result = {"candidate": {"id": "candidate-1"}, "created": True,
+              "import": {"status": "completed"}}
+    handler = AsyncMock(return_value=result)
+    monkeypatch.setattr(service, "import_listing_url", handler)
+    app = FastAPI()
+    app.include_router(router)
+    payload = {"source_url": "https://example.com/jobs/ai-engineer"}
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url="http://test") as client:
+        response = await client.post("/api/job-agent/listings/import", json=payload)
+    assert response.status_code == 200 and response.json() == result
+    handler.assert_awaited_once_with(service.UrlImportRequest(**payload))
+
+
+@pytest.mark.asyncio
+async def test_import_url_stores_then_opens_the_canonical_candidate(monkeypatch):
+    config = service.JobAgentConfig()
+    monkeypatch.setattr(service, "configuration", AsyncMock(return_value={
+        "config": config.model_dump(), "revision": 1,
+    }))
+    import_result = {
+        "id": "run-1", "status": "completed", "result": {
+            "verified": 1,
+            "stored": [{
+                "firm_id": "firm-1", "job_id": "job-1", "added": 1,
+                "source_url": "https://example.com/jobs/ai-engineer",
+                "contacts": {"verified": 1},
+            }],
+            "decisions": [{"decision": {
+                "title": "AI Engineer", "location": "Remote",
+            }}],
+        },
+    }
+    import_handler = AsyncMock(return_value=import_result)
+    open_handler = AsyncMock(return_value={
+        "candidate": {"id": "candidate-1", "processing_revision": 1},
+        "categories": [], "created": True,
+    })
+    monkeypatch.setattr(career_search, "import_url", import_handler)
+    monkeypatch.setattr(service, "open_stored_listing", open_handler)
+    event_handler = AsyncMock()
+    monkeypatch.setattr(service, "_record_url_import_event", event_handler)
+
+    result = await service.import_listing_url(service.UrlImportRequest(
+        source_url="https://example.com/jobs/ai-engineer",
+    ))
+
+    assert result["candidate"]["id"] == "candidate-1"
+    assert result["import"]["message"].endswith("No classification, preparation or email was started.")
+    open_request = open_handler.await_args.args[0]
+    assert open_request.firm_id == "firm-1" and open_request.job_id == "job-1"
+    assert open_handler.await_args.kwargs == {"event_kind": None}
+    assert [call.args[0] for call in event_handler.await_args_list] == [
+        "listing_import_started", "listing_imported_from_url",
+    ]
+    assert event_handler.await_args_list[-1].kwargs["run_id"] == "run-1"
+
+
+@pytest.mark.asyncio
+async def test_import_url_failure_is_visible_in_job_agent_events(monkeypatch):
+    config = service.JobAgentConfig()
+    monkeypatch.setattr(service, "configuration", AsyncMock(return_value={
+        "config": config.model_dump(), "revision": 1,
+    }))
+    monkeypatch.setattr(career_search, "import_url", AsyncMock(return_value={
+        "id": "failed-run", "status": "failed", "result": {
+            "stored": [], "decisions": [],
+            "errors": [{"phase": "url_import", "error": "Official employer identity was not verified"}],
+        },
+    }))
+    event_handler = AsyncMock()
+    monkeypatch.setattr(service, "_record_url_import_event", event_handler)
+
+    with pytest.raises(ValueError, match="Official employer identity was not verified"):
+        await service.import_listing_url(service.UrlImportRequest(
+            source_url="https://linkedin.com/jobs/view/123",
+        ))
+
+    assert [call.args[0] for call in event_handler.await_args_list] == [
+        "listing_import_started", "listing_import_stopped",
+    ]
+    stopped = event_handler.await_args_list[-1].kwargs
+    assert stopped["run_id"] == "failed-run"
+    assert stopped["source_url"] == "https://linkedin.com/jobs/view/123"
 
 
 @pytest.mark.asyncio
@@ -364,14 +506,17 @@ async def test_api_defaults_to_posting_date_and_rejects_unknown_sort(monkeypatch
     app.include_router(router)
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url="http://test") as client:
         assert (await client.get("/api/job-agent/jobs")).status_code == 200
-        handler.assert_awaited_once_with(None, "", 1, "posted_desc", "", None, "exclude")
+        handler.assert_awaited_once_with(None, "", 1, "posted_desc", "", None, "exclude", "all")
         assert (await client.get("/api/job-agent/jobs?order=random")).status_code == 422
         assert (await client.get("/api/job-agent/jobs?source=external_search")).status_code == 200
-        assert handler.await_args.args[-2:] == ("external_search", "exclude")
+        assert handler.await_args.args[-3:] == ("external_search", "exclude", "all")
         assert (await client.get("/api/job-agent/jobs?source=unknown")).status_code == 422
         assert (await client.get("/api/job-agent/jobs?legal_degree=required")).status_code == 200
-        assert handler.await_args.args[-1] == "required"
+        assert handler.await_args.args[-2:] == ("required", "all")
         assert (await client.get("/api/job-agent/jobs?legal_degree=maybe")).status_code == 422
+        assert (await client.get("/api/job-agent/jobs?contract=contract")).status_code == 200
+        assert handler.await_args.args[-1] == "contract"
+        assert (await client.get("/api/job-agent/jobs?contract=maybe")).status_code == 422
         assert (await client.get("/api/job-agent/events?page=0")).status_code == 422
 
 

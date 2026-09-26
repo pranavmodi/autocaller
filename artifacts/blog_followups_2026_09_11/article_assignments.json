@@ -1,0 +1,226 @@
+{
+  "1": {
+    "slug": "ai-cannot-fix-broken-pi-workflow",
+    "basis": "Founding partner with prior status-update context; the article addresses duplicated entry, handoffs, and ownership.",
+    "inference": "Workflow fit is a hypothesis, not evidence of a broken process."
+  },
+  "2": {
+    "slug": "claude-clio-ai-intake-solo-pi-lawyer",
+    "basis": "Founder/CEO with stored Clio vendor record; the article gives a concrete intake administration workflow and reported time reduction.",
+    "inference": "Clio relevance does not prove the same burden or savings at this firm."
+  },
+  "3": {
+    "slug": "ai-transformation-one-workflow-at-a-time",
+    "basis": "Managing partner/founder with stored CASEpeer vendor record; the article offers a bounded workflow-first adoption path.",
+    "inference": "Incremental adoption is plausible from role/vendor context, not confirmed need."
+  },
+  "4": {
+    "slug": "ai-for-small-personal-injury-law-firms",
+    "basis": "Founding partner with stored Filevine vendor record; the article focuses on document and records production efficiency.",
+    "inference": "Filevine supports relevance but does not establish a records backlog."
+  },
+  "5": {
+    "slug": "how-small-pi-firms-use-ai-2026",
+    "basis": "Founder with stored Lawmatics vendor record; the article surveys bounded intake, records, communication, and monitoring workflows.",
+    "inference": "Broad owner relevance is inferred from role and vendor context."
+  },
+  "6": {
+    "slug": "ai-cannot-fix-broken-pi-workflow",
+    "basis": "Founder with stored CASEpeer vendor record and prior AI-readiness context; the article connects readiness to reducing re-entry and handoff friction.",
+    "inference": "Workflow friction is a hypothesis, not a stated firm problem."
+  },
+  "7": {
+    "slug": "ai-for-small-personal-injury-law-firms",
+    "basis": "Founder/managing attorney with stored Filevine vendor record; the article presents concrete document and records preparation efficiency.",
+    "inference": "No measured savings opportunity is established for this firm."
+  },
+  "8": {
+    "slug": "personal-injury-intake-marketing-system",
+    "basis": "Founding principal with stored Clio vendor record and prior after-hours signed-case context; the article addresses intake conversion and handoff leakage.",
+    "inference": "The prior subject supports the topic, not a verified conversion gap."
+  },
+  "9": {
+    "slug": "ai-cannot-fix-broken-pi-workflow",
+    "basis": "Founding partner with stored Filevine vendor record; the article addresses repeated entry, ownership, and cross-system handoffs.",
+    "inference": "Firm-level workflow fit is inferred from role/vendor context."
+  },
+  "11": {
+    "slug": "ai-cannot-fix-broken-pi-workflow",
+    "basis": "Founding partner with stored Filevine vendor record and prior attribution outreach; the article offers a practical system/handoff lens.",
+    "inference": "It does not establish broken workflows at Avalon."
+  },
+  "12": {
+    "slug": "pi-law-firm-reviews-client-trust",
+    "basis": "Managing partner with a prior communication-review touch; the article summarizes review evidence around silence, access, and case movement.",
+    "inference": "The article is relevant to client communication operations, not a claim about this firm's reviews."
+  },
+  "13": {
+    "slug": "personal-injury-marketing-attribution",
+    "basis": "Founder/president with stored Filevine vendor record and prior Lead Docket attribution context; the article directly addresses source-to-signed-case tracking.",
+    "inference": "The prior subject does not prove an attribution failure."
+  },
+  "14": {
+    "slug": "ai-cannot-fix-broken-pi-workflow",
+    "basis": "Founder/principal with stored Filevine vendor record and prior attribution outreach; the article focuses on eliminating re-entry before automating.",
+    "inference": "The relevance is an operational hypothesis."
+  },
+  "15": {
+    "slug": "ai-governance-roi-small-pi-firms",
+    "basis": "Founder/senior partner with stored Filevine vendor record and prior status context; the article covers organizing records, search, and version control before AI.",
+    "inference": "Records relevance is plausible, not measured firm data."
+  },
+  "16": {
+    "slug": "personal-injury-marketing-attribution",
+    "basis": "Founder/managing partner with stored Filevine vendor record and prior Lead Docket attribution context; the post follows leads to signed cases.",
+    "inference": "The article does not prove an attribution gap at O'Connor & Hurt."
+  },
+  "17": {
+    "slug": "ai-cannot-fix-broken-pi-workflow",
+    "basis": "Founder/principal with stored Filevine vendor record and prior attribution context; the article provides a practical handoff and re-entry lens.",
+    "inference": "Firm pain remains unconfirmed."
+  },
+  "18": {
+    "slug": "ai-governance-roi-small-pi-firms",
+    "basis": "Founding partner with stored Filevine vendor record and prior attribution touch; records organization and version control are the practical wedge.",
+    "inference": "Vendor evidence supports relevance but not a governance deficiency."
+  },
+  "19": {
+    "slug": "ai-cannot-fix-broken-pi-workflow",
+    "basis": "Founder/managing attorney with stored Filevine vendor record and prior records-oriented outreach; the article addresses repeated entry and ownership.",
+    "inference": "The workflow hypothesis is not a claim about the firm's process."
+  },
+  "20": {
+    "slug": "ai-pi-firm-judgment-workflows",
+    "basis": "Founder/president and lead trial attorney with stored PowerLiens vendor record; the article focuses on routing judgment-heavy work with human review.",
+    "inference": "Litigation leadership makes the topic plausible; no specific bottleneck is asserted."
+  },
+  "21": {
+    "slug": "ai-cannot-fix-broken-pi-workflow",
+    "basis": "Founding/managing partner with stored CASEpeer vendor record and prior adoption discussion; the article offers an anti-re-entry framework.",
+    "inference": "CASEpeer evidence does not prove fragmented operations."
+  },
+  "22": {
+    "slug": "ai-cannot-fix-broken-pi-workflow",
+    "basis": "Founding partner with stored SmartAdvocate vendor record and prior client-trust article; the article connects visible complaints to underlying handoffs.",
+    "inference": "No new claim is made about Farah & Farah."
+  },
+  "23": {
+    "slug": "ai-cannot-fix-broken-pi-workflow",
+    "basis": "Founder with stored Salesforce vendor record and prior client-trust article; the post gives a practical way to identify repeated work before adding AI.",
+    "inference": "No Salesforce or communication gap is asserted."
+  },
+  "24": {
+    "slug": "claude-clio-ai-intake-solo-pi-lawyer",
+    "basis": "Founder/principal with stored Clio vendor record; the article gives a matter-creation, document-packet, and task-list workflow.",
+    "inference": "The reported savings are not a promise for Accident Abe."
+  },
+  "25": {
+    "slug": "pi-law-firm-reviews-client-trust",
+    "basis": "Founder with stored case-status record and prior communication complaint context; the article addresses visible updates and client trust.",
+    "inference": "No current complaint is asserted."
+  },
+  "26": {
+    "slug": "claude-clio-ai-intake-solo-pi-lawyer",
+    "basis": "Founding partner with stored Clio vendor record; the article focuses on reducing repeated intake administration with attorney review.",
+    "inference": "The workflow is an example, not evidence of intake volume."
+  },
+  "27": {
+    "slug": "ai-transformation-one-workflow-at-a-time",
+    "basis": "Founding/managing partner with prior AI-transformation outreach; this unseen article offers a concrete one-workflow measurement approach.",
+    "inference": "The prior topic makes the follow-up coherent; no metric is inferred."
+  },
+  "28": {
+    "slug": "ai-governance-roi-small-pi-firms",
+    "basis": "Founder/lead counsel with prior records-oriented Precise context; the article addresses organizing records and reducing search/review effort.",
+    "inference": "Records relevance follows the prior subject, not a confirmed backlog."
+  },
+  "29": {
+    "slug": "ai-cannot-fix-broken-pi-workflow",
+    "basis": "Founding partner with prior Precise status-update context; the article addresses handoffs and duplicate entry behind status work.",
+    "inference": "A handoff opportunity is hypothesized, not observed."
+  },
+  "30": {
+    "slug": "how-small-pi-firms-use-ai-2026",
+    "basis": "Founder/senior attorney with prior Precise status-update context; the article provides a practical menu of bounded administrative workflows.",
+    "inference": "The article is broad because no stronger firm-specific workflow evidence is stored."
+  },
+  "31": {
+    "slug": "ai-governance-roi-small-pi-firms",
+    "basis": "Founding partner with prior Precise status-update context; the article focuses on records organization, search, and version control.",
+    "inference": "This is a records-efficiency hypothesis, not a governance claim."
+  },
+  "32": {
+    "slug": "ai-transformation-one-workflow-at-a-time",
+    "basis": "Principal attorney with prior AI-readiness context; the article turns broad readiness into a measurable one-workflow experiment.",
+    "inference": "Readiness outreach supports continuity, not a known adoption blocker."
+  },
+  "33": {
+    "slug": "personal-injury-intake-marketing-system",
+    "basis": "Founder/partner with prior after-hours case-loss context; the article addresses intake conversion and slow handoffs.",
+    "inference": "The prior subject does not prove current after-hours leakage."
+  },
+  "34": {
+    "slug": "the-science-of-client-intake-conversion",
+    "basis": "Founder/president with prior caller-response context; the article provides evidence-oriented intake conversion framing.",
+    "inference": "It is a practical intake hypothesis, not a claim about conversion rate."
+  },
+  "35": {
+    "slug": "ai-transformation-one-workflow-at-a-time",
+    "basis": "Founder/managing partner with prior AI-readiness context; the article offers an incremental adoption and measurement path.",
+    "inference": "No specific workflow or time loss is asserted."
+  },
+  "36": {
+    "slug": "ai-cannot-fix-broken-pi-workflow",
+    "basis": "Co-founder/managing attorney with prior AI-readiness context; the article focuses on owners and re-entry before automation.",
+    "inference": "Workflow fit is inferred from role and prior topic."
+  },
+  "37": {
+    "slug": "pi-law-firm-reviews-client-trust",
+    "basis": "Founding partner with prior client-review communication context; the article provides review-backed client-update framing.",
+    "inference": "No new review claim is made about Protection Law Group."
+  },
+  "38": {
+    "slug": "ai-governance-roi-small-pi-firms",
+    "basis": "Founder/principal with prior imaging-status context; the article addresses organizing medical records and reducing search/review effort.",
+    "inference": "The article is relevant to records operations but does not prove a backlog."
+  },
+  "39": {
+    "slug": "ai-cannot-fix-broken-pi-workflow",
+    "basis": "Founder/attorney with prior document/records article; this unseen post connects that concern to upstream handoffs and duplicate entry.",
+    "inference": "No specific broken workflow is asserted."
+  },
+  "40": {
+    "slug": "ai-governance-roi-small-pi-firms",
+    "basis": "Founding attorney with prior document/records and first-mover articles; the governance post adds a search/version-control efficiency angle.",
+    "inference": "The post is a practical records hypothesis, not a governance claim."
+  },
+  "41": {
+    "slug": "ai-cannot-fix-broken-pi-workflow",
+    "basis": "Founder/principal with prior document/records and first-mover articles; the unseen post offers a workflow simplification lens.",
+    "inference": "No firm-specific workflow failure is asserted."
+  },
+  "42": {
+    "slug": "ai-cannot-fix-broken-pi-workflow",
+    "basis": "Founder/managing attorney with prior document/records and first-mover articles; the unseen post offers a workflow simplification lens.",
+    "inference": "No firm-specific workflow failure is asserted."
+  },
+  "43": {
+    "slug": "ai-governance-roi-small-pi-firms",
+    "basis": "Founder/CEO with prior document/records and first-mover articles; the article adds a records search and version-control efficiency angle.",
+    "inference": "The post is a practical records hypothesis, not a governance claim."
+  },
+  "44": {
+    "slug": "ai-cannot-fix-broken-pi-workflow",
+    "basis": "Founder/managing partner with prior document/records and first-mover articles; the unseen post offers a workflow simplification lens.",
+    "inference": "No firm-specific workflow failure is asserted."
+  },
+  "45": {"slug": "ai-cannot-fix-broken-pi-workflow", "basis": "Founder/lead attorney with prior document/records and first-mover articles; the unseen post offers a workflow simplification lens.", "inference": "No firm-specific workflow failure is asserted."},
+  "46": {"slug": "ai-governance-roi-small-pi-firms", "basis": "Founder/attorney with prior document/records and first-mover articles; the article adds a records search and version-control efficiency angle.", "inference": "The post is a practical records hypothesis, not a governance claim."},
+  "47": {"slug": "ai-cannot-fix-broken-pi-workflow", "basis": "Founding partner with prior document/records and first-mover articles; the unseen post offers a workflow simplification lens.", "inference": "No firm-specific workflow failure is asserted."},
+  "48": {"slug": "ai-governance-roi-small-pi-firms", "basis": "Founder/attorney with prior document/records and first-mover articles; the article adds a records search and version-control efficiency angle.", "inference": "The post is a practical records hypothesis, not a governance claim."},
+  "49": {"slug": "ai-cannot-fix-broken-pi-workflow", "basis": "Founding partner with prior document/records and first-mover articles; the unseen post offers a workflow simplification lens.", "inference": "No firm-specific workflow failure is asserted."},
+  "50": {"slug": "ai-governance-roi-small-pi-firms", "basis": "Founder with prior document/records and first-mover articles; the article adds a records search and version-control efficiency angle.", "inference": "The post is a practical records hypothesis, not a governance claim."},
+  "51": {"slug": "ai-cannot-fix-broken-pi-workflow", "basis": "Founder/attorney with prior document/records and first-mover articles; the unseen post offers a workflow simplification lens.", "inference": "No firm-specific workflow failure is asserted."},
+  "52": {"slug": "ai-governance-roi-small-pi-firms", "basis": "Founder/owner with prior document/records and first-mover articles; the article adds a records search and version-control efficiency angle.", "inference": "The post is a practical records hypothesis, not a governance claim."},
+  "vendor_language_policy": "Use stored vendor record/evidence as an observed signal only. Do not call a vendor confirmed without independent direct source verification."
+}

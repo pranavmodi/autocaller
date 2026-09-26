@@ -1,0 +1,4713 @@
+{
+  "checked_at": "2026-09-18T13:46:35.533Z",
+  "scope": "Audit of saved results from the 20-firm local enrichment run. These are stored research findings, not a new independent verification of every assertion.",
+  "common_research": [
+    "Firm identity and canonical website",
+    "Summary, practice areas, locations, size and founding year",
+    "Leadership and staff identities, roles, public biographies and contact evidence",
+    "Case results, awards, memberships and other public context where sourced",
+    "Legal software and other vendor signals with source URLs and confidence",
+    "AI adoption and leadership statements, distinct from actual deployment",
+    "Sitemap discovery/change snapshot",
+    "Existing relationship and communication metadata",
+    "Contact-profile construction and contact-directory ingestion",
+    "Recent job-posting research",
+    "ICP scoring"
+  ],
+  "firms": [
+    {
+      "task_id": "firm-enrichment-3da4acb21fcc4193b20150ee24456bb4",
+      "pif_id": "84aa7a3d-f41a-4ae6-87dc-18994b885d42",
+      "firm_name": "Hartounian APLC",
+      "status": "completed",
+      "stages": [
+        {
+          "key": "web_research",
+          "status": "completed",
+          "message": "Web research completed",
+          "detail_keys": null,
+          "error": null
+        },
+        {
+          "key": "persist_research",
+          "status": "completed",
+          "message": "Research saved without replacing existing facts",
+          "detail_keys": [
+            "pif_id",
+            "staff_count",
+            "vendor_count",
+            "domain_claimed",
+            "change_detection",
+            "leadership_count",
+            "canonical_website",
+            "reused_recent_research",
+            "reconciled_from_firm_id"
+          ],
+          "error": null
+        },
+        {
+          "key": "sitemap",
+          "status": "completed",
+          "message": "Completed sitemap",
+          "detail_keys": [
+            "error",
+            "status",
+            "changed",
+            "website",
+            "provider",
+            "truncated",
+            "url_count",
+            "added_urls",
+            "checked_at",
+            "added_count",
+            "snapshot_id",
+            "removed_urls",
+            "sitemap_urls",
+            "removed_count"
+          ],
+          "error": "robots.txt: HTTP 403; https://hartounian.com/sitemap.xml: HTTP 403; https://hartounian.com/sitemap_index.xml: HTTP 403"
+        },
+        {
+          "key": "behavior",
+          "status": "completed",
+          "message": "Completed behavior",
+          "detail_keys": [
+            "provider",
+            "warm_score",
+            "analyzed_at",
+            "last_seen_at",
+            "tech_signals",
+            "contact_count",
+            "inbox_breakdown",
+            "last_records_at",
+            "last_referral_at",
+            "conversation_count"
+          ],
+          "error": null
+        },
+        {
+          "key": "contact_intelligence",
+          "status": "completed",
+          "message": "Completed contact intelligence",
+          "detail_keys": [
+            "contact_profile_count",
+            "leadership_history_count"
+          ],
+          "error": null
+        },
+        {
+          "key": "contacts",
+          "status": "completed",
+          "message": "Completed contacts",
+          "detail_keys": [
+            "firms",
+            "persons",
+            "skipped",
+            "updated",
+            "inserted",
+            "personas"
+          ],
+          "error": null
+        },
+        {
+          "key": "job_postings",
+          "status": "completed",
+          "message": "Completed job postings",
+          "detail_keys": [
+            "kind",
+            "pif_id",
+            "status",
+            "task_id",
+            "firm_name",
+            "started_at",
+            "completed_at",
+            "max_attempts",
+            "requested_at",
+            "attempt_count",
+            "posting_count",
+            "change_detection",
+            "attempt_started_at",
+            "has_recent_openings"
+          ],
+          "error": null
+        },
+        {
+          "key": "score",
+          "status": "completed",
+          "message": "Completed score",
+          "detail_keys": [
+            "id",
+            "icp_tier",
+            "icp_score",
+            "score_breakdown"
+          ],
+          "error": null
+        }
+      ],
+      "research_keys": [
+        "city",
+        "metro",
+        "state",
+        "sources",
+        "summary",
+        "case_mix",
+        "icp_tier",
+        "identity",
+        "firm_size",
+        "size_hint",
+        "value_tier",
+        "ai_adoption",
+        "founded_year",
+        "job_postings",
+        "social_media",
+        "volume_proxy",
+        "notable_cases",
+        "practice_areas",
+        "additional_info",
+        "research_status",
+        "sitemap_monitor",
+        "website_sources",
+        "bar_associations",
+        "local_enrichment",
+        "office_locations",
+        "research_provider",
+        "awards_recognition",
+        "last_researched_at",
+        "website_confidence",
+        "ai_adoption_history",
+        "leadership_email_history",
+        "job_postings_research_status",
+        "contact_intelligence_provider",
+        "job_postings_research_provider",
+        "contact_intelligence_updated_at",
+        "last_job_postings_researched_at"
+      ],
+      "leaders": 2,
+      "staff": 4,
+      "vendor_stack": {
+        "other": {},
+        "evidence": [],
+        "case_mgmt": null
+      },
+      "outcomes": {
+        "task_id": "firm-enrichment-3da4acb21fcc4193b20150ee24456bb4",
+        "firm_name": "Hartounian APLC",
+        "summary": "Glendale-based plaintiff-side personal injury law firm serving clients throughout Southern California and California, with a focus on personal injury and wrongful death matters.",
+        "practice_areas": [
+          "Personal injury",
+          "Wrongful death",
+          "Car accidents",
+          "Motorcycle accidents",
+          "Truck accidents",
+          "Pedestrian accidents",
+          "Premises liability",
+          "Slip and fall",
+          "Dog bites",
+          "Brain injuries",
+          "Spinal cord injuries",
+          "Catastrophic injuries"
+        ],
+        "founded_year": 2019,
+        "firm_size": "2-10 employees",
+        "offices": [
+          "Glendale, CA",
+          "1515 W Glenoaks Blvd., Glendale, CA 91201"
+        ],
+        "notable_cases": [
+          {
+            "source_url": "https://www.linkedin.com/posts/aroutin-hartounian_policylimits-settlementalert-caraccident-activity-7255771355424464896-Vcq7",
+            "description": "$300,000 policy-limits settlement reported for clients in a car-accident matter."
+          },
+          "$945,783.19 truck-versus-auto accident result",
+          "$750,000 auto-versus-auto accident result",
+          "$300,000 auto-versus-auto accident result",
+          "$250,000 auto-versus-auto accident result",
+          "$167,500 auto-versus-auto accident result",
+          "$300,000 policy-limits car-accident settlement"
+        ],
+        "awards": [
+          "Aroutin Hartounian received Avvo Client's Choice Awards in 2021, 2022, and 2023.",
+          "Avvo Client's Choice Award, 2021-2023, Aroutin Hartounian"
+        ],
+        "ai_stage": "unknown",
+        "ai_summary": "No public evidence found.",
+        "jobs": 0,
+        "contact_results": {
+          "contact_profile_count": 6,
+          "leadership_history_count": 2
+        },
+        "leaders": [
+          {
+            "name": "Aroutin Hartounian",
+            "title": "Founder and Managing Attorney",
+            "has_email": true
+          },
+          {
+            "name": "Aroutin Hartounian",
+            "title": "Founder and Managing Attorney",
+            "has_email": false
+          }
+        ]
+      }
+    },
+    {
+      "task_id": "firm-enrichment-dce38eb45b924ac2b84b1881cf6f1839",
+      "pif_id": "cc7e1c56-8fc0-4361-b453-26a79da11a4d",
+      "firm_name": "Garen Gevorgyan, Esq.",
+      "status": "completed",
+      "stages": [
+        {
+          "key": "web_research",
+          "status": "completed",
+          "message": "Web research completed",
+          "detail_keys": null,
+          "error": null
+        },
+        {
+          "key": "persist_research",
+          "status": "completed",
+          "message": "Research saved without replacing existing facts",
+          "detail_keys": [
+            "pif_id",
+            "staff_count",
+            "vendor_count",
+            "domain_claimed",
+            "change_detection",
+            "leadership_count",
+            "canonical_website",
+            "reused_recent_research",
+            "reconciled_from_firm_id"
+          ],
+          "error": null
+        },
+        {
+          "key": "sitemap",
+          "status": "completed",
+          "message": "Completed sitemap",
+          "detail_keys": [
+            "error",
+            "status",
+            "changed",
+            "website",
+            "provider",
+            "truncated",
+            "url_count",
+            "added_urls",
+            "checked_at",
+            "added_count",
+            "snapshot_id",
+            "removed_urls",
+            "sitemap_urls",
+            "removed_count",
+            "change_detection"
+          ],
+          "error": null
+        },
+        {
+          "key": "behavior",
+          "status": "completed",
+          "message": "Completed behavior",
+          "detail_keys": [
+            "provider",
+            "warm_score",
+            "analyzed_at",
+            "last_seen_at",
+            "tech_signals",
+            "contact_count",
+            "inbox_breakdown",
+            "last_records_at",
+            "last_referral_at",
+            "conversation_count"
+          ],
+          "error": null
+        },
+        {
+          "key": "contact_intelligence",
+          "status": "completed",
+          "message": "Completed contact intelligence",
+          "detail_keys": [
+            "contact_profile_count",
+            "leadership_history_count"
+          ],
+          "error": null
+        },
+        {
+          "key": "contacts",
+          "status": "completed",
+          "message": "Completed contacts",
+          "detail_keys": [
+            "firms",
+            "persons",
+            "skipped",
+            "updated",
+            "inserted",
+            "personas"
+          ],
+          "error": null
+        },
+        {
+          "key": "job_postings",
+          "status": "completed",
+          "message": "Completed job postings",
+          "detail_keys": [
+            "kind",
+            "pif_id",
+            "status",
+            "task_id",
+            "firm_name",
+            "started_at",
+            "completed_at",
+            "max_attempts",
+            "requested_at",
+            "attempt_count",
+            "posting_count",
+            "change_detection",
+            "attempt_started_at",
+            "has_recent_openings"
+          ],
+          "error": null
+        },
+        {
+          "key": "score",
+          "status": "completed",
+          "message": "Completed score",
+          "detail_keys": [
+            "id",
+            "icp_tier",
+            "icp_score",
+            "score_breakdown"
+          ],
+          "error": null
+        }
+      ],
+      "research_keys": [
+        "city",
+        "metro",
+        "state",
+        "sources",
+        "summary",
+        "case_mix",
+        "icp_tier",
+        "identity",
+        "firm_size",
+        "size_hint",
+        "value_tier",
+        "ai_adoption",
+        "founded_year",
+        "job_postings",
+        "social_media",
+        "volume_proxy",
+        "notable_cases",
+        "practice_areas",
+        "additional_info",
+        "research_status",
+        "sitemap_monitor",
+        "website_sources",
+        "bar_associations",
+        "local_enrichment",
+        "office_locations",
+        "research_provider",
+        "awards_recognition",
+        "last_researched_at",
+        "website_confidence",
+        "ai_adoption_history",
+        "leadership_email_history",
+        "job_postings_research_status",
+        "contact_intelligence_provider",
+        "job_postings_research_provider",
+        "contact_intelligence_updated_at",
+        "last_job_postings_researched_at"
+      ],
+      "leaders": 1,
+      "staff": 1,
+      "vendor_stack": {
+        "other": {
+          "forms": "Gravity Forms",
+          "analytics": "Google Analytics",
+          "website_cms": "WordPress"
+        },
+        "evidence": [
+          {
+            "source": "official_website",
+            "vendor": "WordPress",
+            "confidence": 0.99,
+            "source_url": "https://garenlaw.com/"
+          },
+          {
+            "source": "official_website",
+            "vendor": "Gravity Forms",
+            "confidence": 0.99,
+            "source_url": "https://garenlaw.com/"
+          },
+          {
+            "source": "privacy_policy",
+            "vendor": "Google Analytics",
+            "confidence": 0.95,
+            "source_url": "https://garenlaw.com/privacy-policy-2/"
+          }
+        ],
+        "case_mgmt": null
+      },
+      "outcomes": {
+        "task_id": "firm-enrichment-dce38eb45b924ac2b84b1881cf6f1839",
+        "firm_name": "Garen Gevorgyan, Esq.",
+        "summary": "California personal injury law firm founded by Garen Gevorgyan and based in Pasadena, serving clients statewide with personalized representation.",
+        "practice_areas": [
+          "Car accidents",
+          "Truck accidents",
+          "Motorcycle accidents",
+          "Slip and fall",
+          "Wrongful death",
+          "Pedestrian accidents",
+          "Dog bites",
+          "Rideshare accidents",
+          "Medical malpractice",
+          "Workplace accidents"
+        ],
+        "founded_year": null,
+        "firm_size": null,
+        "offices": [
+          "Pasadena, CA"
+        ],
+        "notable_cases": [
+          "Dog bite recovery of $178,000",
+          "Rear-end collision settlement of $260,000",
+          "Rideshare accident recovery exceeding $320,000",
+          "Medical malpractice settlement of $200,000",
+          "Ani Arabyan v. Lalageh Galestanian, Los Angeles County Superior Court personal injury, property damage, and wrongful death complaint; Garen Gevorgyan represented the plaintiff.",
+          "Ruben Hovhannisyan v. Oshein Khachikian, Los Angeles County premises liability matter; Garen Gevorgyan represented the plaintiff."
+        ],
+        "awards": [],
+        "ai_stage": "unknown",
+        "ai_summary": "No public evidence found.",
+        "jobs": 0,
+        "contact_results": {
+          "contact_profile_count": 2,
+          "leadership_history_count": 1
+        },
+        "leaders": [
+          {
+            "name": "Garen Gevorgyan",
+            "title": "Founder and Attorney",
+            "has_email": true
+          }
+        ]
+      }
+    },
+    {
+      "task_id": "firm-enrichment-a32da58c22bc4848963777e7fe977cbb",
+      "pif_id": "c8b1f3f7-1daa-4f3f-b5cc-1546ce90e99c",
+      "firm_name": "Dixon Law APC",
+      "status": "completed",
+      "stages": [
+        {
+          "key": "web_research",
+          "status": "completed",
+          "message": "Web research completed",
+          "detail_keys": null,
+          "error": null
+        },
+        {
+          "key": "persist_research",
+          "status": "completed",
+          "message": "Research saved without replacing existing facts",
+          "detail_keys": [
+            "pif_id",
+            "staff_count",
+            "vendor_count",
+            "domain_claimed",
+            "change_detection",
+            "leadership_count",
+            "canonical_website",
+            "reused_recent_research",
+            "reconciled_from_firm_id"
+          ],
+          "error": null
+        },
+        {
+          "key": "sitemap",
+          "status": "completed",
+          "message": "Completed sitemap",
+          "detail_keys": [
+            "error",
+            "status",
+            "changed",
+            "website",
+            "provider",
+            "truncated",
+            "url_count",
+            "added_urls",
+            "checked_at",
+            "added_count",
+            "snapshot_id",
+            "removed_urls",
+            "sitemap_urls",
+            "removed_count",
+            "change_detection"
+          ],
+          "error": null
+        },
+        {
+          "key": "behavior",
+          "status": "completed",
+          "message": "Completed behavior",
+          "detail_keys": [
+            "provider",
+            "warm_score",
+            "analyzed_at",
+            "last_seen_at",
+            "tech_signals",
+            "contact_count",
+            "inbox_breakdown",
+            "last_records_at",
+            "last_referral_at",
+            "conversation_count"
+          ],
+          "error": null
+        },
+        {
+          "key": "contact_intelligence",
+          "status": "completed",
+          "message": "Completed contact intelligence",
+          "detail_keys": [
+            "contact_profile_count",
+            "leadership_history_count"
+          ],
+          "error": null
+        },
+        {
+          "key": "contacts",
+          "status": "completed",
+          "message": "Completed contacts",
+          "detail_keys": [
+            "firms",
+            "persons",
+            "skipped",
+            "updated",
+            "inserted",
+            "personas"
+          ],
+          "error": null
+        },
+        {
+          "key": "job_postings",
+          "status": "completed",
+          "message": "Completed job postings",
+          "detail_keys": [
+            "kind",
+            "pif_id",
+            "status",
+            "task_id",
+            "firm_name",
+            "started_at",
+            "completed_at",
+            "max_attempts",
+            "requested_at",
+            "attempt_count",
+            "posting_count",
+            "attempt_started_at",
+            "has_recent_openings"
+          ],
+          "error": null
+        },
+        {
+          "key": "score",
+          "status": "completed",
+          "message": "Completed score",
+          "detail_keys": [
+            "id",
+            "icp_tier",
+            "icp_score",
+            "score_breakdown"
+          ],
+          "error": null
+        }
+      ],
+      "research_keys": [
+        "city",
+        "metro",
+        "state",
+        "sources",
+        "summary",
+        "case_mix",
+        "icp_tier",
+        "identity",
+        "firm_size",
+        "size_hint",
+        "value_tier",
+        "ai_adoption",
+        "founded_year",
+        "job_postings",
+        "social_media",
+        "volume_proxy",
+        "notable_cases",
+        "practice_areas",
+        "additional_info",
+        "research_status",
+        "sitemap_monitor",
+        "website_sources",
+        "bar_associations",
+        "local_enrichment",
+        "office_locations",
+        "research_provider",
+        "awards_recognition",
+        "last_researched_at",
+        "website_confidence",
+        "ai_adoption_history",
+        "leadership_email_history",
+        "job_postings_research_status",
+        "contact_intelligence_provider",
+        "job_postings_research_provider",
+        "contact_intelligence_updated_at",
+        "last_job_postings_researched_at"
+      ],
+      "leaders": 3,
+      "staff": 1,
+      "vendor_stack": {
+        "other": {},
+        "evidence": [],
+        "case_mgmt": null
+      },
+      "outcomes": {
+        "task_id": "firm-enrichment-a32da58c22bc4848963777e7fe977cbb",
+        "firm_name": "Dixon Law APC",
+        "summary": "Dixon Law, APC is a La Habra, California law firm focused on personal injury, wrongful death, and workers’ compensation matters throughout Orange County and California.",
+        "practice_areas": [
+          "Personal injury",
+          "Workers’ compensation",
+          "Wrongful death",
+          "Car accidents",
+          "Slip and fall injuries",
+          "Construction injuries",
+          "Truck accidents",
+          "Motorcycle accidents",
+          "Pedestrian and bicycle injuries",
+          "Dog bites and animal attacks",
+          "Defective products"
+        ],
+        "founded_year": 2022,
+        "firm_size": null,
+        "offices": [
+          "921 N. Harbor Blvd., Suite 434, La Habra, CA 90631"
+        ],
+        "notable_cases": [
+          "$4,183,900 jury verdict for a public-transit passenger who sustained a traumatic brain injury",
+          "$2,500,000 helicopter air-lift accident result",
+          "$1,525,000 rear-end auto accident result",
+          "$1,250,000 middle-school slip-and-fall result",
+          "$1,000,000 motor-vehicle accident involving mild traumatic brain injury",
+          "$1,250,000 logger catastrophic-injury result",
+          "$800,000 truck-driver spine-injury result"
+        ],
+        "awards": [
+          "Justin P. Dixon is a California Certified Specialist in Workers’ Compensation Law"
+        ],
+        "ai_stage": "unknown",
+        "ai_summary": "No public evidence found.",
+        "jobs": 0,
+        "contact_results": {
+          "contact_profile_count": 4,
+          "leadership_history_count": 3
+        },
+        "leaders": [
+          {
+            "name": "Jenee Dixon",
+            "title": "Director of Operations",
+            "has_email": true
+          },
+          {
+            "name": "Justin P. Dixon",
+            "title": "Attorney",
+            "has_email": true
+          },
+          {
+            "name": "Jenee L. Dixon",
+            "title": "Director of Operations",
+            "has_email": false
+          }
+        ]
+      }
+    },
+    {
+      "task_id": "firm-enrichment-3c59860879074073adc0e45e9ba5dfb0",
+      "pif_id": "d7c604d4-5965-4eb5-b878-702424d7341f",
+      "firm_name": "Hannegan & Tafreshi Injury Law, PC",
+      "status": "completed",
+      "stages": [
+        {
+          "key": "web_research",
+          "status": "completed",
+          "message": "Web research completed",
+          "detail_keys": null,
+          "error": null
+        },
+        {
+          "key": "persist_research",
+          "status": "completed",
+          "message": "Research saved without replacing existing facts",
+          "detail_keys": [
+            "pif_id",
+            "staff_count",
+            "vendor_count",
+            "domain_claimed",
+            "change_detection",
+            "leadership_count",
+            "canonical_website",
+            "reused_recent_research",
+            "reconciled_from_firm_id"
+          ],
+          "error": null
+        },
+        {
+          "key": "sitemap",
+          "status": "completed",
+          "message": "Completed sitemap",
+          "detail_keys": [
+            "error",
+            "status",
+            "changed",
+            "website",
+            "provider",
+            "truncated",
+            "url_count",
+            "added_urls",
+            "checked_at",
+            "added_count",
+            "snapshot_id",
+            "removed_urls",
+            "sitemap_urls",
+            "removed_count",
+            "change_detection"
+          ],
+          "error": null
+        },
+        {
+          "key": "behavior",
+          "status": "completed",
+          "message": "Completed behavior",
+          "detail_keys": [
+            "provider",
+            "warm_score",
+            "analyzed_at",
+            "last_seen_at",
+            "tech_signals",
+            "contact_count",
+            "inbox_breakdown",
+            "last_records_at",
+            "last_referral_at",
+            "conversation_count"
+          ],
+          "error": null
+        },
+        {
+          "key": "contact_intelligence",
+          "status": "completed",
+          "message": "Completed contact intelligence",
+          "detail_keys": [
+            "contact_profile_count",
+            "leadership_history_count"
+          ],
+          "error": null
+        },
+        {
+          "key": "contacts",
+          "status": "completed",
+          "message": "Completed contacts",
+          "detail_keys": [
+            "firms",
+            "persons",
+            "skipped",
+            "updated",
+            "inserted",
+            "personas"
+          ],
+          "error": null
+        },
+        {
+          "key": "job_postings",
+          "status": "completed",
+          "message": "Completed job postings",
+          "detail_keys": [
+            "kind",
+            "pif_id",
+            "status",
+            "task_id",
+            "firm_name",
+            "started_at",
+            "completed_at",
+            "max_attempts",
+            "requested_at",
+            "attempt_count",
+            "posting_count",
+            "change_detection",
+            "attempt_started_at",
+            "has_recent_openings"
+          ],
+          "error": null
+        },
+        {
+          "key": "score",
+          "status": "completed",
+          "message": "Completed score",
+          "detail_keys": [
+            "id",
+            "icp_tier",
+            "icp_score",
+            "score_breakdown"
+          ],
+          "error": null
+        }
+      ],
+      "research_keys": [
+        "city",
+        "metro",
+        "state",
+        "sources",
+        "summary",
+        "case_mix",
+        "icp_tier",
+        "identity",
+        "firm_size",
+        "size_hint",
+        "value_tier",
+        "ai_adoption",
+        "founded_year",
+        "job_postings",
+        "social_media",
+        "volume_proxy",
+        "notable_cases",
+        "practice_areas",
+        "additional_info",
+        "research_status",
+        "sitemap_monitor",
+        "website_sources",
+        "bar_associations",
+        "local_enrichment",
+        "office_locations",
+        "research_provider",
+        "awards_recognition",
+        "last_researched_at",
+        "website_confidence",
+        "ai_adoption_history",
+        "leadership_email_history",
+        "job_postings_research_status",
+        "contact_intelligence_provider",
+        "job_postings_research_provider",
+        "contact_intelligence_updated_at",
+        "last_job_postings_researched_at"
+      ],
+      "leaders": 3,
+      "staff": 3,
+      "vendor_stack": {
+        "other": {},
+        "evidence": [],
+        "case_mgmt": null
+      },
+      "outcomes": {
+        "task_id": "firm-enrichment-3c59860879074073adc0e45e9ba5dfb0",
+        "firm_name": "Hannegan & Tafreshi Injury Law, PC",
+        "summary": "Southern California personal injury and workers’ compensation law firm serving injured civilians, first responders, and other safety professionals throughout California.",
+        "practice_areas": [
+          "Personal injury",
+          "Workers’ compensation",
+          "Automobile accidents",
+          "Motorcycle accidents",
+          "Truck accidents",
+          "Rideshare accidents",
+          "Pedestrian injuries",
+          "Bicycle and e-bike accidents",
+          "Catastrophic injuries",
+          "Wrongful death",
+          "Premises liability",
+          "Workers’ compensation for first responders"
+        ],
+        "founded_year": null,
+        "firm_size": "1-10",
+        "offices": [
+          "Tustin, California"
+        ],
+        "notable_cases": [],
+        "awards": [],
+        "ai_stage": "unknown",
+        "ai_summary": "No public evidence found.",
+        "jobs": 0,
+        "contact_results": {
+          "contact_profile_count": 6,
+          "leadership_history_count": 3
+        },
+        "leaders": [
+          {
+            "name": "Brooke B. Tafreshi",
+            "title": "President",
+            "has_email": false
+          },
+          {
+            "name": "Philip D. Rennick",
+            "title": "Attorney",
+            "has_email": true
+          },
+          {
+            "name": "Kenneth W. Hannegan",
+            "title": "Late partner and founder of the firm’s safety-member practice",
+            "has_email": false
+          }
+        ]
+      }
+    },
+    {
+      "task_id": "firm-enrichment-bdb39758a99f4f41abad483eb524e339",
+      "pif_id": "bf52e0d7-190c-4cda-97bd-0a8486ef3a7d",
+      "firm_name": "Conrad Legal Office",
+      "status": "completed",
+      "stages": [
+        {
+          "key": "web_research",
+          "status": "completed",
+          "message": "Web research completed",
+          "detail_keys": null,
+          "error": null
+        },
+        {
+          "key": "persist_research",
+          "status": "completed",
+          "message": "Research saved without replacing existing facts",
+          "detail_keys": [
+            "pif_id",
+            "staff_count",
+            "vendor_count",
+            "domain_claimed",
+            "change_detection",
+            "leadership_count",
+            "canonical_website",
+            "reused_recent_research",
+            "reconciled_from_firm_id"
+          ],
+          "error": null
+        },
+        {
+          "key": "sitemap",
+          "status": "completed",
+          "message": "Completed sitemap",
+          "detail_keys": [
+            "error",
+            "status",
+            "changed",
+            "website",
+            "provider",
+            "truncated",
+            "url_count",
+            "added_urls",
+            "checked_at",
+            "added_count",
+            "snapshot_id",
+            "removed_urls",
+            "sitemap_urls",
+            "removed_count",
+            "change_detection"
+          ],
+          "error": null
+        },
+        {
+          "key": "behavior",
+          "status": "completed",
+          "message": "Completed behavior",
+          "detail_keys": [
+            "provider",
+            "warm_score",
+            "analyzed_at",
+            "last_seen_at",
+            "tech_signals",
+            "contact_count",
+            "inbox_breakdown",
+            "last_records_at",
+            "last_referral_at",
+            "conversation_count"
+          ],
+          "error": null
+        },
+        {
+          "key": "contact_intelligence",
+          "status": "completed",
+          "message": "Completed contact intelligence",
+          "detail_keys": [
+            "contact_profile_count",
+            "leadership_history_count"
+          ],
+          "error": null
+        },
+        {
+          "key": "contacts",
+          "status": "completed",
+          "message": "Completed contacts",
+          "detail_keys": [
+            "firms",
+            "persons",
+            "skipped",
+            "updated",
+            "inserted",
+            "personas"
+          ],
+          "error": null
+        },
+        {
+          "key": "job_postings",
+          "status": "completed",
+          "message": "Completed job postings",
+          "detail_keys": [
+            "kind",
+            "pif_id",
+            "status",
+            "task_id",
+            "firm_name",
+            "started_at",
+            "completed_at",
+            "max_attempts",
+            "requested_at",
+            "attempt_count",
+            "posting_count",
+            "change_detection",
+            "attempt_started_at",
+            "has_recent_openings"
+          ],
+          "error": null
+        },
+        {
+          "key": "score",
+          "status": "completed",
+          "message": "Completed score",
+          "detail_keys": [
+            "id",
+            "icp_tier",
+            "icp_score",
+            "score_breakdown"
+          ],
+          "error": null
+        }
+      ],
+      "research_keys": [
+        "city",
+        "metro",
+        "state",
+        "sources",
+        "summary",
+        "case_mix",
+        "icp_tier",
+        "identity",
+        "firm_size",
+        "size_hint",
+        "value_tier",
+        "ai_adoption",
+        "founded_year",
+        "job_postings",
+        "social_media",
+        "volume_proxy",
+        "notable_cases",
+        "practice_areas",
+        "additional_info",
+        "research_status",
+        "sitemap_monitor",
+        "website_sources",
+        "bar_associations",
+        "local_enrichment",
+        "office_locations",
+        "research_provider",
+        "awards_recognition",
+        "last_researched_at",
+        "website_confidence",
+        "ai_adoption_history",
+        "leadership_email_history",
+        "job_postings_research_status",
+        "contact_intelligence_provider",
+        "job_postings_research_provider",
+        "contact_intelligence_updated_at",
+        "last_job_postings_researched_at"
+      ],
+      "leaders": 1,
+      "staff": 1,
+      "vendor_stack": {
+        "other": {},
+        "evidence": [],
+        "case_mgmt": null
+      },
+      "outcomes": {
+        "task_id": "firm-enrichment-bdb39758a99f4f41abad483eb524e339",
+        "firm_name": "Conrad Legal Office",
+        "summary": "San Francisco-based law office led by Conrad J. Kuyawa, representing clients in personal injury, tenant rights and habitability, landlord-tenant, criminal defense, and related litigation matters.",
+        "practice_areas": [
+          "Personal injury",
+          "Tenant rights",
+          "Landlord-tenant disputes",
+          "Habitability litigation",
+          "Eviction defense",
+          "Criminal defense",
+          "Consumer and lemon law"
+        ],
+        "founded_year": null,
+        "firm_size": "1-4 employees",
+        "offices": [
+          "San Francisco, CA"
+        ],
+        "notable_cases": [
+          {
+            "source_url": "https://www.conradlegaloffice.com/results",
+            "description": "$150,000 recovered for severe post-flood uninhabitable conditions, consisting of a $75,000 settlement and a $65,000 rent waiver."
+          },
+          {
+            "source_url": "https://www.conradlegaloffice.com/results",
+            "description": "Unlawful detainer action dismissed on trial day after discovery and pre-trial motions; tenancy was reinstated and the landlord was ordered to cover part of the legal fees."
+          },
+          {
+            "source_url": "https://www.conradlegaloffice.com/results",
+            "description": "Significant rent refund and remediation secured in a mold and pest infestation habitability matter."
+          },
+          {
+            "source_url": "https://www.govinfo.gov/content/pkg/USCOURTS-cand-3_23-cv-05712/pdf/USCOURTS-cand-3_23-cv-05712-2.pdf",
+            "description": "Kuyawa v. Mercedes-Benz USA, LLC, a Northern District of California lemon-law action that was dismissed with prejudice upon settlement."
+          }
+        ],
+        "awards": [],
+        "ai_stage": "unknown",
+        "ai_summary": "No public evidence found.",
+        "jobs": 0,
+        "contact_results": {
+          "contact_profile_count": 2,
+          "leadership_history_count": 1
+        },
+        "leaders": [
+          {
+            "name": "Conrad Joseph Kuyawa",
+            "title": "Owner and Managing Attorney",
+            "has_email": false
+          }
+        ]
+      }
+    },
+    {
+      "task_id": "firm-enrichment-257810acbc21493a9bc5b94900a5d784",
+      "pif_id": "a404b7b6-4704-4385-b922-777afb877ec5",
+      "firm_name": "United Attorney Group",
+      "status": "completed",
+      "stages": [
+        {
+          "key": "web_research",
+          "status": "completed",
+          "message": "Web research completed",
+          "detail_keys": null,
+          "error": null
+        },
+        {
+          "key": "persist_research",
+          "status": "completed",
+          "message": "Research saved without replacing existing facts",
+          "detail_keys": [
+            "pif_id",
+            "staff_count",
+            "vendor_count",
+            "domain_claimed",
+            "change_detection",
+            "leadership_count",
+            "canonical_website",
+            "reused_recent_research",
+            "reconciled_from_firm_id"
+          ],
+          "error": null
+        },
+        {
+          "key": "sitemap",
+          "status": "completed",
+          "message": "Completed sitemap",
+          "detail_keys": [
+            "error",
+            "status",
+            "changed",
+            "website",
+            "provider",
+            "truncated",
+            "url_count",
+            "added_urls",
+            "checked_at",
+            "added_count",
+            "snapshot_id",
+            "removed_urls",
+            "sitemap_urls",
+            "removed_count"
+          ],
+          "error": "robots.txt: HTTP 403; https://unitedattorneygroup.com/sitemap.xml: HTTP 403; https://unitedattorneygroup.com/sitemap_index.xml: HTTP 403"
+        },
+        {
+          "key": "behavior",
+          "status": "completed",
+          "message": "Completed behavior",
+          "detail_keys": [
+            "provider",
+            "warm_score",
+            "analyzed_at",
+            "last_seen_at",
+            "tech_signals",
+            "contact_count",
+            "inbox_breakdown",
+            "last_records_at",
+            "last_referral_at",
+            "conversation_count"
+          ],
+          "error": null
+        },
+        {
+          "key": "contact_intelligence",
+          "status": "completed",
+          "message": "Completed contact intelligence",
+          "detail_keys": [
+            "contact_profile_count",
+            "leadership_history_count"
+          ],
+          "error": null
+        },
+        {
+          "key": "contacts",
+          "status": "completed",
+          "message": "Completed contacts",
+          "detail_keys": [
+            "firms",
+            "persons",
+            "skipped",
+            "updated",
+            "inserted",
+            "personas"
+          ],
+          "error": null
+        },
+        {
+          "key": "job_postings",
+          "status": "completed",
+          "message": "Completed job postings",
+          "detail_keys": [
+            "kind",
+            "pif_id",
+            "status",
+            "task_id",
+            "firm_name",
+            "started_at",
+            "completed_at",
+            "max_attempts",
+            "requested_at",
+            "attempt_count",
+            "posting_count",
+            "change_detection",
+            "attempt_started_at",
+            "has_recent_openings"
+          ],
+          "error": null
+        },
+        {
+          "key": "score",
+          "status": "completed",
+          "message": "Completed score",
+          "detail_keys": [
+            "id",
+            "icp_tier",
+            "icp_score",
+            "score_breakdown"
+          ],
+          "error": null
+        }
+      ],
+      "research_keys": [
+        "city",
+        "metro",
+        "state",
+        "sources",
+        "summary",
+        "case_mix",
+        "icp_tier",
+        "identity",
+        "firm_size",
+        "size_hint",
+        "value_tier",
+        "ai_adoption",
+        "founded_year",
+        "job_postings",
+        "social_media",
+        "volume_proxy",
+        "notable_cases",
+        "practice_areas",
+        "additional_info",
+        "research_status",
+        "sitemap_monitor",
+        "website_sources",
+        "bar_associations",
+        "local_enrichment",
+        "office_locations",
+        "research_provider",
+        "awards_recognition",
+        "last_researched_at",
+        "website_confidence",
+        "ai_adoption_history",
+        "leadership_email_history",
+        "job_postings_research_status",
+        "contact_intelligence_provider",
+        "job_postings_research_provider",
+        "contact_intelligence_updated_at",
+        "last_job_postings_researched_at"
+      ],
+      "leaders": 2,
+      "staff": 2,
+      "vendor_stack": {
+        "other": {
+          "website_marketing": "Scorpion"
+        },
+        "evidence": [
+          {
+            "source": "official_website",
+            "vendor": "Scorpion",
+            "confidence": 0.85,
+            "source_url": "https://www.unitedattorneygroup.com/about-us/"
+          }
+        ],
+        "case_mgmt": null
+      },
+      "outcomes": {
+        "task_id": "firm-enrichment-257810acbc21493a9bc5b94900a5d784",
+        "firm_name": "United Attorney Group",
+        "summary": "Personal injury law firm serving clients across California, Maryland, and Washington, D.C., with contingency-fee representation for serious accidents and related injuries.",
+        "practice_areas": [
+          "Car accidents",
+          "Truck accidents",
+          "Motorcycle accidents",
+          "Uber/Lyft accidents",
+          "Bus accidents",
+          "Pedestrian accidents",
+          "Slip and fall",
+          "Premises liability",
+          "Wrongful death",
+          "Brain injuries",
+          "Burn injuries",
+          "Dog bites",
+          "Catastrophic injuries",
+          "Medical malpractice",
+          "Products liability",
+          "Asbestos and mesothelioma"
+        ],
+        "founded_year": 2016,
+        "firm_size": null,
+        "offices": [
+          "Irvine, California",
+          "Santa Monica, California",
+          "Sacramento, California",
+          "Baltimore, Maryland",
+          "Washington, D.C."
+        ],
+        "notable_cases": [
+          "$2.9 million wrongful-death premises-liability settlement",
+          "$2.7 million verdict for a woman rear-ended by a semi-truck in California",
+          "$2.2 million motorcycle-accident verdict",
+          "$1.4 million DUI auto-accident settlement",
+          "$1.2 million traumatic-brain-injury trial verdict",
+          "$1.1 million bicycle-accident settlement",
+          "$145,000 parking-lot accident settlement in Bethesda, Maryland"
+        ],
+        "awards": [
+          "BBB A+ rating; not BBB accredited"
+        ],
+        "ai_stage": "unknown",
+        "ai_summary": "No public evidence found.",
+        "jobs": 0,
+        "contact_results": {
+          "contact_profile_count": 4,
+          "leadership_history_count": 2
+        },
+        "leaders": [
+          {
+            "name": "Hamed Aghajani",
+            "title": "Managing Attorney",
+            "has_email": false
+          },
+          {
+            "name": "Kevin Jani",
+            "title": "Chief Executive Officer, Director, Secretary, and Chief Financial Officer",
+            "has_email": false
+          }
+        ]
+      }
+    },
+    {
+      "task_id": "firm-enrichment-4037f71f6e4d4ce7b2dc16ce96d1b974",
+      "pif_id": "c3cd8104-b9d5-4634-b34d-c7cb58c130ca",
+      "firm_name": "L&F Brown",
+      "status": "completed",
+      "stages": [
+        {
+          "key": "web_research",
+          "status": "completed",
+          "message": "Web research completed",
+          "detail_keys": null,
+          "error": null
+        },
+        {
+          "key": "persist_research",
+          "status": "completed",
+          "message": "Research saved without replacing existing facts",
+          "detail_keys": [
+            "pif_id",
+            "staff_count",
+            "vendor_count",
+            "domain_claimed",
+            "change_detection",
+            "leadership_count",
+            "canonical_website",
+            "reused_recent_research",
+            "reconciled_from_firm_id"
+          ],
+          "error": null
+        },
+        {
+          "key": "sitemap",
+          "status": "completed",
+          "message": "Completed sitemap",
+          "detail_keys": [
+            "error",
+            "status",
+            "changed",
+            "website",
+            "provider",
+            "truncated",
+            "url_count",
+            "added_urls",
+            "checked_at",
+            "added_count",
+            "snapshot_id",
+            "removed_urls",
+            "sitemap_urls",
+            "removed_count",
+            "change_detection"
+          ],
+          "error": null
+        },
+        {
+          "key": "behavior",
+          "status": "completed",
+          "message": "Completed behavior",
+          "detail_keys": [
+            "provider",
+            "warm_score",
+            "analyzed_at",
+            "last_seen_at",
+            "tech_signals",
+            "contact_count",
+            "inbox_breakdown",
+            "last_records_at",
+            "last_referral_at",
+            "conversation_count"
+          ],
+          "error": null
+        },
+        {
+          "key": "contact_intelligence",
+          "status": "completed",
+          "message": "Completed contact intelligence",
+          "detail_keys": [
+            "contact_profile_count",
+            "leadership_history_count"
+          ],
+          "error": null
+        },
+        {
+          "key": "contacts",
+          "status": "completed",
+          "message": "Completed contacts",
+          "detail_keys": [
+            "firms",
+            "persons",
+            "skipped",
+            "updated",
+            "inserted",
+            "personas"
+          ],
+          "error": null
+        },
+        {
+          "key": "job_postings",
+          "status": "completed",
+          "message": "Completed job postings",
+          "detail_keys": [
+            "kind",
+            "pif_id",
+            "status",
+            "task_id",
+            "firm_name",
+            "started_at",
+            "completed_at",
+            "max_attempts",
+            "requested_at",
+            "attempt_count",
+            "posting_count",
+            "change_detection",
+            "attempt_started_at",
+            "has_recent_openings"
+          ],
+          "error": null
+        },
+        {
+          "key": "score",
+          "status": "completed",
+          "message": "Completed score",
+          "detail_keys": [
+            "id",
+            "icp_tier",
+            "icp_score",
+            "score_breakdown"
+          ],
+          "error": null
+        }
+      ],
+      "research_keys": [
+        "city",
+        "metro",
+        "state",
+        "sources",
+        "summary",
+        "case_mix",
+        "icp_tier",
+        "identity",
+        "firm_size",
+        "size_hint",
+        "value_tier",
+        "ai_adoption",
+        "founded_year",
+        "job_postings",
+        "social_media",
+        "volume_proxy",
+        "notable_cases",
+        "practice_areas",
+        "additional_info",
+        "research_status",
+        "sitemap_monitor",
+        "website_sources",
+        "bar_associations",
+        "local_enrichment",
+        "office_locations",
+        "research_provider",
+        "awards_recognition",
+        "last_researched_at",
+        "website_confidence",
+        "ai_adoption_history",
+        "leadership_email_history",
+        "job_postings_research_status",
+        "contact_intelligence_provider",
+        "job_postings_research_provider",
+        "contact_intelligence_updated_at",
+        "last_job_postings_researched_at"
+      ],
+      "leaders": 6,
+      "staff": 1,
+      "vendor_stack": {
+        "other": {},
+        "evidence": [],
+        "case_mgmt": null
+      },
+      "outcomes": {
+        "task_id": "firm-enrichment-4037f71f6e4d4ce7b2dc16ce96d1b974",
+        "firm_name": "L&F Brown",
+        "summary": "L&F Brown, P.C. is a California law firm now operating as Westwood Law after a name change. The firm focuses on personal injury, employment, abuse and neglect, business transactions, and legal technology-related matters, serving Greater Los Angeles and surrounding communities.",
+        "practice_areas": [
+          "Personal injury",
+          "Car accidents",
+          "Slip and fall",
+          "Truck accidents",
+          "Pedestrian and bicycle accidents",
+          "Dog bites",
+          "Toxic exposure",
+          "Train accidents",
+          "Airplane accidents",
+          "Airline injuries",
+          "Cruise ship injuries",
+          "Helicopter accidents",
+          "Employment law",
+          "Severance agreements",
+          "Wage and overtime disputes",
+          "Wrongful termination",
+          "Misclassification",
+          "Retaliation",
+          "Child abuse",
+          "Elder abuse",
+          "Business transactions",
+          "Legal technology",
+          "Insurance bad faith"
+        ],
+        "founded_year": 2016,
+        "firm_size": "11-50 employees",
+        "offices": [
+          "Sherman Oaks, CA",
+          "Westwood, Los Angeles, CA",
+          "Glendale, CA"
+        ],
+        "notable_cases": [
+          "$6,000,000 settlement involving an automobile collision with a government entity",
+          "$4,000,000 slip-and-fall settlement at a major retailer",
+          "$2,500,000 slip-and-fall settlement at a major retailer",
+          "$1,500,000 complex automobile accident settlement",
+          "$900,000 automobile accident settlement",
+          "$700,000 automobile injury resolution",
+          "$650,000 slip-and-fall settlement",
+          "$600,000 motor-vehicle settlement"
+        ],
+        "awards": [
+          "Attorney of the Year Award - Technology, California Lawyers Association Law Practice Management & Technology Committee, 2024, awarded to Arya Firoozmand",
+          "Top 40 Under 40 Civil Plaintiff Attorney, The National Trial Lawyers, awarded to Arya Firoozmand",
+          "California Lawyer of the Year (CLAY Award), The Daily Journal, awarded to Curt Brown",
+          "Super Lawyers Rising Star recognition, awarded to Curt Brown",
+          "Pro Bono Attorney of the Year, USC Law School Public Interest Law Fund, awarded to Curt Brown",
+          "A-V rated, awarded to Richard Armstrong",
+          "AV Preeminent recognition",
+          "Martindale-Hubbell Gold Client Champion recognition"
+        ],
+        "ai_stage": "unknown",
+        "ai_summary": "Public evidence shows strong leadership engagement with legal technology and positive commentary about AI's potential, but no verified evidence of firm-wide AI deployment, named AI tools, implementation timing, internal policy, or AI-specific use cases. The firm launched a Legal Tech practice group in 2024 and describes technology teams improving efficiency, but that does not establish operational AI adoption.",
+        "jobs": 0,
+        "contact_results": {
+          "contact_profile_count": 7,
+          "leadership_history_count": 6
+        },
+        "leaders": [
+          {
+            "name": "Brian Liu",
+            "title": "Founding Partner",
+            "has_email": true
+          },
+          {
+            "name": "Arya Firoozmand",
+            "title": "Founding Partner",
+            "has_email": true
+          },
+          {
+            "name": "Curt Brown",
+            "title": "Founding Partner, Managing Partner and General Counsel",
+            "has_email": true
+          },
+          {
+            "name": "Keith Strahan",
+            "title": "Senior Attorney and Practice Leader, Business Transactions Group",
+            "has_email": true
+          },
+          {
+            "name": "Ken Friedman",
+            "title": "Senior Counsel",
+            "has_email": true
+          },
+          {
+            "name": "Richard L. Armstrong",
+            "title": "Attorney Emeritus",
+            "has_email": true
+          }
+        ]
+      }
+    },
+    {
+      "task_id": "firm-enrichment-2cb0c24993f74f878443b5099e7b319a",
+      "pif_id": "cc78b290-a24a-4968-ae06-874119aa530a",
+      "firm_name": "Law Offices of Richard Weiss",
+      "status": "completed",
+      "stages": [
+        {
+          "key": "web_research",
+          "status": "completed",
+          "message": "Web research completed",
+          "detail_keys": null,
+          "error": null
+        },
+        {
+          "key": "persist_research",
+          "status": "completed",
+          "message": "Research saved without replacing existing facts",
+          "detail_keys": [
+            "pif_id",
+            "staff_count",
+            "vendor_count",
+            "domain_claimed",
+            "change_detection",
+            "leadership_count",
+            "canonical_website",
+            "reused_recent_research",
+            "reconciled_from_firm_id"
+          ],
+          "error": null
+        },
+        {
+          "key": "sitemap",
+          "status": "completed",
+          "message": "Completed sitemap",
+          "detail_keys": [
+            "error",
+            "status",
+            "changed",
+            "website",
+            "provider",
+            "truncated",
+            "url_count",
+            "added_urls",
+            "checked_at",
+            "added_count",
+            "snapshot_id",
+            "removed_urls",
+            "sitemap_urls",
+            "removed_count",
+            "change_detection"
+          ],
+          "error": null
+        },
+        {
+          "key": "behavior",
+          "status": "completed",
+          "message": "Completed behavior",
+          "detail_keys": [
+            "provider",
+            "warm_score",
+            "analyzed_at",
+            "last_seen_at",
+            "tech_signals",
+            "contact_count",
+            "inbox_breakdown",
+            "last_records_at",
+            "last_referral_at",
+            "conversation_count"
+          ],
+          "error": null
+        },
+        {
+          "key": "contact_intelligence",
+          "status": "completed",
+          "message": "Completed contact intelligence",
+          "detail_keys": [
+            "contact_profile_count",
+            "leadership_history_count"
+          ],
+          "error": null
+        },
+        {
+          "key": "contacts",
+          "status": "completed",
+          "message": "Completed contacts",
+          "detail_keys": [
+            "firms",
+            "persons",
+            "skipped",
+            "updated",
+            "inserted",
+            "personas"
+          ],
+          "error": null
+        },
+        {
+          "key": "job_postings",
+          "status": "completed",
+          "message": "Completed job postings",
+          "detail_keys": [
+            "kind",
+            "pif_id",
+            "status",
+            "task_id",
+            "firm_name",
+            "started_at",
+            "completed_at",
+            "max_attempts",
+            "requested_at",
+            "attempt_count",
+            "posting_count",
+            "change_detection",
+            "attempt_started_at",
+            "has_recent_openings"
+          ],
+          "error": null
+        },
+        {
+          "key": "score",
+          "status": "completed",
+          "message": "Completed score",
+          "detail_keys": [
+            "id",
+            "icp_tier",
+            "icp_score",
+            "score_breakdown"
+          ],
+          "error": null
+        }
+      ],
+      "research_keys": [
+        "city",
+        "metro",
+        "state",
+        "sources",
+        "summary",
+        "case_mix",
+        "icp_tier",
+        "identity",
+        "firm_size",
+        "size_hint",
+        "value_tier",
+        "ai_adoption",
+        "founded_year",
+        "job_postings",
+        "social_media",
+        "volume_proxy",
+        "notable_cases",
+        "practice_areas",
+        "additional_info",
+        "research_status",
+        "sitemap_monitor",
+        "website_sources",
+        "bar_associations",
+        "local_enrichment",
+        "office_locations",
+        "research_provider",
+        "awards_recognition",
+        "last_researched_at",
+        "website_confidence",
+        "ai_adoption_history",
+        "leadership_email_history",
+        "job_postings_research_status",
+        "contact_intelligence_provider",
+        "job_postings_research_provider",
+        "contact_intelligence_updated_at",
+        "last_job_postings_researched_at"
+      ],
+      "leaders": 1,
+      "staff": 3,
+      "vendor_stack": {
+        "other": {},
+        "evidence": [],
+        "case_mgmt": null
+      },
+      "outcomes": {
+        "task_id": "firm-enrichment-2cb0c24993f74f878443b5099e7b319a",
+        "firm_name": "Law Offices of Richard Weiss",
+        "summary": "California and Nevada law firm founded by Richard H. Weiss, providing business, corporate, employment, real estate, personal injury, litigation, and investor-fraud services.",
+        "practice_areas": [
+          "Business law",
+          "Corporate law",
+          "Employment law",
+          "Real estate law",
+          "Personal injury law",
+          "Business litigation",
+          "Investor fraud"
+        ],
+        "founded_year": null,
+        "firm_size": null,
+        "offices": [
+          "Los Angeles, CA",
+          "Las Vegas, NV"
+        ],
+        "notable_cases": [
+          "Louis Edward Luzanilla et al. v. County of Los Angeles, Case No. 22AVCV00653; Richard Weiss represented the plaintiffs in a proposed $250,000 settlement.",
+          "Setareh v. Setareh, B229604; Law Offices of Richard Weiss and Richard Weiss represented the appellants."
+        ],
+        "awards": [],
+        "ai_stage": "unknown",
+        "ai_summary": "No public evidence found.",
+        "jobs": 0,
+        "contact_results": {
+          "contact_profile_count": 3,
+          "leadership_history_count": 1
+        },
+        "leaders": [
+          {
+            "name": "Richard Howard Weiss",
+            "title": "Founder",
+            "has_email": true
+          }
+        ]
+      }
+    },
+    {
+      "task_id": "firm-enrichment-ea93016ba07d4cb9a1bea563b3c651cc",
+      "pif_id": "d359cdbd-0043-490c-a9da-10c6df2d431d",
+      "firm_name": "The Sentinel Firm, APC",
+      "status": "completed",
+      "stages": [
+        {
+          "key": "web_research",
+          "status": "completed",
+          "message": "Web research completed",
+          "detail_keys": null,
+          "error": null
+        },
+        {
+          "key": "persist_research",
+          "status": "completed",
+          "message": "Research saved without replacing existing facts",
+          "detail_keys": [
+            "pif_id",
+            "staff_count",
+            "vendor_count",
+            "domain_claimed",
+            "change_detection",
+            "leadership_count",
+            "canonical_website",
+            "reused_recent_research",
+            "reconciled_from_firm_id"
+          ],
+          "error": null
+        },
+        {
+          "key": "sitemap",
+          "status": "completed",
+          "message": "Completed sitemap",
+          "detail_keys": [
+            "error",
+            "status",
+            "changed",
+            "website",
+            "provider",
+            "truncated",
+            "url_count",
+            "added_urls",
+            "checked_at",
+            "added_count",
+            "snapshot_id",
+            "removed_urls",
+            "sitemap_urls",
+            "removed_count",
+            "change_detection"
+          ],
+          "error": null
+        },
+        {
+          "key": "behavior",
+          "status": "completed",
+          "message": "Completed behavior",
+          "detail_keys": [
+            "provider",
+            "warm_score",
+            "analyzed_at",
+            "last_seen_at",
+            "tech_signals",
+            "contact_count",
+            "inbox_breakdown",
+            "last_records_at",
+            "last_referral_at",
+            "conversation_count"
+          ],
+          "error": null
+        },
+        {
+          "key": "contact_intelligence",
+          "status": "completed",
+          "message": "Completed contact intelligence",
+          "detail_keys": [
+            "contact_profile_count",
+            "leadership_history_count"
+          ],
+          "error": null
+        },
+        {
+          "key": "contacts",
+          "status": "completed",
+          "message": "Completed contacts",
+          "detail_keys": [
+            "firms",
+            "persons",
+            "skipped",
+            "updated",
+            "inserted",
+            "personas"
+          ],
+          "error": null
+        },
+        {
+          "key": "job_postings",
+          "status": "completed",
+          "message": "Completed job postings",
+          "detail_keys": [
+            "kind",
+            "pif_id",
+            "status",
+            "task_id",
+            "firm_name",
+            "started_at",
+            "completed_at",
+            "max_attempts",
+            "requested_at",
+            "attempt_count",
+            "posting_count",
+            "attempt_started_at",
+            "has_recent_openings"
+          ],
+          "error": null
+        },
+        {
+          "key": "score",
+          "status": "completed",
+          "message": "Completed score",
+          "detail_keys": [
+            "id",
+            "icp_tier",
+            "icp_score",
+            "score_breakdown"
+          ],
+          "error": null
+        }
+      ],
+      "research_keys": [
+        "city",
+        "metro",
+        "state",
+        "sources",
+        "summary",
+        "case_mix",
+        "icp_tier",
+        "identity",
+        "firm_size",
+        "size_hint",
+        "value_tier",
+        "ai_adoption",
+        "founded_year",
+        "job_postings",
+        "social_media",
+        "volume_proxy",
+        "notable_cases",
+        "practice_areas",
+        "additional_info",
+        "research_status",
+        "sitemap_monitor",
+        "website_sources",
+        "bar_associations",
+        "local_enrichment",
+        "office_locations",
+        "research_provider",
+        "awards_recognition",
+        "last_researched_at",
+        "website_confidence",
+        "ai_adoption_history",
+        "leadership_email_history",
+        "job_postings_research_status",
+        "contact_intelligence_provider",
+        "job_postings_research_provider",
+        "contact_intelligence_updated_at",
+        "last_job_postings_researched_at"
+      ],
+      "leaders": 2,
+      "staff": 21,
+      "vendor_stack": {
+        "other": {},
+        "evidence": [],
+        "case_mgmt": null
+      },
+      "outcomes": {
+        "task_id": "firm-enrichment-ea93016ba07d4cb9a1bea563b3c651cc",
+        "firm_name": "The Sentinel Firm, APC",
+        "summary": "Los Angeles plaintiff-side law firm focused on California employment law and personal injury matters.",
+        "practice_areas": [
+          "Employment law",
+          "Personal injury",
+          "Wage and hour",
+          "Wrongful termination",
+          "Discrimination",
+          "Sexual harassment",
+          "Whistleblower claims",
+          "Class actions",
+          "PAGA actions",
+          "Auto accidents",
+          "Catastrophic injuries",
+          "Premises liability",
+          "Product liability",
+          "Sexual abuse",
+          "Wrongful death"
+        ],
+        "founded_year": 2023,
+        "firm_size": "11-50 employees",
+        "offices": [
+          "Los Angeles, CA"
+        ],
+        "notable_cases": [
+          {
+            "name": "Gamboa v. Northeast Community Clinic",
+            "source_url": "https://www.thesentinelfirm.com/sean-hardy",
+            "description": "Published California Court of Appeal case involving disability accommodation and arbitration; firm attorney Sean Hardy represented the plaintiff."
+          },
+          {
+            "name": "Johnson v. Amazon.com Services LLC",
+            "source_url": "https://cases.justia.com/federal/district-courts/california/caedce/2%3A2024cv02254/451426/10/0.pdf?ts=1741764677",
+            "description": "Federal employment matter in which Sentinel attorneys represented plaintiff Kiara Johnson."
+          },
+          {
+            "name": "Guzman v. Core Environmental Solutions",
+            "source_url": "https://irp.cdn-website.com/70605584/files/uploaded/Signed_Order_Granting_Preliminary_Approval-8465baa4.pdf",
+            "description": "Los Angeles County class and PAGA action involving Sentinel attorneys as class counsel."
+          }
+        ],
+        "awards": [
+          "Seung L. Yang: Super Lawyers Rising Star recognition",
+          "Seung L. Yang: 2023 National Trial Lawyers Top 100 Trial Lawyers in California",
+          "Tiffany Hyun: Southern California Super Lawyers Rising Star",
+          "Sean Hardy: 2025 Super Lawyers Rising Star",
+          "Christina Chang: Super Lawyers Rising Star",
+          "Nicholas Barker: 2nd place Finnegan Prize in Intellectual Property Law"
+        ],
+        "ai_stage": "unknown",
+        "ai_summary": "No public evidence was found of firm-wide AI adoption, implementation, restrictions, or leadership policy. A firm law clerk has publicly authored academic work concerning generative-AI output copyrightability, but this is not evidence of operational adoption.",
+        "jobs": 1,
+        "contact_results": {
+          "contact_profile_count": 23,
+          "leadership_history_count": 2
+        },
+        "leaders": [
+          {
+            "name": "Seung L. Yang",
+            "title": "Founder and Managing Partner",
+            "has_email": true
+          },
+          {
+            "name": "Tiffany Hyun",
+            "title": "Senior Associate; Leader, Complex Litigation and Class Action Department",
+            "has_email": true
+          }
+        ]
+      }
+    },
+    {
+      "task_id": "firm-enrichment-c51d4f0dd03448b59cd76fa6a6dbc6d2",
+      "pif_id": "7546b402-59bf-4c98-a40c-11c7934935ea",
+      "firm_name": "Cheren Law",
+      "status": "completed",
+      "stages": [
+        {
+          "key": "web_research",
+          "status": "completed",
+          "message": "Web research completed",
+          "detail_keys": null,
+          "error": null
+        },
+        {
+          "key": "persist_research",
+          "status": "completed",
+          "message": "Research saved without replacing existing facts",
+          "detail_keys": [
+            "pif_id",
+            "staff_count",
+            "vendor_count",
+            "domain_claimed",
+            "change_detection",
+            "leadership_count",
+            "canonical_website",
+            "reused_recent_research",
+            "reconciled_from_firm_id"
+          ],
+          "error": null
+        },
+        {
+          "key": "sitemap",
+          "status": "completed",
+          "message": "Completed sitemap",
+          "detail_keys": [
+            "error",
+            "status",
+            "changed",
+            "website",
+            "provider",
+            "truncated",
+            "url_count",
+            "added_urls",
+            "checked_at",
+            "added_count",
+            "snapshot_id",
+            "removed_urls",
+            "sitemap_urls",
+            "removed_count",
+            "change_detection"
+          ],
+          "error": null
+        },
+        {
+          "key": "behavior",
+          "status": "completed",
+          "message": "Completed behavior",
+          "detail_keys": [
+            "provider",
+            "warm_score",
+            "analyzed_at",
+            "last_seen_at",
+            "tech_signals",
+            "contact_count",
+            "inbox_breakdown",
+            "last_records_at",
+            "last_referral_at",
+            "conversation_count"
+          ],
+          "error": null
+        },
+        {
+          "key": "contact_intelligence",
+          "status": "completed",
+          "message": "Completed contact intelligence",
+          "detail_keys": [
+            "contact_profile_count",
+            "leadership_history_count"
+          ],
+          "error": null
+        },
+        {
+          "key": "contacts",
+          "status": "completed",
+          "message": "Completed contacts",
+          "detail_keys": [
+            "firms",
+            "persons",
+            "skipped",
+            "updated",
+            "inserted",
+            "personas"
+          ],
+          "error": null
+        },
+        {
+          "key": "job_postings",
+          "status": "completed",
+          "message": "Completed job postings",
+          "detail_keys": [
+            "kind",
+            "pif_id",
+            "status",
+            "task_id",
+            "firm_name",
+            "started_at",
+            "completed_at",
+            "max_attempts",
+            "requested_at",
+            "attempt_count",
+            "posting_count",
+            "attempt_started_at",
+            "has_recent_openings"
+          ],
+          "error": null
+        },
+        {
+          "key": "score",
+          "status": "completed",
+          "message": "Completed score",
+          "detail_keys": [
+            "id",
+            "icp_tier",
+            "icp_score",
+            "score_breakdown"
+          ],
+          "error": null
+        }
+      ],
+      "research_keys": [
+        "city",
+        "metro",
+        "state",
+        "sources",
+        "summary",
+        "case_mix",
+        "icp_tier",
+        "identity",
+        "firm_size",
+        "size_hint",
+        "value_tier",
+        "ai_adoption",
+        "founded_year",
+        "job_postings",
+        "social_media",
+        "volume_proxy",
+        "notable_cases",
+        "practice_areas",
+        "additional_info",
+        "research_status",
+        "sitemap_monitor",
+        "website_sources",
+        "bar_associations",
+        "local_enrichment",
+        "office_locations",
+        "research_provider",
+        "awards_recognition",
+        "last_researched_at",
+        "website_confidence",
+        "ai_adoption_history",
+        "leadership_email_history",
+        "job_postings_research_status",
+        "contact_intelligence_provider",
+        "job_postings_research_provider",
+        "contact_intelligence_updated_at",
+        "last_job_postings_researched_at"
+      ],
+      "leaders": 1,
+      "staff": 1,
+      "vendor_stack": {
+        "other": {},
+        "evidence": [],
+        "case_mgmt": null
+      },
+      "outcomes": {
+        "task_id": "firm-enrichment-c51d4f0dd03448b59cd76fa6a6dbc6d2",
+        "firm_name": "Cheren Law",
+        "summary": "Boutique Encino law firm led by Daniel Jonathan Cheren, handling personal injury, civil litigation, medical malpractice, immigration, and business and corporate litigation matters.",
+        "practice_areas": [
+          "Civil Litigation",
+          "Personal Injury",
+          "Medical Malpractice",
+          "Immigration Law",
+          "Business/Commercial Litigation",
+          "Corporate Litigation",
+          "Business and commercial litigation",
+          "Estate planning"
+        ],
+        "founded_year": 1995,
+        "firm_size": "1 attorney; boutique/solo practice",
+        "offices": [
+          "16055 Ventura Blvd Ste 525, Encino, CA 91436-2609",
+          "16055 Ventura Blvd., Suite 525, Encino, CA 91436"
+        ],
+        "notable_cases": [
+          "Estate of Dayan (California Court of Appeal, 2016) — Daniel Cheren testified in the matter as an estate planning attorney.",
+          {
+            "case": "Edwin Gonzalez et al. v. Richard Kaufman et al.",
+            "matter": "Trip-and-fall liability settlement",
+            "result": "Los Angeles City Council approved authorization for an $850,000 settlement payable to the firm's client trust account.",
+            "source_url": "https://ens.lacity.org/clk/councilactions/clkcouncilactions2196503_04162026.pdf"
+          },
+          {
+            "case": "Wipranik v. Marome",
+            "role": "Counsel for plaintiff/respondent",
+            "matter": "Breach-of-contract action",
+            "result": "Judgment of $397,262.32 was affirmed on appeal.",
+            "source_url": "https://www.casemine.com/judgement/us/5a856e2dadd7b05eb5dc7db0/amp"
+          },
+          {
+            "case": "Logsdon v. Standard Hotel",
+            "role": "Counsel for plaintiff/appellant",
+            "matter": "Premises liability and negligence",
+            "result": "Judgment affirmed.",
+            "source_url": "https://www.casemine.com/judgement/us/5914e461add7b049348fff89/amp"
+          },
+          {
+            "case": "Shek-Se Peter Ip v. City View Construction, Inc.",
+            "role": "Counsel for defendants/appellants",
+            "matter": "Construction fraud and remodeling dispute",
+            "result": "Judgment affirmed.",
+            "source_url": "https://www.casemine.com/judgement/us/5914e500add7b04934902fb2"
+          }
+        ],
+        "awards": [],
+        "ai_stage": "unknown",
+        "ai_summary": "No public evidence found.",
+        "jobs": 0,
+        "contact_results": {
+          "contact_profile_count": 2,
+          "leadership_history_count": 1
+        },
+        "leaders": [
+          {
+            "name": "Daniel Jonathan Cheren",
+            "title": "Founder & Principal Attorney, Cheren & Associates (Encino, CA)",
+            "has_email": true
+          }
+        ]
+      }
+    },
+    {
+      "task_id": "firm-enrichment-9e0eb7e6b9174afc83290316215fe755",
+      "pif_id": "b7a7482a-b97a-4e4c-8a70-f82c3577ce32",
+      "firm_name": "Tran Law Group",
+      "status": "completed",
+      "stages": [
+        {
+          "key": "web_research",
+          "status": "completed",
+          "message": "Web research completed",
+          "detail_keys": null,
+          "error": null
+        },
+        {
+          "key": "persist_research",
+          "status": "completed",
+          "message": "Research saved without replacing existing facts",
+          "detail_keys": [
+            "pif_id",
+            "staff_count",
+            "vendor_count",
+            "domain_claimed",
+            "change_detection",
+            "leadership_count",
+            "canonical_website",
+            "reused_recent_research",
+            "reconciled_from_firm_id"
+          ],
+          "error": null
+        },
+        {
+          "key": "sitemap",
+          "status": "completed",
+          "message": "Completed sitemap",
+          "detail_keys": [
+            "error",
+            "status",
+            "changed",
+            "website",
+            "provider",
+            "truncated",
+            "url_count",
+            "added_urls",
+            "checked_at",
+            "added_count",
+            "snapshot_id",
+            "removed_urls",
+            "sitemap_urls",
+            "removed_count",
+            "change_detection"
+          ],
+          "error": null
+        },
+        {
+          "key": "behavior",
+          "status": "completed",
+          "message": "Completed behavior",
+          "detail_keys": [
+            "provider",
+            "warm_score",
+            "analyzed_at",
+            "last_seen_at",
+            "tech_signals",
+            "contact_count",
+            "inbox_breakdown",
+            "last_records_at",
+            "last_referral_at",
+            "conversation_count"
+          ],
+          "error": null
+        },
+        {
+          "key": "contact_intelligence",
+          "status": "completed",
+          "message": "Completed contact intelligence",
+          "detail_keys": [
+            "contact_profile_count",
+            "leadership_history_count"
+          ],
+          "error": null
+        },
+        {
+          "key": "contacts",
+          "status": "completed",
+          "message": "Completed contacts",
+          "detail_keys": [
+            "firms",
+            "persons",
+            "skipped",
+            "updated",
+            "inserted",
+            "personas"
+          ],
+          "error": null
+        },
+        {
+          "key": "job_postings",
+          "status": "completed",
+          "message": "Completed job postings",
+          "detail_keys": [
+            "kind",
+            "pif_id",
+            "status",
+            "task_id",
+            "firm_name",
+            "started_at",
+            "completed_at",
+            "max_attempts",
+            "requested_at",
+            "attempt_count",
+            "posting_count",
+            "change_detection",
+            "attempt_started_at",
+            "has_recent_openings"
+          ],
+          "error": null
+        },
+        {
+          "key": "score",
+          "status": "completed",
+          "message": "Completed score",
+          "detail_keys": [
+            "id",
+            "icp_tier",
+            "icp_score",
+            "score_breakdown"
+          ],
+          "error": null
+        }
+      ],
+      "research_keys": [
+        "city",
+        "metro",
+        "state",
+        "sources",
+        "summary",
+        "case_mix",
+        "icp_tier",
+        "identity",
+        "firm_size",
+        "size_hint",
+        "value_tier",
+        "ai_adoption",
+        "founded_year",
+        "job_postings",
+        "social_media",
+        "volume_proxy",
+        "notable_cases",
+        "practice_areas",
+        "additional_info",
+        "research_status",
+        "sitemap_monitor",
+        "website_sources",
+        "bar_associations",
+        "local_enrichment",
+        "office_locations",
+        "research_provider",
+        "awards_recognition",
+        "last_researched_at",
+        "website_confidence",
+        "ai_adoption_history",
+        "leadership_email_history",
+        "job_postings_research_status",
+        "contact_intelligence_provider",
+        "job_postings_research_provider",
+        "contact_intelligence_updated_at",
+        "last_job_postings_researched_at"
+      ],
+      "leaders": 0,
+      "staff": 10,
+      "vendor_stack": {
+        "other": {},
+        "evidence": [],
+        "case_mgmt": null
+      },
+      "outcomes": {
+        "task_id": "firm-enrichment-9e0eb7e6b9174afc83290316215fe755",
+        "firm_name": "Tran Law Group",
+        "summary": "Houston, Texas personal injury law firm serving South Texas and handling serious injury, accident, medical malpractice, severe injury, wrongful death, and mass tort matters.",
+        "practice_areas": [
+          "Personal injury",
+          "Car accidents",
+          "18-wheeler accidents",
+          "Uber/Lyft accidents",
+          "Bicycle accidents",
+          "Pedestrian accidents",
+          "Motorcycle accidents",
+          "Slip and fall accidents",
+          "Maritime accidents",
+          "Medical malpractice",
+          "Wrongful death",
+          "Hernia mesh claims",
+          "Roundup exposure",
+          "3M earplug lawsuits",
+          "Mass torts"
+        ],
+        "founded_year": 2009,
+        "firm_size": "11-50 employees",
+        "offices": [
+          "Houston, TX"
+        ],
+        "notable_cases": [
+          {
+            "source_url": "https://kyocharohouston.com/news/8151?page=12&sfl=mb_id%2C1&spt=-15996&stx=texas",
+            "description": "A 2023 local profile reported that Tran Law Group had recently obtained $3.8 million in compensation for a client; case details were not disclosed."
+          }
+        ],
+        "awards": [
+          {
+            "source_url": "https://kyocharohouston.com/news/8151?page=12&sfl=mb_id%2C1&spt=-15996&stx=texas",
+            "description": "A local profile reported four consecutive Texas Superior Attorney selections and five consecutive Premier Lawyers selections."
+          },
+          {
+            "source_url": "https://www.dalkora.com/business/view/?wr_id=5397",
+            "description": "A business listing describes the firm as an American Top 25 traffic-accident firm and a Texas Superior Attorney selection."
+          }
+        ],
+        "ai_stage": "unknown",
+        "ai_summary": "No public evidence found.",
+        "jobs": 0,
+        "contact_results": {
+          "contact_profile_count": 10,
+          "leadership_history_count": 0
+        },
+        "leaders": null
+      }
+    },
+    {
+      "task_id": "firm-enrichment-dead1acc670441d386122abd313a9269",
+      "pif_id": "a399d282-5d33-4992-9294-175f716de05b",
+      "firm_name": "Law Offices of Tamar A. Ekizian",
+      "status": "completed",
+      "stages": [
+        {
+          "key": "web_research",
+          "status": "completed",
+          "message": "Web research completed",
+          "detail_keys": null,
+          "error": null
+        },
+        {
+          "key": "persist_research",
+          "status": "completed",
+          "message": "Research saved without replacing existing facts",
+          "detail_keys": [
+            "pif_id",
+            "staff_count",
+            "vendor_count",
+            "domain_claimed",
+            "change_detection",
+            "leadership_count",
+            "canonical_website",
+            "reused_recent_research",
+            "reconciled_from_firm_id"
+          ],
+          "error": null
+        },
+        {
+          "key": "sitemap",
+          "status": "completed",
+          "message": "Completed sitemap",
+          "detail_keys": [
+            "error",
+            "status",
+            "changed",
+            "website",
+            "provider",
+            "truncated",
+            "url_count",
+            "added_urls",
+            "checked_at",
+            "added_count",
+            "snapshot_id",
+            "removed_urls",
+            "sitemap_urls",
+            "removed_count"
+          ],
+          "error": "robots.txt: HTTP 404; https://ekizianlaw.com/sitemap.xml: HTTP 404; https://ekizianlaw.com/sitemap_index.xml: HTTP 404"
+        },
+        {
+          "key": "behavior",
+          "status": "completed",
+          "message": "Completed behavior",
+          "detail_keys": [
+            "provider",
+            "warm_score",
+            "analyzed_at",
+            "last_seen_at",
+            "tech_signals",
+            "contact_count",
+            "inbox_breakdown",
+            "last_records_at",
+            "last_referral_at",
+            "conversation_count"
+          ],
+          "error": null
+        },
+        {
+          "key": "contact_intelligence",
+          "status": "completed",
+          "message": "Completed contact intelligence",
+          "detail_keys": [
+            "contact_profile_count",
+            "leadership_history_count"
+          ],
+          "error": null
+        },
+        {
+          "key": "contacts",
+          "status": "completed",
+          "message": "Completed contacts",
+          "detail_keys": [
+            "firms",
+            "persons",
+            "skipped",
+            "updated",
+            "inserted",
+            "personas"
+          ],
+          "error": null
+        },
+        {
+          "key": "job_postings",
+          "status": "completed",
+          "message": "Completed job postings",
+          "detail_keys": [
+            "kind",
+            "pif_id",
+            "status",
+            "task_id",
+            "firm_name",
+            "started_at",
+            "completed_at",
+            "max_attempts",
+            "requested_at",
+            "attempt_count",
+            "posting_count",
+            "attempt_started_at",
+            "has_recent_openings"
+          ],
+          "error": null
+        },
+        {
+          "key": "score",
+          "status": "completed",
+          "message": "Completed score",
+          "detail_keys": [
+            "id",
+            "icp_tier",
+            "icp_score",
+            "score_breakdown"
+          ],
+          "error": null
+        }
+      ],
+      "research_keys": [
+        "city",
+        "metro",
+        "state",
+        "sources",
+        "summary",
+        "case_mix",
+        "icp_tier",
+        "identity",
+        "firm_size",
+        "size_hint",
+        "value_tier",
+        "ai_adoption",
+        "founded_year",
+        "job_postings",
+        "social_media",
+        "volume_proxy",
+        "notable_cases",
+        "practice_areas",
+        "additional_info",
+        "research_status",
+        "sitemap_monitor",
+        "website_sources",
+        "bar_associations",
+        "local_enrichment",
+        "office_locations",
+        "research_provider",
+        "awards_recognition",
+        "last_researched_at",
+        "website_confidence",
+        "ai_adoption_history",
+        "leadership_email_history",
+        "job_postings_research_status",
+        "contact_intelligence_provider",
+        "job_postings_research_provider",
+        "contact_intelligence_updated_at",
+        "last_job_postings_researched_at"
+      ],
+      "leaders": 2,
+      "staff": 2,
+      "vendor_stack": {
+        "other": {},
+        "evidence": [],
+        "case_mgmt": null
+      },
+      "outcomes": {
+        "task_id": "firm-enrichment-dead1acc670441d386122abd313a9269",
+        "firm_name": "Law Offices of Tamar A. Ekizian",
+        "summary": "Van Nuys law firm serving clients throughout California in personal injury, motor vehicle accidents, estate planning, probate, tax matters, business formation, and litigation.",
+        "practice_areas": [
+          "Personal injury",
+          "Motor vehicle accidents",
+          "Estate planning",
+          "Probate",
+          "Probate litigation",
+          "Wills and trusts",
+          "Tax preparation",
+          "Entity formation",
+          "Business litigation"
+        ],
+        "founded_year": 2002,
+        "firm_size": "1-10",
+        "offices": [
+          "Van Nuys, CA"
+        ],
+        "notable_cases": [
+          {
+            "case": "Sakhai v. Zipora",
+            "year": 2009,
+            "court": "California Court of Appeal, Second District",
+            "context": "Sam D. Ekizian was listed as counsel for the plaintiffs while associated with Schuler & Brown.",
+            "source_url": "https://caselaw.findlaw.com/court/ca-court-of-appeal/1499842.html"
+          },
+          {
+            "case": "Gonzalez v. Planned Parenthood",
+            "year": 2014,
+            "court": "U.S. Court of Appeals for the Ninth Circuit",
+            "context": "Sam D. Ekizian was listed as counsel for the plaintiff-appellant while associated with Schuler, Brown & Ekizian.",
+            "source_url": "https://www.govinfo.gov/content/pkg/USCOURTS-ca9-12-56352/pdf/USCOURTS-ca9-12-56352-0.pdf"
+          }
+        ],
+        "awards": [
+          {
+            "year": 1997,
+            "award": "American Jurisprudence Award for Wills and Trusts",
+            "recipient": "Tamar A. Ekizian",
+            "source_url": "https://www.avvo.com/attorneys/91406-ca-tamar-ekizian-40730.html"
+          }
+        ],
+        "ai_stage": "unknown",
+        "ai_summary": "No public evidence found.",
+        "jobs": 1,
+        "contact_results": {
+          "contact_profile_count": 4,
+          "leadership_history_count": 2
+        },
+        "leaders": [
+          {
+            "name": "Tamar A. Ekizian",
+            "title": "Partner / Attorney",
+            "has_email": false
+          },
+          {
+            "name": "Sam D. Ekizian",
+            "title": "Partner / Attorney",
+            "has_email": false
+          }
+        ]
+      }
+    },
+    {
+      "task_id": "firm-enrichment-7a37da6273304b74a85f6f56d62059d0",
+      "pif_id": "c6f87908-c967-4d51-b16e-03dd5771ed4b",
+      "firm_name": "Olan Law",
+      "status": "completed",
+      "stages": [
+        {
+          "key": "web_research",
+          "status": "completed",
+          "message": "Web research completed",
+          "detail_keys": null,
+          "error": null
+        },
+        {
+          "key": "persist_research",
+          "status": "completed",
+          "message": "Research saved without replacing existing facts",
+          "detail_keys": [
+            "pif_id",
+            "staff_count",
+            "vendor_count",
+            "domain_claimed",
+            "change_detection",
+            "leadership_count",
+            "canonical_website",
+            "reused_recent_research",
+            "reconciled_from_firm_id"
+          ],
+          "error": null
+        },
+        {
+          "key": "sitemap",
+          "status": "completed",
+          "message": "Completed sitemap",
+          "detail_keys": [
+            "error",
+            "status",
+            "changed",
+            "website",
+            "provider",
+            "truncated",
+            "url_count",
+            "added_urls",
+            "checked_at",
+            "added_count",
+            "snapshot_id",
+            "removed_urls",
+            "sitemap_urls",
+            "removed_count",
+            "change_detection"
+          ],
+          "error": null
+        },
+        {
+          "key": "behavior",
+          "status": "completed",
+          "message": "Completed behavior",
+          "detail_keys": [
+            "provider",
+            "warm_score",
+            "analyzed_at",
+            "last_seen_at",
+            "tech_signals",
+            "contact_count",
+            "inbox_breakdown",
+            "last_records_at",
+            "last_referral_at",
+            "conversation_count"
+          ],
+          "error": null
+        },
+        {
+          "key": "contact_intelligence",
+          "status": "completed",
+          "message": "Completed contact intelligence",
+          "detail_keys": [
+            "contact_profile_count",
+            "leadership_history_count"
+          ],
+          "error": null
+        },
+        {
+          "key": "contacts",
+          "status": "completed",
+          "message": "Completed contacts",
+          "detail_keys": [
+            "firms",
+            "persons",
+            "skipped",
+            "updated",
+            "inserted",
+            "personas"
+          ],
+          "error": null
+        },
+        {
+          "key": "job_postings",
+          "status": "completed",
+          "message": "Completed job postings",
+          "detail_keys": [
+            "kind",
+            "pif_id",
+            "status",
+            "task_id",
+            "firm_name",
+            "started_at",
+            "completed_at",
+            "max_attempts",
+            "requested_at",
+            "attempt_count",
+            "posting_count",
+            "change_detection",
+            "attempt_started_at",
+            "has_recent_openings"
+          ],
+          "error": null
+        },
+        {
+          "key": "score",
+          "status": "completed",
+          "message": "Completed score",
+          "detail_keys": [
+            "id",
+            "icp_tier",
+            "icp_score",
+            "score_breakdown"
+          ],
+          "error": null
+        }
+      ],
+      "research_keys": [
+        "city",
+        "metro",
+        "state",
+        "sources",
+        "summary",
+        "case_mix",
+        "icp_tier",
+        "identity",
+        "firm_size",
+        "size_hint",
+        "value_tier",
+        "ai_adoption",
+        "founded_year",
+        "job_postings",
+        "social_media",
+        "volume_proxy",
+        "notable_cases",
+        "practice_areas",
+        "additional_info",
+        "research_status",
+        "sitemap_monitor",
+        "website_sources",
+        "bar_associations",
+        "local_enrichment",
+        "office_locations",
+        "research_provider",
+        "awards_recognition",
+        "last_researched_at",
+        "website_confidence",
+        "ai_adoption_history",
+        "leadership_email_history",
+        "job_postings_research_status",
+        "contact_intelligence_provider",
+        "job_postings_research_provider",
+        "contact_intelligence_updated_at",
+        "last_job_postings_researched_at"
+      ],
+      "leaders": 3,
+      "staff": 5,
+      "vendor_stack": {
+        "other": {},
+        "evidence": [
+          {
+            "signal": "email_domain",
+            "confidence": 0.9
+          },
+          {
+            "source": "Observed firm subdomain",
+            "vendor": "Filevine",
+            "confidence": 0.99,
+            "source_url": "https://olanlaw.filevineapp.com"
+          }
+        ],
+        "case_mgmt": "filevine"
+      },
+      "outcomes": {
+        "task_id": "firm-enrichment-7a37da6273304b74a85f6f56d62059d0",
+        "firm_name": "Olan Law",
+        "summary": "Boutique Southern California trial law firm focused on personal injury, wrongful death, employment disputes, civil rights, insurance bad faith, and wildfire claims.",
+        "practice_areas": [
+          "Personal injury",
+          "Car accidents",
+          "Motorcycle accidents",
+          "Uninsured motorist claims",
+          "Bicycle accidents",
+          "Bus accidents",
+          "Dog bites",
+          "Slip and fall",
+          "Premises liability",
+          "Product liability",
+          "Construction accidents",
+          "Assault and battery",
+          "Wrongful death",
+          "Truck accidents",
+          "Wrongful termination",
+          "Discrimination",
+          "Sexual harassment",
+          "Civil rights",
+          "Wildfires",
+          "Insurance bad faith"
+        ],
+        "founded_year": 1998,
+        "firm_size": "2-10 employees",
+        "offices": [
+          "Santa Monica, CA",
+          "Long Beach, CA"
+        ],
+        "notable_cases": [
+          {
+            "matter": "Motorcycle accident involving serious fractures",
+            "result": "$1.5 million",
+            "source_url": "https://olanlaw.com/about/"
+          },
+          {
+            "matter": "Motor vehicle accident wrongful-death claim",
+            "result": "$1.4 million",
+            "source_url": "https://olanlaw.com/about/"
+          },
+          {
+            "matter": "Pedestrian struck in a motor vehicle accident",
+            "result": "$1 million",
+            "source_url": "https://olanlaw.com/about/"
+          },
+          {
+            "matter": "Construction accident settlement",
+            "result": "$2.9 million",
+            "source_url": "https://olanlaw.com/personal-injury/construction-accident/"
+          },
+          {
+            "matter": "Premises-liability settlement involving a swimming-pool drowning",
+            "result": "$405,000",
+            "source_url": "https://olanlaw.com/personal-injury/premises-liability/"
+          }
+        ],
+        "awards": [
+          "Best Lawyers in America, 2011-2025",
+          "Best Law Firms, U.S. News & World Report, 2014-2019",
+          "Southern California Super Lawyers, 2007-2019",
+          "Top 100 Southern California Super Lawyers",
+          "Top 100 Trial Lawyers, The National Trial Lawyers, 2014-2019",
+          "AV Preeminent rating, Martindale-Hubbell",
+          "10/10 Avvo rating",
+          "American Board of Trial Advocates membership"
+        ],
+        "ai_stage": "unknown",
+        "ai_summary": "No public evidence found.",
+        "jobs": 0,
+        "contact_results": {
+          "contact_profile_count": 8,
+          "leadership_history_count": 3
+        },
+        "leaders": [
+          {
+            "name": "David R. Olan",
+            "title": "Founding Partner and Trial Attorney",
+            "has_email": true
+          },
+          {
+            "name": "Garrett Mitchel Brief",
+            "title": "Senior Attorney",
+            "has_email": true
+          },
+          {
+            "name": "Sharon Olan",
+            "title": "Director of Operations",
+            "has_email": false
+          }
+        ]
+      }
+    },
+    {
+      "task_id": "firm-enrichment-648bb0e17d444dff950829c500876fda",
+      "pif_id": "e8d3b910-6216-4a6a-a615-4f580908431f",
+      "firm_name": "Usher Law Offices",
+      "status": "completed",
+      "stages": [
+        {
+          "key": "web_research",
+          "status": "completed",
+          "message": "Web research completed",
+          "detail_keys": null,
+          "error": null
+        },
+        {
+          "key": "persist_research",
+          "status": "completed",
+          "message": "Research saved without replacing existing facts",
+          "detail_keys": [
+            "pif_id",
+            "staff_count",
+            "vendor_count",
+            "domain_claimed",
+            "change_detection",
+            "leadership_count",
+            "canonical_website",
+            "reused_recent_research",
+            "reconciled_from_firm_id"
+          ],
+          "error": null
+        },
+        {
+          "key": "sitemap",
+          "status": "completed",
+          "message": "Completed sitemap",
+          "detail_keys": [
+            "error",
+            "status",
+            "changed",
+            "website",
+            "provider",
+            "truncated",
+            "url_count",
+            "added_urls",
+            "checked_at",
+            "added_count",
+            "snapshot_id",
+            "removed_urls",
+            "sitemap_urls",
+            "removed_count",
+            "change_detection"
+          ],
+          "error": null
+        },
+        {
+          "key": "behavior",
+          "status": "completed",
+          "message": "Completed behavior",
+          "detail_keys": [
+            "provider",
+            "warm_score",
+            "analyzed_at",
+            "last_seen_at",
+            "tech_signals",
+            "contact_count",
+            "inbox_breakdown",
+            "last_records_at",
+            "last_referral_at",
+            "conversation_count"
+          ],
+          "error": null
+        },
+        {
+          "key": "contact_intelligence",
+          "status": "completed",
+          "message": "Completed contact intelligence",
+          "detail_keys": [
+            "contact_profile_count",
+            "leadership_history_count"
+          ],
+          "error": null
+        },
+        {
+          "key": "contacts",
+          "status": "completed",
+          "message": "Completed contacts",
+          "detail_keys": [
+            "firms",
+            "persons",
+            "skipped",
+            "updated",
+            "inserted",
+            "personas"
+          ],
+          "error": null
+        },
+        {
+          "key": "job_postings",
+          "status": "completed",
+          "message": "Completed job postings",
+          "detail_keys": [
+            "kind",
+            "pif_id",
+            "status",
+            "task_id",
+            "firm_name",
+            "started_at",
+            "completed_at",
+            "max_attempts",
+            "requested_at",
+            "attempt_count",
+            "posting_count",
+            "change_detection",
+            "attempt_started_at",
+            "has_recent_openings"
+          ],
+          "error": null
+        },
+        {
+          "key": "score",
+          "status": "completed",
+          "message": "Completed score",
+          "detail_keys": [
+            "id",
+            "icp_tier",
+            "icp_score",
+            "score_breakdown"
+          ],
+          "error": null
+        }
+      ],
+      "research_keys": [
+        "city",
+        "metro",
+        "state",
+        "sources",
+        "summary",
+        "case_mix",
+        "icp_tier",
+        "identity",
+        "firm_size",
+        "size_hint",
+        "value_tier",
+        "ai_adoption",
+        "founded_year",
+        "job_postings",
+        "social_media",
+        "volume_proxy",
+        "notable_cases",
+        "practice_areas",
+        "additional_info",
+        "research_status",
+        "sitemap_monitor",
+        "website_sources",
+        "bar_associations",
+        "local_enrichment",
+        "office_locations",
+        "research_provider",
+        "awards_recognition",
+        "last_researched_at",
+        "website_confidence",
+        "ai_adoption_history",
+        "leadership_email_history",
+        "job_postings_research_status",
+        "contact_intelligence_provider",
+        "job_postings_research_provider",
+        "contact_intelligence_updated_at",
+        "last_job_postings_researched_at"
+      ],
+      "leaders": 2,
+      "staff": 1,
+      "vendor_stack": {
+        "other": {},
+        "evidence": [],
+        "case_mgmt": null
+      },
+      "outcomes": {
+        "task_id": "firm-enrichment-648bb0e17d444dff950829c500876fda",
+        "firm_name": "Usher Law Offices",
+        "summary": "Boutique Lancaster law firm serving Lancaster, Palmdale, the Antelope Valley, and surrounding Southern California communities in personal injury, workers’ compensation, family, real estate, business, construction, and criminal matters.",
+        "practice_areas": [
+          "Workers’ compensation",
+          "Personal injury",
+          "Family law",
+          "Real estate law",
+          "Business litigation",
+          "Construction law",
+          "Criminal defense",
+          "Evictions"
+        ],
+        "founded_year": null,
+        "firm_size": "Boutique; two attorneys publicly identified",
+        "offices": [
+          "Lancaster, California"
+        ],
+        "notable_cases": [],
+        "awards": [],
+        "ai_stage": "unknown",
+        "ai_summary": "No public evidence found.",
+        "jobs": 0,
+        "contact_results": {
+          "contact_profile_count": 3,
+          "leadership_history_count": 2
+        },
+        "leaders": [
+          {
+            "name": "Ulric Erwin Usher",
+            "title": "Principal attorney",
+            "has_email": false
+          },
+          {
+            "name": "Atley Usher Jr.",
+            "title": "Attorney",
+            "has_email": false
+          }
+        ]
+      }
+    },
+    {
+      "task_id": "firm-enrichment-d462c77886914676bedcd7dd0b06651e",
+      "pif_id": "c4683554-7bf3-4432-99d6-6c248932bfeb",
+      "firm_name": "Ayala Chirino Law",
+      "status": "completed",
+      "stages": [
+        {
+          "key": "web_research",
+          "status": "completed",
+          "message": "Web research completed",
+          "detail_keys": null,
+          "error": null
+        },
+        {
+          "key": "persist_research",
+          "status": "completed",
+          "message": "Research saved without replacing existing facts",
+          "detail_keys": [
+            "pif_id",
+            "staff_count",
+            "vendor_count",
+            "domain_claimed",
+            "change_detection",
+            "leadership_count",
+            "canonical_website",
+            "reused_recent_research",
+            "reconciled_from_firm_id"
+          ],
+          "error": null
+        },
+        {
+          "key": "sitemap",
+          "status": "completed",
+          "message": "Completed sitemap",
+          "detail_keys": [
+            "error",
+            "status",
+            "changed",
+            "website",
+            "provider",
+            "truncated",
+            "url_count",
+            "added_urls",
+            "checked_at",
+            "added_count",
+            "snapshot_id",
+            "removed_urls",
+            "sitemap_urls",
+            "removed_count",
+            "change_detection"
+          ],
+          "error": null
+        },
+        {
+          "key": "behavior",
+          "status": "completed",
+          "message": "Completed behavior",
+          "detail_keys": [
+            "provider",
+            "warm_score",
+            "analyzed_at",
+            "last_seen_at",
+            "tech_signals",
+            "contact_count",
+            "inbox_breakdown",
+            "last_records_at",
+            "last_referral_at",
+            "conversation_count"
+          ],
+          "error": null
+        },
+        {
+          "key": "contact_intelligence",
+          "status": "completed",
+          "message": "Completed contact intelligence",
+          "detail_keys": [
+            "contact_profile_count",
+            "leadership_history_count"
+          ],
+          "error": null
+        },
+        {
+          "key": "contacts",
+          "status": "completed",
+          "message": "Completed contacts",
+          "detail_keys": [
+            "firms",
+            "persons",
+            "skipped",
+            "updated",
+            "inserted",
+            "personas"
+          ],
+          "error": null
+        },
+        {
+          "key": "job_postings",
+          "status": "completed",
+          "message": "Completed job postings",
+          "detail_keys": [
+            "kind",
+            "pif_id",
+            "status",
+            "task_id",
+            "firm_name",
+            "started_at",
+            "completed_at",
+            "max_attempts",
+            "requested_at",
+            "attempt_count",
+            "posting_count",
+            "change_detection",
+            "attempt_started_at",
+            "has_recent_openings"
+          ],
+          "error": null
+        },
+        {
+          "key": "score",
+          "status": "completed",
+          "message": "Completed score",
+          "detail_keys": [
+            "id",
+            "icp_tier",
+            "icp_score",
+            "score_breakdown"
+          ],
+          "error": null
+        }
+      ],
+      "research_keys": [
+        "city",
+        "metro",
+        "state",
+        "sources",
+        "summary",
+        "case_mix",
+        "icp_tier",
+        "identity",
+        "firm_size",
+        "size_hint",
+        "value_tier",
+        "ai_adoption",
+        "founded_year",
+        "job_postings",
+        "social_media",
+        "volume_proxy",
+        "notable_cases",
+        "practice_areas",
+        "additional_info",
+        "research_status",
+        "sitemap_monitor",
+        "website_sources",
+        "bar_associations",
+        "local_enrichment",
+        "office_locations",
+        "research_provider",
+        "awards_recognition",
+        "last_researched_at",
+        "website_confidence",
+        "ai_adoption_history",
+        "leadership_email_history",
+        "job_postings_research_status",
+        "contact_intelligence_provider",
+        "job_postings_research_provider",
+        "contact_intelligence_updated_at",
+        "last_job_postings_researched_at"
+      ],
+      "leaders": 2,
+      "staff": 1,
+      "vendor_stack": {
+        "other": {},
+        "evidence": [],
+        "case_mgmt": null
+      },
+      "outcomes": {
+        "task_id": "firm-enrichment-d462c77886914676bedcd7dd0b06651e",
+        "firm_name": "Ayala Chirino Law",
+        "summary": "Santa Ana personal injury law firm serving Southern California, with bilingual English-Spanish attorneys and staff.",
+        "practice_areas": [
+          "Personal injury",
+          "Motor vehicle accidents",
+          "Pedestrian accidents",
+          "Hit-and-run accidents",
+          "Uber/Lyft accidents",
+          "Defective products",
+          "Premises liability",
+          "Dog bites"
+        ],
+        "founded_year": null,
+        "firm_size": "Two publicly identified attorneys; total staff count unknown",
+        "offices": [
+          "2009 North Broadway, Santa Ana, CA 92706"
+        ],
+        "notable_cases": [],
+        "awards": [
+          "Christopher J. Ayala received the Wiley W. Manuel Certificate for Pro Bono Legal Services from the State Bar of California in 2012.",
+          "Christopher J. Ayala received two CALI Awards in Legal Writing and Professional Skills.",
+          "The firm's website displays Avvo, Hispanic Bar Association, Law Offices of... and Super Lawyers badges; dates and specific award details were not identified."
+        ],
+        "ai_stage": "unknown",
+        "ai_summary": "No public evidence found.",
+        "jobs": 0,
+        "contact_results": {
+          "contact_profile_count": 3,
+          "leadership_history_count": 2
+        },
+        "leaders": [
+          {
+            "name": "Frank Chirino",
+            "title": "Founding Partner and Lead Trial Attorney",
+            "has_email": false
+          },
+          {
+            "name": "Christopher J. Ayala",
+            "title": "Founding Partner",
+            "has_email": false
+          }
+        ]
+      }
+    },
+    {
+      "task_id": "firm-enrichment-810dd22935e64e9b922ee8179b39a50d",
+      "pif_id": "2d7e0420-a0fa-4eed-9f32-39f20c898830",
+      "firm_name": "Law Offices of Elena Mebtahi",
+      "status": "completed",
+      "stages": [
+        {
+          "key": "web_research",
+          "status": "completed",
+          "message": "Web research completed",
+          "detail_keys": null,
+          "error": null
+        },
+        {
+          "key": "persist_research",
+          "status": "completed",
+          "message": "Research saved without replacing existing facts",
+          "detail_keys": [
+            "pif_id",
+            "staff_count",
+            "vendor_count",
+            "domain_claimed",
+            "change_detection",
+            "leadership_count",
+            "canonical_website",
+            "reused_recent_research",
+            "reconciled_from_firm_id"
+          ],
+          "error": null
+        },
+        {
+          "key": "sitemap",
+          "status": "completed",
+          "message": "Completed sitemap",
+          "detail_keys": [
+            "error",
+            "status",
+            "changed",
+            "website",
+            "provider",
+            "truncated",
+            "url_count",
+            "added_urls",
+            "checked_at",
+            "added_count",
+            "snapshot_id",
+            "removed_urls",
+            "sitemap_urls",
+            "removed_count",
+            "change_detection"
+          ],
+          "error": null
+        },
+        {
+          "key": "behavior",
+          "status": "completed",
+          "message": "Completed behavior",
+          "detail_keys": [
+            "provider",
+            "warm_score",
+            "analyzed_at",
+            "last_seen_at",
+            "tech_signals",
+            "contact_count",
+            "inbox_breakdown",
+            "last_records_at",
+            "last_referral_at",
+            "conversation_count"
+          ],
+          "error": null
+        },
+        {
+          "key": "contact_intelligence",
+          "status": "completed",
+          "message": "Completed contact intelligence",
+          "detail_keys": [
+            "contact_profile_count",
+            "leadership_history_count"
+          ],
+          "error": null
+        },
+        {
+          "key": "contacts",
+          "status": "completed",
+          "message": "Completed contacts",
+          "detail_keys": [
+            "firms",
+            "persons",
+            "skipped",
+            "updated",
+            "inserted",
+            "personas"
+          ],
+          "error": null
+        },
+        {
+          "key": "job_postings",
+          "status": "completed",
+          "message": "Completed job postings",
+          "detail_keys": [
+            "kind",
+            "pif_id",
+            "status",
+            "task_id",
+            "firm_name",
+            "started_at",
+            "completed_at",
+            "max_attempts",
+            "requested_at",
+            "attempt_count",
+            "posting_count",
+            "change_detection",
+            "attempt_started_at",
+            "has_recent_openings"
+          ],
+          "error": null
+        },
+        {
+          "key": "score",
+          "status": "completed",
+          "message": "Completed score",
+          "detail_keys": [
+            "id",
+            "icp_tier",
+            "icp_score",
+            "score_breakdown"
+          ],
+          "error": null
+        }
+      ],
+      "research_keys": [
+        "city",
+        "metro",
+        "state",
+        "sources",
+        "summary",
+        "case_mix",
+        "icp_tier",
+        "identity",
+        "firm_size",
+        "size_hint",
+        "value_tier",
+        "ai_adoption",
+        "founded_year",
+        "job_postings",
+        "social_media",
+        "volume_proxy",
+        "notable_cases",
+        "practice_areas",
+        "additional_info",
+        "research_status",
+        "sitemap_monitor",
+        "website_sources",
+        "bar_associations",
+        "local_enrichment",
+        "office_locations",
+        "research_provider",
+        "awards_recognition",
+        "last_researched_at",
+        "website_confidence",
+        "ai_adoption_history",
+        "leadership_email_history",
+        "job_postings_research_status",
+        "contact_intelligence_provider",
+        "job_postings_research_provider",
+        "contact_intelligence_updated_at",
+        "last_job_postings_researched_at"
+      ],
+      "leaders": 1,
+      "staff": 3,
+      "vendor_stack": {
+        "other": {},
+        "evidence": [
+          {
+            "signal": "message email domain:highlandlegalgroup.filevineapp.com",
+            "confidence": 0.9
+          }
+        ],
+        "case_mgmt": "filevine"
+      },
+      "outcomes": {
+        "task_id": "firm-enrichment-810dd22935e64e9b922ee8179b39a50d",
+        "firm_name": "Law Offices of Elena Mebtahi",
+        "summary": "Los Angeles law practice led by Elena Mebtahi, focused primarily on family law, fathers' rights, child support, paternity, custody, traffic, DUI, criminal defense, and selected personal injury matters.",
+        "practice_areas": [
+          "Family law",
+          "Divorce",
+          "Fathers' rights",
+          "Child support and arrears",
+          "Paternity",
+          "Child custody and visitation",
+          "Personal injury",
+          "Traffic violations",
+          "DUI/DWI",
+          "Criminal defense",
+          "Juvenile law"
+        ],
+        "founded_year": 1995,
+        "firm_size": "1-10 employees",
+        "offices": [
+          "Los Angeles, CA"
+        ],
+        "notable_cases": [],
+        "awards": [],
+        "ai_stage": "unknown",
+        "ai_summary": "No public evidence found.",
+        "jobs": 0,
+        "contact_results": {
+          "contact_profile_count": 3,
+          "leadership_history_count": 1
+        },
+        "leaders": [
+          {
+            "name": "Elena Mebtahi",
+            "title": "Attorney",
+            "has_email": true
+          }
+        ]
+      }
+    },
+    {
+      "task_id": "firm-enrichment-5ccca801a66241fa9665cdc03d3210ee",
+      "pif_id": "efd96a87-672b-416b-9d94-2e6cded57285",
+      "firm_name": "Leonidas Law Firm",
+      "status": "completed",
+      "stages": [
+        {
+          "key": "web_research",
+          "status": "completed",
+          "message": "Web research completed",
+          "detail_keys": null,
+          "error": null
+        },
+        {
+          "key": "persist_research",
+          "status": "completed",
+          "message": "Research saved without replacing existing facts",
+          "detail_keys": [
+            "pif_id",
+            "staff_count",
+            "vendor_count",
+            "domain_claimed",
+            "change_detection",
+            "leadership_count",
+            "canonical_website",
+            "reused_recent_research",
+            "reconciled_from_firm_id"
+          ],
+          "error": null
+        },
+        {
+          "key": "sitemap",
+          "status": "completed",
+          "message": "Completed sitemap",
+          "detail_keys": [
+            "error",
+            "status",
+            "changed",
+            "website",
+            "provider",
+            "truncated",
+            "url_count",
+            "added_urls",
+            "checked_at",
+            "added_count",
+            "snapshot_id",
+            "removed_urls",
+            "sitemap_urls",
+            "removed_count",
+            "change_detection"
+          ],
+          "error": null
+        },
+        {
+          "key": "behavior",
+          "status": "completed",
+          "message": "Completed behavior",
+          "detail_keys": [
+            "provider",
+            "warm_score",
+            "analyzed_at",
+            "last_seen_at",
+            "tech_signals",
+            "contact_count",
+            "inbox_breakdown",
+            "last_records_at",
+            "last_referral_at",
+            "conversation_count"
+          ],
+          "error": null
+        },
+        {
+          "key": "contact_intelligence",
+          "status": "completed",
+          "message": "Completed contact intelligence",
+          "detail_keys": [
+            "contact_profile_count",
+            "leadership_history_count"
+          ],
+          "error": null
+        },
+        {
+          "key": "contacts",
+          "status": "completed",
+          "message": "Completed contacts",
+          "detail_keys": [
+            "firms",
+            "persons",
+            "skipped",
+            "updated",
+            "inserted",
+            "personas"
+          ],
+          "error": null
+        },
+        {
+          "key": "job_postings",
+          "status": "completed",
+          "message": "Completed job postings",
+          "detail_keys": [
+            "kind",
+            "pif_id",
+            "status",
+            "task_id",
+            "firm_name",
+            "started_at",
+            "completed_at",
+            "max_attempts",
+            "requested_at",
+            "attempt_count",
+            "posting_count",
+            "attempt_started_at",
+            "has_recent_openings"
+          ],
+          "error": null
+        },
+        {
+          "key": "score",
+          "status": "completed",
+          "message": "Completed score",
+          "detail_keys": [
+            "id",
+            "icp_tier",
+            "icp_score",
+            "score_breakdown"
+          ],
+          "error": null
+        }
+      ],
+      "research_keys": [
+        "city",
+        "metro",
+        "state",
+        "sources",
+        "summary",
+        "case_mix",
+        "icp_tier",
+        "identity",
+        "firm_size",
+        "size_hint",
+        "value_tier",
+        "ai_adoption",
+        "founded_year",
+        "job_postings",
+        "social_media",
+        "volume_proxy",
+        "notable_cases",
+        "practice_areas",
+        "additional_info",
+        "research_status",
+        "sitemap_monitor",
+        "website_sources",
+        "bar_associations",
+        "local_enrichment",
+        "office_locations",
+        "research_provider",
+        "awards_recognition",
+        "last_researched_at",
+        "website_confidence",
+        "ai_adoption_history",
+        "leadership_email_history",
+        "job_postings_research_status",
+        "contact_intelligence_provider",
+        "job_postings_research_provider",
+        "contact_intelligence_updated_at",
+        "last_job_postings_researched_at"
+      ],
+      "leaders": 1,
+      "staff": 1,
+      "vendor_stack": {
+        "other": {},
+        "evidence": [],
+        "case_mgmt": null
+      },
+      "outcomes": {
+        "task_id": "firm-enrichment-5ccca801a66241fa9665cdc03d3210ee",
+        "firm_name": "Leonidas Law Firm",
+        "summary": "Boutique personal injury law firm serving clients in California and Florida, with a focus on trial advocacy and injury claims.",
+        "practice_areas": [
+          "Personal injury",
+          "Auto accidents",
+          "Trucking accidents",
+          "Catastrophic injury",
+          "Brain injury",
+          "Motorcycle accidents",
+          "Product liability",
+          "Wrongful death",
+          "Insurance bad faith"
+        ],
+        "founded_year": null,
+        "firm_size": "Boutique; numeric headcount not publicly verified",
+        "offices": [
+          "Calabasas, CA",
+          "Long Beach, CA"
+        ],
+        "notable_cases": [
+          "$10,000,000 confidential auto accident settlement involving brain, neck, and back injuries.",
+          "$5,400,000 consent judgment involving severe brain injury from a motorcycle crash.",
+          "$997,324 trucking accident verdict in Bakersfield, California.",
+          "$717,642 jury verdict in Orlando, Florida involving underinsured motorist coverage.",
+          "$409,000 jury verdict in Long Beach, California.",
+          "$406,592 jury verdict in Los Angeles, California."
+        ],
+        "awards": [
+          "Top 40 Under 40, National Trial Lawyers",
+          "Top 25 Women Trial Attorneys, National Trial Lawyers",
+          "Super Lawyers Rising Star, 2017-present",
+          "American Board of Trial Advocates member"
+        ],
+        "ai_stage": "unknown",
+        "ai_summary": "No public evidence found.",
+        "jobs": 1,
+        "contact_results": {
+          "contact_profile_count": 2,
+          "leadership_history_count": 1
+        },
+        "leaders": [
+          {
+            "name": "Elizabeth Munro Farrugia",
+            "title": "Founder and Managing Attorney",
+            "has_email": true
+          }
+        ]
+      }
+    },
+    {
+      "task_id": "firm-enrichment-f27c36d98522436c8cc8b6df8413ec70",
+      "pif_id": "4ce2aca0-bcd3-4578-80f4-56620ecde17d",
+      "firm_name": "777 Law",
+      "status": "completed",
+      "stages": [
+        {
+          "key": "web_research",
+          "status": "completed",
+          "message": "Web research completed",
+          "detail_keys": null,
+          "error": null
+        },
+        {
+          "key": "persist_research",
+          "status": "completed",
+          "message": "Research saved without replacing existing facts",
+          "detail_keys": [
+            "pif_id",
+            "staff_count",
+            "vendor_count",
+            "domain_claimed",
+            "change_detection",
+            "leadership_count",
+            "canonical_website",
+            "reused_recent_research",
+            "reconciled_from_firm_id"
+          ],
+          "error": null
+        },
+        {
+          "key": "sitemap",
+          "status": "completed",
+          "message": "Completed sitemap",
+          "detail_keys": [
+            "error",
+            "status",
+            "changed",
+            "website",
+            "provider",
+            "truncated",
+            "url_count",
+            "added_urls",
+            "checked_at",
+            "added_count",
+            "snapshot_id",
+            "removed_urls",
+            "sitemap_urls",
+            "removed_count",
+            "change_detection"
+          ],
+          "error": null
+        },
+        {
+          "key": "behavior",
+          "status": "completed",
+          "message": "Completed behavior",
+          "detail_keys": [
+            "provider",
+            "warm_score",
+            "analyzed_at",
+            "last_seen_at",
+            "tech_signals",
+            "contact_count",
+            "inbox_breakdown",
+            "last_records_at",
+            "last_referral_at",
+            "conversation_count"
+          ],
+          "error": null
+        },
+        {
+          "key": "contact_intelligence",
+          "status": "completed",
+          "message": "Completed contact intelligence",
+          "detail_keys": [
+            "contact_profile_count",
+            "leadership_history_count"
+          ],
+          "error": null
+        },
+        {
+          "key": "contacts",
+          "status": "completed",
+          "message": "Completed contacts",
+          "detail_keys": [
+            "firms",
+            "persons",
+            "skipped",
+            "updated",
+            "inserted",
+            "personas"
+          ],
+          "error": null
+        },
+        {
+          "key": "job_postings",
+          "status": "completed",
+          "message": "Completed job postings",
+          "detail_keys": [
+            "kind",
+            "pif_id",
+            "status",
+            "task_id",
+            "firm_name",
+            "started_at",
+            "completed_at",
+            "max_attempts",
+            "requested_at",
+            "attempt_count",
+            "posting_count",
+            "change_detection",
+            "attempt_started_at",
+            "has_recent_openings"
+          ],
+          "error": null
+        },
+        {
+          "key": "score",
+          "status": "completed",
+          "message": "Completed score",
+          "detail_keys": [
+            "id",
+            "icp_tier",
+            "icp_score",
+            "score_breakdown"
+          ],
+          "error": null
+        }
+      ],
+      "research_keys": [
+        "city",
+        "metro",
+        "state",
+        "sources",
+        "summary",
+        "case_mix",
+        "icp_tier",
+        "identity",
+        "firm_size",
+        "size_hint",
+        "value_tier",
+        "ai_adoption",
+        "founded_year",
+        "job_postings",
+        "social_media",
+        "volume_proxy",
+        "notable_cases",
+        "practice_areas",
+        "additional_info",
+        "research_status",
+        "sitemap_monitor",
+        "website_sources",
+        "bar_associations",
+        "local_enrichment",
+        "office_locations",
+        "research_provider",
+        "awards_recognition",
+        "last_researched_at",
+        "website_confidence",
+        "ai_adoption_history",
+        "leadership_email_history",
+        "job_postings_research_status",
+        "contact_intelligence_provider",
+        "job_postings_research_provider",
+        "contact_intelligence_updated_at",
+        "last_job_postings_researched_at"
+      ],
+      "leaders": 1,
+      "staff": 0,
+      "vendor_stack": {
+        "other": {},
+        "evidence": [
+          {
+            "signal": "message email domain:eazyliens.filevineapp.com",
+            "confidence": 0.9
+          }
+        ],
+        "case_mgmt": "filevine"
+      },
+      "outcomes": {
+        "task_id": "firm-enrichment-f27c36d98522436c8cc8b6df8413ec70",
+        "firm_name": "777 Law",
+        "summary": "Arcadia, California litigation practice led by Steven Chow, serving individuals, business owners, property owners, tenants, and others facing legal trouble.",
+        "practice_areas": [
+          "Personal injury",
+          "Government investigations",
+          "Litigation"
+        ],
+        "founded_year": null,
+        "firm_size": "Solo practice / 1 attorney",
+        "offices": [
+          "Arcadia, CA"
+        ],
+        "notable_cases": [],
+        "awards": [],
+        "ai_stage": "unknown",
+        "ai_summary": "No public evidence found.",
+        "jobs": 0,
+        "contact_results": {
+          "contact_profile_count": 1,
+          "leadership_history_count": 1
+        },
+        "leaders": [
+          {
+            "name": "Steven Chow",
+            "title": "Attorney at Law",
+            "has_email": true
+          }
+        ]
+      }
+    },
+    {
+      "task_id": "firm-enrichment-7163d84f3841490ebd65b086f5e075a8",
+      "pif_id": "c201da28-c4ca-4fb6-8600-8f46b3307c75",
+      "firm_name": "Vartanian Law",
+      "status": "completed",
+      "stages": [
+        {
+          "key": "web_research",
+          "status": "completed",
+          "message": "Web research completed",
+          "detail_keys": null,
+          "error": null
+        },
+        {
+          "key": "persist_research",
+          "status": "completed",
+          "message": "Research saved without replacing existing facts",
+          "detail_keys": [
+            "pif_id",
+            "staff_count",
+            "vendor_count",
+            "domain_claimed",
+            "change_detection",
+            "leadership_count",
+            "canonical_website",
+            "reused_recent_research",
+            "reconciled_from_firm_id"
+          ],
+          "error": null
+        },
+        {
+          "key": "sitemap",
+          "status": "completed",
+          "message": "Completed sitemap",
+          "detail_keys": [
+            "error",
+            "status",
+            "changed",
+            "website",
+            "provider",
+            "truncated",
+            "url_count",
+            "added_urls",
+            "checked_at",
+            "added_count",
+            "snapshot_id",
+            "removed_urls",
+            "sitemap_urls",
+            "removed_count",
+            "change_detection"
+          ],
+          "error": null
+        },
+        {
+          "key": "behavior",
+          "status": "completed",
+          "message": "Completed behavior",
+          "detail_keys": [
+            "provider",
+            "warm_score",
+            "analyzed_at",
+            "last_seen_at",
+            "tech_signals",
+            "contact_count",
+            "inbox_breakdown",
+            "last_records_at",
+            "last_referral_at",
+            "conversation_count"
+          ],
+          "error": null
+        },
+        {
+          "key": "contact_intelligence",
+          "status": "completed",
+          "message": "Completed contact intelligence",
+          "detail_keys": [
+            "contact_profile_count",
+            "leadership_history_count"
+          ],
+          "error": null
+        },
+        {
+          "key": "contacts",
+          "status": "completed",
+          "message": "Completed contacts",
+          "detail_keys": [
+            "firms",
+            "persons",
+            "skipped",
+            "updated",
+            "inserted",
+            "personas"
+          ],
+          "error": null
+        },
+        {
+          "key": "job_postings",
+          "status": "completed",
+          "message": "Completed job postings",
+          "detail_keys": [
+            "kind",
+            "pif_id",
+            "status",
+            "task_id",
+            "firm_name",
+            "started_at",
+            "completed_at",
+            "max_attempts",
+            "requested_at",
+            "attempt_count",
+            "posting_count",
+            "change_detection",
+            "attempt_started_at",
+            "has_recent_openings"
+          ],
+          "error": null
+        },
+        {
+          "key": "score",
+          "status": "completed",
+          "message": "Completed score",
+          "detail_keys": [
+            "id",
+            "icp_tier",
+            "icp_score",
+            "score_breakdown"
+          ],
+          "error": null
+        }
+      ],
+      "research_keys": [
+        "city",
+        "metro",
+        "state",
+        "sources",
+        "summary",
+        "case_mix",
+        "icp_tier",
+        "identity",
+        "firm_size",
+        "size_hint",
+        "value_tier",
+        "ai_adoption",
+        "founded_year",
+        "job_postings",
+        "social_media",
+        "volume_proxy",
+        "notable_cases",
+        "practice_areas",
+        "additional_info",
+        "research_status",
+        "sitemap_monitor",
+        "website_sources",
+        "bar_associations",
+        "local_enrichment",
+        "office_locations",
+        "research_provider",
+        "awards_recognition",
+        "last_researched_at",
+        "website_confidence",
+        "ai_adoption_history",
+        "leadership_email_history",
+        "job_postings_research_status",
+        "contact_intelligence_provider",
+        "job_postings_research_provider",
+        "contact_intelligence_updated_at",
+        "last_job_postings_researched_at"
+      ],
+      "leaders": 1,
+      "staff": 2,
+      "vendor_stack": {
+        "other": {},
+        "evidence": [],
+        "case_mgmt": null
+      },
+      "outcomes": {
+        "task_id": "firm-enrichment-7163d84f3841490ebd65b086f5e075a8",
+        "firm_name": "Vartanian Law",
+        "summary": "Glendale, California law firm serving Los Angeles and surrounding communities, focused on personal injury, civil litigation, collections, and related matters.",
+        "practice_areas": [
+          "Personal injury",
+          "Civil litigation",
+          "Collections",
+          "Contract disputes",
+          "Business litigation",
+          "Credit card settlements",
+          "Timeshare buyout matters",
+          "DMV hearings"
+        ],
+        "founded_year": 2009,
+        "firm_size": null,
+        "offices": [
+          "425 E. Colorado St. Ste. #445, Glendale, CA 91205"
+        ],
+        "notable_cases": [
+          {
+            "case": "Gemma Li Chao v. Cross Creek Village, et al.",
+            "role": "Counsel for plaintiff",
+            "matter": "Negligence and premises liability",
+            "source_url": "https://www.decisiondepot.legal/cases/260716",
+            "case_number": "25TRCV01474"
+          },
+          {
+            "case": "Carlo Meir v. Carlton Shigg, et al.",
+            "role": "Counsel for plaintiff",
+            "matter": "Personal injury statement of damages",
+            "source_url": "https://notices.dailyjournal.com/LegalNotices/DJCLegalNotices/LDJ-2026-04-16.pdf",
+            "case_number": "25SMCV02217"
+          }
+        ],
+        "awards": [
+          {
+            "year": 2004,
+            "award": "CALI Excellence for the Future Award",
+            "category": "Sports Law",
+            "recipient": "Varand Vartanian",
+            "source_url": "https://vartanianlegal.com/index.php/about-us/"
+          }
+        ],
+        "ai_stage": "unknown",
+        "ai_summary": "No public evidence found.",
+        "jobs": 0,
+        "contact_results": {
+          "contact_profile_count": 2,
+          "leadership_history_count": 1
+        },
+        "leaders": [
+          {
+            "name": "Varand Vartanian",
+            "title": "Founder and attorney",
+            "has_email": true
+          }
+        ]
+      }
+    },
+    {
+      "task_id": "firm-enrichment-3a8c9127dd324ffa9a29da3a4cf94006",
+      "pif_id": "c12cb18b-9c9b-4e35-a5ae-636e1a1a46b1",
+      "firm_name": "Law Offices of George A. Gallegos",
+      "status": "completed",
+      "stages": [
+        {
+          "key": "web_research",
+          "status": "completed",
+          "message": "Web research completed",
+          "detail_keys": null,
+          "error": null
+        },
+        {
+          "key": "persist_research",
+          "status": "completed",
+          "message": "Research saved without replacing existing facts",
+          "detail_keys": [
+            "pif_id",
+            "staff_count",
+            "vendor_count",
+            "domain_claimed",
+            "change_detection",
+            "leadership_count",
+            "canonical_website",
+            "reused_recent_research",
+            "reconciled_from_firm_id"
+          ],
+          "error": null
+        },
+        {
+          "key": "sitemap",
+          "status": "completed",
+          "message": "Completed sitemap",
+          "detail_keys": [
+            "error",
+            "status",
+            "changed",
+            "website",
+            "provider",
+            "truncated",
+            "url_count",
+            "added_urls",
+            "checked_at",
+            "added_count",
+            "snapshot_id",
+            "removed_urls",
+            "sitemap_urls",
+            "removed_count",
+            "change_detection"
+          ],
+          "error": null
+        },
+        {
+          "key": "behavior",
+          "status": "completed",
+          "message": "Completed behavior",
+          "detail_keys": [
+            "provider",
+            "warm_score",
+            "analyzed_at",
+            "last_seen_at",
+            "tech_signals",
+            "contact_count",
+            "inbox_breakdown",
+            "last_records_at",
+            "last_referral_at",
+            "conversation_count"
+          ],
+          "error": null
+        },
+        {
+          "key": "contact_intelligence",
+          "status": "completed",
+          "message": "Completed contact intelligence",
+          "detail_keys": [
+            "contact_profile_count",
+            "leadership_history_count"
+          ],
+          "error": null
+        },
+        {
+          "key": "contacts",
+          "status": "completed",
+          "message": "Completed contacts",
+          "detail_keys": [
+            "firms",
+            "persons",
+            "skipped",
+            "updated",
+            "inserted",
+            "personas"
+          ],
+          "error": null
+        },
+        {
+          "key": "job_postings",
+          "status": "completed",
+          "message": "Completed job postings",
+          "detail_keys": [
+            "kind",
+            "pif_id",
+            "status",
+            "task_id",
+            "firm_name",
+            "started_at",
+            "completed_at",
+            "max_attempts",
+            "requested_at",
+            "attempt_count",
+            "posting_count",
+            "change_detection",
+            "attempt_started_at",
+            "has_recent_openings"
+          ],
+          "error": null
+        },
+        {
+          "key": "score",
+          "status": "completed",
+          "message": "Completed score",
+          "detail_keys": [
+            "id",
+            "icp_tier",
+            "icp_score",
+            "score_breakdown"
+          ],
+          "error": null
+        }
+      ],
+      "research_keys": [
+        "city",
+        "metro",
+        "state",
+        "sources",
+        "summary",
+        "case_mix",
+        "icp_tier",
+        "identity",
+        "firm_size",
+        "size_hint",
+        "value_tier",
+        "ai_adoption",
+        "founded_year",
+        "job_postings",
+        "social_media",
+        "volume_proxy",
+        "notable_cases",
+        "practice_areas",
+        "additional_info",
+        "research_status",
+        "sitemap_monitor",
+        "website_sources",
+        "bar_associations",
+        "local_enrichment",
+        "office_locations",
+        "research_provider",
+        "awards_recognition",
+        "last_researched_at",
+        "website_confidence",
+        "ai_adoption_history",
+        "leadership_email_history",
+        "job_postings_research_status",
+        "contact_intelligence_provider",
+        "job_postings_research_provider",
+        "contact_intelligence_updated_at",
+        "last_job_postings_researched_at"
+      ],
+      "leaders": 1,
+      "staff": 0,
+      "vendor_stack": {
+        "other": {},
+        "evidence": [],
+        "case_mgmt": null
+      },
+      "outcomes": {
+        "task_id": "firm-enrichment-3a8c9127dd324ffa9a29da3a4cf94006",
+        "firm_name": "Law Offices of George A. Gallegos",
+        "summary": "Monterey Park, California personal-injury law firm led by founding attorney George A. Gallegos, serving accident and injury clients throughout Los Angeles County.",
+        "practice_areas": [
+          "Personal injury",
+          "Car accidents",
+          "Truck accidents",
+          "Motorcycle accidents",
+          "Bicycle accidents",
+          "Pedestrian accidents",
+          "Catastrophic injury",
+          "Commercial vehicle accidents",
+          "Construction accidents",
+          "Medical malpractice",
+          "Rideshare accidents",
+          "Slip and fall",
+          "Traumatic brain injury",
+          "Wrongful death"
+        ],
+        "founded_year": null,
+        "firm_size": "1-10; one publicly identified attorney",
+        "offices": [
+          "328 S. Atlantic Blvd., Suite 200, Monterey Park, CA 91754"
+        ],
+        "notable_cases": [
+          "Gomez v. New Champion Promotions, LLC et al., No. 3:23-cv-06608, U.S. District Court for the Northern District of California; George Anthony Gallegos appeared as counsel in February 2024."
+        ],
+        "awards": [
+          "George A. Gallegos is identified on the firm website as a Super Lawyer; award year not stated."
+        ],
+        "ai_stage": "unknown",
+        "ai_summary": "No public evidence found.",
+        "jobs": 0,
+        "contact_results": {
+          "contact_profile_count": 1,
+          "leadership_history_count": 1
+        },
+        "leaders": [
+          {
+            "name": "George Anthony Gallegos",
+            "title": "Founding Attorney",
+            "has_email": true
+          }
+        ]
+      }
+    }
+  ],
+  "limitations": [
+    "All eight workflow stages show completed for all twenty firms; this means the stage finished, not that every desired fact was found.",
+    "Counts are stored records, not verified distinct decision-makers. Aliases, duplicate biographies, non-executive attorneys, emeritus and deceased people can appear in leadership arrays.",
+    "Saved email presence does not establish current deliverability or outreach eligibility.",
+    "Hartounian and United Attorney Group sitemap requests returned HTTP 403; Tamar Ekizian sitemap endpoints returned HTTP 404.",
+    "All twenty AI adoption stages remain unknown; some industry commentary was captured but not treated as firm deployment.",
+    "A negative public vendor search does not establish that a firm has no case-management software."
+  ]
+}

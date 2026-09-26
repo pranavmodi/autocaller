@@ -1,0 +1,189 @@
+Skip to main content
+English
+Settings
+pranav@possiblemindshq.com
+Search for Jobs
+Candidate Home
+Back to Job Posting
+Principal Software Engineer
+completed step 1 of 6
+Autofill with Resume
+completed step 2 of 6
+My Information
+completed step 3 of 6
+My Experience
+completed step 4 of 6
+Application Questions
+completed step 5 of 6
+Voluntary Disclosures
+current step 6 of 6
+Review
+Review
+My Information
+How Did You Hear About Us?
+LinkedIn
+Have you previously worked for Harris?
+No
+Name
+Pranav Modi
+Address
+Budigere Road
+Bangalore- 560049
+Karnātaka
+India
+Email Address
+pranav@possiblemindshq.com
+Phone
++91 82871 49638 (Mobile)
+My Experience
+Work Experience
+Work Experience 1
+Job Title
+Founder - Applied AI & Legal Operations
+Company
+Possible Minds
+Location
+Remote
+I currently work here
+Yes
+From
+12/2023
+Role Description
+Lead a three-person team and own architecture, implementation, testing, deployment and production support. Build Python/FastAPI and Node.js/TypeScript APIs connecting CRM, inbox, document, telephony and AI providers. Deploy LLM intake and support agents with human handoff, exception routing and audit trails.
+Work Experience 2
+Job Title
+Product Manager, Data Platform
+Company
+Expedia Group
+Location
+Bengaluru
+I currently work here
+No
+From
+10/2021
+To
+10/2023
+Role Description
+Led a zero-to-one data-platform product, partnering with engineering, data science and business teams on APIs, governance, adoption and production operations. Drove ML integrations for personalization and dynamic pricing; platform adoption contributed an estimated $18M in revenue.
+Work Experience 3
+Job Title
+Data Scientist
+Company
+Near
+Location
+Bengaluru
+I currently work here
+No
+From
+01/2020
+To
+08/2021
+Role Description
+Built ML and analytics features on a platform covering 1.6B+ users; translated commercial needs into a technical roadmap and improved month-over-month retention by 12%.
+Work Experience 4
+Job Title
+Machine Learning Engineer / Agile Lead
+Company
+Definiens (Tissue Phenomics)
+Location
+Bengaluru / Munich
+I currently work here
+No
+From
+01/2018
+To
+12/2019
+Role Description
+Built production AI systems for cancer detection in digital pathology, including ETL, object-storage APIs, training and application integration. Architected AWS training, deployment and monitoring with CI/CD, Docker and Kubernetes/Kubeflow; led sprint planning and engineering/research knowledge sharing.
+Work Experience 5
+Job Title
+Data Scientist / Product Owner
+Company
+McKinsey & Company
+Location
+Bengaluru
+I currently work here
+No
+From
+04/2013
+To
+01/2018
+Role Description
+Delivered $100M+ in impact through ML and optimization systems across retail, pharma, manufacturing and transport. Owned delivery of a workforce-scheduling application saving $14M annually, from requirements discovery across six facilities through stakeholder adoption and rollout.
+Education
+Education 1
+School or University
+Dhirubhai Ambani Institute of Information and Communication Technology (DA-IICT)
+Degree
+BEng
+Field of Study
+Computer and Information Science
+Overall Result (GPA)
+No Response
+From
+2003
+To (Actual or Expected)
+2007
+Skills
+Software Solutions
+Researching
+Structured Query Language (SQL)
+Python (Programming Language)
+Telephone System
+MORE (10)
+Resume/CV
+
+Pranav_Modi_Engineering_Leadership.pdf
+54.15 KB
+
+Websites
+Add any relevant websites.
+Websites 1
+URL
+https://pranavmodi.com
+Application Questions
+
+Should the role you are applying to require travel, what percentage of travel are you comfortable with?*
+
+25-50%
+
+Do you have experience traveling extensively for work?*
+
+Yes
+
+Are you willing to relocate?*
+
+Yes
+
+What is your desired annual compensation?*
+
+6000000
+
+To the best of your knowledge, are you currently employed or have you previously been employed by a customer or client of any Harris Computer Business Unit?*
+
+No
+
+To the best of your knowledge, are you currently bound by any noncompete agreements which may interfere with your ability to carry out the duties of this role?*
+
+No
+
+Are you legally authorized to work in the country in which the role you are applying for is based?*
+
+Yes
+
+Will you now or in the future require visa sponsorship for employment in the country in which the role you are applying for is based?*
+
+No
+
+Please enter the languages you speak and proficiency level (Beginner, Intermediate, Advanced).*
+
+English - Advanced; Hindi - Advanced.
+Voluntary Disclosures
+Terms and Conditions
+Yes
+Yes
+Back
+Submit
+Follow Us
+Harris Data Privacy Policy
+© 2026 Workday, Inc. All rights reserved.

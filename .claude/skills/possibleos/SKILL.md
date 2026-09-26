@@ -9,7 +9,9 @@ A FastAPI daemon + Typer CLI that cold-calls US personal-injury attorneys, runs 
 
 Full reference: `docs/cli.md` (read it for anything not covered here).
 
-Job application workspace: `/job-agent`. Use `bin/possibleos job-agent status`,
+Job application workspace: `/job-agent`. For end-to-end applications, load the
+dedicated `possibleos-job-application` skill before mutating state.
+Use `bin/possibleos job-agent status`,
 `config`, `configure --file preferences.json`, `collect`, `jobs --order posted_desc
 --category ai_automation --source external_search --page 1`, `review`, and `events
 --page 1`. Source values are `external_search` for Job Agent/public search and
@@ -32,6 +34,10 @@ manual searches are durable, and backend startup marks an orphaned running searc
 never launches a replacement search; the operator explicitly retries with `search`.
 `show ID` includes processing_revision, category,
 selected resume and application stage. Use `classify ID` to retry classification;
+`applications --order updated_desc --page 1` lists every application workflow that
+has been started, including stopped research, ready drafts, queued or uncertain
+sends, and Sent-verified messages. Filter with `--status` or `--search`; listing is
+read-only.
 `category ID --category KEY --revision N` manually overrides it. `prepare ID
 --revision N` researches and composes WITHOUT sending. `apply ID --revision N`
 explicitly authorizes one application via the official Zoho CLI. `verify-sent ID`
@@ -41,6 +47,11 @@ published web contacts and eligible `firm_contacts` records. Stored contacts mus
 belong to the canonical firm or an exact-domain twin, use the verified employer
 domain, and have a suitable recruiting or routing role. The packet and UI identify
 Possible OS provenance; routing contacts always receive a forwarding request.
+Preparation shows separate public-web discovery, source-fetch, stored-contact,
+drafting and audit phases. It is bounded by `JOB_AGENT_PREPARATION_TIMEOUT_S`
+(240 seconds by default); individual gateway calls default to 150 seconds. A timeout
+stops before sending and is retryable. A failed UI status poll must stop displaying
+an unconditional progress spinner and offer a reload while polling recovers.
 Unknown send outcomes never automatically retry the send. Delayed Sent copies get
 bounded read-only IMAP reconciliation after about 30 seconds, 2 minutes and 10 minutes;
 the exact recipient, subject/body, sender and PDF hash must match. Activity is hidden
@@ -51,17 +62,43 @@ Leads `/emailtag-firms` → **Job listings** can open a source-backed row direct
 the same Job Agent workflow. CLI parity is `job-agent open-listing --firm-id ID
 --source-url URL --title TITLE [--job-id ID --location LOCATION]`. This resolves
 the canonical stored posting and does not classify, prepare or send by itself.
+For a specific public job URL that has not been stored, use `job-agent import-url
+URL`. It verifies the exact employer, role and live status, creates or reuses the
+durable firm/job record, and returns the candidate ID. It never classifies,
+prepares or sends; continue with `classify`, `show`, `prepare` and an explicitly
+authorized `apply` using the returned ID and revisions. If a job board establishes
+the role but not the employer's official domain, the import performs one bounded
+public-source enrichment pass for that exact employer. It first tries direct
+OpenClaw tool RPC and falls back to one provider-native search turn when the
+generic search tool is unavailable, then freshly fetches and validates the
+returned official page. A blocked official page may be fetched through a public
+same-origin WordPress REST representation, but structured identity and exact
+quoted-evidence checks remain mandatory. Application preparation reuses the saved
+verified employer-evidence URL when the homepage is blocked, then checks reusable
+Possible OS contacts for that canonical firm. `job-agent events` records the start and
+terminal result, including the career-search run ID and stop reason on failure.
 `job-agent search` starts public-source discovery using the saved target roles,
-preferred industries and location preferences. Comma-, semicolon-, or line-separated
+preferred industries, location preferences and enabled source catalog. Use
+`job-agent sources` to inspect the normalized public feeds/APIs, public pages,
+indexed-web sources and unavailable/account-gated sources. Enabled boards rotate
+through the per-run source budget; direct public queries continue alongside them.
+Comma-, semicolon-, or line-separated
 target roles and preferred industries define the roles and employer industries that
 discovery queries and the verifier may accept. The daily career-search timer uses
 this same Job Agent profile; there is no ordinary PI-only search path. It verifies
 the employer, target-role fit, live role and geographic claims, skips exact jobs already discovered,
-and imports verified new rows into the review queue. Officially published recruiting
+and imports verified new rows into the review queue. Each extracted job receives one
+stored TypeSafe Jev contract-status judgment (`contract`, `non_contract`, or
+`unknown`) with probabilities and model provenance; application preparation reuses
+it and never classifies contract status again. Use `job-agent jobs --contract
+all|contract|non_contract|unknown` to filter it, and `job-agent
+backfill-contract-status` to resumably classify older queue rows. Officially published recruiting
 and routing emails are source-checked and stored once in `firm_contacts`; every role
 for that firm reuses them. `jobs --order contact_desc` puts firms with known emails
-first. It does not classify, prepare,
+first. It does not classify a resume category, prepare,
 email or submit. The UI's **Search now** button invokes the same command path on demand.
+Use `pif job-postings --contract contract|non_contract|unknown` for CLI parity
+with the Leads / Job listings contract filter.
 No automatic inbox-referral handling or portal submissions. `resumes` / `show` return
 file paths relative to `/home/pranav/resume`; use `resume-download` for a guarded
 headless copy. See `docs/JOB_AGENT.md`.
@@ -433,6 +470,39 @@ delays no longer schedule these producers. Manual sync/maintenance commands
 remain explicit operator actions, outside the automatic slot lock. See
 `docs/NIGHTLY_SYNC.md`. Do not alter the separate career-search schedule.
 
+Firm-profile research also investigates AI adoption and leader statements in
+the same gateway call. `pif ai-posture <firm_id>` reads local adoption stage,
+leadership stance, sourced statements/quotes, publication dates, and history.
+Use `pif enrich <firm_id> --poll` to research a firm; otherwise this fills on its
+next due profile refresh. Unknown means no public evidence, not opposition.
+Past observations remain in `research_data.ai_adoption_history`. AI trigger
+candidates share the existing per-firm batched LLM review; first observations
+need dated evidence of a recent development to become outreach triggers.
+
+Historical career-search repair supports
+`pif career-search-run --retry-run RUN_ID [--candidates-file candidates.json]`
+for bounded recovery without consuming a normal daily discovery slot or changing
+the original run. Candidate files are discovery hints, not approvals. Rejected
+raw candidates, corrected-domain attempts and exact-quote source diagnostics
+are retained; shared ATS hosts cannot become canonical employer domains.
+See `docs/DAILY_PI_CAREER_SEARCH.md` for retry audit and strict evidence policy.
+
+The daily Job Agent search is separate from firm research maintenance
+and Mission Control's India search. `pif career-search-config [--file patch.json]
+[--enable/--disable]`, `pif career-search-status`, and `pif career-search-run
+[--due] [--seed-only] [--quiet]` are local server commands. Default disabled;
+configured time 08:00 America/Bogota (13:00 UTC). The parent must apply migration
+`c9d0e1f2g3h4` and install the repo's `possibleos-career-search` service/timer.
+The timer polls every five minutes; the command enforces the configured daily
+time and durable retry limits and loads the current Job Agent roles, industries
+and location preferences. `--seed-only` is legacy maintenance for the five
+historical priority URLs; it is not a second ordinary search. Inspect
+run counters/errors and stored IDs. Do not claim activation without checking
+the live timer. Jobs merge into the existing Job Postings collection with
+canonical firm matching and original dates preserved; closed jobs remain in
+firm data but are excluded from the default listings. Remote != worldwide;
+Colombia/LATAM accessibility is evidence-backed, not work authorization.
+
 Local firm research is operator-triggered outside the daily changed-firm queue
 because it spends web/LLM budget. Use `bin/possibleos research status --tasks` for
 coverage/open tasks, `research firm <domain-or-pif> [--staff/--no-staff]
@@ -442,6 +512,11 @@ without queueing new work. These commands now use the durable local enrichment
 queue and OpenClaw gateway, then persist results and ingest contacts locally.
 Use `bin/possibleos personas map [--pif=<id>]` and `personas show
 <domain-or-pif>` to inspect mapped composer persona keys and confidence.
+
+In the Leads firm modal, People shows complete biographies
+and expandable Professional details from the stored profile: education,
+experience, bar admissions, skills, certifications, publications, cases and
+source links. This is UI-only presentation; no new research is triggered.
 
 Firm-vs-firm PI competition context is available through
 `bin/possibleos front competitors rebuild`, `front competitors summary`, and
@@ -456,6 +531,17 @@ warm-list rows. The browser rendering is UI-only; use
 `front competitors graph --json` for the full scriptable graph payload.
 
 ---
+
+Campaign links also support people not yet in Contacts. In Engagement, select
+a campaign, open **Create a tracking link**, choose **New recipient**, enter a
+name and optional email/firm, then create and copy. The form is outside
+Diagnostics. CLI: `campaigns link CAMPAIGN_ID --channel linkedin --recipient-name
+"Person Name" [--recipient-email person@example.com] [--recipient-firm-id ID]
+--json`. This creates a real contact and attributed link atomically. A unique
+email match reuses an existing contact without changing their details;
+ambiguous matches require `--contact-id`. No name-only merging or invented
+firms. Public links remain anonymous. Mark sent only after actually sending;
+creating a link never sends email. Do not open the real tracking URL to test it.
 
 ## First: establish situational awareness
 
@@ -955,8 +1041,12 @@ hostname than `OUTREACH_PUBLIC_BASE_URL`.
   `reviews extract-all-pending`; REST `POST /api/firms/{pif_id}/extract`.
   Source-backed corpus operations: `bin/possibleos reviews progress` reports
   raw, distinct, independent, classified, source-mix, queue, and 5,000-gate
-  counts; `bin/possibleos reviews queue --limit N` incrementally queues
-  canonical firms, and `--include-researched` revisits low-coverage firms.
+  counts; `bin/possibleos reviews queue --limit N` is a manual legacy corpus
+  operation and must not be used for routine monitoring. Nightly profile
+  maintenance is the sole automatic review-research producer. `review-alerts
+  run` processes already collected reviews into 14-day alerts and never queues
+  research. The manual command incrementally queues canonical firms, and
+  `--include-researched` revisits low-coverage firms.
   `bin/possibleos reviews classify` backfills the versioned operational labels.
   After both gates pass, `bin/possibleos reviews analyze --snapshot-at <UTC-ISO>`
   freezes denominators and writes the rerunnable aggregate plus eight chart CSVs.
@@ -988,3 +1078,106 @@ hostname than `OUTREACH_PUBLIC_BASE_URL`.
   the PHI egress guard (`check_action_policy`), send-window spread, and
   deliverability breaker still gate every send. Do not reintroduce a manual
   approval step (operator-authorized 2026-06-17).
+## Recent Review Alerts
+
+Use `bin/possibleos review-alerts status` for live settings, selected leaders,
+drafts, sent/uncertain outcomes and blockers. `enroll` previews eligible PI firms;
+`enroll --execute` requests bounded structured title classification and enrollment
+of one founder/owner, managing partner or COO per canonical firm. Stored title
+decisions and enrollment progress are visible in `status`. `config --enabled
+--no-auto-send` enables monitoring only. Configure a real
+`--postal-address` and monitored allowed `--sender` before `config --auto-send`.
+`run` requests a bounded worker cycle; poll `status` for completion. Control
+budgets with `--daily-limit` and `--research-daily-limit`. Use `subscription ID
+--status paused|active|unsubscribed` for a firm. Never resume an opt-out or retry an
+uncertain provider attempt. Review-alert attempts appear in `/comms`; the workflow
+UI is `/review-alerts`. Read `docs/REVIEW_ALERTS.md` for operational details.
+
+For an authorized normal lead-gen wave, use `review-alerts schedule --start
+ISO_DATETIME --limit 20 --dry-run`, then repeat without `--dry-run`. Start must be
+in the future today (Pacific date). Oldest recent reviews are prioritized, five
+minutes apart, at most 20 firms including already-linked deliveries today. Drafts
+and actions appear in the usual Send Queue / curated batch. This mode uses the
+existing signature and monitored reply-to, omits postal placeholders, and disables
+standalone review auto-send. Keep reply/opt-out, freshness, duplicate and normal
+transport/policy gates; never fill the quota with ineligible reviews.
+
+For recurring operation, `review-alerts config --auto-schedule
+--auto-schedule-time 09:15 --auto-schedule-limit 20` enables one automatic normal
+lead-gen wave per Pacific day. It drafts, approves, policy-checks and schedules;
+the normal Send Queue executes later. Status exposes the last result/error.
+Failures retry after 30 minutes. This keeps `auto_send` false and does not bypass
+any normal lead-gen or review-specific guard.
+
+
+## Job Agent website applications
+
+Website submission has a separate Playwright worker and status from Zoho email.
+After importing/resolving and classifying the exact job, inspect `job-agent show ID`.
+`job-agent browser-start ID --revision PROCESSING_REVISION --authorize-submit`
+requires user authorization for a website application. Monitor `browser-status ID`
+or list `browser-applications`. Respond to its pending question using
+`browser-control ID --action answer --revision BROWSER_REVISION --question-id Q
+--answer-file FILE`; never invent credentials or eligibility. Other actions are
+pause, resume (pre-submit only), verify (read-only), and release (close inactive
+browser). `browser-screenshot ID --output FILE` copies the saved screenshot.
+`submission_uncertain` must never be restarted/resubmitted; `submitted` requires
+saved visible confirmation and does not imply email sent. Login/CAPTCHA can block;
+there is no remote interactive desktop. Full runbook:
+`/home/pranav/possibleos/docs/JOB_BROWSER_APPLICATIONS.md`.
+
+
+Website AI transport: `job-agent browser-provider gateway|openai [--model MODEL]`
+saves defaults. `browser-start` and `browser-control` (resume/answer/verify) accept
+`--provider gateway|openai` for the selected run. Read the latest browser revision
+before controls. Switching provider does not clear uncertain submission or permit
+resubmitting. Direct API uses server OPENAI_API_KEY, never expose its value; the
+model must support Responses structured outputs. This option only changes website
+applications, not search/email/Jev. No implicit fallback. See the website runbook.
+
+### Automatic application resume selection
+`job-agent prepare`, `apply`, and `browser-start` accept unclassified saved jobs. The authorized worker runs Jev for that job, reuses valid selections, and preserves manual categories before continuing. No separate `classify` command is required. Missing PDFs or matching failures stop for review. Opening a modal and searching do not classify jobs.
+
+### Reusable applicant information
+Before asking for an application fact, read `job-agent profile` and use the `possibleos-job-applicant-context` skill. `profile-save --file FILE` adds/edits question/answer/scope records (include id/revision for edits); `profile-remove ID --revision N` stops future reuse; `profile-import-answers` imports older browser answers. Browser answers are remembered automatically; `browser-control --this-application-only` opts out of cross-application reuse. Preserve country, role, compensation units, and current-versus-planned location distinctions. See `/home/pranav/possibleos/docs/JOB_APPLICANT_PROFILE.md`.
+
+Browser clean restart: inspect `job-agent browser-status JOB_ID` for `can_restart` and `restart_blocked_reason`, then use `job-agent browser-control JOB_ID --action restart --revision N` when authorized. This starts a fresh browser with saved answers/resume and preserves prior attempt history. It cannot bypass an uncertain or confirmed submission.
+
+
+Browser sessions live in `possibleos-browser.service`, independent of the backend.
+`job-agent browser-status ID` reports live browser_session_status and availability.
+Use `browser-control ID --action reconnect --revision N` for stopped runs; it
+attaches without navigation or submission. Resume pre-submit work, answer pending
+questions, or verify uncertain submission read-only. Backend restart preserves new
+forms; browser-service restart or host reboot does not. Never restart the browser
+service as worker recovery. Release closes the form; guarded restart is required
+for a fresh attempt. Legacy sessions cannot be adopted. A lost browser never
+authorizes a duplicate submission.
+
+
+Resume selection uses Jev's highest-ranked category with an assigned PDF, even
+when No clear match wins overall. The raw probabilities remain visible; closest
+match does not establish qualifications. Confidence is informational, never a
+selection gate; legacy classification_threshold values are ignored. Explicit
+manual categories remain authoritative. Missing/invalid PDFs or failed model
+requests still require correction. Use the existing classify or browser resume
+commands for an individual job; no bulk reclassification is triggered.
+
+
+### Quit a website application
+
+`job-agent browser-quit-reasons ID` suggests editable reasons using the run's AI
+provider and the job / current question / blocker; it does not save answers or
+quit. Suggestions are possibilities, not established applicant facts. Custom
+reasons and quitting without a reason remain available if inference fails.
+`job-agent browser-control ID --action quit --revision N --reason "Not willing to relocate"`
+stops a waiting/paused/blocked pre-submit run as `cancelled` (UI: Quit by you).
+The modal offers this beside Save answer and continue, then shows suggested
+reasons and an editable optional reason with a confirmation button.
+History, the pending-question snapshot and saved answers remain; the reason is
+not added to the applicant profile. Browser closure is best-effort and can be
+retried with release if unavailable. Worker recovery leaves cancelled runs alone;
+resume/answer do not reactivate them. Explicit guarded restart can begin a fresh
+attempt. Active runs must pause first; possible/confirmed submissions cannot be
+relabelled cancelled. This is local cancellation, not employer-side withdrawal,
+and it does not cancel an independent email application or change job review.

@@ -1225,7 +1225,7 @@ async def compose_lead_email(
         composer_experiment_key = EXPERIMENT_KEY
         composer_variant_key = selected_variant.key
         skill_sha256 = selected_variant.skill_sha256
-    selected_model = model or os.getenv("LEAD_EMAIL_COMPOSER_MODEL", "openclaw/proxy")
+    selected_model = model or os.getenv("LEAD_EMAIL_COMPOSER_MODEL", "openclaw/neo")
     trace_context = {
         "firm_name": firm_name,
         "contact_id": contact.id,
@@ -1278,6 +1278,7 @@ async def compose_lead_email(
             required_fields=["subject", "body", "angle", "cta", "reasoning", "requires_human_review"],
             model=selected_model,
             max_tokens=int(os.getenv("LEAD_EMAIL_COMPOSER_MAX_TOKENS", "1800")),
+            allow_tools=False,
         )
     except LLMGatewayError as e:
         await safe_record_product_trace(

@@ -1,0 +1,80 @@
+{
+  "date": "2026-09-21",
+  "timezone": "America/Los_Angeles",
+  "campaign_id": "cmp_bSw-erHSlCCbV7x4",
+  "batch_id": "e92f8a3d72a84a83b968d5e4afee744c",
+  "transport_strategy": "resend_first_then_zoho",
+  "status": "scheduled",
+  "scheduled_count": 4,
+  "sent_count": 0,
+  "cancelled_replacement_batch_id": "4a5d3229f4f647a09df1fb7c036ff7af",
+  "cancelled_actions": [
+    "action_075567c007e74e189003f73c",
+    "action_535bfca5772648ca9ad8b4ea",
+    "action_9012d31396bf4b35b3019089",
+    "action_314fdfe482a44b8b80e0f6b0"
+  ],
+  "recipients": [
+    {
+      "firm": "Anil Date MD",
+      "recipient": "anildate25@gmail.com",
+      "contact_id": "98f231b1e5c142da9c77c7bfb3fa139c",
+      "item_id": "b6362ff29d654599aff0989c4fec9f70",
+      "action_id": "action_f102af5c765540d3ad42629b",
+      "scheduled_pdt": "2026-09-21 09:30",
+      "scheduled_utc": "2026-09-21T16:30:00Z",
+      "subject": "Precise Imaging - AI agents for referral coordination",
+      "draft_file": "anil_date.txt",
+      "body_sha256": "43a9a1239627457ba62a075dae20b3b386edcef4808ac788fc70ce64ae5318f0"
+    },
+    {
+      "firm": "ProCare Funding",
+      "recipient": "veronicdan@procarefunding.com",
+      "contact_id": "fc_0716ee9413114ee6b4a9d9da",
+      "item_id": "2819045ebb854f7c9e24af063c72501f",
+      "action_id": "action_392c5a84e138410aae5ad615",
+      "scheduled_pdt": "2026-09-21 09:45",
+      "scheduled_utc": "2026-09-21T16:45:00Z",
+      "subject": "Precise Imaging - AI agents for lien coordination",
+      "draft_file": "procare_veronica.txt",
+      "body_sha256": "a5c8b6b409d41f2febcdde731b96bcf2b5b714d70931237d8f569a30ae2c1df4"
+    },
+    {
+      "firm": "Power Liens",
+      "recipient": "emil@powerliens.com",
+      "contact_id": "fc_fa5abd09bd334aafaa183dcc",
+      "item_id": "9a150a14eb214c379db28fe5fd7e8c3b",
+      "action_id": "action_78fc382cc0a24d72a42bc7f4",
+      "scheduled_pdt": "2026-09-21 10:00",
+      "scheduled_utc": "2026-09-21T17:00:00Z",
+      "subject": "Precise Imaging - AI agents for provider coordination",
+      "draft_file": "powerliens_emil.txt",
+      "body_sha256": "d63dee19b35411ed811ff09c5bc1b410a3b0f80ac1f984e1be7a665e6a43577c"
+    },
+    {
+      "firm": "11 MED",
+      "recipient": "jackie@11med.com",
+      "contact_id": "fc_05f99d19bb204cc49fa88e9b",
+      "item_id": "1c738aea51eb411fb0fe145bd21b2ecf",
+      "action_id": "action_16eef621b6b1426eae2fbe72",
+      "scheduled_pdt": "2026-09-21 10:15",
+      "scheduled_utc": "2026-09-21T17:15:00Z",
+      "subject": "Precise Imaging - AI agents for funding operations",
+      "draft_file": "11med_jackie.txt",
+      "body_sha256": "43b16c163aeeaf22fb28cbc25636446ad4bf3aa6649206778dd57fac0f6693db"
+    }
+  ],
+  "policy": {
+    "allowed": 4,
+    "checked_actions": 4,
+    "transport_available": "zoho_api 0/0 configured=True; resend 0/50 configured=True",
+    "scheduler_running": true,
+    "scheduler_last_error": null,
+    "pending_count": 5,
+    "due_count": 0
+  },
+  "tracking": {
+    "recipient_specific_links": 0,
+    "reason": "No campaign URL was included in the email copy; the campaign groups the wave only."
+  }
+}

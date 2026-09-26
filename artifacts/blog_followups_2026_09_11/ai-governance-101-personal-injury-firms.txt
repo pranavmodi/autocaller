@@ -1,0 +1,186 @@
+AI may already be inside your firm, even if nobody has formally adopted it. A lawyer asks a public chatbot to clean up an email. A paralegal tries a meeting transcription tool. An intake specialist pastes a difficult message into an assistant and asks for a calmer reply.
+A blanket ban rarely tells people what to do instead. Buying an enterprise plan does not settle every information question either. The owner needs a usable lane for experimentation and a firm boundary around client information, legal judgment, and actions that affect a case.
+To build that lane, I searched 795 transcribed episodes in the Possible Minds podcast corpus. The search produced 115 episodes with governance-related signals. I then reviewed the episodes most directly concerned with law-firm information, confidentiality, privilege, data quality, permissions, vendor terms, human review, and AI adoption. The principles below are the recurring lessons, adapted for a solo or small PI firm.
+Governance is control over information and decisions
+The word
+governance
+can sound like work reserved for a national firm. At a five-person PI practice, it is much more concrete:
+01
+Tools
+Which exact AI products and accounts may the team use?
+02
+Information
+What may be entered, uploaded, recorded, or retrieved?
+03
+Access
+Which matters, folders, inboxes, and systems may each tool reach?
+04
+Actions
+May it draft, send, update, file, accept, reject, or only recommend?
+05
+Responsibility
+Who checks the output, approves the action, and handles a failure?
+The
+NIST AI Risk Management Framework
+uses four functions: govern, map, measure, and manage. The useful lesson for a small firm is that governance is continuous. The firm identifies the use, tests the risk, manages it, and revisits the decision as the system changes.
+Do not collapse four information questions into one
+Podcast discussions often use
+secure
+,
+private
+,
+confidential
+,
+privileged
+, and
+HIPAA compliant
+as though they mean the same thing. They do not.
+Question
+What the owner is really asking
+Confidentiality
+May the firm disclose or expose this information while still meeting its professional duties?
+Privilege
+Could this communication be protected from compelled disclosure, or has a third party changed that analysis?
+Privacy and security
+How is the information collected, used, retained, accessed, transferred, deleted, and protected?
+HIPAA
+Are the firm and vendor covered entities or business associates for this activity, and what does that role require?
+The
+ABA's Formal Opinion 512
+directs lawyers using generative AI to consider competence, confidentiality, client communication, supervision, candor, meritorious claims, and reasonable fees. State guidance may add detail. California maintains
+practical AI ethics resources
+, while
+Florida Opinion 24-1
+specifically discusses retention, data sharing, self-learning, oversight, and chatbot disclosures.
+A paid subscription, an enterprise label, encryption, or a business associate agreement can be relevant. None answers every question by itself. HHS explains that HIPAA applies to
+covered entities and business associates as defined by the rule
+, not automatically to every organization handling medical information.
+Seven controls a small firm actually needs
+The transcripts repeatedly return to the same foundation: know what you have, know who can reach it, keep the use case narrow, and preserve human accountability.
+01
+Inventory
+List the AI products, accounts, browser extensions, meeting tools, and connected agents people actually use.
+02
+Classify
+Decide which kinds of information can enter each workflow and which must stay out.
+03
+Approve
+Approve the exact product, plan, account, and use case. A familiar vendor name is not enough.
+04
+Limit
+Give every person and agent the least access needed for the assigned task.
+05
+Verify
+Match human review to the harm an incorrect output or action could cause.
+06
+Record
+Keep enough history to reconstruct the source, output, reviewer, approval, and material action.
+07
+Revisit
+Review tools, permissions, incidents, and vendor terms as products and firm workflows change.
+These controls can live in one spreadsheet, one short policy, and one recurring calendar review. What matters is that they describe reality. An approved-tools list that omits the extensions and transcription apps people use every day is paperwork, not governance.
+Give the team a simple information traffic light
+A solo or small firm needs rules people can remember during a busy day. This traffic light is a starting example, not a legal conclusion for every jurisdiction or matter.
+Green
+Public or synthetic
+General brainstorming, public-law summaries, blank templates, and made-up test matters in an approved tool.
+Yellow
+Internal or minimized
+Firm procedures, de-identified examples, and low-consequence drafts using an approved account and defined review.
+Red
+Client or consequential
+Identifiable client facts, medical records, settlement positions, credentials, filings, legal advice, or actions in a live system. Use only inside a specifically approved workflow with appropriate safeguards and qualified review.
+Start experimentation in the green lane. The firm can learn how models behave without exposing client information. Move a use case into yellow or red only after the product, information, permissions, and review path have been examined together.
+Scale human review to the consequence
+“A human is in the loop” is too vague. A rushed click on an approval button is not meaningful supervision. The reviewer needs the source, enough context to detect an error, and authority to stop the action.
+Low consequence
+A generic agenda or internal formatting task
+Sample review and easy correction may be enough.
+Moderate consequence
+A medical-record chronology or routine client-update draft
+A trained person compares material claims with the source before use.
+High consequence
+Case acceptance, legal advice, a demand, filing, settlement communication, or deadline
+A qualified lawyer or designated professional verifies the substance and approves the action.
+The
+Law of Code discussion on how lawyers use AI
+calls the danger “cognitive surrender”: polished output makes it tempting to stop thinking. Governance should make verification easier by preserving citations, source passages, changes, and uncertainty, not merely by adding an approval box.
+Review the workflow and the vendor together
+A provider can have strong security and still be wrong for a particular use. Before client information or live-system access is involved, ask:
+Which exact product, plan, and features are covered by the contract?
+Is firm data used for training, evaluation, or product improvement?
+What is retained, for how long, and how is deletion verified?
+Which employees, subprocessors, and regions may handle the data?
+Can access be limited by user, matter, folder, field, and action?
+Are prompts, outputs, system actions, edits, and approvals logged?
+How quickly must the vendor report an incident or legal demand?
+Can the firm export its data, configuration, and history in usable form?
+What happens to connected access and stored data when the contract ends?
+Will the vendor document claims the firm is expected to rely on?
+The episodes also warn against long contracts and data lock-in while products are changing quickly. Firm information should remain portable, and critical workflows should have a fallback when a model, integration, or vendor is unavailable. This is the practical side of
+AI vendor-risk governance
+.
+Begin with a one-page AI policy
+The first policy does not need to predict every future model. It should answer the questions that arise today:
+Approved tools
+Name the exact products, plans, accounts, and owners.
+Allowed information
+Define green, yellow, and red information for each use.
+Allowed work
+State what the tool may prepare and what it may never decide or send.
+Required review
+Name the reviewer for moderate- and high-consequence work.
+Incident path
+Tell staff whom to contact after a mistaken upload, output, or action.
+Review date
+Revisit the policy and tool inventory on a fixed schedule.
+Pair the policy with an approved alternative. If staff are told not to paste client material into a public chatbot, give them a safe way to complete the legitimate task they were trying to solve.
+How a small PI firm can begin this week
+01
+Name an owner
+One lawyer or senior operator owns the inventory, approvals, and incident path.
+02
+Ask without blame
+Find out which AI tools and extensions the team already uses and for what work.
+03
+Pause the riskiest use
+Stop unapproved client-data uploads and autonomous high-consequence actions while they are reviewed.
+04
+Open a safe lane
+Approve one green use case with synthetic or public information so the team can learn.
+05
+Choose one real workflow
+Map its information, permissions, review, logs, and vendor terms before a controlled pilot.
+Intake can be a useful first workflow because it is frequent and measurable, but the boundary matters. AI can acknowledge an inquiry, collect approved information, structure the record, and flag urgency. A person should own empathy, sensitive questions, case evaluation, and the relationship. The operating design is explained in our guide to
+human-led AI intake
+.
+Good governance does not slow useful AI down. It gives the firm enough control to keep using it when the first difficult case, staff mistake, vendor change, or bad output arrives.
+Research basis
+The article synthesizes recurring principles from the most relevant transcripts in the Mission Control corpus, including:
+Stop Automating Broken Processes
+Law Firm Owners: Is Your Team Putting Client Data at Risk With AI?
+AI & Legal Privilege
+How Lawyers Are Using AI in 2026
+The Legal Industry Has a Data Problem AI Can't Fix
+From Information Governance to Governed Intelligence for Trustworthy AI
+Tony Forde on AI Governance, Dark Data, and ROT Disposal
+AI Governance and Defensible Disposal
+The Tech Stack That Was Costing TORKLAW Cases
+How AI Helps Law Firms Handle More Cases
+Is AI Intake Ready for Personal Injury Lawyers?
+This article provides an operating framework, not legal advice. A firm should apply the professional-conduct rules, court requirements, privacy laws, client commitments, and contractual duties relevant to its jurisdiction and work.
+Frequently asked questions
+What is AI governance for a small personal injury law firm?
+AI governance is the set of practical rules and controls that determines which AI tools the firm may use, what information they may receive, what they may do, who reviews their work, and how the firm monitors problems. It should be proportionate to the firm's size and the risk of each use case.
+Can a PI firm put client information into ChatGPT or Claude?
+The answer depends on the exact product and account, its contract and data practices, the information involved, client expectations, applicable professional duties, and the firm's safeguards. A paid account alone does not answer those questions. The firm should approve specific products and workflows before confidential information is entered.
+Does an enterprise AI plan make a law firm compliant?
+No. Enterprise terms and controls may help, but governance also requires appropriate permissions, information classification, human review, training, logging, incident handling, and compliance with the firm's jurisdiction-specific obligations.
+Does every PI firm need a HIPAA business associate agreement?
+No. HIPAA applies to covered entities and business associates as defined by the rule. Whether a PI firm or vendor needs a business associate agreement depends on the parties' roles and the work being performed. Firms should not use a BAA as a substitute for determining whether HIPAA applies or for reviewing broader confidentiality and privacy duties.
+Who should own AI governance in a solo or small PI firm?
+One named lawyer or senior operator should own the inventory, approvals, policy, vendor review, and incident path. Technical and ethics advisers can help, but responsibility should not disappear between the firm, its IT provider, and its software vendors.
+Govern one workflow
+Build the safe lane before scaling AI.
+Possible Minds helps PI firms map the information, permissions, review rules, and vendor risks around a real workflow, then test a narrow system under those controls.
+Request an AI governance diagnostic

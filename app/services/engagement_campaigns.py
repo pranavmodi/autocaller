@@ -4,12 +4,14 @@ from __future__ import annotations
 import os
 import re
 import secrets
+import uuid
+from email.headerregistry import Address
 from collections import defaultdict
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-from sqlalchemy import desc, func, or_, select
+from sqlalchemy import desc, func, or_, select, text
 
 from app.db import AsyncSessionLocal
 from app.db.models import (
@@ -202,12 +204,50 @@ async def get_campaign(campaign_id: str) -> EngagementCampaignRow:
     return row
 
 
+async def _tracking_recipient(session, *, name: str, email: str, firm_id: str):
+    name, email, firm_id = name.strip(), email.strip().lower(), firm_id.strip()
+    if not name or len(name) > 255 or len(email) > 320 or len(firm_id) > 64:
+        raise EngagementCampaignError("recipient_name_required_or_invalid")
+    if email:
+        try:
+            address = Address(addr_spec=email)
+            if not address.username or not address.domain:
+                raise ValueError("incomplete email")
+        except (ValueError, IndexError) as exc:
+            raise EngagementCampaignError("recipient_email_invalid") from exc
+    if firm_id and await session.get(PifFirmRow, firm_id) is None:
+        raise EngagementCampaignError("recipient_firm_not_found")
+    if email:
+        # Serialize inline creation by email without changing existing contacts.
+        await session.execute(text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"),
+                              {"key": "campaign-recipient:" + email})
+        matches = list((await session.execute(select(FirmContactRow).where(
+            func.lower(FirmContactRow.email) == email,
+        ).limit(2))).scalars().all())
+        if len(matches) > 1:
+            raise EngagementCampaignError("multiple_contacts_match_email_select_existing")
+        if matches:
+            if firm_id and matches[0].pif_id != firm_id:
+                raise EngagementCampaignError("recipient_firm_mismatch_select_existing")
+            return matches[0]
+    contact = FirmContactRow(
+        id=uuid.uuid4().hex, pif_id=firm_id, full_name=name,
+        first_name=name.split()[0], email=email or None, source="campaign_manual",
+    )
+    session.add(contact)
+    await session.flush()
+    return contact
+
+
 async def create_tracking_link(
     *,
     campaign_id: str,
     channel: str,
     destination_url: str = "",
     contact_id: str = "",
+    recipient_name: str = "",
+    recipient_email: str = "",
+    recipient_firm_id: str = "",
     label: str = "",
     advisor_briefing: str = "",
     mark_sent: bool = False,
@@ -216,6 +256,9 @@ async def create_tracking_link(
     if clean_channel not in CHANNELS:
         raise EngagementCampaignError("unsupported_channel")
     clean_contact_id = _clean(contact_id, 64) or None
+    inline_recipient = bool(recipient_name.strip() or recipient_email.strip() or recipient_firm_id.strip())
+    if inline_recipient and (clean_contact_id or clean_channel == "public"):
+        raise EngagementCampaignError("choose_existing_contact_or_new_recipient")
     async with AsyncSessionLocal() as session:
         campaign = await session.get(EngagementCampaignRow, campaign_id)
         if campaign is None:
@@ -224,6 +267,11 @@ async def create_tracking_link(
         contact = await session.get(FirmContactRow, clean_contact_id) if clean_contact_id else None
         if clean_contact_id and contact is None:
             raise EngagementCampaignError("contact_not_found")
+        if inline_recipient:
+            contact = await _tracking_recipient(
+                session, name=recipient_name, email=recipient_email, firm_id=recipient_firm_id,
+            )
+            clean_contact_id = contact.id
         for _ in range(8):
             code = _new_code()
             if await session.get(EngagementCampaignLinkRow, code) is None:
@@ -234,7 +282,7 @@ async def create_tracking_link(
             code=code,
             campaign_id=campaign.id,
             contact_id=clean_contact_id,
-            pif_id=contact.pif_id if contact else None,
+            pif_id=(contact.pif_id or None) if contact else None,
             channel=clean_channel,
             label=_clean(label, 255) or None,
             destination_url=clean_destination,

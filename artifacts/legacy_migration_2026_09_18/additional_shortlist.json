@@ -1,0 +1,287 @@
+{
+  "checked_at": "2026-09-18T09:41:51.219Z",
+  "scope": "Additional migration outreach candidates; read-only research; no drafts/actions/links created.",
+  "strongest_additions": [
+    {
+      "name": "Norman Gregory Fernandez",
+      "title": "Founder",
+      "email": "norman@ngflaw.com",
+      "firm": "Law Offices of Norman Gregory Fernandez",
+      "vendor": "MyCase",
+      "evidence_grade": "A",
+      "role_source": "https://thepersonalinjury.com/attorney-profiles/norman-gregory-fernandez/",
+      "email_source": "https://apps.calbar.ca.gov/attorney/Licensee/Detail/189402",
+      "vendor_source": "https://thepersonalinjury.com/client-area/",
+      "artifact": "Firm-owned client area links the-law-offices-of-norman-gregory-fernandez.mycase.com; page describes secure case-management system.",
+      "note": "Eligible new-contact candidate. Do not describe him as AI-unready; already publishes AI-enabled accident app."
+    },
+    {
+      "name": "Michael H. Chen",
+      "title": "Owner",
+      "email": "mchen@chenlg.com",
+      "firm": "Chen Law Group, A.P.C.",
+      "vendor": "Tabs3 / PracticeMaster",
+      "evidence_grade": "B",
+      "role_source": "https://www.quo.com/product/call-management",
+      "email_source": "Possible OS fc_de8b675136bc4fe2b374ff44, exact name and firm domain",
+      "vendor_source": "https://www.tabs3.com/tabs3-cloud/practice-master/",
+      "note": "Vendor testimonial names Michael Chen and Chen Law Group; current deployment not independently proven. Conditional migration wording."
+    }
+  ],
+  "conditional": [
+    {
+      "name": "Randolph Roger Ramirez",
+      "email": "rrr@4lawrrr.com",
+      "firm": "Randolph Ramirez Law Corporation",
+      "source": "https://www.4lawrrr.com/service-page/legal-consultation",
+      "note": "Recipient and mailbox clear. Lawcus evidenced as scheduling only, not primary case management. General platform/migration inquiry possible; do not claim proven legacy CMS."
+    }
+  ],
+  "held": [
+    {
+      "name": "Arash Ardalan",
+      "email": "arash@firststeplegal.com",
+      "reason": "Attorney identity corroborated, but leadership role not yet verified; CRM says case manager."
+    },
+    {
+      "name": "Avetis Kazaryan",
+      "email": "avo@kntrialattorneys.com",
+      "reason": "No reliable leadership evidence."
+    },
+    {
+      "name": "Brendan Delaney",
+      "email": "brendan@delaneylawllc.com",
+      "reason": "Prior eligible history from earlier audit, RFC ancestry unrecovered."
+    },
+    {
+      "name": "Trevor Quirk",
+      "email": "trevor@quirklawyers.com",
+      "reason": "Prior eligible history from earlier audit, RFC ancestry unrecovered."
+    }
+  ],
+  "db_preflight": [
+    {
+      "email": "arash@firststeplegal.com",
+      "pif_id": "aa7a1c70-e0e1-41e9-9823-0d2c6d4dab64",
+      "personal_touches": 0,
+      "firm_latest": null,
+      "inbound": 0,
+      "holds": 0,
+      "pending": 0
+    },
+    {
+      "email": "mchen@chenlg.com",
+      "pif_id": "f4e407d4-466e-47ea-8739-0be8ba3faa33",
+      "personal_touches": 0,
+      "firm_latest": null,
+      "inbound": 0,
+      "holds": 0,
+      "pending": 0
+    },
+    {
+      "email": "rrr@4lawrrr.com",
+      "pif_id": "e48f0e0b-0dc1-4edc-bfa1-22c7c8a32063",
+      "personal_touches": 0,
+      "firm_latest": null,
+      "inbound": 0,
+      "holds": 0,
+      "pending": 0
+    },
+    {
+      "email": "avo@kntrialattorneys.com",
+      "pif_id": "e081e358-f013-4572-bead-d95ad3a13a68",
+      "personal_touches": 0,
+      "firm_latest": null,
+      "inbound": 0,
+      "holds": 0,
+      "pending": 0
+    },
+    {
+      "email": "norman@ngflaw.com",
+      "pif_id": "7cfe7b59-a4b5-4d25-a37f-ac390c8cd9e5",
+      "personal_touches": 0,
+      "firm_latest": null,
+      "inbound": 0,
+      "holds": 0,
+      "pending": 0
+    }
+  ],
+  "mailbox": {
+    "checked_at": "2026-09-18T09:40:29.544055+00:00",
+    "coverage": [
+      {
+        "folder": "\"INBOX\"",
+        "since": "2026-05-01",
+        "messages": 254
+      },
+      {
+        "folder": "\"Drafts\"",
+        "since": "2026-05-01",
+        "messages": 9
+      },
+      {
+        "folder": "\"Templates\"",
+        "since": "2026-05-01",
+        "messages": 0
+      },
+      {
+        "folder": "\"Snoozed\"",
+        "since": "2026-05-01",
+        "messages": 0
+      },
+      {
+        "folder": "\"Sent\"",
+        "since": "2026-05-01",
+        "messages": 565
+      },
+      {
+        "folder": "\"Spam\"",
+        "since": "2026-05-01",
+        "messages": 1
+      },
+      {
+        "folder": "\"Trash\"",
+        "since": "2026-05-01",
+        "messages": 0
+      },
+      {
+        "folder": "\"Notification\"",
+        "since": "2026-05-01",
+        "messages": 27
+      },
+      {
+        "folder": "\"Newsletter\"",
+        "since": "2026-05-01",
+        "messages": 67
+      },
+      {
+        "folder": "\"Archive\"",
+        "since": "2026-05-01",
+        "messages": 0
+      }
+    ],
+    "errors": [],
+    "matches": {
+      "arash@firststeplegal.com": [],
+      "mchen@chenlg.com": [],
+      "rrr@4lawrrr.com": [],
+      "avo@kntrialattorneys.com": [],
+      "norman@ngflaw.com": []
+    }
+  },
+  "software_records": [
+    {
+      "id": "aa7a1c70-e0e1-41e9-9823-0d2c6d4dab64",
+      "firm_name": "First Step Legal, APLC",
+      "vendor_stack": {
+        "other": {
+          "actionstep": {
+            "known": false,
+            "source": "website",
+            "vendor": "actionstep",
+            "confidence": "high"
+          }
+        },
+        "evidence": [
+          {
+            "signal": "website",
+            "confidence": 0.9
+          }
+        ],
+        "case_mgmt": "actionstep"
+      }
+    },
+    {
+      "id": "f4e407d4-466e-47ea-8739-0be8ba3faa33",
+      "firm_name": "Chen Law Group, A.P.C.",
+      "vendor_stack": {
+        "other": {
+          "tabs3": {
+            "known": false,
+            "source": "partner_page",
+            "vendor": "tabs3",
+            "confidence": "high"
+          }
+        },
+        "evidence": [
+          {
+            "signal": "partner_page",
+            "confidence": 0.9
+          }
+        ],
+        "case_mgmt": "tabs3"
+      }
+    },
+    {
+      "id": "e48f0e0b-0dc1-4edc-bfa1-22c7c8a32063",
+      "firm_name": "Law Offices | Randolph Roger Ramirez | A Professional Corporation",
+      "vendor_stack": {
+        "other": {
+          "scheduling": "Lawcus",
+          "website_platform": "Wix"
+        },
+        "evidence": [
+          {
+            "source": "official_website",
+            "vendor": "Wix",
+            "confidence": 0.99,
+            "source_url": "https://www.4lawrrr.com/about"
+          },
+          {
+            "source": "official_scheduling_link",
+            "vendor": "Lawcus",
+            "confidence": 0.95,
+            "source_url": "https://4lawrrr.lawcus.com/"
+          }
+        ],
+        "case_mgmt": null
+      }
+    },
+    {
+      "id": "e081e358-f013-4572-bead-d95ad3a13a68",
+      "firm_name": "KN Law Firm, APLC",
+      "vendor_stack": {
+        "other": {
+          "analytics": "Google Analytics",
+          "client_portal": "Unidentified secure online portal",
+          "web_design_seo": "SB Coding"
+        },
+        "evidence": [
+          {
+            "signal": "message email domain:mailsync.practicepanther.com",
+            "confidence": 0.9
+          },
+          {
+            "source": "privacy_policy",
+            "vendor": "Google Analytics",
+            "confidence": 0.9,
+            "source_url": "https://kntrialattorneys.com/privacy-policy/"
+          },
+          {
+            "source": "website_footer",
+            "vendor": "SB Coding",
+            "confidence": 0.95,
+            "source_url": "https://kntrialattorneys.com/attorney-advertising/"
+          }
+        ],
+        "case_mgmt": "practicepanther"
+      }
+    },
+    {
+      "id": "7cfe7b59-a4b5-4d25-a37f-ac390c8cd9e5",
+      "firm_name": "Law Office of Norman Gregory Fernandez",
+      "vendor_stack": {
+        "other": {},
+        "evidence": [
+          {
+            "signal": "website",
+            "confidence": 0.9
+          }
+        ],
+        "case_mgmt": "mycase"
+      }
+    }
+  ],
+  "existing_scheduled": 11,
+  "mutations_performed": false
+}

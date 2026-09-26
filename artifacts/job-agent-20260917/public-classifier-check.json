@@ -1,0 +1,26 @@
+{
+  "sample": "public role description supplied by user plus a generic receptionist comparison",
+  "decisions": [
+    {
+      "candidate_id": "agent_sample",
+      "category_id": "ai_automation",
+      "confidence": 0.99,
+      "reason": "Primary responsibilities involve managing AI agents, identifying automation opportunities, integrating tools, and measuring agent performance.",
+      "tags": [
+        "ai_tech",
+        "automation",
+        "integrations"
+      ]
+    },
+    {
+      "candidate_id": "admin_sample",
+      "category_id": null,
+      "confidence": 0.99,
+      "reason": "The role is primarily legal reception and clerical administration; CRM and office software use do not fit the configured technical categories.",
+      "tags": [
+        "legal",
+        "clerical"
+      ]
+    }
+  ]
+}

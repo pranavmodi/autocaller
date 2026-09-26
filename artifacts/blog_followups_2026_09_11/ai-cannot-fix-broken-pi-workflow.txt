@@ -1,0 +1,86 @@
+A new lead enters through one system. An intake specialist copies it into another. Someone sends a message so the attorney notices it. Management updates a spreadsheet. When the case signs, part of the same information is entered again.
+From a distance, the firm has a four-step process. In practice, it may have twelve steps, several unofficial workarounds, and no single reliable record of what happened.
+That is the operating problem beneath many AI projects. In a recent
+Personal Injury Mastermind conversation
+,
+Yuval Goren, founder and CEO of Kobargo Technology Partners
+, put it plainly: “Great technology is not going to fix a bad process.”
+His point is not that PI firms should wait. It is that the fastest route to useful AI begins with the unglamorous work of seeing the firm clearly.
+Why good tools disappoint
+Firm leaders often begin with a product: an AI receptionist, a drafting assistant, a case-management feature, or an agent that promises to connect everything. The product looks capable in a demo. Adoption then stalls, outputs need constant repair, or staff quietly return to the old workaround.
+The missing layer is usually operational. The firm has not agreed on the required fields, who owns the next action, how exceptions should be handled, which system is authoritative, or how success will be measured. AI cannot infer those decisions reliably from a collection of habits.
+In that environment, automation preserves the ambiguity. A missed handoff happens sooner. Incomplete data travels farther. A poor follow-up sequence runs more consistently. The firm gets more activity without gaining more control.
+Intake is the clearest test
+Intake is attractive because speed matters and the value is visible. It is also where an automation-first mindset can do damage. The person contacting the firm may be injured, frightened, comparing lawyers, or unsure whether anyone is listening.
+Goren draws a useful boundary. AI is well suited to collecting information, acknowledging an inquiry, supporting after-hours coverage, and pursuing leads the team has not reached. People remain better suited to creating the relationship that earns trust, referrals, and reviews.
+AI can prepare
+A person should own
+Immediate acknowledgment and basic fact collection
+Empathy and the first substantive conversation
+A structured lead record and transcript
+Case evaluation and acceptance
+Approved follow-up across channels
+Sensitive questions and unusual facts
+Priority flags and routing
+The decision to call, refer, decline, or escalate
+The right design is not AI instead of intake staff. It is
+AI-assisted, human-led intake
+: the system shortens the delay and prepares the context so the right person can respond well.
+Watch the work before automating it
+An SOP may describe the intended process. It rarely captures the actual one. Watch a real inquiry move through the firm, including the spreadsheet added for reporting, the message sent as insurance, and the second phone number that breaks attribution.
+01
+Trigger
+What event starts the work, and through which channel?
+02
+Inputs
+What information is required, and where does it come from?
+03
+Handoffs
+Who receives the work, and how do they know it is theirs?
+04
+Exceptions
+Which facts require a different route or immediate attention?
+05
+Output
+What must exist when the workflow is complete?
+06
+Measure
+What result should improve: response time, contact rate, accuracy, or staff time?
+This map gives the firm something a vendor demo cannot: a specification for its own work. It becomes the basis for testing an off-the-shelf product, configuring an integration, or building a
+bespoke agent for the last mile
+.
+Prepare the data and security boundary
+A workflow cannot be reliable when the information it needs is scattered across inboxes, local drives, case-management records, cloud folders, and private spreadsheets. Before connecting AI, the firm must decide which source is authoritative, who may access it, what should be retained, and what can be archived or removed.
+An enterprise AI account is not a complete governance program. Review the actual product terms, retention, training use, permissions, logging, connected systems, incident responsibilities, and any privacy or professional obligations that apply to the firm and the data.
+Use the least access the workflow needs. Redact identifying information when it is unnecessary. Keep sending, filing, case acceptance, legal advice, and other consequential actions behind human approval. Verify AI-assisted work against its source before it leaves the firm.
+Clear safeguards can also support trust. A firm should be able to explain, in ordinary client language, how it uses technology and protects information. That is more meaningful than placing an AI badge on the website. It is part of
+vendor risk and AI governance
+.
+Make adoption part of the design
+A technically sound workflow has no value if the team avoids it. Staff may hear “automation” as a judgment on their work or a warning about their jobs. Silence from leadership leaves people to invent their own explanation.
+Tell the team what the system will handle, what remains theirs, how mistakes will be reported, and how the recovered time will be used. Involve the people who perform the workflow; they know the exceptions a demo will miss.
+Start in shadow mode. Let the system prepare work without sending messages or changing the authoritative record. Compare its output with the team's output, record corrections, and expand only when ordinary and difficult cases both hold up. That is how
+AI change management
+becomes concrete rather than ceremonial.
+Buy for the workflow, not the demo
+Goren describes firms signing long contracts after a polished demonstration without running a meaningful trial. The questions that matter appear after the presentation: Does the product connect to the firm's systems? Can the firm retrieve its data? Is there a usable API? How are exceptions surfaced? What can a reviewer inspect? What happens when the process changes?
+Test the product with representative firm scenarios.
+Include emotionally difficult and incomplete intakes.
+Confirm integrations and data-export paths in writing.
+Review permissions, retention, logging, and contract terms.
+Define the human approval points before launch.
+Measure the workflow outcome, not AI activity.
+The firms that benefit from AI will not be the ones that bought the most tools. They will be the ones that understood their work well enough to give technology a clear job.
+Frequently asked questions
+Why does AI fail in a personal injury law firm?
+AI often disappoints when the underlying workflow is undocumented, inconsistent, fragmented across systems, or dependent on one person's memory. The technology then reproduces those problems faster instead of resolving them.
+Is intake a good first AI workflow for a PI firm?
+Yes, when the scope is narrow. AI can acknowledge an inquiry, collect approved facts, organize the lead, and support after-hours follow-up. A person should still build trust, handle sensitive conversations, and make case-acceptance decisions.
+What should a PI firm document before automating a workflow?
+Document the trigger, required information, systems involved, handoffs, expected output, exceptions, escalation rules, responsible reviewer, and success measure. Test the map against ordinary and difficult examples before building.
+How should a PI firm evaluate an AI vendor?
+Evaluate the vendor against the real workflow. Check integrations, API access, permissions, retention, security terms, exportability, exception handling, human review, contract length, and how the firm will verify results.
+Start with the work
+Map one workflow before buying another tool.
+Possible Minds helps PI firms observe a workflow, remove the broken handoffs, define the human boundary, and build a narrow AI system around what remains.
+Request a workflow diagnostic

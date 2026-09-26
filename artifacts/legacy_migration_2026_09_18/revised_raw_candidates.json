@@ -1,0 +1,619 @@
+[
+  {
+    "pif_id": "42376c5f-3e94-4c26-a3b5-f802e6a22bbc",
+    "firm_name": "Attorney Services",
+    "website": "pisanchynlawfirm.com",
+    "vendors": [
+      "needle"
+    ],
+    "contacts": null
+  },
+  {
+    "pif_id": "8524971b-6d5b-44bf-bdd6-cbba57ee0677",
+    "firm_name": "BLOCK LLP",
+    "website": "blockllp.com",
+    "vendors": [
+      "smokeball"
+    ],
+    "contacts": null
+  },
+  {
+    "pif_id": "0eaa168c-4f87-418d-a3c3-bd1a898fb483",
+    "firm_name": "Castillo & Montes",
+    "website": "castillolaw.us",
+    "vendors": [
+      "a-1 law",
+      "a_1_law"
+    ],
+    "contacts": null
+  },
+  {
+    "pif_id": "a12cd93c-7900-4ff0-bef9-641affce211a",
+    "firm_name": "Chain Cohn Clark",
+    "website": "chainlaw.com",
+    "vendors": [
+      "smokeball"
+    ],
+    "contacts": null
+  },
+  {
+    "pif_id": "f4e407d4-466e-47ea-8739-0be8ba3faa33",
+    "firm_name": "Chen Law Group, A.P.C.",
+    "website": "chenlg.com",
+    "vendors": [
+      "tabs3"
+    ],
+    "contacts": null
+  },
+  {
+    "pif_id": "065ec091-1c29-4d80-ae55-dc51a179bc94",
+    "firm_name": "Delaney Law",
+    "website": "delaneylawllc.com",
+    "vendors": [
+      "smokeball"
+    ],
+    "contacts": [
+      {
+        "id": "96cf1b40c26a41c19977a4e3c628149e",
+        "name": "Brendan M. Delaney",
+        "email": "brendan@delaneylawllc.com",
+        "title": "Owner / Principal Attorney, Delaney Law Firm LLC",
+        "research_title": null
+      }
+    ]
+  },
+  {
+    "pif_id": "15d674b0-c22b-4a1a-a18c-35c5eda34cd4",
+    "firm_name": "Dunnion Law",
+    "website": "dunnion.com",
+    "vendors": [
+      "smartadvocate"
+    ],
+    "contacts": [
+      {
+        "id": "7b425d2fdc9c4b61993e1b43787d7529",
+        "name": "Tom Dunnion",
+        "email": "imjurylaw@dunnion.com",
+        "title": "Firm Founder",
+        "research_title": null
+      }
+    ]
+  },
+  {
+    "pif_id": "20c5f306-cfd9-438c-ae17-ec85014c41c0",
+    "firm_name": "Eric Blank Law",
+    "website": "ericblanklaw.com",
+    "vendors": [
+      "needles"
+    ],
+    "contacts": null
+  },
+  {
+    "pif_id": "19bddaeb-7d25-4ff8-b4fc-582402ad38ec",
+    "firm_name": "Farah & Farah",
+    "website": "farahandfarah.com",
+    "vendors": [
+      "smartadvocate"
+    ],
+    "contacts": [
+      {
+        "id": "3a4fd50d0b2645f69c7ee057ffe7a0aa",
+        "name": "Eddie Farah",
+        "email": "efarah@farahandfarah.com",
+        "title": "Founding Partner & Personal Injury Lawyer",
+        "research_title": null
+      }
+    ]
+  },
+  {
+    "pif_id": "e2879f4d-53e2-4358-a35a-d058c2f9298b",
+    "firm_name": "Finch",
+    "website": null,
+    "vendors": [
+      "neos_assembly"
+    ],
+    "contacts": [
+      {
+        "id": "91965918a4454e399cb2b9ab2f5e96a5",
+        "name": "Peter W. Finch",
+        "email": "pf@thefinchfirm.com",
+        "title": "Founder & Managing Attorney",
+        "research_title": null
+      }
+    ]
+  },
+  {
+    "pif_id": "aa7a1c70-e0e1-41e9-9823-0d2c6d4dab64",
+    "firm_name": "First Step Legal, APLC",
+    "website": "firststeplegal.com",
+    "vendors": [
+      "actionstep"
+    ],
+    "contacts": null
+  },
+  {
+    "pif_id": "7cb7df02-e007-434f-baf0-1544beeee996",
+    "firm_name": "Hanning & Sacchetto, LLP",
+    "website": "hanningsacchetto.com",
+    "vendors": [
+      "meruscase"
+    ],
+    "contacts": [
+      {
+        "id": "771cdbd9300e4615971f450cbf59a143",
+        "name": "Nathan A. Hanning, Esq.",
+        "email": "nathan@hanningsacchetto.com",
+        "title": "Co-Founder & Partner",
+        "research_title": null
+      },
+      {
+        "id": "fc_036ba3f64e044748935b6fe6",
+        "name": "michael@hanningsacchetto.com",
+        "email": "michael@hanningsacchetto.com",
+        "title": "Co-Founder & Partner",
+        "research_title": null
+      }
+    ]
+  },
+  {
+    "pif_id": "fbeb9cfa-9e52-48a3-b661-616127884e18",
+    "firm_name": "Hernandez Law",
+    "website": "hernandezlaw.co",
+    "vendors": [
+      "meruscase"
+    ],
+    "contacts": [
+      {
+        "id": "589f0b325194448eb47fe14d996b5ef5",
+        "name": "John Hernandez, Esq.",
+        "email": "info@hernandezlaw.co",
+        "title": "Founder and President",
+        "research_title": null
+      }
+    ]
+  },
+  {
+    "pif_id": "95d509b4-be6d-428b-9bb9-1433f5964cae",
+    "firm_name": "Hernandez Law Offices",
+    "website": "hernandezlawfresno.com",
+    "vendors": [
+      "meruscase"
+    ],
+    "contacts": [
+      {
+        "id": "1910e02653f34ad6934b8ca57c9c2a9d",
+        "name": "Russell Dohan",
+        "email": "rdohan@dohanlaw.com",
+        "title": "Firm Founder",
+        "research_title": null
+      },
+      {
+        "id": "1f827e4a50df41d59185760c2d84ec15",
+        "name": "David O. Hernandez",
+        "email": "david@dohlaw.com",
+        "title": "Owner / Partner",
+        "research_title": null
+      },
+      {
+        "id": "fc_49fcb9b2f1424f7aac1e4c5b",
+        "name": "info@dohlaw.com",
+        "email": "info@dohlaw.com",
+        "title": "Owner / Partner",
+        "research_title": null
+      }
+    ]
+  },
+  {
+    "pif_id": "ea8db863-46fe-490f-b2b7-41852d6280cc",
+    "firm_name": "Hinden & Breslavsky",
+    "website": "hinden.net",
+    "vendors": [
+      "a1law"
+    ],
+    "contacts": [
+      {
+        "id": "3e9e598db1784d278ced2d8d244d2e2e",
+        "name": "Barry Hinden",
+        "email": "barry@hinden.net",
+        "title": "Founding Partner / Managing Partner",
+        "research_title": null
+      }
+    ]
+  },
+  {
+    "pif_id": "e081e358-f013-4572-bead-d95ad3a13a68",
+    "firm_name": "KN Law Firm, APLC",
+    "website": "kntrialattorneys.com",
+    "vendors": [
+      "practicepanther"
+    ],
+    "contacts": null
+  },
+  {
+    "pif_id": "fb08aa8d-cba7-463d-a632-fc29eafac2d6",
+    "firm_name": "Kubota & Craig, PC",
+    "website": "kubotacraig.com",
+    "vendors": [
+      "trialworks"
+    ],
+    "contacts": [
+      {
+        "id": "9985402d70ae4fd3a8e0aab8a7930523",
+        "name": "Yoshiaki C. Kubota",
+        "email": "yckubota@kubotacraig.com",
+        "title": "Co-founder and Partner",
+        "research_title": null
+      },
+      {
+        "id": "442029f1531f474daa189121bb9e05bb",
+        "name": "Cynthia A. Craig",
+        "email": "ccraig@kubotacraig.com",
+        "title": "Co-founder and Partner",
+        "research_title": null
+      }
+    ]
+  },
+  {
+    "pif_id": "601d1563-64e7-45ad-ba49-65246fa3080f",
+    "firm_name": "Lagstein Law Firm, P.C.",
+    "website": "losangeles-personalinjuryattorney.com",
+    "vendors": [
+      "smokeball"
+    ],
+    "contacts": null
+  },
+  {
+    "pif_id": "9485b28e-f601-42ff-9c1e-c806b49c11ff",
+    "firm_name": "Laskin Balma",
+    "website": "laskinlaw.com",
+    "vendors": [
+      "smokeball"
+    ],
+    "contacts": null
+  },
+  {
+    "pif_id": "7cfe7b59-a4b5-4d25-a37f-ac390c8cd9e5",
+    "firm_name": "Law Office of Norman Gregory Fernandez",
+    "website": "thepersonalinjury.com",
+    "vendors": [
+      "mycase"
+    ],
+    "contacts": [
+      {
+        "id": "365f3d1e28a44db5a86c6d7138197a7d",
+        "name": "Norman Gregory Fernandez, Esq.",
+        "email": "eserve@ng§aw.com",
+        "title": "Founder, The Law Offices of Norman Gregory Fernandez & Associates",
+        "research_title": null
+      }
+    ]
+  },
+  {
+    "pif_id": "97bd9910-e546-4d59-8273-5c93621ba40e",
+    "firm_name": "Law Offices of Felicia M. Katsarov",
+    "website": "felicia.legal",
+    "vendors": [
+      "mycase"
+    ],
+    "contacts": null
+  },
+  {
+    "pif_id": "337a8ad2-3f94-4e3c-9e07-f9f83825e29e",
+    "firm_name": "Law Offices of Joshua Cohen Slatkin, Inc.",
+    "website": "thejcslawfirm.com",
+    "vendors": [
+      "law ruler"
+    ],
+    "contacts": null
+  },
+  {
+    "pif_id": "0ec79aca-4cb5-4566-8cbc-7778de431e65",
+    "firm_name": "Law Offices of Lee & Associates",
+    "website": "lawyerlee.com",
+    "vendors": [
+      "smokeball"
+    ],
+    "contacts": null
+  },
+  {
+    "pif_id": "8e98e41e-120d-4252-96f5-1f80c9bbf4c8",
+    "firm_name": "Law Offices of Steers & Associates",
+    "website": "steerslawfirm.com",
+    "vendors": [
+      "smokeball"
+    ],
+    "contacts": [
+      {
+        "id": "fc_8049c743c75442f58a8a4dab",
+        "name": "elena@steerslawfirm.com",
+        "email": "elena@steerslawfirm.com",
+        "title": "Founding Partner",
+        "research_title": null
+      }
+    ]
+  },
+  {
+    "pif_id": "e48f0e0b-0dc1-4edc-bfa1-22c7c8a32063",
+    "firm_name": "Law Offices | Randolph Roger Ramirez | A Professional Corporation",
+    "website": "4lawrrr.com",
+    "vendors": [
+      "lawcus"
+    ],
+    "contacts": null
+  },
+  {
+    "pif_id": "acc0dc95-8725-48ed-b948-0f2d9c7e814e",
+    "firm_name": "Lawyer Lee",
+    "website": null,
+    "vendors": [
+      "smokeball"
+    ],
+    "contacts": null
+  },
+  {
+    "pif_id": "dafc3200-9a40-473f-bf04-210bab30eab8",
+    "firm_name": "Manoukian Law Firm, P.C.",
+    "website": "manoukianlaw.com",
+    "vendors": [
+      "smokeball"
+    ],
+    "contacts": null
+  },
+  {
+    "pif_id": "499e61cb-ddcb-4193-b60f-2f0565b8a57f",
+    "firm_name": "Matrix Document Imaging",
+    "website": "legal-records.us",
+    "vendors": [
+      "ikase"
+    ],
+    "contacts": null
+  },
+  {
+    "pif_id": "3ef738bf-5e9a-43ee-9aca-6272e7743abb",
+    "firm_name": "Mesriani Law Group",
+    "website": "mesrianilaw.com",
+    "vendors": [
+      "meruscase"
+    ],
+    "contacts": [
+      {
+        "id": "fc_26ff01e6b9e842259d492271",
+        "name": "Rodney M.",
+        "email": "rodney@mesriani.com",
+        "title": "Principal Partner (Founder, Managing Partner)",
+        "research_title": null
+      }
+    ]
+  },
+  {
+    "pif_id": "bccfcbec-0281-434c-a761-288d75b52501",
+    "firm_name": "Michael Sarkisyan Law",
+    "website": "michaelsarkisyanlaw.com",
+    "vendors": [
+      "mycase"
+    ],
+    "contacts": null
+  },
+  {
+    "pif_id": "37f5d03d-1d36-4d8c-8eda-e9413e9a9c01",
+    "firm_name": "PARRIS",
+    "website": "parris.com",
+    "vendors": [
+      "prolaw"
+    ],
+    "contacts": [
+      {
+        "id": "f63a46e757874f1b89d2c43922357684",
+        "name": "R. Rex Parris",
+        "email": "rrex@parris.com",
+        "title": "Founder; Managing Partner",
+        "research_title": null
+      }
+    ]
+  },
+  {
+    "pif_id": "033a4337-0366-4b68-88c2-eddfd36ee140",
+    "firm_name": "Primo Law, P.C.",
+    "website": "primolaw.com",
+    "vendors": [
+      "pclaw"
+    ],
+    "contacts": [
+      {
+        "id": "71db496079404b05ae458ac66f794859",
+        "name": "Kevin Pouldar",
+        "email": "info@primolaw.com",
+        "title": "Founder & Principal Attorney",
+        "research_title": null
+      }
+    ]
+  },
+  {
+    "pif_id": "207f726c-b6d6-4a25-ba57-f01843608c72",
+    "firm_name": "Quirk Law Firm, LLP",
+    "website": "quirklawyers.com",
+    "vendors": [
+      "mycase"
+    ],
+    "contacts": [
+      {
+        "id": "97eb86b3f8c64025b25d029741f06697",
+        "name": "Trevor Michael Quirk",
+        "email": "trevor@quirklawyers.com",
+        "title": "Founder / Owner; Attorney",
+        "research_title": null
+      }
+    ]
+  },
+  {
+    "pif_id": "a53e65d6-c430-4229-ba05-452ad389fed8",
+    "firm_name": "RHA Personal Injury Law",
+    "website": "rhapilaw.com",
+    "vendors": [
+      "mycase"
+    ],
+    "contacts": [
+      {
+        "id": "aa3a964d68ac45a3958f83b0751e0ee6",
+        "name": "Robert Hindin",
+        "email": "info@rhapilaw.com",
+        "title": "Founder and Senior Personal Injury Attorney",
+        "research_title": null
+      },
+      {
+        "id": "1d9a99b370fc4436ae77c27c5e767f14",
+        "name": "Robert Hindin",
+        "email": "robert@roberthindinlaw.com",
+        "title": "Founder, Robert Hindin & Associates (RHA) / Personal Injury Attorney",
+        "research_title": null
+      }
+    ]
+  },
+  {
+    "pif_id": "3fadd790-0202-4b8b-b341-617de90313d1",
+    "firm_name": "RS LAW OFFICES, PC",
+    "website": "rslawoffices.com",
+    "vendors": [
+      "prolaw"
+    ],
+    "contacts": [
+      {
+        "id": "1bcdfd09de56419d9e7b651fb857b60f",
+        "name": "Rafael Shpelfogel",
+        "email": "rafael@rslawoffices.com",
+        "title": "Founder & Lead Attorney",
+        "research_title": null
+      }
+    ]
+  },
+  {
+    "pif_id": "961af1c4-fd75-40f7-a566-3baa864c43f7",
+    "firm_name": "Redkey Gordon Law",
+    "website": "redkeygordonlaw.com",
+    "vendors": [
+      "smokeball"
+    ],
+    "contacts": [
+      {
+        "id": "fc_303e26e6a3c34e4d8faa9003",
+        "name": "jude@redkeygordonlaw.com",
+        "email": "jude@redkeygordonlaw.com",
+        "title": "Founding Partner",
+        "research_title": null
+      },
+      {
+        "id": "fc_5743c51f6f464a2ea7af7b28",
+        "name": "robert@RedkeyGordonLaw.com",
+        "email": "robert@redkeygordonlaw.com",
+        "title": "Founding Partner",
+        "research_title": null
+      }
+    ]
+  },
+  {
+    "pif_id": "21fd9efe-3d07-4fd6-b508-cce2737204bd",
+    "firm_name": "Shushanyan Law Firm",
+    "website": "shushanyanlaw.com",
+    "vendors": [
+      "meruscase"
+    ],
+    "contacts": [
+      {
+        "id": "706116bd88ef45faa702265d93ec9c60",
+        "name": "Arthur Shushanyan",
+        "email": "info@shushanyanlaw.com",
+        "title": "Founder & Principal Attorney",
+        "research_title": null
+      }
+    ]
+  },
+  {
+    "pif_id": "818007a0-67d4-4028-a17d-81a5d70e54d2",
+    "firm_name": "Smokeball",
+    "website": "leearterlaw.com",
+    "vendors": [
+      "smokeball"
+    ],
+    "contacts": null
+  },
+  {
+    "pif_id": "3ba229d8-8dfc-47ff-a586-acb1c487ad3b",
+    "firm_name": "The Choyce Law Firm",
+    "website": "choycelawfirm.com",
+    "vendors": [
+      "mycase"
+    ],
+    "contacts": [
+      {
+        "id": "fc_4693f9ed78344bdbbce64b32",
+        "name": "Dionne",
+        "email": "dchoyce@choycelawfirm.com",
+        "title": "Founder & Trial Attorney (Personal Injury & Criminal Defense)",
+        "research_title": null
+      }
+    ]
+  },
+  {
+    "pif_id": "03f6eb4b-55e4-49e1-a8fb-a32235317a86",
+    "firm_name": "The Friel Law Firm",
+    "website": "friellaw.com",
+    "vendors": [
+      "abacus"
+    ],
+    "contacts": null
+  },
+  {
+    "pif_id": "084a3465-27cd-4a05-803e-a01b9e4f7f77",
+    "firm_name": "Tristan Rivera Law",
+    "website": "tristanriveralaw.com",
+    "vendors": [
+      "smokeball"
+    ],
+    "contacts": [
+      {
+        "id": "1eb72c9d954d4daa90ddf18f3c7e2a31",
+        "name": "Tristan F. Rivera",
+        "email": "info@tristanriveralaw.com",
+        "title": "Founder; Managing Partner",
+        "research_title": null
+      }
+    ]
+  },
+  {
+    "pif_id": "f360c761-12d6-446f-a5fb-9bfa6c561c4e",
+    "firm_name": "Ventura Law, A Professional Legal Corporation",
+    "website": "venturalegal.net",
+    "vendors": [
+      "needles_needlesbyassemblysoftware",
+      "neos(assemblysoftware)",
+      "neos_assemblysoftware"
+    ],
+    "contacts": null
+  },
+  {
+    "pif_id": "5dc60d29-6918-4c3d-8736-6e1f35fc558c",
+    "firm_name": "Vetchtein Law, APC",
+    "website": "vetchteinlaw.com",
+    "vendors": [
+      "merus"
+    ],
+    "contacts": null
+  },
+  {
+    "pif_id": "e6c80251-9db3-4e43-946d-d0633f34cfe9",
+    "firm_name": "Walter Clark Legal Group",
+    "website": "walterclark.com",
+    "vendors": [
+      "smartadvocate"
+    ],
+    "contacts": [
+      {
+        "id": "fea3b202b4264f79a380fefcc27fe847",
+        "name": "Walter T. Clark",
+        "email": "wclark@walterclark.com",
+        "title": "Founder & CEO / President (CEO noted on Our Team page)",
+        "research_title": null
+      }
+    ]
+  }
+]

@@ -1,0 +1,183 @@
+{
+  "date": "2026-09-18",
+  "campaign_id": "cmp_ki-WF9eCn7bGJ01C",
+  "batch_id": "6de389e0a5fe4f5794991acc1391bd38",
+  "recipients": [
+    {
+      "id": "fc_de8b675136bc4fe2b374ff44",
+      "full_name": "Michael H. Chen",
+      "email": "mchen@chenlg.com",
+      "title": null,
+      "pif_id": "f4e407d4-466e-47ea-8739-0be8ba3faa33",
+      "firm": "Chen Law Group, A.P.C.",
+      "website": "chenlg.com",
+      "item_id": "cc673d48455c4c419c65226a3ec64f0e",
+      "link": {
+        "code": "S7TGwIYR6g",
+        "campaign_id": "cmp_ki-WF9eCn7bGJ01C",
+        "contact_id": "fc_de8b675136bc4fe2b374ff44",
+        "pif_id": "f4e407d4-466e-47ea-8739-0be8ba3faa33",
+        "channel": "email",
+        "label": "Additional migration contacts - 2026-09-18",
+        "destination_url": "https://getpossibleminds.com/services/case-management-migration",
+        "advisor_briefing": null,
+        "tracking_url": "https://getpossibleminds.com/t/S7TGwIYR6g",
+        "sent_at": null,
+        "created_at": "2026-09-18T09:45:27.932875+00:00"
+      },
+      "subject": "Considering Clio or Filevine?",
+      "action_type": "first_touch",
+      "time": "2026-09-18T10:50:00-07:00",
+      "file": "artifacts/legacy_migration_2026_09_18/additional3/draft_1.txt",
+      "body": "Hi Michael,\n\nYou've built a PI practice where your team handles both litigation and clients' medical coordination. As the owner, you'd want a software change to make those handoffs easier, without disrupting active cases.\n\nI'm Pranav, founder of Possible Minds, previously at McKinsey and Expedia. We built Precise Imaging's email-handling system, which processes over 600 emails daily, routes requests and sends automated status responses.\n\nIf you're weighing a move from PracticeMaster to Clio or Filevine, we can help migrate your records, documents and workflows, with careful mapping and validation so they're better connected for AI and automation.\n\nHere's how we approach migration:\nhttps://getpossibleminds.com/t/S7TGwIYR6g\n\nWould a brief outline of what a move could involve be useful? I'd appreciate your thoughts.\n\nBest,\nPranav\nFounder, Possible Minds"
+    },
+    {
+      "id": "fc_141017da9ce44072ae0ae848",
+      "full_name": "Randolph Ramirez, Esq.",
+      "email": "rrr@4lawrrr.com",
+      "title": null,
+      "pif_id": "e48f0e0b-0dc1-4edc-bfa1-22c7c8a32063",
+      "firm": "Law Offices | Randolph Roger Ramirez | A Professional Corporation",
+      "website": "4lawrrr.com",
+      "item_id": "ce637abbf602498ba4f6a640600c2ebe",
+      "link": {
+        "code": "CJU48_ppEQ",
+        "campaign_id": "cmp_ki-WF9eCn7bGJ01C",
+        "contact_id": "fc_141017da9ce44072ae0ae848",
+        "pif_id": "e48f0e0b-0dc1-4edc-bfa1-22c7c8a32063",
+        "channel": "email",
+        "label": "Additional migration contacts - 2026-09-18",
+        "destination_url": "https://getpossibleminds.com/services/case-management-migration",
+        "advisor_briefing": null,
+        "tracking_url": "https://getpossibleminds.com/t/CJU48_ppEQ",
+        "sent_at": null,
+        "created_at": "2026-09-18T09:45:31.767418+00:00"
+      },
+      "subject": "Considering Clio or Filevine?",
+      "action_type": "first_touch",
+      "time": "2026-09-18T11:00:00-07:00",
+      "file": "artifacts/legacy_migration_2026_09_18/additional3/draft_2.txt",
+      "body": "Hi Randolph,\n\nYou emphasize preparing every case for trial. If you ever change case-management systems, preserving the documents, deadlines and case history your team relies on would be essential.\n\nI'm Pranav, founder of Possible Minds, previously at McKinsey and Expedia. We built Precise Imaging's email-handling system, which processes over 600 emails daily, routes requests and sends automated status responses.\n\nIf a move to Clio or Filevine is on the table, we can help migrate your records, documents and workflows, with careful mapping and validation so they're better connected for AI and automation.\n\nHere's how we approach migration:\nhttps://getpossibleminds.com/t/CJU48_ppEQ\n\nWould a brief outline of what a move could involve be useful? I'd appreciate your thoughts.\n\nBest,\nPranav\nFounder, Possible Minds"
+    },
+    {
+      "id": "fc_9b79863ed34e4d1fa3759096",
+      "full_name": "Norman Gregory Fernandez",
+      "email": "norman@ngflaw.com",
+      "title": null,
+      "pif_id": "7cfe7b59-a4b5-4d25-a37f-ac390c8cd9e5",
+      "firm": "Law Office of Norman Gregory Fernandez",
+      "website": "thepersonalinjury.com",
+      "item_id": "c4c175e770574dcda31ca2d59f7e2d9a",
+      "link": {
+        "code": "FsGe0I39Tw",
+        "campaign_id": "cmp_ki-WF9eCn7bGJ01C",
+        "contact_id": "fc_9b79863ed34e4d1fa3759096",
+        "pif_id": "7cfe7b59-a4b5-4d25-a37f-ac390c8cd9e5",
+        "channel": "email",
+        "label": "Additional migration contacts - 2026-09-18",
+        "destination_url": "https://getpossibleminds.com/services/case-management-migration",
+        "advisor_briefing": null,
+        "tracking_url": "https://getpossibleminds.com/t/FsGe0I39Tw",
+        "sent_at": null,
+        "created_at": "2026-09-18T09:45:35.634096+00:00"
+      },
+      "subject": "Considering Clio or Filevine?",
+      "action_type": "first_touch",
+      "time": "2026-09-18T11:10:00-07:00",
+      "file": "artifacts/legacy_migration_2026_09_18/additional3/draft_3.txt",
+      "body": "Hi Norman,\n\nYou already give clients access to their documents, messages and calendars through MyCase. Any future move would need to preserve that visibility, not disrupt it.\n\nI'm Pranav, founder of Possible Minds, previously at McKinsey and Expedia. We built Precise Imaging's email-handling system, which processes over 600 emails daily, routes requests and sends automated status responses.\n\nIf you're considering Clio or Filevine, we can help migrate your records, documents and workflows, with careful mapping and validation so they're better connected for AI and automation.\n\nHere's how we approach migration:\nhttps://getpossibleminds.com/t/FsGe0I39Tw\n\nWould a brief outline of what a move could involve be useful? I'd appreciate your thoughts.\n\nBest,\nPranav\nFounder, Possible Minds"
+    }
+  ],
+  "preflight": [
+    {
+      "email": "mchen@chenlg.com",
+      "pif_id": "f4e407d4-466e-47ea-8739-0be8ba3faa33",
+      "personal_touches": 0,
+      "firm_latest": null,
+      "inbound": 0,
+      "holds": 0,
+      "pending": 0
+    },
+    {
+      "email": "rrr@4lawrrr.com",
+      "pif_id": "e48f0e0b-0dc1-4edc-bfa1-22c7c8a32063",
+      "personal_touches": 0,
+      "firm_latest": null,
+      "inbound": 0,
+      "holds": 0,
+      "pending": 0
+    },
+    {
+      "email": "norman@ngflaw.com",
+      "pif_id": "7cfe7b59-a4b5-4d25-a37f-ac390c8cd9e5",
+      "personal_touches": 0,
+      "firm_latest": null,
+      "inbound": 0,
+      "holds": 0,
+      "pending": 0
+    }
+  ],
+  "mailbox": {
+    "checked_at": "2026-09-18T09:40:29.544055+00:00",
+    "coverage": [
+      {
+        "folder": "\"INBOX\"",
+        "since": "2026-05-01",
+        "messages": 254
+      },
+      {
+        "folder": "\"Drafts\"",
+        "since": "2026-05-01",
+        "messages": 9
+      },
+      {
+        "folder": "\"Templates\"",
+        "since": "2026-05-01",
+        "messages": 0
+      },
+      {
+        "folder": "\"Snoozed\"",
+        "since": "2026-05-01",
+        "messages": 0
+      },
+      {
+        "folder": "\"Sent\"",
+        "since": "2026-05-01",
+        "messages": 565
+      },
+      {
+        "folder": "\"Spam\"",
+        "since": "2026-05-01",
+        "messages": 1
+      },
+      {
+        "folder": "\"Trash\"",
+        "since": "2026-05-01",
+        "messages": 0
+      },
+      {
+        "folder": "\"Notification\"",
+        "since": "2026-05-01",
+        "messages": 27
+      },
+      {
+        "folder": "\"Newsletter\"",
+        "since": "2026-05-01",
+        "messages": 67
+      },
+      {
+        "folder": "\"Archive\"",
+        "since": "2026-05-01",
+        "messages": 0
+      }
+    ],
+    "errors": [],
+    "matches": {
+      "arash@firststeplegal.com": [],
+      "mchen@chenlg.com": [],
+      "rrr@4lawrrr.com": [],
+      "avo@kntrialattorneys.com": [],
+      "norman@ngflaw.com": []
+    }
+  }
+}

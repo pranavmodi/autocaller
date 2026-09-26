@@ -1,0 +1,305 @@
+{
+  "checked_at": "2026-09-17T09:40:03.232446+00:00",
+  "coverage": [
+    {
+      "folder": "\"INBOX\"",
+      "since": "2026-05-01",
+      "messages": 246
+    },
+    {
+      "folder": "\"Drafts\"",
+      "since": "2026-05-01",
+      "messages": 9
+    },
+    {
+      "folder": "\"Templates\"",
+      "since": "2026-05-01",
+      "messages": 0
+    },
+    {
+      "folder": "\"Snoozed\"",
+      "since": "2026-05-01",
+      "messages": 0
+    },
+    {
+      "folder": "\"Sent\"",
+      "since": "2026-05-01",
+      "messages": 562
+    },
+    {
+      "folder": "\"Spam\"",
+      "since": "2026-05-01",
+      "messages": 1
+    },
+    {
+      "folder": "\"Trash\"",
+      "since": "2026-05-01",
+      "messages": 0
+    },
+    {
+      "folder": "\"Notification\"",
+      "since": "2026-05-01",
+      "messages": 27
+    },
+    {
+      "folder": "\"Newsletter\"",
+      "since": "2026-05-01",
+      "messages": 63
+    },
+    {
+      "folder": "\"Archive\"",
+      "since": "2026-05-01",
+      "messages": 0
+    }
+  ],
+  "errors": [],
+  "matches": {
+    "lillian@sedlawgroup.com": [],
+    "ethan@esqlegalgroup.com": [],
+    "estelaricheda@earthlink.net": [],
+    "daniel.kim@dklaw.com": [],
+    "aslan.petrosyan@petrosyanlawpc.com": [],
+    "ajordan@josejordan.com": [],
+    "dchoyce@choycelawfirm.com": [],
+    "svaziri@vazirilaw.com": [],
+    "rogerb@bonakdarlawfirm.com": [
+      {
+        "folder": "\"Sent\"",
+        "uid": "717",
+        "from": "pranav@possiblemindshq.com",
+        "to": "rogerb@bonakdarlawfirm.com",
+        "subject": "precise imaging and ai readiness",
+        "date": "Fri, 26 Jun 2026 21:46:45 +0530",
+        "message_id": "<19f04b82758.1e3748a252715.5961745942063573649@possiblemindshq.com>",
+        "in_reply_to": "",
+        "references": "",
+        "body_excerpt": "",
+        "bounce": false
+      }
+    ],
+    "daniel@setarehfirm.com": [
+      {
+        "folder": "\"Sent\"",
+        "uid": "673",
+        "from": "pranav@possiblemindshq.com",
+        "to": "daniel@setarehfirm.com",
+        "subject": "ai readiness at Setareh",
+        "date": "Wed, 24 Jun 2026 21:30:28 +0530",
+        "message_id": "<19efa5c8687.21adb19a3376.7569739296861888336@possiblemindshq.com>",
+        "in_reply_to": "",
+        "references": "",
+        "body_excerpt": "",
+        "bounce": false
+      }
+    ],
+    "mike@melawyers.com": [],
+    "ak@arashlaw.com": [],
+    "fernando@vargaslawoffice.com": [],
+    "linda@lawclf.com": [
+      {
+        "folder": "\"Sent\"",
+        "uid": "478",
+        "from": "pranav@possiblemindshq.com",
+        "to": "linda@lawclf.com",
+        "subject": "Question from the team behind Precise Imaging updates",
+        "date": "Mon, 01 Jun 2026 19:49:19 +0530",
+        "message_id": "<19e838da911.851f39c124955.4599615205310072479@possiblemindshq.com>",
+        "in_reply_to": "",
+        "references": "",
+        "body_excerpt": "",
+        "bounce": false
+      }
+    ],
+    "sa@lginjuryattorneys.com": [
+      {
+        "folder": "\"Sent\"",
+        "uid": "519",
+        "from": "pranav@possiblemindshq.com",
+        "to": "sa@lginjuryattorneys.com",
+        "subject": "the system behind Precise Imaging's replies",
+        "date": "Thu, 11 Jun 2026 22:50:04 +0530",
+        "message_id": "<19eb7b2bd7e.5014c78984041.1812288133144102603@possiblemindshq.com>",
+        "in_reply_to": "",
+        "references": "",
+        "body_excerpt": "",
+        "bounce": false
+      }
+    ],
+    "dcarter@carterlawgroup.com": [],
+    "clifton.albright@ayslaw.com": [],
+    "reina@resnikpersonalinjury.com": [],
+    "silvia@silviaereynosolaw.com": [],
+    "richarda@ralawllp.com": [],
+    "parag@lawpla.com": [],
+    "acohen@actslaw.com": [],
+    "abraham@abginlaw.com": [],
+    "kfasoro@fasorolaw.com": [],
+    "robert@robertmontanezlaw.com": [],
+    "elliot@zarabilaw.com": [],
+    "prahgozar@rahgozarlaw.com": [],
+    "st@thetafirm.com": [],
+    "gil@arbelegal.com": [],
+    "jessica@elkingamboa.com": [],
+    "jura@jhartleylawapc.com": [],
+    "edna@ednafelix.law": [],
+    "alla@teninalaw.com": [],
+    "andrew@a2zlegal.com": [],
+    "dgonor@shaffergonorlaw.com": [],
+    "ssoliman@thesolimanfirm.com": [],
+    "pedram@pedramlaw.com": [],
+    "ara@aranajarian.com": [],
+    "meylin@malfarolaw.com": [],
+    "ab@bekhloyanlaw.com": [],
+    "mrizzo@rizzolawportland.com": [
+      {
+        "folder": "\"Sent\"",
+        "uid": "939",
+        "from": "pranav@possiblemindshq.com",
+        "to": "mrizzo@rizzolawportland.com",
+        "subject": "Precise imaging - quick question",
+        "date": "Thu, 20 Aug 2026 23:50:26 +0530",
+        "message_id": "<1a0206728f6.6503988f20992.448443114834405942@possiblemindshq.com>",
+        "in_reply_to": "",
+        "references": "",
+        "body_excerpt": "",
+        "bounce": false
+      }
+    ],
+    "erick@noviklawgroup.com": [],
+    "mbraun@mbraunlaw.com": [],
+    "jon@theinjurylawfirm.com": [],
+    "daniel@theinjurypartners.com": [],
+    "william@hstonelaw.com": [],
+    "anita@levianlaw.com": [
+      {
+        "folder": "\"Sent\"",
+        "uid": "969",
+        "from": "pranav@possiblemindshq.com",
+        "to": "anita@levianlaw.com",
+        "subject": "Re: Is Lead Docket at Levian Law tying marketing spend to signed cases?",
+        "date": "Tue, 25 Aug 2026 23:25:22 +0530",
+        "message_id": "<1a03a0fffa4.234f48c856163.2096852097442969861@possiblemindshq.com>",
+        "in_reply_to": "<0100019ff89dcefc-66e62110-3456-422f-8fa8-8d0e8e40bd41-000000@email.amazonses.com>",
+        "references": "<0100019ff89dcefc-66e62110-3456-422f-8fa8-8d0e8e40bd41-000000@email.amazonses.com>",
+        "body_excerpt": "",
+        "bounce": false
+      }
+    ],
+    "kevin@colonylaw.com": [
+      {
+        "folder": "\"Sent\"",
+        "uid": "964",
+        "from": "pranav@possiblemindshq.com",
+        "to": "kevin@colonylaw.com",
+        "subject": "Re: Is Lead Docket at Colony Law tying marketing spend to signed cases?",
+        "date": "Tue, 25 Aug 2026 22:45:09 +0530",
+        "message_id": "<1a039eb3021.7589dc9758551.139318666614308748@possiblemindshq.com>",
+        "in_reply_to": "<0100019ff7f48136-7661cb23-2b80-4fe8-aff1-041853b46a7e-000000@email.amazonses.com>",
+        "references": "<0100019ff7f48136-7661cb23-2b80-4fe8-aff1-041853b46a7e-000000@email.amazonses.com>",
+        "body_excerpt": "",
+        "bounce": false
+      }
+    ],
+    "jh@halplaw.com": [
+      {
+        "folder": "\"Sent\"",
+        "uid": "960",
+        "from": "pranav@possiblemindshq.com",
+        "to": "jh@halplaw.com",
+        "subject": "Re: Is Lead Docket at Halpern & Associates tying marketing spend to signed cases?",
+        "date": "Tue, 25 Aug 2026 22:05:28 +0530",
+        "message_id": "<1a039c6daf7.1f308ca517820.4712005396439532448@possiblemindshq.com>",
+        "in_reply_to": "<0100019ff8149c4e-6387a075-2977-4ef5-b40d-a55f0ecb8695-000000@email.amazonses.com>",
+        "references": "<0100019ff8149c4e-6387a075-2977-4ef5-b40d-a55f0ecb8695-000000@email.amazonses.com>",
+        "body_excerpt": "",
+        "bounce": false
+      }
+    ],
+    "peter@hosharianlaw.com": [
+      {
+        "folder": "\"Sent\"",
+        "uid": "959",
+        "from": "pranav@possiblemindshq.com",
+        "to": "peter@hosharianlaw.com",
+        "subject": "Re: Is Lead Docket at Hosharian Law Firm, APLC tying marketing spend to signed cases?",
+        "date": "Tue, 25 Aug 2026 21:55:26 +0530",
+        "message_id": "<1a039bda983.1bef8c8f58123.6653655378556219388@possiblemindshq.com>",
+        "in_reply_to": "<0100019ff8193276-df678bd2-6027-43ec-92a1-fa2f238440f3-000000@email.amazonses.com>",
+        "references": "<0100019ff8193276-df678bd2-6027-43ec-92a1-fa2f238440f3-000000@email.amazonses.com>",
+        "body_excerpt": "",
+        "bounce": false
+      }
+    ],
+    "sam@nordeanlaw.com": [
+      {
+        "folder": "\"Sent\"",
+        "uid": "953",
+        "from": "pranav@possiblemindshq.com",
+        "to": "sam@nordeanlaw.com",
+        "subject": "Re: Is Lead Docket at Nordean Law tying marketing spend to signed cases?",
+        "date": "Mon, 24 Aug 2026 22:45:26 +0530",
+        "message_id": "<1a034c51546.6bbfbf7533447.5756684261650822950@possiblemindshq.com>",
+        "in_reply_to": "<0100019ff82b8848-21899c85-c3b4-45ff-a97d-e118f4a36ce5-000000@email.amazonses.com>",
+        "references": "<0100019ff82b8848-21899c85-c3b4-45ff-a97d-e118f4a36ce5-000000@email.amazonses.com>",
+        "body_excerpt": "",
+        "bounce": false
+      }
+    ],
+    "victor@alglegal.com": [
+      {
+        "folder": "\"Sent\"",
+        "uid": "952",
+        "from": "pranav@possiblemindshq.com",
+        "to": "victor@alglegal.com",
+        "subject": "Re: Is Lead Docket at Alexandroff Law Group tying marketing spend to signed cases?",
+        "date": "Mon, 24 Aug 2026 22:35:23 +0530",
+        "message_id": "<1a034bbe3fa.3ce5a0b732753.964953491444844476@possiblemindshq.com>",
+        "in_reply_to": "<0100019ff86223b9-aa4f9d48-2de7-4432-b1b1-7bc7af4df216-000000@email.amazonses.com>",
+        "references": "<0100019ff86223b9-aa4f9d48-2de7-4432-b1b1-7bc7af4df216-000000@email.amazonses.com>",
+        "body_excerpt": "",
+        "bounce": false
+      }
+    ],
+    "payton@sunsetwestlg.com": [
+      {
+        "folder": "\"Sent\"",
+        "uid": "948",
+        "from": "pranav@possiblemindshq.com",
+        "to": "payton@sunsetwestlg.com",
+        "subject": "Re: Is Lead Docket at Sunset West Legal Group tying marketing spend to signed cases?",
+        "date": "Mon, 24 Aug 2026 21:55:12 +0530",
+        "message_id": "<1a0349719f1.651f773b32162.2221651493875749871@possiblemindshq.com>",
+        "in_reply_to": "<0100019ff846a1df-c730d064-1dc5-4a8f-866c-d2d68700f3b7-000000@email.amazonses.com>",
+        "references": "<0100019ff846a1df-c730d064-1dc5-4a8f-866c-d2d68700f3b7-000000@email.amazonses.com>",
+        "body_excerpt": "",
+        "bounce": false
+      }
+    ],
+    "daniel@downtownlalaw.com": [
+      {
+        "folder": "\"Sent\"",
+        "uid": "946",
+        "from": "pranav@possiblemindshq.com",
+        "to": "daniel@downtownlalaw.com",
+        "subject": "Re: Is Lead Docket at Downtown L.A. Law Group tying marketing spend to signed cases?",
+        "date": "Mon, 24 Aug 2026 21:35:35 +0530",
+        "message_id": "<1a0348521a7.416e536832198.7592508718325013052@possiblemindshq.com>",
+        "in_reply_to": "<0100019ff886e0da-7699204c-30d2-4090-b378-a7752ff18442-000000@email.amazonses.com>",
+        "references": "<0100019ff886e0da-7699204c-30d2-4090-b378-a7752ff18442-000000@email.amazonses.com>",
+        "body_excerpt": "",
+        "bounce": false
+      }
+    ],
+    "rrex@parris.com": [],
+    "amir@protectionlawgroup.com": [],
+    "hpteam@tl4j.com": [],
+    "jake@stipplawfirm.com": [],
+    "allen@westcoasttriallawyers.com": [],
+    "abs@bplaw-inc.com": [],
+    "vinceb@pdslawoffices.com": [],
+    "anesbit@nesbitlawgroup.com": [],
+    "david@nlginc.com": [],
+    "corbin@moorelaws.com": [],
+    "jose@slegal.com": []
+  }
+}

@@ -1,0 +1,132 @@
+{
+  "action": {
+    "id": "action_d82c966cdfde480299cf0ed5",
+    "action_type": "send_approved_lead_gen_draft",
+    "status": "approved",
+    "risk_level": "high",
+    "requested_by": "codex",
+    "approved_by": "codex",
+    "entity_type": "lead_gen_batch_item",
+    "entity_id": "c97a4de0d4184bc894aff5d1104d7891",
+    "input": {
+      "body": "Hi Richard,\n\nWith your work across employment and personal injury, I imagine the useful output is not the same for every matter. The intake example I sent was one option, rather than a workflow every practice should copy.\n\nI'm Pranav, founder of Possible Minds. We help PI firms adopt AI, and I'm trying to understand where it would genuinely help before building around assumptions.\n\nFor your injury cases, would a reliable chronology or a checklist of missing documents be the better starting point? Even a brief answer would help, and I'd appreciate your time.\n\nBest,\nPranav\nFounder, Possible Minds",
+      "subject": "Re: where AI could compound at Rodriguez Apodaca Law Firm LLP",
+      "approval": {
+        "references": "<0100019ffcc39852-b184c0e6-00a8-4a7e-88a4-0fc03a4c93c5-000000@email.amazonses.com>",
+        "approved_at": "2026-09-17T09:52:55.525315+00:00",
+        "approved_by": "codex",
+        "body_sha256": "343cc63a1283f56aea8be0436908e1be2f766bdb032ec8f5bb1cf4e7b06def59",
+        "in_reply_to": "<0100019ffcc39852-b184c0e6-00a8-4a7e-88a4-0fc03a4c93c5-000000@email.amazonses.com>",
+        "subject_sha256": "d799b5f7167eb104a4c980bce7564d792d67cd3d73177fb6418b9278778eb0a5"
+      },
+      "transport": "resend",
+      "references": "<0100019ffcc39852-b184c0e6-00a8-4a7e-88a4-0fc03a4c93c5-000000@email.amazonses.com>",
+      "skill_path": null,
+      "body_sha256": "343cc63a1283f56aea8be0436908e1be2f766bdb032ec8f5bb1cf4e7b06def59",
+      "in_reply_to": "<0100019ffcc39852-b184c0e6-00a8-4a7e-88a4-0fc03a4c93c5-000000@email.amazonses.com>",
+      "skill_sha256": null,
+      "batch_item_id": "c97a4de0d4184bc894aff5d1104d7891",
+      "brief_version": null,
+      "subject_sha256": "d799b5f7167eb104a4c980bce7564d792d67cd3d73177fb6418b9278778eb0a5",
+      "composer_variant_key": null,
+      "lead_gen_action_type": "follow_up",
+      "composer_experiment_key": null
+    },
+    "policy_result": {},
+    "execution_result": {},
+    "error": null,
+    "trace_id": null,
+    "scheduled_for": "2026-09-17T17:50:00+00:00",
+    "started_at": null,
+    "completed_at": null,
+    "created_at": "2026-09-17T09:52:55.531940+00:00",
+    "updated_at": "2026-09-17T09:52:55.531947+00:00"
+  },
+  "created": true,
+  "updated_existing": false,
+  "executed": false,
+  "scheduled_for_pt": "2026-09-17 10:50 PDT",
+  "scheduled_for_utc": "2026-09-17 17:50:00 UTC",
+  "policy": {
+    "allowed": true,
+    "reason": "allowed",
+    "checks": [
+      {
+        "name": "status_allows_execution",
+        "passed": true,
+        "detail": "approved"
+      },
+      {
+        "name": "human_approval_present",
+        "passed": true,
+        "detail": "codex"
+      },
+      {
+        "name": "subject_present",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "body_present",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "subject_hash_matches_approval",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "body_hash_matches_approval",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "in_reply_to_matches_approval",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "references_match_approval",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "lead_gen_transport_available",
+        "passed": true,
+        "detail": "zoho_api 0/0 configured=True; resend 0/50 configured=True"
+      },
+      {
+        "name": "no_patient_data_in_outreach",
+        "passed": true,
+        "detail": "llm_guard_disabled"
+      },
+      {
+        "name": "batch_item_exists",
+        "passed": true,
+        "detail": "c97a4de0d4184bc894aff5d1104d7891"
+      },
+      {
+        "name": "batch_item_not_already_started",
+        "passed": true,
+        "detail": "approved"
+      },
+      {
+        "name": "contact_email_present",
+        "passed": true,
+        "detail": "richarda@ralawllp.com"
+      },
+      {
+        "name": "no_prior_successful_action_for_item",
+        "passed": true,
+        "detail": ""
+      }
+    ],
+    "risk_level": "high",
+    "requires_human_approval": true,
+    "action_type": "send_approved_lead_gen_draft",
+    "contact_email": "richarda@ralawllp.com"
+  },
+  "rank": 12,
+  "email": "richarda@ralawllp.com"
+}

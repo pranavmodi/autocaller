@@ -1,0 +1,136 @@
+Marketing attribution matters because the decisions built on it are expensive. A PI firm may spend heavily on a source that appears to generate cheap leads, then discover that few become wanted or signed cases. Another source may look costly at the top of the funnel while producing the firm's most valuable matters.
+Without attribution, both sources look like marketing questions. They may actually be intake questions, staffing questions, case-selection questions, or data-quality questions.
+The agency sees impressions, calls, and forms. Intake sees conversations and retainers. The case team sees files that survive. Finance sees fees years later. Each group can report its slice accurately while the owner still cannot answer the basic question: what did this source create for the firm?
+Attribution is the connective tissue. It lets a firm allocate budget, diagnose conversion failures, hold vendors and teams to the same definitions, and measure acquisition against case economics.
+In plain English
+PI marketing attribution means preserving evidence from first touch to collected fee. It does not require pretending that one advertisement caused the hire. It should reliably show which sources produce wanted, signed, and kept cases, where good opportunities are lost, and what those cases eventually contribute.
+Attribution tells you what to fix
+Lead volume alone cannot distinguish four very different problems. A source may produce the wrong cases. The firm may respond too slowly. Intake may misclassify wanted matters. Or good signed cases may later fall out of the portfolio.
+Budget
+Which sources deserve more, less, or different spend?
+Intake
+Where do qualified opportunities stop progressing?
+Accountability
+Are marketing and intake using the same definitions?
+Economics
+Which sources produce kept cases and collected fees?
+This is why the right unit is not merely cost per lead. It is the path from source to wanted lead, signed case, kept case, and eventual fee.
+The two-dashboard problem
+A 2026 episode of Lunch Hour Legal Marketing offers a useful warning. In
+A Tale of Two Dashboards
+, Conrad Saam and Gyi Tsakalakis described an $11,500 campaign that generated 64 leads. After reviewing the calls, the agency believed 27 were qualified. The firm said the campaign produced no signed cases.
+The lesson is not that one side was right. The agency measured cost per lead. The owner cared about cost per client. There was no shared signal for what the firm considered wanted, what happened after intake, or how those outcomes returned to the marketing view.
+When those definitions and records are disconnected, good marketing can be cut because intake failed. Weak marketing can survive because it generates activity. And the firm can change agencies without repairing the operating problem that follows it.
+Aim for useful truth, not perfect certainty
+A PI prospect may see a billboard, hear the firm's name from a friend, read reviews, search on Google, visit a location page, and call days later. Assigning all credit to the first or last recorded touch is tidy, but it is not the same as understanding the decision.
+In his episode on
+why law-firm marketing ROI is difficult to track
+, Chris Dreyer recommends combining system evidence with an open-ended intake question: how did you hear about us? The structured trail shows what the system observed. The prospect's answer adds what they remembered. Neither should erase the other.
+Attribution becomes more reliable at volume. One disputed case should not move a budget. Repeated patterns across source evidence, prospect recall, wanted-case rate, signed cases, and fees can.
+01
+Source
+Campaign or referral
+02
+Opportunity
+Call, form, or chat
+03
+Response
+Human contact
+04
+Wanted
+Firm criteria
+05
+Signed
+Retainer
+06
+Kept
+Case retained
+07
+Fee
+Collected value
+One evidence trail from first touch to collected value
+The source should survive a changed phone number
+In a Tip the Scales conversation, Maria Monroy raised a common failure. A prospect may call from an office phone or a relative's device, then give the intake specialist a different number for future contact. If attribution depends on matching one phone field later, the trail breaks.
+Yani Smith
+explained that her team's Lead Docket setup preserves multiple data points: the referral and current URLs, UTM values, the page involved, the number used, and the contact information gathered by intake. The full conversation is available in her
+intake optimization episode
+.
+The operating principle is simple: source evidence belongs to the opportunity, not to one mutable identity field. Update the preferred callback number. Keep the original trail.
+How to use Lead Docket for attribution
+Lead Docket can serve as the intake system of record, but installing it does not make attribution accurate. The configuration and the team's data discipline do that.
+01
+Separate the three source fields
+Marketing Source is how the prospect heard about the firm. Contact Source is how the prospect reached the firm. Opportunity Source is the integration that delivered the inquiry. Preserve all three.
+02
+Send every inquiry into Lead Docket
+Website forms, chat, after-hours services, lead providers, social forms, and phone workflows should create an Opportunity automatically. Manual entry should be the exception, not the normal path.
+03
+Capture the raw source evidence
+Map the current URL, referral URL, landing page, UTM values, campaign identifiers, timestamps, and original phone details into standard or custom fields. Retain the original payload in notes when useful for troubleshooting.
+04
+Create Source Rules
+Use URL fragments and UTM values to assign Marketing Source and Contact Source consistently. Test rule precedence and remember that edited rules apply to future records, not historical ones.
+05
+Update identity without rewriting origin
+When intake learns a better callback number or email address, update the contact record. Do not replace the source evidence that arrived with the original Opportunity.
+06
+Make outcome discipline non-negotiable
+Every inquiry needs a record, an owner, a wanted or unwanted decision, a signed or lost outcome, and a specific reason when it does not progress. Review exceptions instead of allowing records to disappear.
+07
+Close the loop with reports
+Validate Opportunities by source, compare wanted and signed leads, then connect financial outcomes through revenue and fee reports. The result should move from volume to case economics.
+The Lead Docket mechanics behind the setup
+Lead Docket's
+official glossary
+separates Marketing Source, Contact Source, and Opportunity Source. Its integration documentation supports creating Opportunities from sources such as website forms, web chat, answering services, lead providers, and social forms, with incoming values mapped to standard or custom fields.
+For digital attribution, Lead Docket's
+Source Rules
+can assign Marketing Source and Contact Source from matching URLs or UTM values. Test overlapping rules carefully: the documentation says the most recently added matching rule takes precedence, and edits affect future records rather than rewriting historical ones.
+When configuring an external source, enable enough raw detail to audit the mapping. Lead Docket's guide to
+integrating Opportunity sources
+explains how incoming fields can be shown in Opportunity notes and mapped into existing or custom fields. Send a test from every real path, including mobile and after hours, before trusting the reports.
+What the owner should review
+A useful attribution dashboard does not stop at leads, and it does not hide counts behind percentages. Review each source across the same operating and economic measures.
+Opportunity
+How many inquiries arrived, and was the source complete?
+Response
+How quickly did a prepared person make contact?
+Wanted
+How many met the firm's documented criteria?
+Signed
+How many wanted matters completed a retainer?
+Kept
+How many remained viable after early case development?
+Economics
+What fees were collected, and how long did monetization take?
+This is also where the idea of kept-case acquisition cost becomes useful. In a podcast discussion of
+PI firm unit economics
+, Anthony Lopez emphasized that acquisition cost, case fallout, time on desk, and the labor required to resolve a case all affect profitability. A signed case is an important milestone, not the final economic answer.
+Lead Docket provides an
+Agency Report
+with leads, wanted leads, signed leads, and source breakdowns without financial information. Internally, the firm can use documented
+revenue-by-source
+and
+fee reports
+. Those reports become decision-grade only when source, status, and financial data are complete.
+AI should reconcile the evidence, not invent it
+Attribution creates a useful role for AI. An agent can compare source payloads, UTM values, referral URLs, call metadata, contact updates, intake notes, statuses, and downstream outcomes. It can flag missing fields, likely duplicates, conflicting classifications, and records that stopped moving.
+It should not silently guess a source. The system should preserve the supporting evidence, state its confidence, and route uncertain matches for human review. That same boundary applies to the broader
+PI intake operating system
+: AI can detect, structure, route, remind, and measure. People own judgment, case acceptance, and the relationship.
+Start with a discrepancy audit. Compare the last 50 inquiries across the original source evidence, Lead Docket record, signed matter, and available fee data. The repeated gaps will tell you whether the first project is integration, taxonomy, staff workflow, identity matching, or outcome synchronization.
+Questions PI firm owners ask
+What is marketing attribution for a personal injury law firm?
+Marketing attribution is the process of preserving evidence about how an inquiry found and contacted the firm, then connecting that record to qualification, signature, retention, and eventual fee outcomes.
+Can a PI firm achieve perfect marketing attribution?
+Usually not. A prospect may encounter several channels before contacting the firm. The goal is useful attribution: retain first-party source evidence, ask the prospect what they remember, preserve both, and make decisions from patterns rather than false certainty.
+What is the difference between Marketing Source and Contact Source in Lead Docket?
+Marketing Source describes how the prospect heard about the firm. Contact Source describes how the prospect made contact. Opportunity Source identifies the integration that delivered the inquiry. These fields may be different and should not be collapsed into one label.
+What happens when a prospect changes their callback number?
+Update the preferred contact number without overwriting the original opportunity evidence. The source trail should remain attached to the inquiry through URLs, UTM parameters, timestamps, integration details, and original phone data where available.
+Can Lead Docket report revenue by marketing source?
+Yes. Lead Docket documents reports for revenue and fees by Marketing Source and other criteria. Those reports are only as reliable as the source, status, and financial data maintained in the system.
+How can AI improve law firm marketing attribution?
+AI can reconcile identifiers, detect missing source fields, flag conflicting classifications, and connect intake activity to later outcomes. It should preserve evidence and confidence levels rather than inventing a source when the record is incomplete.
+Source note
+This article synthesizes public podcast conversations and Lead Docket's official product documentation. Podcast examples are presented as the speakers' accounts and operating guidance, not universal benchmarks. Lead Docket capabilities and menu paths should be validated against the firm's current account and configuration.

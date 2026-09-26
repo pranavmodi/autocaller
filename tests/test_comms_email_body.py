@@ -53,6 +53,9 @@ async def test_email_item_recovers_full_body_from_product_trace(monkeypatch):
         status="delivered",
         message_type="dynamic_lead_email",
         message_id="provider-message-1",
+        firm_name=None,
+        source_type=None,
+        source_id=None,
     )
     full_body = "x" * 500 + "\n\nComplete CTA and signature"
     trace = SimpleNamespace(

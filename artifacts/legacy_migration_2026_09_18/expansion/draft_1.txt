@@ -1,0 +1,18 @@
+Subject: Considering Clio or Filevine?
+
+Hi Nathan,
+
+As a co-founder, you'd want any software change to make your team's work easier, without disrupting active cases.
+
+I'm Pranav, founder of Possible Minds, previously at McKinsey and Expedia. We built Precise Imaging's email-handling system, which processes over 600 emails daily, routes requests and sends automated status responses.
+
+If you're considering a move from MerusCase, we can help migrate your records, documents and workflows to Clio or Filevine, with careful mapping and validation so they're better connected for AI and automation.
+
+Here's how we approach migration:
+https://getpossibleminds.com/t/9f9tZVCzTA
+
+Would a brief outline of what a move could involve be useful? I'd appreciate your thoughts.
+
+Best,
+Pranav
+Founder, Possible Minds

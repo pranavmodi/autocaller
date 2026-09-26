@@ -15,7 +15,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Literal
 from urllib.parse import urlsplit
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, HttpUrl, model_validator
 from sqlalchemy import DateTime, Integer, String, Boolean, and_, case, cast, delete, func, not_, or_, select, text
 from sqlalchemy.dialects.postgresql import JSONB, insert
 from sqlalchemy.orm import Mapped, mapped_column
@@ -23,11 +23,13 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.db import AsyncSessionLocal, Base, async_engine
 from app.services.career_job_store import PROVIDER, source_identity
 from app.services.job_agent_resumes import ResumeCategory, default_categories, inspect_resume
+from app.services.job_search_sources import DEFAULT_SOURCE_IDS, catalog_payload, source_urls, validate_source_ids
 
 
 ReviewStatus = Literal["new", "shortlisted", "needs_info", "skipped"]
 JobSource = Literal["possibleos", "external_search"]
 LegalDegreeFilter = Literal["exclude", "all", "required"]
+ContractFilter = Literal["all", "contract", "non_contract", "unknown"]
 
 
 def now():
@@ -36,8 +38,11 @@ def now():
 
 class JobAgentConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
+    browser_ai_provider: Literal['gateway', 'openai'] = 'gateway'
+    browser_openai_model: str = Field('gpt-5-mini', min_length=1, max_length=120, pattern=r'^\S+$')
     classification_enabled: bool = False
-    classification_threshold: float = Field(0.8, ge=0, le=1)
+    # Compatibility with saved configurations/older clients; selection has no confidence gate.
+    classification_threshold: float = Field(0.0, ge=0, le=1)
     resume_categories: list[ResumeCategory] = Field(default_factory=default_categories)
     collection_enabled: bool = True
     search: str = Field("", max_length=255)
@@ -47,6 +52,7 @@ class JobAgentConfig(BaseModel):
     preferred_industries: str = Field("Legal technology, personal injury firms, healthcare operations", max_length=2000)
     location_preferences: str = Field("Remote from Bengaluru, India; planning to move to Medellín, Colombia (UTC-5). Verify country-specific eligibility.", max_length=2000)
     prefer_overseas_employers: bool = True
+    search_source_ids: list[str] = Field(default_factory=lambda: list(DEFAULT_SOURCE_IDS), max_length=30)
     application_notes: str = Field("Founder-led, concise applications. Use verified experience. Reuse the best suitable one-page PDF resume. Do not call it 'tailored' in emails.", max_length=4000)
 
 
@@ -54,6 +60,7 @@ class JobAgentConfig(BaseModel):
     def unique_categories(self):
         if len({category.id for category in self.resume_categories}) != len(self.resume_categories):
             raise ValueError("Category identifiers must be unique.")
+        validate_source_ids(self.search_source_ids)
         return self
 
 
@@ -78,6 +85,12 @@ class ListingSelection(BaseModel):
     source_url: str = Field(min_length=1, max_length=2000)
     title: str = Field(min_length=1, max_length=1000)
     location: str | None = Field(None, max_length=1000)
+
+
+class UrlImportRequest(BaseModel):
+    """One public job URL supplied directly by an operator or external agent."""
+    model_config = ConfigDict(extra="forbid")
+    source_url: HttpUrl
 
 
 class JobAgentState(Base):
@@ -171,7 +184,9 @@ async def ensure_tables():
             # Serialize additive initialization across workers too.
             await conn.execute(text("SELECT pg_advisory_xact_lock(734985215)"))
             from app.services.job_agent_processing import JobProcessing
-            for model in (JobAgentState, JobAgentCandidate, JobAgentEvent, JobAgentCollectionRun, JobAgentCollectionItem, JobProcessing):
+            from app.services.job_browser import BrowserRun, BrowserEvent
+            from app.services.job_applicant_profile import ApplicantAnswer
+            for model in (JobAgentState, JobAgentCandidate, JobAgentEvent, JobAgentCollectionRun, JobAgentCollectionItem, JobProcessing, BrowserRun, BrowserEvent, ApplicantAnswer):
                 await conn.run_sync(model.__table__.create, checkfirst=True)
         _ready = True
 
@@ -282,7 +297,15 @@ def search_profile(config: JobAgentConfig) -> dict:
         "preferred_industries": config.preferred_industries,
         "location_preferences": config.location_preferences,
         "prefer_overseas_employers": config.prefer_overseas_employers,
+        "source_ids": config.search_source_ids,
+        "source_urls": source_urls(config.search_source_ids),
     }
+
+
+async def search_sources():
+    settings = await configuration()
+    config = JobAgentConfig.model_validate(settings["config"])
+    return catalog_payload(config.search_source_ids)
 
 
 async def _search_and_import(profile: dict):
@@ -471,7 +494,8 @@ def select_stored_posting(postings, request: ListingSelection):
     raise KeyError("Stored job listing not found")
 
 
-async def open_stored_listing(request: ListingSelection):
+async def open_stored_listing(request: ListingSelection, *,
+                              event_kind: str | None = "listing_opened_from_leads"):
     """Resolve a Leads listing into the canonical Job Agent candidate."""
     from app.db.models import PifFirmRow
     from app.services import job_agent_processing as processing
@@ -500,9 +524,9 @@ async def open_stored_listing(request: ListingSelection):
         if legacy and all(str(legacy.posting.get(k) or "").strip().casefold() ==
                           str(posting.get(k) or "").strip().casefold() for k in ("title", "location")):
             identity = legacy.id
-        if outcome in {"added", "updated"}:
+        if outcome in {"added", "updated"} and event_kind:
             session.add(JobAgentEvent(
-                kind="listing_opened_from_leads",
+                kind=event_kind,
                 message=f"{firm.firm_name}: opened in Job Agent",
                 details={"candidate_id": identity, "firm_id": firm.id,
                          "title": posting.get("title"), "outcome": outcome},
@@ -515,6 +539,114 @@ async def open_stored_listing(request: ListingSelection):
         "categories": settings["config"]["resume_categories"],
         "created": outcome == "added",
     }
+
+
+def _url_import_failure(result: dict) -> str:
+    audit = result.get("result") if isinstance(result.get("result"), dict) else {}
+    rejections = audit.get("candidate_rejections") or []
+    errors = audit.get("errors") or []
+    if rejections:
+        reason = rejections[-1].get("reason") or rejections[-1].get("error")
+        if reason:
+            return str(reason)
+    if errors:
+        reason = errors[-1].get("error")
+        if reason:
+            return str(reason)
+    return "The employer, exact role, or live application status could not be verified."
+
+
+async def _record_url_import_event(kind: str, message: str, **details):
+    """Make every external-agent import attempt visible in Job Agent activity."""
+    await ensure_tables()
+    async with AsyncSessionLocal() as session:
+        session.add(JobAgentEvent(kind=kind, message=message, details=details))
+        await session.commit()
+
+
+async def import_listing_url(request: UrlImportRequest):
+    """Resolve one arbitrary public job URL into the durable Job Agent queue."""
+    from app.services import daily_career_search as career_search
+
+    source_url = str(request.source_url)
+    attempt_id = uuid4().hex
+    await _record_url_import_event(
+        "listing_import_started",
+        "Started verifying a supplied job URL",
+        attempt_id=attempt_id,
+        source_url=source_url,
+    )
+    try:
+        settings = await configuration()
+        profile = search_profile(JobAgentConfig.model_validate(settings["config"]))
+        result = await career_search.import_url(source_url, search_profile=profile)
+    except Exception as exc:
+        await _record_url_import_event(
+            "listing_import_failed",
+            "Job URL import failed before a verified listing was stored",
+            attempt_id=attempt_id,
+            source_url=source_url,
+            reason=str(exc)[:2000] or type(exc).__name__,
+        )
+        raise
+    if result.get("status") == "busy":
+        await _record_url_import_event(
+            "listing_import_busy",
+            "This job URL is already being verified",
+            attempt_id=attempt_id,
+            source_url=source_url,
+        )
+        return result
+    audit = result.get("result") if isinstance(result.get("result"), dict) else {}
+    stored_rows = audit.get("stored") or []
+    decisions = audit.get("decisions") or []
+    if not stored_rows or not decisions:
+        reason = _url_import_failure(result)
+        await _record_url_import_event(
+            "listing_import_stopped",
+            "Job URL import stopped before a verified listing was stored",
+            attempt_id=attempt_id,
+            run_id=result.get("id"),
+            source_url=source_url,
+            status=result.get("status"),
+            reason=reason,
+        )
+        raise ValueError("Job URL import stopped: " + reason)
+    stored = stored_rows[-1]
+    decision = decisions[-1]["decision"]
+    opened = await open_stored_listing(ListingSelection(
+        firm_id=stored["firm_id"],
+        job_id=stored.get("job_id"),
+        source_url=stored.get("source_url") or source_url,
+        title=decision["title"],
+        location=decision.get("location") or None,
+    ), event_kind=None)
+    opened["import"] = {
+        "run_id": result.get("id"),
+        "status": result.get("status"),
+        "source_url": source_url,
+        "verified": audit.get("verified", 0),
+        "new_job": bool(stored.get("added")),
+        "contacts": stored.get("contacts") or {},
+        "message": "Job verified and added to Job Agent. No classification, preparation or email was started.",
+    }
+    firm_name = (
+        opened.get("candidate", {}).get("posting", {}).get("firm_name")
+        or decisions[-1].get("candidate", {}).get("firm_name")
+        or "Employer"
+    )
+    await _record_url_import_event(
+        "listing_imported_from_url",
+        f"{decision['title']} at {firm_name}: verified and added to Job Agent",
+        attempt_id=attempt_id,
+        run_id=result.get("id"),
+        source_url=source_url,
+        candidate_id=opened["candidate"]["id"],
+        firm_id=stored["firm_id"],
+        job_id=stored.get("job_id"),
+        outcome="added" if opened["created"] else "reused",
+    )
+    return opened
 
 
 async def upsert_posting(session, posting):
@@ -530,6 +662,13 @@ async def upsert_posting(session, posting):
     if created:
         return "added"
     row = await session.get(JobAgentCandidate, identity, with_for_update=True)
+    from app.services.job_contract_classification import current_contract_classification
+    if current_contract_classification(row.posting) and not current_contract_classification(posting):
+        posting = {
+            **posting,
+            "contract_status": row.posting.get("contract_status"),
+            "contract_classification": row.posting.get("contract_classification"),
+        }
     if row.posting != posting:
         from app.services.job_agent_processing import JobProcessing, job_key
         if job_key(row.posting) != job_key(posting):
@@ -691,7 +830,8 @@ def legal_degree_required_expression():
 async def candidates(status: ReviewStatus | None = None, search: str = "", page: int = 1,
                      order: JobOrder = "posted_desc", category: str = "",
                      source: JobSource | None = None,
-                     legal_degree: LegalDegreeFilter = "exclude"):
+                     legal_degree: LegalDegreeFilter = "exclude",
+                     contract: ContractFilter = "all"):
     from app.services.job_agent_processing import JobProcessing, attach_details
     await ensure_tables()
     query = select(JobAgentCandidate)
@@ -713,6 +853,12 @@ async def candidates(status: ReviewStatus | None = None, search: str = "", page:
             else_="possibleos",
         )
         query = query.where(derived_source == source)
+    if contract == "unknown":
+        query = query.where(func.coalesce(
+            JobAgentCandidate.posting["contract_status"].astext, "unknown"
+        ) == "unknown")
+    elif contract != "all":
+        query = query.where(JobAgentCandidate.posting["contract_status"].astext == contract)
     if search.strip():
         phrase = f"%{search.strip()}%"
         query = query.where(JobAgentCandidate.posting["firm_name"].astext.ilike(phrase)
@@ -803,6 +949,7 @@ async def overview():
                              ("new_jobs", "verified", "closed", "duplicates_skipped", "errors", "attempt_errors",
                              "verification_rejections", "job_agent_search", "search_trigger", "manual_search",
                              "search_profile", "interrupted_reason",
+                             "search_source_ids", "search_sources_consulted",
                              "contacts_found", "contacts_inserted")}}
                            for r in source["runs"]]}
         source_error = None
@@ -815,4 +962,5 @@ async def overview():
             "mode": "operator_requested_applications", "execution_connected": True,
             "processing_counts": processing_counts,
             "collection": serialize_run(run), "sync_interval_seconds": SYNC_INTERVAL_SECONDS,
-            "source": source, "source_error": source_error}
+            "source": source, "source_error": source_error,
+            "search_sources": catalog_payload(saved_config(state.config).search_source_ids) if state else catalog_payload(JobAgentConfig().search_source_ids)}

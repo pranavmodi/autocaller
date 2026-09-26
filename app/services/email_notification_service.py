@@ -484,6 +484,9 @@ def _send_email(
     references: str | None = None,
     brief_version: int | None = None,
     attachments: list[str] | None = None,
+    source_type: str | None = None,
+    source_id: str | None = None,
+    firm_name: str | None = None,
 ) -> str:
     """Send an email. Prefers the Zoho Mail HTTPS API when configured, then
     SMTP, and only uses Resend when explicitly selected or SMTP/API is
@@ -505,7 +508,11 @@ def _send_email(
     transport = _choose_email_transport(transport)
     if attachments and transport != "zoho_api":
         raise RuntimeError("attachments_require_zoho_api_transport")
+    source_metadata = {"source_type": source_type, "source_id": source_id, "firm_name": firm_name} if source_type else {}
     try:
+        from app.services.review_alerts import outgoing_suppression
+        if outgoing_suppression(recipient, pif_id):
+            raise RuntimeError("Recipient opted out of review alerts; outbound email suppressed")
         if transport == "zoho_api":
             msg_id = _send_via_zoho_api(
                 subject=subject, body=body, from_addr=resolved_from_addr, to=recipient,
@@ -519,6 +526,8 @@ def _send_email(
                     in_reply_to=in_reply_to, references=references,
                 )
             except Exception as e:
+                if source_type == "review_alert":
+                    raise
                 # Only fall back to SMTP if it's actually plausible to
                 # succeed — we know it probably won't if the host is
                 # behind a provider SMTP block. Log and re-raise.
@@ -546,6 +555,7 @@ def _send_email(
             call_id=call_id,
             recipient_name=recipient_name,
             brief_version=brief_version,
+            **source_metadata,
         )
         raise
 
@@ -561,6 +571,7 @@ def _send_email(
         call_id=call_id,
         recipient_name=recipient_name,
         brief_version=brief_version,
+        **source_metadata,
     )
     return msg_id
 

@@ -1,0 +1,149 @@
+A solo PI lawyer can finish a good intake call and still lose the next hour to administration: opening the matter, entering the same facts again, preparing the retainer, generating authorizations, drafting letters, and assigning follow-up.
+That is the part of legal work AI is beginning to change. Not the human conversation. Not case selection. Not the judgment that tells an experienced lawyer which fact feels wrong. The change is in everything required to carry verified information from one step to the next.
+This guide draws on the
+Law of Code episode on how lawyers are using AI in 2026
+. The episode profiles unusually advanced legal teams using agents for drafting, research, email, regulatory monitoring, and contract work. Those examples are the leading edge, not the average firm. The useful question for a small PI owner is what architecture can be borrowed without borrowing the complexity.
+What changed in legal AI
+The first wave of legal AI lived in a chat window. A lawyer pasted text, asked for a summary or draft, and carried the answer into the real workflow by hand. That can save time, but the model remains outside the operating system of the firm.
+More advanced legal teams now work through four levels:
+0
+1
+Ask
+Draft or summarize
+. Each level adds leverage, but also requires better permissions, testing, data controls, and review.
+0
+2
+Ground
+Use firm examples
+. Each level adds leverage, but also requires better permissions, testing, data controls, and review.
+0
+3
+Connect
+Reach approved systems
+. Each level adds leverage, but also requires better permissions, testing, data controls, and review.
+0
+4
+Run
+Complete a governed workflow
+. Each level adds leverage, but also requires better permissions, testing, data controls, and review.
+In the episode, Michael Showalter describes a practice in which Claude works with selected folders, email, a calendar, a browser, and legal-research connectors. Other teams describe agents built around company playbooks, regulatory monitoring, and structured case-law analysis. The common ingredient is not a magical model. It is a defined workflow supported by examples, sources, permissions, and human correction.
+This is the difference between using an AI tool and building an
+AI system around legal work
+.
+Seven useful workflows for a solo or small PI firm
+A small firm does not need the technology stack of a global legal department. It needs relief where information is repeatedly copied, reconstructed, searched, or chased.
+01
+Intake preparation
+Turn a call, form, referral, or chat into a structured lead, identify missing facts, send an acknowledgment, and brief the person who will call the prospect.
+02
+Document assembly
+Prepare retainers, representation letters, authorizations, provider correspondence, and task lists from approved templates and verified matter data.
+03
+Medical-record organization
+Index records, build a draft chronology, surface missing periods, and preserve citations back to the source pages for human verification.
+04
+Client communication
+Draft routine status updates, translate case activity into plain language, and escalate questions involving legal advice, dissatisfaction, or material case decisions.
+05
+Research support
+Frame research questions, search connected authoritative sources, organize potentially relevant decisions, and return citations for a lawyer to inspect.
+06
+Case and deadline monitoring
+Watch approved matter data for missing tasks, stale files, outstanding records, and dates that require staff attention without treating AI as the authoritative calendar.
+07
+Firm operations
+Triage email, prepare internal reports, monitor vendor or regulatory developments, and route work to the right person with a visible audit trail.
+These are not seven projects to begin at once. They are a menu. The right first workflow is the one that happens often, has recognizable inputs and outputs, causes visible delay, and can pause cleanly when the facts do not fit.
+Why intake is often the right first workflow
+Intake sits at the beginning of the revenue path. It is frequent, time-sensitive, and measurable. It also has a natural human boundary: AI can prepare the moment, while a person earns the trust and decides what the firm should do.
+0
+1
+Respond
+Acknowledge the inquiry immediately, including after hours.
+0
+2
+Structure
+Turn the call, form, or chat into a consistent set of facts.
+0
+3
+Clarify
+Identify missing information and ask approved follow-up questions.
+0
+4
+Prepare
+Create the lead record, transcript, summary, and next-step tasks.
+0
+5
+Escalate
+Send serious, competitive, sensitive, or uncertain matters to the right person.
+The workflow should not impersonate a lawyer, make promises, or quietly reject an unusual case. Its job is to prevent delay and prepare a better human response. That is the design behind
+Intake Agent
+and the broader approach to
+AI-assisted, human-led intake
+.
+AI prepares. People decide.
+The danger is not simply that AI can be wrong. It is that the answer can look polished enough to discourage scrutiny. The episode calls this cognitive surrender: accepting fluent output without doing the professional work of understanding and checking it.
+AI can prepare
+A qualified person should decide or verify
+A structured intake summary
+Whether the firm wants the case and who should speak with the prospect
+A draft chronology with source references
+What the medical history means and how it affects case strategy
+A draft letter or pleading
+Every fact, authority, allegation, deadline, and filing decision
+A list of apparent exceptions
+Whether an exception is material and what action to take
+A routine client-update draft
+Legal advice, material case developments, complaints, and sensitive communication
+AI can create leverage. It does not transfer the lawyer's responsibility for work that is sent, signed, filed, relied upon, or used to advise a client.
+Protect client information before connecting the tools
+A promise that a provider does not train on customer data is useful, but incomplete. The firm must also understand what is retained, where it is stored, who can access it, what is logged, which connected systems the agent can reach, and how permissions can be revoked.
+Before live client information enters a workflow, the owner should be able to answer:
+Which exact AI product and account are approved?
+What do the contract and retention terms permit?
+Is customer data used for training or evaluation?
+Which folders, matters, inboxes, and fields can the system access?
+Can sensitive matters be separated from ordinary work?
+Are inputs, outputs, edits, and approvals logged?
+Can identifying information be removed when it is unnecessary?
+Who reviews the firm's professional and privacy obligations?
+Use the least access required for the workflow. A records agent does not need the entire firm inbox. An intake agent does not need settlement authority. A drafting system does not need permission to send the document it creates. These boundaries are part of
+AI governance and vendor-risk control
+, not optional cleanup after launch.
+Use AI to teach the work, not hide it
+Routine work has always been part of how junior lawyers and paralegals learn what to notice. If AI silently removes that work, the firm can gain speed while losing judgment.
+The episode describes a better training pattern. When a junior receives an unfamiliar assignment, AI first explains the doctrines, assumptions, and implied questions. The junior then prepares an independent outline. AI can help refine the final communication, but the junior must understand and own the analysis before it goes back to the assigning lawyer.
+Small PI firms can apply the same pattern operationally. Ask the intake specialist or paralegal to document how the workflow really works, define what a good output contains, collect representative examples, and identify the exceptions that require escalation. The people closest to the work often make the best agent designers because they know where the process breaks.
+AI adoption is therefore a management project as much as a technology project. The firm needs an owner, review habits, and a way to retain corrections. Installing another tool without changing the operating behavior is why
+AI transformation still moves at the speed of the firm
+.
+A practical 30-day plan for the owner
+Week 1
+Choose one intake path
+Follow one inquiry from arrival to signed, declined, or referred. Record response time, repeated entry, staff minutes, handoffs, and failure points.
+Week 2
+Show the system what good looks like
+Collect approved templates and 10-20 representative examples. Define required fields, pause conditions, escalation rules, and the person responsible for review.
+Week 3
+Run in shadow mode
+Let AI prepare the work without sending messages or changing authoritative records automatically. Compare every output with what staff would have produced.
+Week 4
+Measure and decide
+Review time saved, corrections, missed facts, unresolved exceptions, response speed, and staff experience. Expand only if quality holds under ordinary and difficult cases.
+Do not measure success by the number of prompts, summaries, or generated documents. Measure whether the complete workflow becomes faster, more consistent, easier to audit, and better for the prospective client. The workflow is ready to expand only when the firm understands both its value and its failure modes.
+The small firm does not win by having the most AI. It wins by teaching AI one valuable part of the practice, governing it well, and carrying that learning into the next workflow.
+Frequently asked questions
+What is the best first AI use case for a small personal injury firm?
+Intake is often the strongest first candidate because it is frequent, time-sensitive, measurable, and easy to keep human-led. AI can acknowledge the inquiry, structure facts, identify missing information, and prepare the record while staff or a lawyer owns qualification, empathy, and the decision to sign the case.
+Can a solo PI lawyer use AI without hiring an engineer?
+Yes, for bounded tasks such as summarizing approved documents, preparing drafts, and working from templates. Connected workflows that write into case-management systems, monitor inboxes, or handle client data usually require more careful configuration, permissions, testing, and technical support.
+Should AI be allowed to accept or reject personal injury cases?
+AI can organize facts and apply clearly documented screening rules, but consequential case-acceptance decisions should remain with qualified people. Serious injuries, unclear liability, approaching deadlines, minors, unusual defendants, and other exceptions should be escalated rather than decided automatically.
+Can lawyers put confidential client information into any AI account?
+No. A firm should evaluate the specific product, contract, retention terms, training policy, access controls, storage, logging, and applicable professional and privacy obligations before client information enters an AI system. Consumer access alone is not approval for confidential or regulated data.
+How should a PI firm measure whether an AI workflow is working?
+Measure the complete workflow: elapsed time, repeated data entry, staff minutes, correction rate, unresolved exceptions, response time, and the client or case outcome the workflow is meant to improve. More drafts or prompts are activity metrics, not proof of value.
+Begin with one workflow
+Find the repetitive work that is stealing time from clients.
+Possible Minds helps PI firm owners map one workflow, establish the human-review boundary, test it against real examples, and decide whether it is ready for production.
+Request a workflow diagnostic

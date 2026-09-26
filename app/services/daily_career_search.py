@@ -4,24 +4,30 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import os
 import random
 import re
 import uuid
 from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 from typing import Literal
-from urllib.parse import urlsplit
+from urllib.parse import quote, urlencode, urlsplit, urlunsplit
 from zoneinfo import ZoneInfo
 
-from pydantic import BaseModel, ConfigDict, Field, HttpUrl, model_validator
+from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator, model_validator
 from sqlalchemy import func, select, text
 from sqlalchemy.dialects.postgresql import insert
 
 from app.db import AsyncSessionLocal, async_engine
 from app.db.models import CareerSearchRunRow, CareerSearchStateRow, FirmContactRow, PifFirmRow
 from app.services.career_job_store import PROVIDER, job_id, merge_career_postings, source_identity, same_job
-from app.services.career_search_web import fetch_page
-from app.services.llm_gateway import call_skill_json, prompt_cache_metrics, LLMGatewayResponseError
+from app.services.career_search_web import fetch_page, public_url
+from app.services.llm_gateway import (
+    LLMGatewayResponseError,
+    call_skill_json,
+    invoke_openclaw_tool,
+    prompt_cache_metrics,
+)
 from app.services.pif_firm_crud import get_pif_firm_for_crud, upsert_pif_firm
 from app.services.pif_job_posting_research import classify_job_posting
 
@@ -99,6 +105,8 @@ class SearchProfile(BaseModel):
     preferred_industries: str = Field(min_length=1, max_length=2000)
     location_preferences: str = Field(min_length=1, max_length=2000)
     prefer_overseas_employers: bool = True
+    source_ids: list[str] = Field(default_factory=list, max_length=30)
+    source_urls: list[HttpUrl] = Field(default_factory=list, max_length=30)
 
     @model_validator(mode="after")
     def configured_lists_not_empty(self):
@@ -116,6 +124,13 @@ class CandidateFields(BaseModel):
     employer_evidence_url: HttpUrl
     title: str = Field(min_length=1, max_length=300)
     contact_urls: list[HttpUrl] = Field(default_factory=list, max_length=5)
+
+
+class UrlImportIdentity(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    firm_name: str = Field(min_length=1, max_length=255)
+    title: str = Field(min_length=1, max_length=300)
+    source_url: HttpUrl
 
 
 class Candidate(CandidateFields):
@@ -136,6 +151,67 @@ class Candidate(CandidateFields):
         return self
 
 
+def shared_recruiting_source(url: str) -> bool:
+    """Return whether a URL is mechanically hosted by a known shared platform."""
+    host = (urlsplit(url).hostname or "").lower().rstrip(".")
+    return any(host == domain or host.endswith("." + domain)
+               for domain in SHARED_RECRUITING_DOMAINS)
+
+
+def official_page_transport_fallbacks(url: str) -> list[str]:
+    """Return same-origin machine-readable transports for a blocked public page.
+
+    This is a mechanical fetch fallback, not employer-identity evidence by
+    itself. The resulting content must still pass the structured verifier and
+    exact excerpt checks before storage.
+    """
+    parts = urlsplit(url)
+    path_parts = [segment for segment in parts.path.split("/") if segment]
+    if parts.scheme != "https" or not parts.hostname or not path_parts:
+        return []
+    slug = path_parts[-1]
+    query = urlencode({"slug": slug, "_fields": "link,title,content"}, quote_via=quote)
+    return [urlunsplit(("https", parts.netloc, "/wp-json/wp/v2/pages", query, ""))]
+
+
+async def fetch_direct_import_employer_page(
+    candidate: Candidate,
+    cache: dict[str, dict],
+    audit: dict,
+) -> tuple[Candidate, dict]:
+    """Fetch official identity evidence, recovering blocked WordPress pages."""
+    employer_url = str(candidate.employer_evidence_url)
+    try:
+        if employer_url not in cache:
+            cache[employer_url] = await fetch_page(employer_url)
+        return candidate, cache[employer_url]
+    except Exception as original_error:
+        fallback_errors = []
+        for fallback_url in official_page_transport_fallbacks(employer_url):
+            try:
+                if fallback_url not in cache:
+                    cache[fallback_url] = await fetch_page(fallback_url)
+                page = cache[fallback_url]
+                if page["http_status"] != 200:
+                    raise ValueError(f"HTTP {page['http_status']}")
+                replacement = Candidate.model_validate({
+                    **candidate.model_dump(mode="json"),
+                    "employer_evidence_url": fallback_url,
+                })
+                audit.setdefault("official_evidence_fetch_fallbacks", []).append({
+                    "blocked_url": employer_url,
+                    "blocked_error": str(original_error)[:1000],
+                    "evidence_url": fallback_url,
+                    "transport": "wordpress_rest_api",
+                })
+                return replacement, page
+            except Exception as exc:
+                fallback_errors.append({"source_url": fallback_url, "error": str(exc)[:1000]})
+        if fallback_errors:
+            audit.setdefault("official_evidence_fetch_errors", []).extend(fallback_errors)
+        raise original_error
+
+
 class Excerpt(BaseModel):
     source_url: HttpUrl
     text: str = Field(min_length=1, max_length=1200)
@@ -148,6 +224,11 @@ class ApplicationContact(BaseModel):
     title: str = Field("", max_length=255)
     kind: Literal["recruiting", "routing"]
     evidence: Excerpt
+
+    @field_validator("name", "title", mode="before")
+    @classmethod
+    def optional_labels(cls, value):
+        return "" if value is None else value
 
 
 class Decision(BaseModel):
@@ -271,6 +352,15 @@ def next_due(config: SearchConfig, completed_days: set[str], *, now: datetime) -
     return datetime.combine(day, time.fromisoformat(config.local_time), tzinfo=ZoneInfo(config.timezone)).astimezone(timezone.utc)
 
 
+def run_consumes_daily_slot(run) -> bool:
+    """A bounded scheduled run is once daily even when some work was partial."""
+    result = run.result or {}
+    return (run.status in {"completed", "partial"}
+            and not result.get("retry_of")
+            and not result.get("manual_search")
+            and result.get("search_trigger") in {None, "scheduled"})
+
+
 async def configuration(changes: dict | None = None) -> SearchConfig:
     await ensure_tables()
     async with AsyncSessionLocal() as session:
@@ -287,19 +377,41 @@ async def configuration(changes: dict | None = None) -> SearchConfig:
 
 
 def serialize_run(row: CareerSearchRunRow) -> dict:
-    return {"id": row.id, "scheduled_day": row.scheduled_day, "status": row.status,
+    result = json.loads(json.dumps(row.result or {}))
+    # Older runs recorded a final, evidence-backed `unverified` decision as an
+    # operational error. Reconstruct those candidate exclusions from the
+    # persisted decision so status remains truthful without changing history.
+    rejected_pairs = {
+        (str(entry.get("candidate", {}).get("source_url") or ""),
+         str(entry.get("decision", {}).get("reason") or ""))
+        for entry in result.get("decisions", [])
+        if entry.get("decision", {}).get("status") == "unverified"
+    }
+    errors = []
+    exclusions = list(result.get("candidate_rejections") or [])
+    known_exclusions = {(str(item.get("source_url") or ""), str(item.get("reason") or ""))
+                        for item in exclusions}
+    for error in result.get("errors", []):
+        pair = (str(error.get("source_url") or ""), str(error.get("error") or ""))
+        if pair in rejected_pairs:
+            if pair not in known_exclusions:
+                exclusions.append({"source_url": pair[0], "reason": pair[1]})
+                known_exclusions.add(pair)
+        else:
+            errors.append(error)
+    result["errors"] = errors
+    result["candidate_rejections"] = exclusions
+    display_status = "completed" if row.status == "partial" and not errors else row.status
+    return {"id": row.id, "scheduled_day": row.scheduled_day, "status": display_status,
             "started_at": row.started_at.isoformat(),
-            "completed_at": row.completed_at.isoformat() if row.completed_at else None, "result": row.result}
+            "completed_at": row.completed_at.isoformat() if row.completed_at else None, "result": result}
 
 
 async def status() -> dict:
     config = await configuration()
     async with AsyncSessionLocal() as session:
         runs = list((await session.scalars(select(CareerSearchRunRow).order_by(CareerSearchRunRow.started_at.desc()).limit(10))).all())
-    completed = {r.scheduled_day for r in runs if r.status == "completed"
-                 and not (r.result or {}).get("retry_of")
-                 and not (r.result or {}).get("manual_search")
-                 and (r.result or {}).get("search_trigger") in {None, "scheduled"}}
+    completed = {r.scheduled_day for r in runs if run_consumes_daily_slot(r)}
     return {"config": config.model_dump(mode="json"), "next_due_at": next_due(config, completed, now=now_utc()).isoformat() if config.enabled else None,
             "schedule_enabled": config.enabled, "timer_installation": "external; verify systemctl timers",
             "runs": [serialize_run(r) for r in runs]}
@@ -358,9 +470,13 @@ async def reconcile_interrupted_manual_runs() -> int:
 
 
 async def llm(payload: dict, required: str, config: SearchConfig, audit: dict, run_id: str,
-              *, deadline: float | None = None):
+              *, deadline: float | None = None, lane: str | None = None,
+              allow_tools: bool | None = None):
     verification = required == "decisions"
-    attempts = 1 if payload["mode"] in {"verification_repair", "candidate_repair"} else config.max_attempts
+    attempts = 1 if payload["mode"] in {
+        "verification_repair", "candidate_repair", "url_import", "url_import_identity",
+        "url_import_enrichment",
+    } else config.max_attempts
     for attempt in range(attempts):
         structured_failure = None
 
@@ -393,11 +509,17 @@ async def llm(payload: dict, required: str, config: SearchConfig, audit: dict, r
                         f"{payload['mode']} skipped because the run time budget was exhausted")
             audit["llm_calls"] += 1
             await checkpoint(run_id, audit)
+            tool_access = (
+                payload["mode"] in {"discovery", "retry_discovery"}
+                if allow_tools is None else allow_tools
+            )
             request = call_skill_json(skill_path=SKILL, payload=payload, required_fields=[required],
                 model="openclaw/main", timeout_s=max(1, int(call_timeout)), max_tokens=9000, retries=1,
                 schema_repair_retries=0 if verification or payload["mode"] == "candidate_repair" else 1,
                 attempt_observer=observe_attempt,
-                prompt_cache_key="possibleos:career-search:v4")
+                prompt_cache_key="possibleos:career-search:v4",
+                allow_tools=tool_access,
+                lane=lane or os.getenv("OPENCLAW_RPC_BATCH_LANE", "possibleos-batch"))
             task = asyncio.create_task(request)
             done, _ = await asyncio.wait({task}, timeout=call_timeout)
             if not done:
@@ -465,8 +587,41 @@ def evidence_source_matches(original, pages: list[dict]) -> dict:
     return matches
 
 
+def evidence_excerpt_matches(evidence: Excerpt | None, pages: list[dict]) -> bool:
+    if evidence is None:
+        return True
+    page = next((item for item in pages
+                 if source_identity(item["requested_url"]) == source_identity(str(evidence.source_url))), None)
+    if page is None:
+        return False
+    quote = " ".join(evidence.text.split()).casefold()
+    content = " ".join(page["content"].split()).casefold()
+    return quote in content
+
+
+def downgrade_unverified_optional_evidence(decision: Decision, pages: list[dict]) -> Decision:
+    """Fail optional date/location claims closed without losing a verified role."""
+    updates = {}
+    if decision.direct_pi_employer and (
+        not decision.legal_domain_employer or decision.legal_domain_kind != "law_firm"
+    ):
+        updates["direct_pi_employer"] = False
+    if not evidence_excerpt_matches(decision.geography_evidence, pages):
+        updates.update({
+            "work_arrangement": "unclear",
+            "remote_scope": "unclear",
+            "colombia_eligibility": "unknown",
+            "geography_note": "Location eligibility was not verified from the supplied source.",
+            "geography_evidence": None,
+        })
+    if not evidence_excerpt_matches(decision.date_evidence, pages):
+        updates.update({"posted_date": None, "date_evidence": None})
+    return decision.model_copy(update=updates) if updates else decision
+
+
 def inspect_verification(batch: list[dict], response, *, today: date, phase: str, audit: dict,
-                         search_profile: SearchProfile | None = None):
+                         search_profile: SearchProfile | None = None,
+                         direct_import: bool = False):
     accepted, failed = [], []
     rows = response.get("decisions") if isinstance(response, dict) else None
     expected = {item["candidate_id"] for item in batch}
@@ -485,7 +640,10 @@ def inspect_verification(batch: list[dict], response, *, today: date, phase: str
             if len(matches) != 1:
                 raise ValueError(f"expected exactly one decision for {item['candidate_id']}; got {len(matches)}")
             decision = Decision.model_validate(original)
-            validate_decision(decision, item["pages"], today=today, search_profile=search_profile)
+            if direct_import:
+                decision = downgrade_unverified_optional_evidence(decision, item["pages"])
+            validate_decision(decision, item["pages"], today=today,
+                              search_profile=search_profile, direct_import=direct_import)
             accepted.append((item, decision))
         except ValueError as exc:
             error = str(exc)[:4000]
@@ -500,13 +658,18 @@ def inspect_verification(batch: list[dict], response, *, today: date, phase: str
 
 
 async def verified_decisions(batch: list[dict], config: SearchConfig, audit: dict, run_id: str, *, today: date,
-                             search_profile: SearchProfile | None = None, deadline: float | None = None):
+                             search_profile: SearchProfile | None = None, deadline: float | None = None,
+                             direct_import: bool = False):
     profile = search_profile.model_dump(mode="json") if search_profile else None
-    payload = {"mode": "verification", "as_of": today.isoformat(), "search_profile": profile, "candidates": [
+    lane = (os.getenv("OPENCLAW_RPC_INTERACTIVE_LANE", "possibleos-interactive")
+            if direct_import else None)
+    payload = {"mode": "verification", "as_of": today.isoformat(), "search_profile": profile,
+               "direct_import": direct_import, "candidates": [
         {"candidate_id": item["candidate_id"], **item["candidate"].model_dump(mode="json"), "pages": item["pages"]} for item in batch
     ]}
     try:
-        response = await llm(payload, "decisions", config, audit, run_id, **deadline_kwargs(deadline))
+        response = await llm(payload, "decisions", config, audit, run_id,
+                             lane=lane, **deadline_kwargs(deadline))
     except Exception as exc:
         error = str(exc)[:1000] or type(exc).__name__
         audit.setdefault("verification_rejections", []).append({
@@ -522,7 +685,7 @@ async def verified_decisions(batch: list[dict], config: SearchConfig, audit: dic
         await checkpoint(run_id, audit)
         return
     accepted, failed = inspect_verification(batch, response, today=today, phase="initial", audit=audit,
-                                            search_profile=search_profile)
+                                            search_profile=search_profile, direct_import=direct_import)
     await checkpoint(run_id, audit)
     # Yield valid rows before a repair can time out, so their ingests are durable.
     for pair in accepted:
@@ -530,7 +693,8 @@ async def verified_decisions(batch: list[dict], config: SearchConfig, audit: dic
     if not failed:
         return
     audit["repair_calls"] = audit.get("repair_calls", 0) + 1
-    repair_payload = {"mode": "verification_repair", "as_of": today.isoformat(), "search_profile": profile, "candidates": [
+    repair_payload = {"mode": "verification_repair", "as_of": today.isoformat(),
+                      "search_profile": profile, "direct_import": direct_import, "candidates": [
         {"candidate_id": item["candidate_id"], **item["candidate"].model_dump(mode="json"),
          "pages": item["pages"], "original_decision": rejection["original_decision"],
          "evidence_source_matches": rejection["evidence_source_matches"],
@@ -538,9 +702,12 @@ async def verified_decisions(batch: list[dict], config: SearchConfig, audit: dic
     ]}
     await checkpoint(run_id, audit)
     try:
-        repaired = await llm(repair_payload, "decisions", config, audit, run_id, **deadline_kwargs(deadline))
+        repaired = await llm(repair_payload, "decisions", config, audit, run_id,
+                             lane=lane, **deadline_kwargs(deadline))
         accepted, remaining = inspect_verification([item for item, _ in failed], repaired, today=today,
-                                                   phase="repair", audit=audit, search_profile=search_profile)
+                                                   phase="repair", audit=audit,
+                                                   search_profile=search_profile,
+                                                   direct_import=direct_import)
     except Exception as exc:
         accepted = []
         remaining = [(item, {"validation_error": f"repair call failed: {str(exc)[:1000] or type(exc).__name__}"}) for item, _ in failed]
@@ -557,7 +724,8 @@ async def verified_decisions(batch: list[dict], config: SearchConfig, audit: dic
 
 
 def validate_decision(decision: Decision, pages: list[dict], *, today: date,
-                      search_profile: SearchProfile | None = None) -> None:
+                      search_profile: SearchProfile | None = None,
+                      direct_import: bool = False) -> None:
     content = {p["requested_url"]: " ".join(p["content"].split()).casefold() for p in pages}
     for field in ("employer_evidence", "role_evidence", "status_evidence", "geography_evidence", "date_evidence"):
         evidence = getattr(decision, field)
@@ -582,12 +750,13 @@ def validate_decision(decision: Decision, pages: list[dict], *, today: date,
                              or configured_legacy_legal_match(decision, search_profile))
                             if search_profile else decision.direct_pi_employer)
         role_matches = decision.target_role_match if search_profile else decision.technology_role
-        if search_profile and not employer_matches:
-            raise ValueError("employer is not in a verified configured industry")
-        if search_profile and not role_matches:
-            raise ValueError("role does not match a configured target role")
-        if not search_profile and (not employer_matches or not role_matches):
-            raise ValueError("not a direct PI technology role")
+        if not direct_import:
+            if search_profile and not employer_matches:
+                raise ValueError("employer is not in a verified configured industry")
+            if search_profile and not role_matches:
+                raise ValueError("role does not match a configured target role")
+            if not search_profile and (not employer_matches or not role_matches):
+                raise ValueError("not a direct PI technology role")
         if not all((decision.employer_evidence, decision.role_evidence, decision.status_evidence)):
             raise ValueError("active job lacks required live evidence")
         if decision.posted_date and (not decision.date_evidence or decision.posted_date > today):
@@ -599,7 +768,9 @@ def validate_decision(decision: Decision, pages: list[dict], *, today: date,
         from app.services.job_agent_research import _possibleos_contact_kind, organization_domain_matches
         official_host = urlsplit(str(decision.employer_evidence.source_url)).hostname or ""
         for contact in decision.application_contacts:
-            page = next((item for item in pages if item["requested_url"] == str(contact.evidence.source_url)), None)
+            page = next((item for item in pages
+                         if source_identity(item["requested_url"])
+                         == source_identity(str(contact.evidence.source_url))), None)
             content = page["content"] if page and page.get("http_status", 200) == 200 else ""
             if contact.email.casefold() not in content.casefold():
                 raise ValueError("application contact email not found in fetched source")
@@ -714,6 +885,61 @@ async def ingest_application_contacts(firm_id: str, contacts: list[ApplicationCo
     return counts
 
 
+async def replay_url_import_evidence(source_url: str, previous_runs: list[tuple[str, dict]],
+                                     *, checked_at: datetime) -> dict | None:
+    """Reuse a prior model decision only after fresh exact-evidence validation."""
+    for previous_run_id, result in previous_runs:
+        rejections = result.get("verification_rejections") if isinstance(result, dict) else None
+        for rejection in reversed(rejections or []):
+            try:
+                candidate = Candidate.model_validate(rejection["candidate"])
+                if source_identity(str(candidate.source_url)) != source_identity(source_url):
+                    continue
+                decision = Decision.model_validate(rejection["original_decision"])
+                urls = list(dict.fromkeys([
+                    str(candidate.source_url), str(candidate.employer_evidence_url),
+                    *(str(url) for url in candidate.contact_urls),
+                ]))
+                pages = [await fetch_page(url) for url in urls]
+                if any(page["http_status"] != 200 for page in pages[:2]):
+                    continue
+                decision = downgrade_unverified_optional_evidence(decision, pages)
+                validate_decision(decision, pages, today=checked_at.date(), direct_import=True)
+                if decision.status != "active":
+                    continue
+                posting = to_posting(candidate, decision, checked_at=checked_at)
+                posting["source_urls"] = list(dict.fromkeys(filter(None, [
+                    str(candidate.source_url), pages[0]["final_url"], source_url,
+                ])))
+                from app.services.job_contract_classification import classify_extracted_postings
+                classified_postings, _ = await classify_extracted_postings([posting])
+                posting = classified_postings[0]
+                stored = await ingest(candidate, posting)
+                contacts = await ingest_application_contacts(stored["firm_id"], decision.application_contacts)
+                stored["contacts"] = contacts
+                return {
+                    "candidate": candidate.model_dump(mode="json"),
+                    "decision": decision.model_dump(mode="json"),
+                    "stored": stored,
+                    "replayed_from_run": previous_run_id,
+                }
+            except (KeyError, TypeError, ValueError, RuntimeError):
+                continue
+    return None
+
+
+async def previous_url_import_runs(source_url: str, *, limit: int = 10) -> list[tuple[str, dict]]:
+    async with AsyncSessionLocal() as session:
+        rows = (await session.scalars(
+            select(CareerSearchRunRow).where(
+                CareerSearchRunRow.status != "running",
+                CareerSearchRunRow.result["url_import"].astext == "true",
+                CareerSearchRunRow.result["source_url"].astext == source_url,
+            ).order_by(CareerSearchRunRow.started_at.desc()).limit(limit)
+        )).all()
+    return [(row.id, row.result or {}) for row in rows]
+
+
 async def tracked_candidates(limit: int, source_urls: list[str] | None = None) -> list[dict]:
     if not limit:
         return []
@@ -821,11 +1047,13 @@ async def recover_candidates(discovered: list, config: SearchConfig, audit: dict
             if len(matches) != 1:
                 raise ValueError("expected exactly one candidate repair")
             repaired = Candidate.model_validate(matches[0])
-            if (str(repaired.source_url) != str(CandidateFields.model_validate(original).source_url)
+            if (source_identity(str(repaired.source_url)) != source_identity(
+                    str(CandidateFields.model_validate(original).source_url))
                     or repaired.firm_name != original["firm_name"]):
                 raise ValueError("candidate repair changed job or employer identity")
             from app.services.front_sync import normalize_domain
-            if not any(p["requested_url"] == str(repaired.employer_evidence_url) and p["http_status"] == 200
+            if not any(source_identity(p["requested_url"]) == source_identity(
+                           str(repaired.employer_evidence_url)) and p["http_status"] == 200
                        and normalize_domain(p["final_url"]) == repaired.canonical_domain for p in item["pages"]):
                 raise ValueError("corrected canonical identity lacks a matching fetched official page")
             accepted.append(repaired)
@@ -836,6 +1064,124 @@ async def recover_candidates(discovered: list, config: SearchConfig, audit: dict
             audit.setdefault("candidate_rejections", []).append({**error, "phase": "repair", "response": audit_value(rows)})
     await checkpoint(run_id, audit)
     return accepted
+
+
+async def recover_direct_import_candidate(
+    discovered: list,
+    *,
+    source_url: str,
+    direct_page: dict,
+    search_profile: SearchProfile | None,
+    config: SearchConfig,
+    audit: dict,
+    run_id: str,
+    deadline: float | None = None,
+) -> list[Candidate]:
+    """Resolve one supplied job, researching official identity only when needed."""
+    original = discovered[0] if len(discovered) == 1 else None
+    failure = None
+    if original is not None:
+        try:
+            return [Candidate.model_validate(original)]
+        except ValueError as exc:
+            failure = str(exc)[:4000]
+    elif not discovered:
+        failure = "The supplied page did not expose an official employer identity."
+    else:
+        failure = f"The supplied page produced {len(discovered)} candidate identities instead of one."
+    rejection = {
+        "candidate_id": "0",
+        "original_candidate": audit_value(original),
+        "validation_error": failure,
+        "phase": "url_import_identity",
+    }
+    audit.setdefault("candidate_rejections", []).append(rejection)
+    await checkpoint(run_id, audit)
+
+    identity = None
+    if isinstance(original, dict):
+        try:
+            identity = UrlImportIdentity.model_validate({
+                "firm_name": original.get("firm_name"),
+                "title": original.get("title"),
+                "source_url": original.get("source_url") or source_url,
+            })
+        except ValueError:
+            identity = None
+    if identity is None:
+        identity_result = await llm({
+            "mode": "url_import_identity",
+            "source_url": source_url,
+            "final_url": direct_page["final_url"],
+            "job_page": direct_page,
+        }, "identities", config, audit, run_id,
+           lane=os.getenv("OPENCLAW_RPC_INTERACTIVE_LANE", "possibleos-interactive"),
+           **deadline_kwargs(deadline))
+        identities = identity_result.get("identities")
+        if not isinstance(identities, list) or len(identities) != 1:
+            raise ValueError("The supplied page did not produce one job and employer identity")
+        identity = UrlImportIdentity.model_validate(identities[0])
+
+    search_result = None
+    search_error = None
+    try:
+        search_result = await invoke_openclaw_tool(
+            "web_search",
+            {
+                "objective": (
+                    f"Find the official company website and an official about or company page for "
+                    f"{identity.firm_name}. The selected job is {identity.title}."
+                ),
+                "search_queries": [
+                    f"{identity.firm_name} official website",
+                    f"{identity.firm_name} company about",
+                ],
+                "count": 6,
+                "client_model": "gpt-5.6-luna",
+            },
+            timeout_s=90,
+        )
+        audit.setdefault("url_import_search", []).append({
+            "transport": "native_tool_rpc",
+            "result": audit_value(search_result),
+        })
+    except Exception as exc:
+        # A generic OpenClaw web-search provider is optional. The gateway's
+        # existing model can still expose provider-native search inside one
+        # bounded agent turn, so preserve the failed lightweight attempt and
+        # fall back without weakening any evidence checks.
+        search_error = str(exc)[:2000] or type(exc).__name__
+        audit.setdefault("url_import_search", []).append({
+            "transport": "native_tool_rpc",
+            "error": search_error,
+            "fallback": "provider_native_agent_search",
+        })
+    await checkpoint(run_id, audit)
+
+    enrichment_payload = {
+        "mode": "url_import_enrichment",
+        "source_url": source_url,
+        "final_url": direct_page["final_url"],
+        "job_page": direct_page,
+        "original_candidate": original,
+        "job_identity": identity.model_dump(mode="json"),
+        "web_search_results": search_result,
+        "research_transport": (
+            "native_tool_rpc" if search_result is not None else "provider_native_agent_search"
+        ),
+        "native_tool_error": search_error,
+        "validation_error": rejection["validation_error"],
+        "search_profile": search_profile.model_dump(mode="json") if search_profile else None,
+    }
+    result = await llm(enrichment_payload, "candidates", config, audit, run_id,
+       lane=os.getenv("OPENCLAW_RPC_INTERACTIVE_LANE", "possibleos-interactive"),
+       allow_tools=search_result is None,
+       **deadline_kwargs(deadline))
+    audit.setdefault("url_import_enrichment", []).append(audit_value(result))
+    candidates = result.get("candidates")
+    if not isinstance(candidates, list) or len(candidates) != 1:
+        raise ValueError("Official employer identity research did not return exactly one candidate")
+    return await recover_candidates(candidates, config, audit, run_id, deadline=deadline)
 
 
 def retry_inputs(previous: dict) -> dict:
@@ -854,10 +1200,35 @@ def retry_inputs(previous: dict) -> dict:
 
 async def execute(run_id: str, config: SearchConfig, *, seed_only: bool, audit: dict, retry_result: dict | None = None,
                   retry_candidates: list | None = None, search_profile: SearchProfile | None = None,
-                  deadline: float | None = None):
+                  deadline: float | None = None, direct_source_url: str | None = None):
     now = now_utc()
     day_number = now.date().toordinal()
-    if retry_result is not None:
+    direct_page = None
+    if direct_source_url:
+        direct_page = await fetch_page(direct_source_url)
+        if direct_page["http_status"] != 200:
+            raise ValueError(f"The supplied job URL returned HTTP {direct_page['http_status']}")
+        if shared_recruiting_source(direct_source_url) or shared_recruiting_source(direct_page["final_url"]):
+            # A shared board can prove the role, but it can never be the
+            # canonical employer identity. Go directly to the bounded research
+            # fallback instead of paying for a raw pass that cannot satisfy the
+            # identity invariant.
+            discovered = []
+        else:
+            result = await llm({
+                "mode": "url_import",
+                "source_url": direct_source_url,
+                "final_url": direct_page["final_url"],
+                "job_page": direct_page,
+                "search_profile": search_profile.model_dump(mode="json") if search_profile else None,
+            }, "candidates", config, audit, run_id,
+               lane=os.getenv("OPENCLAW_RPC_INTERACTIVE_LANE", "possibleos-interactive"),
+               **deadline_kwargs(deadline))
+            if not isinstance(result.get("candidates"), list):
+                raise ValueError("URL import extraction did not return a candidates array")
+            discovered = result["candidates"]
+        candidates = []
+    elif retry_result is not None:
         retry = retry_inputs(retry_result)
         discovered = retry["candidates"][:config.max_candidates]
         if retry_candidates is not None:
@@ -884,9 +1255,12 @@ async def execute(run_id: str, config: SearchConfig, *, seed_only: bool, audit: 
         # All ordinary daily and operator searches receive the same Job Agent profile.
         # The null-profile branch remains only for legacy maintenance callers.
         candidates = [] if search_profile else await tracked_candidates(config.max_rechecks)
-        sources = [] if search_profile else list(config.source_urls)
+        sources = list(search_profile.source_urls) if search_profile else list(config.source_urls)
         offset = day_number % max(1, len(sources))
         sources = (sources[offset:] + sources[:offset])[:config.max_sources] if sources else []
+        if search_profile:
+            audit["search_source_ids"] = list(search_profile.source_ids)
+            audit["search_sources_consulted"] = [str(source) for source in sources]
         queries = profile_queries(search_profile, day_number) if search_profile else [
             PI_QUERIES[(day_number + i) % len(PI_QUERIES)] for i in range(3)
         ]
@@ -899,17 +1273,42 @@ async def execute(run_id: str, config: SearchConfig, *, seed_only: bool, audit: 
         if not isinstance(result["candidates"], list):
             raise ValueError("discovery candidates must be an array")
         discovered = result["candidates"][:config.max_candidates]
-    seen = await known_source_identities() if search_profile else {
-        source_identity(str(i["candidate"].source_url)) for i in candidates
-    }
     audit["discovery_candidates"] = audit_value(discovered)
-    for candidate in await recover_candidates(discovered, config, audit, run_id, deadline=deadline):
-        key = source_identity(str(candidate.source_url))
-        if key not in seen:
-            candidates.append({"candidate": candidate})
-            seen.add(key)
-        else:
-            audit["duplicates_skipped"] = audit.get("duplicates_skipped", 0) + 1
+    if direct_source_url:
+        recovered = await recover_direct_import_candidate(
+            discovered,
+            source_url=direct_source_url,
+            direct_page=direct_page,
+            search_profile=search_profile,
+            config=config,
+            audit=audit,
+            run_id=run_id,
+            deadline=deadline,
+        )
+    else:
+        recovered = await recover_candidates(discovered, config, audit, run_id, deadline=deadline)
+    if direct_source_url:
+        if len(recovered) != 1:
+            raise ValueError("The supplied URL did not produce one valid employer and job identity")
+        candidate = recovered[0]
+        allowed_sources = {
+            source_identity(direct_source_url), source_identity(str(direct_page["final_url"])),
+        }
+        if source_identity(str(candidate.source_url)) not in allowed_sources:
+            raise ValueError("The importer returned a different job URL than the one supplied")
+        candidates.append({"candidate": candidate, "prefetched_job_page": direct_page,
+                           "input_source_url": direct_source_url})
+    else:
+        seen = await known_source_identities() if search_profile else {
+            source_identity(str(i["candidate"].source_url)) for i in candidates
+        }
+        for candidate in recovered:
+            key = source_identity(str(candidate.source_url))
+            if key not in seen:
+                candidates.append({"candidate": candidate})
+                seen.add(key)
+            else:
+                audit["duplicates_skipped"] = audit.get("duplicates_skipped", 0) + 1
     audit["candidates"] = len(candidates)
     await checkpoint(run_id, audit)
     cache = {}
@@ -923,18 +1322,25 @@ async def execute(run_id: str, config: SearchConfig, *, seed_only: bool, audit: 
         for index, item in enumerate(candidates[start:start + 3], start=start):
             candidate = item["candidate"]
             try:
-                job_page = await fetch_page(str(candidate.source_url))
+                job_page = item.get("prefetched_job_page") or await fetch_page(str(candidate.source_url))
                 if job_page["http_status"] in {404, 410}:
-                    if item.get("tracked") and job_page["final_url"] == str(candidate.source_url):
+                    if item.get("tracked") and source_identity(job_page["final_url"]) == source_identity(
+                            str(candidate.source_url)):
                         await mark_checked(item, closed=True, reason=f"HTTP {job_page['http_status']}")
                         audit["closed"] += 1
                     else:
                         audit["rejected"] += 1
                     continue
-                employer_url = str(candidate.employer_evidence_url)
-                if employer_url not in cache:
-                    cache[employer_url] = await fetch_page(employer_url)
-                employer_page = cache[employer_url]
+                if direct_source_url:
+                    candidate, employer_page = await fetch_direct_import_employer_page(
+                        candidate, cache, audit,
+                    )
+                    item["candidate"] = candidate
+                else:
+                    employer_url = str(candidate.employer_evidence_url)
+                    if employer_url not in cache:
+                        cache[employer_url] = await fetch_page(employer_url)
+                    employer_page = cache[employer_url]
                 if employer_page["http_status"] != 200:
                     raise ValueError("employer identity page unavailable")
                 contact_pages = []
@@ -962,18 +1368,56 @@ async def execute(run_id: str, config: SearchConfig, *, seed_only: bool, audit: 
         if not batch:
             await checkpoint(run_id, audit)
             continue
+        verified_batch = []
         async for item, decision in verified_decisions(batch, config, audit, run_id, today=now.date(),
-                                                       search_profile=search_profile, deadline=deadline):
+                                                       search_profile=search_profile, deadline=deadline,
+                                                       direct_import=bool(direct_source_url)):
+            candidate = item["candidate"]
+            audit["decisions"].append({"candidate": candidate.model_dump(mode="json"), "decision": decision.model_dump(mode="json")})
+            verified_batch.append((item, decision))
+            await checkpoint(run_id, audit)
+
+        prepared: dict[int, dict] = {}
+        for index, (item, decision) in enumerate(verified_batch):
+            candidate = item["candidate"]
+            if decision.status != "active":
+                continue
+            if (decision.posted_date and decision.posted_date < now.date() - timedelta(days=30)
+                    and not item.get("tracked") and not direct_source_url):
+                continue
+            try:
+                posting = to_posting(candidate, decision, checked_at=now_utc())
+                posting["source_urls"] = list(dict.fromkeys(filter(None, [
+                    str(candidate.source_url), item["pages"][0]["final_url"], item.get("input_source_url"),
+                ])))
+                prepared[index] = posting
+            except Exception as exc:
+                audit["errors"].append({"source_url": str(candidate.source_url), "error": str(exc)[:1000]})
+
+        if prepared:
+            from app.services.job_contract_classification import classify_extracted_postings
+            positions = list(prepared)
+            classified_postings, contract_error = await classify_extracted_postings(
+                [prepared[position] for position in positions]
+            )
+            prepared.update(dict(zip(positions, classified_postings)))
+            if contract_error:
+                audit.setdefault("contract_classification_errors", []).append({
+                    "candidate_ids": [verified_batch[position][0]["candidate_id"] for position in positions],
+                    "error": contract_error,
+                })
+
+        for index, (item, decision) in enumerate(verified_batch):
             candidate = item["candidate"]
             try:
-                audit["decisions"].append({"candidate": candidate.model_dump(mode="json"), "decision": decision.model_dump(mode="json")})
-                await checkpoint(run_id, audit)
                 if decision.status == "active":
-                    if decision.posted_date and decision.posted_date < now.date() - timedelta(days=30) and not item.get("tracked"):
+                    if (decision.posted_date and decision.posted_date < now.date() - timedelta(days=30)
+                            and not item.get("tracked") and not direct_source_url):
                         audit["rejected"] += 1
                         continue
-                    posting = to_posting(candidate, decision, checked_at=now_utc())
-                    posting["source_urls"] = list(dict.fromkeys([str(candidate.source_url), item["pages"][0]["final_url"]]))
+                    posting = prepared.get(index)
+                    if posting is None:
+                        continue
                     stored = await ingest(candidate, posting)
                     contact_counts = await ingest_application_contacts(stored["firm_id"], decision.application_contacts)
                     stored["contacts"] = contact_counts
@@ -994,18 +1438,111 @@ async def execute(run_id: str, config: SearchConfig, *, seed_only: bool, audit: 
                             state.updated_at = now_utc()
                             await session.commit()
                 elif (decision.status == "closed" and item.get("tracked") and decision.status_evidence
-                      and str(decision.status_evidence.source_url) == str(candidate.source_url)):
+                      and source_identity(str(decision.status_evidence.source_url))
+                      == source_identity(str(candidate.source_url))):
                     await mark_checked(item, closed=True, reason=decision.reason)
                     audit["closed"] += 1
                 else:
                     audit["rejected"] += 1
                     if decision.status == "unverified":
-                        audit["errors"].append({"source_url": str(candidate.source_url), "error": decision.reason})
+                        audit.setdefault("candidate_rejections", []).append({
+                            "source_url": str(candidate.source_url), "reason": decision.reason,
+                        })
                     if item.get("tracked"):
                         await mark_checked(item, closed=False, reason=decision.reason)
             except Exception as exc:
                 audit["errors"].append({"source_url": str(candidate.source_url), "error": str(exc)[:1000]})
             await checkpoint(run_id, audit)
+
+
+def direct_import_lock_id(source_url: str) -> int:
+    """Use a stable per-URL PostgreSQL lock without blocking scheduled searches."""
+    digest = hashlib.sha256(source_identity(source_url).encode()).digest()[:8]
+    return int.from_bytes(digest, byteorder="big", signed=True)
+
+
+async def import_url(source_url: str, *, search_profile: SearchProfile | dict | None = None) -> dict:
+    """Verify and store one operator-supplied job URL without applying to it."""
+    await public_url(source_url)
+    await ensure_tables()
+    profile = (SearchProfile.model_validate(search_profile) if search_profile is not None
+               else await configured_job_agent_profile())
+    config = await configuration()
+    run_id = uuid.uuid4().hex
+    now = now_utc()
+    day = now.astimezone(ZoneInfo(config.timezone)).date().isoformat()
+    audit = {
+        "new_jobs": 0, "verified": 0, "closed": 0, "rejected": 0, "candidates": 0,
+        "duplicates_skipped": 0, "contacts_found": 0, "contacts_inserted": 0,
+        "llm_calls": 0, "errors": [], "candidate_rejections": [], "attempt_errors": [],
+        "stored": [], "decisions": [], "usage": [], "prompt_cache_metrics": [],
+        "seed_only": False, "job_agent_search": True, "search_trigger": "url_import",
+        "manual_search": True, "url_import": True, "source_url": source_url,
+        "search_profile": profile.model_dump(mode="json"),
+    }
+    lock_id = direct_import_lock_id(source_url)
+    async with async_engine.connect() as connection:
+        locked = await connection.scalar(text("SELECT pg_try_advisory_lock(:key)"), {"key": lock_id})
+        await connection.commit()
+        if not locked:
+            return {"status": "busy", "source_url": source_url,
+                    "message": "This job URL is already being imported."}
+        try:
+            async with AsyncSessionLocal() as session:
+                session.add(CareerSearchRunRow(
+                    id=run_id, scheduled_day=day, status="running", started_at=now, result=audit,
+                ))
+                await session.commit()
+            try:
+                replayed = await replay_url_import_evidence(
+                    source_url, await previous_url_import_runs(source_url), checked_at=now_utc(),
+                )
+                if replayed:
+                    stored = replayed["stored"]
+                    contacts = stored.get("contacts") or {}
+                    audit.update({
+                        "candidates": 1,
+                        "verified": 1,
+                        "new_jobs": int(bool(stored.get("added"))),
+                        "contacts_found": contacts.get("verified", 0),
+                        "contacts_inserted": contacts.get("inserted", 0),
+                        "stored": [stored],
+                        "decisions": [{
+                            "candidate": replayed["candidate"],
+                            "decision": replayed["decision"],
+                        }],
+                        "replayed_from_run": replayed["replayed_from_run"],
+                    })
+                    await checkpoint(run_id, audit, "completed")
+                    return {"id": run_id, "status": "completed", "result": audit}
+                loop = asyncio.get_running_loop()
+                deadline = loop.time() + RUN_TIMEOUT_SECONDS - RUN_CLEANUP_RESERVE_SECONDS
+                await asyncio.wait_for(execute(
+                    run_id, config, seed_only=False, audit=audit, search_profile=profile,
+                    deadline=deadline, direct_source_url=source_url,
+                ), timeout=RUN_TIMEOUT_SECONDS)
+                final = "partial" if audit["errors"] else "completed"
+            except CareerSearchBudgetExceeded as exc:
+                audit["errors"].append({
+                    "phase": "url_import", "error": str(exc)[:1000],
+                })
+                final = "partial" if audit["stored"] or audit["decisions"] else "failed"
+            except TimeoutError:
+                audit["errors"].append({
+                    "phase": "url_import",
+                    "error": "URL import exceeded the 30-minute safety limit; completed results were preserved.",
+                })
+                final = "partial" if audit["stored"] or audit["decisions"] else "failed"
+            except Exception as exc:
+                audit["errors"].append({
+                    "phase": "url_import", "error": str(exc)[:1000] or type(exc).__name__,
+                })
+                final = "failed"
+            await checkpoint(run_id, audit, final)
+            return {"id": run_id, "status": final, "result": audit}
+        finally:
+            await connection.execute(text("SELECT pg_advisory_unlock(:key)"), {"key": lock_id})
+            await connection.commit()
 
 
 async def run(*, due_only: bool = False, seed_only: bool = False, retry_run: str | None = None,
@@ -1041,7 +1578,9 @@ async def run(*, due_only: bool = False, seed_only: bool = False, retry_run: str
                           and not (r.get("result") or {}).get("manual_search")
                           and (r.get("result") or {}).get("search_trigger") in {None, "scheduled"}]
             if due_only:
-                if not config.enabled or next_due(config, {r["scheduled_day"] for r in today_runs if r["status"] == "completed"}, now=now) > now:
+                finished_days = {r["scheduled_day"] for r in today_runs
+                                 if r["status"] in {"completed", "partial"}}
+                if not config.enabled or next_due(config, finished_days, now=now) > now:
                     return {"status": "not_due"}
                 if len(today_runs) >= config.max_attempts:
                     return {"status": "retry_limit", "error": "daily attempt limit reached; inspect status"}
@@ -1052,7 +1591,8 @@ async def run(*, due_only: bool = False, seed_only: bool = False, retry_run: str
             audit = {"new_jobs": 0, "verified": 0, "closed": 0, "rejected": 0, "candidates": 0,
                      "duplicates_skipped": 0,
                      "contacts_found": 0, "contacts_inserted": 0,
-                     "llm_calls": 0, "errors": [], "attempt_errors": [], "stored": [], "decisions": [], "usage": [], "prompt_cache_metrics": [], "seed_only": seed_only}
+                     "llm_calls": 0, "errors": [], "candidate_rejections": [], "attempt_errors": [],
+                     "stored": [], "decisions": [], "usage": [], "prompt_cache_metrics": [], "seed_only": seed_only}
             if search_profile:
                 trigger = "manual" if explicit_search_profile else "scheduled" if due_only else "operator"
                 audit.update({"job_agent_search": True, "search_trigger": trigger,
@@ -1077,6 +1617,11 @@ async def run(*, due_only: bool = False, seed_only: bool = False, retry_run: str
                     retry_result=retry_result, retry_candidates=retry_candidates,
                     search_profile=search_profile, deadline=deadline), timeout=RUN_TIMEOUT_SECONDS)
                 final = "partial" if audit["errors"] else "completed"
+            except CareerSearchBudgetExceeded as exc:
+                audit["errors"].append({
+                    "phase": "run_budget", "error": str(exc)[:1000],
+                })
+                final = "partial" if audit["stored"] or audit["decisions"] else "failed"
             except TimeoutError:
                 audit["errors"].append({"phase": "run",
                     "error": "Run exceeded the 30-minute safety limit; completed results were preserved."})

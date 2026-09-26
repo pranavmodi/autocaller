@@ -1,0 +1,93 @@
+{
+  "checked_at": "2026-09-11T08:25:43.373522+00:00",
+  "pending_count": 5,
+  "selected_count": 5,
+  "all_passed": true,
+  "actions": [
+    {
+      "email": "nkuvara@18004injury.com",
+      "id": "action_0f5e2587197e4e9bbca50f53",
+      "scheduled_utc": "2026-09-11T15:30:00+00:00",
+      "checks": {
+        "approved": true,
+        "future": true,
+        "policy_allowed": true,
+        "follow_up": true,
+        "draft_matches": true,
+        "body_hash_matches": true,
+        "rfc_shape": true,
+        "rfc_matches_source": true,
+        "rfc_matches_approval": true,
+        "not_executed": true
+      }
+    },
+    {
+      "email": "vanfrish@frishlawgroup.com",
+      "id": "action_da7d47a6b19143fe9ef3d92c",
+      "scheduled_utc": "2026-09-11T15:40:00+00:00",
+      "checks": {
+        "approved": true,
+        "future": true,
+        "policy_allowed": true,
+        "follow_up": true,
+        "draft_matches": true,
+        "body_hash_matches": true,
+        "rfc_shape": true,
+        "rfc_matches_source": true,
+        "rfc_matches_approval": true,
+        "not_executed": true
+      }
+    },
+    {
+      "email": "ardy@pirnialawgroup.com",
+      "id": "action_a08569fd9b8742f7bcd5e0c2",
+      "scheduled_utc": "2026-09-11T15:50:00+00:00",
+      "checks": {
+        "approved": true,
+        "future": true,
+        "policy_allowed": true,
+        "follow_up": true,
+        "draft_matches": true,
+        "body_hash_matches": true,
+        "rfc_shape": true,
+        "rfc_matches_source": true,
+        "rfc_matches_approval": true,
+        "not_executed": true
+      }
+    },
+    {
+      "email": "bryan@rodeolawfirm.com",
+      "id": "action_100154acd19442b3857ed3dc",
+      "scheduled_utc": "2026-09-11T16:00:00+00:00",
+      "checks": {
+        "approved": true,
+        "future": true,
+        "policy_allowed": true,
+        "follow_up": true,
+        "draft_matches": true,
+        "body_hash_matches": true,
+        "rfc_shape": true,
+        "rfc_matches_source": true,
+        "rfc_matches_approval": true,
+        "not_executed": true
+      }
+    },
+    {
+      "email": "nicole@lahmanilaw.com",
+      "id": "action_c184f1df31e449a4a012a97a",
+      "scheduled_utc": "2026-09-11T16:10:00+00:00",
+      "checks": {
+        "approved": true,
+        "future": true,
+        "policy_allowed": true,
+        "follow_up": true,
+        "draft_matches": true,
+        "body_hash_matches": true,
+        "rfc_shape": true,
+        "rfc_matches_source": true,
+        "rfc_matches_approval": true,
+        "not_executed": true
+      }
+    }
+  ]
+}

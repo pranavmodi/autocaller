@@ -1708,6 +1708,7 @@ async def create_send_email_action(
     in_reply_to: str | None = None,
     references: str | None = None,
     attachments: list[str] | None = None,
+    review_alert_delivery_id: str | None = None,
 ) -> dict[str, Any]:
     await ensure_agent_tables()
     email_mode = (mode or "test").strip().lower()
@@ -1769,6 +1770,8 @@ async def create_send_email_action(
         "references": reference_ids,
         "attachments": attachment_paths,
     }
+    if review_alert_delivery_id:
+        input_json["review_alert_delivery_id"] = review_alert_delivery_id
     if email_mode == "lead_gen":
         cleaned_action_type = _clean_lead_gen_action_type(lead_gen_action_type)
         if cleaned_action_type:
@@ -2002,6 +2005,11 @@ async def _check_send_email_policy_in_session(session, action: AgentActionRow) -
         checks.append({"name": name, "passed": passed, "detail": detail})
 
     payload = dict(action.input_json or {})
+    review_alert = bool(payload.get("review_alert_delivery_id"))
+    if review_alert:
+        from app.services.review_alert_lead_gen import action_guard
+        review_reason = await action_guard(session, action)
+        add("review_alert_eligible", review_reason is None, review_reason or "allowed")
     approval = dict(payload.get("approval") or {})
     recipient = str(payload.get("to") or action.entity_id or "").strip().lower()
     subject = _sanitize_email_copy(str(payload.get("subject") or ""))
@@ -2144,6 +2152,8 @@ async def _check_send_email_policy_in_session(session, action: AgentActionRow) -
                 "sample_firm_bypass" if sample_firm_bypass else (existing_step_success.id if existing_step_success else ""),
             )
             add("no_prior_successful_lead_gen_action_for_recipient", True, "follow_up_sequence_step")
+        elif review_alert:
+            add("no_prior_successful_lead_gen_action_for_recipient", True, "New deduplicated review event; review-specific recency and suppression checks apply")
         else:
             existing_recipient_success = None
             if not sample_firm_bypass:
@@ -2483,20 +2493,31 @@ async def _execute_send_email(payload: dict[str, Any]) -> dict[str, Any]:
             policy.weights_json or {},
             total_daily_budget=daily_send_budget_from_policy(policy),
         )
-    msg_id = _send_email(
-        subject,
-        body,
-        to=recipient,
-        from_addr=from_addr,
-        message_type=f"possible_os_action_{mode}",
-        recipient_name=recipient_name,
-        pif_id=pif_id,
-        transport=transport,
-        in_reply_to=str(payload.get("in_reply_to") or "").strip() or None,
-        references=str(payload.get("references") or "").strip() or None,
-        brief_version=int(payload["brief_version"]) if payload.get("brief_version") else None,
-        attachments=[str(item) for item in (payload.get("attachments") or [])],
-    )
+    review_id = payload.get("review_alert_delivery_id")
+    source_metadata = {}
+    if review_id:
+        from app.services.review_alert_lead_gen import claim, finish
+        await claim(None, review_id)
+        source_metadata = {"source_type": "review_alert", "source_id": review_id, "firm_name": payload.get("firm_name")}
+    try:
+        msg_id = _send_email(
+            subject, body, to=recipient, from_addr=from_addr,
+            message_type=f"possible_os_action_{mode}", recipient_name=recipient_name,
+            pif_id=pif_id, transport=transport,
+            in_reply_to=str(payload.get("in_reply_to") or "").strip() or None,
+            references=str(payload.get("references") or "").strip() or None,
+            brief_version=int(payload["brief_version"]) if payload.get("brief_version") else None,
+            attachments=[str(item) for item in (payload.get("attachments") or [])],
+            **source_metadata,
+        )
+        if review_id and (not msg_id or msg_id.startswith("zoho-api:")):
+            raise RuntimeError("Review-alert provider acceptance is unconfirmed; verify Sent before retrying")
+    except Exception as exc:
+        if review_id:
+            await finish(review_id, error=str(exc)[:1000])
+        raise
+    if review_id:
+        await finish(review_id, message_id=msg_id)
     email_log: EmailLogRow | None = None
     async with AsyncSessionLocal() as session:
         email_log = (await session.execute(

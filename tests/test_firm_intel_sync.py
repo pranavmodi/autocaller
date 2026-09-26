@@ -40,7 +40,7 @@ class FakeSession:
     async def __aexit__(self, exc_type, exc, tb):
         return False
 
-    async def get(self, model, key):
+    async def get(self, model, key, **kwargs):
         if model is PifFirmRow:
             return self.store.firms.get(str(key))
         if model is FirmIntelSyncStateRow:

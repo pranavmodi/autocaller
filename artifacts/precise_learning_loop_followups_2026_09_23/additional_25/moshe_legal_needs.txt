@@ -1,0 +1,13 @@
+Subject: after-hours cases slipping away
+
+Hi Moshe,
+
+I wanted to share this short note about the AI system we built for Precise Imaging. It explains how the team flags mistakes, reviews them, and tests fixes before they go live.
+
+https://getpossibleminds.com/t/eXtLxCDtzg
+
+At Legal Needs, is this more useful for after-hours intake or client updates?
+
+Best,
+Pranav
+Founder, Possible Minds

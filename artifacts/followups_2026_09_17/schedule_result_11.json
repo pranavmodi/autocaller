@@ -1,0 +1,132 @@
+{
+  "action": {
+    "id": "action_0682215db05e49649e033e22",
+    "action_type": "send_approved_lead_gen_draft",
+    "status": "approved",
+    "risk_level": "high",
+    "requested_by": "codex",
+    "approved_by": "codex",
+    "entity_type": "lead_gen_batch_item",
+    "entity_id": "747a4d3580a540a69bb1f995c08b914d",
+    "input": {
+      "body": "Hi Silvia,\n\nYour path from legal support work to leading your own practice gives you a perspective on both the preparation and attorney-review sides. It made me think there is a more useful question than my earlier broad note about AI workflows.\n\nI'm Pranav, founder of Possible Minds. We help PI firms adopt AI, and I'm trying to understand where it would genuinely help before building around assumptions.\n\nWould you start by making missing information easier to collect, or making the case summary easier to review? Even a brief answer would help, and I'd appreciate your time.\n\nBest,\nPranav\nFounder, Possible Minds",
+      "subject": "Re: where AI could compound at Law Office of Silvia E. Reynoso, ALC",
+      "approval": {
+        "references": "<0100019ffcb5d235-750ce863-f9d3-444e-9755-1001430dbfc7-000000@email.amazonses.com>",
+        "approved_at": "2026-09-17T09:52:46.499800+00:00",
+        "approved_by": "codex",
+        "body_sha256": "157e9e5edd46891668a471d58eef84d6a985c9344c606542246f4e7fc1a493e3",
+        "in_reply_to": "<0100019ffcb5d235-750ce863-f9d3-444e-9755-1001430dbfc7-000000@email.amazonses.com>",
+        "subject_sha256": "e6325caa58551676851a7ee5df6ca93047c3c68e2e9f1ce66000512f1c85766c"
+      },
+      "transport": "resend",
+      "references": "<0100019ffcb5d235-750ce863-f9d3-444e-9755-1001430dbfc7-000000@email.amazonses.com>",
+      "skill_path": null,
+      "body_sha256": "157e9e5edd46891668a471d58eef84d6a985c9344c606542246f4e7fc1a493e3",
+      "in_reply_to": "<0100019ffcb5d235-750ce863-f9d3-444e-9755-1001430dbfc7-000000@email.amazonses.com>",
+      "skill_sha256": null,
+      "batch_item_id": "747a4d3580a540a69bb1f995c08b914d",
+      "brief_version": null,
+      "subject_sha256": "e6325caa58551676851a7ee5df6ca93047c3c68e2e9f1ce66000512f1c85766c",
+      "composer_variant_key": null,
+      "lead_gen_action_type": "follow_up",
+      "composer_experiment_key": null
+    },
+    "policy_result": {},
+    "execution_result": {},
+    "error": null,
+    "trace_id": null,
+    "scheduled_for": "2026-09-17T17:40:00+00:00",
+    "started_at": null,
+    "completed_at": null,
+    "created_at": "2026-09-17T09:52:46.506190+00:00",
+    "updated_at": "2026-09-17T09:52:46.506196+00:00"
+  },
+  "created": true,
+  "updated_existing": false,
+  "executed": false,
+  "scheduled_for_pt": "2026-09-17 10:40 PDT",
+  "scheduled_for_utc": "2026-09-17 17:40:00 UTC",
+  "policy": {
+    "allowed": true,
+    "reason": "allowed",
+    "checks": [
+      {
+        "name": "status_allows_execution",
+        "passed": true,
+        "detail": "approved"
+      },
+      {
+        "name": "human_approval_present",
+        "passed": true,
+        "detail": "codex"
+      },
+      {
+        "name": "subject_present",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "body_present",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "subject_hash_matches_approval",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "body_hash_matches_approval",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "in_reply_to_matches_approval",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "references_match_approval",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "lead_gen_transport_available",
+        "passed": true,
+        "detail": "zoho_api 0/0 configured=True; resend 0/50 configured=True"
+      },
+      {
+        "name": "no_patient_data_in_outreach",
+        "passed": true,
+        "detail": "llm_guard_disabled"
+      },
+      {
+        "name": "batch_item_exists",
+        "passed": true,
+        "detail": "747a4d3580a540a69bb1f995c08b914d"
+      },
+      {
+        "name": "batch_item_not_already_started",
+        "passed": true,
+        "detail": "approved"
+      },
+      {
+        "name": "contact_email_present",
+        "passed": true,
+        "detail": "silvia@silviaereynosolaw.com"
+      },
+      {
+        "name": "no_prior_successful_action_for_item",
+        "passed": true,
+        "detail": ""
+      }
+    ],
+    "risk_level": "high",
+    "requires_human_approval": true,
+    "action_type": "send_approved_lead_gen_draft",
+    "contact_email": "silvia@silviaereynosolaw.com"
+  },
+  "rank": 11,
+  "email": "silvia@silviaereynosolaw.com"
+}

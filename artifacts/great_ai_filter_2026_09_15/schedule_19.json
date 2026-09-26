@@ -1,0 +1,130 @@
+{
+  "action": {
+    "id": "action_70d7f117ed47497aba268904",
+    "action_type": "send_approved_lead_gen_draft",
+    "status": "approved",
+    "risk_level": "high",
+    "requested_by": "codex",
+    "approved_by": "codex",
+    "entity_type": "lead_gen_batch_item",
+    "entity_id": "6d1071f3cd234911b8a1166807458bbf",
+    "input": {
+      "body": "Hi Bradley,\n\nFollowing the document-workflow article I sent, I wanted to share a short piece on what happens after an AI tool starts saving time.\n\nThe benefit can stay with one person, or become a better process the whole team uses. Making that second step happen is increasingly the focus of our work at Possible Minds.\n\nhttps://getpossibleminds.com/t/IPpGzQkljw\n\nAt The Hayes Law Firm, which seems harder: finding a useful AI tool or turning it into a shared way of working? I'd value your perspective.\n\nBest,\nPranav\nFounder, Possible Minds",
+      "subject": "Re: where AI could compound at The Hayes Law Firm, APC",
+      "approval": {
+        "references": "<0100019ffd08669a-4583924f-9293-4890-9fc1-fbd4963b0d4f-000000@email.amazonses.com>",
+        "approved_at": "2026-09-15T10:41:32.197703+00:00",
+        "approved_by": "codex",
+        "body_sha256": "fd5026c0f3bd9c2ec650b9f1e339078a56b6c18e90d4a6e712e746389471460d",
+        "in_reply_to": "<0100019ffd08669a-4583924f-9293-4890-9fc1-fbd4963b0d4f-000000@email.amazonses.com>",
+        "subject_sha256": "3738dbfa3ef93b755dbfad3392762d9af845ee6f8584f8fd833173b172448dc1"
+      },
+      "transport": "resend",
+      "references": "<0100019ffd08669a-4583924f-9293-4890-9fc1-fbd4963b0d4f-000000@email.amazonses.com>",
+      "skill_path": null,
+      "body_sha256": "fd5026c0f3bd9c2ec650b9f1e339078a56b6c18e90d4a6e712e746389471460d",
+      "in_reply_to": "<0100019ffd08669a-4583924f-9293-4890-9fc1-fbd4963b0d4f-000000@email.amazonses.com>",
+      "skill_sha256": null,
+      "batch_item_id": "6d1071f3cd234911b8a1166807458bbf",
+      "brief_version": null,
+      "subject_sha256": "3738dbfa3ef93b755dbfad3392762d9af845ee6f8584f8fd833173b172448dc1",
+      "composer_variant_key": null,
+      "lead_gen_action_type": "follow_up",
+      "composer_experiment_key": null
+    },
+    "policy_result": {},
+    "execution_result": {},
+    "error": null,
+    "trace_id": null,
+    "scheduled_for": "2026-09-15T18:30:00+00:00",
+    "started_at": null,
+    "completed_at": null,
+    "created_at": "2026-09-15T10:41:32.204409+00:00",
+    "updated_at": "2026-09-15T10:41:32.204415+00:00"
+  },
+  "created": true,
+  "updated_existing": false,
+  "executed": false,
+  "scheduled_for_pt": "2026-09-15 11:30 PDT",
+  "scheduled_for_utc": "2026-09-15 18:30:00 UTC",
+  "final_policy": {
+    "allowed": true,
+    "reason": "allowed",
+    "checks": [
+      {
+        "name": "status_allows_execution",
+        "passed": true,
+        "detail": "approved"
+      },
+      {
+        "name": "human_approval_present",
+        "passed": true,
+        "detail": "codex"
+      },
+      {
+        "name": "subject_present",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "body_present",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "subject_hash_matches_approval",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "body_hash_matches_approval",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "in_reply_to_matches_approval",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "references_match_approval",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "lead_gen_transport_available",
+        "passed": true,
+        "detail": "zoho_api 1/0 configured=True; resend 0/50 configured=True"
+      },
+      {
+        "name": "no_patient_data_in_outreach",
+        "passed": true,
+        "detail": "llm_guard_disabled"
+      },
+      {
+        "name": "batch_item_exists",
+        "passed": true,
+        "detail": "6d1071f3cd234911b8a1166807458bbf"
+      },
+      {
+        "name": "batch_item_not_already_started",
+        "passed": true,
+        "detail": "approved"
+      },
+      {
+        "name": "contact_email_present",
+        "passed": true,
+        "detail": "brad@thehayeslawfirmapc.com"
+      },
+      {
+        "name": "no_prior_successful_action_for_item",
+        "passed": true,
+        "detail": ""
+      }
+    ],
+    "risk_level": "high",
+    "requires_human_approval": true,
+    "action_type": "send_approved_lead_gen_draft",
+    "contact_email": "brad@thehayeslawfirmapc.com"
+  }
+}

@@ -324,6 +324,7 @@ async def run_lead_finder_step(
             ),
             gateway_user=_cache_session_user(run_id),
             attempt_observer=attempt_observer,
+            allow_tools=False,
         )
 
     parsed = result.parsed

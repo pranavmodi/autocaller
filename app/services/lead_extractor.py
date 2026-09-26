@@ -8,7 +8,7 @@ The extractor runs through the OpenClaw proxy gateway (OAuth — "Sign in with
 ChatGPT"), driven by `app/skills/lead-extractor/SKILL.md`. The gateway has no
 structured-output enforcement, so the SKILL.md specifies the exact JSON shape
 and the gateway's tolerant JSON parser extracts it. Model/agent is configurable
-via `LEAD_EXTRACTOR_MODEL` env var (default `openclaw/proxy`).
+via `LEAD_EXTRACTOR_MODEL` env var (default `openclaw/neo`).
 
 Cost: billed against the gateway's ChatGPT account quota, not per-token API.
 """
@@ -25,7 +25,7 @@ from app.services.llm_gateway import call_skill_json
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_MODEL = os.getenv("LEAD_EXTRACTOR_MODEL", "openclaw/proxy")
+DEFAULT_MODEL = os.getenv("LEAD_EXTRACTOR_MODEL", "openclaw/neo")
 _SKILL_PATH = Path(__file__).resolve().parents[1] / "skills/lead-extractor/SKILL.md"
 _REQUIRED_FIELDS = [
     "usable",
@@ -89,6 +89,8 @@ async def extract_lead(firm: dict, *, model: str = DEFAULT_MODEL) -> ExtractedLe
             required_fields=_REQUIRED_FIELDS,
             model=model,
             max_tokens=int(os.getenv("LEAD_EXTRACTOR_MAX_TOKENS", "700")),
+            lane=os.getenv("OPENCLAW_RPC_BATCH_LANE", "possibleos-batch"),
+            allow_tools=False,
         )
     except Exception as e:
         logger.warning("extractor gateway call failed: %s", e)

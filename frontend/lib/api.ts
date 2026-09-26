@@ -952,6 +952,9 @@ export const createEngagementCampaignLink = (
     channel: "email" | "linkedin" | "public";
     destination_url?: string;
     contact_id?: string;
+    recipient_name?: string;
+    recipient_email?: string;
+    recipient_firm_id?: string;
     label?: string;
     mark_sent?: boolean;
   },
@@ -1719,6 +1722,8 @@ export type CommsItem = {
   call_id: string | null;
   duration_seconds: number | null;
   message_type: string | null;
+  source_type: string | null;
+  source_id: string | null;
 };
 
 export type CommsResponse = {

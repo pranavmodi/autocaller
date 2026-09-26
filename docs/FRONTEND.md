@@ -42,6 +42,46 @@ as a desktop page that merely shrinks.
 
 ## Core screens
 
+### `/job-agent` — Job agent
+
+User-requested configuration and observability workspace for job applications.
+Review queue with persisted shortlist/skip/needs-information decisions and notes;
+automatic uncapped collection with durable progress and pause/resume; most recently
+posted sorting by default (unknown dates last); saved collection filters and
+applicant preferences. Review queue, Applications, CVs and Settings are separate tabs; activity
+history remains available through the CLI/API. The CVs tab lists the exact
+company-specific PDFs prepared for application emails, their recipient and Sent
+status, reusable category CVs, and other saved PDFs. Selecting a CV opens a preview
+and a browser download with the original filename.
+The Applications tab is the durable cross-job view for every started workflow:
+researching, stopped, draft-ready, queued or sending, uncertain, and Sent-verified.
+It supports search, status filtering, ordering, pagination, source/PDF links, and
+opens the same detail modal without triggering preparation or sending.
+Settings includes editable category definitions and one-page PDF mappings, with
+preview links. Automatic bulk classification is off by default; the job detail
+control requests classification for that selected job only. Job details show
+category confidence/reasons, manual overrides, application preparation, explicit
+Zoho CLI sending and Sent verification. The application panel presents the durable
+workflow as individual checkpoints, with completed/in-progress/stopped states,
+the exact failed phase, safe preparation retries, and a separate recovery action
+for uncertain sends. Queue filtering supports categories. Portal
+submissions remain separate. Settings and reviews have conflict protection. All operations
+have `job-agent` CLI parity. See [JOB_AGENT.md](JOB_AGENT.md).
+Attempted Job Agent emails appear in `/comms` with their firm, recipient, complete
+message, and either Sent-verified or unverified status; Sent rechecks update the same
+row rather than creating duplicates.
+The Leads **Job listings** table exposes a Job Agent action on every source-backed
+row. It resolves or creates the canonical candidate and opens the existing application
+controls in a modal, so both screens share classification, resume, draft, duplicate,
+send and verification state. Merely opening the modal performs no classification or
+outbound action.
+
+The default ontology includes reusable one-page resumes for personal-injury case
+management and entry-level paralegal/legal-assistant career transitions. Their
+definitions exclude mandatory experienced or credentialed roles rather than
+presenting transferable legal-operations exposure as direct caseload or litigation
+experience.
+
 ### 1. `/` — Now
 What's happening *right now*. Single screen, glanceable in 2 seconds.
 
@@ -205,3 +245,41 @@ there are >20 leads and >50 calls to reason about.
 
 Stop after Phase 3 unless a concrete need drives more. The goal is not a
 product, it's a pane of glass.
+
+
+### Job Agent browser applications
+
+`JobBrowserApplication` is embedded in the shared `JobApplicationControls` modal
+from both Job Agent and Leads. The modal is wider for progress and screenshots;
+questions accept choices or text and resume with revision protection. The
+Applications tab lists website runs separately through `JobBrowserApplications`.
+See `docs/JOB_BROWSER_APPLICATIONS.md` for exact state/recovery semantics.
+
+
+The website-application panel exposes an AI provider selector. Active runs must be
+paused before choosing another provider for resume; the panel also displays the
+provider actually recorded for the run. Settings saves the default provider and
+OpenAI API model. No credential values are returned to the frontend.
+
+### Automatic resume selection in applications
+Website start and email prepare/apply now include category matching and one-page PDF selection as the first saved worker step. Existing valid selections and manual categories are reused. CLI commands and APIs accept unclassified jobs without an extra classification call. Opening a job does not start work. The modal shows a shared resume card with optional category controls, a website workflow with three progress stages, and an expandable email workflow. Missing resume mappings and classification failures remain actionable blockers.
+
+### Reusable applicant profile
+Answers to website application questions are saved automatically for contextual reuse. Manage them in the Applicant profile tab or inside the application modal. CLI: `job-agent profile`, `profile-save --file FILE`, `profile-remove ID --revision N`, `profile-import-answers`. `browser-control --action answer` defaults to remembering; `--this-application-only` limits reuse. See [JOB_APPLICANT_PROFILE.md](JOB_APPLICANT_PROFILE.md) for scope, provenance, snapshot and conflict behavior.
+
+Job browser modal: stopped applications expose Restart from beginning with an
+inline explanation/confirmation, current attempt number, and a server-provided
+reason if restart is unavailable. Restart keeps the resume and saved answers.
+
+
+Website applications display browser health separately from workflow status:
+preserved, unreachable, lost or closed. Reconnect attaches a stopped run without
+submission; resume/answer and read-only confirmation checking remain separate.
+Closing a browser explicitly distinguishes saved answers from the live form.
+
+
+Website questions now offer Quit application beside Save answer and continue.
+The inline confirmation loads selectable model-inferred reasons, with optional
+editable text and Keep applying. Quit by you hides the unanswered form while
+preserving its question in history. Suggestions never submit an answer or create
+a global profile preference. Browser cleanup failure is separate and retryable.

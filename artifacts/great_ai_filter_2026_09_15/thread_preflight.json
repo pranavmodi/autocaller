@@ -1,0 +1,170 @@
+[
+  {
+    "email": "becker@beckerlawgroup.com",
+    "subject": "Re: Precise Imaging - quick question",
+    "sources": [],
+    "provider_status": 401,
+    "action_candidates": []
+  },
+  {
+    "email": "dimitri@oconnorhurt.com",
+    "subject": "Re: Is Lead Docket at O'Connor & Hurt tying marketing spend to signed cases?",
+    "sources": [
+      {
+        "source": "zoho_sent",
+        "uid": "957",
+        "subject": "Re: Is Lead Docket at O'Connor & Hurt tying marketing spend to signed cases?",
+        "in_reply_to": "<1a039ab4493.801ec87c54946.6501548808148515321@possiblemindshq.com>",
+        "references": "<0100019ff82fa925-e042288e-5687-489f-b345-91e32ed86f78-000000@email.amazonses.com> <1a039ab4493.801ec87c54946.6501548808148515321@possiblemindshq.com>"
+      }
+    ],
+    "action_candidates": []
+  },
+  {
+    "email": "shawn@hakakianlaw.com",
+    "subject": "Re: Is Lead Docket at Hakakian Law Group, PC tying marketing spend to signed cases?",
+    "sources": [
+      {
+        "source": "zoho_sent",
+        "uid": "961",
+        "subject": "Re: Is Lead Docket at Hakakian Law Group, PC tying marketing spend to signed cases?",
+        "in_reply_to": "<1a039d00c5f.5084f62b6311.387906433646508708@possiblemindshq.com>",
+        "references": "<0100019ff810062e-c412b5b6-7df2-45b1-92ac-1f4c452be64d-000000@email.amazonses.com> <1a039d00c5f.5084f62b6311.387906433646508708@possiblemindshq.com>"
+      }
+    ],
+    "action_candidates": []
+  },
+  {
+    "email": "gurgen@ympklaw.com",
+    "subject": "Re: Is Lead Docket at YMPK Law Group, LLP tying marketing spend to signed cases?",
+    "sources": [],
+    "provider_status": 401,
+    "action_candidates": []
+  },
+  {
+    "email": "kendrick@kebradleylaw.com",
+    "subject": "Re: Precise imaging - quick question",
+    "sources": [
+      {
+        "source": "zoho_sent",
+        "uid": "935",
+        "subject": "Precise imaging - quick question",
+        "in_reply_to": "<1a02054aab3.1fa52de221066.3143278410572891490@possiblemindshq.com>",
+        "references": "<1a02054aab3.1fa52de221066.3143278410572891490@possiblemindshq.com>"
+      }
+    ],
+    "action_candidates": []
+  },
+  {
+    "email": "jbeahm@beahmlaw.com",
+    "subject": "Re: where AI could compound at Beahm Law",
+    "sources": [],
+    "provider_status": 401,
+    "action_candidates": []
+  },
+  {
+    "email": "romel@raandassociates.com",
+    "subject": "Re: where AI could compound at RA & Associates, APC",
+    "sources": [],
+    "provider_status": 401,
+    "action_candidates": []
+  },
+  {
+    "email": "efarah@farahandfarah.com",
+    "subject": "Re: What 7,383 PI reviews revealed",
+    "sources": [],
+    "provider_status": 401,
+    "action_candidates": []
+  },
+  {
+    "email": "mike@mweiserlaw.com",
+    "subject": "Re: A client-trust question for MW Law",
+    "sources": [],
+    "provider_status": 401,
+    "action_candidates": []
+  },
+  {
+    "email": "abe@accidentabe.com",
+    "subject": "Re: jelassi rahma submitted a Google review about Accident Abe",
+    "sources": [],
+    "provider_status": 401,
+    "action_candidates": []
+  },
+  {
+    "email": "cj@cyruslegal.com",
+    "subject": "Re: Nick J submitted a Google review about Law Offices of Cyrus Jamehdo",
+    "sources": [],
+    "provider_status": 401,
+    "action_candidates": []
+  },
+  {
+    "email": "kjacobson@quillarrowlaw.com",
+    "subject": "Re: M C submitted a Google review about Quill & Arrow",
+    "sources": [],
+    "provider_status": 401,
+    "action_candidates": []
+  },
+  {
+    "email": "acampano@campanolaw.com",
+    "subject": "Re: Precise imaging - quick question",
+    "sources": [
+      {
+        "source": "zoho_sent",
+        "uid": "933",
+        "subject": "Precise imaging - quick question",
+        "in_reply_to": "<1a0202bb40d.1fe3aefa20089.7714261828498340837@possiblemindshq.com>",
+        "references": "<1a0202bb40d.1fe3aefa20089.7714261828498340837@possiblemindshq.com>"
+      }
+    ],
+    "action_candidates": []
+  },
+  {
+    "email": "matt@alipour.law",
+    "subject": "Re: where AI could compound at Alipour Law Group",
+    "sources": [],
+    "provider_status": 401,
+    "action_candidates": []
+  },
+  {
+    "email": "arnak@azaklaw.com",
+    "subject": "Re: where AI could compound at Azaryan Law",
+    "sources": [],
+    "provider_status": 401,
+    "action_candidates": []
+  },
+  {
+    "email": "caroleen@ctalawfirm.com",
+    "subject": "Re: where AI could compound at CTA Law, APLC",
+    "sources": [],
+    "provider_status": 401,
+    "action_candidates": []
+  },
+  {
+    "email": "george@paijuklaw.com",
+    "subject": "Re: where AI could compound at PAIJUKLAW, PC",
+    "sources": [],
+    "provider_status": 401,
+    "action_candidates": []
+  },
+  {
+    "email": "jamil@sbinjurylawyers.com",
+    "subject": "Re: where AI could compound at Shaaban Biedgoly Injury Lawyers",
+    "sources": [],
+    "provider_status": 401,
+    "action_candidates": []
+  },
+  {
+    "email": "brad@thehayeslawfirmapc.com",
+    "subject": "Re: where AI could compound at The Hayes Law Firm, APC",
+    "sources": [],
+    "provider_status": 401,
+    "action_candidates": []
+  },
+  {
+    "email": "lesly@leslyblaw.com",
+    "subject": "Re: A client-trust question",
+    "sources": [],
+    "provider_status": 401,
+    "action_candidates": []
+  }
+]

@@ -1,0 +1,53 @@
+{
+  "checked_at": "2026-09-22T07:26:52Z",
+  "campaign_id": "cmp_NB-uemH0kZIYD55B",
+  "batch_id": "aed8849776dd4987884ad3e735cf61c7",
+  "status": "approved_and_scheduled_not_sent",
+  "subject": "Precise Imaging - A quick question",
+  "timezone": "America/Los_Angeles",
+  "transport": "resend",
+  "recipients": [
+    {"name":"Dalia Jacobs","firm":"Saeedian Law Group","email":"dalia@saeedianlawgroup.com","title":"Director of Operations","item_id":"7d2dd3992173430db772d9d6b7a1e7a4","action_id":"action_224102480817474eb6bb9b59","scheduled_pdt":"2026-09-22 08:30 PDT","scheduled_utc":"2026-09-22T15:30:00Z","hook":"Multi-office Filevine operations and post-referral handoffs","precise_event":"2026-09-21, firm-domain bill-offer event","draft_file":"dalia_jacobs.txt"},
+    {"name":"Monica Chaney","firm":"Camden Law Firm","email":"monica.chaney@camdenfirm.com","title":"Director of Operations","item_id":"9a0a0c0e5ea2438a9698da3ce7880a36","action_id":"action_ff5deb46009640b0a39f6f72","scheduled_pdt":"2026-09-22 08:40 PDT","scheduled_utc":"2026-09-22T15:40:00Z","hook":"California and Texas coverage with Filevine and Practice 360","precise_event":"2026-09-18, firm-domain lien event","draft_file":"monica_chaney.txt"},
+    {"name":"Tony Akopyan","firm":"Khachikyan Law Firm","email":"tony@khachikyanlawfirm.com","title":"Director of Operations","item_id":"71dc0ba2901b42a89afe85bc97df3c23","action_id":"action_0cb3c767860d4a45b2ec0fa7","scheduled_pdt":"2026-09-22 08:50 PDT","scheduled_utc":"2026-09-22T15:50:00Z","hook":"Boutique practice spanning PI, lemon law, property damage, and business matters","precise_event":"2026-09-19, recipient-domain bill-offer event","draft_file":"tony_akopyan.txt"},
+    {"name":"Eduardo Hernandez","firm":"Kronos Law","email":"eduardo@kronoslaw.com","title":"Director of Operations","item_id":"4d36a684b61e4357811bf99341d223db","action_id":"action_0d9f2e00ea6f417089dcb16a","scheduled_pdt":"2026-09-22 09:00 PDT","scheduled_utc":"2026-09-22T16:00:00Z","hook":"Lean multi-practice operations with confirmed Filevine","precise_event":"2026-09-17, firm-domain appointment-status event","draft_file":"eduardo_hernandez.txt"},
+    {"name":"Nicole Goodman","firm":"BLOCK LLP","email":"nicolegoodman@blockllp.com","title":"Director of Operations","item_id":"b1cd8a9c441c4316b654488be1035bc5","action_id":"action_97d20f956eca45548c41ad0e","scheduled_pdt":"2026-09-22 09:10 PDT","scheduled_utc":"2026-09-22T16:10:00Z","hook":"Multi-office, after-hours, Spanish-language client support","precise_event":"2026-09-17, firm-domain lien event","draft_file":"nicole_goodman.txt"},
+    {"name":"Jalissa Tello","firm":"Trauma Law","email":"jt@traumalaw.com","title":"Director of Operations","item_id":"5dd853fb85224806bcce2e26b3ed2d70","action_id":"action_164f33f10c5341a3a1cbb354","scheduled_pdt":"2026-09-22 09:20 PDT","scheduled_utc":"2026-09-22T16:20:00Z","hook":"Serious and catastrophic injury practice with confirmed CASEpeer evidence","precise_event":"2026-09-02, firm-domain lien event","draft_file":"jalissa_tello.txt"},
+    {"name":"Stephanie Perez","firm":"Venerable Injury Law","email":"stephanie@venerablelaw.com","title":"Director of Operations | Litigation Manager","item_id":"1bb8b4b97f424e99bb66db1d07196d65","action_id":"action_b2a505de4b90423f9e804167","scheduled_pdt":"2026-09-22 09:30 PDT","scheduled_utc":"2026-09-22T16:30:00Z","hook":"ClaimTrack client portal, Filevine, and litigation operations","precise_event":"2026-09-11, firm-domain bill-offer event","draft_file":"stephanie_perez.txt"},
+    {"name":"Myrna Ferniza","firm":"Bridgewater Law Group","email":"myrna@bwaterlaw.com","title":"Director of Operations","item_id":"4a7cdbeaed764f3b99ff5625590e3f2b","action_id":"action_e98d587c5e84481b8c61625c","scheduled_pdt":"2026-09-22 09:40 PDT","scheduled_utc":"2026-09-22T16:40:00Z","hook":"Compact statewide firm offering 24/7 and Spanish-language support","precise_event":"2026-08-14, firm-domain bill-offer event","draft_file":"myrna_ferniza.txt"},
+    {"name":"Sam Byun","firm":"PIROUZLAW","email":"sam@pirouzlaw.com","title":"Director of Operations","item_id":"97122923461b410b8adbc7b73a416abf","action_id":"action_694b715c015d49fba3059b65","scheduled_pdt":"2026-09-22 09:50 PDT","scheduled_utc":"2026-09-22T16:50:00Z","hook":"Expert-intensive PI trial practice with confirmed CASEpeer evidence","precise_event":"2026-07-30, recipient-domain bill-balance event","draft_file":"sam_byun.txt"},
+    {"name":"Liene Larsen","firm":"Meridian Law Group","email":"larsen@meridianlawgroup.ca","title":"Director of Operations and HR","item_id":"84bc882089454a4dacdc20f5e5904b8a","action_id":"action_d5f945b97d234452a10dc5a0","scheduled_pdt":"2026-09-22 10:00 PDT","scheduled_utc":"2026-09-22T17:00:00Z","hook":"Operations-and-HR ownership of repetitive but judgment-sensitive work","precise_event":"2026-07-20, canonical-firm bill-offer event","draft_file":"liene_larsen.txt"}
+  ],
+  "validation": {
+    "distinct_recipients": 10,
+    "distinct_firms": 10,
+    "firm_matched_non_test_precise_events": "10/10",
+    "fresh_all_folder_mailbox_scan": "No target reply, bounce, or opt-out found",
+    "policy_allowed": "10/10",
+    "approved_scheduled_actions": "10/10",
+    "plaintext_newlines": "10/10",
+    "action_type": "first_touch",
+    "tracking_links": 0,
+    "sent": 0,
+    "delivered": 0,
+    "failed": 0,
+    "scheduler_running": true,
+    "scheduler_last_error": null,
+    "queue_pending_count": 10,
+    "daily_provider_cap": 50
+  },
+  "held": [
+    {"name":"Christopher Jones","firm":"Power Liens","reason":"A different Power Liens leader was sent a similarly themed email on 2026-09-21."},
+    {"name":"Veronica Samaan","firm":"ProCare Funding","reason":"The same recipient was sent a similarly themed email on 2026-09-21."},
+    {"name":"Karen","firm":"Downtown L.A. Law Group","reason":"Firm contact occurred within the 30-day cooldown."},
+    {"name":"Cesar Bazan","firm":"Ravan Law","reason":"A different Ravan Law contact was sent a message on 2026-09-21."},
+    {"name":"Jessica Horrilleno","firm":"Alexandroff Law Group","reason":"Firm contact occurred within the 30-day cooldown."},
+    {"name":"Katie Whitt","firm":"RMD Law","reason":"Firm contact occurred within the 30-day cooldown."},
+    {"name":"Stella Chalian","firm":"Hosharian Law Firm","reason":"Firm contact occurred within the 30-day cooldown."},
+    {"name":"Allen Kian","firm":"Oakmont Law","reason":"Firm contact occurred within the 30-day cooldown."},
+    {"name":"Zack Malal","firm":"SAW Law Group","reason":"Only a masked email is available."},
+    {"name":"Andy Cardenas","firm":"The Law Offices of David Nitka","reason":"Stored contact name and supplied identity conflict."},
+    {"name":"Charles Mugrdechian","firm":"NP College","reason":"No qualifying Precise event and not a PI or medical-legal operating target."},
+    {"name":"Dr. Lisa Putnam","firm":"Ventura County Community College District","reason":"No qualifying Precise event and not a PI or medical-legal operating target."}
+  ]
+}

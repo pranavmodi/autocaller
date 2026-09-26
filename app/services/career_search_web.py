@@ -72,6 +72,16 @@ class PageText(HTMLParser):
 
 
 def extract_page(html: str) -> str:
+    # Public content APIs and some ATS endpoints return JSON rather than HTML.
+    # Decode once before serializing with real Unicode characters so exact
+    # evidence excerpts are compared to the document's meaning instead of its
+    # wire-level escape sequences (for example, `\u00f3`).
+    try:
+        document = json.loads(html)
+    except (json.JSONDecodeError, TypeError):
+        document = None
+    if isinstance(document, (dict, list)):
+        return json.dumps(document, ensure_ascii=False)[:60000]
     parser = PageText()
     parser.feed(html)
     # ATS JSON carries dates, location restrictions and live application metadata.

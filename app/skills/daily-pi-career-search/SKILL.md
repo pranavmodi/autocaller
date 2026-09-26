@@ -23,6 +23,12 @@ configured. The role itself must semantically match one of the comma-, semicolon
 or line-separated target roles. Do not promote a job merely because it uses a tool
 or shares a weak keyword with a target role. When search_profile is null, the call
 is legacy seed/retry maintenance only; do not perform a separate broad PI search.
+The supplied career_sources are operator-enabled discovery surfaces. Prefer their
+public feeds/APIs and public job pages. For sources marked for web search, use only
+public indexed pages; do not sign in, bypass access controls, automate an account,
+or treat a marketplace profile as a job. A board or feed is a discovery source,
+not the employer identity: still establish the employer on its official domain and
+return a specific job URL.
 Do not conflate an unnamed recruiter with the actual employer.
 Prioritize opportunities matching search_profile.location_preferences; retain
 country or region restrictions exactly. Remote alone does not mean global.
@@ -41,6 +47,52 @@ appear to publish a recruiting email or a suitable general routing email. Use an
 empty array when none is found. Never include third-party people databases,
 guessed addresses, accessibility/accommodation mailboxes, or an address inferred
 from an email pattern.
+
+## URL import mode
+`url_import` resolves exactly one operator-supplied job URL into the discovery
+candidate schema. Use only the supplied freshly fetched job page, including its
+structured data and links, to establish the employer's official domain, an
+official employer identity page, and optional official contact pages. Do not
+guess a company domain or browse. Return exactly one
+candidate when the supplied page identifies a specific job. Keep `source_url`
+equal to the supplied URL or its supplied final redirect URL; do not substitute
+another role, a search result, or a generic careers page. This mode imports the
+operator's chosen role regardless of whether it matches the saved search
+preferences. The later verifier still records any preference matches and must
+verify the exact employer, role and live status before storage.
+
+## URL import identity mode
+`url_import_identity` extracts the exact employer name and job title from one
+freshly fetched operator-supplied job page. Return
+`{"identities":[{"firm_name":"...","title":"...","source_url":"..."}]}`
+with exactly one entry when the page identifies one specific job. Keep
+`source_url` equal to the supplied URL or its supplied final redirect URL. Use
+only the supplied page, do not browse, and omit the identity when the page is
+ambiguous or generic.
+
+## URL import enrichment mode
+`url_import_enrichment` is a bounded research and synthesis step used only when
+the freshly fetched operator-supplied job page identifies the role and employer
+but does not establish a valid official employer domain and identity page. When
+`research_transport` is `native_tool_rpc`, use only the supplied job page,
+extracted job_identity and supplied web_search results; do not call tools. When
+it is `provider_native_agent_search`, the lighter tool RPC was unavailable and
+you must use bounded web search to find the exact employer's official website
+and an official identity page. Select sources only for the exact employer named
+on the supplied page. Return
+exactly one candidate in the discovery schema, keep `source_url` equal to the
+supplied URL or its supplied final redirect URL, and do not substitute a
+different role. `employer_evidence_url` must be a public page on the employer's
+own domain that establishes the same employer identity; a LinkedIn, job-board,
+ATS, directory, or search-result page is not an official employer identity page.
+Search-result snippets are discovery hints, not final evidence. The server will
+freshly fetch and validate every returned URL. If a public official page blocks
+the verifier but exposes the same page through a public same-origin WordPress
+REST endpoint, the server may supply that machine-readable response instead;
+it remains subject to the same structured identity and exact-excerpt checks. Omit the
+candidate if official identity cannot be established. `contact_urls` may include
+only official-employer pages discovered during this same bounded research pass.
+Do not apply, contact anyone, send a message, or submit a form.
 
 ## Retry discovery mode
 `retry_discovery` recovers historical failed candidates whose raw inputs were
@@ -84,8 +136,10 @@ Each decision must contain:
   technology_role (boolean) remains descriptive. A qualifying Job Agent result
   requires preferred_industry_employer and target_role_match.
   legal_domain_employer remains descriptive and does not bypass the operator's
-  configured industry list. Legacy null-profile maintenance requires a direct PI
-  technology role. A broad company serving an
+  configured industry list. When `direct_import` is true, the operator supplied
+  the exact role, so industry and target-role matches are descriptive and do not
+  determine whether an otherwise verified active role can be stored. Legacy
+  null-profile maintenance requires a direct PI technology role. A broad company serving an
   industry is not part of that industry merely because a role mentions one customer.
 - title; requisition_id (string or null); ats_provider (string or null).
 - posted_date (YYYY-MM-DD or null): ONLY original employer publication.

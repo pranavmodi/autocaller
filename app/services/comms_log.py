@@ -13,6 +13,7 @@ from __future__ import annotations
 import logging
 import os
 import uuid
+import hashlib
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -62,8 +63,21 @@ def log_email(
     call_id: Optional[str] = None,
     recipient_name: Optional[str] = None,
     brief_version: Optional[int] = None,
-) -> None:
-    """Insert one row into email_logs. Never raises."""
+    firm_name: Optional[str] = None,
+    source_type: Optional[str] = None,
+    source_id: Optional[str] = None,
+    occurred_at: Optional[datetime] = None,
+) -> Optional[str]:
+    """Insert or refresh one row in email_logs. Never raises.
+
+    Source metadata makes external send paths such as the Job Agent
+    idempotent: repeated Sent verification updates the same Communications
+    record instead of creating another apparent email.
+    """
+    identity = None
+    if source_type and source_id:
+        identity = hashlib.sha256(f"{source_type}:{source_id}".encode()).hexdigest()
+    row_id = identity or uuid.uuid4().hex
     try:
         with _engine().begin() as conn:
             conn.execute(
@@ -72,16 +86,31 @@ def log_email(
                     INSERT INTO email_logs (
                         id, pif_id, call_id, recipient_email, recipient_name,
                         subject, body_excerpt, message_type, transport,
-                        message_id, status, error, sent_at, brief_version
+                        message_id, status, error, sent_at, brief_version,
+                        firm_name, source_type, source_id
                     ) VALUES (
                         :id, :pif_id, :call_id, :to, :to_name,
                         :subject, :body, :mtype, :transport,
-                        :mid, :status, :err, :sent_at, :brief_version
+                        :mid, :status, :err, :sent_at, :brief_version,
+                        :firm_name, :source_type, :source_id
                     )
+                    ON CONFLICT (id) DO UPDATE SET
+                        recipient_email = EXCLUDED.recipient_email,
+                        recipient_name = EXCLUDED.recipient_name,
+                        subject = EXCLUDED.subject,
+                        body_excerpt = EXCLUDED.body_excerpt,
+                        message_type = EXCLUDED.message_type,
+                        transport = EXCLUDED.transport,
+                        message_id = COALESCE(EXCLUDED.message_id, email_logs.message_id),
+                        status = EXCLUDED.status,
+                        error = EXCLUDED.error,
+                        firm_name = EXCLUDED.firm_name,
+                        source_type = EXCLUDED.source_type,
+                        source_id = EXCLUDED.source_id
                     """
                 ),
                 {
-                    "id": uuid.uuid4().hex,
+                    "id": row_id,
                     "pif_id": pif_id,
                     "call_id": call_id,
                     "to": (recipient_email or "").strip().lower()[:320],
@@ -93,12 +122,17 @@ def log_email(
                     "mid": (message_id or None),
                     "status": (status or "sent")[:16],
                     "err": error,
-                    "sent_at": datetime.now(timezone.utc),
+                    "sent_at": occurred_at or datetime.now(timezone.utc),
                     "brief_version": brief_version,
+                    "firm_name": (firm_name or None),
+                    "source_type": (source_type or None),
+                    "source_id": (source_id or None),
                 },
             )
+        return row_id
     except Exception as e:
         logger.warning("email_logs insert failed: %s", e)
+        return None
 
 
 def log_sms(

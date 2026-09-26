@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Activity,
+  Bell,
   BrainCircuit,
   BookOpen,
   Bot,
@@ -54,6 +55,7 @@ const items = [
   { href: "/cadence", label: "Call Lab", icon: Headset },
   { href: "/calls", label: "Calls", icon: PhoneCall },
   { href: "/comms", label: "Comms", icon: MessageSquare },
+  { href: "/review-alerts", label: "Review Alerts", icon: Bell },
   { href: "/lead-gen", label: "Lead Gen", icon: BrainCircuit },
   { href: "/research-leads", label: "Research Leads", icon: Users },
   { href: "/lead-finder", label: "Lead Finder", icon: Search },

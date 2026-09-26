@@ -1,0 +1,18 @@
+Subject: Considering Clio or Filevine?
+
+Hi Alex,
+
+You handle cases from the first client call through appeal. Any software change needs to preserve that history, not give your team more admin work.
+
+If PARRIS is considering a move from ProLaw, we can help plan and carry out a migration to Clio or Filevine, mapping records, documents and workflows so they're better connected for AI and automation.
+
+I'm Pranav, founder of Possible Minds, previously at McKinsey and Expedia. We built Precise Imaging's email-handling system, which processes over 600 emails daily, routes requests and sends automated status responses.
+
+Here's how we approach migration:
+https://getpossibleminds.com/t/7FUyplVojA
+
+Would a brief outline of what a move could involve be useful? I'd appreciate your thoughts.
+
+Best,
+Pranav
+Founder, Possible Minds

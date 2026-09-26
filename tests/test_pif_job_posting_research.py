@@ -212,7 +212,9 @@ def test_gateway_failure_is_requeued_with_persisted_retry_state(monkeypatch):
         async def __aexit__(self, *args):
             return None
 
-        async def get(self, model, key):
+        async def get(self, model, key, **kwargs):
+            if model is service.PifFirmRow:
+                assert kwargs.get("with_for_update") is True
             return task if model is service.PifJobResearchTaskRow else firm
 
         async def commit(self):

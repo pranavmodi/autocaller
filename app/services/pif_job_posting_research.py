@@ -16,6 +16,7 @@ from sqlalchemy import case, select, update
 from app.db import AsyncSessionLocal
 from app.db.models import PifFirmRow, PifJobResearchTaskRow
 from app.services.llm_gateway import call_skill_json
+from app.services.career_job_store import PROVIDER as CAREER_PROVIDER, preserve_career_postings, merge_career_postings
 
 
 logger = logging.getLogger(__name__)
@@ -267,6 +268,8 @@ def _firm_website(firm: PifFirmRow) -> str | None:
 
 def classify_job_posting(posting: dict[str, Any], *, classified_at: datetime | None = None) -> dict[str, Any]:
     """Add stable GTM taxonomy fields without changing source-backed posting data."""
+    if posting.get("classification_provider") == CAREER_PROVIDER:
+        return dict(posting)
     title = str(posting.get("title") or "").lower()
     body_parts = [
         posting.get("description_summary"),
@@ -334,7 +337,10 @@ def _research_data_with_status(
     data["job_postings_research_status"] = status
     data["job_postings_research_provider"] = LOCAL_RESEARCH_PROVIDER
     if result is not None:
-        data["job_postings"] = result
+        previous_jobs = dict(data.get("job_postings") or {})
+        merged = preserve_career_postings(previous_jobs.get("postings"), result.get("postings"))
+        data["job_postings"] = {**result, "postings": merged,
+            "has_recent_openings": any(p.get("status") != "closed" for p in merged)}
     if checked_at is not None:
         data["last_job_postings_researched_at"] = checked_at.isoformat()
     if status in {"completed", "failed"}:
@@ -440,12 +446,15 @@ async def research_recent_job_postings(
         max_tokens=int(os.getenv("PIF_JOB_RESEARCH_MAX_TOKENS", "4000")),
         retries=1,
         schema_repair_retries=1,
+        lane=os.getenv("OPENCLAW_RPC_BATCH_LANE", "possibleos-batch"),
     )
     postings = normalize_job_postings(
         result.parsed.get("postings"),
         window_start=window_start,
         window_end=window_end,
     )
+    from app.services.job_contract_classification import classify_extracted_postings
+    postings, contract_classification_error = await classify_extracted_postings(postings)
     return {
         "has_recent_openings": bool(postings),
         "window_days": WINDOW_DAYS,
@@ -453,12 +462,13 @@ async def research_recent_job_postings(
         "window_end": window_end.isoformat(),
         "researched_at": _utcnow().isoformat(),
         "postings": postings,
+        "contract_classification_error": contract_classification_error,
     }
 
 
 async def start_job_posting_research(firm_id: str) -> dict[str, Any]:
     async with AsyncSessionLocal() as session:
-        firm = await session.get(PifFirmRow, firm_id)
+        firm = await session.get(PifFirmRow, firm_id, with_for_update=True)
         if firm is None:
             raise PifResearchUpstreamError(404, "firm_not_found")
         existing = (await session.execute(
@@ -492,6 +502,12 @@ async def start_job_posting_research(firm_id: str) -> dict[str, Any]:
         firm.updated_at = _utcnow()
         session.add(task)
         await session.commit()
+        try:
+            from app.services.pif_change_detection import MODULE_JOBS, mark_research_status
+
+            await mark_research_status(firm_id, MODULE_JOBS, "queued", metadata={"task_id": task_id})
+        except Exception:
+            logger.exception("Could not update job research queue state for %s", firm_id)
         return {
             "task_id": task_id,
             "pif_id": firm_id,
@@ -503,7 +519,7 @@ async def start_job_posting_research(firm_id: str) -> dict[str, Any]:
 
 async def start_sitemap_research(firm_id: str) -> dict[str, Any]:
     async with AsyncSessionLocal() as session:
-        firm = await session.get(PifFirmRow, firm_id)
+        firm = await session.get(PifFirmRow, firm_id, with_for_update=True)
         if firm is None:
             raise PifResearchUpstreamError(404, "firm_not_found")
         if not _firm_website(firm):
@@ -538,6 +554,12 @@ async def start_sitemap_research(firm_id: str) -> dict[str, Any]:
         firm.research_data = _research_data_with_sitemap_status(firm, "queued")
         firm.updated_at = _utcnow()
         await session.commit()
+        try:
+            from app.services.pif_change_detection import MODULE_SITEMAP, mark_research_status
+
+            await mark_research_status(firm_id, MODULE_SITEMAP, "queued", metadata={"task_id": task_id})
+        except Exception:
+            logger.exception("Could not update sitemap research queue state for %s", firm_id)
         return {
             "task_id": task_id,
             "pif_id": firm_id,
@@ -686,7 +708,7 @@ async def _claim_next_task() -> tuple[str, str, str] | None:
             summary.pop("retry_at", None)
             summary.pop("retry_delay_seconds", None)
             task.result_summary = summary
-        firm = await session.get(PifFirmRow, task.pif_id)
+        firm = await session.get(PifFirmRow, task.pif_id, with_for_update=True)
         if firm is not None:
             if task.kind == "research":
                 research_data = _research_data_with_status(firm, "in_progress")
@@ -699,6 +721,18 @@ async def _claim_next_task() -> tuple[str, str, str] | None:
                 firm.research_data = _research_data_with_sitemap_status(firm, "in_progress")
             firm.updated_at = _utcnow()
         await session.commit()
+        if task.kind in {"research", "sitemap"}:
+            try:
+                from app.services.pif_change_detection import (
+                    MODULE_JOBS,
+                    MODULE_SITEMAP,
+                    mark_research_status,
+                )
+
+                module = MODULE_SITEMAP if task.kind == "sitemap" else MODULE_JOBS
+                await mark_research_status(task.pif_id, module, "in_progress", metadata={"task_id": task.task_id})
+            except Exception:
+                logger.exception("Could not update %s research running state for %s", task.kind, task.pif_id)
         return task.task_id, task.pif_id, task.kind
 
 
@@ -711,11 +745,13 @@ async def _finish_task(
     kind: str = "research",
 ) -> None:
     checked_at = _utcnow()
+    target_pif_id: str | None = None
     async with AsyncSessionLocal() as session:
         task = await session.get(PifJobResearchTaskRow, task_id)
         if task is None:
             return
-        firm = await session.get(PifFirmRow, task.pif_id)
+        firm = await session.get(PifFirmRow, task.pif_id, with_for_update=True)
+        target_pif_id = task.pif_id
         previous_summary = dict(task.result_summary) if isinstance(task.result_summary, dict) else {}
         attempt_metadata = {
             key: previous_summary[key]
@@ -753,7 +789,9 @@ async def _finish_task(
                 research_data = dict(firm.research_data) if isinstance(firm.research_data, dict) else {}
                 job_data = dict(research_data.get("job_postings") or {})
                 job_data.update({
-                    "postings": result.get("postings") or [],
+                    "postings": preserve_career_postings(job_data.get("postings"), merge_career_postings(
+                        job_data.get("postings") or [], result.get("postings") or [],
+                    )[0]),
                     "classification_status": "completed",
                     "classification_version": CLASSIFIER_VERSION,
                     "classified_at": checked_at.isoformat(),
@@ -792,6 +830,37 @@ async def _finish_task(
         if firm is not None:
             firm.updated_at = checked_at
         await session.commit()
+    if target_pif_id and kind == "research":
+        try:
+            from app.services.pif_change_detection import (
+                MODULE_JOBS,
+                mark_research_failure,
+                record_research_snapshot,
+            )
+
+            if status == "completed" and result is not None:
+                change_summary = await record_research_snapshot(
+                    target_pif_id,
+                    MODULE_JOBS,
+                    result,
+                    captured_at=checked_at,
+                )
+                async with AsyncSessionLocal() as session:
+                    task = await session.get(PifJobResearchTaskRow, task_id)
+                    if task is not None:
+                        summary = dict(task.result_summary) if isinstance(task.result_summary, dict) else {}
+                        summary["change_detection"] = change_summary
+                        task.result_summary = summary
+                        await session.commit()
+            elif status == "failed":
+                await mark_research_failure(
+                    target_pif_id,
+                    MODULE_JOBS,
+                    error or "Job-posting research failed",
+                    attempted_at=checked_at,
+                )
+        except Exception:
+            logger.exception("Job-posting change detection failed for %s", target_pif_id)
 
 
 async def _schedule_job_research_retry(task_id: str, error: Exception) -> bool:
@@ -823,7 +892,7 @@ async def _schedule_job_research_retry(task_id: str, error: Exception) -> bool:
                 f"{retry_at.isoformat()}"
             ),
         }
-        firm = await session.get(PifFirmRow, task.pif_id)
+        firm = await session.get(PifFirmRow, task.pif_id, with_for_update=True)
         if firm is not None:
             research_data = _research_data_with_status(firm, "queued")
             research_data["job_postings_research_retry"] = {
@@ -902,7 +971,7 @@ async def queue_job_posting_classification_backfill(*, force: bool = False) -> d
         firms = (await session.execute(
             select(PifFirmRow).where(
                 PifFirmRow.research_data["job_postings"]["postings"].isnot(None)
-            )
+            ).with_for_update()
         )).scalars().all()
         open_ids = set((await session.execute(
             select(PifJobResearchTaskRow.pif_id).where(

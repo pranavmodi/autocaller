@@ -1,0 +1,70 @@
+{
+  "leadership": [
+    {
+      "name": "Veronica Samaan",
+      "email": "veronicdan@procarefunding.com",
+      "phone": "(657) 251-5530",
+      "title": "Director of Operations",
+      "is_decision_maker": true,
+      "confidence": 0.7,
+      "research_checked_at": "2026-09-21T11:41:03Z",
+      "source_urls": [
+        "https://procarefunding.com/",
+        "https://procarefunding.com/about/",
+        "https://procarefunding.com/contact/"
+      ],
+      "role_verification": "Existing Possible OS leadership roster; the official site does not publish an individual leadership directory",
+      "business_email_status": "Existing Possible OS roster email; not published on the official contact page",
+      "linkedin_status": "No company-matched public LinkedIn profile verified"
+    },
+    {
+      "name": "James Aviles",
+      "email": "",
+      "phone": "",
+      "title": "Co-owner / Co-founder, ProCare Funding, LLC",
+      "is_decision_maker": true,
+      "confidence": 0.85,
+      "research_checked_at": "2026-09-21T11:41:03Z",
+      "source_urls": [
+        "https://news.workcompacademy.com/2024/Healthcare-Management-v-R.O.A.R.-Management-B330809.PDF",
+        "https://law.counselstack.com/opinion/healthcare-management-v-roar-management-ca21-calctapp-2024"
+      ],
+      "role_verification": "The 2024 California Court of Appeal opinion describes ProCare as run by James Aviles and Ernest Medina",
+      "business_email_status": "No direct public email verified",
+      "linkedin_status": "Search results were ambiguous; no company-matched profile recorded"
+    },
+    {
+      "name": "Ernest Medina",
+      "email": "info@procarefunding.com",
+      "phone": "(657) 251-5530",
+      "title": "Co-owner / Co-founder, ProCare Funding, LLC",
+      "is_decision_maker": true,
+      "confidence": 0.85,
+      "research_checked_at": "2026-09-21T11:41:03Z",
+      "source_urls": [
+        "https://news.workcompacademy.com/2024/Healthcare-Management-v-R.O.A.R.-Management-B330809.PDF",
+        "https://law.counselstack.com/opinion/healthcare-management-v-roar-management-ca21-calctapp-2024",
+        "https://procarefunding.com/contact/"
+      ],
+      "role_verification": "The 2024 California Court of Appeal opinion describes ProCare as run by Ernest Medina and James Aviles",
+      "business_email_status": "Official shared ProCare contact mailbox; not a verified personal address",
+      "linkedin_status": "A public Ernest Medina profile exists at Healthpointe, but its ProCare affiliation is not established"
+    },
+    {
+      "name": "Mary Aviles",
+      "email": "",
+      "phone": "",
+      "title": "Manager, ProCare Funding, LLC (California filing); related-entity leadership reference",
+      "is_decision_maker": true,
+      "confidence": 0.8,
+      "research_checked_at": "2026-09-21T11:41:03Z",
+      "source_urls": [
+        "https://www.bizprofile.net/ca/la-mirada/procare-funding-llc",
+        "https://bizprofile.net/authorized-person/mary-aviles"
+      ],
+      "role_verification": "California business-filing information lists Mary Aviles as manager of ProCare Funding, LLC; the legal opinion separately describes James Aviles and Ernest Medina as running ProCare",
+      "business_email_status": "No direct public email verified",
+      "linkedin_status": "No company-matched public LinkedIn profile verified"
+    }
+  ]
+}

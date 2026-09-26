@@ -26,6 +26,7 @@ from app.db.models import FirmAliasRow, FirmIntelSyncStateRow, PifAutorespondEve
 from app.services.firm_alias_integrity import is_trusted_domain_alias, normalize_identity_domain
 from app.services.front_sync import is_consumer_domain, normalize_domain
 from app.services.persona_mapper import classify_contact
+from app.services.pif_count_ranges import count_ranges_condition
 
 logger = logging.getLogger(__name__)
 
@@ -358,6 +359,16 @@ def _preserve_local_job_research(existing: Any, incoming: dict[str, Any]) -> dic
         value = prior.get(key)
         if isinstance(value, dict) and str(value.get("provider") or "").startswith("possibleos_"):
             merged[key] = value
+    for key in ("ai_adoption", "ai_adoption_history"):
+        if key in prior:
+            merged[key] = prior[key]
+    from app.services.career_job_store import PROVIDER, preserve_career_postings
+    old_jobs = prior.get("job_postings") or {}
+    if any(p.get("discovery_provider") == PROVIDER for p in old_jobs.get("postings", []) if isinstance(p, dict)):
+        jobs = dict(merged.get("job_postings") or {})
+        jobs["postings"] = preserve_career_postings(old_jobs.get("postings"), jobs.get("postings"))
+        jobs["has_recent_openings"] = any(p.get("status") != "closed" for p in jobs["postings"])
+        merged["job_postings"] = jobs
     return merged
 
 
@@ -650,12 +661,12 @@ async def _upsert_profile(session, profile: dict[str, Any], *, now: datetime) ->
     if not firm_id:
         return "skipped", 0, None
     linked_firm_id = await _firm_id_by_local_alias(session, firm_id) if is_extraction else None
-    row = await session.get(PifFirmRow, linked_firm_id or firm_id)
+    row = await session.get(PifFirmRow, linked_firm_id or firm_id, with_for_update=True)
     status = "updated"
     if row is None:
         canonical = _profile_website(profile)
         existing_id = await _firm_id_by_website(session, canonical) if canonical else None
-        existing = await session.get(PifFirmRow, existing_id) if existing_id else None
+        existing = await session.get(PifFirmRow, existing_id, with_for_update=True) if existing_id else None
         if existing is not None and existing.profile_source == "manual":
             row = existing
         else:
@@ -1618,6 +1629,8 @@ async def list_mirrored_pif_job_postings(
     trigger_tag: str | None = None,
     technology: str | None = None,
     gtm_relevance: str | None = None,
+    remote_scope: str | None = None,
+    contract_status: str | None = None,
     global_remote: bool | None = None,
     posted_within_days: int | None = None,
     order: str = "posted_desc",
@@ -1629,11 +1642,17 @@ async def list_mirrored_pif_job_postings(
     page = max(1, int(page))
     page_size = max(1, min(100, int(page_size)))
     relevance = (gtm_relevance or "").strip().lower()
+    selected_remote_scope = (remote_scope or "").strip().lower()
+    selected_contract_status = (contract_status or "").strip().lower()
     ordering = (order or "posted_desc").strip().lower()
     if relevance and relevance not in {"high", "medium", "low"}:
         raise ValueError(f"unsupported_gtm_relevance:{relevance}")
     if ordering not in {"posted_desc", "found_desc"}:
         raise ValueError(f"unsupported_job_posting_order:{ordering}")
+    if selected_remote_scope and selected_remote_scope not in {"remote", "global", "not_global"}:
+        raise ValueError(f"unsupported_remote_scope:{selected_remote_scope}")
+    if selected_contract_status and selected_contract_status not in {"contract", "non_contract", "unknown"}:
+        raise ValueError(f"unsupported_contract_status:{selected_contract_status}")
 
     sql = """
         SELECT
@@ -1643,6 +1662,7 @@ async def list_mirrored_pif_job_postings(
             COALESCE(f.canonical_website, f.website) AS website,
             f.updated_at,
             COALESCE(
+                NULLIF(posting.value->>'first_seen_at', '')::timestamptz,
                 NULLIF(f.research_data->'job_postings'->>'researched_at', '')::timestamptz,
                 NULLIF(f.research_data->>'last_job_postings_researched_at', '')::timestamptz
             ) AS found_at,
@@ -1652,6 +1672,7 @@ async def list_mirrored_pif_job_postings(
             COALESCE(f.research_data->'job_postings'->'postings', '[]'::jsonb)
         ) posting(value)
         WHERE COALESCE(f.source_json->>'merged_into', '') = ''
+          AND COALESCE(posting.value->>'status', 'active') != 'closed'
     """
     params: dict[str, Any] = {}
     if search and search.strip():
@@ -1675,9 +1696,20 @@ async def list_mirrored_pif_job_postings(
     if relevance:
         params["gtm_relevance"] = relevance
         sql += " AND COALESCE(posting.value->>'gtm_relevance', '') = :gtm_relevance"
-    if global_remote is not None:
+    if selected_remote_scope == "remote":
+        sql += " AND COALESCE(posting.value->>'work_arrangement', '') = 'remote'"
+    elif selected_remote_scope == "global":
+        sql += " AND COALESCE(posting.value->>'global_remote', 'false') = 'true'"
+    elif selected_remote_scope == "not_global":
+        sql += " AND COALESCE(posting.value->>'global_remote', 'false') = 'false'"
+    elif global_remote is not None:
         params["global_remote"] = "true" if global_remote else "false"
         sql += " AND COALESCE(posting.value->>'global_remote', 'false') = :global_remote"
+    if selected_contract_status == "unknown":
+        sql += " AND COALESCE(posting.value->>'contract_status', 'unknown') = 'unknown'"
+    elif selected_contract_status:
+        params["contract_status"] = selected_contract_status
+        sql += " AND posting.value->>'contract_status' = :contract_status"
     if posted_within_days is not None:
         cutoff = (datetime.now(timezone.utc) - timedelta(days=max(0, posted_within_days))).date().isoformat()
         params["posted_after"] = cutoff
@@ -1717,6 +1749,14 @@ async def list_mirrored_pif_job_postings(
             "employment_type": posting.get("employment_type"),
             "remote_eligibility": posting.get("remote_eligibility"),
             "posted_date": posting.get("posted_date"),
+            "first_seen_at": posting.get("first_seen_at"),
+            "last_checked_at": posting.get("last_checked_at"),
+            "ats_created_at": posting.get("ats_created_at"),
+            "ats_updated_at": posting.get("ats_updated_at"),
+            "recency_label": posting.get("recency_label"),
+            "colombia_eligibility": posting.get("colombia_eligibility"),
+            "status": posting.get("status", "active"),
+            "job_id": posting.get("id"),
             "description_summary": str(posting.get("description_summary") or ""),
             "source_name": str(posting.get("source_name") or "Web source"),
             "source_url": str(posting.get("source_url") or ""),
@@ -1730,6 +1770,8 @@ async def list_mirrored_pif_job_postings(
             "global_remote": bool(posting.get("global_remote")),
             "global_remote_evidence": posting.get("global_remote_evidence") if isinstance(posting.get("global_remote_evidence"), list) else [],
             "global_remote_confidence": posting.get("global_remote_confidence"),
+            "contract_status": posting.get("contract_status", "unknown"),
+            "contract_classification": posting.get("contract_classification"),
         })
     return {
         "items": items,
@@ -1849,26 +1891,37 @@ async def list_mirrored_pif_firms(
     sort_by: str | None = "updated_at",
     research_status: str | None = None,
     icp_tier: str | None = None,
+    icp_tiers: list[str] | None = None,
     entity_type: str | None = None,
+    entity_types: list[str] | None = None,
     recently_researched: int | None = None,
     contact_email_min: int | None = None,
     contact_email_max: int | None = None,
+    contact_email_ranges: list[str] | None = None,
     staff_count_min: int | None = None,
     staff_count_max: int | None = None,
+    staff_count_ranges: list[str] | None = None,
     autorespond_window: str | None = None,
     autorespond_type: str | None = None,
+    autorespond_types: list[str] | None = None,
     website_presence: str | None = None,
     research_presence: str | None = None,
+    research_presences: list[str] | None = None,
     staff_presence: str | None = None,
+    staff_presences: list[str] | None = None,
     job_postings_presence: str | None = None,
+    job_postings_presences: list[str] | None = None,
     job_posting_role: str | None = None,
+    job_posting_roles: list[str] | None = None,
     job_posting_tag: str | None = None,
+    job_posting_tags: list[str] | None = None,
     job_posting_query: str | None = None,
     job_posted_within_days: int | None = None,
     behavior_presence: str | None = None,
     icp_presence: str | None = None,
     vendor_presence: str | None = None,
     vendor: str | None = None,
+    vendors: list[str] | None = None,
     manually_added: bool | None = None,
     first_contacted_from: date | None = None,
     first_contacted_to: date | None = None,
@@ -1879,20 +1932,32 @@ async def list_mirrored_pif_firms(
     page = max(1, int(page))
     page_size = max(1, min(100, int(page_size)))
 
-    vendor_ids = await _firm_ids_for_vendor(vendor) if vendor else None
-    if vendor_ids is not None and not vendor_ids:
+    selected_vendors = _distinct([
+        *_as_list(vendors),
+        *([vendor] if vendor else []),
+    ], lower=True)
+    include_missing_vendor = "__missing" in selected_vendors
+    selected_vendors = [value for value in selected_vendors if value != "__missing"]
+    vendor_id_sets = await asyncio.gather(*(_firm_ids_for_vendor(value) for value in selected_vendors))
+    vendor_ids = set().union(*vendor_id_sets) if vendor_id_sets else None
+    if selected_vendors and not vendor_ids and not include_missing_vendor:
         return {"items": [], "total": 0, "page": page, "page_size": page_size, "total_pages": 0}
 
     any_vendor_ids: set[str] | None = None
-    if vendor_presence in {"has", "missing"} and vendor_ids is None:
+    if include_missing_vendor or (vendor_presence in {"has", "missing"} and vendor_ids is None):
         any_vendor_ids = await _firm_ids_with_any_vendor()
 
     conditions = []
     if active_only:
         merged_into = PifFirmRow.source_json["merged_into"].astext
         conditions.append(or_(merged_into.is_(None), merged_into == ""))
-    if vendor_ids is not None:
+    if vendor_ids is not None and include_missing_vendor:
+        if any_vendor_ids:
+            conditions.append(or_(PifFirmRow.id.in_(vendor_ids), PifFirmRow.id.notin_(any_vendor_ids)))
+    elif vendor_ids is not None:
         conditions.append(PifFirmRow.id.in_(vendor_ids))
+    elif include_missing_vendor and any_vendor_ids:
+        conditions.append(PifFirmRow.id.notin_(any_vendor_ids))
     elif vendor_presence == "has":
         if not any_vendor_ids:
             return {"items": [], "total": 0, "page": page, "page_size": page_size, "total_pages": 0}
@@ -1911,16 +1976,24 @@ async def list_mirrored_pif_firms(
         ))
     if research_status:
         conditions.append(PifFirmRow.research_status == research_status)
-    if icp_tier:
-        conditions.append(PifFirmRow.icp_tier == icp_tier)
-    if entity_type:
-        conditions.append(PifFirmRow.entity_type == entity_type)
+    selected_icp_tiers = _distinct([*_as_list(icp_tiers), *([icp_tier] if icp_tier else [])])
+    selected_entity_types = _distinct([*_as_list(entity_types), *([entity_type] if entity_type else [])], lower=True)
+    if selected_icp_tiers:
+        conditions.append(PifFirmRow.icp_tier.in_(selected_icp_tiers))
+    if selected_entity_types:
+        conditions.append(PifFirmRow.entity_type.in_(selected_entity_types))
     if manually_added is not None:
         conditions.append(PifFirmRow.manually_added.is_(manually_added))
     if recently_researched is not None:
         conditions.append(PifFirmRow.last_researched_at >= datetime.now(timezone.utc) - timedelta(days=recently_researched))
     email_count = func.jsonb_array_length(PifFirmRow.emails)
     staff_count = func.jsonb_array_length(PifFirmRow.staff)
+    contact_email_range_condition = count_ranges_condition(email_count, contact_email_ranges)
+    staff_count_range_condition = count_ranges_condition(staff_count, staff_count_ranges)
+    if contact_email_range_condition is not None:
+        conditions.append(contact_email_range_condition)
+    if staff_count_range_condition is not None:
+        conditions.append(staff_count_range_condition)
     if contact_email_min is not None:
         conditions.append(email_count >= contact_email_min)
     if contact_email_max is not None:
@@ -1929,14 +2002,18 @@ async def list_mirrored_pif_firms(
         conditions.append(staff_count >= staff_count_min)
     if staff_count_max is not None:
         conditions.append(staff_count <= staff_count_max)
+    selected_autorespond_types = _distinct([
+        *(_as_list(autorespond_types)),
+        *([autorespond_type] if autorespond_type else []),
+    ], lower=True)
     if autorespond_window and autorespond_window != "any":
         event_conditions = [
             PifAutorespondEventRow.canonical_pif_id == PifFirmRow.id,
             PifAutorespondEventRow.response_sent.is_(True),
             PifAutorespondEventRow.test_mode.is_(False),
         ]
-        if autorespond_type:
-            event_conditions.append(PifAutorespondEventRow.agent_type == autorespond_type)
+        if selected_autorespond_types:
+            event_conditions.append(PifAutorespondEventRow.agent_type.in_(selected_autorespond_types))
         window_days = {"24h": 1, "7d": 7, "30d": 30, "90d": 90}.get(autorespond_window)
         if window_days is not None:
             event_conditions.append(
@@ -1944,12 +2021,12 @@ async def list_mirrored_pif_firms(
             )
         has_event = exists(select(PifAutorespondEventRow.id).where(*event_conditions))
         conditions.append(~has_event if autorespond_window == "never" else has_event)
-    elif autorespond_type:
+    elif selected_autorespond_types:
         conditions.append(exists(select(PifAutorespondEventRow.id).where(
             PifAutorespondEventRow.canonical_pif_id == PifFirmRow.id,
             PifAutorespondEventRow.response_sent.is_(True),
             PifAutorespondEventRow.test_mode.is_(False),
-            PifAutorespondEventRow.agent_type == autorespond_type,
+            PifAutorespondEventRow.agent_type.in_(selected_autorespond_types),
         )))
     if first_contacted_from is not None:
         conditions.append(PifFirmRow.first_contacted_precise_at >= datetime.combine(first_contacted_from, time.min, tzinfo=timezone.utc))
@@ -1964,7 +2041,15 @@ async def list_mirrored_pif_firms(
         "firm_operations": ("firm_operations", "finance_billing", "executive_leadership"),
         "technology": ("technology_data",),
     }
-    selected_categories = role_categories.get(str(job_posting_role or "").strip().lower())
+    selected_job_roles = _distinct([
+        *_as_list(job_posting_roles),
+        *([job_posting_role] if job_posting_role else []),
+    ], lower=True)
+    selected_categories = sorted({
+        category
+        for role in selected_job_roles
+        for category in role_categories.get(role, ())
+    })
     if selected_categories:
         category_path = "$.job_postings.postings[*].role_category"
         conditions.append(or_(*(
@@ -1974,13 +2059,20 @@ async def list_mirrored_pif_firms(
             )
             for category in selected_categories
         )))
-    if job_posting_tag and job_posting_tag.strip():
-        safe_tag = re.sub(r"[^a-z0-9_]", "", job_posting_tag.strip().lower())
-        if safe_tag:
-            conditions.append(func.jsonb_path_exists(
+    selected_job_tags = _distinct([
+        *_as_list(job_posting_tags),
+        *([job_posting_tag] if job_posting_tag else []),
+    ], lower=True)
+    safe_tags = [re.sub(r"[^a-z0-9_]", "", value) for value in selected_job_tags]
+    safe_tags = [value for value in safe_tags if value]
+    if safe_tags:
+        conditions.append(or_(*(
+            func.jsonb_path_exists(
                 PifFirmRow.research_data,
                 cast(f'$.job_postings.postings[*].trigger_tags[*] ? (@ == "{safe_tag}")', JSONPATH),
-            ))
+            )
+            for safe_tag in safe_tags
+        )))
     if job_posting_query and job_posting_query.strip():
         terms = list(dict.fromkeys(
             term.lower() for term in re.split(r"[\s,]+", job_posting_query.strip()) if term
@@ -1991,11 +2083,75 @@ async def list_mirrored_pif_firms(
         path = f'$.job_postings.postings[*] ? (@.posted_date >= "{cutoff.isoformat()}")'
         conditions.append(func.jsonb_path_exists(PifFirmRow.research_data, cast(path, JSONPATH)))
 
+    selected_research_presences = _distinct([
+        *_as_list(research_presences),
+        *([research_presence] if research_presence else []),
+    ], lower=True)
+    selected_staff_presences = _distinct([
+        *_as_list(staff_presences),
+        *([staff_presence] if staff_presence else []),
+    ], lower=True)
+    selected_job_presences = _distinct([
+        *_as_list(job_postings_presences),
+        *([job_postings_presence] if job_postings_presence else []),
+    ], lower=True)
+
+    def status_presence_condition(column, value: str):
+        if value == "completed":
+            return column.in_(list(STATUS_COMPLETED))
+        if value == "missing":
+            return or_(column.is_(None), ~column.in_(list({*STATUS_COMPLETED, *STATUS_RUNNING, "failed"})))
+        if value == "queued_or_running":
+            return column.in_(list(STATUS_RUNNING))
+        if value == "failed":
+            return column == "failed"
+        return None
+
+    research_conditions = [
+        condition
+        for value in selected_research_presences
+        if value != "any" and (condition := status_presence_condition(PifFirmRow.research_status, value)) is not None
+    ]
+    staff_conditions = [
+        condition
+        for value in selected_staff_presences
+        if value != "any" and (condition := status_presence_condition(PifFirmRow.staff_research_status, value)) is not None
+    ]
+    if research_conditions:
+        conditions.append(or_(*research_conditions))
+    if staff_conditions:
+        conditions.append(or_(*staff_conditions))
+
+    job_status = PifFirmRow.research_data["job_postings_research_status"].astext
+    has_recent_jobs = PifFirmRow.research_data["job_postings"]["has_recent_openings"].astext
+    has_postings = func.jsonb_path_exists(
+        PifFirmRow.research_data,
+        cast("$.job_postings.postings[*]", JSONPATH),
+    )
+    job_presence_conditions = []
+    for value in selected_job_presences:
+        if value == "has":
+            job_presence_conditions.append(or_(has_recent_jobs == "true", has_postings))
+        elif value == "none":
+            job_presence_conditions.append(and_(
+                job_status.in_(list(STATUS_COMPLETED)),
+                func.coalesce(has_recent_jobs, "false") != "true",
+                ~has_postings,
+            ))
+        elif value == "not_researched":
+            job_presence_conditions.append(or_(
+                job_status.is_(None),
+                ~job_status.in_(list({*STATUS_COMPLETED, *STATUS_RUNNING, "failed"})),
+            ))
+        elif value == "queued_or_running":
+            job_presence_conditions.append(job_status.in_(list(STATUS_RUNNING)))
+        elif value == "failed":
+            job_presence_conditions.append(job_status == "failed")
+    if job_presence_conditions:
+        conditions.append(or_(*job_presence_conditions))
+
     for field, value in (
         ("website_presence", website_presence),
-        ("research_presence", research_presence),
-        ("staff_presence", staff_presence),
-        ("job_postings_presence", job_postings_presence),
         ("behavior_presence", behavior_presence),
         ("icp_presence", icp_presence),
     ):
@@ -2015,48 +2171,6 @@ async def list_mirrored_pif_firms(
                 conditions.append(PifFirmRow.source_json["website_status"].astext == "resolved")
             elif value == "unresolved":
                 conditions.append(PifFirmRow.source_json["website_status"].astext != "resolved")
-        elif field == "research_presence":
-            if value == "completed":
-                conditions.append(PifFirmRow.research_status.in_(list(STATUS_COMPLETED)))
-            elif value == "missing":
-                conditions.append(or_(PifFirmRow.research_status.is_(None), ~PifFirmRow.research_status.in_(list({*STATUS_COMPLETED, *STATUS_RUNNING, "failed"}))))
-            elif value == "queued_or_running":
-                conditions.append(PifFirmRow.research_status.in_(list(STATUS_RUNNING)))
-            elif value == "failed":
-                conditions.append(PifFirmRow.research_status == "failed")
-        elif field == "staff_presence":
-            if value == "completed":
-                conditions.append(PifFirmRow.staff_research_status.in_(list(STATUS_COMPLETED)))
-            elif value == "missing":
-                conditions.append(or_(PifFirmRow.staff_research_status.is_(None), ~PifFirmRow.staff_research_status.in_(list({*STATUS_COMPLETED, *STATUS_RUNNING, "failed"}))))
-            elif value == "queued_or_running":
-                conditions.append(PifFirmRow.staff_research_status.in_(list(STATUS_RUNNING)))
-            elif value == "failed":
-                conditions.append(PifFirmRow.staff_research_status == "failed")
-        elif field == "job_postings_presence":
-            status = PifFirmRow.research_data["job_postings_research_status"].astext
-            has_recent = PifFirmRow.research_data["job_postings"]["has_recent_openings"].astext
-            has_postings = func.jsonb_path_exists(
-                PifFirmRow.research_data,
-                cast("$.job_postings.postings[*]", JSONPATH),
-            )
-            if value == "has":
-                conditions.append(or_(has_recent == "true", has_postings))
-            elif value == "none":
-                conditions.append(and_(
-                    status.in_(list(STATUS_COMPLETED)),
-                    func.coalesce(has_recent, "false") != "true",
-                    ~has_postings,
-                ))
-            elif value == "not_researched":
-                conditions.append(or_(
-                    status.is_(None),
-                    ~status.in_(list({*STATUS_COMPLETED, *STATUS_RUNNING, "failed"})),
-                ))
-            elif value == "queued_or_running":
-                conditions.append(status.in_(list(STATUS_RUNNING)))
-            elif value == "failed":
-                conditions.append(status == "failed")
         elif field == "behavior_presence":
             has_value = PifFirmRow.behavioral_data != {}
             conditions.append(has_value if value == "has" else ~has_value)

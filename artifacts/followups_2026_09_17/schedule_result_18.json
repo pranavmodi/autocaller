@@ -1,0 +1,132 @@
+{
+  "action": {
+    "id": "action_e411aa2139e3475db7f34509",
+    "action_type": "send_approved_lead_gen_draft",
+    "status": "approved",
+    "risk_level": "high",
+    "requested_by": "codex",
+    "approved_by": "codex",
+    "entity_type": "lead_gen_batch_item",
+    "entity_id": "58e927afa1004e0fb83cde27503e8dcf",
+    "input": {
+      "body": "Hi Jura,\n\nYour focus on preparing injury cases made me think more carefully about the document-workflow example I sent. For an attorney reviewing a file, a faster draft is only useful if the supporting material is easy to verify.\n\nI'm Pranav, founder of Possible Minds. We help PI firms adopt AI, and I'm trying to understand where it would genuinely help before building around assumptions.\n\nWould a source-linked medical chronology or a checklist of missing evidence be more useful to you? Even a brief answer would help, and I'd appreciate your time.\n\nBest,\nPranav\nFounder, Possible Minds",
+      "subject": "Re: where AI could compound at J. Hartley Law, APC",
+      "approval": {
+        "references": "<0100019ffca87fec-1723e568-1d9b-4a3d-a8fb-f254a8902d07-000000@email.amazonses.com>",
+        "approved_at": "2026-09-17T09:54:12.069007+00:00",
+        "approved_by": "codex",
+        "body_sha256": "5a77d773650e8e08ac3564172b300c0bd3353eb57dfbbf4f3dbbf6359a6c81ab",
+        "in_reply_to": "<0100019ffca87fec-1723e568-1d9b-4a3d-a8fb-f254a8902d07-000000@email.amazonses.com>",
+        "subject_sha256": "6ed83f831aad623aa8ec37c7679b512b3470dfa37ada69e1b82f70f259e0c16b"
+      },
+      "transport": "resend",
+      "references": "<0100019ffca87fec-1723e568-1d9b-4a3d-a8fb-f254a8902d07-000000@email.amazonses.com>",
+      "skill_path": null,
+      "body_sha256": "5a77d773650e8e08ac3564172b300c0bd3353eb57dfbbf4f3dbbf6359a6c81ab",
+      "in_reply_to": "<0100019ffca87fec-1723e568-1d9b-4a3d-a8fb-f254a8902d07-000000@email.amazonses.com>",
+      "skill_sha256": null,
+      "batch_item_id": "58e927afa1004e0fb83cde27503e8dcf",
+      "brief_version": null,
+      "subject_sha256": "6ed83f831aad623aa8ec37c7679b512b3470dfa37ada69e1b82f70f259e0c16b",
+      "composer_variant_key": null,
+      "lead_gen_action_type": "follow_up",
+      "composer_experiment_key": null
+    },
+    "policy_result": {},
+    "execution_result": {},
+    "error": null,
+    "trace_id": null,
+    "scheduled_for": "2026-09-17T18:50:00+00:00",
+    "started_at": null,
+    "completed_at": null,
+    "created_at": "2026-09-17T09:54:12.077201+00:00",
+    "updated_at": "2026-09-17T09:54:12.077209+00:00"
+  },
+  "created": true,
+  "updated_existing": false,
+  "executed": false,
+  "scheduled_for_pt": "2026-09-17 11:50 PDT",
+  "scheduled_for_utc": "2026-09-17 18:50:00 UTC",
+  "policy": {
+    "allowed": true,
+    "reason": "allowed",
+    "checks": [
+      {
+        "name": "status_allows_execution",
+        "passed": true,
+        "detail": "approved"
+      },
+      {
+        "name": "human_approval_present",
+        "passed": true,
+        "detail": "codex"
+      },
+      {
+        "name": "subject_present",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "body_present",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "subject_hash_matches_approval",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "body_hash_matches_approval",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "in_reply_to_matches_approval",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "references_match_approval",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "lead_gen_transport_available",
+        "passed": true,
+        "detail": "zoho_api 0/0 configured=True; resend 0/50 configured=True"
+      },
+      {
+        "name": "no_patient_data_in_outreach",
+        "passed": true,
+        "detail": "llm_guard_disabled"
+      },
+      {
+        "name": "batch_item_exists",
+        "passed": true,
+        "detail": "58e927afa1004e0fb83cde27503e8dcf"
+      },
+      {
+        "name": "batch_item_not_already_started",
+        "passed": true,
+        "detail": "approved"
+      },
+      {
+        "name": "contact_email_present",
+        "passed": true,
+        "detail": "jura@jhartleylawapc.com"
+      },
+      {
+        "name": "no_prior_successful_action_for_item",
+        "passed": true,
+        "detail": ""
+      }
+    ],
+    "risk_level": "high",
+    "requires_human_approval": true,
+    "action_type": "send_approved_lead_gen_draft",
+    "contact_email": "jura@jhartleylawapc.com"
+  },
+  "rank": 18,
+  "email": "jura@jhartleylawapc.com"
+}

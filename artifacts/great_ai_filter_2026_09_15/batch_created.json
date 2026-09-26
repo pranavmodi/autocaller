@@ -1,0 +1,92 @@
+{
+  "batch_id": "ea467e41220147d287e948a605569c09",
+  "added": 20,
+  "skipped": [],
+  "item_ids": [
+    {
+      "contact_email": "becker@beckerlawgroup.com",
+      "item_id": "fc7c394dff5f48a7a3e11004d4307385"
+    },
+    {
+      "contact_email": "dimitri@oconnorhurt.com",
+      "item_id": "13b21a9afaed4f0fbe37685cd674cecb"
+    },
+    {
+      "contact_email": "shawn@hakakianlaw.com",
+      "item_id": "458e055067bb4865830737148179d3f9"
+    },
+    {
+      "contact_email": "gurgen@ympklaw.com",
+      "item_id": "25a7406f164043fc97fb60631bdc92da"
+    },
+    {
+      "contact_email": "kendrick@kebradleylaw.com",
+      "item_id": "7128c4d9e1bd4ef2bbd8585a891757e0"
+    },
+    {
+      "contact_email": "jbeahm@beahmlaw.com",
+      "item_id": "87bdcf0e093241a2abea8335937a101e"
+    },
+    {
+      "contact_email": "romel@raandassociates.com",
+      "item_id": "61bac85ea1464f32a78461d783459a42"
+    },
+    {
+      "contact_email": "efarah@farahandfarah.com",
+      "item_id": "3770bda3626a418289d49278876f302a"
+    },
+    {
+      "contact_email": "mike@mweiserlaw.com",
+      "item_id": "9381e180aaa04bdaa7b8f2bd4a266620"
+    },
+    {
+      "contact_email": "abe@accidentabe.com",
+      "item_id": "23ad6f0f33f14405b7ea5a2fc085eebb"
+    },
+    {
+      "contact_email": "cj@cyruslegal.com",
+      "item_id": "2435fad2aee4499fac5171989525d2b0"
+    },
+    {
+      "contact_email": "kjacobson@quillarrowlaw.com",
+      "item_id": "8096e9ad1c3049098e9238ae77c51728"
+    },
+    {
+      "contact_email": "acampano@campanolaw.com",
+      "item_id": "2c1beaee26064472a3b032788a375b54"
+    },
+    {
+      "contact_email": "matt@alipour.law",
+      "item_id": "ff8a5f1827834186bc1c8ebc1d191e28"
+    },
+    {
+      "contact_email": "arnak@azaklaw.com",
+      "item_id": "5d3d7304a9074db5bc653adcaf6e82f4"
+    },
+    {
+      "contact_email": "caroleen@ctalawfirm.com",
+      "item_id": "a158c73580004507983fae7bf8d8eefe"
+    },
+    {
+      "contact_email": "george@paijuklaw.com",
+      "item_id": "bf2835ff11154d1c8e0a82ef9feafb11"
+    },
+    {
+      "contact_email": "jamil@sbinjurylawyers.com",
+      "item_id": "5b242a143d9d44b8a96cc3d2ff6013e8"
+    },
+    {
+      "contact_email": "brad@thehayeslawfirmapc.com",
+      "item_id": "6d1071f3cd234911b8a1166807458bbf"
+    },
+    {
+      "contact_email": "lesly@leslyblaw.com",
+      "item_id": "81ef93421f874d3aa9f2984704e5a391"
+    }
+  ],
+  "counts": {
+    "basis": "operator-curated",
+    "returned": 20,
+    "requested": 20
+  }
+}

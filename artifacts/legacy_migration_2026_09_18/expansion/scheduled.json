@@ -1,0 +1,2395 @@
+{
+  "checked_at": "2026-09-18T09:32:10.155Z",
+  "date": "2026-09-18",
+  "campaign_id": "cmp_ki-WF9eCn7bGJ01C",
+  "batch_id": "6de389e0a5fe4f5794991acc1391bd38",
+  "summary": {
+    "scheduled": 11,
+    "sent": 0,
+    "delivered": 0,
+    "failed": 0,
+    "first_touch": 10,
+    "follow_up": 1,
+    "policy_allowed": 11,
+    "unique_recipients": 11,
+    "unique_firms": 11,
+    "unique_domains": 11,
+    "unique_email_links": 11,
+    "transport": "resend",
+    "configured_strategy": "resend_first_then_zoho",
+    "resend_cap": 50,
+    "zoho_cap": 0,
+    "daily_cap": 50,
+    "window_pdt": "09:00-10:40",
+    "window_utc": "16:00-17:40",
+    "window_ist": "21:30-23:10",
+    "approved_unscheduled_orphans_in_batch": 0
+  },
+  "scheduler": {
+    "running": true,
+    "last_tick_at": "2026-09-18T09:30:23.429974+00:00",
+    "last_error": null,
+    "last_result": {
+      "tick_at": "2026-09-18T09:30:23.429974+00:00",
+      "due_action_ids": [],
+      "expired_action_ids": [],
+      "executed": 0,
+      "expired": 0,
+      "results": [],
+      "expired_results": []
+    },
+    "pending_count": 11,
+    "due_count": 0
+  },
+  "queue": {
+    "sent": 0,
+    "scheduled": 11,
+    "total": 11
+  },
+  "validation": [
+    {
+      "email": "awheeler@parrislawyers.com",
+      "body_matches_stored": true,
+      "subject_matches_stored": true,
+      "formatting_ok": true,
+      "approval_hashes_match": true,
+      "unique_tracking": true,
+      "follow_up_headers": true,
+      "scheduled_future": true,
+      "policy_allowed": true
+    },
+    {
+      "email": "steve@hinden.net",
+      "body_matches_stored": true,
+      "subject_matches_stored": true,
+      "formatting_ok": true,
+      "approval_hashes_match": true,
+      "unique_tracking": true,
+      "follow_up_headers": true,
+      "scheduled_future": true,
+      "policy_allowed": true
+    },
+    {
+      "email": "nathan@hanningsacchetto.com",
+      "body_matches_stored": true,
+      "subject_matches_stored": true,
+      "formatting_ok": true,
+      "approval_hashes_match": true,
+      "unique_tracking": true,
+      "follow_up_headers": true,
+      "scheduled_future": true,
+      "policy_allowed": true
+    },
+    {
+      "email": "john@hernandezlaw.co",
+      "body_matches_stored": true,
+      "subject_matches_stored": true,
+      "formatting_ok": true,
+      "approval_hashes_match": true,
+      "unique_tracking": true,
+      "follow_up_headers": true,
+      "scheduled_future": true,
+      "policy_allowed": true
+    },
+    {
+      "email": "josh@jcslawyers.com",
+      "body_matches_stored": true,
+      "subject_matches_stored": true,
+      "formatting_ok": true,
+      "approval_hashes_match": true,
+      "unique_tracking": true,
+      "follow_up_headers": true,
+      "scheduled_future": true,
+      "policy_allowed": true
+    },
+    {
+      "email": "elena@steerslawfirm.com",
+      "body_matches_stored": true,
+      "subject_matches_stored": true,
+      "formatting_ok": true,
+      "approval_hashes_match": true,
+      "unique_tracking": true,
+      "follow_up_headers": true,
+      "scheduled_future": true,
+      "policy_allowed": true
+    },
+    {
+      "email": "jude@redkeygordonlaw.com",
+      "body_matches_stored": true,
+      "subject_matches_stored": true,
+      "formatting_ok": true,
+      "approval_hashes_match": true,
+      "unique_tracking": true,
+      "follow_up_headers": true,
+      "scheduled_future": true,
+      "policy_allowed": true
+    },
+    {
+      "email": "wclark@walterclark.com",
+      "body_matches_stored": true,
+      "subject_matches_stored": true,
+      "formatting_ok": true,
+      "approval_hashes_match": true,
+      "unique_tracking": true,
+      "follow_up_headers": true,
+      "scheduled_future": true,
+      "policy_allowed": true
+    },
+    {
+      "email": "eran@lagsteinlawfirm.com",
+      "body_matches_stored": true,
+      "subject_matches_stored": true,
+      "formatting_ok": true,
+      "approval_hashes_match": true,
+      "unique_tracking": true,
+      "follow_up_headers": true,
+      "scheduled_future": true,
+      "policy_allowed": true
+    },
+    {
+      "email": "castillolaw2000@aol.com",
+      "body_matches_stored": true,
+      "subject_matches_stored": true,
+      "formatting_ok": true,
+      "approval_hashes_match": true,
+      "unique_tracking": true,
+      "follow_up_headers": true,
+      "scheduled_future": true,
+      "policy_allowed": true
+    },
+    {
+      "email": "robert@vetchteinlaw.com",
+      "body_matches_stored": true,
+      "subject_matches_stored": true,
+      "formatting_ok": true,
+      "approval_hashes_match": true,
+      "unique_tracking": true,
+      "follow_up_headers": true,
+      "scheduled_future": true,
+      "policy_allowed": true
+    }
+  ],
+  "duplicate_conflicts": [],
+  "recipients": [
+    {
+      "name": "Alexander R. Wheeler",
+      "email": "awheeler@parrislawyers.com",
+      "title": "Partner",
+      "firm": "PARRIS",
+      "contact_id": "ce8f6a66f7ef49238273c6dfe14e438f",
+      "pif_id": "37f5d03d-1d36-4d8c-8eda-e9413e9a9c01",
+      "item_id": "db25c1cfc9d145a7a1eb7ffda01da79f",
+      "action_id": "action_2bac6d79006848b6a3379fca",
+      "status": "approved",
+      "subject": "Considering Clio or Filevine?",
+      "body": "Hi Alex,\n\nYou handle cases from the first client call through appeal. Any software change needs to preserve that history, not give your team more admin work.\n\nIf PARRIS is considering a move from ProLaw, we can help plan and carry out a migration to Clio or Filevine, mapping records, documents and workflows so they're better connected for AI and automation.\n\nI'm Pranav, founder of Possible Minds, previously at McKinsey and Expedia. We built Precise Imaging's email-handling system, which processes over 600 emails daily, routes requests and sends automated status responses.\n\nHere's how we approach migration:\nhttps://getpossibleminds.com/t/7FUyplVojA\n\nWould a brief outline of what a move could involve be useful? I'd appreciate your thoughts.\n\nBest,\nPranav\nFounder, Possible Minds",
+      "scheduled_utc": "2026-09-18T16:00:00+00:00",
+      "scheduled_pdt": "18/09/2026, 09:00:00",
+      "scheduled_ist": "18/09/2026, 21:30:00",
+      "action_type": "first_touch",
+      "transport": "resend",
+      "in_reply_to": null,
+      "references": null,
+      "approval": {
+        "references": null,
+        "approved_at": "2026-09-18T09:09:30.622434+00:00",
+        "approved_by": "codex",
+        "body_sha256": "4875ed22cdf491f84422eacf36d3a66b6e17f3565876d66f53cc39f8901ceebd",
+        "in_reply_to": null,
+        "subject_sha256": "a4bb8e25de32fd3617183c1db3b45152547cac1e001ba4a9684af9cf03b74904"
+      },
+      "policy": {
+        "checks": [
+          {
+            "name": "status_allows_execution",
+            "detail": "approved",
+            "passed": true
+          },
+          {
+            "name": "human_approval_present",
+            "detail": "codex",
+            "passed": true
+          },
+          {
+            "name": "subject_present",
+            "detail": "",
+            "passed": true
+          },
+          {
+            "name": "body_present",
+            "detail": "",
+            "passed": true
+          },
+          {
+            "name": "subject_hash_matches_approval",
+            "detail": "",
+            "passed": true
+          },
+          {
+            "name": "body_hash_matches_approval",
+            "detail": "",
+            "passed": true
+          },
+          {
+            "name": "in_reply_to_matches_approval",
+            "detail": "",
+            "passed": true
+          },
+          {
+            "name": "references_match_approval",
+            "detail": "",
+            "passed": true
+          },
+          {
+            "name": "lead_gen_transport_available",
+            "detail": "zoho_api 0/0 configured=True; resend 0/50 configured=True",
+            "passed": true
+          },
+          {
+            "name": "no_patient_data_in_outreach",
+            "detail": "llm_guard_disabled",
+            "passed": true
+          },
+          {
+            "name": "batch_item_exists",
+            "detail": "db25c1cfc9d145a7a1eb7ffda01da79f",
+            "passed": true
+          },
+          {
+            "name": "batch_item_not_already_started",
+            "detail": "approved",
+            "passed": true
+          },
+          {
+            "name": "contact_email_present",
+            "detail": "awheeler@parrislawyers.com",
+            "passed": true
+          },
+          {
+            "name": "no_prior_successful_action_for_item",
+            "detail": "",
+            "passed": true
+          }
+        ],
+        "reason": "allowed",
+        "allowed": true,
+        "risk_level": "high",
+        "action_type": "send_approved_lead_gen_draft",
+        "contact_email": "awheeler@parrislawyers.com",
+        "requires_human_approval": true
+      },
+      "tracking": {
+        "code": "7FUyplVojA",
+        "tracking_url": "https://getpossibleminds.com/t/7FUyplVojA",
+        "destination_url": "https://getpossibleminds.com/services/case-management-migration",
+        "channel": "email",
+        "label": "Partner migration outreach - 2026-09-18",
+        "contact_id": "ce8f6a66f7ef49238273c6dfe14e438f",
+        "contact_name": "Alexander R. Wheeler",
+        "contact_email": "awheeler@parrislawyers.com",
+        "firm_name": "PARRIS",
+        "sent_at": null,
+        "created_at": "2026-09-18T09:08:08.169192+00:00",
+        "raw_clicks": 0,
+        "confirmed_visits": 0,
+        "meaningful_actions": 0,
+        "deepest_scroll": 0,
+        "max_time_on_page_seconds": 0
+      }
+    },
+    {
+      "name": "Stephen M. Hinden",
+      "email": "steve@hinden.net",
+      "title": "Partner",
+      "firm": "Hinden & Breslavsky",
+      "contact_id": "fc_41ec0b6601c3443189f39733",
+      "pif_id": "ea8db863-46fe-490f-b2b7-41852d6280cc",
+      "item_id": "c80d8c5941ac493eb1605ee121edd720",
+      "action_id": "action_c68f39a1b73c4dd28fae7530",
+      "status": "approved",
+      "subject": "Considering Clio or Filevine?",
+      "body": "Hi Stephen,\n\nYou emphasize helping clients understand their cases. Keeping records and updates connected matters to that work, especially when several colleagues support the same client.\n\nIf a change of case-management system is on the table, we can help plan and carry out a migration to Clio or Filevine, mapping records, documents and workflows so they're better connected for AI and automation.\n\nI'm Pranav, founder of Possible Minds, previously at McKinsey and Expedia. We built Precise Imaging's email-handling system, which processes over 600 emails daily, routes requests and sends automated status responses.\n\nHere's how we approach migration:\nhttps://getpossibleminds.com/t/jO8vzoIDfA\n\nWould a brief outline of what a move could involve be useful? I'd appreciate your thoughts.\n\nBest,\nPranav\nFounder, Possible Minds",
+      "scheduled_utc": "2026-09-18T16:10:00+00:00",
+      "scheduled_pdt": "18/09/2026, 09:10:00",
+      "scheduled_ist": "18/09/2026, 21:40:00",
+      "action_type": "first_touch",
+      "transport": "resend",
+      "in_reply_to": null,
+      "references": null,
+      "approval": {
+        "references": null,
+        "approved_at": "2026-09-18T09:09:37.284219+00:00",
+        "approved_by": "codex",
+        "body_sha256": "7864c07014402460865b6bc2df038943b1f365217ab968c60619c7f3b3ebf3b6",
+        "in_reply_to": null,
+        "subject_sha256": "a4bb8e25de32fd3617183c1db3b45152547cac1e001ba4a9684af9cf03b74904"
+      },
+      "policy": {
+        "checks": [
+          {
+            "name": "status_allows_execution",
+            "detail": "approved",
+            "passed": true
+          },
+          {
+            "name": "human_approval_present",
+            "detail": "codex",
+            "passed": true
+          },
+          {
+            "name": "subject_present",
+            "detail": "",
+            "passed": true
+          },
+          {
+            "name": "body_present",
+            "detail": "",
+            "passed": true
+          },
+          {
+            "name": "subject_hash_matches_approval",
+            "detail": "",
+            "passed": true
+          },
+          {
+            "name": "body_hash_matches_approval",
+            "detail": "",
+            "passed": true
+          },
+          {
+            "name": "in_reply_to_matches_approval",
+            "detail": "",
+            "passed": true
+          },
+          {
+            "name": "references_match_approval",
+            "detail": "",
+            "passed": true
+          },
+          {
+            "name": "lead_gen_transport_available",
+            "detail": "zoho_api 0/0 configured=True; resend 0/50 configured=True",
+            "passed": true
+          },
+          {
+            "name": "no_patient_data_in_outreach",
+            "detail": "llm_guard_disabled",
+            "passed": true
+          },
+          {
+            "name": "batch_item_exists",
+            "detail": "c80d8c5941ac493eb1605ee121edd720",
+            "passed": true
+          },
+          {
+            "name": "batch_item_not_already_started",
+            "detail": "approved",
+            "passed": true
+          },
+          {
+            "name": "contact_email_present",
+            "detail": "steve@hinden.net",
+            "passed": true
+          },
+          {
+            "name": "no_prior_successful_action_for_item",
+            "detail": "",
+            "passed": true
+          }
+        ],
+        "reason": "allowed",
+        "allowed": true,
+        "risk_level": "high",
+        "action_type": "send_approved_lead_gen_draft",
+        "contact_email": "steve@hinden.net",
+        "requires_human_approval": true
+      },
+      "tracking": {
+        "code": "jO8vzoIDfA",
+        "tracking_url": "https://getpossibleminds.com/t/jO8vzoIDfA",
+        "destination_url": "https://getpossibleminds.com/services/case-management-migration",
+        "channel": "email",
+        "label": "Partner migration outreach - 2026-09-18",
+        "contact_id": "fc_41ec0b6601c3443189f39733",
+        "contact_name": "steve@hinden.net",
+        "contact_email": "steve@hinden.net",
+        "firm_name": "Hinden & Breslavsky",
+        "sent_at": null,
+        "created_at": "2026-09-18T09:08:11.921042+00:00",
+        "raw_clicks": 0,
+        "confirmed_visits": 0,
+        "meaningful_actions": 0,
+        "deepest_scroll": 0,
+        "max_time_on_page_seconds": 0
+      }
+    },
+    {
+      "name": "Nathan Hanning",
+      "email": "nathan@hanningsacchetto.com",
+      "contact_id": "771cdbd9300e4615971f450cbf59a143",
+      "pif_id": "7cb7df02-e007-434f-baf0-1544beeee996",
+      "firm": "Hanning & Sacchetto, LLP",
+      "vendor": "MerusCase",
+      "hook": "As a co-founder, you'd want any software change to make your team's work easier, without disrupting active cases.",
+      "link": {
+        "code": "9f9tZVCzTA",
+        "campaign_id": "cmp_ki-WF9eCn7bGJ01C",
+        "contact_id": "771cdbd9300e4615971f450cbf59a143",
+        "pif_id": "7cb7df02-e007-434f-baf0-1544beeee996",
+        "channel": "email",
+        "label": "Migration expansion - 2026-09-18",
+        "destination_url": "https://getpossibleminds.com/services/case-management-migration",
+        "advisor_briefing": null,
+        "tracking_url": "https://getpossibleminds.com/t/9f9tZVCzTA",
+        "sent_at": null,
+        "created_at": "2026-09-18T09:16:58.459902+00:00"
+      },
+      "item_id": "cbf51342f432446d82d6ad52dd206ef8",
+      "time": "2026-09-18T09:20:00-07:00",
+      "body": "Hi Nathan,\n\nAs a co-founder, you'd want any software change to make your team's work easier, without disrupting active cases.\n\nI'm Pranav, founder of Possible Minds, previously at McKinsey and Expedia. We built Precise Imaging's email-handling system, which processes over 600 emails daily, routes requests and sends automated status responses.\n\nIf you're considering a move from MerusCase, we can help migrate your records, documents and workflows to Clio or Filevine, with careful mapping and validation so they're better connected for AI and automation.\n\nHere's how we approach migration:\nhttps://getpossibleminds.com/t/9f9tZVCzTA\n\nWould a brief outline of what a move could involve be useful? I'd appreciate your thoughts.\n\nBest,\nPranav\nFounder, Possible Minds",
+      "subject": "Considering Clio or Filevine?",
+      "file": "artifacts/legacy_migration_2026_09_18/expansion/draft_1.txt",
+      "receipt": {
+        "action": {
+          "id": "action_38e1d92107554ec49b779896",
+          "action_type": "send_approved_lead_gen_draft",
+          "status": "approved",
+          "risk_level": "high",
+          "requested_by": "codex",
+          "approved_by": "codex",
+          "entity_type": "lead_gen_batch_item",
+          "entity_id": "cbf51342f432446d82d6ad52dd206ef8",
+          "input": {
+            "body": "Hi Nathan,\n\nAs a co-founder, you'd want any software change to make your team's work easier, without disrupting active cases.\n\nI'm Pranav, founder of Possible Minds, previously at McKinsey and Expedia. We built Precise Imaging's email-handling system, which processes over 600 emails daily, routes requests and sends automated status responses.\n\nIf you're considering a move from MerusCase, we can help migrate your records, documents and workflows to Clio or Filevine, with careful mapping and validation so they're better connected for AI and automation.\n\nHere's how we approach migration:\nhttps://getpossibleminds.com/t/9f9tZVCzTA\n\nWould a brief outline of what a move could involve be useful? I'd appreciate your thoughts.\n\nBest,\nPranav\nFounder, Possible Minds",
+            "subject": "Considering Clio or Filevine?",
+            "approval": {
+              "references": null,
+              "approved_at": "2026-09-18T09:18:09.689384+00:00",
+              "approved_by": "codex",
+              "body_sha256": "eac77904933c6d12f3ba39cdeb4a16ac4d3d6d55fbe409cb4ef6fdc2e2a6bd42",
+              "in_reply_to": null,
+              "subject_sha256": "a4bb8e25de32fd3617183c1db3b45152547cac1e001ba4a9684af9cf03b74904"
+            },
+            "transport": "resend",
+            "references": null,
+            "skill_path": null,
+            "body_sha256": "eac77904933c6d12f3ba39cdeb4a16ac4d3d6d55fbe409cb4ef6fdc2e2a6bd42",
+            "in_reply_to": null,
+            "skill_sha256": null,
+            "batch_item_id": "cbf51342f432446d82d6ad52dd206ef8",
+            "brief_version": null,
+            "subject_sha256": "a4bb8e25de32fd3617183c1db3b45152547cac1e001ba4a9684af9cf03b74904",
+            "composer_variant_key": null,
+            "lead_gen_action_type": "first_touch",
+            "composer_experiment_key": null
+          },
+          "policy_result": {},
+          "execution_result": {},
+          "error": null,
+          "trace_id": null,
+          "scheduled_for": "2026-09-18T16:20:00+00:00",
+          "started_at": null,
+          "completed_at": null,
+          "created_at": "2026-09-18T09:18:09.706014+00:00",
+          "updated_at": "2026-09-18T09:18:09.706024+00:00"
+        },
+        "created": true,
+        "updated_existing": false,
+        "executed": false,
+        "scheduled_for_pt": "2026-09-18 09:20 PDT",
+        "scheduled_for_utc": "2026-09-18 16:20:00 UTC"
+      },
+      "policy": {
+        "checks": [
+          {
+            "name": "status_allows_execution",
+            "detail": "approved",
+            "passed": true
+          },
+          {
+            "name": "human_approval_present",
+            "detail": "codex",
+            "passed": true
+          },
+          {
+            "name": "subject_present",
+            "detail": "",
+            "passed": true
+          },
+          {
+            "name": "body_present",
+            "detail": "",
+            "passed": true
+          },
+          {
+            "name": "subject_hash_matches_approval",
+            "detail": "",
+            "passed": true
+          },
+          {
+            "name": "body_hash_matches_approval",
+            "detail": "",
+            "passed": true
+          },
+          {
+            "name": "in_reply_to_matches_approval",
+            "detail": "",
+            "passed": true
+          },
+          {
+            "name": "references_match_approval",
+            "detail": "",
+            "passed": true
+          },
+          {
+            "name": "lead_gen_transport_available",
+            "detail": "zoho_api 0/0 configured=True; resend 0/50 configured=True",
+            "passed": true
+          },
+          {
+            "name": "no_patient_data_in_outreach",
+            "detail": "llm_guard_disabled",
+            "passed": true
+          },
+          {
+            "name": "batch_item_exists",
+            "detail": "cbf51342f432446d82d6ad52dd206ef8",
+            "passed": true
+          },
+          {
+            "name": "batch_item_not_already_started",
+            "detail": "approved",
+            "passed": true
+          },
+          {
+            "name": "contact_email_present",
+            "detail": "nathan@hanningsacchetto.com",
+            "passed": true
+          },
+          {
+            "name": "no_prior_successful_action_for_item",
+            "detail": "",
+            "passed": true
+          }
+        ],
+        "reason": "allowed",
+        "allowed": true,
+        "risk_level": "high",
+        "action_type": "send_approved_lead_gen_draft",
+        "contact_email": "nathan@hanningsacchetto.com",
+        "requires_human_approval": true
+      },
+      "action_id": "action_38e1d92107554ec49b779896",
+      "status": "approved",
+      "scheduled_utc": "2026-09-18T16:20:00+00:00",
+      "scheduled_pdt": "18/09/2026, 09:20:00",
+      "scheduled_ist": "18/09/2026, 21:50:00",
+      "action_type": "first_touch",
+      "transport": "resend",
+      "in_reply_to": null,
+      "references": null,
+      "approval": {
+        "references": null,
+        "approved_at": "2026-09-18T09:18:09.689384+00:00",
+        "approved_by": "codex",
+        "body_sha256": "eac77904933c6d12f3ba39cdeb4a16ac4d3d6d55fbe409cb4ef6fdc2e2a6bd42",
+        "in_reply_to": null,
+        "subject_sha256": "a4bb8e25de32fd3617183c1db3b45152547cac1e001ba4a9684af9cf03b74904"
+      },
+      "tracking": {
+        "code": "9f9tZVCzTA",
+        "tracking_url": "https://getpossibleminds.com/t/9f9tZVCzTA",
+        "destination_url": "https://getpossibleminds.com/services/case-management-migration",
+        "channel": "email",
+        "label": "Migration expansion - 2026-09-18",
+        "contact_id": "771cdbd9300e4615971f450cbf59a143",
+        "contact_name": "Nathan A. Hanning, Esq.",
+        "contact_email": "nathan@hanningsacchetto.com",
+        "firm_name": "Hanning & Sacchetto, LLP",
+        "sent_at": null,
+        "created_at": "2026-09-18T09:16:58.459902+00:00",
+        "raw_clicks": 0,
+        "confirmed_visits": 0,
+        "meaningful_actions": 0,
+        "deepest_scroll": 0,
+        "max_time_on_page_seconds": 0
+      }
+    },
+    {
+      "name": "John Hernandez",
+      "email": "john@hernandezlaw.co",
+      "contact_id": "88f7d5469b144771933d6ded45b9ebcf",
+      "pif_id": "fbeb9cfa-9e52-48a3-b661-616127884e18",
+      "firm": "Hernandez Law",
+      "vendor": "MerusCase",
+      "hook": "Your experience as a workers' compensation judge gives you a different perspective on case preparation. A software change should help your team keep that preparation intact.",
+      "link": {
+        "code": "xDOhm7nOEQ",
+        "campaign_id": "cmp_ki-WF9eCn7bGJ01C",
+        "contact_id": "88f7d5469b144771933d6ded45b9ebcf",
+        "pif_id": "fbeb9cfa-9e52-48a3-b661-616127884e18",
+        "channel": "email",
+        "label": "Migration expansion - 2026-09-18",
+        "destination_url": "https://getpossibleminds.com/services/case-management-migration",
+        "advisor_briefing": null,
+        "tracking_url": "https://getpossibleminds.com/t/xDOhm7nOEQ",
+        "sent_at": null,
+        "created_at": "2026-09-18T09:17:02.337198+00:00"
+      },
+      "item_id": "4d876549856940798e2c617d684f9fec",
+      "time": "2026-09-18T09:30:00-07:00",
+      "body": "Hi John,\n\nYour experience as a workers' compensation judge gives you a different perspective on case preparation. A software change should help your team keep that preparation intact.\n\nI'm Pranav, founder of Possible Minds, previously at McKinsey and Expedia. We built Precise Imaging's email-handling system, which processes over 600 emails daily, routes requests and sends automated status responses.\n\nIf you're considering a move from MerusCase, we can help migrate your records, documents and workflows to Clio or Filevine, with careful mapping and validation so they're better connected for AI and automation.\n\nHere's how we approach migration:\nhttps://getpossibleminds.com/t/xDOhm7nOEQ\n\nWould a brief outline of what a move could involve be useful? I'd appreciate your thoughts.\n\nBest,\nPranav\nFounder, Possible Minds",
+      "subject": "Considering Clio or Filevine?",
+      "file": "artifacts/legacy_migration_2026_09_18/expansion/draft_2.txt",
+      "receipt": {
+        "action": {
+          "id": "action_6547963e8d1943b9bb46aef5",
+          "action_type": "send_approved_lead_gen_draft",
+          "status": "approved",
+          "risk_level": "high",
+          "requested_by": "codex",
+          "approved_by": "codex",
+          "entity_type": "lead_gen_batch_item",
+          "entity_id": "4d876549856940798e2c617d684f9fec",
+          "input": {
+            "body": "Hi John,\n\nYour experience as a workers' compensation judge gives you a different perspective on case preparation. A software change should help your team keep that preparation intact.\n\nI'm Pranav, founder of Possible Minds, previously at McKinsey and Expedia. We built Precise Imaging's email-handling system, which processes over 600 emails daily, routes requests and sends automated status responses.\n\nIf you're considering a move from MerusCase, we can help migrate your records, documents and workflows to Clio or Filevine, with careful mapping and validation so they're better connected for AI and automation.\n\nHere's how we approach migration:\nhttps://getpossibleminds.com/t/xDOhm7nOEQ\n\nWould a brief outline of what a move could involve be useful? I'd appreciate your thoughts.\n\nBest,\nPranav\nFounder, Possible Minds",
+            "subject": "Considering Clio or Filevine?",
+            "approval": {
+              "references": null,
+              "approved_at": "2026-09-18T09:18:15.316716+00:00",
+              "approved_by": "codex",
+              "body_sha256": "98bf75e358272ce22ccc5f68b46527350892dee82bac1b1b30bf60d77c34f0bc",
+              "in_reply_to": null,
+              "subject_sha256": "a4bb8e25de32fd3617183c1db3b45152547cac1e001ba4a9684af9cf03b74904"
+            },
+            "transport": "resend",
+            "references": null,
+            "skill_path": null,
+            "body_sha256": "98bf75e358272ce22ccc5f68b46527350892dee82bac1b1b30bf60d77c34f0bc",
+            "in_reply_to": null,
+            "skill_sha256": null,
+            "batch_item_id": "4d876549856940798e2c617d684f9fec",
+            "brief_version": null,
+            "subject_sha256": "a4bb8e25de32fd3617183c1db3b45152547cac1e001ba4a9684af9cf03b74904",
+            "composer_variant_key": null,
+            "lead_gen_action_type": "first_touch",
+            "composer_experiment_key": null
+          },
+          "policy_result": {},
+          "execution_result": {},
+          "error": null,
+          "trace_id": null,
+          "scheduled_for": "2026-09-18T16:30:00+00:00",
+          "started_at": null,
+          "completed_at": null,
+          "created_at": "2026-09-18T09:18:15.323972+00:00",
+          "updated_at": "2026-09-18T09:18:15.323978+00:00"
+        },
+        "created": true,
+        "updated_existing": false,
+        "executed": false,
+        "scheduled_for_pt": "2026-09-18 09:30 PDT",
+        "scheduled_for_utc": "2026-09-18 16:30:00 UTC"
+      },
+      "policy": {
+        "checks": [
+          {
+            "name": "status_allows_execution",
+            "detail": "approved",
+            "passed": true
+          },
+          {
+            "name": "human_approval_present",
+            "detail": "codex",
+            "passed": true
+          },
+          {
+            "name": "subject_present",
+            "detail": "",
+            "passed": true
+          },
+          {
+            "name": "body_present",
+            "detail": "",
+            "passed": true
+          },
+          {
+            "name": "subject_hash_matches_approval",
+            "detail": "",
+            "passed": true
+          },
+          {
+            "name": "body_hash_matches_approval",
+            "detail": "",
+            "passed": true
+          },
+          {
+            "name": "in_reply_to_matches_approval",
+            "detail": "",
+            "passed": true
+          },
+          {
+            "name": "references_match_approval",
+            "detail": "",
+            "passed": true
+          },
+          {
+            "name": "lead_gen_transport_available",
+            "detail": "zoho_api 0/0 configured=True; resend 0/50 configured=True",
+            "passed": true
+          },
+          {
+            "name": "no_patient_data_in_outreach",
+            "detail": "llm_guard_disabled",
+            "passed": true
+          },
+          {
+            "name": "batch_item_exists",
+            "detail": "4d876549856940798e2c617d684f9fec",
+            "passed": true
+          },
+          {
+            "name": "batch_item_not_already_started",
+            "detail": "approved",
+            "passed": true
+          },
+          {
+            "name": "contact_email_present",
+            "detail": "john@hernandezlaw.co",
+            "passed": true
+          },
+          {
+            "name": "no_prior_successful_action_for_item",
+            "detail": "",
+            "passed": true
+          }
+        ],
+        "reason": "allowed",
+        "allowed": true,
+        "risk_level": "high",
+        "action_type": "send_approved_lead_gen_draft",
+        "contact_email": "john@hernandezlaw.co",
+        "requires_human_approval": true
+      },
+      "action_id": "action_6547963e8d1943b9bb46aef5",
+      "status": "approved",
+      "scheduled_utc": "2026-09-18T16:30:00+00:00",
+      "scheduled_pdt": "18/09/2026, 09:30:00",
+      "scheduled_ist": "18/09/2026, 22:00:00",
+      "action_type": "first_touch",
+      "transport": "resend",
+      "in_reply_to": null,
+      "references": null,
+      "approval": {
+        "references": null,
+        "approved_at": "2026-09-18T09:18:15.316716+00:00",
+        "approved_by": "codex",
+        "body_sha256": "98bf75e358272ce22ccc5f68b46527350892dee82bac1b1b30bf60d77c34f0bc",
+        "in_reply_to": null,
+        "subject_sha256": "a4bb8e25de32fd3617183c1db3b45152547cac1e001ba4a9684af9cf03b74904"
+      },
+      "tracking": {
+        "code": "xDOhm7nOEQ",
+        "tracking_url": "https://getpossibleminds.com/t/xDOhm7nOEQ",
+        "destination_url": "https://getpossibleminds.com/services/case-management-migration",
+        "channel": "email",
+        "label": "Migration expansion - 2026-09-18",
+        "contact_id": "88f7d5469b144771933d6ded45b9ebcf",
+        "contact_name": "John Hernandez",
+        "contact_email": "john@hernandezlaw.co",
+        "firm_name": "Hernandez Law",
+        "sent_at": null,
+        "created_at": "2026-09-18T09:17:02.337198+00:00",
+        "raw_clicks": 0,
+        "confirmed_visits": 0,
+        "meaningful_actions": 0,
+        "deepest_scroll": 0,
+        "max_time_on_page_seconds": 0
+      }
+    },
+    {
+      "name": "Joshua Cohen Slatkin",
+      "email": "josh@jcslawyers.com",
+      "contact_id": "faf6097874b4457f8b32246ecbac764d",
+      "pif_id": "337a8ad2-3f94-4e3c-9e07-f9f83825e29e",
+      "firm": "Law Offices of Joshua Cohen Slatkin, Inc.",
+      "vendor": "Law Ruler",
+      "hook": "You've built a practice handling both injury and employment cases. Any software change should preserve the workflows your team relies on, not create another admin project.",
+      "link": {
+        "code": "TfJCfzBbsg",
+        "campaign_id": "cmp_ki-WF9eCn7bGJ01C",
+        "contact_id": "faf6097874b4457f8b32246ecbac764d",
+        "pif_id": "337a8ad2-3f94-4e3c-9e07-f9f83825e29e",
+        "channel": "email",
+        "label": "Migration expansion - 2026-09-18",
+        "destination_url": "https://getpossibleminds.com/services/case-management-migration",
+        "advisor_briefing": null,
+        "tracking_url": "https://getpossibleminds.com/t/TfJCfzBbsg",
+        "sent_at": null,
+        "created_at": "2026-09-18T09:17:06.014486+00:00"
+      },
+      "item_id": "930037e923184ef7b142aa57858c1a4d",
+      "time": "2026-09-18T09:40:00-07:00",
+      "body": "Hi Joshua,\n\nYou've built a practice handling both injury and employment cases. Any software change should preserve the workflows your team relies on, not create another admin project.\n\nI'm Pranav, founder of Possible Minds, previously at McKinsey and Expedia. We built Precise Imaging's email-handling system, which processes over 600 emails daily, routes requests and sends automated status responses.\n\nIf you're considering a move from Law Ruler, we can help migrate your records, documents and workflows to Clio or Filevine, with careful mapping and validation so they're better connected for AI and automation.\n\nHere's how we approach migration:\nhttps://getpossibleminds.com/t/TfJCfzBbsg\n\nWould a brief outline of what a move could involve be useful? I'd appreciate your thoughts.\n\nBest,\nPranav\nFounder, Possible Minds",
+      "subject": "Considering Clio or Filevine?",
+      "file": "artifacts/legacy_migration_2026_09_18/expansion/draft_3.txt",
+      "receipt": {
+        "action": {
+          "id": "action_ba43524755a94e079b115b0c",
+          "action_type": "send_approved_lead_gen_draft",
+          "status": "approved",
+          "risk_level": "high",
+          "requested_by": "codex",
+          "approved_by": "codex",
+          "entity_type": "lead_gen_batch_item",
+          "entity_id": "930037e923184ef7b142aa57858c1a4d",
+          "input": {
+            "body": "Hi Joshua,\n\nYou've built a practice handling both injury and employment cases. Any software change should preserve the workflows your team relies on, not create another admin project.\n\nI'm Pranav, founder of Possible Minds, previously at McKinsey and Expedia. We built Precise Imaging's email-handling system, which processes over 600 emails daily, routes requests and sends automated status responses.\n\nIf you're considering a move from Law Ruler, we can help migrate your records, documents and workflows to Clio or Filevine, with careful mapping and validation so they're better connected for AI and automation.\n\nHere's how we approach migration:\nhttps://getpossibleminds.com/t/TfJCfzBbsg\n\nWould a brief outline of what a move could involve be useful? I'd appreciate your thoughts.\n\nBest,\nPranav\nFounder, Possible Minds",
+            "subject": "Considering Clio or Filevine?",
+            "approval": {
+              "references": null,
+              "approved_at": "2026-09-18T09:18:21.870349+00:00",
+              "approved_by": "codex",
+              "body_sha256": "fefa310850c8831d762e1ea5bbcfbb5f3aa333b09331d7680de4ce6e02bb2b29",
+              "in_reply_to": null,
+              "subject_sha256": "a4bb8e25de32fd3617183c1db3b45152547cac1e001ba4a9684af9cf03b74904"
+            },
+            "transport": "resend",
+            "references": null,
+            "skill_path": null,
+            "body_sha256": "fefa310850c8831d762e1ea5bbcfbb5f3aa333b09331d7680de4ce6e02bb2b29",
+            "in_reply_to": null,
+            "skill_sha256": null,
+            "batch_item_id": "930037e923184ef7b142aa57858c1a4d",
+            "brief_version": null,
+            "subject_sha256": "a4bb8e25de32fd3617183c1db3b45152547cac1e001ba4a9684af9cf03b74904",
+            "composer_variant_key": null,
+            "lead_gen_action_type": "first_touch",
+            "composer_experiment_key": null
+          },
+          "policy_result": {},
+          "execution_result": {},
+          "error": null,
+          "trace_id": null,
+          "scheduled_for": "2026-09-18T16:40:00+00:00",
+          "started_at": null,
+          "completed_at": null,
+          "created_at": "2026-09-18T09:18:21.876696+00:00",
+          "updated_at": "2026-09-18T09:18:21.876702+00:00"
+        },
+        "created": true,
+        "updated_existing": false,
+        "executed": false,
+        "scheduled_for_pt": "2026-09-18 09:40 PDT",
+        "scheduled_for_utc": "2026-09-18 16:40:00 UTC"
+      },
+      "policy": {
+        "checks": [
+          {
+            "name": "status_allows_execution",
+            "detail": "approved",
+            "passed": true
+          },
+          {
+            "name": "human_approval_present",
+            "detail": "codex",
+            "passed": true
+          },
+          {
+            "name": "subject_present",
+            "detail": "",
+            "passed": true
+          },
+          {
+            "name": "body_present",
+            "detail": "",
+            "passed": true
+          },
+          {
+            "name": "subject_hash_matches_approval",
+            "detail": "",
+            "passed": true
+          },
+          {
+            "name": "body_hash_matches_approval",
+            "detail": "",
+            "passed": true
+          },
+          {
+            "name": "in_reply_to_matches_approval",
+            "detail": "",
+            "passed": true
+          },
+          {
+            "name": "references_match_approval",
+            "detail": "",
+            "passed": true
+          },
+          {
+            "name": "lead_gen_transport_available",
+            "detail": "zoho_api 0/0 configured=True; resend 0/50 configured=True",
+            "passed": true
+          },
+          {
+            "name": "no_patient_data_in_outreach",
+            "detail": "llm_guard_disabled",
+            "passed": true
+          },
+          {
+            "name": "batch_item_exists",
+            "detail": "930037e923184ef7b142aa57858c1a4d",
+            "passed": true
+          },
+          {
+            "name": "batch_item_not_already_started",
+            "detail": "approved",
+            "passed": true
+          },
+          {
+            "name": "contact_email_present",
+            "detail": "josh@jcslawyers.com",
+            "passed": true
+          },
+          {
+            "name": "no_prior_successful_action_for_item",
+            "detail": "",
+            "passed": true
+          }
+        ],
+        "reason": "allowed",
+        "allowed": true,
+        "risk_level": "high",
+        "action_type": "send_approved_lead_gen_draft",
+        "contact_email": "josh@jcslawyers.com",
+        "requires_human_approval": true
+      },
+      "action_id": "action_ba43524755a94e079b115b0c",
+      "status": "approved",
+      "scheduled_utc": "2026-09-18T16:40:00+00:00",
+      "scheduled_pdt": "18/09/2026, 09:40:00",
+      "scheduled_ist": "18/09/2026, 22:10:00",
+      "action_type": "first_touch",
+      "transport": "resend",
+      "in_reply_to": null,
+      "references": null,
+      "approval": {
+        "references": null,
+        "approved_at": "2026-09-18T09:18:21.870349+00:00",
+        "approved_by": "codex",
+        "body_sha256": "fefa310850c8831d762e1ea5bbcfbb5f3aa333b09331d7680de4ce6e02bb2b29",
+        "in_reply_to": null,
+        "subject_sha256": "a4bb8e25de32fd3617183c1db3b45152547cac1e001ba4a9684af9cf03b74904"
+      },
+      "tracking": {
+        "code": "TfJCfzBbsg",
+        "tracking_url": "https://getpossibleminds.com/t/TfJCfzBbsg",
+        "destination_url": "https://getpossibleminds.com/services/case-management-migration",
+        "channel": "email",
+        "label": "Migration expansion - 2026-09-18",
+        "contact_id": "faf6097874b4457f8b32246ecbac764d",
+        "contact_name": "Joshua Cohen Slatkin",
+        "contact_email": "josh@jcslawyers.com",
+        "firm_name": "Law Offices of Joshua Cohen Slatkin, Inc.",
+        "sent_at": null,
+        "created_at": "2026-09-18T09:17:06.014486+00:00",
+        "raw_clicks": 0,
+        "confirmed_visits": 0,
+        "meaningful_actions": 0,
+        "deepest_scroll": 0,
+        "max_time_on_page_seconds": 0
+      }
+    },
+    {
+      "name": "Elena Steers",
+      "email": "elena@steerslawfirm.com",
+      "contact_id": "fc_8049c743c75442f58a8a4dab",
+      "pif_id": "8e98e41e-120d-4252-96f5-1f80c9bbf4c8",
+      "firm": "Law Offices of Steers & Associates",
+      "vendor": null,
+      "hook": "As a founding partner, you'd want any change to your team's systems to earn its keep. Moving software should mean less admin, not more disruption.",
+      "link": {
+        "code": "dbvBILh4YA",
+        "campaign_id": "cmp_ki-WF9eCn7bGJ01C",
+        "contact_id": "fc_8049c743c75442f58a8a4dab",
+        "pif_id": "8e98e41e-120d-4252-96f5-1f80c9bbf4c8",
+        "channel": "email",
+        "label": "Migration expansion - 2026-09-18",
+        "destination_url": "https://getpossibleminds.com/services/case-management-migration",
+        "advisor_briefing": null,
+        "tracking_url": "https://getpossibleminds.com/t/dbvBILh4YA",
+        "sent_at": null,
+        "created_at": "2026-09-18T09:17:09.591453+00:00"
+      },
+      "item_id": "73c6d96bc3fb484f94877c65e1925ef6",
+      "time": "2026-09-18T09:50:00-07:00",
+      "body": "Hi Elena,\n\nAs a founding partner, you'd want any change to your team's systems to earn its keep. Moving software should mean less admin, not more disruption.\n\nI'm Pranav, founder of Possible Minds, previously at McKinsey and Expedia. We built Precise Imaging's email-handling system, which processes over 600 emails daily, routes requests and sends automated status responses.\n\nIf a change of case-management system is on the table, we can help migrate your records, documents and workflows to Clio or Filevine, with careful mapping and validation so they're better connected for AI and automation.\n\nHere's how we approach migration:\nhttps://getpossibleminds.com/t/dbvBILh4YA\n\nWould a brief outline of what a move could involve be useful? I'd appreciate your thoughts.\n\nBest,\nPranav\nFounder, Possible Minds",
+      "subject": "Considering Clio or Filevine?",
+      "file": "artifacts/legacy_migration_2026_09_18/expansion/draft_4.txt",
+      "receipt": {
+        "action": {
+          "id": "action_0d3b5cd1c4f143e99eb103bf",
+          "action_type": "send_approved_lead_gen_draft",
+          "status": "approved",
+          "risk_level": "high",
+          "requested_by": "codex",
+          "approved_by": "codex",
+          "entity_type": "lead_gen_batch_item",
+          "entity_id": "73c6d96bc3fb484f94877c65e1925ef6",
+          "input": {
+            "body": "Hi Elena,\n\nAs a founding partner, you'd want any change to your team's systems to earn its keep. Moving software should mean less admin, not more disruption.\n\nI'm Pranav, founder of Possible Minds, previously at McKinsey and Expedia. We built Precise Imaging's email-handling system, which processes over 600 emails daily, routes requests and sends automated status responses.\n\nIf a change of case-management system is on the table, we can help migrate your records, documents and workflows to Clio or Filevine, with careful mapping and validation so they're better connected for AI and automation.\n\nHere's how we approach migration:\nhttps://getpossibleminds.com/t/dbvBILh4YA\n\nWould a brief outline of what a move could involve be useful? I'd appreciate your thoughts.\n\nBest,\nPranav\nFounder, Possible Minds",
+            "subject": "Considering Clio or Filevine?",
+            "approval": {
+              "references": null,
+              "approved_at": "2026-09-18T09:18:40.948778+00:00",
+              "approved_by": "codex",
+              "body_sha256": "9e10493438645d315f77f86a38996286bb16fce4ec131ebf9de0aa822f024af9",
+              "in_reply_to": null,
+              "subject_sha256": "a4bb8e25de32fd3617183c1db3b45152547cac1e001ba4a9684af9cf03b74904"
+            },
+            "transport": "resend",
+            "references": null,
+            "skill_path": null,
+            "body_sha256": "9e10493438645d315f77f86a38996286bb16fce4ec131ebf9de0aa822f024af9",
+            "in_reply_to": null,
+            "skill_sha256": null,
+            "batch_item_id": "73c6d96bc3fb484f94877c65e1925ef6",
+            "brief_version": null,
+            "subject_sha256": "a4bb8e25de32fd3617183c1db3b45152547cac1e001ba4a9684af9cf03b74904",
+            "composer_variant_key": null,
+            "lead_gen_action_type": "first_touch",
+            "composer_experiment_key": null
+          },
+          "policy_result": {},
+          "execution_result": {},
+          "error": null,
+          "trace_id": null,
+          "scheduled_for": "2026-09-18T16:50:00+00:00",
+          "started_at": null,
+          "completed_at": null,
+          "created_at": "2026-09-18T09:18:40.953415+00:00",
+          "updated_at": "2026-09-18T09:18:40.953422+00:00"
+        },
+        "created": true,
+        "updated_existing": false,
+        "executed": false,
+        "scheduled_for_pt": "2026-09-18 09:50 PDT",
+        "scheduled_for_utc": "2026-09-18 16:50:00 UTC"
+      },
+      "policy": {
+        "checks": [
+          {
+            "name": "status_allows_execution",
+            "detail": "approved",
+            "passed": true
+          },
+          {
+            "name": "human_approval_present",
+            "detail": "codex",
+            "passed": true
+          },
+          {
+            "name": "subject_present",
+            "detail": "",
+            "passed": true
+          },
+          {
+            "name": "body_present",
+            "detail": "",
+            "passed": true
+          },
+          {
+            "name": "subject_hash_matches_approval",
+            "detail": "",
+            "passed": true
+          },
+          {
+            "name": "body_hash_matches_approval",
+            "detail": "",
+            "passed": true
+          },
+          {
+            "name": "in_reply_to_matches_approval",
+            "detail": "",
+            "passed": true
+          },
+          {
+            "name": "references_match_approval",
+            "detail": "",
+            "passed": true
+          },
+          {
+            "name": "lead_gen_transport_available",
+            "detail": "zoho_api 0/0 configured=True; resend 0/50 configured=True",
+            "passed": true
+          },
+          {
+            "name": "no_patient_data_in_outreach",
+            "detail": "llm_guard_disabled",
+            "passed": true
+          },
+          {
+            "name": "batch_item_exists",
+            "detail": "73c6d96bc3fb484f94877c65e1925ef6",
+            "passed": true
+          },
+          {
+            "name": "batch_item_not_already_started",
+            "detail": "approved",
+            "passed": true
+          },
+          {
+            "name": "contact_email_present",
+            "detail": "elena@steerslawfirm.com",
+            "passed": true
+          },
+          {
+            "name": "no_prior_successful_action_for_item",
+            "detail": "",
+            "passed": true
+          }
+        ],
+        "reason": "allowed",
+        "allowed": true,
+        "risk_level": "high",
+        "action_type": "send_approved_lead_gen_draft",
+        "contact_email": "elena@steerslawfirm.com",
+        "requires_human_approval": true
+      },
+      "action_id": "action_0d3b5cd1c4f143e99eb103bf",
+      "status": "approved",
+      "scheduled_utc": "2026-09-18T16:50:00+00:00",
+      "scheduled_pdt": "18/09/2026, 09:50:00",
+      "scheduled_ist": "18/09/2026, 22:20:00",
+      "action_type": "first_touch",
+      "transport": "resend",
+      "in_reply_to": null,
+      "references": null,
+      "approval": {
+        "references": null,
+        "approved_at": "2026-09-18T09:18:40.948778+00:00",
+        "approved_by": "codex",
+        "body_sha256": "9e10493438645d315f77f86a38996286bb16fce4ec131ebf9de0aa822f024af9",
+        "in_reply_to": null,
+        "subject_sha256": "a4bb8e25de32fd3617183c1db3b45152547cac1e001ba4a9684af9cf03b74904"
+      },
+      "tracking": {
+        "code": "dbvBILh4YA",
+        "tracking_url": "https://getpossibleminds.com/t/dbvBILh4YA",
+        "destination_url": "https://getpossibleminds.com/services/case-management-migration",
+        "channel": "email",
+        "label": "Migration expansion - 2026-09-18",
+        "contact_id": "fc_8049c743c75442f58a8a4dab",
+        "contact_name": "elena@steerslawfirm.com",
+        "contact_email": "elena@steerslawfirm.com",
+        "firm_name": "Law Offices of Steers & Associates",
+        "sent_at": null,
+        "created_at": "2026-09-18T09:17:09.591453+00:00",
+        "raw_clicks": 0,
+        "confirmed_visits": 0,
+        "meaningful_actions": 0,
+        "deepest_scroll": 0,
+        "max_time_on_page_seconds": 0
+      }
+    },
+    {
+      "name": "Jude Redkey",
+      "email": "jude@redkeygordonlaw.com",
+      "contact_id": "fc_303e26e6a3c34e4d8faa9003",
+      "pif_id": "961af1c4-fd75-40f7-a566-3baa864c43f7",
+      "firm": "Redkey Gordon Law",
+      "vendor": null,
+      "hook": "As a founding partner, you'd want a software change to protect the case history and working habits your team has built up, while making everyday tasks easier.",
+      "link": {
+        "code": "92kNQCqnow",
+        "campaign_id": "cmp_ki-WF9eCn7bGJ01C",
+        "contact_id": "fc_303e26e6a3c34e4d8faa9003",
+        "pif_id": "961af1c4-fd75-40f7-a566-3baa864c43f7",
+        "channel": "email",
+        "label": "Migration expansion - 2026-09-18",
+        "destination_url": "https://getpossibleminds.com/services/case-management-migration",
+        "advisor_briefing": null,
+        "tracking_url": "https://getpossibleminds.com/t/92kNQCqnow",
+        "sent_at": null,
+        "created_at": "2026-09-18T09:17:16.871995+00:00"
+      },
+      "item_id": "fe49184e4994419ba3c5261005a86b24",
+      "time": "2026-09-18T10:00:00-07:00",
+      "body": "Hi Jude,\n\nAs a founding partner, you'd want a software change to protect the case history and working habits your team has built up, while making everyday tasks easier.\n\nI'm Pranav, founder of Possible Minds, previously at McKinsey and Expedia. We built Precise Imaging's email-handling system, which processes over 600 emails daily, routes requests and sends automated status responses.\n\nIf a change of case-management system is on the table, we can help migrate your records, documents and workflows to Clio or Filevine, with careful mapping and validation so they're better connected for AI and automation.\n\nHere's how we approach migration:\nhttps://getpossibleminds.com/t/92kNQCqnow\n\nWould a brief outline of what a move could involve be useful? I'd appreciate your thoughts.\n\nBest,\nPranav\nFounder, Possible Minds",
+      "subject": "Considering Clio or Filevine?",
+      "file": "artifacts/legacy_migration_2026_09_18/expansion/draft_5.txt",
+      "receipt": {
+        "action": {
+          "id": "action_e64dbb3a45ca45b78a7c17e9",
+          "action_type": "send_approved_lead_gen_draft",
+          "status": "approved",
+          "risk_level": "high",
+          "requested_by": "codex",
+          "approved_by": "codex",
+          "entity_type": "lead_gen_batch_item",
+          "entity_id": "fe49184e4994419ba3c5261005a86b24",
+          "input": {
+            "body": "Hi Jude,\n\nAs a founding partner, you'd want a software change to protect the case history and working habits your team has built up, while making everyday tasks easier.\n\nI'm Pranav, founder of Possible Minds, previously at McKinsey and Expedia. We built Precise Imaging's email-handling system, which processes over 600 emails daily, routes requests and sends automated status responses.\n\nIf a change of case-management system is on the table, we can help migrate your records, documents and workflows to Clio or Filevine, with careful mapping and validation so they're better connected for AI and automation.\n\nHere's how we approach migration:\nhttps://getpossibleminds.com/t/92kNQCqnow\n\nWould a brief outline of what a move could involve be useful? I'd appreciate your thoughts.\n\nBest,\nPranav\nFounder, Possible Minds",
+            "subject": "Considering Clio or Filevine?",
+            "approval": {
+              "references": null,
+              "approved_at": "2026-09-18T09:18:47.298523+00:00",
+              "approved_by": "codex",
+              "body_sha256": "85b28c95a110b6c8787b7c500fbbf21583a4e829dc2e24da6c04b82c51da253d",
+              "in_reply_to": null,
+              "subject_sha256": "a4bb8e25de32fd3617183c1db3b45152547cac1e001ba4a9684af9cf03b74904"
+            },
+            "transport": "resend",
+            "references": null,
+            "skill_path": null,
+            "body_sha256": "85b28c95a110b6c8787b7c500fbbf21583a4e829dc2e24da6c04b82c51da253d",
+            "in_reply_to": null,
+            "skill_sha256": null,
+            "batch_item_id": "fe49184e4994419ba3c5261005a86b24",
+            "brief_version": null,
+            "subject_sha256": "a4bb8e25de32fd3617183c1db3b45152547cac1e001ba4a9684af9cf03b74904",
+            "composer_variant_key": null,
+            "lead_gen_action_type": "first_touch",
+            "composer_experiment_key": null
+          },
+          "policy_result": {},
+          "execution_result": {},
+          "error": null,
+          "trace_id": null,
+          "scheduled_for": "2026-09-18T17:00:00+00:00",
+          "started_at": null,
+          "completed_at": null,
+          "created_at": "2026-09-18T09:18:47.303087+00:00",
+          "updated_at": "2026-09-18T09:18:47.303094+00:00"
+        },
+        "created": true,
+        "updated_existing": false,
+        "executed": false,
+        "scheduled_for_pt": "2026-09-18 10:00 PDT",
+        "scheduled_for_utc": "2026-09-18 17:00:00 UTC"
+      },
+      "policy": {
+        "checks": [
+          {
+            "name": "status_allows_execution",
+            "detail": "approved",
+            "passed": true
+          },
+          {
+            "name": "human_approval_present",
+            "detail": "codex",
+            "passed": true
+          },
+          {
+            "name": "subject_present",
+            "detail": "",
+            "passed": true
+          },
+          {
+            "name": "body_present",
+            "detail": "",
+            "passed": true
+          },
+          {
+            "name": "subject_hash_matches_approval",
+            "detail": "",
+            "passed": true
+          },
+          {
+            "name": "body_hash_matches_approval",
+            "detail": "",
+            "passed": true
+          },
+          {
+            "name": "in_reply_to_matches_approval",
+            "detail": "",
+            "passed": true
+          },
+          {
+            "name": "references_match_approval",
+            "detail": "",
+            "passed": true
+          },
+          {
+            "name": "lead_gen_transport_available",
+            "detail": "zoho_api 0/0 configured=True; resend 0/50 configured=True",
+            "passed": true
+          },
+          {
+            "name": "no_patient_data_in_outreach",
+            "detail": "llm_guard_disabled",
+            "passed": true
+          },
+          {
+            "name": "batch_item_exists",
+            "detail": "fe49184e4994419ba3c5261005a86b24",
+            "passed": true
+          },
+          {
+            "name": "batch_item_not_already_started",
+            "detail": "approved",
+            "passed": true
+          },
+          {
+            "name": "contact_email_present",
+            "detail": "jude@redkeygordonlaw.com",
+            "passed": true
+          },
+          {
+            "name": "no_prior_successful_action_for_item",
+            "detail": "",
+            "passed": true
+          }
+        ],
+        "reason": "allowed",
+        "allowed": true,
+        "risk_level": "high",
+        "action_type": "send_approved_lead_gen_draft",
+        "contact_email": "jude@redkeygordonlaw.com",
+        "requires_human_approval": true
+      },
+      "action_id": "action_e64dbb3a45ca45b78a7c17e9",
+      "status": "approved",
+      "scheduled_utc": "2026-09-18T17:00:00+00:00",
+      "scheduled_pdt": "18/09/2026, 10:00:00",
+      "scheduled_ist": "18/09/2026, 22:30:00",
+      "action_type": "first_touch",
+      "transport": "resend",
+      "in_reply_to": null,
+      "references": null,
+      "approval": {
+        "references": null,
+        "approved_at": "2026-09-18T09:18:47.298523+00:00",
+        "approved_by": "codex",
+        "body_sha256": "85b28c95a110b6c8787b7c500fbbf21583a4e829dc2e24da6c04b82c51da253d",
+        "in_reply_to": null,
+        "subject_sha256": "a4bb8e25de32fd3617183c1db3b45152547cac1e001ba4a9684af9cf03b74904"
+      },
+      "tracking": {
+        "code": "92kNQCqnow",
+        "tracking_url": "https://getpossibleminds.com/t/92kNQCqnow",
+        "destination_url": "https://getpossibleminds.com/services/case-management-migration",
+        "channel": "email",
+        "label": "Migration expansion - 2026-09-18",
+        "contact_id": "fc_303e26e6a3c34e4d8faa9003",
+        "contact_name": "jude@redkeygordonlaw.com",
+        "contact_email": "jude@redkeygordonlaw.com",
+        "firm_name": "Redkey Gordon Law",
+        "sent_at": null,
+        "created_at": "2026-09-18T09:17:16.871995+00:00",
+        "raw_clicks": 0,
+        "confirmed_visits": 0,
+        "meaningful_actions": 0,
+        "deepest_scroll": 0,
+        "max_time_on_page_seconds": 0
+      }
+    },
+    {
+      "name": "Walter Clark",
+      "email": "wclark@walterclark.com",
+      "contact_id": "fea3b202b4264f79a380fefcc27fe847",
+      "pif_id": "e6c80251-9db3-4e43-946d-d0633f34cfe9",
+      "firm": "Walter Clark Legal Group",
+      "vendor": "SmartAdvocate",
+      "hook": "After building your practice over decades, you'd want any new platform to support your team without disrupting active cases or losing the detail behind them.",
+      "link": {
+        "code": "gKeJJFJXPQ",
+        "campaign_id": "cmp_ki-WF9eCn7bGJ01C",
+        "contact_id": "fea3b202b4264f79a380fefcc27fe847",
+        "pif_id": "e6c80251-9db3-4e43-946d-d0633f34cfe9",
+        "channel": "email",
+        "label": "Migration expansion - 2026-09-18",
+        "destination_url": "https://getpossibleminds.com/services/case-management-migration",
+        "advisor_briefing": null,
+        "tracking_url": "https://getpossibleminds.com/t/gKeJJFJXPQ",
+        "sent_at": null,
+        "created_at": "2026-09-18T09:17:20.722860+00:00"
+      },
+      "item_id": "172da90cb4704a02b5271041c4812e6e",
+      "time": "2026-09-18T10:10:00-07:00",
+      "body": "Hi Walter,\n\nAfter building your practice over decades, you'd want any new platform to support your team without disrupting active cases or losing the detail behind them.\n\nI'm Pranav, founder of Possible Minds, previously at McKinsey and Expedia. We built Precise Imaging's email-handling system, which processes over 600 emails daily, routes requests and sends automated status responses.\n\nIf you're considering a move from SmartAdvocate, we can help migrate your records, documents and workflows to Clio or Filevine, with careful mapping and validation so they're better connected for AI and automation.\n\nHere's how we approach migration:\nhttps://getpossibleminds.com/t/gKeJJFJXPQ\n\nWould a brief outline of what a move could involve be useful? I'd appreciate your thoughts.\n\nBest,\nPranav\nFounder, Possible Minds",
+      "subject": "Considering Clio or Filevine?",
+      "file": "artifacts/legacy_migration_2026_09_18/expansion/draft_6.txt",
+      "receipt": {
+        "action": {
+          "id": "action_b982a5a639c24edfae2bacd7",
+          "action_type": "send_approved_lead_gen_draft",
+          "status": "approved",
+          "risk_level": "high",
+          "requested_by": "codex",
+          "approved_by": "codex",
+          "entity_type": "lead_gen_batch_item",
+          "entity_id": "172da90cb4704a02b5271041c4812e6e",
+          "input": {
+            "body": "Hi Walter,\n\nAfter building your practice over decades, you'd want any new platform to support your team without disrupting active cases or losing the detail behind them.\n\nI'm Pranav, founder of Possible Minds, previously at McKinsey and Expedia. We built Precise Imaging's email-handling system, which processes over 600 emails daily, routes requests and sends automated status responses.\n\nIf you're considering a move from SmartAdvocate, we can help migrate your records, documents and workflows to Clio or Filevine, with careful mapping and validation so they're better connected for AI and automation.\n\nHere's how we approach migration:\nhttps://getpossibleminds.com/t/gKeJJFJXPQ\n\nWould a brief outline of what a move could involve be useful? I'd appreciate your thoughts.\n\nBest,\nPranav\nFounder, Possible Minds",
+            "subject": "Considering Clio or Filevine?",
+            "approval": {
+              "references": null,
+              "approved_at": "2026-09-18T09:18:52.377838+00:00",
+              "approved_by": "codex",
+              "body_sha256": "a2a7dfa6e57f8498bea80469cc9a5ec728c8ef474ed5fc3e20f7911a25282739",
+              "in_reply_to": null,
+              "subject_sha256": "a4bb8e25de32fd3617183c1db3b45152547cac1e001ba4a9684af9cf03b74904"
+            },
+            "transport": "resend",
+            "references": null,
+            "skill_path": null,
+            "body_sha256": "a2a7dfa6e57f8498bea80469cc9a5ec728c8ef474ed5fc3e20f7911a25282739",
+            "in_reply_to": null,
+            "skill_sha256": null,
+            "batch_item_id": "172da90cb4704a02b5271041c4812e6e",
+            "brief_version": null,
+            "subject_sha256": "a4bb8e25de32fd3617183c1db3b45152547cac1e001ba4a9684af9cf03b74904",
+            "composer_variant_key": null,
+            "lead_gen_action_type": "first_touch",
+            "composer_experiment_key": null
+          },
+          "policy_result": {},
+          "execution_result": {},
+          "error": null,
+          "trace_id": null,
+          "scheduled_for": "2026-09-18T17:10:00+00:00",
+          "started_at": null,
+          "completed_at": null,
+          "created_at": "2026-09-18T09:18:52.382393+00:00",
+          "updated_at": "2026-09-18T09:18:52.382399+00:00"
+        },
+        "created": true,
+        "updated_existing": false,
+        "executed": false,
+        "scheduled_for_pt": "2026-09-18 10:10 PDT",
+        "scheduled_for_utc": "2026-09-18 17:10:00 UTC"
+      },
+      "policy": {
+        "checks": [
+          {
+            "name": "status_allows_execution",
+            "detail": "approved",
+            "passed": true
+          },
+          {
+            "name": "human_approval_present",
+            "detail": "codex",
+            "passed": true
+          },
+          {
+            "name": "subject_present",
+            "detail": "",
+            "passed": true
+          },
+          {
+            "name": "body_present",
+            "detail": "",
+            "passed": true
+          },
+          {
+            "name": "subject_hash_matches_approval",
+            "detail": "",
+            "passed": true
+          },
+          {
+            "name": "body_hash_matches_approval",
+            "detail": "",
+            "passed": true
+          },
+          {
+            "name": "in_reply_to_matches_approval",
+            "detail": "",
+            "passed": true
+          },
+          {
+            "name": "references_match_approval",
+            "detail": "",
+            "passed": true
+          },
+          {
+            "name": "lead_gen_transport_available",
+            "detail": "zoho_api 0/0 configured=True; resend 0/50 configured=True",
+            "passed": true
+          },
+          {
+            "name": "no_patient_data_in_outreach",
+            "detail": "llm_guard_disabled",
+            "passed": true
+          },
+          {
+            "name": "batch_item_exists",
+            "detail": "172da90cb4704a02b5271041c4812e6e",
+            "passed": true
+          },
+          {
+            "name": "batch_item_not_already_started",
+            "detail": "approved",
+            "passed": true
+          },
+          {
+            "name": "contact_email_present",
+            "detail": "wclark@walterclark.com",
+            "passed": true
+          },
+          {
+            "name": "no_prior_successful_action_for_item",
+            "detail": "",
+            "passed": true
+          }
+        ],
+        "reason": "allowed",
+        "allowed": true,
+        "risk_level": "high",
+        "action_type": "send_approved_lead_gen_draft",
+        "contact_email": "wclark@walterclark.com",
+        "requires_human_approval": true
+      },
+      "action_id": "action_b982a5a639c24edfae2bacd7",
+      "status": "approved",
+      "scheduled_utc": "2026-09-18T17:10:00+00:00",
+      "scheduled_pdt": "18/09/2026, 10:10:00",
+      "scheduled_ist": "18/09/2026, 22:40:00",
+      "action_type": "first_touch",
+      "transport": "resend",
+      "in_reply_to": null,
+      "references": null,
+      "approval": {
+        "references": null,
+        "approved_at": "2026-09-18T09:18:52.377838+00:00",
+        "approved_by": "codex",
+        "body_sha256": "a2a7dfa6e57f8498bea80469cc9a5ec728c8ef474ed5fc3e20f7911a25282739",
+        "in_reply_to": null,
+        "subject_sha256": "a4bb8e25de32fd3617183c1db3b45152547cac1e001ba4a9684af9cf03b74904"
+      },
+      "tracking": {
+        "code": "gKeJJFJXPQ",
+        "tracking_url": "https://getpossibleminds.com/t/gKeJJFJXPQ",
+        "destination_url": "https://getpossibleminds.com/services/case-management-migration",
+        "channel": "email",
+        "label": "Migration expansion - 2026-09-18",
+        "contact_id": "fea3b202b4264f79a380fefcc27fe847",
+        "contact_name": "Walter T. Clark",
+        "contact_email": "wclark@walterclark.com",
+        "firm_name": "Walter Clark Legal Group",
+        "sent_at": null,
+        "created_at": "2026-09-18T09:17:20.722860+00:00",
+        "raw_clicks": 0,
+        "confirmed_visits": 0,
+        "meaningful_actions": 0,
+        "deepest_scroll": 0,
+        "max_time_on_page_seconds": 0
+      }
+    },
+    {
+      "name": "Eran Lagstein",
+      "email": "eran@lagsteinlawfirm.com",
+      "contact_id": "fc_a1326745fa324e23b05c4508",
+      "pif_id": "601d1563-64e7-45ad-ba49-65246fa3080f",
+      "firm": "Lagstein Law Firm, P.C.",
+      "subject": "Considering Clio or Filevine?",
+      "action_type": "first_touch",
+      "link": {
+        "code": "EogRC1ZS2Q",
+        "campaign_id": "cmp_ki-WF9eCn7bGJ01C",
+        "contact_id": "fc_a1326745fa324e23b05c4508",
+        "pif_id": "601d1563-64e7-45ad-ba49-65246fa3080f",
+        "channel": "email",
+        "label": "Migration expansion - 2026-09-18",
+        "destination_url": "https://getpossibleminds.com/services/case-management-migration",
+        "advisor_briefing": null,
+        "tracking_url": "https://getpossibleminds.com/t/EogRC1ZS2Q",
+        "sent_at": null,
+        "created_at": "2026-09-18T09:26:26.304518+00:00"
+      },
+      "item_id": "0d7e25475cda4ff8af4ef22e7902d97b",
+      "time": "2026-09-18T10:20:00-07:00",
+      "file": "artifacts/legacy_migration_2026_09_18/expansion/draft_7.txt",
+      "body": "Hi Eran,\n\nYou've built a practice spanning California and Nevada, so keeping case information usable across matters and jurisdictions matters as much as choosing new software.\n\nI'm Pranav, founder of Possible Minds, previously at McKinsey and Expedia. We built Precise Imaging's email-handling system, which processes over 600 emails daily, routes requests and sends automated status responses.\n\nIf a change of case-management system is on the table, we can help migrate your records, documents and workflows to Clio or Filevine, with careful mapping and validation so they're better connected for AI and automation.\n\nHere's how we approach migration:\nhttps://getpossibleminds.com/t/EogRC1ZS2Q\n\nWould a brief outline of what a move could involve be useful? I'd appreciate your thoughts.\n\nBest,\nPranav\nFounder, Possible Minds",
+      "role_source": "https://losangeles-personalinjuryattorney.com/the-team/eran-lagstein/",
+      "email_source": "Possible OS front contact plus https://docs.justia.com/cases/federal/district-courts/nevada/nvdce/2%3A2024cv00785/168295/58",
+      "vendor_evidence": "Smokeball message mention, confidence 0.6; not named in copy; no migration status asserted.",
+      "receipt": {
+        "action": {
+          "id": "action_26de3814a72b4dc59d5168a7",
+          "action_type": "send_approved_lead_gen_draft",
+          "status": "approved",
+          "risk_level": "high",
+          "requested_by": "codex",
+          "approved_by": "codex",
+          "entity_type": "lead_gen_batch_item",
+          "entity_id": "0d7e25475cda4ff8af4ef22e7902d97b",
+          "input": {
+            "body": "Hi Eran,\n\nYou've built a practice spanning California and Nevada, so keeping case information usable across matters and jurisdictions matters as much as choosing new software.\n\nI'm Pranav, founder of Possible Minds, previously at McKinsey and Expedia. We built Precise Imaging's email-handling system, which processes over 600 emails daily, routes requests and sends automated status responses.\n\nIf a change of case-management system is on the table, we can help migrate your records, documents and workflows to Clio or Filevine, with careful mapping and validation so they're better connected for AI and automation.\n\nHere's how we approach migration:\nhttps://getpossibleminds.com/t/EogRC1ZS2Q\n\nWould a brief outline of what a move could involve be useful? I'd appreciate your thoughts.\n\nBest,\nPranav\nFounder, Possible Minds",
+            "subject": "Considering Clio or Filevine?",
+            "approval": {
+              "references": null,
+              "approved_at": "2026-09-18T09:28:02.896336+00:00",
+              "approved_by": "codex",
+              "body_sha256": "ada5795f136aecdefe02c5b5ce78dd67ad16fde8ff72931dc15b5a335053ba2a",
+              "in_reply_to": null,
+              "subject_sha256": "a4bb8e25de32fd3617183c1db3b45152547cac1e001ba4a9684af9cf03b74904"
+            },
+            "transport": "resend",
+            "references": null,
+            "skill_path": null,
+            "body_sha256": "ada5795f136aecdefe02c5b5ce78dd67ad16fde8ff72931dc15b5a335053ba2a",
+            "in_reply_to": null,
+            "skill_sha256": null,
+            "batch_item_id": "0d7e25475cda4ff8af4ef22e7902d97b",
+            "brief_version": null,
+            "subject_sha256": "a4bb8e25de32fd3617183c1db3b45152547cac1e001ba4a9684af9cf03b74904",
+            "composer_variant_key": null,
+            "lead_gen_action_type": "first_touch",
+            "composer_experiment_key": null
+          },
+          "policy_result": {},
+          "execution_result": {},
+          "error": null,
+          "trace_id": null,
+          "scheduled_for": "2026-09-18T17:20:00+00:00",
+          "started_at": null,
+          "completed_at": null,
+          "created_at": "2026-09-18T09:28:02.900966+00:00",
+          "updated_at": "2026-09-18T09:28:02.900973+00:00"
+        },
+        "created": true,
+        "updated_existing": false,
+        "executed": false,
+        "scheduled_for_pt": "2026-09-18 10:20 PDT",
+        "scheduled_for_utc": "2026-09-18 17:20:00 UTC"
+      },
+      "policy": {
+        "checks": [
+          {
+            "name": "status_allows_execution",
+            "detail": "approved",
+            "passed": true
+          },
+          {
+            "name": "human_approval_present",
+            "detail": "codex",
+            "passed": true
+          },
+          {
+            "name": "subject_present",
+            "detail": "",
+            "passed": true
+          },
+          {
+            "name": "body_present",
+            "detail": "",
+            "passed": true
+          },
+          {
+            "name": "subject_hash_matches_approval",
+            "detail": "",
+            "passed": true
+          },
+          {
+            "name": "body_hash_matches_approval",
+            "detail": "",
+            "passed": true
+          },
+          {
+            "name": "in_reply_to_matches_approval",
+            "detail": "",
+            "passed": true
+          },
+          {
+            "name": "references_match_approval",
+            "detail": "",
+            "passed": true
+          },
+          {
+            "name": "lead_gen_transport_available",
+            "detail": "zoho_api 0/0 configured=True; resend 0/50 configured=True",
+            "passed": true
+          },
+          {
+            "name": "no_patient_data_in_outreach",
+            "detail": "llm_guard_disabled",
+            "passed": true
+          },
+          {
+            "name": "batch_item_exists",
+            "detail": "0d7e25475cda4ff8af4ef22e7902d97b",
+            "passed": true
+          },
+          {
+            "name": "batch_item_not_already_started",
+            "detail": "approved",
+            "passed": true
+          },
+          {
+            "name": "contact_email_present",
+            "detail": "eran@lagsteinlawfirm.com",
+            "passed": true
+          },
+          {
+            "name": "no_prior_successful_action_for_item",
+            "detail": "",
+            "passed": true
+          }
+        ],
+        "reason": "allowed",
+        "allowed": true,
+        "risk_level": "high",
+        "action_type": "send_approved_lead_gen_draft",
+        "contact_email": "eran@lagsteinlawfirm.com",
+        "requires_human_approval": true
+      },
+      "action_id": "action_26de3814a72b4dc59d5168a7",
+      "status": "approved",
+      "scheduled_utc": "2026-09-18T17:20:00+00:00",
+      "scheduled_pdt": "18/09/2026, 10:20:00",
+      "scheduled_ist": "18/09/2026, 22:50:00",
+      "transport": "resend",
+      "in_reply_to": null,
+      "references": null,
+      "approval": {
+        "references": null,
+        "approved_at": "2026-09-18T09:28:02.896336+00:00",
+        "approved_by": "codex",
+        "body_sha256": "ada5795f136aecdefe02c5b5ce78dd67ad16fde8ff72931dc15b5a335053ba2a",
+        "in_reply_to": null,
+        "subject_sha256": "a4bb8e25de32fd3617183c1db3b45152547cac1e001ba4a9684af9cf03b74904"
+      },
+      "tracking": {
+        "code": "EogRC1ZS2Q",
+        "tracking_url": "https://getpossibleminds.com/t/EogRC1ZS2Q",
+        "destination_url": "https://getpossibleminds.com/services/case-management-migration",
+        "channel": "email",
+        "label": "Migration expansion - 2026-09-18",
+        "contact_id": "fc_a1326745fa324e23b05c4508",
+        "contact_name": "Eran Lagstein",
+        "contact_email": "eran@lagsteinlawfirm.com",
+        "firm_name": "Lagstein Law Firm, P.C.",
+        "sent_at": null,
+        "created_at": "2026-09-18T09:26:26.304518+00:00",
+        "raw_clicks": 0,
+        "confirmed_visits": 0,
+        "meaningful_actions": 0,
+        "deepest_scroll": 0,
+        "max_time_on_page_seconds": 0
+      }
+    },
+    {
+      "name": "Domingo Castillo",
+      "email": "castillolaw2000@aol.com",
+      "contact_id": "c0ed0352ef4e45f3aeb0a16442530a5b",
+      "pif_id": "0eaa168c-4f87-418d-a3c3-bd1a898fb483",
+      "firm": "Castillo & Montes",
+      "subject": "Quick question about Precise Imaging status updates",
+      "action_type": "follow_up",
+      "link": {
+        "code": "1BvpmLj1IA",
+        "campaign_id": "cmp_ki-WF9eCn7bGJ01C",
+        "contact_id": "c0ed0352ef4e45f3aeb0a16442530a5b",
+        "pif_id": "0eaa168c-4f87-418d-a3c3-bd1a898fb483",
+        "channel": "email",
+        "label": "Migration expansion - 2026-09-18",
+        "destination_url": "https://getpossibleminds.com/services/case-management-migration",
+        "advisor_briefing": null,
+        "tracking_url": "https://getpossibleminds.com/t/1BvpmLj1IA",
+        "sent_at": null,
+        "created_at": "2026-09-18T09:26:51.162986+00:00"
+      },
+      "item_id": "7c8e0808edc24078b00fbc4a281fe56e",
+      "time": "2026-09-18T10:30:00-07:00",
+      "file": "artifacts/legacy_migration_2026_09_18/expansion/draft_8.txt",
+      "body": "Hi Domingo,\n\nMy earlier note was about automating records follow-up and client communication. With your team working across several offices, the case-management system underneath those workflows is another part worth considering.\n\nIf you're weighing a move from A-1 Law, we can help migrate records, documents and workflows to Clio or Filevine, checking that the case history and fields your team relies on carry over properly. That creates a better foundation for connected AI workflows, rather than another disconnected tool.\n\nHere's our approach:\nhttps://getpossibleminds.com/t/1BvpmLj1IA\n\nWould a brief outline of what a move could involve be useful? I'd appreciate your thoughts.\n\nBest,\nPranav\nFounder, Possible Minds",
+      "in_reply_to": "<19e838b0ea9.214cd13628299.4707045211943265619@possiblemindshq.com>",
+      "references": "<19e838b0ea9.214cd13628299.4707045211943265619@possiblemindshq.com>",
+      "thread_source": "Zoho Sent UID 476, exact recipient and subject checked with BODY.PEEK[], original 2026-06-01",
+      "role_source": "https://www.castillolaw.us/meet-the-team/",
+      "email_source": "Possible OS patients_dm plus https://ww3.workcompcentral.com/visibleuser/index/id/189",
+      "vendor_evidence": "A-1 Law, firm-specific LinkedIn job posting https://www.linkedin.com/jobs/view/workers-compensation-specialist-at-castillo-montes-attorneys-at-law-4436591310",
+      "receipt": {
+        "action": {
+          "id": "action_ce8a262484d34e50aecf6ff0",
+          "action_type": "send_approved_lead_gen_draft",
+          "status": "approved",
+          "risk_level": "high",
+          "requested_by": "codex",
+          "approved_by": "codex",
+          "entity_type": "lead_gen_batch_item",
+          "entity_id": "7c8e0808edc24078b00fbc4a281fe56e",
+          "input": {
+            "body": "Hi Domingo,\n\nMy earlier note was about automating records follow-up and client communication. With your team working across several offices, the case-management system underneath those workflows is another part worth considering.\n\nIf you're weighing a move from A-1 Law, we can help migrate records, documents and workflows to Clio or Filevine, checking that the case history and fields your team relies on carry over properly. That creates a better foundation for connected AI workflows, rather than another disconnected tool.\n\nHere's our approach:\nhttps://getpossibleminds.com/t/1BvpmLj1IA\n\nWould a brief outline of what a move could involve be useful? I'd appreciate your thoughts.\n\nBest,\nPranav\nFounder, Possible Minds",
+            "subject": "Quick question about Precise Imaging status updates",
+            "approval": {
+              "references": "<19e838b0ea9.214cd13628299.4707045211943265619@possiblemindshq.com>",
+              "approved_at": "2026-09-18T09:28:31.770788+00:00",
+              "approved_by": "codex",
+              "body_sha256": "bdd0a86e442aa7d4618fe50b512b1758acc5e150c6d7de7fdb06976e59540290",
+              "in_reply_to": "<19e838b0ea9.214cd13628299.4707045211943265619@possiblemindshq.com>",
+              "subject_sha256": "822ed0bd45832de2d48f6bd759894511324c8c9eaa5179c2ce58bb721bc562c9"
+            },
+            "transport": "resend",
+            "references": "<19e838b0ea9.214cd13628299.4707045211943265619@possiblemindshq.com>",
+            "skill_path": null,
+            "body_sha256": "bdd0a86e442aa7d4618fe50b512b1758acc5e150c6d7de7fdb06976e59540290",
+            "in_reply_to": "<19e838b0ea9.214cd13628299.4707045211943265619@possiblemindshq.com>",
+            "skill_sha256": null,
+            "batch_item_id": "7c8e0808edc24078b00fbc4a281fe56e",
+            "brief_version": null,
+            "subject_sha256": "822ed0bd45832de2d48f6bd759894511324c8c9eaa5179c2ce58bb721bc562c9",
+            "composer_variant_key": null,
+            "lead_gen_action_type": "follow_up",
+            "composer_experiment_key": null
+          },
+          "policy_result": {},
+          "execution_result": {},
+          "error": null,
+          "trace_id": null,
+          "scheduled_for": "2026-09-18T17:30:00+00:00",
+          "started_at": null,
+          "completed_at": null,
+          "created_at": "2026-09-18T09:28:31.781394+00:00",
+          "updated_at": "2026-09-18T09:28:31.781400+00:00"
+        },
+        "created": true,
+        "updated_existing": false,
+        "executed": false,
+        "scheduled_for_pt": "2026-09-18 10:30 PDT",
+        "scheduled_for_utc": "2026-09-18 17:30:00 UTC"
+      },
+      "policy": {
+        "checks": [
+          {
+            "name": "status_allows_execution",
+            "detail": "approved",
+            "passed": true
+          },
+          {
+            "name": "human_approval_present",
+            "detail": "codex",
+            "passed": true
+          },
+          {
+            "name": "subject_present",
+            "detail": "",
+            "passed": true
+          },
+          {
+            "name": "body_present",
+            "detail": "",
+            "passed": true
+          },
+          {
+            "name": "subject_hash_matches_approval",
+            "detail": "",
+            "passed": true
+          },
+          {
+            "name": "body_hash_matches_approval",
+            "detail": "",
+            "passed": true
+          },
+          {
+            "name": "in_reply_to_matches_approval",
+            "detail": "",
+            "passed": true
+          },
+          {
+            "name": "references_match_approval",
+            "detail": "",
+            "passed": true
+          },
+          {
+            "name": "lead_gen_transport_available",
+            "detail": "zoho_api 0/0 configured=True; resend 0/50 configured=True",
+            "passed": true
+          },
+          {
+            "name": "no_patient_data_in_outreach",
+            "detail": "llm_guard_disabled",
+            "passed": true
+          },
+          {
+            "name": "batch_item_exists",
+            "detail": "7c8e0808edc24078b00fbc4a281fe56e",
+            "passed": true
+          },
+          {
+            "name": "batch_item_not_already_started",
+            "detail": "approved",
+            "passed": true
+          },
+          {
+            "name": "contact_email_present",
+            "detail": "castillolaw2000@aol.com",
+            "passed": true
+          },
+          {
+            "name": "no_prior_successful_action_for_item",
+            "detail": "",
+            "passed": true
+          }
+        ],
+        "reason": "allowed",
+        "allowed": true,
+        "risk_level": "high",
+        "action_type": "send_approved_lead_gen_draft",
+        "contact_email": "castillolaw2000@aol.com",
+        "requires_human_approval": true
+      },
+      "action_id": "action_ce8a262484d34e50aecf6ff0",
+      "status": "approved",
+      "scheduled_utc": "2026-09-18T17:30:00+00:00",
+      "scheduled_pdt": "18/09/2026, 10:30:00",
+      "scheduled_ist": "18/09/2026, 23:00:00",
+      "transport": "resend",
+      "approval": {
+        "references": "<19e838b0ea9.214cd13628299.4707045211943265619@possiblemindshq.com>",
+        "approved_at": "2026-09-18T09:28:31.770788+00:00",
+        "approved_by": "codex",
+        "body_sha256": "bdd0a86e442aa7d4618fe50b512b1758acc5e150c6d7de7fdb06976e59540290",
+        "in_reply_to": "<19e838b0ea9.214cd13628299.4707045211943265619@possiblemindshq.com>",
+        "subject_sha256": "822ed0bd45832de2d48f6bd759894511324c8c9eaa5179c2ce58bb721bc562c9"
+      },
+      "tracking": {
+        "code": "1BvpmLj1IA",
+        "tracking_url": "https://getpossibleminds.com/t/1BvpmLj1IA",
+        "destination_url": "https://getpossibleminds.com/services/case-management-migration",
+        "channel": "email",
+        "label": "Migration expansion - 2026-09-18",
+        "contact_id": "c0ed0352ef4e45f3aeb0a16442530a5b",
+        "contact_name": "Domingo Castillo",
+        "contact_email": "castillolaw2000@aol.com",
+        "firm_name": "Castillo & Montes",
+        "sent_at": null,
+        "created_at": "2026-09-18T09:26:51.162986+00:00",
+        "raw_clicks": 0,
+        "confirmed_visits": 0,
+        "meaningful_actions": 0,
+        "deepest_scroll": 0,
+        "max_time_on_page_seconds": 0
+      }
+    },
+    {
+      "name": "Robert Vetchtein",
+      "email": "robert@vetchteinlaw.com",
+      "contact_id": "fc_236cd5254b484a948d685e95",
+      "pif_id": "5dc60d29-6918-4c3d-8736-6e1f35fc558c",
+      "firm": "Vetchtein Law, APC",
+      "subject": "Considering Clio or Filevine?",
+      "action_type": "first_touch",
+      "link": {
+        "code": "HF-KpcCjQw",
+        "campaign_id": "cmp_ki-WF9eCn7bGJ01C",
+        "contact_id": "fc_236cd5254b484a948d685e95",
+        "pif_id": "5dc60d29-6918-4c3d-8736-6e1f35fc558c",
+        "channel": "email",
+        "label": "Migration expansion - 2026-09-18",
+        "destination_url": "https://getpossibleminds.com/services/case-management-migration",
+        "advisor_briefing": null,
+        "tracking_url": "https://getpossibleminds.com/t/HF-KpcCjQw",
+        "sent_at": null,
+        "created_at": "2026-09-18T09:26:54.330660+00:00"
+      },
+      "item_id": "9ac4a86560b54109868050c2c31fa396",
+      "time": "2026-09-18T10:40:00-07:00",
+      "file": "artifacts/legacy_migration_2026_09_18/expansion/draft_9.txt",
+      "body": "Hi Robert,\n\nAs the founder working with a COO and case-management team, you'd want a software change to improve coordination without losing the case history everyone depends on.\n\nI'm Pranav, founder of Possible Minds, previously at McKinsey and Expedia. We built Precise Imaging's email-handling system, which processes over 600 emails daily, routes requests and sends automated status responses.\n\nIf you're considering a move from MerusCase, we can help migrate your records, documents and workflows to Clio or Filevine, with careful mapping and validation so they're better connected for AI and automation.\n\nHere's how we approach migration:\nhttps://getpossibleminds.com/t/HF-KpcCjQw\n\nWould a brief outline of what a move could involve be useful? I'd appreciate your thoughts.\n\nBest,\nPranav\nFounder, Possible Minds",
+      "role_source": "https://www.vetchteinlaw.com/our-firm/our-team/",
+      "email_source": "Possible OS exact named front contact fc_236cd5254b484a948d685e95",
+      "vendor_evidence": "Merus, firm staff profile https://us.bold.pro/my/yased-puentes confidence 0.85; conditional migration language.",
+      "receipt": {
+        "action": {
+          "id": "action_74c731242cc6424296ff9b94",
+          "action_type": "send_approved_lead_gen_draft",
+          "status": "approved",
+          "risk_level": "high",
+          "requested_by": "codex",
+          "approved_by": "codex",
+          "entity_type": "lead_gen_batch_item",
+          "entity_id": "9ac4a86560b54109868050c2c31fa396",
+          "input": {
+            "body": "Hi Robert,\n\nAs the founder working with a COO and case-management team, you'd want a software change to improve coordination without losing the case history everyone depends on.\n\nI'm Pranav, founder of Possible Minds, previously at McKinsey and Expedia. We built Precise Imaging's email-handling system, which processes over 600 emails daily, routes requests and sends automated status responses.\n\nIf you're considering a move from MerusCase, we can help migrate your records, documents and workflows to Clio or Filevine, with careful mapping and validation so they're better connected for AI and automation.\n\nHere's how we approach migration:\nhttps://getpossibleminds.com/t/HF-KpcCjQw\n\nWould a brief outline of what a move could involve be useful? I'd appreciate your thoughts.\n\nBest,\nPranav\nFounder, Possible Minds",
+            "subject": "Considering Clio or Filevine?",
+            "approval": {
+              "references": null,
+              "approved_at": "2026-09-18T09:28:57.452138+00:00",
+              "approved_by": "codex",
+              "body_sha256": "03ba463e336ff1af83e9355815475b7627b78f3d3453124ddeca9f541ad255fe",
+              "in_reply_to": null,
+              "subject_sha256": "a4bb8e25de32fd3617183c1db3b45152547cac1e001ba4a9684af9cf03b74904"
+            },
+            "transport": "resend",
+            "references": null,
+            "skill_path": null,
+            "body_sha256": "03ba463e336ff1af83e9355815475b7627b78f3d3453124ddeca9f541ad255fe",
+            "in_reply_to": null,
+            "skill_sha256": null,
+            "batch_item_id": "9ac4a86560b54109868050c2c31fa396",
+            "brief_version": null,
+            "subject_sha256": "a4bb8e25de32fd3617183c1db3b45152547cac1e001ba4a9684af9cf03b74904",
+            "composer_variant_key": null,
+            "lead_gen_action_type": "first_touch",
+            "composer_experiment_key": null
+          },
+          "policy_result": {},
+          "execution_result": {},
+          "error": null,
+          "trace_id": null,
+          "scheduled_for": "2026-09-18T17:40:00+00:00",
+          "started_at": null,
+          "completed_at": null,
+          "created_at": "2026-09-18T09:28:57.457189+00:00",
+          "updated_at": "2026-09-18T09:28:57.457196+00:00"
+        },
+        "created": true,
+        "updated_existing": false,
+        "executed": false,
+        "scheduled_for_pt": "2026-09-18 10:40 PDT",
+        "scheduled_for_utc": "2026-09-18 17:40:00 UTC"
+      },
+      "policy": {
+        "checks": [
+          {
+            "name": "status_allows_execution",
+            "detail": "approved",
+            "passed": true
+          },
+          {
+            "name": "human_approval_present",
+            "detail": "codex",
+            "passed": true
+          },
+          {
+            "name": "subject_present",
+            "detail": "",
+            "passed": true
+          },
+          {
+            "name": "body_present",
+            "detail": "",
+            "passed": true
+          },
+          {
+            "name": "subject_hash_matches_approval",
+            "detail": "",
+            "passed": true
+          },
+          {
+            "name": "body_hash_matches_approval",
+            "detail": "",
+            "passed": true
+          },
+          {
+            "name": "in_reply_to_matches_approval",
+            "detail": "",
+            "passed": true
+          },
+          {
+            "name": "references_match_approval",
+            "detail": "",
+            "passed": true
+          },
+          {
+            "name": "lead_gen_transport_available",
+            "detail": "zoho_api 0/0 configured=True; resend 0/50 configured=True",
+            "passed": true
+          },
+          {
+            "name": "no_patient_data_in_outreach",
+            "detail": "llm_guard_disabled",
+            "passed": true
+          },
+          {
+            "name": "batch_item_exists",
+            "detail": "9ac4a86560b54109868050c2c31fa396",
+            "passed": true
+          },
+          {
+            "name": "batch_item_not_already_started",
+            "detail": "approved",
+            "passed": true
+          },
+          {
+            "name": "contact_email_present",
+            "detail": "robert@vetchteinlaw.com",
+            "passed": true
+          },
+          {
+            "name": "no_prior_successful_action_for_item",
+            "detail": "",
+            "passed": true
+          }
+        ],
+        "reason": "allowed",
+        "allowed": true,
+        "risk_level": "high",
+        "action_type": "send_approved_lead_gen_draft",
+        "contact_email": "robert@vetchteinlaw.com",
+        "requires_human_approval": true
+      },
+      "action_id": "action_74c731242cc6424296ff9b94",
+      "status": "approved",
+      "scheduled_utc": "2026-09-18T17:40:00+00:00",
+      "scheduled_pdt": "18/09/2026, 10:40:00",
+      "scheduled_ist": "18/09/2026, 23:10:00",
+      "transport": "resend",
+      "in_reply_to": null,
+      "references": null,
+      "approval": {
+        "references": null,
+        "approved_at": "2026-09-18T09:28:57.452138+00:00",
+        "approved_by": "codex",
+        "body_sha256": "03ba463e336ff1af83e9355815475b7627b78f3d3453124ddeca9f541ad255fe",
+        "in_reply_to": null,
+        "subject_sha256": "a4bb8e25de32fd3617183c1db3b45152547cac1e001ba4a9684af9cf03b74904"
+      },
+      "tracking": {
+        "code": "HF-KpcCjQw",
+        "tracking_url": "https://getpossibleminds.com/t/HF-KpcCjQw",
+        "destination_url": "https://getpossibleminds.com/services/case-management-migration",
+        "channel": "email",
+        "label": "Migration expansion - 2026-09-18",
+        "contact_id": "fc_236cd5254b484a948d685e95",
+        "contact_name": "Robert Vetchtein",
+        "contact_email": "robert@vetchteinlaw.com",
+        "firm_name": "Vetchtein Law, APC",
+        "sent_at": null,
+        "created_at": "2026-09-18T09:26:54.330660+00:00",
+        "raw_clicks": 0,
+        "confirmed_visits": 0,
+        "meaningful_actions": 0,
+        "deepest_scroll": 0,
+        "max_time_on_page_seconds": 0
+      }
+    }
+  ],
+  "preflight": {
+    "initial_two": "../partners/scheduled.json",
+    "six": [
+      {
+        "email": "nathan@hanningsacchetto.com",
+        "pif_id": "7cb7df02-e007-434f-baf0-1544beeee996",
+        "personal_touches": 0,
+        "firm_latest": null,
+        "inbound": 0,
+        "holds": 0,
+        "pending": 0
+      },
+      {
+        "email": "john@hernandezlaw.co",
+        "pif_id": "fbeb9cfa-9e52-48a3-b661-616127884e18",
+        "personal_touches": 0,
+        "firm_latest": null,
+        "inbound": 0,
+        "holds": 0,
+        "pending": 0
+      },
+      {
+        "email": "josh@jcslawyers.com",
+        "pif_id": "337a8ad2-3f94-4e3c-9e07-f9f83825e29e",
+        "personal_touches": 0,
+        "firm_latest": null,
+        "inbound": 0,
+        "holds": 0,
+        "pending": 0
+      },
+      {
+        "email": "elena@steerslawfirm.com",
+        "pif_id": "8e98e41e-120d-4252-96f5-1f80c9bbf4c8",
+        "personal_touches": 0,
+        "firm_latest": null,
+        "inbound": 0,
+        "holds": 0,
+        "pending": 0
+      },
+      {
+        "email": "jude@redkeygordonlaw.com",
+        "pif_id": "961af1c4-fd75-40f7-a566-3baa864c43f7",
+        "personal_touches": 0,
+        "firm_latest": null,
+        "inbound": 0,
+        "holds": 0,
+        "pending": 0
+      },
+      {
+        "email": "wclark@walterclark.com",
+        "pif_id": "e6c80251-9db3-4e43-946d-d0633f34cfe9",
+        "personal_touches": 0,
+        "firm_latest": null,
+        "inbound": 0,
+        "holds": 0,
+        "pending": 0
+      }
+    ],
+    "six_mailbox": {
+      "checked_at": "2026-09-18T09:16:07.348526+00:00",
+      "coverage": [
+        {
+          "folder": "\"INBOX\"",
+          "since": "2026-05-01",
+          "messages": 254
+        },
+        {
+          "folder": "\"Drafts\"",
+          "since": "2026-05-01",
+          "messages": 9
+        },
+        {
+          "folder": "\"Templates\"",
+          "since": "2026-05-01",
+          "messages": 0
+        },
+        {
+          "folder": "\"Snoozed\"",
+          "since": "2026-05-01",
+          "messages": 0
+        },
+        {
+          "folder": "\"Sent\"",
+          "since": "2026-05-01",
+          "messages": 565
+        },
+        {
+          "folder": "\"Spam\"",
+          "since": "2026-05-01",
+          "messages": 1
+        },
+        {
+          "folder": "\"Trash\"",
+          "since": "2026-05-01",
+          "messages": 0
+        },
+        {
+          "folder": "\"Notification\"",
+          "since": "2026-05-01",
+          "messages": 27
+        },
+        {
+          "folder": "\"Newsletter\"",
+          "since": "2026-05-01",
+          "messages": 67
+        },
+        {
+          "folder": "\"Archive\"",
+          "since": "2026-05-01",
+          "messages": 0
+        }
+      ],
+      "errors": [],
+      "matches": {
+        "nathan@hanningsacchetto.com": [],
+        "john@hernandezlaw.co": [],
+        "josh@jcslawyers.com": [],
+        "elena@steerslawfirm.com": [],
+        "jude@redkeygordonlaw.com": [],
+        "wclark@walterclark.com": []
+      }
+    },
+    "extra": [
+      {
+        "email": "rblock@blockllp.com",
+        "pif_id": "8524971b-6d5b-44bf-bdd6-cbba57ee0677",
+        "personal_touches": 1,
+        "firm_latest": "2026-08-11T17:30:18.482882+00:00",
+        "inbound": 3,
+        "holds": 0,
+        "pending": 2
+      },
+      {
+        "email": "eran@lagsteinlawfirm.com",
+        "pif_id": "601d1563-64e7-45ad-ba49-65246fa3080f",
+        "personal_touches": 0,
+        "firm_latest": null,
+        "inbound": 0,
+        "holds": 0,
+        "pending": 0
+      },
+      {
+        "email": "castillolaw2000@aol.com",
+        "pif_id": "0eaa168c-4f87-418d-a3c3-bd1a898fb483",
+        "personal_touches": 1,
+        "firm_latest": "2026-09-03T16:00:14.041265+00:00",
+        "inbound": 0,
+        "holds": 0,
+        "pending": 0
+      },
+      {
+        "email": "robert@vetchteinlaw.com",
+        "pif_id": "5dc60d29-6918-4c3d-8736-6e1f35fc558c",
+        "personal_touches": 0,
+        "firm_latest": null,
+        "inbound": 0,
+        "holds": 0,
+        "pending": 0
+      }
+    ],
+    "extra_mailbox": {
+      "checked_at": "2026-09-18T09:23:43.170802+00:00",
+      "coverage": "All 10 Zoho folders, read-only BODY.PEEK, since 2026-05-01",
+      "errors": [],
+      "matches": {
+        "eran@lagsteinlawfirm.com": [],
+        "robert@vetchteinlaw.com": [],
+        "castillolaw2000@aol.com": [
+          {
+            "folder": "Sent",
+            "uid": "476",
+            "from": "pranav@possiblemindshq.com",
+            "to": "castillolaw2000@aol.com",
+            "subject": "Quick question about Precise Imaging status updates",
+            "date": "2026-06-01T14:16:29Z",
+            "message_id": "<19e838b0ea9.214cd13628299.4707045211943265619@possiblemindshq.com>",
+            "in_reply_to": "",
+            "references": ""
+          }
+        ]
+      }
+    }
+  },
+  "notes": [
+    "One canonical existing campaign and batch reused; no duplicate batch or campaign.",
+    "Recipient tracking links have not been opened or marked sent. One pre-existing PUBLIC link has a suspect preview fetch; no email link clicks.",
+    "Stored software signals do not prove a firm has not migrated. Copy is conditional; weak Smokeball signals are not named.",
+    "Composition rationale supported by this artifact; no direct database writes.",
+    "One per firm/domain maintained. No immediate sending requested or performed."
+  ],
+  "exclusions": [
+    {
+      "firm": "Block LLP",
+      "reason": "Ryan Block has inbound history and two pending actions; do not duplicate."
+    },
+    {
+      "firm": "Farah & Farah",
+      "reason": "Firm touched September 15."
+    },
+    {
+      "firm": "The Choyce Law Firm",
+      "reason": "Firm touched September 17."
+    },
+    {
+      "firm": "RS Law Offices",
+      "reason": "Existing approved unscheduled action; preserved unrelated ownership."
+    },
+    {
+      "firm": "Kubota & Craig",
+      "reason": "Yoshi bounce; Cynthia already has three touches."
+    },
+    {
+      "firm": "Mesriani Law Group",
+      "reason": "Existing three-touch cadence hold."
+    },
+    {
+      "firm": "RHA",
+      "reason": "Unsupported software classification from generic use-case language."
+    },
+    {
+      "firm": "Finch",
+      "reason": "Vendor/firm identity mismatch."
+    },
+    {
+      "firm": "Primo Law",
+      "reason": "Firm-specific Filevine evidence excludes it from requested migration audience."
+    },
+    {
+      "firm": "Dunnion",
+      "reason": "No sufficiently verified direct founder mailbox."
+    },
+    {
+      "firm": "Delaney and Quirk",
+      "reason": "Prior outreach exists but RFC ancestry unrecovered; held rather than new-thread duplicate."
+    }
+  ]
+}

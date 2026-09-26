@@ -1,0 +1,310 @@
+{
+  "checked_at_utc": "2026-09-11T12:34:58.827715+00:00",
+  "source": "Live HTTPS page fetched directly; web search cached listing was stale",
+  "count": 36,
+  "posts": [
+    {
+      "url": "https://getpossibleminds.com/blog/ai-governance-roi-small-pi-firms",
+      "slug": "ai-governance-roi-small-pi-firms",
+      "title": "Information Governance: The First Step Before AI for a Small PI Firm",
+      "date": "2026-09-07",
+      "description": "A practical guide to finding, organizing, retaining, and safely disposing of PI firm information before connecting it to AI.",
+      "full_text_path": "/home/pranav/possibleos/artifacts/blog_followups_2026_09_11/ai-governance-roi-small-pi-firms.txt",
+      "fetch_status": "live_200",
+      "selection_guidance": "High when records/search/version control or data organization relevant; newest Sep7.",
+      "claim_boundary": "Less document search/review effort, duplicate storage/migration cost; operational framework not measured universal ROI. No automatic deletion advice."
+    },
+    {
+      "url": "https://getpossibleminds.com/blog/ai-governance-101-personal-injury-firms",
+      "slug": "ai-governance-101-personal-injury-firms",
+      "title": "AI Governance 101 for Small Personal Injury Firms",
+      "date": "2026-09-06",
+      "description": "A plain-English guide to approved AI tools, client information, human review, vendor risk, and practical oversight for solo and small PI firms.",
+      "full_text_path": "/home/pranav/possibleos/artifacts/blog_followups_2026_09_11/ai-governance-101-personal-injury-firms.txt",
+      "fetch_status": "live_200",
+      "selection_guidance": "Medium: Sep6 but use chiefly with explicit governance/security/vendor oversight concern, not generic time-savings choice.",
+      "claim_boundary": "Approved tools/data, review and accountability; no quantified efficiency promise."
+    },
+    {
+      "url": "https://getpossibleminds.com/blog/ai-cannot-fix-broken-pi-workflow",
+      "slug": "ai-cannot-fix-broken-pi-workflow",
+      "title": "AI Cannot Fix a Broken PI Firm Workflow",
+      "date": "2026-09-03",
+      "description": "Why PI firms should map intake, data, handoffs, and human review before automating with AI.",
+      "full_text_path": "/home/pranav/possibleos/artifacts/blog_followups_2026_09_11/ai-cannot-fix-broken-pi-workflow.txt",
+      "fetch_status": "live_200",
+      "selection_guidance": "High: Sep3 timely for teams with system handoffs, copied data, intake followup and fragmented ops context.",
+      "claim_boundary": "Map actual work, eliminate re-entry and clarify owner/human review before automation; avoid claiming recipient has a broken workflow."
+    },
+    {
+      "url": "https://getpossibleminds.com/blog/pi-law-firm-reviews-client-trust",
+      "slug": "pi-law-firm-reviews-client-trust",
+      "title": "What 7,383 PI Law Firm Reviews Reveal About Client Trust",
+      "date": "2026-09-01",
+      "description": "An analysis of 7,383 PI law firm reviews shows how communication, care, access, delays, and outcomes shape client trust.",
+      "full_text_path": "/home/pranav/possibleos/artifacts/blog_followups_2026_09_11/pi-law-firm-reviews-client-trust.txt",
+      "fetch_status": "live_200",
+      "selection_guidance": "High for known client-communication or status-chasing context; Sep1.",
+      "claim_boundary": "Review evidence about communication/client trust supports routine-update workflow relevance; do not invent negative reviews for target."
+    },
+    {
+      "url": "https://getpossibleminds.com/blog/how-small-pi-firms-use-ai-2026",
+      "slug": "how-small-pi-firms-use-ai-2026",
+      "title": "How Lawyers Are Actually Using AI in 2026: A Small PI Firm Owner's Guide",
+      "date": "2026-08-31",
+      "description": "How solo and small PI firms can use AI for intake, documents, research, monitoring, and client service without giving up control.",
+      "full_text_path": "/home/pranav/possibleos/artifacts/blog_followups_2026_09_11/how-small-pi-firms-use-ai-2026.txt",
+      "fetch_status": "live_200",
+      "selection_guidance": "High: Aug31 practical overview for owners with broad operational burden or unknown stack.",
+      "claim_boundary": "Seven bounded workflows: intake prep, documents, medical records, client communications, research, case monitoring, operations. No guaranteed numeric savings."
+    },
+    {
+      "url": "https://getpossibleminds.com/blog/claude-clio-ai-intake-solo-pi-lawyer",
+      "slug": "claude-clio-ai-intake-solo-pi-lawyer",
+      "title": "How a Solo PI Lawyer Used Claude and Clio to Cut Intake Work by Roughly 90%",
+      "date": "2026-08-28",
+      "description": "How a solo PI lawyer uses Claude and Clio to turn dictated intake facts into matters, documents, tasks, and review-ready work.",
+      "full_text_path": "/home/pranav/possibleos/artifacts/blog_followups_2026_09_11/claude-clio-ai-intake-solo-pi-lawyer.txt",
+      "fetch_status": "live_200",
+      "selection_guidance": "High: concrete intake administration savings; strongest for verified Clio, solo/small PI, intake or repeated-entry context. Other CMS can learn workflow but do not imply they use Clio.",
+      "claim_boundary": "Dan Sinsky self-reported roughly 90% less intake work; demonstrated matter creation, document assembly and tasks after lawyer conversation. Not independently benchmarked or blanket HIPAA compliance."
+    },
+    {
+      "url": "https://getpossibleminds.com/blog/ai-transformation-one-workflow-at-a-time",
+      "slug": "ai-transformation-one-workflow-at-a-time",
+      "title": "How to Eat the AI Transformation Elephant? One Workflow at a Time",
+      "date": "2026-08-27",
+      "description": "AI transformation becomes manageable when PI firms improve one measurable workflow at a time and carry what they learn into the next.",
+      "full_text_path": "/home/pranav/possibleos/artifacts/blog_followups_2026_09_11/ai-transformation-one-workflow-at-a-time.txt",
+      "fetch_status": "live_200",
+      "selection_guidance": "High: measurable process-efficiency starting point for owners with varied systems or incremental adoption.",
+      "claim_boundary": "Choose repeated visible cost, simplify first, run shadow mode and measure staff time/rework before expansion."
+    },
+    {
+      "url": "https://getpossibleminds.com/blog/how-to-set-up-claude-for-legal-work",
+      "slug": "how-to-set-up-claude-for-legal-work",
+      "title": "A Trial Lawyer's First Claude Session: How to Set Up Claude for Legal Work",
+      "date": "2026-08-26",
+      "description": "A step-by-step guide to installing and configuring Claude for legal work, informed by a trial lawyer's first session and current legal-data safeguards.",
+      "full_text_path": "/home/pranav/possibleos/artifacts/blog_followups_2026_09_11/how-to-set-up-claude-for-legal-work.txt",
+      "fetch_status": "live_200"
+    },
+    {
+      "url": "https://getpossibleminds.com/blog/ai-for-small-personal-injury-law-firms",
+      "slug": "ai-for-small-personal-injury-law-firms",
+      "title": "How a Small PI Firm Built Its Own AI Advantage Without Giving Up Control",
+      "date": "2026-08-25",
+      "description": "How Jacob Cukjati's PI firm used Claude skills to move from roughly 5-7 documents per day to 12-15 while keeping lawyer review in place.",
+      "full_text_path": "/home/pranav/possibleos/artifacts/blog_followups_2026_09_11/ai-for-small-personal-injury-law-firms.txt",
+      "fetch_status": "live_200",
+      "selection_guidance": "High: concrete document/records/demand preparation efficiency; strong for litigation owners and small PI practices.",
+      "claim_boundary": "Jacob Cukjati self-reported assistant output from 5-7 to12-15 documents/day; first scheduling packet about10min; lawyer review remains. Distinct article from Clio90% case."
+    },
+    {
+      "url": "https://getpossibleminds.com/blog/claude-ai-watermarks-law-firm-review",
+      "slug": "claude-ai-watermarks-law-firm-review",
+      "title": "Before a Claude-Assisted Draft Leaves Your Firm",
+      "date": "2026-08-17",
+      "description": "Claude's watermark is not the main risk for law firms. Use this five-point preflight before any AI-assisted legal document leaves the firm.",
+      "full_text_path": "/home/pranav/possibleos/artifacts/blog_followups_2026_09_11/claude-ai-watermarks-law-firm-review.txt",
+      "fetch_status": "live_200"
+    },
+    {
+      "url": "https://getpossibleminds.com/blog/why-pi-firms-need-bespoke-ai-agents",
+      "slug": "why-pi-firms-need-bespoke-ai-agents",
+      "title": "Your Legal AI Vendor Will Not Build the Last Mile",
+      "date": "2026-08-14",
+      "description": "Why PI firms need bespoke AI agents for the workflows, data, handoffs, and controls that off-the-shelf legal AI products are not designed to own.",
+      "full_text_path": "/home/pranav/possibleos/artifacts/blog_followups_2026_09_11/why-pi-firms-need-bespoke-ai-agents.txt",
+      "fetch_status": "live_200",
+      "selection_guidance": "Medium/high for verified systems integration or last-mile mismatch; Aug14.",
+      "claim_boundary": "Firm-specific work/handoffs outside standard vendor workflows; do not assume vendor missing capabilities."
+    },
+    {
+      "url": "https://getpossibleminds.com/blog/first-mover-ai-personal-injury-firms",
+      "slug": "first-mover-ai-personal-injury-firms",
+      "title": "The First-Mover Advantage in AI Is Real",
+      "date": "2026-08-13",
+      "description": "Why PI firms should start one AI workflow now, how consolidation changes the market, and a practical 30-day plan for nontechnical owners.",
+      "full_text_path": "/home/pranav/possibleos/artifacts/blog_followups_2026_09_11/first-mover-ai-personal-injury-firms.txt",
+      "fetch_status": "live_200"
+    },
+    {
+      "url": "https://getpossibleminds.com/blog/ai-pi-firm-judgment-workflows",
+      "slug": "ai-pi-firm-judgment-workflows",
+      "title": "AI Will Make Intelligence Cheap. Your PI Firm's Judgment Is the Moat.",
+      "date": "2026-08-13",
+      "description": "Every firm will have access to capable AI. The advantage is turning earned judgment, workflows, and relationships into governed systems.",
+      "full_text_path": "/home/pranav/possibleos/artifacts/blog_followups_2026_09_11/ai-pi-firm-judgment-workflows.txt",
+      "fetch_status": "live_200"
+    },
+    {
+      "url": "https://getpossibleminds.com/blog/personal-injury-marketing-attribution",
+      "slug": "personal-injury-marketing-attribution",
+      "title": "Marketing Attribution for PI Firms: Follow the Case, Not the Click",
+      "date": "2026-08-11",
+      "description": "A practical guide to connecting PI marketing sources with wanted, signed, and kept cases, including a Lead Docket attribution setup.",
+      "full_text_path": "/home/pranav/possibleos/artifacts/blog_followups_2026_09_11/personal-injury-marketing-attribution.txt",
+      "fetch_status": "live_200",
+      "selection_guidance": "Medium, prioritize only with verified intake/marketing/Lead Docket interest; Aug11.",
+      "claim_boundary": "Connect source to signed/kept cases; one demonstrated Lead Docket setup."
+    },
+    {
+      "url": "https://getpossibleminds.com/blog/personal-injury-intake-marketing-system",
+      "slug": "personal-injury-intake-marketing-system",
+      "title": "How to Build a Personal Injury Intake System That Converts",
+      "date": "2026-08-07",
+      "description": "A step-by-step guide for PI firm owners to improve intake response, qualification, follow-up, attribution, and signed-case conversion.",
+      "full_text_path": "/home/pranav/possibleos/artifacts/blog_followups_2026_09_11/personal-injury-intake-marketing-system.txt",
+      "fetch_status": "live_200"
+    },
+    {
+      "url": "https://getpossibleminds.com/blog/ai-change-management-personal-injury-firms",
+      "slug": "ai-change-management-personal-injury-firms",
+      "title": "The Fastest AI Still Moves at the Speed of the Firm",
+      "date": "2026-07-30",
+      "description": "AI transformation fails when firms install tools without changing behavior. A practical change-management framework for personal injury firms."
+    },
+    {
+      "url": "https://getpossibleminds.com/blog/headless-legal-software-pi-vendor-rankings",
+      "slug": "headless-legal-software-pi-vendor-rankings",
+      "title": "Headless Legal Software: Which PI Vendors Are Ready for AI Agents?",
+      "date": "2026-07-16",
+      "description": "We rank 12 PI legal-tech vendors on APIs, webhooks, CLI/MCP access, and whether external AI agents can safely operate their software."
+    },
+    {
+      "url": "https://getpossibleminds.com/blog/insurance-ai-claims-pi-firms",
+      "slug": "insurance-ai-claims-pi-firms",
+      "title": "Insurance AI Is Scoring PI Claims. Firms Need a Counter-System.",
+      "date": "2026-07-12",
+      "description": "Insurers use AI to triage, score, and negotiate injury claims. PI firms need cleaner case data, review rules, and counter-workflows."
+    },
+    {
+      "url": "https://getpossibleminds.com/blog/from-prompts-to-systems-law-firms-ai",
+      "slug": "from-prompts-to-systems-law-firms-ai",
+      "title": "From Prompts to Systems: How Law Firms Should Absorb AI",
+      "date": "2026-07-09",
+      "description": "Good AI prompting is good legal delegation. Learn the six-part instruction anatomy lawyers need and why firms must move from prompts to AI systems."
+    },
+    {
+      "url": "https://getpossibleminds.com/blog/sb-623-rideshare-injury-pi-firms",
+      "slug": "sb-623-rideshare-injury-pi-firms",
+      "title": "SB 623 and Rideshare Injury Cases: What California PI Firms Should Do Now",
+      "date": "2026-07-08",
+      "description": "California SB 623 is a major but targeted change for PI firms handling Uber and Lyft injury cases with lien-based treatment. Here are the operating, valuation, discovery, and vendor-risk implications."
+    },
+    {
+      "url": "https://getpossibleminds.com/blog/why-ai-readiness-matters-pi-firms",
+      "slug": "why-ai-readiness-matters-pi-firms",
+      "title": "Why AI Readiness Starts Before AI: The Operating Questions Every PI Firm Should Answer",
+      "date": "2026-06-24",
+      "description": "AI does not fail inside PI firms because the model is weak. It fails because case data, workflows, metrics, security, and ownership are not ready for automation."
+    },
+    {
+      "url": "https://getpossibleminds.com/blog/speed-is-easy-to-graph-intake",
+      "slug": "speed-is-easy-to-graph-intake",
+      "title": "Speed Is Easy to Graph: The Intake Metric PI Firms Keep Optimizing Wrong",
+      "date": "2026-06-12",
+      "description": "Industry-wide, only 7% of personal injury leads set a consultation. Most firms respond by making intake faster. The best intake thinkers are converging on a different answer: stability, not speed, is what converts."
+    },
+    {
+      "url": "https://getpossibleminds.com/blog/cybernetic-organization-ai",
+      "slug": "cybernetic-organization-ai",
+      "title": "The Cybernetic Organization: What Norbert Wiener Saw Before the AI Era",
+      "date": "2026-05-25",
+      "description": "Most companies still operate like Roman legions: information climbs a hierarchy, decisions travel back down, and humans serve as the routing layer. AI changes that. Norbert Wiener&apos;s cybernetics offers a better model for how modern firms will sense, decide, act, and learn."
+    },
+    {
+      "url": "https://getpossibleminds.com/blog/musk-algorithm-ai-pi-firm",
+      "slug": "musk-algorithm-ai-pi-firm",
+      "title": "Elon Musk\u2019s Algorithm Applied to AI Transformation for a PI Law Firm",
+      "date": "2026-05-20",
+      "description": "Most AI projects inside personal injury firms fail because they automate the wrong workflow. Musk\u2019s 5-step algorithm forces the redesign first \u2014 and produces a 10-agent operating model built on case movement, not case management."
+    },
+    {
+      "url": "https://getpossibleminds.com/blog/tools-vs-systems-pi-firms-ai",
+      "slug": "tools-vs-systems-pi-firms-ai",
+      "title": "Tools vs. Systems: Why Most PI Firms Will Get the AI Era Wrong",
+      "date": "2026-05-05",
+      "description": "Most PI firms think they are adopting AI because staff use ChatGPT or Claude. The real divide is between firms using AI tools and firms building AI systems that run core workflows."
+    },
+    {
+      "url": "https://getpossibleminds.com/blog/derisk-ai-adoption-legal-practice",
+      "slug": "derisk-ai-adoption-legal-practice",
+      "title": "How to Derisk AI Adoption in Your Legal Practice",
+      "date": "2026-04-23",
+      "description": "A practical framework for law firms adopting agentic AI safely: define handoffs, map pause conditions, tighten review gates, and align legal judgment with technical workflow design."
+    },
+    {
+      "url": "https://getpossibleminds.com/blog/build-vs-consume-ai-law-firms",
+      "slug": "build-vs-consume-ai-law-firms",
+      "title": "Build vs. Consume: The AI Choice That Will Define Your Firm",
+      "date": "2026-04-22",
+      "description": "The legal industry is splitting into firms that use AI and firms that build with it. Here is what builders actually do, why the economics favor them, and how to start in the next 30 days."
+    },
+    {
+      "url": "https://getpossibleminds.com/blog/hidden-math-lien-negotiations",
+      "slug": "hidden-math-lien-negotiations",
+      "title": "The Hidden Math of Lien Negotiations: What 563 Cases Reveal",
+      "date": "2026-04-02",
+      "description": "We analyzed 563 real medical lien negotiations between a diagnostic imaging provider and PI law firms. The data reveals striking patterns in reduction demands, settlement timing, and firm behavior that neither side is tracking."
+    },
+    {
+      "url": "https://getpossibleminds.com/blog/nobody-owns-ai-at-your-firm",
+      "slug": "nobody-owns-ai-at-your-firm",
+      "title": "Nobody Owns AI at Your Firm (And That\u2019s Why It\u2019s Failing)",
+      "date": "2026-03-24",
+      "description": "80% of law firms can\u2019t show ROI from AI investments. The problem isn\u2019t the tools \u2014 it\u2019s that nobody owns the strategy. Here\u2019s what the most successful PI firms are doing differently."
+    },
+    {
+      "url": "https://getpossibleminds.com/blog/gemini-maps-pi-firms",
+      "slug": "gemini-maps-pi-firms",
+      "title": "Google Just Put Gemini in Maps. Here\u2019s What PI Firms Need to Do Now.",
+      "date": "2026-03-17",
+      "description": "Google\u2019s biggest Maps update in 10 years puts Gemini AI between your firm and your next client. Here\u2019s what personal injury firms need to optimize \u2014 before they become invisible."
+    },
+    {
+      "url": "https://getpossibleminds.com/blog/the-200000-satisfying-answer",
+      "slug": "the-200000-satisfying-answer",
+      "title": "The $200,000 Answer Your Clients Never Called About",
+      "date": "2026-03-13",
+      "description": "A PI managing partner discovers why his calls dropped 30% while his rankings held \u2014 and what he found when he Googled himself from his phone."
+    },
+    {
+      "url": "https://getpossibleminds.com/blog/ai-search-law-firm-marketing",
+      "slug": "ai-search-law-firm-marketing",
+      "title": "Your Rankings Held. Your Calls Didn\u2019t.",
+      "date": "2026-03-12",
+      "description": "Google\u2019s AI Overviews have quietly rewired how clients find personal injury attorneys. Most firms have no idea it\u2019s happening \u2014 and no tool to measure it."
+    },
+    {
+      "url": "https://getpossibleminds.com/blog/the-science-of-client-intake-conversion",
+      "slug": "the-science-of-client-intake-conversion",
+      "title": "The Science of Client Intake and Lead Conversion",
+      "date": "2026-02-26",
+      "description": "Personal injury firms spend thousands per lead\u2014then lose half of them to slow response times and broken follow-up. Here\u2019s how conversion science, proactive intake, and AI are closing the gap."
+    },
+    {
+      "url": "https://getpossibleminds.com/blog/sample-agent-ops",
+      "slug": "sample-agent-ops",
+      "title": "How Agentic Ops Actually Launch Inside Regulated Teams",
+      "date": "2026-02-25",
+      "description": "Three quick lessons from launching AI pilots for PI, health, and pharma teams without breaking compliance or losing stakeholder trust."
+    },
+    {
+      "url": "https://getpossibleminds.com/blog/when-ai-is-the-user",
+      "slug": "when-ai-is-the-user",
+      "title": "When AI Is the User: The New Economics of Software",
+      "date": "2026-02-06",
+      "description": "Software has always been built for people. That era is ending. When AI agents become the primary users of software products, everything changes\u2014pricing, interfaces, distribution, and the very definition of value."
+    },
+    {
+      "url": "https://getpossibleminds.com/blog/the-real-reason-ai-evals-matter",
+      "slug": "the-real-reason-ai-evals-matter",
+      "title": "The Real Reason AI Evals Matter for Your Business",
+      "date": "2024-08-17",
+      "description": "Why AI evaluations are the foundation of learning loops that create unbreachable competitive moats\u2014and how the smartest companies are using them to win in the age of AI."
+    }
+  ],
+  "guidance": "Choose relevant unseen practical-efficiency post, with recency preference; do not select governance merely because newest if a recent concrete time-savings case fits better. Article fit is a hypothesis based on stored firm facts, not proof of recipient pain."
+}

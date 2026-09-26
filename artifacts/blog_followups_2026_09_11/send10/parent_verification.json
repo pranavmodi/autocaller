@@ -1,0 +1,109 @@
+{
+  "checked_at": "2026-09-11T13:10:11.605724+00:00",
+  "new_wave_count": 10,
+  "total_scheduled_count": 15,
+  "all_checks_passed": true,
+  "checks": [
+    "one action per recipient",
+    "exact reviewed body and subject",
+    "one unique tracked link",
+    "contact and article destination match",
+    "links not marked sent",
+    "RFC threading present",
+    "all policy checks passed",
+    "exact scheduled times",
+    "Resend transport"
+  ],
+  "actions": [
+    {
+      "email": "william@driverslegaldefense.com",
+      "action_id": "action_ae994f7e2209477991c51e65",
+      "scheduled_for": "2026-09-11T16:30:00+00:00",
+      "link_code": "NKUMY07WLA",
+      "article_url": "https://getpossibleminds.com/blog/claude-clio-ai-intake-solo-pi-lawyer",
+      "contact_id": "593563b335a14ecd8667b3d540d18381",
+      "checks_passed": true
+    },
+    {
+      "email": "jeff@jlffirm.com",
+      "action_id": "action_d12c264fa47e48188edccdc4",
+      "scheduled_for": "2026-09-11T16:40:00+00:00",
+      "link_code": "cWWBRbMMjg",
+      "article_url": "https://getpossibleminds.com/blog/ai-transformation-one-workflow-at-a-time",
+      "contact_id": "51be9ddf203b43c9b709af46cee39039",
+      "checks_passed": true
+    },
+    {
+      "email": "wrp@paboojianlaw.com",
+      "action_id": "action_b939f34b16eb4c86adf80722",
+      "scheduled_for": "2026-09-11T16:50:00+00:00",
+      "link_code": "iQvOyRxRig",
+      "article_url": "https://getpossibleminds.com/blog/ai-for-small-personal-injury-law-firms",
+      "contact_id": "fc_f5b327b0c7ce45aba589c960",
+      "checks_passed": true
+    },
+    {
+      "email": "nima@thehlawgroup.com",
+      "action_id": "action_6cad781f32004b959c21341a",
+      "scheduled_for": "2026-09-11T17:00:00+00:00",
+      "link_code": "NRy0ZnSAHg",
+      "article_url": "https://getpossibleminds.com/blog/how-small-pi-firms-use-ai-2026",
+      "contact_id": "eea36463877f42d2b98b14e5613da28b",
+      "checks_passed": true
+    },
+    {
+      "email": "gary@walchlaw.com",
+      "action_id": "action_724eb6ba6cf847f08e9dcb33",
+      "scheduled_for": "2026-09-11T17:10:00+00:00",
+      "link_code": "J9NsDkieNw",
+      "article_url": "https://getpossibleminds.com/blog/ai-cannot-fix-broken-pi-workflow",
+      "contact_id": "5bff7731694b43bb8ebe96bb02b62159",
+      "checks_passed": true
+    },
+    {
+      "email": "bana@banalaw.com",
+      "action_id": "action_042822a294b9446e8fa05283",
+      "scheduled_for": "2026-09-11T17:20:00+00:00",
+      "link_code": "8ROau16aYg",
+      "article_url": "https://getpossibleminds.com/blog/ai-for-small-personal-injury-law-firms",
+      "contact_id": "d4e0f8af7f0f46be84977adf04960d75",
+      "checks_passed": true
+    },
+    {
+      "email": "sam@heidarilawgroup.com",
+      "action_id": "action_7dfa8681016b45c8a534779f",
+      "scheduled_for": "2026-09-11T17:30:00+00:00",
+      "link_code": "mrSJxrkg1g",
+      "article_url": "https://getpossibleminds.com/blog/personal-injury-intake-marketing-system",
+      "contact_id": "fc_c78b24c561f340889a2161d5",
+      "checks_passed": true
+    },
+    {
+      "email": "oganes@kglegalgroup.com",
+      "action_id": "action_b6e7caee714146359b98c45a",
+      "scheduled_for": "2026-09-11T17:40:00+00:00",
+      "link_code": "fT56af2mow",
+      "article_url": "https://getpossibleminds.com/blog/ai-cannot-fix-broken-pi-workflow",
+      "contact_id": "2f5600514b444dd181fabab06feefc66",
+      "checks_passed": true
+    },
+    {
+      "email": "mark@broadwaylaw.com",
+      "action_id": "action_0058f9fb1fa4470d9263e502",
+      "scheduled_for": "2026-09-11T17:50:00+00:00",
+      "link_code": "9_K9ivh2cg",
+      "article_url": "https://getpossibleminds.com/blog/personal-injury-marketing-attribution",
+      "contact_id": "40191d76be99470fb0ad72a58b719f36",
+      "checks_passed": true
+    },
+    {
+      "email": "della@shakerlawgroup.com",
+      "action_id": "action_6bae7e9177284f85a2d1362c",
+      "scheduled_for": "2026-09-11T18:00:00+00:00",
+      "link_code": "it0kpC5wuQ",
+      "article_url": "https://getpossibleminds.com/blog/ai-cannot-fix-broken-pi-workflow",
+      "contact_id": "d6975925f61540a29cca92f437d89349",
+      "checks_passed": true
+    }
+  ]
+}

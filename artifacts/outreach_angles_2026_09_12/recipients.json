@@ -1,0 +1,220 @@
+{
+  "generated_at": "2026-09-12T05:36:00Z",
+  "scope": "Research-only recipient and relationship audit; no sends, schedules, campaigns, or contact mutations.",
+  "freshness": "Priority export generated 2026-09-12 ~05:36 UTC. Firm/leadership and trigger modules are dated in each source record; stored communications read through 2026-09-12. Full mailbox sync was not run.",
+  "send_readiness_default": false,
+  "send_readiness_reason": "No live full-mailbox check in this run; a stored-history read cannot establish that a recipient is safe to contact now.",
+  "pending_conflicts": {
+    "Weber Gallagher Simpson Stapleton Fires & Newby LLP": "Defense-side fit; no PI-first outreach.",
+    "Lyfe Law": "Recent Sahm/Brisa messages; verify no reply or active thread before contacting Brisa.",
+    "Taylor Law Firm": "None in stored history; live mailbox check still required.",
+    "CSAA Insurance Exchange": "Insurer entity, outside current PI law-firm scope.",
+    "Maison Law, APLC": "Recent Martin send on 2026-09-02; do not duplicate without thread review.",
+    "Stockton Bohm Law Group, Inc.": "None in stored history; live mailbox check still required.",
+    "TorkLaw, APC": "No named founder email; resolve address before outreach.",
+    "Martinian Law": "None in stored history; live mailbox check still required.",
+    "Power Legal Group, PC": "Five recent role-mailbox sends through 2026-07-14; review existing threads and avoid duplicate.",
+    "Allied Pain & Spine Institute": "Provider entity, outside current PI-law-firm scope.",
+    "Pacific Liberty Law": "Role mailbox and Sep 8 export/Sep 9 live-posting date discrepancy; verify routing.",
+    "LA Injury Lawyers": "Two Marina-thread sends through 2026-07-02; review before switching to Ashton.",
+    "The Delashmit Firm, LLC": "hunter@ stored but not verified as direct-to-Hunter.",
+    "Dimopoulos Law Firm": "Founder address malformed; Snagajob trigger unavailable and original date unproven.",
+    "Law Offices of Patrick S. Aguirre & Associates, A PLC": "attorney@ is a role mailbox; verify routing.",
+    "Steve Kevin Marks Law Office": "Identity/domain/mailbox ownership ambiguous; explicit hold.",
+    "Arias Sanguinetti": "Six sends to other firm contacts on 2026-07-09; review threads before Mike Arias contact.",
+    "de la Peña & Holiday LLP": "Defense-focused and no named leader; exclude.",
+    "Onyx Law Firm": "No named leader; Film Crew posting is not PI operations evidence."
+  },
+  "recipients": [
+    {
+      "firm": "Weber Gallagher Simpson Stapleton Fires & Newby LLP",
+      "disposition": "hold",
+      "fit_note": "Defense/general-liability and workers-comp orientation; not a core plaintiff PI prospect.",
+      "recipient": {"name": "Andrew L. Indeck", "role": "Managing Partner and Firm Chair", "email": "aindeck@wglaw.com", "email_type": "direct_named", "verification_source": "firm attorney page in priority export", "confidence": 0.8, "source_url": "https://www.wglaw.com/attorney/andrew-l-indeck/"},
+      "relationship": {"state": "first_touch_not_found", "last_send_at": null, "recent_firm_domain_history": "No stored sends", "stored_reply_observed": false, "mailbox_limit": "Full mailbox not checked"},
+      "signal": "Paralegal and Legal Assistant openings dated 2026-09-07/08; operational hiring is real but fit is defense-side.",
+      "angle": "If ever pursued, frame around defense-file operations and handoff consistency, not plaintiff intake.",
+      "sources": ["https://www.wglaw.com/attorney/andrew-l-indeck/", "https://www.linkedin.com/jobs/view/paralegal-at-weber-gallagher-4449929096", "https://www.linkedin.com/jobs/view/legal-assistant-at-weber-gallagher-4464603865"]
+    },
+    {
+      "firm": "Lyfe Law",
+      "disposition": "pursue_after_mailbox_check",
+      "fit_note": "Core PI firm; operations decision-maker is identifiable.",
+      "recipient": {"name": "Brisa A.", "role": "Partner and Pre-Litigation Department Manager", "email": "BrisaA@lyfe.com", "email_type": "direct_named", "verification_source": "Lyfe about-us roster", "confidence": 0.85, "source_url": "https://lyfe.com/about-us/"},
+      "relationship": {"state": "recent_threaded_contact", "last_send_at": "2026-09-08T22:50:00Z", "last_send_recipient": "sahm@lyfe.com", "recent_firm_domain_history": "4 delivered messages: Sahm 2026-09-08; Brisa 2026-08-13; Sahm 2026-08-12 and 2026-08-11", "stored_reply_observed": false, "mailbox_limit": "Full mailbox not checked"},
+      "signal": "Employment Law Associate opening dated 2026-09-08; positive review/operations context is a strength, not a pain claim.",
+      "angle": "Ask how pre-litigation managers keep source-to-signed-case attribution and client updates consistent as the team grows; build on the existing CAC/Lead Docket conversation without repeating a pitch.",
+      "sources": ["https://lyfe.com/about-us/", "https://lyfe.com/about-us/sam-tabibian-esq/", "https://employdiversity.com/job/51166624/employment-law-associate-attorney/"]
+    },
+    {
+      "firm": "Taylor Law Firm",
+      "disposition": "pursue_after_mailbox_check",
+      "fit_note": "Plaintiff PI/wrongful-death firm with named managing attorney.",
+      "recipient": {"name": "Aura Taylor", "role": "Founding Attorney / Managing Attorney", "email": "aura@tlfinjury.com", "email_type": "direct_named", "verification_source": "firm attorney page in priority export", "confidence": 0.8, "source_url": "https://thetaylorlawfirmatl.com/meet-the-policy-limit-queen/"},
+      "relationship": {"state": "first_touch_not_found", "last_send_at": null, "recent_firm_domain_history": "No stored sends", "stored_reply_observed": false, "mailbox_limit": "Full mailbox not checked"},
+      "signal": "Litigation Paralegal opening dated 2026-09-08.",
+      "angle": "Connect the hiring moment to repeatable litigation handoffs, demand prep, and a client-update timeline that survives growth; avoid claiming capacity problems.",
+      "sources": ["https://thetaylorlawfirmatl.com/meet-the-policy-limit-queen/", "https://thetaylorlawfirmatl.com/our-attorneys/", "https://www.callings.ai/job-openings/legal-compliance-risk/atlanta-sandy-springs-roswell"]
+    },
+    {
+      "firm": "CSAA Insurance Exchange",
+      "disposition": "exclude",
+      "fit_note": "Insurer, not a core PI law firm.",
+      "recipient": {"name": "Michael J. Zukerman", "role": "President and Chief Executive Officer", "email": "Mike.zukerman@csaa.com", "email_type": "direct_named", "verification_source": "priority leadership research; no official page URL stored", "confidence": 0.85, "source_url": null},
+      "relationship": {"state": "not_contacted", "last_send_at": null, "recent_firm_domain_history": "No stored sends", "stored_reply_observed": false, "mailbox_limit": "Full mailbox not checked"},
+      "signal": "AI/ML Platform Operations opening dated 2026-09-08.",
+      "angle": "Out of current PI outreach scope.",
+      "sources": ["https://csaa-insurance.aaa.com/"]
+    },
+    {
+      "firm": "Maison Law, APLC",
+      "disposition": "hold_for_thread_decision",
+      "fit_note": "Core PI firm; recent contact is already active and needs mailbox/thread review.",
+      "recipient": {"name": "Martin Gasparian, Esq.", "role": "Founder & Managing Attorney", "email": "martin@maisonlaw.com", "email_type": "direct_named", "verification_source": "stored roster; firm about page checked", "confidence": 0.85, "source_url": "https://maisonlaw.com/about/"},
+      "relationship": {"state": "recent_follow_up_history", "last_send_at": "2026-09-02T17:30:17Z", "last_send_recipient": "martin@maisonlaw.com", "recent_firm_domain_history": "4 delivered/sent messages: Martin 2026-09-02, 2026-07-01, 2026-06-23; Arian 2026-07-14", "stored_reply_observed": false, "mailbox_limit": "Full mailbox not checked"},
+      "signal": "Martin-authored Maison article dated 2026-09-07 confirms active, source-linked case-content publishing; positive public work is a strength, not a pain claim.",
+      "angle": "Only contact after thread review; offer a source-linked chronology/client-dignity workflow for high-volume publishing and intake, without implying a service failure.",
+      "sources": ["https://maisonlaw.com/about/", "https://maisonlaw.com/2026/09/killed-e-scooter-crash-21st-street-g-street-merced/"]
+    },
+    {
+      "firm": "Stockton Bohm Law Group, Inc.",
+      "disposition": "pursue_after_mailbox_check",
+      "fit_note": "Law firm, but PI fit is mixed; named principal is available.",
+      "recipient": {"name": "Lawrance Bohm, Esq.", "role": "Principal & Lead Trial Attorney", "email": "l.bohm@bohmlaw.com", "email_type": "direct_named", "verification_source": "priority leadership roster", "confidence": 0.8, "source_url": "https://bohmlaw.com/about/"},
+      "relationship": {"state": "first_touch_not_found", "last_send_at": null, "recent_firm_domain_history": "No stored sends", "stored_reply_observed": false, "mailbox_limit": "Full mailbox not checked"},
+      "signal": "Paralegal opening dated 2026-09-08 (Indeed).",
+      "angle": "Ask about preserving attorney-ready chronologies and handoffs while adding paralegal capacity; keep the use case practice-neutral.",
+      "sources": ["https://bohmlaw.com/about/", "https://www.indeed.com/viewjob?jk=a20829b03b55b377"]
+    },
+    {
+      "firm": "TorkLaw, APC",
+      "disposition": "pursue_after_named_email_resolution",
+      "fit_note": "Core PI firm; leadership verified but no named email stored.",
+      "recipient": {"name": "Reza Torkzadeh", "role": "Founder and CEO; Senior Partner", "email": null, "email_type": "no_verified_named_email", "stored_role_mailboxes": ["general inquiries/marketing addresses in firm page; do not guess"], "verification_source": "official attorney page", "confidence": 0.9, "source_url": "https://www.torklaw.com/attorneys/reza-torkzadeh/"},
+      "relationship": {"state": "first_touch_not_found", "last_send_at": null, "recent_firm_domain_history": "No stored sends", "stored_reply_observed": false, "mailbox_limit": "Full mailbox not checked"},
+      "signal": "Sitemap detection on 2026-09-09; comparative-fault page is dated 2026-09-04 and outside the seven-day window, so not a new-publication claim.",
+      "angle": "Resolve a real named address first; then discuss evidence/chronology consistency across a multi-office PI operation, not the stale article as a trigger.",
+      "sources": ["https://www.torklaw.com/attorneys/reza-torkzadeh/", "https://www.torklaw.com/attorneys/korosh-torkzadeh/", "https://www.torklaw.com/attorneys/eugenia-steele/", "https://www.torklaw.com/attorneys/laura-m-morris/", "https://www.torklaw.com/attorneys/emma-smoler/"]
+    },
+    {
+      "firm": "Martinian Law",
+      "disposition": "pursue_after_mailbox_check",
+      "fit_note": "Core PI firm with verified founder and operational hiring signal.",
+      "recipient": {"name": "Tigran Martinian", "role": "Attorney & Founder", "email": "tm@martinianlaw.com", "email_type": "direct_named", "verification_source": "official attorney page", "confidence": 0.9, "source_url": "https://www.martinianlaw.com/meet-our-attorneys/tigran-martinian/"},
+      "relationship": {"state": "first_touch_not_found", "last_send_at": null, "recent_firm_domain_history": "No stored sends", "stored_reply_observed": false, "mailbox_limit": "Full mailbox not checked"},
+      "signal": "Legal Case Assistant / Bilingual Spanish opening dated 2026-09-08; board explicitly describes records and billing requests and Armenian + Spanish needs.",
+      "angle": "Lead with bilingual records/billing-request chronology and attorney handoffs; mention Armenian and Spanish support as an observed requirement, not a promise about staffing.",
+      "sources": ["https://www.martinianlaw.com/meet-our-attorneys/tigran-martinian/", "https://www.goparalegals.com/jobs/590029590-legal-case-assistant-bilingual-spanish-at-martinian-lawyers"]
+    },
+    {
+      "firm": "Power Legal Group, PC",
+      "disposition": "hold_for_thread_decision",
+      "fit_note": "Core PI firm; founder has no verified named email and role mailboxes have recent outreach.",
+      "recipient": {"name": "Babak \"Bobby\" Yaghoubian", "role": "Founder & Lead Attorney", "email": null, "email_type": "no_verified_named_email", "stored_role_mailboxes": ["opm1@powerlegalgroup.com", "liens@powerlegalgroup.com"], "verification_source": "official attorneys page; role addresses from stored roster", "confidence": 0.9, "source_url": "https://powerlegalgroup.com/attorneys/"},
+      "relationship": {"state": "recent_role_mailbox_contact", "last_send_at": "2026-07-14T00:00:00Z", "last_send_recipient": "opm1@powerlegalgroup.com", "recent_firm_domain_history": "5 sends through opm1/cme/liens between 2026-06-12 and 2026-07-14", "stored_reply_observed": false, "mailbox_limit": "Full mailbox not checked"},
+      "signal": "Sitemap page added; no dated event strong enough to override thread hold.",
+      "angle": "Review existing role-mailbox thread before any new outreach; if reopened, focus on file surprises and liens/records handoffs without implying nonresponse.",
+      "sources": ["https://powerlegalgroup.com/attorneys/"]
+    },
+    {
+      "firm": "Allied Pain & Spine Institute",
+      "disposition": "exclude",
+      "fit_note": "Medical provider, not a core PI law-firm prospect.",
+      "recipient": {"name": "James Petros, MD", "role": "Founder & Chief Executive Officer", "email": null, "email_type": "no_verified_named_email", "verification_source": "official team page", "confidence": 0.85, "source_url": "https://myalliedpain.com/about/our-team/james-petros-md/"},
+      "relationship": {"state": "not_contacted", "last_send_at": null, "recent_firm_domain_history": "No stored sends", "stored_reply_observed": false, "mailbox_limit": "Full mailbox not checked"},
+      "signal": "Patient Care Coordinator Spanish Speaker opening dated 2026-09-09.",
+      "angle": "Out of current law-firm outreach scope.",
+      "sources": ["https://myalliedpain.com/about/our-team/james-petros-md/", "https://www.simplyhired.com/job/ml_EVcqeBXwmhi9Tx_4ZyxyyBmTUw3IPDXAvWX5hRlViSGnR8mQghA"]
+    },
+    {
+      "firm": "Pacific Liberty Law",
+      "disposition": "pursue_after_mailbox_check",
+      "fit_note": "Core PI law firm, though leadership source page was not stored in export.",
+      "recipient": {"name": "Eugene S. Fu, Esq.", "role": "Founder & Attorney", "email": "atty@pacificlibertylaw.com", "email_type": "role_mailbox", "verification_source": "stored firm roster; role address", "confidence": 0.75, "source_url": "https://pacificlibertylaw.com/"},
+      "relationship": {"state": "first_touch_not_found", "last_send_at": null, "recent_firm_domain_history": "No stored sends", "stored_reply_observed": false, "mailbox_limit": "Full mailbox not checked"},
+      "signal": "Receptionist Secretary posting live on Snagajob 2026-09-09; export stored it 2026-09-08 (date discrepancy noted).",
+      "angle": "Use the live posting as a staffing/phone-and-records handoff question; label atty@ as role mailbox and verify routing first.",
+      "sources": ["https://pacificlibertylaw.com/", "https://www.snagajob.com/jobs/1252387282"]
+    },
+    {
+      "firm": "LA Injury Lawyers",
+      "disposition": "hold_for_thread_decision",
+      "fit_note": "Core PI firm; recent outreach to firm mailbox requires thread review.",
+      "recipient": {"name": "Ashton S. Cohen", "role": "Managing Attorney", "email": "ashton@lainjurylawyers.com", "email_type": "direct_named", "verification_source": "official attorney page", "confidence": 0.9, "source_url": "https://lainjurylawyers.com/ashton-cohen/"},
+      "relationship": {"state": "recent_firm_mailbox_contact", "last_send_at": "2026-07-02T00:00:00Z", "last_send_recipient": "marina@lainjurylawyers.com", "recent_firm_domain_history": "2 sends to marina@ on 2026-07-02 and 2026-06-25", "stored_reply_observed": false, "mailbox_limit": "Full mailbox not checked"},
+      "signal": "Hollywood Boulevard e-scooter page was originally published 2025-04 and dateModified 2026-09-08; treat as content revision, not new publication.",
+      "angle": "Only after thread review: source-linked preservation chronologies for app/GPS evidence and client updates; do not call the revision a new event or infer a pain point.",
+      "sources": ["https://lainjurylawyers.com/ashton-cohen/", "https://lainjurylawyers.com/hollywood-boulevard-e-scooter-crash-sidewalk-bike-lane/"]
+    },
+    {
+      "firm": "The Delashmit Firm, LLC",
+      "disposition": "pursue_after_email_verification",
+      "fit_note": "Small PI firm; founder identity is clear but email is stored firm-level, not verified as direct.",
+      "recipient": {"name": "Hunter Delashmit", "role": "Founding Attorney", "email": "hunter@thedelashmitfirm.com", "email_type": "stored_firm_address_unverified_as_direct", "verification_source": "stored roster; leadership page URL absent", "confidence": 0.7, "source_url": "https://delashmitfirm.com/"},
+      "relationship": {"state": "first_touch_not_found", "last_send_at": null, "recent_firm_domain_history": "No stored sends", "stored_reply_observed": false, "mailbox_limit": "Full mailbox not checked"},
+      "signal": "Personal Injury Paralegal / Case Manager opening dated 2026-09-08.",
+      "angle": "Verify hunter@ routes to Hunter, then ask about case-manager handoffs, records chronology, and client-status cadence during hiring.",
+      "sources": ["https://delashmitfirm.com/", "https://www.indeed.com/viewjob?jk=275e1b5e4e84cc07"]
+    },
+    {
+      "firm": "Dimopoulos Law Firm",
+      "disposition": "hold_for_email_resolution",
+      "fit_note": "PI firm, but founder email is malformed and the trigger date/source is uncertain.",
+      "recipient": {"name": "Steve Dimopoulos", "role": "Founding Attorney; Lead Attorney", "email": null, "email_type": "malformed_stored_email", "stored_role_mailboxes": ["ps@stevedimopoulos.com", "adc@stevedimopoulos.com", "ss@stevedimopoulos.com", "jm@stevedimopoulos.com", "nv@stevedimopoulos.com"], "verification_source": "stored leadership roster; no verified founder address", "confidence": 0.85, "source_url": "https://stevedimopoulos.com/about/steve-dimopoulos/"},
+      "relationship": {"state": "first_touch_not_found", "last_send_at": null, "recent_firm_domain_history": "No stored sends", "stored_reply_observed": false, "mailbox_limit": "Full mailbox not checked"},
+      "signal": "Snagajob trigger 2026-09-07 is 404; same disbursal-auditing/reconciliation job is live on Indeed, but original publication date is unproven.",
+      "angle": "Resolve a named or clearly routed mailbox first; if pursued, discuss disbursal reconciliation and audit-ready chronology without asserting a staffing gap.",
+      "sources": ["https://stevedimopoulos.com/about/steve-dimopoulos/", "https://www.indeed.com/", "https://www.snagajob.com/jobs/1291504518"]
+    },
+    {
+      "firm": "Law Offices of Patrick S. Aguirre & Associates, A PLC",
+      "disposition": "pursue_after_mailbox_check",
+      "fit_note": "PI/criminal-defense practice; founder contact is a role mailbox, not a personal mailbox.",
+      "recipient": {"name": "Patrick S. Aguirre", "role": "Founder & Principal Attorney", "email": "attorney@paguirrelaw.com", "email_type": "role_mailbox", "verification_source": "official about page; attorney@ is firm role address", "confidence": 0.9, "source_url": "https://attorneypatrickaguirre.com/about/"},
+      "relationship": {"state": "first_touch_not_found", "last_send_at": null, "recent_firm_domain_history": "No stored sends", "stored_reply_observed": false, "mailbox_limit": "Full mailbox not checked"},
+      "signal": "Sitemap expanded with 21 pages; discovery is structural, not proof of a new publication or pain.",
+      "angle": "Ask whether a compact source-linked case chronology could reduce attorney handoff friction across PI matters; verify attorney@ routing before contact.",
+      "sources": ["https://attorneypatrickaguirre.com/about/"]
+    },
+    {
+      "firm": "Steve Kevin Marks Law Office",
+      "disposition": "hold_identity_ambiguous",
+      "fit_note": "Identity/firm mapping is ambiguous; explicit hold requested.",
+      "recipient": {"name": "Steve Kevin Marks", "role": "Chief Executive Officer; Attorney", "email": null, "email_type": "unverified_gmail_in_roster", "stored_role_mailboxes": ["smarkslawoffice@gmail.com"], "verification_source": "California Bar profile plus stored roster", "confidence": 0.8, "source_url": "https://apps.calbar.ca.gov/attorney/Licensee/Detail/264658"},
+      "relationship": {"state": "hold", "last_send_at": null, "recent_firm_domain_history": "No stored sends", "stored_reply_observed": false, "mailbox_limit": "Full mailbox not checked"},
+      "signal": "Three Google reviews dated 2026-09-07; reviews are a strength/identity signal, not a pain claim.",
+      "angle": "Do not contact until identity, firm domain, and mailbox ownership are explicitly resolved.",
+      "sources": ["https://apps.calbar.ca.gov/attorney/Licensee/Detail/264658"]
+    },
+    {
+      "firm": "Arias Sanguinetti",
+      "disposition": "hold_for_thread_decision",
+      "fit_note": "Strong PI fit and named managing partner, but prior outreach exists and event basis must be handled carefully.",
+      "recipient": {"name": "Mike Arias", "role": "Managing Partner", "email": "mike@aswtlawyers.com", "email_type": "direct_named", "verification_source": "stored leadership roster; official firm news identifies Mike Arias", "confidence": 0.9, "source_url": "https://aswtlawyers.com/"},
+      "relationship": {"state": "recent_multi_recipient_history", "last_send_at": "2026-07-09T00:00:00Z", "last_send_recipient": "sahar@aswtlawyers.com / jamie@ / gregg@ / arnold@ / elise@", "recent_firm_domain_history": "6 sends on 2026-07-09 to Sahar, Jamie, Gregg, Arnold, Elise and related firm contacts; no direct Mike send observed", "stored_reply_observed": false, "mailbox_limit": "Full mailbox not checked"},
+      "signal": "First-party Sep 9 news quotes Mike Arias and names Sahar Malek/Nia Gamble as counsel. Do not use the expired/unrelated LinkedIn hiring redirect or claim hiring activity.",
+      "angle": "If thread review permits, discuss source-linked institutional knowledge chronologies and client dignity at a high level; no case-sensitive detail, no assumptions about internal workflow, and no hiring claim.",
+      "sources": ["https://aswtlawyers.com/blog/lawsuit-cesar-chavez-foundation-and-ufw-failed-to-prevent-womans-rape/", "https://aswtlawyers.com/"]
+    },
+    {
+      "firm": "de la Peña & Holiday LLP",
+      "disposition": "exclude",
+      "fit_note": "Defense-focused signal; not a core plaintiff PI prospect.",
+      "recipient": {"name": null, "role": null, "email": "afranco@dlphlaw.com", "email_type": "stored_staff_address", "verification_source": "priority export; no named leadership", "confidence": 0.5, "source_url": "https://dlphlaw.com/"},
+      "relationship": {"state": "not_contacted", "last_send_at": null, "recent_firm_domain_history": "No stored sends", "stored_reply_observed": false, "mailbox_limit": "Full mailbox not checked"},
+      "signal": "Litigation Paralegal posting dated 2026-09-08; role alone does not change defense fit.",
+      "angle": "Out of current PI outreach scope.",
+      "sources": ["https://dlphlaw.com/", "https://www.linkedin.com/jobs/view/paralegal-at-de-la-pe%C3%B1a-holiday-llp-4419443650"]
+    },
+    {
+      "firm": "Onyx Law Firm",
+      "disposition": "exclude",
+      "fit_note": "No verified leadership and current signal is a Film Crew posting, not a core PI operations event.",
+      "recipient": {"name": null, "role": null, "email": "info@onyxlawfirm.com", "email_type": "role_mailbox", "verification_source": "priority export; no named leadership", "confidence": 0.5, "source_url": "https://onyxlawfirm.com/"},
+      "relationship": {"state": "not_contacted", "last_send_at": null, "recent_firm_domain_history": "No stored sends", "stored_reply_observed": false, "mailbox_limit": "Full mailbox not checked"},
+      "signal": "Film Crew board posting live 2026-09-12; not evidence of PI case-operations hiring.",
+      "angle": "Out of current PI outreach scope unless the firm’s practice and leadership are independently verified.",
+      "sources": ["https://onyxlawfirm.com/", "https://www.snagajob.com/jobs/1292285662"]
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+[Unit]
+Description=Possible OS persistent job application browsers
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/home/pranav/possibleos
+ExecStart=/home/pranav/possibleos/.venv/bin/python -m app.services.job_browser_broker
+Restart=on-failure
+RestartSec=3
+UMask=0077
+KillMode=control-group
+TimeoutStopSec=30
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

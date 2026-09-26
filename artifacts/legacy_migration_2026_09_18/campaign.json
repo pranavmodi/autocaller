@@ -1,0 +1,11 @@
+{
+  "campaign_id": "cmp_ki-WF9eCn7bGJ01C",
+  "name": "Email - Clio or Filevine Migration - 2026-09-18",
+  "destination_url": "https://getpossibleminds.com/services/case-management-migration",
+  "general_tracking_url": "https://getpossibleminds.com/t/jg7ggyI9OQ",
+  "general_link_channel": "public",
+  "general_link_sent_at": null,
+  "recipient_links_created": 0,
+  "outreach_scheduled": 0,
+  "notes": "General link requested separately by user. Recipient-specific links must be created for each eligible recipient; never reuse this public link in place of contact attribution. Audience validation remains incomplete. No new batch or send actions created."
+}

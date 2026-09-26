@@ -1,0 +1,132 @@
+{
+  "action": {
+    "id": "action_368f0bc6ff864af8944e1a4c",
+    "action_type": "send_approved_lead_gen_draft",
+    "status": "approved",
+    "risk_level": "high",
+    "requested_by": "codex",
+    "approved_by": "codex",
+    "entity_type": "lead_gen_batch_item",
+    "entity_id": "b1fafad1193c4cfc9b52dbe342603880",
+    "input": {
+      "body": "Hi Kunle,\n\nSince your practice includes both personal injury and immigration, I wanted to narrow my earlier workflow question to the injury side. A useful automation should fit the information you need, rather than add another tool for you to manage.\n\nI'm Pranav, founder of Possible Minds. We help PI firms adopt AI, and I'm trying to understand where it would genuinely help before building around assumptions.\n\nWould a structured intake summary or a checklist of missing documents be the better starting point? Even a brief answer would help, and I'd appreciate your time.\n\nBest,\nPranav\nFounder, Possible Minds",
+      "subject": "Re: where AI could compound at Fasoro Law",
+      "approval": {
+        "references": "<0100019ffcf17727-196f8ef1-4c59-4768-afc7-85159c17d855-000000@email.amazonses.com>",
+        "approved_at": "2026-09-17T09:53:32.994526+00:00",
+        "approved_by": "codex",
+        "body_sha256": "a450db1e8b0206b9d5a61c34ddb14778a5390b4ba9f3973afb6d577284a3cb7e",
+        "in_reply_to": "<0100019ffcf17727-196f8ef1-4c59-4768-afc7-85159c17d855-000000@email.amazonses.com>",
+        "subject_sha256": "7450bd0dee1aa5700ff84099d8422e04953125a3834962ca5d9536a97a13d965"
+      },
+      "transport": "resend",
+      "references": "<0100019ffcf17727-196f8ef1-4c59-4768-afc7-85159c17d855-000000@email.amazonses.com>",
+      "skill_path": null,
+      "body_sha256": "a450db1e8b0206b9d5a61c34ddb14778a5390b4ba9f3973afb6d577284a3cb7e",
+      "in_reply_to": "<0100019ffcf17727-196f8ef1-4c59-4768-afc7-85159c17d855-000000@email.amazonses.com>",
+      "skill_sha256": null,
+      "batch_item_id": "b1fafad1193c4cfc9b52dbe342603880",
+      "brief_version": null,
+      "subject_sha256": "7450bd0dee1aa5700ff84099d8422e04953125a3834962ca5d9536a97a13d965",
+      "composer_variant_key": null,
+      "lead_gen_action_type": "follow_up",
+      "composer_experiment_key": null
+    },
+    "policy_result": {},
+    "execution_result": {},
+    "error": null,
+    "trace_id": null,
+    "scheduled_for": "2026-09-17T18:20:00+00:00",
+    "started_at": null,
+    "completed_at": null,
+    "created_at": "2026-09-17T09:53:33.002805+00:00",
+    "updated_at": "2026-09-17T09:53:33.002813+00:00"
+  },
+  "created": true,
+  "updated_existing": false,
+  "executed": false,
+  "scheduled_for_pt": "2026-09-17 11:20 PDT",
+  "scheduled_for_utc": "2026-09-17 18:20:00 UTC",
+  "policy": {
+    "allowed": true,
+    "reason": "allowed",
+    "checks": [
+      {
+        "name": "status_allows_execution",
+        "passed": true,
+        "detail": "approved"
+      },
+      {
+        "name": "human_approval_present",
+        "passed": true,
+        "detail": "codex"
+      },
+      {
+        "name": "subject_present",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "body_present",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "subject_hash_matches_approval",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "body_hash_matches_approval",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "in_reply_to_matches_approval",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "references_match_approval",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "lead_gen_transport_available",
+        "passed": true,
+        "detail": "zoho_api 0/0 configured=True; resend 0/50 configured=True"
+      },
+      {
+        "name": "no_patient_data_in_outreach",
+        "passed": true,
+        "detail": "llm_guard_disabled"
+      },
+      {
+        "name": "batch_item_exists",
+        "passed": true,
+        "detail": "b1fafad1193c4cfc9b52dbe342603880"
+      },
+      {
+        "name": "batch_item_not_already_started",
+        "passed": true,
+        "detail": "approved"
+      },
+      {
+        "name": "contact_email_present",
+        "passed": true,
+        "detail": "kfasoro@fasorolaw.com"
+      },
+      {
+        "name": "no_prior_successful_action_for_item",
+        "passed": true,
+        "detail": ""
+      }
+    ],
+    "risk_level": "high",
+    "requires_human_approval": true,
+    "action_type": "send_approved_lead_gen_draft",
+    "contact_email": "kfasoro@fasorolaw.com"
+  },
+  "rank": 15,
+  "email": "kfasoro@fasorolaw.com"
+}

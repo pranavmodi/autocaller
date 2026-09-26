@@ -15,7 +15,7 @@ from uuid import uuid4
 
 import httpx
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import DateTime, Integer, String, func, select, text
+from sqlalchemy import DateTime, Integer, String, func, or_, select, text
 from sqlalchemy.dialects.postgresql import JSONB, insert
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -57,6 +57,9 @@ class ApplicationRequest(BaseModel):
     mode: Literal['prepare', 'send'] = 'prepare'
 
 
+ApplicationOrder = Literal['updated_desc', 'firm_asc', 'role_asc']
+
+
 class ClassificationDecision(BaseModel):
     model_config = ConfigDict(extra='forbid')
     candidate_id: str
@@ -84,8 +87,6 @@ def classification_view(row, config):
     value = dict(row.classification)
     category = next((c for c in config.resume_categories if c.id == value.get('category_id')), None)
     status = row.classification_status
-    if status == 'classified' and value.get('source') == 'model' and value.get('confidence', 0) < config.classification_threshold:
-        status = 'needs_review'
     if status == 'classified' and not category:
         status = 'needs_review'
     if status == 'classified' and category and not category.resume_path:
@@ -104,6 +105,9 @@ def processing_view(row, config):
 
 
 async def attach_details(session, rows):
+    from app.services.job_browser import BrowserRun
+    browser_runs = {r.candidate_id: r.status for r in (await session.scalars(
+        select(BrowserRun).where(BrowserRun.candidate_id.in_([r.id for r in rows])))).all()}
     state = await session.get(core.JobAgentState, 'default')
     config = core.saved_config(state.config) if state else core.JobAgentConfig()
     processing = {row.candidate_id: row for row in (await session.scalars(select(JobProcessing).where(
@@ -131,7 +135,8 @@ async def attach_details(session, rows):
             'best': ({key: best[key] for key in ('contact_id', 'email', 'name', 'title', 'kind', 'source')}
                      if best else None),
         }
-        items.append({**serialized, **processing_view(processing.get(row.id), config), 'contact': contact_view})
+        items.append({**serialized, **processing_view(processing.get(row.id), config),
+                      'form_status': browser_runs.get(row.id, 'not_started'), 'contact': contact_view})
     return items
 
 
@@ -142,6 +147,59 @@ async def detail(identity):
         if not row:
             raise KeyError(identity)
         return (await attach_details(session, [row]))[0]
+
+
+async def applications(*, search: str = '', status: str = '', page: int = 1,
+                       order: ApplicationOrder = 'updated_desc') -> dict:
+    """List every job whose application workflow has been started."""
+    await core.ensure_tables()
+    search = search.strip()
+    status = status.strip()
+    if page < 1:
+        raise ValueError('Page must be at least 1.')
+    if status and (len(status) > 32 or not re.fullmatch(r'[a-z_]+', status)):
+        raise ValueError('Invalid application status.')
+    ordering = {
+        'updated_desc': (JobProcessing.updated_at.desc(),),
+        'firm_asc': (func.lower(core.JobAgentCandidate.posting['firm_name'].astext),
+                     JobProcessing.updated_at.desc()),
+        'role_asc': (func.lower(core.JobAgentCandidate.posting['title'].astext),
+                     JobProcessing.updated_at.desc()),
+    }[order]
+    base = (select(core.JobAgentCandidate, JobProcessing)
+            .join(JobProcessing, JobProcessing.candidate_id == core.JobAgentCandidate.id)
+            .where(JobProcessing.application_status != 'not_started'))
+    count_base = (select(JobProcessing.application_status, func.count())
+                  .select_from(JobProcessing)
+                  .join(core.JobAgentCandidate, core.JobAgentCandidate.id == JobProcessing.candidate_id)
+                  .where(JobProcessing.application_status != 'not_started'))
+    if search:
+        phrase = f'%{search}%'
+        search_filter = or_(
+            core.JobAgentCandidate.posting['firm_name'].astext.ilike(phrase),
+            core.JobAgentCandidate.posting['title'].astext.ilike(phrase),
+            JobProcessing.application['recipient']['email'].astext.ilike(phrase),
+        )
+        base = base.where(search_filter)
+        count_base = count_base.where(search_filter)
+    async with core.AsyncSessionLocal() as session:
+        counts = dict((await session.execute(
+            count_base.group_by(JobProcessing.application_status))).all())
+        if status:
+            base = base.where(JobProcessing.application_status == status)
+        total = await session.scalar(select(func.count()).select_from(base.subquery()))
+        pairs = (await session.execute(base.order_by(*ordering, core.JobAgentCandidate.id)
+                                       .offset((page - 1) * 25).limit(25))).all()
+        rows = [candidate for candidate, _processing in pairs]
+        items = await attach_details(session, rows) if rows else []
+    return {
+        'items': items,
+        'total': int(total or 0),
+        'page': page,
+        'page_size': 25,
+        'total_pages': ((int(total or 0) + 24) // 25),
+        'counts': counts,
+    }
 
 
 async def resumes():
@@ -240,10 +298,11 @@ async def request_classification(identity):
 
 
 async def ask_application_model(mode, payload, fields):
-    timeout_s = int(os.getenv('JOB_AGENT_GATEWAY_TIMEOUT_S', '420'))
+    timeout_s = int(os.getenv('JOB_AGENT_GATEWAY_TIMEOUT_S', '150'))
     result = await call_skill_json(skill_path=SKILL, payload={'mode': mode, **payload}, required_fields=fields,
         model=os.getenv('JOB_AGENT_MODEL', 'openclaw/neo'), timeout_s=timeout_s, max_tokens=7000, retries=1,
-        schema_repair_retries=1, prompt_cache_key='possibleos:job-application-agent:v2')
+        schema_repair_retries=1, prompt_cache_key='possibleos:job-application-agent:v2',
+        lane=os.getenv('OPENCLAW_RPC_INTERACTIVE_LANE', 'possibleos-interactive'), allow_tools=False)
     return result.parsed
 
 
@@ -332,15 +391,22 @@ def _parse_jev_decisions(response, identities, categories):
                for value in probabilities.values()) or abs(sum(probabilities.values()) - 1) > 0.02:
             raise ValueError(f'TypeSafe Choice answer job_{index} has invalid probabilities.')
         normalized = {key: float(value) for key, value in probabilities.items()}
-        if choice == JEV_NO_MATCH:
-            decisions.append(ClassificationDecision(candidate_id=identity, category_id=None,
-                confidence=float(confidence), reason='Jev found no clear match among the configured resume categories.',
-                probabilities=normalized, model=model, usage=usage))
-            continue
-        category = by_id[choice]
-        decisions.append(ClassificationDecision(candidate_id=identity, category_id=choice,
-            confidence=float(confidence),
-            reason=_classification_reason(category, normalized[choice], normalized, categories),
+        available = [category for category in categories if category.resume_path]
+        if not available:
+            raise ValueError('Assign a resume PDF to at least one category in Settings.')
+        # Jev owns the semantic ranking; code selects the best available PDF.
+        # No-match remains diagnostic evidence, never a resume-selection veto.
+        category = max(available, key=lambda item: normalized[item.id])
+        fallback = choice != category.id
+        reason = _classification_reason(category, normalized[category.id], normalized, categories)
+        if fallback:
+            reason = (f'Closest available resume: {category.name} '
+                      f'({normalized[category.id]:.0%} category probability). '
+                      'Jev did not select an available category as an exact match; using its highest-ranked available resume. '
+                      'This does not establish that every job requirement is met.')
+        decisions.append(ClassificationDecision(candidate_id=identity, category_id=category.id,
+            confidence=normalized[category.id] if fallback else float(confidence),
+            reason=reason,
             probabilities=normalized, model=model, usage=usage))
     return decisions
 
@@ -374,13 +440,17 @@ async def classify_with_jev(jobs, categories):
     raise RuntimeError('TypeSafe Jev classification request failed.') from last_error
 
 
-async def classify_batch(*, requested_only=False):
+async def classify_batch(*, requested_only=False, identity=None):
     config = core.JobAgentConfig.model_validate((await core.configuration())['config'])
-    if not requested_only and not config.classification_enabled:
+    if identity is None and not requested_only and not config.classification_enabled:
         return False
     async with core.AsyncSessionLocal() as session:
         query = select(JobProcessing).where(JobProcessing.classification_status == 'pending')
-        if requested_only:
+        if identity is None:
+            query = query.where(JobProcessing.classification['application_owned'].astext.is_distinct_from('true'))
+        if identity is not None:
+            query = query.where(JobProcessing.candidate_id == identity)
+        elif requested_only:
             query = query.where(JobProcessing.classification['requested'].astext == 'true')
         else:
             query = query.where(JobProcessing.classification['requested'].astext.is_distinct_from('true'))
@@ -421,7 +491,7 @@ async def classify_batch(*, requested_only=False):
                 row.classification = {**decision.model_dump(exclude={'candidate_id'}), 'source': 'model',
                     'provider': 'typesafe_jev',
                     'taxonomy_key': taxonomy_key(config), 'job_key': job_key(candidate.posting)}
-                row.classification_status = 'classified' if decision.category_id and decision.confidence >= config.classification_threshold else 'needs_review'
+                row.classification_status = 'classified' if decision.category_id else 'needs_review'
                 row.revision += 1
                 row.updated_at = core.now()
             await session.commit()
@@ -438,6 +508,60 @@ async def classify_batch(*, requested_only=False):
     return True
 
 
+async def application_resume(identity, posting):
+    """Select a resume inside an authorized workflow, never by scanning the queue."""
+    async with core.AsyncSessionLocal() as session:
+        row = await session.get(JobProcessing, identity, with_for_update=True)
+        candidate = await session.get(core.JobAgentCandidate, identity)
+        settings = await session.get(core.JobAgentState, 'default')
+        config = core.saved_config(settings.config) if settings else core.JobAgentConfig()
+        if not row or not candidate or job_key(candidate.posting) != job_key(posting) or candidate.posting.get('status') == 'closed':
+            raise ValueError('The job changed or closed. Review it before applying.')
+        choice = classification_view(row, config)
+        current = row.classification.get('job_key') == job_key(posting)
+        reusable = current and (row.classification.get('source') == 'operator' or
+                               row.classification.get('taxonomy_key') == taxonomy_key(config))
+        if not (reusable and choice['status'] == 'classified'):
+            # Preserve an explicit category even when its PDF is missing.
+            if reusable and row.classification.get('source') == 'operator' and choice.get('category_id'):
+                raise ValueError('Your selected category has no usable resume. Assign a one-page PDF in Settings or choose another category.')
+            row.classification_status = 'pending'
+            row.classification = {'requested': True, 'application_owned': True}
+            row.revision += 1
+            row.updated_at = core.now()
+            await session.commit()
+            needs_classification = True
+        else:
+            needs_classification = False
+    if needs_classification:
+        try:
+            await asyncio.wait_for(classify_batch(identity=identity), timeout=150)
+        except (TimeoutError, asyncio.CancelledError):
+            async with core.AsyncSessionLocal() as session:
+                row = await session.get(JobProcessing, identity, with_for_update=True)
+                if row.classification.get('application_owned'):
+                    row.classification_status = 'needs_review'
+                    row.classification = {'source': 'error', 'reason': 'Resume matching timed out. Retry the application or choose a category manually.'}
+                    row.revision += 1
+                    await session.commit()
+            raise
+    async with core.AsyncSessionLocal() as session:
+        row = await session.get(JobProcessing, identity)
+        candidate = await session.get(core.JobAgentCandidate, identity)
+        settings = await session.get(core.JobAgentState, 'default')
+        config = core.saved_config(settings.config) if settings else core.JobAgentConfig()
+        choice = classification_view(row, config)
+        if choice.get('category_id') and not choice.get('resume'):
+            raise ValueError('The matched category has no resume. Assign a one-page PDF in Job Agent Settings or choose another category.')
+        if choice['status'] != 'classified' or not choice.get('resume'):
+            raise ValueError('Automatic resume selection needs your help. ' +
+                             (choice.get('reason') or 'Choose a category and assign a one-page PDF in Settings.'))
+        if row.classification.get('job_key') != job_key(posting) or job_key(candidate.posting) != job_key(posting):
+            raise ValueError('The job changed during resume selection. Review it before applying.')
+        resume = await asyncio.to_thread(inspect_resume, choice['resume']['path'])
+        return {'resume': resume, 'category_id': choice['category_id']}
+
+
 async def request_application(identity, request: ApplicationRequest):
     await enqueue_missing()
     async with core.AsyncSessionLocal() as session:
@@ -452,15 +576,13 @@ async def request_application(identity, request: ApplicationRequest):
         state = await session.get(core.JobAgentState, 'default')
         config = core.saved_config(state.config) if state else core.JobAgentConfig()
         category = next((c for c in config.resume_categories if c.id == row.classification.get('category_id')), None)
-        if classification_view(row, config)['status'] != 'classified' or not category or not category.resume_path:
-            raise ValueError('Choose a category with a one-page resume before applying.')
         candidate = await session.get(core.JobAgentCandidate, identity)
-        if row.classification.get('job_key') != job_key(candidate.posting):
-            raise ValueError('The job responsibilities changed. Classify the current job before applying.')
         if candidate.posting.get('status') == 'closed':
             raise ValueError('This job is marked closed at its source.')
-        resume = await asyncio.to_thread(inspect_resume, category.resume_path)
         if row.application_status == 'ready' and request.mode == 'send':
+            if classification_view(row, config)['status'] != 'classified' or not category or not category.resume_path or row.classification.get('job_key') != job_key(candidate.posting):
+                raise ValueError('The job or resume category changed. Prepare a new draft before sending.')
+            resume = await asyncio.to_thread(inspect_resume, category.resume_path)
             if row.application.get('resume', {}).get('sha256') != resume['sha256']:
                 raise ValueError('The mapped resume changed. Prepare a new email before sending.')
             row.application = {**row.application, 'send_requested': True,
@@ -470,15 +592,15 @@ async def request_application(identity, request: ApplicationRequest):
         else:
             previous_attempt = int(row.application.get('attempt') or 0)
             row.application = {'run_id': uuid4().hex, 'attempt': previous_attempt + 1,
-                'phase': 'queued', 'send_requested': request.mode == 'send',
+                'phase': 'selecting_resume', 'send_requested': request.mode == 'send',
                 'authorized_at': core.now().isoformat() if request.mode == 'send' else None,
-                'category_id': category.id, 'resume': resume, 'posting': candidate.posting,
-                'preferences': config.model_dump(exclude={'resume_categories'}), 'stage': 'Queued'}
+                'posting': candidate.posting,
+                'preferences': config.model_dump(exclude={'resume_categories'}), 'stage': 'Selecting the best resume for this job'}
             row.application_status = 'queued'
         row.revision += 1
         row.updated_at = core.now()
         session.add(core.JobAgentEvent(kind='application_requested', message='Application processing requested',
-            details={'candidate_id': identity, 'mode': request.mode, 'category_id': category.id}))
+            details={'candidate_id': identity, 'mode': request.mode, 'category_id': category.id if category else None}))
         await session.commit()
     _wakeup.set()
     return await detail(identity)
@@ -487,6 +609,8 @@ async def request_application(identity, request: ApplicationRequest):
 async def set_application(identity, *, status=None, **updates):
     async with core.AsyncSessionLocal() as session:
         row = await session.get(JobProcessing, identity, with_for_update=True)
+        if 'phase' in updates and updates['phase'] != row.application.get('phase'):
+            updates.setdefault('phase_updated_at', core.now().isoformat())
         row.application = {**row.application, **updates}
         if status:
             row.application_status = status
@@ -619,6 +743,11 @@ async def prepare_application(identity, application):
     async def update_phase(phase, stage):
         await set_application(identity, phase=phase, stage=stage)
 
+    if not application.get('resume'):
+        await set_application(identity, phase='selecting_resume', stage='Matching the job to a category and selecting its resume')
+        selected = await application_resume(identity, application['posting'])
+        application = {**application, **selected}
+        await set_application(identity, **selected)
     await set_application(identity, phase='researching', stage='Researching the company, role and recruiting contacts')
     packet = await research_application(application, ask_application_model, update_phase)
     await set_application(identity, phase='checking_duplicates',
@@ -796,12 +925,17 @@ async def process_application():
         identity, previous, application = row.candidate_id, row.application_status, dict(row.application)
         # Keep an authorized send visibly queued during its read-only preflight.
         # Only preparation work uses the broader `preparing` state.
+        claimed_at = core.now()
         row.application_status = 'preparing' if previous == 'queued' else 'queued_send'
-        row.updated_at = core.now()
+        if previous == 'queued':
+            application = {**application, 'started_at': claimed_at.isoformat()}
+            row.application = application
+        row.updated_at = claimed_at
         await session.commit()
     try:
         if previous == 'queued':
-            await prepare_application(identity, application)
+            timeout_s = max(30, int(os.getenv('JOB_AGENT_PREPARATION_TIMEOUT_S', '240')))
+            await asyncio.wait_for(prepare_application(identity, application), timeout=timeout_s)
         else:
             await send_application(identity, application)
     except Exception as exc:
@@ -812,6 +946,9 @@ async def process_application():
             failed_phase = (await detail(identity))['application'].get('phase') or 'preparation'
             if isinstance(exc, ValueError):
                 message = str(exc)
+            elif isinstance(exc, TimeoutError):
+                message = ('Preparation exceeded its time limit. No email was sent. '
+                           'Retry when the research service is responsive.')
             elif isinstance(exc, LLMGatewayError) and ('429' in str(exc) or 'rate_limit' in str(exc)):
                 message = 'The drafting service is temporarily rate-limited. Retry preparation shortly.'
             else:

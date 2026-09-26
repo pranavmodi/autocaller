@@ -1,0 +1,130 @@
+{
+  "action": {
+    "id": "action_d057623844de4c3ebd8792fe",
+    "action_type": "send_approved_lead_gen_draft",
+    "status": "approved",
+    "risk_level": "high",
+    "requested_by": "codex",
+    "approved_by": "codex",
+    "entity_type": "lead_gen_batch_item",
+    "entity_id": "87bdcf0e093241a2abea8335937a101e",
+    "input": {
+      "body": "Hi Jason,\n\nI previously shared an example of a lawyer connecting intake facts, documents, and tasks with AI. This article looks at what makes that work beyond one person's desk.\n\nThe idea is that lasting gains come from shared ways of working, not just individual shortcuts. That's shaping how we help PI firms adopt AI at Possible Minds.\n\nhttps://getpossibleminds.com/t/7pQJFLwtzA\n\nAt Beahm Law, what seems harder: finding a useful AI tool or making it part of the team's routine? I'd appreciate even a short reply.\n\nBest,\nPranav\nFounder, Possible Minds",
+      "subject": "Re: where AI could compound at Beahm Law",
+      "approval": {
+        "references": "<0100019ffcb1acb5-1b29873f-976c-4363-9be8-16a635acc1a9-000000@email.amazonses.com>",
+        "approved_at": "2026-09-15T10:40:45.379337+00:00",
+        "approved_by": "codex",
+        "body_sha256": "c5b4e1ac0cdaae81adbba36cdceab46d2d1e5bd361160d0d2882b31fee1f8c7b",
+        "in_reply_to": "<0100019ffcb1acb5-1b29873f-976c-4363-9be8-16a635acc1a9-000000@email.amazonses.com>",
+        "subject_sha256": "18f4f56eeb736a20095bdda86c59474e2dea138da4ac28fde1c4ac25b2813fc4"
+      },
+      "transport": "resend",
+      "references": "<0100019ffcb1acb5-1b29873f-976c-4363-9be8-16a635acc1a9-000000@email.amazonses.com>",
+      "skill_path": null,
+      "body_sha256": "c5b4e1ac0cdaae81adbba36cdceab46d2d1e5bd361160d0d2882b31fee1f8c7b",
+      "in_reply_to": "<0100019ffcb1acb5-1b29873f-976c-4363-9be8-16a635acc1a9-000000@email.amazonses.com>",
+      "skill_sha256": null,
+      "batch_item_id": "87bdcf0e093241a2abea8335937a101e",
+      "brief_version": null,
+      "subject_sha256": "18f4f56eeb736a20095bdda86c59474e2dea138da4ac28fde1c4ac25b2813fc4",
+      "composer_variant_key": null,
+      "lead_gen_action_type": "follow_up",
+      "composer_experiment_key": null
+    },
+    "policy_result": {},
+    "execution_result": {},
+    "error": null,
+    "trace_id": null,
+    "scheduled_for": "2026-09-15T16:20:00+00:00",
+    "started_at": null,
+    "completed_at": null,
+    "created_at": "2026-09-15T10:40:45.384008+00:00",
+    "updated_at": "2026-09-15T10:40:45.384013+00:00"
+  },
+  "created": true,
+  "updated_existing": false,
+  "executed": false,
+  "scheduled_for_pt": "2026-09-15 09:20 PDT",
+  "scheduled_for_utc": "2026-09-15 16:20:00 UTC",
+  "final_policy": {
+    "allowed": true,
+    "reason": "allowed",
+    "checks": [
+      {
+        "name": "status_allows_execution",
+        "passed": true,
+        "detail": "approved"
+      },
+      {
+        "name": "human_approval_present",
+        "passed": true,
+        "detail": "codex"
+      },
+      {
+        "name": "subject_present",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "body_present",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "subject_hash_matches_approval",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "body_hash_matches_approval",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "in_reply_to_matches_approval",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "references_match_approval",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "lead_gen_transport_available",
+        "passed": true,
+        "detail": "zoho_api 1/0 configured=True; resend 0/50 configured=True"
+      },
+      {
+        "name": "no_patient_data_in_outreach",
+        "passed": true,
+        "detail": "llm_guard_disabled"
+      },
+      {
+        "name": "batch_item_exists",
+        "passed": true,
+        "detail": "87bdcf0e093241a2abea8335937a101e"
+      },
+      {
+        "name": "batch_item_not_already_started",
+        "passed": true,
+        "detail": "approved"
+      },
+      {
+        "name": "contact_email_present",
+        "passed": true,
+        "detail": "jbeahm@beahmlaw.com"
+      },
+      {
+        "name": "no_prior_successful_action_for_item",
+        "passed": true,
+        "detail": ""
+      }
+    ],
+    "risk_level": "high",
+    "requires_human_approval": true,
+    "action_type": "send_approved_lead_gen_draft",
+    "contact_email": "jbeahm@beahmlaw.com"
+  }
+}

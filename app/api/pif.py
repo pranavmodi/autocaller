@@ -46,6 +46,13 @@ from app.services.pif_job_posting_research import (
     start_job_posting_research,
     start_sitemap_research,
 )
+from app.services.pif_change_detection import (
+    baseline_existing_firm_research,
+    list_firm_trigger_events,
+    list_priority_firms,
+    revalidate_active_trigger_events,
+    trigger_filter_options,
+)
 from app.services.pif_local_enrichment import (
     PifLocalEnrichmentError,
     get_local_enrichment_status,
@@ -58,6 +65,12 @@ from app.services.pif_research_maintenance import (
 from app.services.pif_sitemap_monitor import list_firm_sitemap_history
 
 router = APIRouter(prefix="/api/pif", tags=["pif-directory"])
+
+CountRange = Literal["0-0", "1-5", "6-10", "11-25", "26-50", "51-100", "101+"]
+PifTierFilter = Literal["A", "B", "C", "D"]
+StatusPresenceFilter = Literal["completed", "missing", "queued_or_running", "failed"]
+JobPostingsPresenceFilter = Literal["has", "none", "not_researched", "queued_or_running", "failed"]
+JobPostingRoleFilter = Literal["intake", "marketing", "case_operations", "firm_operations", "technology"]
 
 
 class PifFirmWriteRequest(BaseModel):
@@ -163,6 +176,50 @@ async def get_pif_vendors():
     return await list_extracted_vendors()
 
 
+@router.get("/trigger-options")
+async def get_pif_trigger_options():
+    return await trigger_filter_options()
+
+
+@router.get("/priority-firms")
+async def get_pif_priority_firms(
+    search: str | None = Query(None, max_length=255),
+    event_type: list[str] | None = Query(None),
+    category: list[str] | None = Query(None),
+    within_days: int = Query(30, ge=1, le=3650),
+    min_score: int = Query(0, ge=0, le=100),
+    min_confidence: float = Query(0.0, ge=0.0, le=1.0),
+    match_mode: Literal["any", "all"] = Query("any"),
+    icp_tier: list[PifTierFilter] | None = Query(None),
+    entity_type: list[str] | None = Query(None),
+    staff_count_min: int | None = Query(None, ge=0),
+    staff_count_max: int | None = Query(None, ge=0),
+    staff_count_range: list[CountRange] | None = Query(None),
+    vendor: list[str] | None = Query(None),
+    sort_by: Literal["priority", "newest", "fit"] = Query("priority"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(25, ge=1, le=100),
+):
+    return await list_priority_firms(
+        search=search,
+        event_types=event_type,
+        categories=category,
+        within_days=within_days,
+        min_score=min_score,
+        min_confidence=min_confidence,
+        match_mode=match_mode,
+        icp_tiers=icp_tier,
+        entity_types=entity_type,
+        staff_count_min=staff_count_min,
+        staff_count_max=staff_count_max,
+        staff_count_ranges=staff_count_range,
+        vendors=vendor,
+        sort_by=sort_by,
+        page=page,
+        page_size=page_size,
+    )
+
+
 @router.get("/people/filter-options")
 async def get_pif_people_filter_options():
     return await list_mirrored_pif_people_filter_options()
@@ -205,6 +262,8 @@ async def get_pif_job_postings(
     trigger_tag: str | None = Query(None, max_length=64),
     technology: str | None = Query(None, max_length=128),
     gtm_relevance: str | None = Query(None, max_length=16),
+    remote_scope: Literal["remote", "global", "not_global"] | None = Query(None),
+    contract_status: Literal["contract", "non_contract", "unknown"] | None = Query(None),
     global_remote: bool | None = Query(None),
     posted_within_days: int | None = Query(None, ge=0, le=3650),
     order: str = Query("posted_desc", max_length=32),
@@ -218,6 +277,8 @@ async def get_pif_job_postings(
             trigger_tag=trigger_tag,
             technology=technology,
             gtm_relevance=gtm_relevance,
+            remote_scope=remote_scope,
+            contract_status=contract_status,
             global_remote=global_remote,
             posted_within_days=posted_within_days,
             order=order,
@@ -226,6 +287,12 @@ async def get_pif_job_postings(
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get("/career-search/status")
+async def get_career_search_status():
+    from app.services.daily_career_search import status
+    return await status()
 
 
 @router.get("/job-postings/daily-stats")
@@ -282,27 +349,29 @@ async def get_pif_firms(
     page_size: int = Query(25, ge=1, le=100),
     sort_by: str | None = Query("updated_at"),
     research_status: str | None = Query(None),
-    icp_tier: str | None = Query(None),
-    entity_type: str | None = Query(None),
+    icp_tier: list[PifTierFilter] | None = Query(None),
+    entity_type: list[str] | None = Query(None),
     recently_researched: int | None = Query(None, ge=0),
     contact_email_min: int | None = Query(None, ge=0),
     contact_email_max: int | None = Query(None, ge=0),
+    contact_email_range: list[CountRange] | None = Query(None),
     staff_count_min: int | None = Query(None, ge=0),
     staff_count_max: int | None = Query(None, ge=0),
+    staff_count_range: list[CountRange] | None = Query(None),
     autorespond_window: str | None = Query(None),
-    autorespond_type: str | None = Query(None),
+    autorespond_type: list[str] | None = Query(None),
     website_presence: str | None = Query(None),
-    research_presence: str | None = Query(None),
-    staff_presence: str | None = Query(None),
-    job_postings_presence: str | None = Query(None),
-    job_posting_role: str | None = Query(None),
-    job_posting_tag: str | None = Query(None, max_length=64),
+    research_presence: list[StatusPresenceFilter] | None = Query(None),
+    staff_presence: list[StatusPresenceFilter] | None = Query(None),
+    job_postings_presence: list[JobPostingsPresenceFilter] | None = Query(None),
+    job_posting_role: list[JobPostingRoleFilter] | None = Query(None),
+    job_posting_tag: list[str] | None = Query(None),
     job_posting_query: str | None = Query(None, max_length=255),
     job_posted_within_days: int | None = Query(None, ge=0, le=3650),
     behavior_presence: str | None = Query(None),
     icp_presence: str | None = Query(None),
     vendor_presence: str | None = Query(None),
-    vendor: str | None = Query(None, description="Exact extracted vendor key, e.g. filevine"),
+    vendor: list[str] | None = Query(None, description="Repeated extracted vendor keys, e.g. filevine"),
     manually_added: bool | None = Query(None, description="True for operator-created firms; false for sync-origin firms"),
     first_contacted_from: date | None = Query(None),
     first_contacted_to: date | None = Query(None),
@@ -314,27 +383,29 @@ async def get_pif_firms(
         page_size=page_size,
         sort_by=sort_by,
         research_status=research_status,
-        icp_tier=icp_tier,
-        entity_type=entity_type,
+        icp_tiers=icp_tier,
+        entity_types=entity_type,
         recently_researched=recently_researched,
         contact_email_min=contact_email_min,
         contact_email_max=contact_email_max,
+        contact_email_ranges=contact_email_range,
         staff_count_min=staff_count_min,
         staff_count_max=staff_count_max,
+        staff_count_ranges=staff_count_range,
         autorespond_window=autorespond_window,
-        autorespond_type=autorespond_type,
+        autorespond_types=autorespond_type,
         website_presence=website_presence,
-        research_presence=research_presence,
-        staff_presence=staff_presence,
-        job_postings_presence=job_postings_presence,
-        job_posting_role=job_posting_role,
-        job_posting_tag=job_posting_tag,
+        research_presences=research_presence,
+        staff_presences=staff_presence,
+        job_postings_presences=job_postings_presence,
+        job_posting_roles=job_posting_role,
+        job_posting_tags=job_posting_tag,
         job_posting_query=job_posting_query,
         job_posted_within_days=job_posted_within_days,
         behavior_presence=behavior_presence,
         icp_presence=icp_presence,
         vendor_presence=vendor_presence,
-        vendor=vendor,
+        vendors=vendor,
         manually_added=manually_added,
         first_contacted_from=first_contacted_from,
         first_contacted_to=first_contacted_to,
@@ -354,6 +425,14 @@ async def get_pif_firm(firm_id: str):
 async def get_pif_firm_sitemap_history(firm_id: str, limit: int = Query(20, ge=1, le=100)):
     try:
         return await list_firm_sitemap_history(firm_id, limit=limit)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.get("/firms/{firm_id}/triggers")
+async def get_pif_firm_triggers(firm_id: str, limit: int = Query(100, ge=1, le=500)):
+    try:
+        return await list_firm_trigger_events(firm_id, limit=limit)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
@@ -388,6 +467,19 @@ async def get_nightly_sync_status():
 @router.post("/research-maintenance/queue")
 async def post_research_maintenance_queue(limit: int = Query(175, ge=1, le=1000)):
     return await queue_due_firm_maintenance(limit=limit)
+
+
+@router.post("/triggers/backfill")
+async def post_trigger_baseline_backfill(limit: int = Query(500, ge=1, le=5000)):
+    return await baseline_existing_firm_research(limit=limit)
+
+
+@router.post("/triggers/revalidate")
+async def post_trigger_revalidation(
+    firm_id: str | None = Query(None, max_length=64),
+    limit: int = Query(250, ge=1, le=2000),
+):
+    return await revalidate_active_trigger_events(pif_id=firm_id, limit=limit)
 
 
 @router.post("/job-postings/classify")

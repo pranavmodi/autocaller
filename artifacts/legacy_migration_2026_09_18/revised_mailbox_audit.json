@@ -1,0 +1,95 @@
+{
+  "checked_at": "2026-09-18T08:56:43.501745+00:00",
+  "coverage": [
+    {
+      "folder": "\"INBOX\"",
+      "since": "2026-05-01",
+      "messages": 254
+    },
+    {
+      "folder": "\"Drafts\"",
+      "since": "2026-05-01",
+      "messages": 9
+    },
+    {
+      "folder": "\"Templates\"",
+      "since": "2026-05-01",
+      "messages": 0
+    },
+    {
+      "folder": "\"Snoozed\"",
+      "since": "2026-05-01",
+      "messages": 0
+    },
+    {
+      "folder": "\"Sent\"",
+      "since": "2026-05-01",
+      "messages": 565
+    },
+    {
+      "folder": "\"Spam\"",
+      "since": "2026-05-01",
+      "messages": 1
+    },
+    {
+      "folder": "\"Trash\"",
+      "since": "2026-05-01",
+      "messages": 0
+    },
+    {
+      "folder": "\"Notification\"",
+      "since": "2026-05-01",
+      "messages": 27
+    },
+    {
+      "folder": "\"Newsletter\"",
+      "since": "2026-05-01",
+      "messages": 67
+    },
+    {
+      "folder": "\"Archive\"",
+      "since": "2026-05-01",
+      "messages": 0
+    }
+  ],
+  "errors": [],
+  "matches": {
+    "brendan@delaneylawllc.com": [],
+    "imjurylaw@dunnion.com": [],
+    "efarah@farahandfarah.com": [],
+    "pf@thefinchfirm.com": [],
+    "nathan@hanningsacchetto.com": [],
+    "michael@hanningsacchetto.com": [],
+    "john@hernandezlaw.co": [],
+    "rdohan@dohanlaw.com": [],
+    "david@dohlaw.com": [],
+    "barry@hinden.net": [],
+    "yckubota@kubotacraig.com": [],
+    "ccraig@kubotacraig.com": [],
+    "josh@jcslawyers.com": [],
+    "elena@steerslawfirm.com": [],
+    "rodney@mesriani.com": [],
+    "rrex@parris.com": [],
+    "trevor@quirklawyers.com": [],
+    "robert@roberthindinlaw.com": [],
+    "rafael@rslawoffices.com": [
+      {
+        "folder": "\"Sent\"",
+        "uid": "689",
+        "from": "pranav@possiblemindshq.com",
+        "to": "rafael@rslawoffices.com",
+        "subject": "Precise Imaging and AI readiness",
+        "date": "Wed, 24 Jun 2026 22:33:40 +0530",
+        "message_id": "<19efa966494.7248bf1a244786.495699059841744297@possiblemindshq.com>",
+        "in_reply_to": "",
+        "references": "",
+        "body_excerpt": "",
+        "bounce": false
+      }
+    ],
+    "jude@redkeygordonlaw.com": [],
+    "robert@redkeygordonlaw.com": [],
+    "dchoyce@choycelawfirm.com": [],
+    "wclark@walterclark.com": []
+  }
+}

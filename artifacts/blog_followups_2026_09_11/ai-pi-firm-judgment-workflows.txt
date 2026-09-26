@@ -1,0 +1,104 @@
+A serious lead arrives after hours. The intake specialist is unsure whether the facts justify waking the attorney. A treatment gap appears in an important file. A young lawyer preparing a deposition needs to know which contradiction matters and which one is noise.
+If the owner or senior trial lawyer is available, the firm usually knows what to do. If that person is in court, taking a child to school, or simply trying to take a day off, the answer may sit in a voicemail, inbox, or someone's memory.
+That is the useful way to read Simon's prediction. The opportunity is not a digital replica of a famous lawyer dispensing answers. It is a firm that can apply more of its best operating judgment, more consistently, without requiring its best people to touch every routine step.
+When the owner is not in the room
+Most PI firms already possess valuable institutional knowledge. The problem is its form. It lives in a partner's instincts, a senior paralegal's workarounds, old deposition transcripts, model demands, recorded training calls, and unwritten rules about when a case deserves escalation.
+That creates founder dependence. The firm's quality changes with the availability of a few people. New employees learn through proximity. Departures remove context. The same facts can receive different treatment depending on who notices them.
+The first AI question for an owner is therefore diagnostic: if you disappeared for a week, where would the firm stop thinking like you? Those points are candidates for institutionalization. They are not all candidates for automation.
+Intelligence is becoming infrastructure
+Models will continue to improve, and access to capable drafting, summarization, classification, and research will spread across vendors. Having AI will become less differentiating for the same reason having email or cloud storage is not a strategy.
+The competitive gap will come from what surrounds the model: the quality of the firm's source material, the specificity of its instructions, the systems the agent can use, the tests applied to its work, and the judgment points reserved for people.
+A competing firm does not need a magical model to pull ahead. It needs to respond to good leads sooner, preserve more case knowledge, remove more administrative delay, and give lawyers more time for strategy and trust. That is an operating advantage, not a software feature.
+What your firm knows that software does not
+"Wisdom" can sound mystical. Inside a PI firm, much of it is concrete. It is knowing:
+which inquiries need a lawyer's immediate personal response;
+which facts change case acceptance, urgency, or referral strategy;
+how the firm investigates coverage, collectability, and liability;
+which treatment or documentation gaps require explanation;
+what makes a demand, deposition, or negotiation persuasive in this venue; and
+when a client needs judgment and reassurance rather than another automated message.
+Some of that knowledge can become criteria, examples, checklists, and escalation rules. Some remains tacit and must stay with experienced people. A mature AI strategy knows the difference.
+Three shifts PI owners should prepare for
+01
+The best lawyers become more valuable, not less
+Agents can prepare first drafts, monitor queues, assemble records, and surface exceptions. The lawyer's scarce contribution becomes clearer: judgment, persuasion, responsibility, and the human moment that wins confidence. Firms that use AI well can return time to those activities and to life outside the firm.
+02
+Consolidation increases the value of a specific operating edge
+Better-funded firms can buy media, software, and talent. Legal-tech vendors can copy thin AI features. Neither can instantly reproduce a firm's local reputation, referral relationships, trial experience, and tested way of handling a narrow case type. A smaller firm's advantage becomes stronger when that knowledge is explicit enough to scale.
+03
+Conversation becomes the interface
+Lawyers will increasingly describe a mission in ordinary language: prepare the status update, assemble the chronology, identify what is missing, or draft the first version. The interface may be voice. The difficult part will still be the system underneath: approved sources, permissions, workflow state, review rules, and a record of what happened.
+Build an institutional brain, not another chatbot
+Uploading a folder of documents and adding a chat box does not create firm-wide intelligence. A useful system needs three layers.
+Knowledge
+Approved policies, playbooks, training material, exemplary work product, decision criteria, and carefully selected examples. The source should be identifiable, current, and appropriate for the task.
+Workflow
+The trigger, sequence, system integrations, assignments, deadlines, and escalation paths through which knowledge becomes action. This is what separates an answer from an operating system.
+Governance
+Permissions, matter boundaries, citations, evaluations, audit logs, uncertainty thresholds, and human approval. These controls determine what the agent may see, propose, and do.
+That architecture is why we distinguish between isolated AI tools and
+AI systems that run defined workflows
+. The model is one component. The firm's operating design is the asset.
+The lawyer becomes editor-in-chief
+"Editor-in-chief" is a useful metaphor only if it does not become an excuse for superficial review. The lawyer defines the mission, standards, sources, and boundaries. The system handles approved execution. A person reviews the result in proportion to its consequence and uncertainty.
+In intake, AI can acknowledge an inquiry, collect facts, organize the transcript, and alert the right person. It should not impersonate the relationship or make the final legal judgment. A competitive serious case may need the owner's text or call precisely because the human signal is what distinguishes the firm.
+In case development, an agent can identify missing records, draft routine follow-up, and surface a discrepancy. The case manager decides what the discrepancy means. The attorney retains strategy, valuation, settlement authority, and responsibility for work sent to a client, opposing counsel, or a court.
+This is consistent with the
+State Bar of California's practical guidance on generative and agentic AI
+, which emphasizes that greater autonomy requires stronger supervision and verification, while professional judgment remains with the lawyer.
+Ownership means control and governance
+A firm does not need to own every server to own the strategic asset. It needs meaningful control over its knowledge and operating layer: the ability to export data, preserve provenance, change vendors, define permissions, set retention, prevent unauthorized training, and inspect what the system did.
+Broad data access is not a sign of sophistication. An agent connected to email, documents, calendars, and case files can create more leverage, but it also creates more ways to cross matter boundaries or disclose information. Access should be no broader or longer-lived than the workflow requires.
+The
+ABA's Formal Opinion 512
+similarly frames AI use through competence, confidentiality, communication, supervision, and review. Firms should also apply the rules and guidance of their own jurisdictions. Our practical starting point is an explicit
+AI governance and vendor-risk review
+before sensitive data or autonomous actions enter scope.
+Start with one workflow
+Do not begin by trying to reproduce the owner's entire brain. Choose one repeatable workflow where inconsistency or delay has a visible cost. Serious-lead response is often a good candidate because it combines urgency, economics, empathy, qualification, and attorney escalation.
+01
+Choose the failure
+Identify where work currently stalls, varies, or depends on one person.
+02
+Observe the best operator
+Document what that person notices, decides, records, and escalates.
+03
+Separate execution from judgment
+Mark what can be prepared automatically and what still requires a person.
+04
+Curate examples
+Use strong, weak, and ambiguous historical examples to define expected behavior.
+05
+Build the narrow system
+Connect only the data and tools required for that workflow.
+06
+Test before autonomy
+Evaluate accuracy, uncertainty, escalation, and failure handling against real scenarios.
+07
+Measure the operating result
+Track response, completion, rework, exceptions, and human time rather than demo quality.
+This is the same diagnostic logic behind our approach to
+AI-supported personal injury intake
+: make the firm faster around the human conversation, not less human at the moment trust is won.
+Protect what should remain scarce
+Your moat is not access to AI. Every firm will have access to AI.
+The moat is the judgment your firm has earned, the relationships it has built, and the operating system through which both appear consistently. Technology can make a trusted lawyer's standards more available. It cannot manufacture the trust, responsibility, or experience that gave those standards value.
+The immediate task is not to automate everything. It is to find where your firm's best judgment lives, decide which parts can guide a system, protect the underlying data, and preserve human control where the client or case needs it.
+If you stepped away for a week, which parts of the firm would stop thinking like you?
+Start there.
+Common questions
+AI agents, firm knowledge, and control
+What is a firm-owned AI system for a personal injury firm?
+A firm-owned AI system applies the firm's approved knowledge, workflow rules, and review standards to a defined task while the firm retains control over its data, permissions, outputs, and ability to change vendors.
+What law firm knowledge should be available to an AI agent?
+Start with approved policies, playbooks, training material, exemplary work product, decision criteria, and de-identified examples relevant to one workflow. Do not provide broad access to client files merely because the technology can ingest them.
+Can an AI agent make legal decisions for a PI firm?
+AI can organize facts, prepare drafts, monitor routine work, and flag issues. Lawyers should retain legal advice, strategy, case acceptance, valuation, settlement authority, court filings, and other consequential professional judgments.
+Where should a PI firm begin building an AI workflow?
+Choose one repeatable workflow where delay or inconsistency has a visible cost, such as serious-lead escalation, records follow-up, or routine client updates. Map the current process before introducing automation.
+How should a PI firm protect client data when using agentic AI?
+Limit access to the minimum necessary data, verify how vendors collect and retain information, isolate matters appropriately, require human review for external actions, maintain audit logs, and reassess controls as the system changes.
+Find the first workflow
+Map where your firm's judgment is trapped
+Possible Minds helps PI firms identify one consequential workflow, separate execution from judgment, and build a governed system around the work that is ready. The first conversation is a diagnosis, not a demo.
+Request an institutional intelligence audit

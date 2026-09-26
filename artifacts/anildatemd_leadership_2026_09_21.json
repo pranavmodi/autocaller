@@ -1,0 +1,394 @@
+{
+  "firm_name": "Anil Date MD",
+  "leadership": [
+    {
+      "bio": null,
+      "name": "Renee",
+      "email": "renee@anildatemd.com",
+      "phone": "",
+      "title": "Marketing Director, Client Care Liaison, Business Development Inquiries",
+      "persona": null,
+      "linkedin": null,
+      "freshness": {
+        "source": "extraction",
+        "last_seen_at": null
+      },
+      "person_id": "5d718494-5e7b-5ba1-8da0-c0578170046b",
+      "confidence": 0.7,
+      "publications": [],
+      "cases_handled": [],
+      "bar_admissions": [],
+      "is_decision_maker": true,
+      "research_checked_at": "2026-09-21T11:33:02.595Z",
+      "source_urls": [
+        "https://anildatemd.com/",
+        "https://anildatemd.com/about-us",
+        "https://anildatemd.com/contact-us",
+        "https://www.linkedin.com/in/anil-date-a880541b"
+      ],
+      "role_verification": "Official contact page lists Renee for nights/weekends",
+      "email_verification": "Official contact page"
+    },
+    {
+      "bio": "An internist raised in Santa Clarita Valley, Anil Ravi Date, MD completed medical school at Ross University School of Medicine (graduated June 2007), followed by residency in Internal Medicine at Flushing Hospital, Queens, NY, and fellowship in Geriatric Medicine. He practiced one year as a hospitalist in Arizona before returning to Southern California, practicing inpatient and outpatient medicine at Antelope Valley Hospital for over three years. He now provides comprehensive internal and geriatric medicine at SCV Medical Group, serving a broad spectrum of illnesses.",
+      "name": "Anil Ravi Date, MD",
+      "email": "anildate25@gmail.com",
+      "phone": "(818) 220‑5209",
+      "title": "Internal Medicine Physician, SCV Medical Group (Date)",
+      "persona": null,
+      "linkedin": "https://www.linkedin.com/in/anil-date-a880541b6",
+      "freshness": {
+        "source": "research",
+        "last_seen_at": null
+      },
+      "person_id": "258edbd1-bced-5f74-b94e-a9a35f0f4432",
+      "confidence": 0.85,
+      "publications": [],
+      "cases_handled": [],
+      "bar_admissions": [],
+      "is_decision_maker": true,
+      "research_checked_at": "2026-09-21T11:33:02.595Z",
+      "source_urls": [
+        "https://anildatemd.com/",
+        "https://anildatemd.com/about-us",
+        "https://anildatemd.com/contact-us",
+        "https://www.linkedin.com/in/anil-date-a880541b"
+      ],
+      "role_verification": "Official site identifies Dr. Anil Date as board-certified internal medicine and primary-care physician",
+      "linkedin_verification": "Personal profile matches DR ANIL DATE MD",
+      "business_email_status": "Existing Possible OS roster email; not published on official contact page",
+      "founder_status": "not_verified"
+    },
+    {
+      "bio": "Internal medicine physician serving the San Fernando and Santa Clarita Valleys. Trained at Universidad Autónoma de Guadalajara; residency at LA County + USC; bilingual in English, Spanish and Farsi. Focus areas include adult primary care, diabetes, hypertension, lipid disorders, GI issues, weight management. Affiliated with Providence Holy Cross Medical Center and Henry Mayo Newhall Memorial Hospital; operates clinics in Canyon Country and Sylmar under the SCV Medical Group umbrella.",
+      "name": "Amir Parvinchi, MD",
+      "email": "scvmedicalgroup@gmail.com",
+      "phone": "(818) 362‑1758",
+      "title": "Internal Medicine Physician; Partner, SCV Medical Group branding (Amir Parvinchi MD Inc)",
+      "persona": null,
+      "linkedin": "https://www.linkedin.com/in/amir-pouya-parvinchi-2a2a4759",
+      "freshness": {
+        "source": "research",
+        "last_seen_at": null
+      },
+      "person_id": "26982762-893d-51dc-8c56-99138140738a",
+      "confidence": 0.85,
+      "publications": [],
+      "cases_handled": [],
+      "bar_admissions": [],
+      "is_decision_maker": true,
+      "research_checked_at": "2026-09-21T11:33:02.595Z",
+      "source_urls": [
+        "https://anildatemd.com/",
+        "https://anildatemd.com/about-us",
+        "https://anildatemd.com/contact-us",
+        "https://www.linkedin.com/in/anil-date-a880541b"
+      ]
+    },
+    {
+      "bio": "Physician providing internal medicine, primary care, urgent care, telemedicine, and personal-injury medical services.",
+      "name": "Anil Ravi Date, MD",
+      "email": "referrals@anildatemd.com",
+      "phone": "+13109060256",
+      "title": "Physician; Board-Certified Internal Medicine and Primary Care Physician",
+      "skills": [
+        "Internal medicine",
+        "Primary care",
+        "Urgent care",
+        "Telemedicine",
+        "Geriatric medicine"
+      ],
+      "linkedin": "https://www.linkedin.com/in/anil-date-a880541b",
+      "education": [
+        "Ross University School of Medicine, Class of 2007",
+        "Internal Medicine Residency, Flushing Hospital Medical Center, 2008-2011",
+        "Geriatric Medicine Fellowship, Flushing Hospital Medical Center, 2011-2012"
+      ],
+      "confidence": 0.8,
+      "source_url": "https://anildatemd.com/about-us",
+      "certifications": [
+        "American Board of Internal Medicine certification in Internal Medicine"
+      ],
+      "research_checked_at": "2026-09-21T11:33:02.595Z",
+      "source_urls": [
+        "https://anildatemd.com/",
+        "https://anildatemd.com/about-us",
+        "https://anildatemd.com/contact-us",
+        "https://www.linkedin.com/in/anil-date-a880541b"
+      ],
+      "role_verification": "Official site identifies Dr. Anil Date as board-certified internal medicine and primary-care physician",
+      "linkedin_verification": "Personal profile matches DR ANIL DATE MD",
+      "business_email_status": "Official referrals mailbox published on contact page",
+      "founder_status": "not_verified"
+    }
+  ],
+  "emails": [
+    "info@anildatemd.com",
+    "assistant@anildatemd.com",
+    "billingteam@anildatemd.com",
+    "renee@anildatemd.com",
+    "referrals@anildatemd.com",
+    "dr.anil@anildatemd.com",
+    "collections@anildatemd.com",
+    "admin@anildatemd.com",
+    "preops@anildatemd.com",
+    "billing@anildatemd.com",
+    "anildate25@gmail.com",
+    "scvmedicalgroup@gmail.com",
+    "emely@aa.law",
+    "ashley@lacitylaw.com",
+    "gabriela@lacitylaw.com",
+    "sally@jtlegalgroup.com",
+    "lorena.q@precisemri.com"
+  ],
+  "phones": [
+    "(661) 227-1039",
+    "(619) 400-3329",
+    "(310) 906-0256",
+    "(661) 627-1039",
+    "310-906-0256",
+    "661-627-1039",
+    "(818) 220‑5209",
+    "(818) 362‑1758",
+    "+13109060256",
+    "4242049914"
+  ],
+  "contact_profiles": {
+    "emely@aa.law": {
+      "name": "emely",
+      "email": "emely@aa.law",
+      "sources": [
+        "web_staff"
+      ],
+      "updated_at": "2026-08-28T08:54:06.754775+00:00",
+      "communications": {
+        "inbound_count": 0,
+        "outbound_count": 0,
+        "last_inbound_at": null,
+        "last_outbound_at": null
+      }
+    },
+    "name:carlos santos": {
+      "name": "Carlos Santos",
+      "email": null,
+      "phone": "(310) 906-0256",
+      "title": "Medical Assistant",
+      "sources": [
+        "extracted_contact",
+        "web_staff"
+      ],
+      "updated_at": "2026-08-28T08:54:06.754775+00:00"
+    },
+    "name:daniela irias": {
+      "name": "Daniela Irias",
+      "email": null,
+      "phone": "(310) 906-0256",
+      "title": "Team Lead",
+      "sources": [
+        "extracted_contact",
+        "web_staff"
+      ],
+      "updated_at": "2026-08-28T08:54:06.754775+00:00"
+    },
+    "info@anildatemd.com": {
+      "name": "Rebecca Irias",
+      "email": "info@anildatemd.com",
+      "phone": "(619) 400-3329",
+      "title": "Assistant",
+      "sources": [
+        "extracted_contact",
+        "web_staff"
+      ],
+      "updated_at": "2026-08-28T08:54:06.754775+00:00",
+      "communications": {
+        "inbound_count": 0,
+        "outbound_count": 0,
+        "last_inbound_at": null,
+        "last_outbound_at": null
+      }
+    },
+    "anildate25@gmail.com": {
+      "name": "Anil Ravi Date, MD",
+      "email": "anildate25@gmail.com",
+      "phone": "(818) 220‑5209",
+      "title": "Internal Medicine Physician, SCV Medical Group (Date)",
+      "sources": [
+        "web_leadership"
+      ],
+      "linkedin": "https://www.linkedin.com/in/anil-date-a880541b6",
+      "updated_at": "2026-08-28T08:54:06.754775+00:00",
+      "communications": {
+        "inbound_count": 0,
+        "outbound_count": 0,
+        "last_inbound_at": null,
+        "last_outbound_at": null
+      }
+    },
+    "ashley@lacitylaw.com": {
+      "name": "ashley",
+      "email": "ashley@lacitylaw.com",
+      "sources": [
+        "web_staff"
+      ],
+      "updated_at": "2026-08-28T08:54:06.754775+00:00",
+      "communications": {
+        "inbound_count": 0,
+        "outbound_count": 0,
+        "last_inbound_at": null,
+        "last_outbound_at": null
+      }
+    },
+    "renee@anildatemd.com": {
+      "name": "Renee",
+      "email": "renee@anildatemd.com",
+      "title": "Marketing Director, Client Care Liaison, Business Development Inquiries",
+      "sources": [
+        "extracted_contact",
+        "web_leadership"
+      ],
+      "updated_at": "2026-08-28T08:54:06.754775+00:00",
+      "communications": {
+        "inbound_count": 0,
+        "outbound_count": 0,
+        "last_inbound_at": null,
+        "last_outbound_at": null
+      },
+      "verified_at": "2026-09-21T11:33:02.595Z",
+      "official_mailbox": "nights_and_weekends",
+      "source_urls": [
+        "https://anildatemd.com/contact-us"
+      ],
+      "email_note": "Published by official practice contact page"
+    },
+    "gabriela@lacitylaw.com": {
+      "name": "gabriela",
+      "email": "gabriela@lacitylaw.com",
+      "phone": "4242049914",
+      "title": "Attorney at Law",
+      "sources": [
+        "web_staff"
+      ],
+      "updated_at": "2026-08-28T08:54:06.754775+00:00",
+      "communications": {
+        "inbound_count": 0,
+        "outbound_count": 0,
+        "last_inbound_at": null,
+        "last_outbound_at": null
+      }
+    },
+    "sally@jtlegalgroup.com": {
+      "name": "sally",
+      "email": "sally@jtlegalgroup.com",
+      "sources": [
+        "web_staff"
+      ],
+      "updated_at": "2026-08-28T08:54:06.754775+00:00",
+      "communications": {
+        "inbound_count": 0,
+        "outbound_count": 0,
+        "last_inbound_at": null,
+        "last_outbound_at": null
+      }
+    },
+    "lorena.q@precisemri.com": {
+      "name": "lorena.q",
+      "email": "lorena.q@precisemri.com",
+      "sources": [
+        "web_staff"
+      ],
+      "updated_at": "2026-08-28T08:54:06.754775+00:00",
+      "communications": {
+        "inbound_count": 0,
+        "outbound_count": 0,
+        "last_inbound_at": null,
+        "last_outbound_at": null
+      }
+    },
+    "assistant@anildatemd.com": {
+      "name": "Jennifer Villasante",
+      "email": "assistant@anildatemd.com",
+      "phone": "(661) 227-1039",
+      "title": "Assistant",
+      "sources": [
+        "extracted_contact",
+        "web_staff"
+      ],
+      "updated_at": "2026-08-28T08:54:06.754775+00:00",
+      "communications": {
+        "inbound_count": 0,
+        "outbound_count": 0,
+        "last_inbound_at": null,
+        "last_outbound_at": null
+      }
+    },
+    "referrals@anildatemd.com": {
+      "name": "Daniela Irias",
+      "email": "referrals@anildatemd.com",
+      "phone": "(310) 906-0256",
+      "title": "Medical Assistant",
+      "sources": [
+        "extracted_contact",
+        "web_leadership",
+        "web_staff"
+      ],
+      "linkedin": "https://www.linkedin.com/in/anil-date-a880541b",
+      "source_url": "https://anildatemd.com/about-us",
+      "updated_at": "2026-08-28T08:54:06.754775+00:00",
+      "communications": {
+        "inbound_count": 0,
+        "outbound_count": 0,
+        "last_inbound_at": null,
+        "last_outbound_at": null
+      },
+      "verified_at": "2026-09-21T11:33:02.595Z",
+      "official_mailbox": "referrals",
+      "source_urls": [
+        "https://anildatemd.com/contact-us"
+      ],
+      "email_note": "Published by official practice contact page; use as referrals/business-development route, not assume personal mailbox"
+    },
+    "scvmedicalgroup@gmail.com": {
+      "name": "Amir Parvinchi, MD",
+      "email": "scvmedicalgroup@gmail.com",
+      "phone": "(818) 362‑1758",
+      "title": "Internal Medicine Physician; Partner, SCV Medical Group branding (Amir Parvinchi MD Inc)",
+      "sources": [
+        "web_leadership"
+      ],
+      "linkedin": "https://www.linkedin.com/in/amir-pouya-parvinchi-2a2a4759",
+      "updated_at": "2026-08-28T08:54:06.754775+00:00",
+      "communications": {
+        "inbound_count": 0,
+        "outbound_count": 0,
+        "last_inbound_at": null,
+        "last_outbound_at": null
+      }
+    },
+    "billingteam@anildatemd.com": {
+      "name": "Andrea Ulffe",
+      "email": "billingteam@anildatemd.com",
+      "phone": "(661) 227-1039",
+      "title": "Billing Team",
+      "sources": [
+        "extracted_contact",
+        "web_staff"
+      ],
+      "updated_at": "2026-08-28T08:54:06.754775+00:00",
+      "communications": {
+        "inbound_count": 0,
+        "outbound_count": 0,
+        "last_inbound_at": null,
+        "last_outbound_at": null
+      }
+    },
+    "name:anil ravi date, md": {
+      "verified_at": "2026-09-21T11:33:02.595Z",
+      "source_urls": [
+        "https://anildatemd.com/about-us",
+        "https://www.linkedin.com/in/anil-date-a880541b"
+      ],
+      "role_verification": "Official site identifies Anil Date as board-certified internal medicine and primary-care physician",
+      "linkedin_verification": "Personal profile matches DR ANIL DATE MD"
+    }
+  }
+}

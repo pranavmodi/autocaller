@@ -65,6 +65,14 @@ A reasonable heuristic: if someone three months from now had only the CLI and `d
 
 ## Other standing rules
 
+- **Deploy verified fixes.** The user expects issue fixes to be deployed to
+  production and checked live, not left at a local preview. For directly
+  user-authorized fixes, carry through the applicable deployment after tests
+  and safety checks, preserve unrelated WIP and a rollback artifact, and report
+  live verification. Do not restart during active calls. Explicit delegated
+  packets that reserve deployment for a parent still require that handoff;
+  state any genuine deployment blocker instead of claiming the fix is live.
+
 - **EmailTag web search is disabled.** Do not build or retain Possible OS
   functionality that depends on EmailTag executing web searches or web
   research. Any such workflow must run locally in Possible OS, normally through
@@ -99,6 +107,9 @@ A reasonable heuristic: if someone three months from now had only the CLI and `d
   so these calls execute on the Possible OS server. Before changing an older
   single-shot JSON workflow that still defaults to `openclaw/proxy`, verify its
   live model and migrate it deliberately; do not assume the stale default works.
+  The shared structured client uses native WebSocket RPC with explicit
+  `possibleos-interactive` and `possibleos-batch` lanes; do not send new work
+  through `/v1/chat/completions` or infer lanes from agent IDs.
   Direct-OpenAI calls do not use this gateway and are unaffected.
 - **Design agent context for prompt-cache reuse.** For recurring or multi-step
   LLM workflows, put stable instructions, tool definitions, schemas, and shared
@@ -114,7 +125,18 @@ A reasonable heuristic: if someone three months from now had only the CLI and `d
 - **Keep safety rails explicit.** `ALLOW_TWILIO_CALLS`, `allow_live_calls`, `allowed_phones`, `mock_mode`, `system_enabled` — every new risk vector needs a gate of comparable clarity.
 - **Never auto-start the dispatcher on daemon boot.** Restarts must not trigger outbound calls. Explicit operator action only.
 - **Prompt change protocol.** Every prompt change must: (1) bump `PROMPT_VERSION` in `app/prompts/attorney_cold_call.py`, (2) `git commit` with a descriptive message, (3) `git push`, (4) restart the backend. No prompt change ships without all four steps. This ensures every live call's `prompt_version` traces to a committed, pushed revision.
-- **LLM-first for information extraction.** Prefer structured-output LLM calls over regex for classifying titles, states, phones, dispositions, etc. Regex is acceptable only for fast pre-filters (e.g., the IVR-phrase detector in `transfer_service.py`).
+- **Semantic decisions require semantic models.** Do not use regexes, token
+  overlap, substring checks, edit distance, or other string-matching heuristics
+  for semantic identity, equivalence, classification, relevance, or change
+  detection unless the representation and invariants make the result guaranteed
+  correct. Use TypeSafe Jev for narrow typed judgments over supplied state; use a
+  structured-output LLM for evidence synthesis, research, varied-document
+  extraction, or generation. Preserve the model, evidence, probabilities or
+  confidence, and threshold; route uncertainty to review. Deterministic code is
+  still required for mechanical facts and safety boundaries such as normalized
+  identifiers, protocol constants, hashes, schema checks, exact allowlists, and
+  delimiters. Regex/string checks may be performance prefilters, but must not make
+  the final semantic accept/reject decision.
 - **Judge every completed call.** `app/services/judge.py` runs a background loop; new outcome types need to be added to its rubric.
 - **Record the rendered prompt on every call log** (`prompt_text` + `prompt_version` + `tools_snapshot`). Post-hoc debugging depends on this.
 - **Commit discipline**: descriptive commit message, Co-Authored-By Claude on every commit.

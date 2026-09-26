@@ -25,6 +25,71 @@ def test_local_research_due_accepts_legacy_naive_timestamp():
     ) is True
 
 
+def test_claim_canonical_domain_creates_domain_alias():
+    now = datetime(2026, 9, 9, tzinfo=timezone.utc)
+    firm = PifFirmRow(id="firm-1", firm_name="Victory Law")
+    aliases = {}
+
+    class Result:
+        def scalar_one_or_none(self):
+            return None
+
+    class Session:
+        async def execute(self, _stmt):
+            return Result()
+
+        async def get(self, model, key, **kwargs):
+            assert model is FirmAliasRow
+            return aliases.get((key["alias_type"], key["alias_value"]))
+
+        def add(self, row):
+            aliases[(row.alias_type, row.alias_value)] = row
+
+    claimed = asyncio.run(service._claim_canonical_domain(
+        Session(), firm, "victorylawinjury.com", now,
+    ))
+
+    assert claimed is True
+    assert firm.canonical_website == "victorylawinjury.com"
+    assert firm.website == "victorylawinjury.com"
+    assert aliases[("domain", "victorylawinjury.com")].firm_id == firm.id
+
+
+def test_claim_canonical_domain_reuses_alias_owned_by_firm():
+    old_synced_at = datetime(2026, 8, 1, tzinfo=timezone.utc)
+    now = datetime(2026, 9, 9, tzinfo=timezone.utc)
+    firm = PifFirmRow(id="firm-1", firm_name="Victory Law")
+    alias = FirmAliasRow(
+        alias_type="domain",
+        alias_value="victorylawinjury.com",
+        firm_id=firm.id,
+        synced_at=old_synced_at,
+    )
+
+    class Result:
+        def scalar_one_or_none(self):
+            return None
+
+    class Session:
+        async def execute(self, _stmt):
+            return Result()
+
+        async def get(self, model, key, **kwargs):
+            assert model is FirmAliasRow
+            return alias
+
+        def add(self, _row):
+            raise AssertionError("Existing aliases should be reused")
+
+    claimed = asyncio.run(service._claim_canonical_domain(
+        Session(), firm, "victorylawinjury.com", now,
+    ))
+
+    assert claimed is True
+    assert alias.firm_id == firm.id
+    assert alias.synced_at == now
+
+
 def test_attach_extraction_to_recent_canonical_firm_preserves_research(monkeypatch):
     now = datetime(2026, 8, 31, tzinfo=timezone.utc)
     canonical = PifFirmRow(
@@ -56,7 +121,7 @@ def test_attach_extraction_to_recent_canonical_firm_preserves_research(monkeypat
     aliases = {}
 
     class Session:
-        async def get(self, model, key):
+        async def get(self, model, key, **kwargs):
             assert model is FirmAliasRow
             return aliases.get((key["alias_type"], key["alias_value"]))
 
@@ -136,7 +201,7 @@ def test_persist_reconciles_domain_owner_without_review_conflict(monkeypatch):
         async def execute(self, _stmt):
             return Result()
 
-        async def get(self, model, key):
+        async def get(self, model, key, **kwargs):
             if model is PifEnrichmentTaskRow:
                 return task
             if model is PifFirmRow:
@@ -208,14 +273,17 @@ def test_raw_extraction_preserves_local_derived_fields_and_marks_dirty():
 
 def test_local_gateway_receives_identity_hints_not_extraction_notes(monkeypatch):
     captured = {}
+    calls = []
 
     async def fake_call_skill_json(**kwargs):
+        calls.append(kwargs)
         captured.update(kwargs)
         return SimpleNamespace(parsed={
             "canonical_website": "examplelaw.com",
             "website_confidence": 0.9,
             "website_sources": ["https://examplelaw.com"],
             "summary": "PI firm",
+            "ai_adoption": {"adoption_stage": "unknown", "statements": []},
             "practice_areas": ["Personal injury"],
             "founded_year": None,
             "firm_size": "15-50",
@@ -249,6 +317,10 @@ def test_local_gateway_receives_identity_hints_not_extraction_notes(monkeypatch)
     assert "extraction_notes" not in captured["payload"]
     assert "conversation_ids" not in captured["payload"]
     assert result["canonical_website"] == "examplelaw.com"
+    assert len(calls) == 1
+    assert "ai_adoption" in captured["required_fields"]
+    assert captured["payload"]["as_of_date"]
+    assert result["ai_adoption"]["adoption_stage"] == "unknown"
 
 
 def test_normalize_enrichment_rejects_unsourced_people_and_consumer_domain():
@@ -334,7 +406,7 @@ def test_full_pipeline_reports_every_stage_before_finalizing(monkeypatch):
         async def __aexit__(self, *args):
             return None
 
-        async def get(self, model, key):
+        async def get(self, model, key, **kwargs):
             return firm
 
     async def fake_set_stage(task_id, key, status, **kwargs):

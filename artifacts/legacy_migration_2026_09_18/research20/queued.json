@@ -1,0 +1,1455 @@
+{
+  "queued_at": "2026-09-18T09:49:16.310Z",
+  "count": 20,
+  "firm_research_includes": [
+    "canonical domain",
+    "PI practice identity",
+    "founders and leadership",
+    "public direct email evidence",
+    "staff",
+    "case-management and other vendor signals",
+    "AI adoption evidence"
+  ],
+  "firms": [
+    {
+      "id": "84aa7a3d-f41a-4ae6-87dc-18994b885d42",
+      "firm_name": "Hartounian APLC",
+      "website": "hartounian.com",
+      "icp_score": null,
+      "warm_score": null,
+      "research_status": null,
+      "last_researched_at": null,
+      "contacts": 2,
+      "leaders": 0,
+      "first_contacted_precise_at": "2026-06-29T23:08:15.890851+00:00",
+      "queue_receipt": {
+        "task_id": "firm-enrichment-3da4acb21fcc4193b20150ee24456bb4",
+        "pif_id": "84aa7a3d-f41a-4ae6-87dc-18994b885d42",
+        "firm_name": "Hartounian APLC",
+        "status": "queued",
+        "message": "Waiting for a local enrichment worker",
+        "current_stage": null,
+        "progress_percent": 0,
+        "stages": [
+          {
+            "key": "web_research",
+            "label": "Firm, website, people, and vendors",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "persist_research",
+            "label": "Save researched facts",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "sitemap",
+            "label": "Sitemap changes",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "behavior",
+            "label": "Relationship behavior",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "contact_intelligence",
+            "label": "Leadership communication and contact profiles",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "contacts",
+            "label": "Contact directory",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "job_postings",
+            "label": "Recent job postings",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "score",
+            "label": "ICP score",
+            "status": "pending",
+            "message": null
+          }
+        ],
+        "warning_count": 0
+      }
+    },
+    {
+      "id": "cc7e1c56-8fc0-4361-b453-26a79da11a4d",
+      "firm_name": "Garen Gevorgyan, Esq.",
+      "website": "garenlaw.com",
+      "icp_score": null,
+      "warm_score": null,
+      "research_status": null,
+      "last_researched_at": null,
+      "contacts": 2,
+      "leaders": 0,
+      "first_contacted_precise_at": "2026-06-19T22:59:32.480505+00:00",
+      "queue_receipt": {
+        "task_id": "firm-enrichment-dce38eb45b924ac2b84b1881cf6f1839",
+        "pif_id": "cc7e1c56-8fc0-4361-b453-26a79da11a4d",
+        "firm_name": "Garen Gevorgyan, Esq.",
+        "status": "queued",
+        "message": "Waiting for a local enrichment worker",
+        "current_stage": null,
+        "progress_percent": 0,
+        "stages": [
+          {
+            "key": "web_research",
+            "label": "Firm, website, people, and vendors",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "persist_research",
+            "label": "Save researched facts",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "sitemap",
+            "label": "Sitemap changes",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "behavior",
+            "label": "Relationship behavior",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "contact_intelligence",
+            "label": "Leadership communication and contact profiles",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "contacts",
+            "label": "Contact directory",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "job_postings",
+            "label": "Recent job postings",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "score",
+            "label": "ICP score",
+            "status": "pending",
+            "message": null
+          }
+        ],
+        "warning_count": 0
+      }
+    },
+    {
+      "id": "c8b1f3f7-1daa-4f3f-b5cc-1546ce90e99c",
+      "firm_name": "Dixon Law APC",
+      "website": "dixonlawapc.com",
+      "icp_score": null,
+      "warm_score": null,
+      "research_status": null,
+      "last_researched_at": null,
+      "contacts": 2,
+      "leaders": 1,
+      "first_contacted_precise_at": "2026-06-19T21:35:41.398973+00:00",
+      "queue_receipt": {
+        "task_id": "firm-enrichment-a32da58c22bc4848963777e7fe977cbb",
+        "pif_id": "c8b1f3f7-1daa-4f3f-b5cc-1546ce90e99c",
+        "firm_name": "Dixon Law APC",
+        "status": "queued",
+        "message": "Waiting for a local enrichment worker",
+        "current_stage": null,
+        "progress_percent": 0,
+        "stages": [
+          {
+            "key": "web_research",
+            "label": "Firm, website, people, and vendors",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "persist_research",
+            "label": "Save researched facts",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "sitemap",
+            "label": "Sitemap changes",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "behavior",
+            "label": "Relationship behavior",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "contact_intelligence",
+            "label": "Leadership communication and contact profiles",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "contacts",
+            "label": "Contact directory",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "job_postings",
+            "label": "Recent job postings",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "score",
+            "label": "ICP score",
+            "status": "pending",
+            "message": null
+          }
+        ],
+        "warning_count": 0
+      }
+    },
+    {
+      "id": "d7c604d4-5965-4eb5-b878-702424d7341f",
+      "firm_name": "Hannegan & Tafreshi Injury Law, PC",
+      "website": "htinjurylaw.com",
+      "icp_score": null,
+      "warm_score": null,
+      "research_status": null,
+      "last_researched_at": null,
+      "contacts": 1,
+      "leaders": 0,
+      "first_contacted_precise_at": "2026-06-18T22:30:23.890537+00:00",
+      "queue_receipt": {
+        "task_id": "firm-enrichment-3c59860879074073adc0e45e9ba5dfb0",
+        "pif_id": "d7c604d4-5965-4eb5-b878-702424d7341f",
+        "firm_name": "Hannegan & Tafreshi Injury Law, PC",
+        "status": "queued",
+        "message": "Waiting for a local enrichment worker",
+        "current_stage": null,
+        "progress_percent": 0,
+        "stages": [
+          {
+            "key": "web_research",
+            "label": "Firm, website, people, and vendors",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "persist_research",
+            "label": "Save researched facts",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "sitemap",
+            "label": "Sitemap changes",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "behavior",
+            "label": "Relationship behavior",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "contact_intelligence",
+            "label": "Leadership communication and contact profiles",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "contacts",
+            "label": "Contact directory",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "job_postings",
+            "label": "Recent job postings",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "score",
+            "label": "ICP score",
+            "status": "pending",
+            "message": null
+          }
+        ],
+        "warning_count": 0
+      }
+    },
+    {
+      "id": "bf52e0d7-190c-4cda-97bd-0a8486ef3a7d",
+      "firm_name": "Conrad Legal Office",
+      "website": "conradlegaloffice.com",
+      "icp_score": null,
+      "warm_score": null,
+      "research_status": null,
+      "last_researched_at": null,
+      "contacts": 1,
+      "leaders": 0,
+      "first_contacted_precise_at": "2026-06-17T21:13:33.796169+00:00",
+      "queue_receipt": {
+        "task_id": "firm-enrichment-bdb39758a99f4f41abad483eb524e339",
+        "pif_id": "bf52e0d7-190c-4cda-97bd-0a8486ef3a7d",
+        "firm_name": "Conrad Legal Office",
+        "status": "queued",
+        "message": "Waiting for a local enrichment worker",
+        "current_stage": null,
+        "progress_percent": 0,
+        "stages": [
+          {
+            "key": "web_research",
+            "label": "Firm, website, people, and vendors",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "persist_research",
+            "label": "Save researched facts",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "sitemap",
+            "label": "Sitemap changes",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "behavior",
+            "label": "Relationship behavior",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "contact_intelligence",
+            "label": "Leadership communication and contact profiles",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "contacts",
+            "label": "Contact directory",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "job_postings",
+            "label": "Recent job postings",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "score",
+            "label": "ICP score",
+            "status": "pending",
+            "message": null
+          }
+        ],
+        "warning_count": 0
+      }
+    },
+    {
+      "id": "a404b7b6-4704-4385-b922-777afb877ec5",
+      "firm_name": "United Attorney Group",
+      "website": "unitedattorneygroup.com",
+      "icp_score": null,
+      "warm_score": null,
+      "research_status": null,
+      "last_researched_at": null,
+      "contacts": 4,
+      "leaders": 0,
+      "first_contacted_precise_at": "2026-06-17T19:17:28.374783+00:00",
+      "queue_receipt": {
+        "task_id": "firm-enrichment-257810acbc21493a9bc5b94900a5d784",
+        "pif_id": "a404b7b6-4704-4385-b922-777afb877ec5",
+        "firm_name": "United Attorney Group",
+        "status": "queued",
+        "message": "Waiting for a local enrichment worker",
+        "current_stage": null,
+        "progress_percent": 0,
+        "stages": [
+          {
+            "key": "web_research",
+            "label": "Firm, website, people, and vendors",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "persist_research",
+            "label": "Save researched facts",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "sitemap",
+            "label": "Sitemap changes",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "behavior",
+            "label": "Relationship behavior",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "contact_intelligence",
+            "label": "Leadership communication and contact profiles",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "contacts",
+            "label": "Contact directory",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "job_postings",
+            "label": "Recent job postings",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "score",
+            "label": "ICP score",
+            "status": "pending",
+            "message": null
+          }
+        ],
+        "warning_count": 0
+      }
+    },
+    {
+      "id": "c3cd8104-b9d5-4634-b34d-c7cb58c130ca",
+      "firm_name": "L&F Brown",
+      "website": "lfbrown.law",
+      "icp_score": null,
+      "warm_score": null,
+      "research_status": null,
+      "last_researched_at": null,
+      "contacts": 1,
+      "leaders": 0,
+      "first_contacted_precise_at": "2026-06-15T20:44:38.04824+00:00",
+      "queue_receipt": {
+        "task_id": "firm-enrichment-4037f71f6e4d4ce7b2dc16ce96d1b974",
+        "pif_id": "c3cd8104-b9d5-4634-b34d-c7cb58c130ca",
+        "firm_name": "L&F Brown",
+        "status": "queued",
+        "message": "Waiting for a local enrichment worker",
+        "current_stage": null,
+        "progress_percent": 0,
+        "stages": [
+          {
+            "key": "web_research",
+            "label": "Firm, website, people, and vendors",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "persist_research",
+            "label": "Save researched facts",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "sitemap",
+            "label": "Sitemap changes",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "behavior",
+            "label": "Relationship behavior",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "contact_intelligence",
+            "label": "Leadership communication and contact profiles",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "contacts",
+            "label": "Contact directory",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "job_postings",
+            "label": "Recent job postings",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "score",
+            "label": "ICP score",
+            "status": "pending",
+            "message": null
+          }
+        ],
+        "warning_count": 0
+      }
+    },
+    {
+      "id": "cc78b290-a24a-4968-ae06-874119aa530a",
+      "firm_name": "Law Offices of Richard Weiss",
+      "website": "richardweisslaw.com",
+      "icp_score": null,
+      "warm_score": null,
+      "research_status": null,
+      "last_researched_at": null,
+      "contacts": 2,
+      "leaders": 0,
+      "first_contacted_precise_at": "2026-06-12T17:17:09.378384+00:00",
+      "queue_receipt": {
+        "task_id": "firm-enrichment-2cb0c24993f74f878443b5099e7b319a",
+        "pif_id": "cc78b290-a24a-4968-ae06-874119aa530a",
+        "firm_name": "Law Offices of Richard Weiss",
+        "status": "queued",
+        "message": "Waiting for a local enrichment worker",
+        "current_stage": null,
+        "progress_percent": 0,
+        "stages": [
+          {
+            "key": "web_research",
+            "label": "Firm, website, people, and vendors",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "persist_research",
+            "label": "Save researched facts",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "sitemap",
+            "label": "Sitemap changes",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "behavior",
+            "label": "Relationship behavior",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "contact_intelligence",
+            "label": "Leadership communication and contact profiles",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "contacts",
+            "label": "Contact directory",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "job_postings",
+            "label": "Recent job postings",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "score",
+            "label": "ICP score",
+            "status": "pending",
+            "message": null
+          }
+        ],
+        "warning_count": 0
+      }
+    },
+    {
+      "id": "d359cdbd-0043-490c-a9da-10c6df2d431d",
+      "firm_name": "The Sentinel Firm, APC",
+      "website": "thesentinelfirm.com",
+      "icp_score": null,
+      "warm_score": null,
+      "research_status": null,
+      "last_researched_at": null,
+      "contacts": 1,
+      "leaders": 0,
+      "first_contacted_precise_at": "2026-06-10T22:38:08.570807+00:00",
+      "queue_receipt": {
+        "task_id": "firm-enrichment-ea93016ba07d4cb9a1bea563b3c651cc",
+        "pif_id": "d359cdbd-0043-490c-a9da-10c6df2d431d",
+        "firm_name": "The Sentinel Firm, APC",
+        "status": "queued",
+        "message": "Waiting for a local enrichment worker",
+        "current_stage": null,
+        "progress_percent": 0,
+        "stages": [
+          {
+            "key": "web_research",
+            "label": "Firm, website, people, and vendors",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "persist_research",
+            "label": "Save researched facts",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "sitemap",
+            "label": "Sitemap changes",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "behavior",
+            "label": "Relationship behavior",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "contact_intelligence",
+            "label": "Leadership communication and contact profiles",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "contacts",
+            "label": "Contact directory",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "job_postings",
+            "label": "Recent job postings",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "score",
+            "label": "ICP score",
+            "status": "pending",
+            "message": null
+          }
+        ],
+        "warning_count": 0
+      }
+    },
+    {
+      "id": "fdee1fc1-7743-4108-b6e0-6b90571c44cd",
+      "firm_name": "Daniel Cheren and Associates, PC",
+      "website": "cherenlaw.com",
+      "icp_score": null,
+      "warm_score": null,
+      "research_status": null,
+      "last_researched_at": null,
+      "contacts": 3,
+      "leaders": 0,
+      "first_contacted_precise_at": "2026-06-09T21:35:25.490403+00:00",
+      "queue_receipt": {
+        "task_id": "firm-enrichment-c51d4f0dd03448b59cd76fa6a6dbc6d2",
+        "pif_id": "fdee1fc1-7743-4108-b6e0-6b90571c44cd",
+        "firm_name": "Daniel Cheren and Associates, PC",
+        "status": "queued",
+        "message": "Waiting for a local enrichment worker",
+        "current_stage": null,
+        "progress_percent": 0,
+        "stages": [
+          {
+            "key": "web_research",
+            "label": "Firm, website, people, and vendors",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "persist_research",
+            "label": "Save researched facts",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "sitemap",
+            "label": "Sitemap changes",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "behavior",
+            "label": "Relationship behavior",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "contact_intelligence",
+            "label": "Leadership communication and contact profiles",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "contacts",
+            "label": "Contact directory",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "job_postings",
+            "label": "Recent job postings",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "score",
+            "label": "ICP score",
+            "status": "pending",
+            "message": null
+          }
+        ],
+        "warning_count": 0
+      }
+    },
+    {
+      "id": "b7a7482a-b97a-4e4c-8a70-f82c3577ce32",
+      "firm_name": "Tran Law Group",
+      "website": "tranlawgrp.com",
+      "icp_score": null,
+      "warm_score": null,
+      "research_status": null,
+      "last_researched_at": null,
+      "contacts": 1,
+      "leaders": 0,
+      "first_contacted_precise_at": "2026-06-08T22:44:32.242166+00:00",
+      "queue_receipt": {
+        "task_id": "firm-enrichment-9e0eb7e6b9174afc83290316215fe755",
+        "pif_id": "b7a7482a-b97a-4e4c-8a70-f82c3577ce32",
+        "firm_name": "Tran Law Group",
+        "status": "queued",
+        "message": "Waiting for a local enrichment worker",
+        "current_stage": null,
+        "progress_percent": 0,
+        "stages": [
+          {
+            "key": "web_research",
+            "label": "Firm, website, people, and vendors",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "persist_research",
+            "label": "Save researched facts",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "sitemap",
+            "label": "Sitemap changes",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "behavior",
+            "label": "Relationship behavior",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "contact_intelligence",
+            "label": "Leadership communication and contact profiles",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "contacts",
+            "label": "Contact directory",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "job_postings",
+            "label": "Recent job postings",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "score",
+            "label": "ICP score",
+            "status": "pending",
+            "message": null
+          }
+        ],
+        "warning_count": 0
+      }
+    },
+    {
+      "id": "a399d282-5d33-4992-9294-175f716de05b",
+      "firm_name": "Law Offices of Tamar A. Ekizian",
+      "website": "ekizianlaw.com",
+      "icp_score": null,
+      "warm_score": null,
+      "research_status": null,
+      "last_researched_at": null,
+      "contacts": 0,
+      "leaders": 0,
+      "first_contacted_precise_at": "2026-06-08T22:26:12.753308+00:00",
+      "queue_receipt": {
+        "task_id": "firm-enrichment-dead1acc670441d386122abd313a9269",
+        "pif_id": "a399d282-5d33-4992-9294-175f716de05b",
+        "firm_name": "Law Offices of Tamar A. Ekizian",
+        "status": "queued",
+        "message": "Waiting for a local enrichment worker",
+        "current_stage": null,
+        "progress_percent": 0,
+        "stages": [
+          {
+            "key": "web_research",
+            "label": "Firm, website, people, and vendors",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "persist_research",
+            "label": "Save researched facts",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "sitemap",
+            "label": "Sitemap changes",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "behavior",
+            "label": "Relationship behavior",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "contact_intelligence",
+            "label": "Leadership communication and contact profiles",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "contacts",
+            "label": "Contact directory",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "job_postings",
+            "label": "Recent job postings",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "score",
+            "label": "ICP score",
+            "status": "pending",
+            "message": null
+          }
+        ],
+        "warning_count": 0
+      }
+    },
+    {
+      "id": "c6f87908-c967-4d51-b16e-03dd5771ed4b",
+      "firm_name": "Olan Law",
+      "website": "olanlaw.com",
+      "icp_score": null,
+      "warm_score": null,
+      "research_status": null,
+      "last_researched_at": null,
+      "contacts": 6,
+      "leaders": 0,
+      "first_contacted_precise_at": "2026-06-06T14:20:52.845582+00:00",
+      "queue_receipt": {
+        "task_id": "firm-enrichment-7a37da6273304b74a85f6f56d62059d0",
+        "pif_id": "c6f87908-c967-4d51-b16e-03dd5771ed4b",
+        "firm_name": "Olan Law",
+        "status": "queued",
+        "message": "Waiting for a local enrichment worker",
+        "current_stage": null,
+        "progress_percent": 0,
+        "stages": [
+          {
+            "key": "web_research",
+            "label": "Firm, website, people, and vendors",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "persist_research",
+            "label": "Save researched facts",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "sitemap",
+            "label": "Sitemap changes",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "behavior",
+            "label": "Relationship behavior",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "contact_intelligence",
+            "label": "Leadership communication and contact profiles",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "contacts",
+            "label": "Contact directory",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "job_postings",
+            "label": "Recent job postings",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "score",
+            "label": "ICP score",
+            "status": "pending",
+            "message": null
+          }
+        ],
+        "warning_count": 0
+      }
+    },
+    {
+      "id": "e8d3b910-6216-4a6a-a615-4f580908431f",
+      "firm_name": "Usher Law Offices",
+      "website": "ulricusher.com",
+      "icp_score": null,
+      "warm_score": null,
+      "research_status": null,
+      "last_researched_at": null,
+      "contacts": 5,
+      "leaders": 0,
+      "first_contacted_precise_at": "2026-06-04T18:49:36.548733+00:00",
+      "queue_receipt": {
+        "task_id": "firm-enrichment-648bb0e17d444dff950829c500876fda",
+        "pif_id": "e8d3b910-6216-4a6a-a615-4f580908431f",
+        "firm_name": "Usher Law Offices",
+        "status": "queued",
+        "message": "Waiting for a local enrichment worker",
+        "current_stage": null,
+        "progress_percent": 0,
+        "stages": [
+          {
+            "key": "web_research",
+            "label": "Firm, website, people, and vendors",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "persist_research",
+            "label": "Save researched facts",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "sitemap",
+            "label": "Sitemap changes",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "behavior",
+            "label": "Relationship behavior",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "contact_intelligence",
+            "label": "Leadership communication and contact profiles",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "contacts",
+            "label": "Contact directory",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "job_postings",
+            "label": "Recent job postings",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "score",
+            "label": "ICP score",
+            "status": "pending",
+            "message": null
+          }
+        ],
+        "warning_count": 0
+      }
+    },
+    {
+      "id": "c4683554-7bf3-4432-99d6-6c248932bfeb",
+      "firm_name": "Ayala Chirino Law",
+      "website": "ayalachirinolaw.com",
+      "icp_score": null,
+      "warm_score": null,
+      "research_status": null,
+      "last_researched_at": null,
+      "contacts": 4,
+      "leaders": 0,
+      "first_contacted_precise_at": "2026-06-03T17:42:26.584344+00:00",
+      "queue_receipt": {
+        "task_id": "firm-enrichment-d462c77886914676bedcd7dd0b06651e",
+        "pif_id": "c4683554-7bf3-4432-99d6-6c248932bfeb",
+        "firm_name": "Ayala Chirino Law",
+        "status": "queued",
+        "message": "Waiting for a local enrichment worker",
+        "current_stage": null,
+        "progress_percent": 0,
+        "stages": [
+          {
+            "key": "web_research",
+            "label": "Firm, website, people, and vendors",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "persist_research",
+            "label": "Save researched facts",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "sitemap",
+            "label": "Sitemap changes",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "behavior",
+            "label": "Relationship behavior",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "contact_intelligence",
+            "label": "Leadership communication and contact profiles",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "contacts",
+            "label": "Contact directory",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "job_postings",
+            "label": "Recent job postings",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "score",
+            "label": "ICP score",
+            "status": "pending",
+            "message": null
+          }
+        ],
+        "warning_count": 0
+      }
+    },
+    {
+      "id": "2d7e0420-a0fa-4eed-9f32-39f20c898830",
+      "firm_name": "Law Offices of Elena Mebtahi",
+      "website": "mebtahilawfirm.com",
+      "icp_score": null,
+      "warm_score": null,
+      "research_status": null,
+      "last_researched_at": null,
+      "contacts": 1,
+      "leaders": 0,
+      "first_contacted_precise_at": "2026-06-02T19:42:19.689022+00:00",
+      "queue_receipt": {
+        "task_id": "firm-enrichment-810dd22935e64e9b922ee8179b39a50d",
+        "pif_id": "2d7e0420-a0fa-4eed-9f32-39f20c898830",
+        "firm_name": "Law Offices of Elena Mebtahi",
+        "status": "queued",
+        "message": "Waiting for a local enrichment worker",
+        "current_stage": null,
+        "progress_percent": 0,
+        "stages": [
+          {
+            "key": "web_research",
+            "label": "Firm, website, people, and vendors",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "persist_research",
+            "label": "Save researched facts",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "sitemap",
+            "label": "Sitemap changes",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "behavior",
+            "label": "Relationship behavior",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "contact_intelligence",
+            "label": "Leadership communication and contact profiles",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "contacts",
+            "label": "Contact directory",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "job_postings",
+            "label": "Recent job postings",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "score",
+            "label": "ICP score",
+            "status": "pending",
+            "message": null
+          }
+        ],
+        "warning_count": 0
+      }
+    },
+    {
+      "id": "efd96a87-672b-416b-9d94-2e6cded57285",
+      "firm_name": "Leonidas Law Firm",
+      "website": "leonidaslaw.com",
+      "icp_score": null,
+      "warm_score": null,
+      "research_status": null,
+      "last_researched_at": null,
+      "contacts": 1,
+      "leaders": 0,
+      "first_contacted_precise_at": "2026-06-01T23:47:53.879114+00:00",
+      "queue_receipt": {
+        "task_id": "firm-enrichment-5ccca801a66241fa9665cdc03d3210ee",
+        "pif_id": "efd96a87-672b-416b-9d94-2e6cded57285",
+        "firm_name": "Leonidas Law Firm",
+        "status": "queued",
+        "message": "Waiting for a local enrichment worker",
+        "current_stage": null,
+        "progress_percent": 0,
+        "stages": [
+          {
+            "key": "web_research",
+            "label": "Firm, website, people, and vendors",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "persist_research",
+            "label": "Save researched facts",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "sitemap",
+            "label": "Sitemap changes",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "behavior",
+            "label": "Relationship behavior",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "contact_intelligence",
+            "label": "Leadership communication and contact profiles",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "contacts",
+            "label": "Contact directory",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "job_postings",
+            "label": "Recent job postings",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "score",
+            "label": "ICP score",
+            "status": "pending",
+            "message": null
+          }
+        ],
+        "warning_count": 0
+      }
+    },
+    {
+      "id": "4ce2aca0-bcd3-4578-80f4-56620ecde17d",
+      "firm_name": "777 Law",
+      "website": "777.law",
+      "icp_score": null,
+      "warm_score": null,
+      "research_status": null,
+      "last_researched_at": null,
+      "contacts": 1,
+      "leaders": 0,
+      "first_contacted_precise_at": "2026-06-01T21:24:21.680974+00:00",
+      "queue_receipt": {
+        "task_id": "firm-enrichment-f27c36d98522436c8cc8b6df8413ec70",
+        "pif_id": "4ce2aca0-bcd3-4578-80f4-56620ecde17d",
+        "firm_name": "777 Law",
+        "status": "queued",
+        "message": "Waiting for a local enrichment worker",
+        "current_stage": null,
+        "progress_percent": 0,
+        "stages": [
+          {
+            "key": "web_research",
+            "label": "Firm, website, people, and vendors",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "persist_research",
+            "label": "Save researched facts",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "sitemap",
+            "label": "Sitemap changes",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "behavior",
+            "label": "Relationship behavior",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "contact_intelligence",
+            "label": "Leadership communication and contact profiles",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "contacts",
+            "label": "Contact directory",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "job_postings",
+            "label": "Recent job postings",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "score",
+            "label": "ICP score",
+            "status": "pending",
+            "message": null
+          }
+        ],
+        "warning_count": 0
+      }
+    },
+    {
+      "id": "c201da28-c4ca-4fb6-8600-8f46b3307c75",
+      "firm_name": "Vartanian Law",
+      "website": "vartanianlegal.com",
+      "icp_score": null,
+      "warm_score": null,
+      "research_status": null,
+      "last_researched_at": null,
+      "contacts": 3,
+      "leaders": 0,
+      "first_contacted_precise_at": "2026-05-28T21:33:14.447743+00:00",
+      "queue_receipt": {
+        "task_id": "firm-enrichment-7163d84f3841490ebd65b086f5e075a8",
+        "pif_id": "c201da28-c4ca-4fb6-8600-8f46b3307c75",
+        "firm_name": "Vartanian Law",
+        "status": "queued",
+        "message": "Waiting for a local enrichment worker",
+        "current_stage": null,
+        "progress_percent": 0,
+        "stages": [
+          {
+            "key": "web_research",
+            "label": "Firm, website, people, and vendors",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "persist_research",
+            "label": "Save researched facts",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "sitemap",
+            "label": "Sitemap changes",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "behavior",
+            "label": "Relationship behavior",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "contact_intelligence",
+            "label": "Leadership communication and contact profiles",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "contacts",
+            "label": "Contact directory",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "job_postings",
+            "label": "Recent job postings",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "score",
+            "label": "ICP score",
+            "status": "pending",
+            "message": null
+          }
+        ],
+        "warning_count": 0
+      }
+    },
+    {
+      "id": "c12cb18b-9c9b-4e35-a5ae-636e1a1a46b1",
+      "firm_name": "Law Offices of George A. Gallegos",
+      "website": "gallegoslawfirm.com",
+      "icp_score": null,
+      "warm_score": null,
+      "research_status": null,
+      "last_researched_at": null,
+      "contacts": 1,
+      "leaders": 0,
+      "first_contacted_precise_at": "2026-05-26T22:29:39.761035+00:00",
+      "queue_receipt": {
+        "task_id": "firm-enrichment-3a8c9127dd324ffa9a29da3a4cf94006",
+        "pif_id": "c12cb18b-9c9b-4e35-a5ae-636e1a1a46b1",
+        "firm_name": "Law Offices of George A. Gallegos",
+        "status": "queued",
+        "message": "Waiting for a local enrichment worker",
+        "current_stage": null,
+        "progress_percent": 0,
+        "stages": [
+          {
+            "key": "web_research",
+            "label": "Firm, website, people, and vendors",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "persist_research",
+            "label": "Save researched facts",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "sitemap",
+            "label": "Sitemap changes",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "behavior",
+            "label": "Relationship behavior",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "contact_intelligence",
+            "label": "Leadership communication and contact profiles",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "contacts",
+            "label": "Contact directory",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "job_postings",
+            "label": "Recent job postings",
+            "status": "pending",
+            "message": null
+          },
+          {
+            "key": "score",
+            "label": "ICP score",
+            "status": "pending",
+            "message": null
+          }
+        ],
+        "warning_count": 0
+      }
+    }
+  ]
+}

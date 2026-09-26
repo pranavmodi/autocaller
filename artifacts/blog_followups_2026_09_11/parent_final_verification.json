@@ -1,0 +1,13 @@
+{
+  "verified_at_utc": "2026-09-11T12:53:39.746154+00:00",
+  "selected_count": 40,
+  "all_unique_person_firm_domain": true,
+  "all_mailbox_cleared": true,
+  "pending_conflicts": [],
+  "last_send_and_lifetime_counts_unchanged": true,
+  "min_gap_days": 8,
+  "max_lifetime_touches": 2,
+  "distinct_articles": 9,
+  "prior_article_collision_found": false,
+  "new_sends_or_schedules_created": false
+}

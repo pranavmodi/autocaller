@@ -1,0 +1,416 @@
+import asyncio
+import logging
+import os
+from contextlib import asynccontextmanager
+
+logger = logging.getLogger(__name__)
+from fastapi import FastAPI
+from fastapi.responses import PlainTextResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
+from pathlib import Path
+
+from .api import dashboard_router, websocket_router, settings_router, dispatcher_router, scenarios_router, carrier_router, cadence_router, consults_router, call_lists_router, voice_preview_router, firm_reviews_router, comms_router, sequences_router, outreach_router, lead_gen_router, resend_webhooks_router, inbound_email_router, operator_notifications_router, seo_router, product_traces_router, learning_router, todos_router, composer_variants_router, actions_router, front_router, research_router, aiaudit_router, visibility_links_router, data_returned_router, front_inbox_router, engagement_campaigns_router, call_lab_router, knowledge_router, lead_finder_router, codex_gateway_router
+from .api.agents import router as agents_router
+from .api.pif import router as pif_router
+from .api.auth import router as auth_router, SESSION_COOKIE, verify_session_token, auth_configured
+from .services.dispatcher import get_dispatcher
+from .services.daily_report_service import daily_report_loop
+from .services.judge import judge_loop
+from .services.voicemail_followup_service import voicemail_followup_loop
+from .services.sequence_scheduler import sequence_loop
+from .services.action_scheduler import scheduled_action_loop
+from .services.product_traces import new_trace_id, request_id_var, trace_id_var
+from .providers import set_queue_source, set_patient_source
+from .providers.settings_provider import get_settings_provider
+from .db import AsyncSessionLocal, async_engine
+from .db.seed import seed_default_settings, seed_builtin_scenarios, seed_sample_patients
+from .services.todos import seed_default_todos
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup: seed DB defaults, then start the dispatcher
+    async with AsyncSessionLocal() as session:
+        await seed_default_settings(session)
+        await seed_builtin_scenarios(session)
+        await seed_sample_patients(session)
+        await session.commit()
+    await seed_default_todos()
+    from .services.lead_finder import (
+        execute_lead_finder_step,
+        recover_interrupted_lead_finder_steps,
+    )
+    recovered_lead_finder_step_ids = await recover_interrupted_lead_finder_steps()
+    lead_finder_recovery_tasks = [
+        asyncio.create_task(execute_lead_finder_step(step_id))
+        for step_id in recovered_lead_finder_step_ids
+    ]
+    if recovered_lead_finder_step_ids:
+        logger.info(
+            "Requeued %s interrupted Lead Finder steps",
+            len(recovered_lead_finder_step_ids),
+        )
+    # Apply persisted source settings
+    settings = await get_settings_provider().get_settings()
+    set_queue_source(settings.queue_source)
+    set_patient_source(settings.patient_source)
+    print(f"[STARTUP] patient_source={settings.patient_source}, queue_source={settings.queue_source}, call_mode={settings.call_mode}")
+    # Apply persisted dispatcher settings before starting.
+    # CLI flag (VERBOSE_LOGGING env var) overrides the DB setting.
+    ds = settings.dispatcher_settings
+    verbose_override = os.getenv("VERBOSE_LOGGING", "").lower() in ("1", "true", "yes")
+    verbose = verbose_override or ds.verbose_logging
+    get_dispatcher().update_config(
+        poll_interval=ds.poll_interval,
+        dispatch_timeout=ds.dispatch_timeout,
+        max_attempts=ds.max_attempts,
+        min_hours_between=ds.min_hours_between,
+        cooldown_seconds=ds.cooldown_seconds,
+        verbose_logging=verbose,
+    )
+    # If sources are "simulation" and active_scenario_id is set, activate the scenario
+    if (settings.queue_source == "simulation" or settings.patient_source == "simulation") and settings.active_scenario_id:
+        from .api.settings import activate_scenario
+        try:
+            await activate_scenario(settings.active_scenario_id)
+        except ValueError:
+            pass  # Scenario not found, skip activation
+    # Intentionally do NOT auto-start the dispatcher on boot.
+    # A daemon restart must never trigger outbound cold calls without
+    # explicit operator action. Start via the Now-page toggle or
+    # POST /api/dispatcher/toggle or /api/dispatcher/start-batch.
+    logger.info("Dispatcher NOT auto-started on boot — operator must trigger explicitly")
+    # Start the daily Slack report loop (no-op if disabled via env var)
+    daily_report_task = asyncio.create_task(daily_report_loop())
+    # Start the background judge — every 60s, score unjudged ended calls
+    judge_task = asyncio.create_task(judge_loop(interval_seconds=60))
+    # Start the cadence scan loop — checks hourly, fires at 6 AM Eastern
+    from .services.cadence_service import cadence_scan_loop
+    cadence_task = asyncio.create_task(cadence_scan_loop())
+    # Start the voicemail / no-reach follow-up emailer (gated by
+    # ALLOW_VOICEMAIL_EMAIL=true — loop ticks but no-ops without the flag).
+    vm_followup_task = asyncio.create_task(voicemail_followup_loop(interval_seconds=120))
+    # Start the email sequence scheduler. Gated by
+    # ALLOW_SEQUENCE_SEND=true — loop ticks but no-ops without the flag.
+    sequence_task = asyncio.create_task(sequence_loop(interval_seconds=60))
+    # Start explicitly scheduled durable action sends. This does not start the
+    # dispatcher; it only drains approved actions with scheduled_for set.
+    scheduled_action_task = asyncio.create_task(scheduled_action_loop(interval_seconds=30))
+    from .services.lead_gen_daily import daily_run_loop
+    lead_gen_daily_task = asyncio.create_task(daily_run_loop(interval_seconds=600))
+    from .services.master_agent import (
+        heartbeat_interval_seconds,
+        master_heartbeat_loop,
+        subagent_runner_enabled,
+        subagent_runner_interval_seconds,
+        subagent_runner_loop,
+    )
+    master_heartbeat_task = asyncio.create_task(
+        master_heartbeat_loop(interval_seconds=heartbeat_interval_seconds())
+    )
+    master_subagent_runner_task = None
+    if subagent_runner_enabled():
+        master_subagent_runner_task = asyncio.create_task(
+            subagent_runner_loop(interval_seconds=subagent_runner_interval_seconds())
+        )
+    # Start the carrier-state reconciler — enforces the invariant
+    # `ended_at IS NOT NULL ⟺ carrier confirmed terminal`. Sweeps
+    # non-terminal call_log rows every 60s and force-hangs-up any
+    # carrier-side orphans. Also does a one-shot backfill of pre-existing
+    # zombies on boot.
+    from .services.call_reconciler import reconciler_loop as _reconciler_loop
+    reconciler_task = asyncio.create_task(_reconciler_loop())
+    from .services.pif_job_posting_research import (
+        job_posting_research_loop,
+        recover_interrupted_job_research,
+    )
+    recovered_job_tasks = await recover_interrupted_job_research()
+    if recovered_job_tasks:
+        logger.info("Requeued %s interrupted job-opening research tasks", recovered_job_tasks)
+    job_research_workers = [
+        asyncio.create_task(job_posting_research_loop())
+        for _ in range(max(1, int(os.getenv("PIF_JOB_RESEARCH_WORKERS", "2"))))
+    ]
+    from .services.firm_review_research import (
+        firm_review_research_loop,
+        recover_interrupted_firm_review_research,
+    )
+    recovered_review_tasks = await recover_interrupted_firm_review_research()
+    if recovered_review_tasks:
+        logger.info("Requeued %s interrupted public-review research tasks", recovered_review_tasks)
+    review_research_workers = [
+        asyncio.create_task(firm_review_research_loop())
+        for _ in range(max(1, int(os.getenv("FIRM_REVIEW_RESEARCH_WORKERS", "1"))))
+    ]
+    from .services.pif_local_enrichment import (
+        local_enrichment_loop,
+        recover_interrupted_local_enrichment,
+    )
+    recovered_enrichment_tasks = await recover_interrupted_local_enrichment()
+    if recovered_enrichment_tasks:
+        logger.info("Requeued %s interrupted local firm enrichment tasks", recovered_enrichment_tasks)
+    local_enrichment_workers = [
+        asyncio.create_task(local_enrichment_loop())
+        for _ in range(max(1, int(os.getenv("PIF_LOCAL_ENRICHMENT_WORKERS", "2"))))
+    ]
+    from .services.nightly_sync import nightly_sync_loop
+    nightly_sync_task = asyncio.create_task(nightly_sync_loop())
+    yield
+    # Shutdown: stop the dispatcher, cancel background tasks, dispose engine
+    get_dispatcher().stop()
+    tasks_to_cancel = [
+        daily_report_task,
+        judge_task,
+        cadence_task,
+        vm_followup_task,
+        sequence_task,
+        scheduled_action_task,
+        nightly_sync_task,
+        lead_gen_daily_task,
+        reconciler_task,
+        *job_research_workers,
+        *review_research_workers,
+        *local_enrichment_workers,
+        *lead_finder_recovery_tasks,
+    ]
+    tasks_to_cancel.append(master_heartbeat_task)
+    if master_subagent_runner_task is not None:
+        tasks_to_cancel.append(master_subagent_runner_task)
+    for t in tasks_to_cancel:
+        t.cancel()
+        try:
+            await t
+        except (asyncio.CancelledError, Exception):
+            pass
+    await async_engine.dispose()
+
+
+app = FastAPI(title="AI Outbound Voice Orchestrator", version="0.2.0", lifespan=lifespan)
+
+# CORS middleware for frontend
+# - Configure CORS_ORIGINS env var (comma-separated) to specify explicit origins
+# - Optionally configure CORS_ORIGIN_REGEX to allow a regex (e.g., local LAN IPs)
+_default_origins = ["http://localhost:3000", "http://127.0.0.1:3000"]
+_cors_origins = os.getenv("CORS_ORIGINS")
+_origin_regex_env = os.getenv("CORS_ORIGIN_REGEX")
+if _cors_origins:
+    _allowed_origins = [o.strip() for o in _cors_origins.split(",") if o.strip()]
+else:
+    _allowed_origins = _default_origins
+_default_origin_regex = r"https?://(localhost|127\.0\.0\.1|0\.0\.0\.0|192\.168\.\d{1,3}\.\d{1,3})(:\d+)?$"
+_allow_origin_regex = _origin_regex_env.strip() if _origin_regex_env else _default_origin_regex
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_allowed_origins,
+    allow_origin_regex=_allow_origin_regex,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["x-possible-request-id", "x-possible-trace-id"],
+)
+
+
+# Password auth middleware. Enforced only when AUTH_PASSWORD +
+# AUTH_SESSION_SECRET are both set. Exempt paths: /api/auth/* (login),
+# /api/twilio/* and /api/telnyx/* (carrier webhooks), /ws/twilio/* and
+# /ws/telnyx/* (carrier media-stream websockets), /health, /static,
+# /audio, and loopback-origin traffic (the CLI hits 127.0.0.1 directly).
+_AUTH_EXEMPT_PREFIXES = (
+    "/api/auth/",
+    "/api/twilio/",   # inbound Twilio webhooks
+    "/api/telnyx/",   # inbound Telnyx webhooks (TeXML callbacks)
+    "/api/resend/webhook",  # inbound Resend delivery/engagement webhooks
+    "/ws/twilio",     # Twilio media-stream websocket (/ws/twilio-media/...)
+    "/ws/telnyx",     # Telnyx media-stream websocket (/ws/telnyx-media/...)
+    "/health",
+    "/static/",
+    "/audio/",
+    # Public endpoints the marketing site posts/queries unauthenticated.
+    # Only the book/slots paths are exempt; list/admin is still gated.
+    "/api/consults/slots",
+    "/api/consults/book",
+    # Early-access / design-partner capture from a product solution page.
+    "/api/lead-gen/product-interest",
+    # Human-session beacon from tracked landing pages (consult, solution, ...).
+    "/api/lead-gen/page-event",
+    # Engagement dashboard readout for the Possible Minds admin page.
+    "/api/lead-gen/engagement-analytics",
+    # Server-to-server Mira personalization. The endpoint enforces its own
+    # shared-secret header and returns a deliberately narrow context object.
+    "/api/engagement-campaigns/advisor-context/",
+    # Outreach open-pixel + click-redirect — fetched by recipients' email
+    # clients, no session cookie possible.
+    "/t/o/",
+    "/t/c/",
+    "/a/",
+    "/v/",
+    "/aiaudit/go",
+)
+
+class _AuthMiddleware:
+    """Cookie-gated access to /api/* and /ws/dashboard.
+
+    ASGI middleware (rather than BaseHTTPMiddleware) so we can gate
+    WebSocket upgrades — those don't go through the HTTP base class.
+    """
+
+    def __init__(self, app_):
+        self._app = app_
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] not in ("http", "websocket"):
+            return await self._app(scope, receive, send)
+        if not auth_configured():
+            return await self._app(scope, receive, send)
+
+        path = scope.get("path", "")
+        # Allow the health probe, auth routes, Twilio webhooks, static.
+        if any(path.startswith(p) for p in _AUTH_EXEMPT_PREFIXES):
+            return await self._app(scope, receive, send)
+        # Only gate /api/* and /ws/* — everything else Next.js serves.
+        if not (path.startswith("/api/") or path.startswith("/ws/")):
+            return await self._app(scope, receive, send)
+
+        # Loopback bypass for CLI and local tooling.
+        client = scope.get("client") or ()
+        client_host = client[0] if client else ""
+        if client_host in ("127.0.0.1", "::1", "localhost", ""):
+            return await self._app(scope, receive, send)
+
+        # Extract cookie and verify the session token.
+        cookies_header = ""
+        for k, v in scope.get("headers", []):
+            if k == b"cookie":
+                cookies_header = v.decode("latin-1", errors="replace")
+                break
+        session_value = ""
+        for part in cookies_header.split(";"):
+            part = part.strip()
+            if part.startswith(f"{SESSION_COOKIE}="):
+                session_value = part[len(SESSION_COOKIE) + 1:]
+                break
+        if verify_session_token(session_value):
+            return await self._app(scope, receive, send)
+
+        # Reject.
+        if scope["type"] == "http":
+            import json as _json
+            body = _json.dumps({"detail": "Unauthorized"}).encode("utf-8")
+            await send({
+                "type": "http.response.start",
+                "status": 401,
+                "headers": [
+                    (b"content-type", b"application/json"),
+                    (b"content-length", str(len(body)).encode("ascii")),
+                ],
+            })
+            await send({"type": "http.response.body", "body": body})
+        else:
+            # WebSocket — close with 1008 Policy Violation.
+            await send({"type": "websocket.close", "code": 1008})
+
+
+app.add_middleware(_AuthMiddleware)
+
+
+class _TraceContextMiddleware:
+    """Attach request and trace IDs to every HTTP/WebSocket request."""
+
+    def __init__(self, app_):
+        self._app = app_
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] not in ("http", "websocket"):
+            return await self._app(scope, receive, send)
+
+        header_map = {k.lower(): v for k, v in scope.get("headers", [])}
+        request_id = (
+            header_map.get(b"x-possible-request-id", b"")
+            .decode("latin-1", errors="replace")
+            .strip()
+            or new_trace_id()
+        )[:64]
+        trace_id = (
+            header_map.get(b"x-possible-trace-id", b"")
+            .decode("latin-1", errors="replace")
+            .strip()
+            or new_trace_id()
+        )[:64]
+
+        request_token = request_id_var.set(request_id)
+        trace_token = trace_id_var.set(trace_id)
+        scope["possible_request_id"] = request_id
+        scope["possible_trace_id"] = trace_id
+
+        async def send_with_trace_headers(message):
+            if message["type"] == "http.response.start":
+                headers = list(message.get("headers", []))
+                headers.append((b"x-possible-request-id", request_id.encode("ascii", errors="ignore")))
+                headers.append((b"x-possible-trace-id", trace_id.encode("ascii", errors="ignore")))
+                message = {**message, "headers": headers}
+            await send(message)
+
+        try:
+            await self._app(scope, receive, send_with_trace_headers)
+        finally:
+            request_id_var.reset(request_token)
+            trace_id_var.reset(trace_token)
+
+
+app.add_middleware(_TraceContextMiddleware)
+
+# Include API routers
+app.include_router(auth_router)
+app.include_router(dashboard_router)
+app.include_router(websocket_router)
+app.include_router(settings_router)
+app.include_router(dispatcher_router)
+app.include_router(scenarios_router)
+app.include_router(carrier_router)
+app.include_router(cadence_router)
+app.include_router(call_lab_router)
+app.include_router(knowledge_router)
+app.include_router(lead_finder_router)
+app.include_router(codex_gateway_router)
+app.include_router(consults_router)
+app.include_router(call_lists_router)
+app.include_router(voice_preview_router)
+app.include_router(firm_reviews_router)
+app.include_router(comms_router)
+app.include_router(sequences_router)
+app.include_router(outreach_router)
+app.include_router(lead_gen_router)
+app.include_router(resend_webhooks_router)
+app.include_router(inbound_email_router)
+app.include_router(operator_notifications_router)
+app.include_router(seo_router)
+app.include_router(product_traces_router)
+app.include_router(learning_router)
+app.include_router(todos_router)
+app.include_router(composer_variants_router)
+app.include_router(actions_router)
+app.include_router(front_router)
+app.include_router(research_router)
+app.include_router(aiaudit_router)
+app.include_router(engagement_campaigns_router)
+app.include_router(visibility_links_router)
+app.include_router(data_returned_router)
+app.include_router(front_inbox_router)
+app.include_router(agents_router)
+app.include_router(pif_router)
+
+# Legacy static (kept for compatibility)
+STATIC_DIR = Path("static")
+STATIC_DIR.mkdir(parents=True, exist_ok=True)
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+# Audio directory under app/
+AUDIO_DIR = Path(__file__).resolve().parent / "audio"
+AUDIO_DIR.mkdir(parents=True, exist_ok=True)
+app.mount("/audio", StaticFiles(directory=str(AUDIO_DIR)), name="audio")
+
+@app.get("/health", response_class=PlainTextResponse)
+def health() -> str:
+    return "ok"

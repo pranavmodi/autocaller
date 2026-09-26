@@ -1,0 +1,294 @@
+{
+  "audit_timestamp_utc": "2026-09-11T07:50:00Z",
+  "scope": "broader_possible_minds_outreach",
+  "read_only": true,
+  "mutation_performed": false,
+  "evidence_sources": [
+    "./bin/possibleos comms list --channel email --since 30d --limit 500 --raw",
+    "./bin/possibleos inbound list --limit 200 --matched all --json",
+    "./bin/possibleos actions list --status approved --limit 500 --json",
+    "./bin/possibleos actions list --status waiting_for_approval --limit 500 --json",
+    "./bin/possibleos actions list --scheduled --limit 200 --json",
+    "read-only email_logs/firm_contacts/action trace queries"
+  ],
+  "live_state": {
+    "scheduler_running": true,
+    "scheduler_last_error": null,
+    "scheduled_actions_found": 0,
+    "candidate_action_conflicts_found": 0,
+    "transport_strategy": "resend_first_then_zoho",
+    "resend_daily_cap": 50,
+    "zoho_daily_cap": 0,
+    "mailbox_mirror_checked": true,
+    "fresh_zoho_sent_imap_header_retrieval": false
+  },
+  "selection_rules": [
+    "Broader Possible Minds outreach only; exclude job-application threads.",
+    "Prior successful delivered outbound before 2026-09-09, with an older unreplied touch.",
+    "Prefer one prior touch, direct business address, distinct firm/domain, and a useful next-message hook.",
+    "Exclude inbound human replies, bounce/failure history, opt-out/negative signals, and pending action conflicts.",
+    "A follow-up is not thread-ready until the original RFC Message-ID and References chain are recovered."
+  ],
+  "top5": [
+    {
+      "rank": 1,
+      "name": "Khail A. Parris",
+      "firm": "PARRIS",
+      "title": "Partner",
+      "persona": "partner",
+      "email": "khail@parris.com",
+      "canonical_domain": "parris.com",
+      "last_outbound_utc": "2026-07-23T17:40:16.893048Z",
+      "gap_days_as_of_2026-09-11": 50,
+      "send_count": 1,
+      "delivery_status": "delivered",
+      "original_subject": "Jonathan L. submitted a Yelp review about PARRIS",
+      "original_email_log_id": "d304cf2289594342ae43df11cbb8f560",
+      "original_provider_id": "43f0b66a-6c7a-42c5-9a37-7bd51e62405a",
+      "original_action_id": "action_816755df8a274e14ac18c8fb",
+      "original_batch_id": "29c4b13b524347b5ac2d954d1da907e2",
+      "original_batch_item_id": "8ab3a55e8909491ea10ee009e25711b9",
+      "original_body_context": "The email cited a Yelp complaint that the reviewer was ignored after signing an offer, then positioned Possible Minds' Precise Imaging triage system as a way to surface unowned messages and aging follow-ups before public complaints.",
+      "inbound_human_reply": null,
+      "bounce_or_failure": false,
+      "pending_action_conflict": false,
+      "due_basis": "50 days since one delivered outreach touch; no stored reply or queue conflict.",
+      "credible_hook": "Public complaint about being ignored after signing; connect the follow-up to visible communication gaps and ownership.",
+      "recommended_next_message_goal": "Ask whether unresolved client communication is still a partner-level concern and offer a short workflow example.",
+      "suggested_provider": "Resend, subject to current policy and Zoho task recheck",
+      "rfc": {
+        "status": "pending_zoho_source_resolution",
+        "in_reply_to": null,
+        "references": null,
+        "provider_lookup": "GET https://api.resend.com/emails/43f0b66a-6c7a-42c5-9a37-7bd51e62405a returned HTTP 404.",
+        "zoho_retrieval_route": "Zoho IMAP account pranav@possiblemindshq.com, Sent or configured BCC/audit folder, BODY.PEEK[], match exact recipient + original subject + sent date, then preserve RFC Message-ID and References."
+      }
+    },
+    {
+      "rank": 2,
+      "name": "Matthew M. Taylor",
+      "firm": "DK Law",
+      "title": "Senior Partner and Director of Litigation",
+      "persona": "managing_partner",
+      "email": "matt.taylor@dklaw.com",
+      "canonical_domain": "dklaw.com",
+      "last_outbound_utc": "2026-08-10T22:00:07.630395Z",
+      "gap_days_as_of_2026-09-11": 32,
+      "send_count": 1,
+      "delivery_status": "delivered",
+      "original_subject": "Ariel W. submitted a Yelp review about DK Law",
+      "original_email_log_id": "0fa7af3d16c347db8f4d84091b6d46b8",
+      "original_provider_id": "8b221b79-bef9-4be6-a7f8-d3001f09f21f",
+      "original_action_id": "action_96d4d8e1480742299f45e2e5",
+      "original_batch_id": "c690f93901e641168839e681d5594712",
+      "original_batch_item_id": "96ab3d546b4542dcacffa1bba11dfb46",
+      "original_body_context": "The email cited an October 2025 Yelp complaint about messages to the handling lawyer not receiving a callback for weeks, then positioned Precise Imaging's communication triage as a way to route routine messages and flag unresolved requests.",
+      "inbound_human_reply": null,
+      "bounce_or_failure": false,
+      "pending_action_conflict": false,
+      "due_basis": "32 days since one delivered outreach touch; no stored reply or queue conflict.",
+      "credible_hook": "Weeks-long callback delay; frame the follow-up around ownership and aging client requests.",
+      "recommended_next_message_goal": "Test whether callback triage is a live operational priority and offer to show the same workflow applied to PI communication.",
+      "suggested_provider": "Resend, subject to current policy and Zoho task recheck",
+      "rfc": {
+        "status": "pending_zoho_source_resolution",
+        "in_reply_to": null,
+        "references": null,
+        "provider_lookup": "GET https://api.resend.com/emails/8b221b79-bef9-4be6-a7f8-d3001f09f21f returned HTTP 404.",
+        "zoho_retrieval_route": "Zoho IMAP account pranav@possiblemindshq.com, Sent or configured BCC/audit folder, BODY.PEEK[], match exact recipient + original subject + sent date, then preserve RFC Message-ID and References."
+      }
+    },
+    {
+      "rank": 3,
+      "name": "Brandi Kurlander",
+      "firm": "Bender Kurlander Hernandez & Campbell, APC",
+      "title": "Founding Member & Partner",
+      "persona": "founder_owner",
+      "email": "bkurlander@bkhclaw.com",
+      "canonical_domain": "bkhclaw.com",
+      "last_outbound_utc": "2026-08-10T22:40:12.476698Z",
+      "gap_days_as_of_2026-09-11": 32,
+      "send_count": 1,
+      "delivery_status": "delivered",
+      "original_subject": "Edward G. submitted a Yelp review about BKHC Law",
+      "original_email_log_id": "36b0ccbaa4924f6d87564a7f6fbc2bc6",
+      "original_provider_id": "504cc8c4-c0d2-40c9-a165-4a74c86ff837",
+      "original_action_id": "action_2ff5342d693f45f0b87a8b23",
+      "original_batch_id": "c690f93901e641168839e681d5594712",
+      "original_batch_item_id": "fb057e1c9ff34621814afb7d3fc1e994",
+      "original_body_context": "The email cited a July 2025 Yelp complaint saying the reviewer would not get a response before three months, then positioned Precise Imaging's communication triage as a way to route routine messages and flag unresolved requests before they age.",
+      "inbound_human_reply": null,
+      "bounce_or_failure": false,
+      "pending_action_conflict": false,
+      "due_basis": "32 days since one delivered outreach touch; no stored reply or queue conflict.",
+      "credible_hook": "Three-month response-time complaint; focus on aging requests and response ownership.",
+      "recommended_next_message_goal": "Ask whether response-time visibility is worth a short operational review for the firm.",
+      "suggested_provider": "Resend, subject to current policy and Zoho task recheck",
+      "rfc": {
+        "status": "pending_zoho_source_resolution",
+        "in_reply_to": null,
+        "references": null,
+        "provider_lookup": "GET https://api.resend.com/emails/504cc8c4-c0d2-40c9-a165-4a74c86ff837 returned HTTP 404.",
+        "zoho_retrieval_route": "Zoho IMAP account pranav@possiblemindshq.com, Sent or configured BCC/audit folder, BODY.PEEK[], match exact recipient + original subject + sent date, then preserve RFC Message-ID and References."
+      }
+    },
+    {
+      "rank": 4,
+      "name": "Brisa Andrade",
+      "firm": "Lyfe Law",
+      "title": "Partner and Pre-Litigation Department Manager",
+      "persona": "partner",
+      "email": "brisaa@lyfe.com",
+      "canonical_domain": "lyfe.com",
+      "last_outbound_utc": "2026-08-13T01:00:19.833484Z",
+      "gap_days_as_of_2026-09-11": 29,
+      "send_count": 1,
+      "delivery_status": "delivered",
+      "original_subject": "Is Lead Docket at Lyfe Law tying marketing spend to signed cases?",
+      "original_email_log_id": "c1f19b30c3ff489fa17b5d2620ee5242",
+      "original_provider_id": "7b9c36e4-c059-41da-9d5a-91c6e162eb50",
+      "original_action_id": "action_a69b9c1b22884c45bbcc9739",
+      "original_batch_id": "c48c24c8ada64ce5ba58134a29092832",
+      "original_batch_item_id": "207f7b6075bb483591764748182476d3",
+      "original_body_context": "The email opened with a Lead Docket to Filevine attribution gap after a matter becomes a signed case, mentioned the Precise Imaging autoresponse system processing roughly 600 emails per day, and asked whether Lyfe could be getting more from Lead Docket.",
+      "inbound_human_reply": null,
+      "bounce_or_failure": false,
+      "pending_action_conflict": false,
+      "due_basis": "29 days since one delivered outreach touch; no stored reply or queue conflict.",
+      "credible_hook": "Lead-to-signed-case attribution across Lead Docket and Filevine; Brisa owns pre-litigation.",
+      "recommended_next_message_goal": "Ask whether attribution breaks at signed-case handoff and offer a narrow audit of that transition.",
+      "suggested_provider": "Resend, subject to current policy and Zoho task recheck",
+      "rfc": {
+        "status": "pending_zoho_source_resolution",
+        "in_reply_to": null,
+        "references": null,
+        "provider_lookup": "GET https://api.resend.com/emails/7b9c36e4-c059-41da-9d5a-91c6e162eb50 returned HTTP 404.",
+        "zoho_retrieval_route": "Zoho IMAP account pranav@possiblemindshq.com, Sent or configured BCC/audit folder, BODY.PEEK[], match exact recipient + original subject + sent date, then preserve RFC Message-ID and References."
+      }
+    },
+    {
+      "rank": 5,
+      "name": "Christopher V. Bulone",
+      "firm": "Dordick Law Corporation",
+      "title": "Partner",
+      "persona": "partner",
+      "email": "christopher@dordicklaw.com",
+      "canonical_domain": "dordicklaw.com",
+      "last_outbound_utc": "2026-08-13T00:25:15.624795Z",
+      "gap_days_as_of_2026-09-11": 29,
+      "send_count": 1,
+      "delivery_status": "delivered",
+      "original_subject": "Is Lead Docket at Dordick Law Corporation tying marketing spend to signed cases?",
+      "original_email_log_id": "029a41e91c9d4033a4fd1b31e747f948",
+      "original_provider_id": "5ea51cc2-5f9c-48dd-9f40-f60a4b130392",
+      "original_action_id": "action_e204a70b1c164089b7798e2e",
+      "original_batch_id": "c48c24c8ada64ce5ba58134a29092832",
+      "original_batch_item_id": "fdf3086554e5493bac12e2a3b0f173a4",
+      "original_body_context": "The email opened with a Lead Docket to Filevine attribution gap after a matter becomes a signed case, mentioned the Precise Imaging autoresponse system processing roughly 600 emails per day, and asked whether the team could be getting more from Lead Docket.",
+      "inbound_human_reply": null,
+      "bounce_or_failure": false,
+      "pending_action_conflict": false,
+      "due_basis": "29 days since one delivered outreach touch; no stored reply or queue conflict.",
+      "credible_hook": "Lead-to-signed-case attribution; partner-level visibility into marketing spend and case conversion.",
+      "recommended_next_message_goal": "Offer a focused look at where lead attribution is lost between intake and signed matter.",
+      "suggested_provider": "Resend, subject to current policy and Zoho task recheck",
+      "rfc": {
+        "status": "pending_zoho_source_resolution",
+        "in_reply_to": null,
+        "references": null,
+        "provider_lookup": "GET https://api.resend.com/emails/5ea51cc2-5f9c-48dd-9f40-f60a4b130392 returned HTTP 404.",
+        "zoho_retrieval_route": "Zoho IMAP account pranav@possiblemindshq.com, Sent or configured BCC/audit folder, BODY.PEEK[], match exact recipient + original subject + sent date, then preserve RFC Message-ID and References."
+      }
+    }
+  ],
+  "alternates": [
+    {
+      "name": "Babak Kheiri",
+      "firm": "B&D Injury Law Group APLC",
+      "title": "Partner",
+      "email": "babak@bdinjury.com",
+      "canonical_domain": "bdinjurylawgroup.com",
+      "last_outbound_utc": "2026-08-12T23:55:09Z",
+      "send_count": 1,
+      "original_provider_id": "17eb0e44-5d29-48ed-a9a2-ec119ef91e5d",
+      "original_action_id": "action_3ca3408852a54690b8bf47c4",
+      "original_batch_id": "c48c24c8ada64ce5ba58134a29092832",
+      "original_batch_item_id": "17579393ec8c4f87b395e71f5ead5311",
+      "selection_note": "Older single-touch partner candidate; verify current mailbox/reply/RFC state before use."
+    },
+    {
+      "name": "Lourdes De Armas",
+      "firm": "Omega Law Group",
+      "title": "Partner",
+      "email": "lda@omegalaw.com",
+      "canonical_domain": "omegalaw.com",
+      "last_outbound_utc": "2026-08-13T01:10:20Z",
+      "send_count": 1,
+      "original_provider_id": "5b004c1b-9363-4332-b8b0-c46e1995f80f",
+      "original_action_id": "action_fdd898df63154ef6b148aaf0",
+      "original_batch_id": "c48c24c8ada64ce5ba58134a29092832",
+      "original_batch_item_id": "4257cdae66e5407d84129f5fbb2deff7",
+      "selection_note": "Older single-touch partner candidate; verify current mailbox/reply/RFC state before use."
+    },
+    {
+      "name": "Amir Nayebdadash",
+      "firm": "Protection Law Group",
+      "title": "Partner / Founding Partner",
+      "email": "amir@protectionlawgroup.com",
+      "canonical_domain": "protectionlawgroup.com",
+      "last_outbound_utc": "2026-08-14T23:15:12Z",
+      "send_count": 2,
+      "original_provider_id": "a70e702d-133e-4e27-8a7c-97edea028a19",
+      "original_action_id": "action_c821bd7a541e4fc08277776a",
+      "original_batch_id": "e31533eeb0c94d679ff6b17cc86c01f2",
+      "original_batch_item_id": "14be89a4e9604b289b52f0ecee131ef8",
+      "selection_note": "Use only after the top five; two prior touches make this a lower-priority alternate."
+    }
+  ],
+  "actual_inbound_responses_to_handle_contextually": [
+    {
+      "from_email": "drmichellelim@gmail.com",
+      "received_at": "2026-08-20",
+      "subject": "Re: Precise imaging - quick question",
+      "classification_status": "classified",
+      "recommended_action": "Contextual human reply; suppress automated unanswered-follow-up nudge."
+    },
+    {
+      "from_email": "michael@beverlylaw.org",
+      "received_at": "2026-08-19",
+      "subject": "Re: Precise Imaging — quick check",
+      "classification_status": "unmatched contact in mirror",
+      "recommended_action": "Resolve the contact and respond contextually; suppress automated unanswered-follow-up nudge."
+    }
+  ],
+  "explicit_exclusions": [
+    {
+      "reason": "Yesterday's job-application threads are too recent and outside broader outreach scope.",
+      "contacts": [
+        "recruitment@topdoglaw.com",
+        "info@jacobyandmeyers.com",
+        "info@ciglaw.com",
+        "gtopp@stikeman.com",
+        "hernandezk@gtlaw.com"
+      ]
+    },
+    {
+      "reason": "Existing inbound human response; follow-up would be the wrong action.",
+      "contacts": [
+        "drmichellelim@gmail.com",
+        "michael@beverlylaw.org"
+      ]
+    },
+    {
+      "reason": "Email/domain mismatch requires verification before selection.",
+      "contacts": [
+        "ocampo@centurylawgroup.com / 10x Law"
+      ]
+    }
+  ],
+  "rfc_resolution_policy": {
+    "do_not_use_provider_uuid_as_rfc": true,
+    "current_top5_provider_lookups": "All five Resend GET lookups returned HTTP 404; no RFC Message-ID was inferred.",
+    "zoho_owner_action": "Before drafting or queueing, retrieve the original sent MIME via Zoho IMAP BODY.PEEK[] from Sent or configured BCC/audit folder using exact recipient, subject, and sent date. Copy the original RFC Message-ID and References into the follow-up headers. If absent, leave the follow-up unthreaded or hold it; do not fabricate headers."
+  }
+}

@@ -1,0 +1,11 @@
+[Unit]
+Description=Check whether daily PI career search is due (configured local timezone)
+
+[Timer]
+OnCalendar=*-*-* *:00/5:00 UTC
+Persistent=true
+AccuracySec=30s
+Unit=possibleos-career-search.service
+
+[Install]
+WantedBy=timers.target

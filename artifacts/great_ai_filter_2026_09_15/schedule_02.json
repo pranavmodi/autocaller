@@ -1,0 +1,130 @@
+{
+  "action": {
+    "id": "action_c1d867172f0c409fb9fceca5",
+    "action_type": "send_approved_lead_gen_draft",
+    "status": "approved",
+    "risk_level": "high",
+    "requested_by": "codex",
+    "approved_by": "codex",
+    "entity_type": "lead_gen_batch_item",
+    "entity_id": "13b21a9afaed4f0fbe37685cd674cecb",
+    "input": {
+      "body": "Hi Dimitri,\n\nMy earlier note asked about tracing leads through to retained matters. I wrote a short article on why better software alone doesn't always make that easier.\n\nThe bigger challenge can be agreeing how intake and case teams share information and responsibility. That's shaping how we approach AI adoption at Possible Minds.\n\nhttps://getpossibleminds.com/t/ql-gv7Zh-w\n\nFrom your managing partner's perspective, which would take more work: connecting the tools or changing the team's routines? I'd value a quick take.\n\nBest,\nPranav\nFounder, Possible Minds",
+      "subject": "Re: Is Lead Docket at O'Connor & Hurt tying marketing spend to signed cases?",
+      "approval": {
+        "references": "<0100019ff82fa925-e042288e-5687-489f-b345-91e32ed86f78-000000@email.amazonses.com> <1a039ab4493.801ec87c54946.6501548808148515321@possiblemindshq.com>",
+        "approved_at": "2026-09-15T10:40:29.780358+00:00",
+        "approved_by": "codex",
+        "body_sha256": "decadb3add79614004f89337ae8bd6e0bb033525bd5cb9bb4b7bf6b23a7dd561",
+        "in_reply_to": "<1a039ab4493.801ec87c54946.6501548808148515321@possiblemindshq.com>",
+        "subject_sha256": "e2589090d8eeba58c46f95e029ee0697c08534530382bc8c3c48c6d13fc0402d"
+      },
+      "transport": "resend",
+      "references": "<0100019ff82fa925-e042288e-5687-489f-b345-91e32ed86f78-000000@email.amazonses.com> <1a039ab4493.801ec87c54946.6501548808148515321@possiblemindshq.com>",
+      "skill_path": null,
+      "body_sha256": "decadb3add79614004f89337ae8bd6e0bb033525bd5cb9bb4b7bf6b23a7dd561",
+      "in_reply_to": "<1a039ab4493.801ec87c54946.6501548808148515321@possiblemindshq.com>",
+      "skill_sha256": null,
+      "batch_item_id": "13b21a9afaed4f0fbe37685cd674cecb",
+      "brief_version": null,
+      "subject_sha256": "e2589090d8eeba58c46f95e029ee0697c08534530382bc8c3c48c6d13fc0402d",
+      "composer_variant_key": null,
+      "lead_gen_action_type": "follow_up",
+      "composer_experiment_key": null
+    },
+    "policy_result": {},
+    "execution_result": {},
+    "error": null,
+    "trace_id": null,
+    "scheduled_for": "2026-09-15T15:40:00+00:00",
+    "started_at": null,
+    "completed_at": null,
+    "created_at": "2026-09-15T10:40:29.785841+00:00",
+    "updated_at": "2026-09-15T10:40:29.785846+00:00"
+  },
+  "created": true,
+  "updated_existing": false,
+  "executed": false,
+  "scheduled_for_pt": "2026-09-15 08:40 PDT",
+  "scheduled_for_utc": "2026-09-15 15:40:00 UTC",
+  "final_policy": {
+    "allowed": true,
+    "reason": "allowed",
+    "checks": [
+      {
+        "name": "status_allows_execution",
+        "passed": true,
+        "detail": "approved"
+      },
+      {
+        "name": "human_approval_present",
+        "passed": true,
+        "detail": "codex"
+      },
+      {
+        "name": "subject_present",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "body_present",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "subject_hash_matches_approval",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "body_hash_matches_approval",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "in_reply_to_matches_approval",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "references_match_approval",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "lead_gen_transport_available",
+        "passed": true,
+        "detail": "zoho_api 1/0 configured=True; resend 0/50 configured=True"
+      },
+      {
+        "name": "no_patient_data_in_outreach",
+        "passed": true,
+        "detail": "llm_guard_disabled"
+      },
+      {
+        "name": "batch_item_exists",
+        "passed": true,
+        "detail": "13b21a9afaed4f0fbe37685cd674cecb"
+      },
+      {
+        "name": "batch_item_not_already_started",
+        "passed": true,
+        "detail": "approved"
+      },
+      {
+        "name": "contact_email_present",
+        "passed": true,
+        "detail": "dimitri@oconnorhurt.com"
+      },
+      {
+        "name": "no_prior_successful_action_for_item",
+        "passed": true,
+        "detail": ""
+      }
+    ],
+    "risk_level": "high",
+    "requires_human_approval": true,
+    "action_type": "send_approved_lead_gen_draft",
+    "contact_email": "dimitri@oconnorhurt.com"
+  }
+}

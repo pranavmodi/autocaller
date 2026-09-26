@@ -1,0 +1,96 @@
+A drafting tool can make a demand letter faster. It cannot decide why the medical records are still missing, notice that the provider used a different patient name, update the case system, alert the paralegal, and keep following up under your firm's rules.
+That is not a criticism of the tool. It is a different kind of problem. The first is a product feature. The second is an operating system made from your data, your software, and your institutional judgment.
+AI writing solves the smaller problem
+Legal AI is already useful for research, drafting, document review, medical-record analysis, and chronology building. Thomson Reuters, for example, now markets CoCounsel to PI firms for demands, pleadings, discovery, timelines, and structured extraction from case records.
+But a PI firm loses time and money in places a prompt box cannot see: an intake record copied into a case-management system, an email that never becomes a task, a treatment gap noticed too late, a client update waiting on three people, or a report that no longer matches the source data.
+In a billable firm, that friction may appear as unrecorded time or a write-down. In a contingency firm, it appears as slower response, reduced staff capacity, stalled files, delayed demands, and cash arriving later than it should.
+Product scope reference: Thomson Reuters' official overview of
+CoCounsel for personal injury law
+.
+Why vendors stop at the product boundary
+Software vendors are rewarded for repeatability. The best feature is one they can build once, support consistently, and sell to hundreds of firms. That is how a software business scales.
+Your hardest workflow is often the opposite. It may depend on a custom field added years ago, a spreadsheet maintained by one case manager, a naming convention no one documented, two systems that disagree, and an escalation rule that lives in a partner's head.
+Cleaning that up requires discovery, mapping, implementation, testing, and change management. It creates more support responsibility and serves one firm at a time. A product vendor may expose APIs, integrations, or a workflow builder, but it is rarely incentivized to own every firm's bespoke operating logic.
+Vendors build the common layer. Your advantage lives in the last mile.
+The industry is recognizing the underlying context problem. Entegrata describes a legal data lakehouse that collects and transforms data from multiple systems. NetDocuments is building a permission-aware context layer across matters, documents, people, and communications. DeepJudge connects AI workflows to firm-wide document repositories and supports custom workflows.
+Those are meaningful foundations. They make firm knowledge more usable. They still do not decide how your intake team should escalate a serious case, what your records workflow should do after a failed request, or which exceptions require your managing attorney.
+These descriptions come from the vendors' own materials, not an independent outcome study:
+Entegrata
+,
+NetDocuments
+, and
+DeepJudge
+.
+What a bespoke AI agent actually is
+Bespoke does not mean training your own model. Most firms should not do that. It means taking capable general models and placing them inside a workflow designed for your firm.
+Context
+The right matter, documents, status, history, and permissions.
+Action
+The tools needed to update, route, draft, schedule, or follow up.
+Control
+Firm rules, review gates, exception handling, logs, and ownership.
+The model is only one component. The valuable part is the system around it: triggers, integrations, matter context, approved actions, confidence thresholds, human handoffs, evaluation cases, and an audit trail.
+This is the distinction between an AI tool and an AI system. A tool waits for an individual user. A system can notice that work is due, assemble the context, complete bounded steps, and place the exception in front of the right person.
+A PI firm example
+Digger Earles started in the mail room
+On
+Personal Injury Mastermind
+, Digger Earles of Laborde Earles said his firm tested several AI products, then hired an in-house AI and data specialist to work with the firm's own data and workflows. The specialist's first project was a mail-room workflow that automatically populated case files as mail arrived. Earles called it a "huge home run" and said it moved faster than the firm's prior software implementations.
+The lesson is not that every PI firm needs an AI researcher on staff. It is that the useful work was specific to Laborde Earles. A general product can classify a document. To complete the workflow, the system must also know how that firm identifies the matter, names and stores the document, updates the file, assigns responsibility, and handles an uncertain match. That firm-specific layer is where bespoke AI earns its cost.
+Source:
+Digger Earles on building custom AI at Laborde Earles
+.
+For a deeper explanation, see our guide to
+tools versus systems for PI firms
+.
+Where PI firms need the last mile
+Intake
+A standard chatbot can collect answers. A bespoke
+AI intake workflow
+can acknowledge the lead, write cleanly into the intake system, preserve attribution, recognize the firm's priority signals, and alert the right human closer without pretending to be the lawyer.
+Case development
+A generic agent can draft an email. A firm-specific
+records-chasing system
+knows the provider, authorization status, prior attempts, expected documents, matter stage, and when another failed request needs human attention.
+Client updates
+A writing assistant can make a message sound polished. A governed
+client communication system
+can distinguish a routine status request from frustration, a medical issue, a settlement question, or a message that should reach an attorney immediately.
+Data migration
+A destination vendor can explain its import format. A hands-on
+case-management migration
+must discover old conventions, clean records, map fields and users, test representative matters, reconcile exceptions, and verify that the new system reflects how the firm works.
+In each example, the reusable AI capability already exists. The economic value comes from fitting it to a repeated workflow and making the handoff reliable.
+When to buy, configure, or build
+Not every workflow deserves custom software. Bespoke work adds setup, testing, maintenance, security, and ownership. Use it where those costs are justified.
+Buy
+The task is common, the standard workflow fits, and the vendor's product already handles the data and risk. Research and first-draft tools often belong here.
+Configure
+The platform is right, but fields, templates, routing rules, integrations, or permissions need to match the firm. Use the vendor's supported workflow layer where it is sufficient.
+Build bespoke
+The workflow repeats, crosses systems, carries measurable value, and depends on firm-specific context or handoffs. The agent should work around your systems, not create another isolated destination.
+Do not automate
+The work is rare, poorly understood, dominated by legal judgment, or based on unreliable data. Fix the process first or keep it human.
+How to start without overbuilding
+Pick one workflow that creates visible friction every week. Follow one real matter through it. Count the systems touched, repeated entries, waiting points, exceptions, and moments where only one experienced person knows what to do.
+Then define a narrow outcome: acknowledge every after-hours inquiry, reduce manual records follow-up, or eliminate duplicate entry between two systems. Establish a baseline before adding AI.
+Build the smallest agent that can improve that outcome while keeping legal judgment and sensitive communication with people. Test ordinary cases and ugly exceptions. Log what happens. Expand only after the workflow is reliable.
+The prerequisite is not a larger AI budget. It is
+operational readiness
+: clear ownership, usable data, documented handoffs, and agreement about what the agent may do.
+The point of bespoke AI is not to own more software. It is to remove a costly piece of friction that no general product is designed to own.
+Common questions
+Bespoke AI agents for PI firms
+What is a bespoke AI agent for a personal injury firm?
+It is an AI-enabled workflow configured around the firm's systems, data, rules, permissions, and human handoffs. It uses existing models; it does not usually require training a new foundation model.
+Why cannot a legal AI vendor solve every workflow?
+A product vendor must build features that work for many customers. A firm's hardest operating problems often depend on its particular systems, field conventions, staffing model, escalation rules, and historical data. Solving those details is implementation work, not merely another product feature.
+When should a PI firm build a bespoke agent instead of buying software?
+Consider a bespoke agent when the workflow repeats often, crosses systems, has measurable economic value, and requires firm-specific rules or handoffs. Buy an established product when the task is common and the standard workflow already fits.
+Does bespoke AI replace legal judgment?
+It should not. Case acceptance, legal advice, strategy, negotiation, deadline responsibility, and sensitive client conversations should remain with qualified people. The agent should organize, route, draft, and escalate within defined boundaries.
+How should a firm govern a bespoke AI agent?
+Limit its data access and permitted actions, define human review gates, log what it did, test realistic exceptions, monitor outcomes, and assign a named owner who can pause or change the workflow.
+Find the workflow your vendors will not own
+Possible Minds helps PI firms map the operating problem, decide what should remain human, and build a narrow agent around the systems the firm already uses.
+Request a workflow diagnostic

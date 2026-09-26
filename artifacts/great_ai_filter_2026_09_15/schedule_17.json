@@ -1,0 +1,130 @@
+{
+  "action": {
+    "id": "action_48adb354dab84091a18c58a4",
+    "action_type": "send_approved_lead_gen_draft",
+    "status": "approved",
+    "risk_level": "high",
+    "requested_by": "codex",
+    "approved_by": "codex",
+    "entity_type": "lead_gen_batch_item",
+    "entity_id": "bf2835ff11154d1c8e0a82ef9feafb11",
+    "input": {
+      "body": "Hi George,\n\nFollowing my note about recurring document work at PAIJUKLAW, I wanted to share a short article on the leadership side of AI adoption.\n\nTwo firms can buy the same technology and get very different results. The difference is often whether people change how they share information, review work, and handle exceptions. That's guiding our work at Possible Minds.\n\nhttps://getpossibleminds.com/t/gWlOyIogrQ\n\nFrom your CEO's perspective, which is the bigger challenge: choosing the tools or making those changes stick? I'd appreciate your take.\n\nBest,\nPranav\nFounder, Possible Minds",
+      "subject": "Re: where AI could compound at PAIJUKLAW, PC",
+      "approval": {
+        "references": "<0100019ffd1ac147-8d8a9483-46fc-4c1c-a921-43ef2ea3f72b-000000@email.amazonses.com>",
+        "approved_at": "2026-09-15T10:41:25.106291+00:00",
+        "approved_by": "codex",
+        "body_sha256": "65bef215af57912ea0e0b975dcd8d2ba51f942e2bee13e04fe9ba68baea32641",
+        "in_reply_to": "<0100019ffd1ac147-8d8a9483-46fc-4c1c-a921-43ef2ea3f72b-000000@email.amazonses.com>",
+        "subject_sha256": "d3ba7bb293ca4bbe0c63d7a172c944394a7ce228a98f325622ea9abfc6f6d16a"
+      },
+      "transport": "resend",
+      "references": "<0100019ffd1ac147-8d8a9483-46fc-4c1c-a921-43ef2ea3f72b-000000@email.amazonses.com>",
+      "skill_path": null,
+      "body_sha256": "65bef215af57912ea0e0b975dcd8d2ba51f942e2bee13e04fe9ba68baea32641",
+      "in_reply_to": "<0100019ffd1ac147-8d8a9483-46fc-4c1c-a921-43ef2ea3f72b-000000@email.amazonses.com>",
+      "skill_sha256": null,
+      "batch_item_id": "bf2835ff11154d1c8e0a82ef9feafb11",
+      "brief_version": null,
+      "subject_sha256": "d3ba7bb293ca4bbe0c63d7a172c944394a7ce228a98f325622ea9abfc6f6d16a",
+      "composer_variant_key": null,
+      "lead_gen_action_type": "follow_up",
+      "composer_experiment_key": null
+    },
+    "policy_result": {},
+    "execution_result": {},
+    "error": null,
+    "trace_id": null,
+    "scheduled_for": "2026-09-15T18:10:00+00:00",
+    "started_at": null,
+    "completed_at": null,
+    "created_at": "2026-09-15T10:41:25.112111+00:00",
+    "updated_at": "2026-09-15T10:41:25.112118+00:00"
+  },
+  "created": true,
+  "updated_existing": false,
+  "executed": false,
+  "scheduled_for_pt": "2026-09-15 11:10 PDT",
+  "scheduled_for_utc": "2026-09-15 18:10:00 UTC",
+  "final_policy": {
+    "allowed": true,
+    "reason": "allowed",
+    "checks": [
+      {
+        "name": "status_allows_execution",
+        "passed": true,
+        "detail": "approved"
+      },
+      {
+        "name": "human_approval_present",
+        "passed": true,
+        "detail": "codex"
+      },
+      {
+        "name": "subject_present",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "body_present",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "subject_hash_matches_approval",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "body_hash_matches_approval",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "in_reply_to_matches_approval",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "references_match_approval",
+        "passed": true,
+        "detail": ""
+      },
+      {
+        "name": "lead_gen_transport_available",
+        "passed": true,
+        "detail": "zoho_api 1/0 configured=True; resend 0/50 configured=True"
+      },
+      {
+        "name": "no_patient_data_in_outreach",
+        "passed": true,
+        "detail": "llm_guard_disabled"
+      },
+      {
+        "name": "batch_item_exists",
+        "passed": true,
+        "detail": "bf2835ff11154d1c8e0a82ef9feafb11"
+      },
+      {
+        "name": "batch_item_not_already_started",
+        "passed": true,
+        "detail": "approved"
+      },
+      {
+        "name": "contact_email_present",
+        "passed": true,
+        "detail": "george@paijuklaw.com"
+      },
+      {
+        "name": "no_prior_successful_action_for_item",
+        "passed": true,
+        "detail": ""
+      }
+    ],
+    "risk_level": "high",
+    "requires_human_approval": true,
+    "action_type": "send_approved_lead_gen_draft",
+    "contact_email": "george@paijuklaw.com"
+  }
+}

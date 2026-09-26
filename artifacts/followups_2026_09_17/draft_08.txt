@@ -1,0 +1,13 @@
+Subject: ai readiness at Setareh
+
+Hi Daniel,
+
+The example I sent used Claude and Clio, but I wasn't suggesting you change systems. The part I wanted to explore was turning intake facts into a structured summary and task list that your team can review.
+
+I'm trying to understand which part would actually save time.
+
+Would organizing the initial client facts or checking the resulting tasks be more useful? I'd appreciate even a brief reply.
+
+Best,
+Pranav
+Founder, Possible Minds

@@ -15,6 +15,7 @@ from app.db import AsyncSessionLocal
 from app.db.models import FirmAliasRow, PifEnrichmentTaskRow, PifFirmRow
 from app.services.front_sync import is_consumer_domain, normalize_domain
 from app.services.llm_gateway import call_skill_json
+from app.services.pif_ai_posture import normalize_ai_posture, store_ai_posture
 
 
 logger = logging.getLogger(__name__)
@@ -183,7 +184,7 @@ async def _set_stage(
         task = await session.get(PifEnrichmentTaskRow, task_id)
         if task is None:
             return
-        firm = await session.get(PifFirmRow, task.pif_id)
+        firm = await session.get(PifFirmRow, task.pif_id, with_for_update=True)
         summary = _as_dict(task.result_summary)
         stages = [dict(row) for row in _as_list(summary.get("stages")) if isinstance(row, dict)] or _stage_list()
         for row in stages:
@@ -235,6 +236,7 @@ def _identity_payload(firm: PifFirmRow) -> dict[str, Any]:
             domains.append(domain)
     return {
         "firm_name": firm.firm_name,
+        "as_of_date": datetime.now(timezone.utc).date().isoformat(),
         "entity_type": firm.entity_type,
         "observed_domains": domains,
         "phones": _as_list(source.get("phones"))[:10],
@@ -304,6 +306,7 @@ def normalize_enrichment(value: dict[str, Any]) -> dict[str, Any]:
         "leadership": leadership[:15],
         "staff": staff[:30],
         "vendor_stack": vendor_stack,
+        "ai_adoption": normalize_ai_posture(value.get("ai_adoption")),
     }
 
 
@@ -316,17 +319,19 @@ async def research_firm_locally(firm: PifFirmRow) -> dict[str, Any]:
             "practice_areas", "founded_year", "firm_size", "office_locations",
             "notable_cases", "awards_recognition", "bar_associations",
             "social_media", "additional_info", "sources", "leadership", "staff", "vendor_stack",
+            "ai_adoption",
         ],
         model=os.getenv("PIF_LOCAL_ENRICHMENT_MODEL", "openclaw/main"),
         timeout_s=int(os.getenv("PIF_LOCAL_ENRICHMENT_TIMEOUT_S", "300")),
         max_tokens=int(os.getenv("PIF_LOCAL_ENRICHMENT_MAX_TOKENS", "6000")),
+        lane=os.getenv("OPENCLAW_RPC_BATCH_LANE", "possibleos-batch"),
     )
     return normalize_enrichment(response.parsed)
 
 
 async def start_local_firm_enrichment(firm_id: str) -> dict[str, Any]:
     async with AsyncSessionLocal() as session:
-        firm = await session.get(PifFirmRow, firm_id)
+        firm = await session.get(PifFirmRow, firm_id, with_for_update=True)
         if firm is None:
             raise PifLocalEnrichmentError(404, "firm_not_found")
         existing = (await session.execute(
@@ -376,6 +381,12 @@ async def start_local_firm_enrichment(firm_id: str) -> dict[str, Any]:
         )
         firm.updated_at = _utcnow()
         await session.commit()
+        try:
+            from app.services.pif_change_detection import MODULE_PROFILE, mark_research_status
+
+            await mark_research_status(firm_id, MODULE_PROFILE, "queued", metadata={"task_id": task_id})
+        except Exception:
+            logger.exception("Could not update profile research queue state for %s", firm_id)
         return {
             "task_id": task_id,
             "pif_id": firm_id,
@@ -417,7 +428,7 @@ async def _claim_next_task() -> tuple[str, str] | None:
             return None
         task.status = "in_progress"
         task.started_at = _utcnow()
-        firm = await session.get(PifFirmRow, task.pif_id)
+        firm = await session.get(PifFirmRow, task.pif_id, with_for_update=True)
         if firm:
             firm.research_status = "in_progress"
             firm.staff_research_status = "in_progress"
@@ -432,6 +443,12 @@ async def _claim_next_task() -> tuple[str, str] | None:
                 warning_count=summary.get("warning_count", 0),
             )
         await session.commit()
+        try:
+            from app.services.pif_change_detection import MODULE_PROFILE, mark_research_status
+
+            await mark_research_status(task.pif_id, MODULE_PROFILE, "in_progress", metadata={"task_id": task.task_id})
+        except Exception:
+            logger.exception("Could not update profile research running state for %s", task.pif_id)
         return task.task_id, task.pif_id
 
 
@@ -457,6 +474,7 @@ async def _claim_canonical_domain(session, firm: PifFirmRow, domain: str | None,
         return False
     if await _canonical_domain_owner(session, firm, domain):
         return False
+    alias = await session.get(FirmAliasRow, {"alias_type": "domain", "alias_value": domain})
     firm.canonical_website = domain
     firm.website = domain
     if alias is None:
@@ -577,7 +595,7 @@ async def _persist_research_result(task_id: str, result: dict[str, Any]) -> dict
         task = await session.get(PifEnrichmentTaskRow, task_id)
         if task is None:
             raise RuntimeError("research_task_not_found")
-        firm = await session.get(PifFirmRow, task.pif_id)
+        firm = await session.get(PifFirmRow, task.pif_id, with_for_update=True)
         if firm is None:
             raise RuntimeError("firm_not_found")
         domain = result.get("canonical_website")
@@ -623,6 +641,7 @@ async def _persist_research_result(task_id: str, result: dict[str, Any]) -> dict
         ):
             data[key] = _merge_values(data.get(key), result.get(key))
         data["research_provider"] = LOCAL_PROVIDER
+        store_ai_posture(data, result.get("ai_adoption"), now)
         state = _as_dict(data.get("local_enrichment"))
         state.pop("canonical_domain_review", None)
         data["local_enrichment"] = state
@@ -632,6 +651,13 @@ async def _persist_research_result(task_id: str, result: dict[str, Any]) -> dict
         firm.vendor_stack = _merge_vendor_stack(firm.vendor_stack, result.get("vendor_stack"))
         firm.updated_at = now
         await session.commit()
+        change_summary = None
+        try:
+            from app.services.pif_change_detection import MODULE_PROFILE, record_research_snapshot
+
+            change_summary = await record_research_snapshot(firm.id, MODULE_PROFILE, result, captured_at=now)
+        except Exception:
+            logger.exception("Firm profile change detection failed for %s", firm.id)
         return {
             "pif_id": firm.id,
             "canonical_website": firm.canonical_website,
@@ -641,16 +667,18 @@ async def _persist_research_result(task_id: str, result: dict[str, Any]) -> dict
             "leadership_count": len(firm.leadership),
             "staff_count": len(firm.staff),
             "vendor_count": len(_as_list((firm.vendor_stack or {}).get("evidence"))),
+            "change_detection": change_summary,
         }
 
 
 async def _finalize_task(task_id: str, status: str, *, error: str | None = None) -> None:
     now = _utcnow()
+    failed_pif_id: str | None = None
     async with AsyncSessionLocal() as session:
         task = await session.get(PifEnrichmentTaskRow, task_id)
         if task is None:
             return
-        firm = await session.get(PifFirmRow, task.pif_id)
+        firm = await session.get(PifFirmRow, task.pif_id, with_for_update=True)
         summary = _as_dict(task.result_summary)
         stages = _as_list(summary.get("stages")) or _stage_list()
         warning_count = sum(
@@ -696,7 +724,16 @@ async def _finalize_task(task_id: str, status: str, *, error: str | None = None)
                 })
             firm.research_data = _local_state(firm, status, **extra)
             firm.updated_at = now
+            if status != "completed":
+                failed_pif_id = firm.id
         await session.commit()
+    if failed_pif_id:
+        try:
+            from app.services.pif_change_detection import MODULE_PROFILE, mark_research_failure
+
+            await mark_research_failure(failed_pif_id, MODULE_PROFILE, error or "Firm enrichment failed", attempted_at=now)
+        except Exception:
+            logger.exception("Could not update profile research failure state for %s", failed_pif_id)
 
 
 async def _run_optional_stage(task_id: str, key: str, operation) -> Any:

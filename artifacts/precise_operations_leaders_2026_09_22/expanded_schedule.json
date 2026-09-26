@@ -1,0 +1,22 @@
+{
+  "checked_at": "2026-09-22T07:49:28Z",
+  "campaign_id": "cmp_NB-uemH0kZIYD55B",
+  "batch_id": "aed8849776dd4987884ad3e735cf61c7",
+  "status": "approved_and_scheduled_not_sent",
+  "transport": "resend",
+  "added_recipients": [
+    {"name":"Christopher Jones","firm":"Power Liens","email":"chris@powerliens.com","item_id":"a1eb884ace6a49f3aa963200d3924ace","action_id":"action_98cee27193a44fc3adec909b","scheduled_pdt":"2026-09-22 10:10 PDT","scheduled_utc":"2026-09-22T17:10:00Z","draft_file":"chris_jones.txt"},
+    {"name":"Karen","firm":"Downtown L.A. Law Group","email":"karen@firstprioritymgmt.com","item_id":"e2b71c5923b543c482ddc5bb8cb232d9","action_id":"action_5da437fe921342a9bfb03410","scheduled_pdt":"2026-09-22 10:20 PDT","scheduled_utc":"2026-09-22T17:20:00Z","draft_file":"karen_downtown_la.txt"},
+    {"name":"Veronica Samaan","firm":"ProCare Funding","email":"veronicasamaan@procarefunding.com","item_id":"3125e7311c944913b8e4277fbb16ddb5","action_id":"action_df5c335cb76c4cd2810ee348","scheduled_pdt":"2026-09-22 10:30 PDT","scheduled_utc":"2026-09-22T17:30:00Z","draft_file":"veronica_samaan.txt"},
+    {"name":"Cesar Bazan","firm":"Ravan Law","email":"cesar@ravanlaw.com","item_id":"6eee80227f274d4d914bba4356d01e61","action_id":"action_f001ff9f38664d969360aeee","scheduled_pdt":"2026-09-22 10:40 PDT","scheduled_utc":"2026-09-22T17:40:00Z","draft_file":"cesar_bazan.txt"},
+    {"name":"Jessica Horrilleno","firm":"Alexandroff Law Group","email":"jessica@alglegal.com","item_id":"9c9104e6d5ad464fa7c7f5462a8e7b77","action_id":"action_1219ac43708b436f884c9b8f","scheduled_pdt":"2026-09-22 10:50 PDT","scheduled_utc":"2026-09-22T17:50:00Z","draft_file":"jessica_horrilleno.txt"},
+    {"name":"Katie Whitt","firm":"RMD Law","email":"katie@rmdlaw.com","item_id":"6ccdf8842c4b4994b302165dd7a1af83","action_id":"action_149031c5e03e47e8bb66aa6f","scheduled_pdt":"2026-09-22 11:00 PDT","scheduled_utc":"2026-09-22T18:00:00Z","draft_file":"katie_whitt.txt"},
+    {"name":"Stella Chalian","firm":"Hosharian Law Firm","email":"stella@hosharianlaw.com","item_id":"f81872fa05dd41648831a2d58dd051f4","action_id":"action_c78a2593862d466f833c750b","scheduled_pdt":"2026-09-22 11:10 PDT","scheduled_utc":"2026-09-22T18:10:00Z","draft_file":"stella_chalian.txt"},
+    {"name":"Charles Mugrdechian","firm":"NP College","email":"cmugrdechian@npcollege.edu","item_id":"7d94a0daf2bb4c989cbb4970454824fe","action_id":"action_3d54cb2419f7459f8386e834","scheduled_pdt":"2026-09-22 11:20 PDT","scheduled_utc":"2026-09-22T18:20:00Z","draft_file":"charles_mugrdechian.txt"},
+    {"name":"Andy Cardenas","firm":"The Nitka Firm","email":"andya@thenitkaalgazefirm.com","item_id":"6ddd3e3371c1458c85a4f460556dc824","action_id":"action_2c77394d78b947d8aa4c9eba","scheduled_pdt":"2026-09-22 11:30 PDT","scheduled_utc":"2026-09-22T18:30:00Z","draft_file":"andy_cardenas.txt"},
+    {"name":"Allen Kian","firm":"Oakmont Law","email":"allen@oakmontlawpc.com","item_id":"c6fd3d2d588949eba4966f60210a3d7c","action_id":"action_0994e1887bd0403a92253984","scheduled_pdt":"2026-09-22 11:40 PDT","scheduled_utc":"2026-09-22T18:40:00Z","draft_file":"allen_kian.txt"},
+    {"name":"Dr. Lisa Putnam","firm":"Ventura County Community College District","email":"lputnam@vcccd.edu","item_id":"82a3f528589f4b86a19909d3b6d46f14","action_id":"action_da12726154fc41eca87e5aba","scheduled_pdt":"2026-09-22 11:50 PDT","scheduled_utc":"2026-09-22T18:50:00Z","draft_file":"lisa_putnam.txt"},
+    {"name":"Zack Malal","firm":"SAW Law Group","email":"zack@sawlawgroup.com","item_id":"b17d1f260a3b440a861cc2dc2f3f6e01","action_id":"action_a07db896c1a945e3835f1c61","scheduled_pdt":"2026-09-22 12:00 PDT","scheduled_utc":"2026-09-22T19:00:00Z","draft_file":"zack_malal.txt"}
+  ],
+  "validation": {"actions":22,"unique_recipients":22,"unique_firms":22,"unique_domains":22,"approved_future":22,"policy_allowed":22,"sent":0,"failed":0,"scheduler_running":true,"scheduler_last_error":null}
+}

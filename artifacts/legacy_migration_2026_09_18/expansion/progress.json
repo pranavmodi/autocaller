@@ -1,0 +1,138 @@
+{
+  "batch_id": "6de389e0a5fe4f5794991acc1391bd38",
+  "campaign_id": "cmp_ki-WF9eCn7bGJ01C",
+  "six": [
+    {
+      "name": "Nathan Hanning",
+      "email": "nathan@hanningsacchetto.com",
+      "contact_id": "771cdbd9300e4615971f450cbf59a143",
+      "pif_id": "7cb7df02-e007-434f-baf0-1544beeee996",
+      "firm": "Hanning & Sacchetto",
+      "vendor": "MerusCase",
+      "hook": "As a co-founder, you'd want any software change to make your team's work easier, without disrupting active cases.",
+      "link": {
+        "code": "9f9tZVCzTA",
+        "campaign_id": "cmp_ki-WF9eCn7bGJ01C",
+        "contact_id": "771cdbd9300e4615971f450cbf59a143",
+        "pif_id": "7cb7df02-e007-434f-baf0-1544beeee996",
+        "channel": "email",
+        "label": "Migration expansion - 2026-09-18",
+        "destination_url": "https://getpossibleminds.com/services/case-management-migration",
+        "advisor_briefing": null,
+        "tracking_url": "https://getpossibleminds.com/t/9f9tZVCzTA",
+        "sent_at": null,
+        "created_at": "2026-09-18T09:16:58.459902+00:00"
+      }
+    },
+    {
+      "name": "John Hernandez",
+      "email": "john@hernandezlaw.co",
+      "contact_id": "88f7d5469b144771933d6ded45b9ebcf",
+      "pif_id": "fbeb9cfa-9e52-48a3-b661-616127884e18",
+      "firm": "Hernandez Law",
+      "vendor": "MerusCase",
+      "hook": "Your experience as a workers' compensation judge gives you a different perspective on case preparation. A software change should help your team keep that preparation intact.",
+      "link": {
+        "code": "xDOhm7nOEQ",
+        "campaign_id": "cmp_ki-WF9eCn7bGJ01C",
+        "contact_id": "88f7d5469b144771933d6ded45b9ebcf",
+        "pif_id": "fbeb9cfa-9e52-48a3-b661-616127884e18",
+        "channel": "email",
+        "label": "Migration expansion - 2026-09-18",
+        "destination_url": "https://getpossibleminds.com/services/case-management-migration",
+        "advisor_briefing": null,
+        "tracking_url": "https://getpossibleminds.com/t/xDOhm7nOEQ",
+        "sent_at": null,
+        "created_at": "2026-09-18T09:17:02.337198+00:00"
+      }
+    },
+    {
+      "name": "Joshua Cohen Slatkin",
+      "email": "josh@jcslawyers.com",
+      "contact_id": "faf6097874b4457f8b32246ecbac764d",
+      "pif_id": "337a8ad2-3f94-4e3c-9e07-f9f83825e29e",
+      "firm": "JCS Law Firm",
+      "vendor": "Law Ruler",
+      "hook": "You've built a practice handling both injury and employment cases. Any software change should preserve the workflows your team relies on, not create another admin project.",
+      "link": {
+        "code": "TfJCfzBbsg",
+        "campaign_id": "cmp_ki-WF9eCn7bGJ01C",
+        "contact_id": "faf6097874b4457f8b32246ecbac764d",
+        "pif_id": "337a8ad2-3f94-4e3c-9e07-f9f83825e29e",
+        "channel": "email",
+        "label": "Migration expansion - 2026-09-18",
+        "destination_url": "https://getpossibleminds.com/services/case-management-migration",
+        "advisor_briefing": null,
+        "tracking_url": "https://getpossibleminds.com/t/TfJCfzBbsg",
+        "sent_at": null,
+        "created_at": "2026-09-18T09:17:06.014486+00:00"
+      }
+    },
+    {
+      "name": "Elena Steers",
+      "email": "elena@steerslawfirm.com",
+      "contact_id": "fc_8049c743c75442f58a8a4dab",
+      "pif_id": "8e98e41e-120d-4252-96f5-1f80c9bbf4c8",
+      "firm": "Steers & Associates",
+      "vendor": null,
+      "hook": "As a founding partner, you'd want any change to your team's systems to earn its keep. Moving software should mean less admin, not more disruption.",
+      "link": {
+        "code": "dbvBILh4YA",
+        "campaign_id": "cmp_ki-WF9eCn7bGJ01C",
+        "contact_id": "fc_8049c743c75442f58a8a4dab",
+        "pif_id": "8e98e41e-120d-4252-96f5-1f80c9bbf4c8",
+        "channel": "email",
+        "label": "Migration expansion - 2026-09-18",
+        "destination_url": "https://getpossibleminds.com/services/case-management-migration",
+        "advisor_briefing": null,
+        "tracking_url": "https://getpossibleminds.com/t/dbvBILh4YA",
+        "sent_at": null,
+        "created_at": "2026-09-18T09:17:09.591453+00:00"
+      }
+    },
+    {
+      "name": "Jude Redkey",
+      "email": "jude@redkeygordonlaw.com",
+      "contact_id": "fc_303e26e6a3c34e4d8faa9003",
+      "pif_id": "961af1c4-fd75-40f7-a566-3baa864c43f7",
+      "firm": "Redkey Gordon Law",
+      "vendor": null,
+      "hook": "As a founding partner, you'd want a software change to protect the case history and working habits your team has built up, while making everyday tasks easier.",
+      "link": {
+        "code": "92kNQCqnow",
+        "campaign_id": "cmp_ki-WF9eCn7bGJ01C",
+        "contact_id": "fc_303e26e6a3c34e4d8faa9003",
+        "pif_id": "961af1c4-fd75-40f7-a566-3baa864c43f7",
+        "channel": "email",
+        "label": "Migration expansion - 2026-09-18",
+        "destination_url": "https://getpossibleminds.com/services/case-management-migration",
+        "advisor_briefing": null,
+        "tracking_url": "https://getpossibleminds.com/t/92kNQCqnow",
+        "sent_at": null,
+        "created_at": "2026-09-18T09:17:16.871995+00:00"
+      }
+    },
+    {
+      "name": "Walter Clark",
+      "email": "wclark@walterclark.com",
+      "contact_id": "fea3b202b4264f79a380fefcc27fe847",
+      "pif_id": "e6c80251-9db3-4e43-946d-d0633f34cfe9",
+      "firm": "Walter Clark Legal Group",
+      "vendor": "SmartAdvocate",
+      "hook": "After building your practice over decades, you'd want any new platform to support your team without disrupting active cases or losing the detail behind them.",
+      "link": {
+        "code": "gKeJJFJXPQ",
+        "campaign_id": "cmp_ki-WF9eCn7bGJ01C",
+        "contact_id": "fea3b202b4264f79a380fefcc27fe847",
+        "pif_id": "e6c80251-9db3-4e43-946d-d0633f34cfe9",
+        "channel": "email",
+        "label": "Migration expansion - 2026-09-18",
+        "destination_url": "https://getpossibleminds.com/services/case-management-migration",
+        "advisor_briefing": null,
+        "tracking_url": "https://getpossibleminds.com/t/gKeJJFJXPQ",
+        "sent_at": null,
+        "created_at": "2026-09-18T09:17:20.722860+00:00"
+      }
+    }
+  ]
+}

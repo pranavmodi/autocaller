@@ -1,0 +1,26 @@
+{
+  "categories": [
+    "AI agents and automation",
+    "Engineering leadership",
+    "Technical product and solutions",
+    "Data and machine learning"
+  ],
+  "resume_count": 47,
+  "queue_total": 567,
+  "processing_counts": {
+    "pending": 552,
+    "classifying": 15
+  },
+  "browser_errors": [],
+  "application_requests": 0,
+  "checks": [
+    "settings category mappings",
+    "four PDF previews",
+    "path escape rejected",
+    "job category control",
+    "prepare/apply controls",
+    "desktop/mobile layout",
+    "default newest posted",
+    "no Activity tab"
+  ]
+}

@@ -1,0 +1,219 @@
+[
+  {
+    "email": "blalezari@redefinelawfirm.com",
+    "sources": [],
+    "provider_status": 401
+  },
+  {
+    "email": "jamal@jsminjuryfirm.com",
+    "sources": []
+  },
+  {
+    "email": "kris@peeralilaw.com",
+    "sources": []
+  },
+  {
+    "email": "gohar@abelianlawfirm.com",
+    "sources": []
+  },
+  {
+    "email": "hgk@keosianlaw.com",
+    "sources": []
+  },
+  {
+    "email": "david@greylaw.com",
+    "sources": []
+  },
+  {
+    "email": "david@pourati.com",
+    "sources": []
+  },
+  {
+    "email": "sj@jarulaw.com",
+    "sources": []
+  },
+  {
+    "email": "hyp@hyplaw.com",
+    "sources": []
+  },
+  {
+    "email": "lillian@sedlawgroup.com",
+    "sources": [
+      {
+        "source": "succeeded_action_ancestry",
+        "action_id": "action_ab5a459977d24418913ef413",
+        "subject": "Is Lead Docket at SED Law Group tying marketing spend to signed cases?",
+        "in_reply_to": "<0100019ff83d6e78-898b78fe-d404-4c9f-b7f5-fcfce5184ba7-000000@email.amazonses.com>",
+        "references": "<0100019ff83d6e78-898b78fe-d404-4c9f-b7f5-fcfce5184ba7-000000@email.amazonses.com>"
+      }
+    ]
+  },
+  {
+    "email": "ethan@esqlegalgroup.com",
+    "sources": [
+      {
+        "source": "succeeded_action_ancestry",
+        "action_id": "action_899faa6538a143b6b4b47499",
+        "subject": "where AI could compound at E.S.q Legal, APLC",
+        "in_reply_to": "<0100019ffcda87d0-049b6b50-6f79-4402-854a-375a2b21d631-000000@email.amazonses.com>",
+        "references": "<0100019ffcda87d0-049b6b50-6f79-4402-854a-375a2b21d631-000000@email.amazonses.com>"
+      }
+    ]
+  },
+  {
+    "email": "estelaricheda@earthlink.net",
+    "sources": [
+      {
+        "source": "succeeded_action_ancestry",
+        "action_id": "action_40d9bf52bedd4782b268c92b",
+        "subject": "where AI could compound at Law Office of Estela S. Richeda",
+        "in_reply_to": "<0100019ffcdf1e03-ff7cb9e1-a9a9-4923-8b09-6ed4715e8b17-000000@email.amazonses.com>",
+        "references": "<0100019ffcdf1e03-ff7cb9e1-a9a9-4923-8b09-6ed4715e8b17-000000@email.amazonses.com>"
+      }
+    ]
+  },
+  {
+    "email": "daniel.kim@dklaw.com",
+    "sources": [
+      {
+        "source": "succeeded_action_ancestry",
+        "action_id": "action_fd90bf534a1e4c67a177eb57",
+        "subject": "Ariel W. submitted a Yelp review about DK Law",
+        "in_reply_to": "<0100019fed4316db-bce1c12a-3e64-4ebb-be18-b6810dfd90cb-000000@email.amazonses.com>",
+        "references": "<0100019fed4316db-bce1c12a-3e64-4ebb-be18-b6810dfd90cb-000000@email.amazonses.com>"
+      }
+    ]
+  },
+  {
+    "email": "aslan.petrosyan@petrosyanlawpc.com",
+    "sources": [
+      {
+        "source": "succeeded_action_ancestry",
+        "action_id": "action_526af694ff2946c98130923d",
+        "subject": "where AI could compound at TRIDENT LEGAL, LLP",
+        "in_reply_to": "<0100019ffd364b42-19b11524-695e-4360-8df8-eda8641a8694-000000@email.amazonses.com>",
+        "references": "<0100019ffd364b42-19b11524-695e-4360-8df8-eda8641a8694-000000@email.amazonses.com>"
+      }
+    ]
+  },
+  {
+    "email": "ajordan@josejordan.com",
+    "sources": [
+      {
+        "source": "succeeded_action_ancestry",
+        "action_id": "action_c39770937f9341779b4abb2d",
+        "subject": "Is Lead Docket at Jose Jordan & Associates, APLC tying marketing spend to signed cases?",
+        "in_reply_to": "<0100019ff8225cfb-9fd75160-11c4-450e-b156-36cdfb694c85-000000@email.amazonses.com>",
+        "references": "<0100019ff8225cfb-9fd75160-11c4-450e-b156-36cdfb694c85-000000@email.amazonses.com>"
+      }
+    ]
+  },
+  {
+    "email": "dchoyce@choycelawfirm.com",
+    "sources": [
+      {
+        "source": "succeeded_action_ancestry",
+        "action_id": "action_3ce020027722413db9def3ae",
+        "subject": "Re: Precise imaging - quick question",
+        "in_reply_to": "<010001a022da0d66-e030a615-7304-49cc-8d1b-88837608dbfe-000000@email.amazonses.com>",
+        "references": "<010001a022da0d66-e030a615-7304-49cc-8d1b-88837608dbfe-000000@email.amazonses.com>"
+      }
+    ]
+  },
+  {
+    "email": "svaziri@vazirilaw.com",
+    "sources": [
+      {
+        "source": "succeeded_action_ancestry",
+        "action_id": "action_a2c8ff0a6b8444a4b6f20752",
+        "subject": "Re: Vaziri Law Group + AbacusLaw migration",
+        "in_reply_to": "<010001a001a42393-980bfd4b-c511-4132-ae0f-58e4d98ba92d-000000@email.amazonses.com>",
+        "references": "<010001a001a42393-980bfd4b-c511-4132-ae0f-58e4d98ba92d-000000@email.amazonses.com>"
+      }
+    ]
+  },
+  {
+    "email": "william@hillstonelaw.com",
+    "sources": []
+  },
+  {
+    "email": "will@sgwlawyers.com",
+    "sources": []
+  },
+  {
+    "email": "werner@meissnerlawfirm.com",
+    "sources": []
+  },
+  {
+    "email": "tina@alvandigroup.com",
+    "sources": []
+  },
+  {
+    "email": "stephan@sfalaw.com",
+    "sources": []
+  },
+  {
+    "email": "spencer@seyblaw.com",
+    "sources": []
+  },
+  {
+    "email": "sa@tridentlegal.com",
+    "sources": []
+  },
+  {
+    "email": "ryan@sargentlawfirm.com",
+    "sources": []
+  },
+  {
+    "email": "ross@jurewitz.com",
+    "sources": []
+  },
+  {
+    "email": "rivasinjurylaw@outlook.com",
+    "sources": []
+  },
+  {
+    "email": "randal@ramoslaw.com",
+    "sources": []
+  },
+  {
+    "email": "psharma@wingertlaw.com",
+    "sources": []
+  },
+  {
+    "email": "orlanmarie@slegal.com",
+    "sources": []
+  },
+  {
+    "email": "mike@oakwoodlegal.com",
+    "sources": []
+  },
+  {
+    "email": "michaelpark@parklawgroup.com",
+    "sources": []
+  },
+  {
+    "email": "michael@thetitanlaw.com",
+    "sources": []
+  },
+  {
+    "email": "michael@ghozlandlawfirm.com",
+    "sources": []
+  },
+  {
+    "email": "mahsa@bdinjury.com",
+    "sources": []
+  },
+  {
+    "email": "liz@accidentjustice.com",
+    "sources": []
+  },
+  {
+    "email": "kramirez@ramirezlaw.com",
+    "sources": []
+  },
+  {
+    "email": "kirill@pacificwestinjury.com",
+    "sources": []
+  }
+]

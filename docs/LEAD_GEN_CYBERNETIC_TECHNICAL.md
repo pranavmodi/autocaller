@@ -13,6 +13,26 @@ Use the other lead-gen docs for different purposes:
 
 ## Runtime Surfaces
 
+### Inline Campaign Recipients
+
+Campaign link creation accepts `recipient_name`, optional `recipient_email`,
+and optional `recipient_firm_id` instead of `contact_id`. The existing
+`POST /api/engagement-campaigns/{id}/links` transaction creates the contact and
+link together. Exact case-normalized email matches reuse one contact; duplicate
+or conflicting-firm matches require explicit selection. A transaction advisory
+lock serializes inline creation for the same email. No name-only auto-merge or
+inferred firm records: an unassigned contact has an empty `pif_id`, and its link
+has null firm attribution. Source is `campaign_manual`. Existing analytics use
+the real contact ID, so recipient names/counts work without anonymous labels.
+
+`CampaignTrackingLinkForm` is visible directly in the selected campaign on
+`/click-analytics`, outside Diagnostics. It offers New recipient, Existing
+contact, or Public post, with a copyable result and optional sent marker.
+No email is sent by this operation. CLI parity: `campaigns link --recipient-name
+"Name" [--recipient-email email] [--recipient-firm-id id] --channel linkedin`.
+No schema migration. Tests: `test_campaign_tracking_recipient.py` and existing
+`test_engagement_campaigns.py`.
+
 ### Fixed Nightly Producers
 
 `app/services/nightly_sync.py` owns the automatic 01:00 Asia/Kolkata pipeline
@@ -1655,3 +1675,58 @@ lift daily eligible leads; (2) derive persona from `contact_profiles`/titles;
 (3) feed `sender_roles`/`topic_mix`/`after_hours_ratio` into the composer for
 per-firm pain hooks; (4) order selection by `icp_score`; (5) target `leadership`
 decision-makers and wire their LinkedIn into the outreach skills.
+# Daily PI technology career search
+
+An independent bounded server-side career discovery runner merges verified PI
+technology jobs into the existing Job Postings collection. It does not alter
+outbound or firm maintenance schedules. See [DAILY_PI_CAREER_SEARCH.md](DAILY_PI_CAREER_SEARCH.md)
+for schema, CLI, merge/locking rules, schedule configuration and parent deployment.
+The staged timer is not active merely because code exists.
+# Review Alert Outbox
+
+The local review monitor lives in `app/services/review_alerts.py`, with API
+`/api/review-alerts`, CLI `review-alerts`, and UI `/review-alerts`.
+
+Review collection has one automatic producer: the 01:00 IST firm-maintenance
+run. When a law firm is selected for profile maintenance, that same cohort gets
+a direct Google review check. The five-minute Review Alerts loop does not queue
+research; it composes from stored evidence, using only reviews with verified
+publication dates in the current 14-day window. Manual single-firm research and
+the legacy bulk-corpus CLI remain explicit operator actions.
+
+The operator-authorized `review-alerts schedule --start ISO --limit 20` bridge
+includes full verbatim stored review text and reviewer attribution in the normal
+draft body, alongside rating, date and source. Evidence snapshots retain that
+text; missing text fails composition rather than creating a links-only draft.
+Historical sent bodies are preserved and are not resent by a formatting change.
+New compositions also include a brief, podcast-backed response-advice paragraph
+before the feedback request. It is conditional on the firm not already having
+replied, does not assert reply status or a ranking benefit, and includes a privacy
+reminder. Episode IDs, raw-transcript timestamps and corroborating Google guidance
+are recorded in `docs/REVIEW_ALERTS.md`.
+The bridge
+creates curated drafts and ordinary `send_email` lead-gen actions, oldest review
+first, five minutes apart. Delivery/action/item linkage is durable; send-time
+review eligibility, reply pause, source links and mailbox checks supplement all
+normal provider/budget policies. A deduplicated review event is not treated as
+another first touch to an existing recipient. Standalone review auto-send is
+disabled in this mode. Unknown transport outcomes are not retried or sent through
+a fallback provider. See `docs/REVIEW_ALERTS.md` for deployment and CLI details.
+
+Daily automation uses the same bridge. `review_alerts.auto_schedule` asks the
+existing five-minute monitor for one Pacific-date wave after the configured
+`auto_schedule_time`; it is not a second sender. The monitor records the daily
+result, retries infrastructure failures after 30 minutes, and considers the day
+complete only after a successful scheduling attempt. Every created action still
+passes the ordinary lead-gen approval, recipient, mailbox, conflict, transport
+and budget checks. `auto_send` remains false in this mode.
+It reuses reviews collected by nightly firm maintenance, contact selection, structured inbound feedback
+classification and Zoho transport. Migration `e2060920a001` adds subscriptions,
+delivery outbox, per-review deduplication and reply audit tables. Config is scoped
+under `system_settings.agent_config.review_alerts`.
+
+Provider attempts are transactionally recorded in `email_logs` before sending,
+with `message_type=review_alert` and deterministic source identity, so they appear
+in Communications with full content. Unknown send outcomes are held, not retried.
+Any recipient reply pauses alerts; opt-outs suppress subsequent common-transport
+email too. See `docs/REVIEW_ALERTS.md` for cadence, activation, limits and CLI.

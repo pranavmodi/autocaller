@@ -1,0 +1,57 @@
+{
+  "verified_at": "2026-09-11T09:35:54.882091+00:00",
+  "nightly": {
+    "scheduler_active": true,
+    "next_run_at": "2026-09-11T19:30:00+00:00",
+    "last_error": null,
+    "started_at": "2026-09-11T09:35:05.563651+00:00",
+    "enabled": true,
+    "timezone": "Asia/Kolkata",
+    "local_time": "01:00",
+    "next_run_at_ist": "2026-09-12T01:00:00+05:30",
+    "stages_enabled": {
+      "firm_sync": true,
+      "autoresponses": true,
+      "contact_ingestion": true,
+      "front": true,
+      "research_maintenance": true
+    },
+    "stage_timeout_seconds": 1800,
+    "front_max_calls": 300,
+    "research_daily_limit_per_kind": 175,
+    "running": false,
+    "last_run": {}
+  },
+  "front_sync_health": {
+    "last_run_at": "2026-09-10T12:05:36.833886+00:00",
+    "last_run_age_hours": 21.5,
+    "calls_used": null,
+    "call_budget": 300,
+    "rate_limited": null,
+    "latest_watermark": "2026-09-09T21:38:09.952000+00:00",
+    "latest_watermark_age_hours": 35.96,
+    "next_daily_run_at": "2026-09-11T19:30:00+00:00",
+    "daily_schedule_timezone": "Asia/Kolkata",
+    "daily_schedule_local_time": "01:00",
+    "last_error": "ReadTimeout: ",
+    "stale": false,
+    "stale_after_hours": 36
+  },
+  "calls": {
+    "active": false,
+    "call": null
+  },
+  "validation": "39 focused tests passed; two pre-existing FastAPI deprecation warnings",
+  "activation": "possibleos-backend.service restarted and live status verified",
+  "commits": [
+    "f36f10b",
+    "c937b12"
+  ],
+  "preserved_followup_schedule": [
+    "action_0f5e2587197e4e9bbca50f53|approved|2026-09-11 15:30:00+00",
+    "action_da7d47a6b19143fe9ef3d92c|approved|2026-09-11 15:40:00+00",
+    "action_a08569fd9b8742f7bcd5e0c2|approved|2026-09-11 15:50:00+00",
+    "action_100154acd19442b3857ed3dc|approved|2026-09-11 16:00:00+00",
+    "action_c184f1df31e449a4a012a97a|approved|2026-09-11 16:10:00+00"
+  ]
+}

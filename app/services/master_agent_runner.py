@@ -286,6 +286,8 @@ async def openclaw_runner_decision_provider(payload: dict[str, Any]) -> dict[str
         max_tokens=int(os.getenv("MASTER_AGENT_RUNNER_MAX_TOKENS", "2000")),
         prompt_cache_key=os.getenv("MASTER_AGENT_RUNNER_PROMPT_CACHE_KEY", "possible-os-master-agent-runner-v1"),
         prompt_cache_retention=os.getenv("MASTER_AGENT_PROMPT_CACHE_RETENTION", "24h"),
+        lane=os.getenv("OPENCLAW_RPC_BATCH_LANE", "possibleos-batch"),
+        allow_tools=False,
     )
     decision = result.parsed
     decision["_llm_metadata"] = {

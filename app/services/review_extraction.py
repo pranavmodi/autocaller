@@ -279,7 +279,9 @@ async def extract_review_quotes(
             skill_path=_SKILL_PATH,
             payload={"firm_name": firm_name or "", "raw_reviews": raw[:20000]},
             required_fields=["evidence"],
-            model=os.getenv("REVIEW_EXTRACTOR_MODEL", "openclaw/proxy"),
+            model=os.getenv("REVIEW_EXTRACTOR_MODEL", "openclaw/neo"),
+            lane=os.getenv("OPENCLAW_RPC_BATCH_LANE", "possibleos-batch"),
+            allow_tools=False,
         )
     except LLMGatewayError as exc:
         logger.warning("review extraction gateway failed for %s: %s", pif_id, exc)

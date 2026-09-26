@@ -72,6 +72,8 @@ logs/
 !.claude/skills/autocaller/**
 !.claude/skills/possibleos/
 !.claude/skills/possibleos/**
+!.claude/skills/possibleos-job-application/
+!.claude/skills/possibleos-job-application/**
 
 # Testing
 .coverage
@@ -81,3 +83,4 @@ docs/product/tasks/logs/
 
 # Generated validation/analysis output
 reports/
+var/job-browser/

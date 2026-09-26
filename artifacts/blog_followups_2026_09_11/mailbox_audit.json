@@ -1,0 +1,1356 @@
+{
+  "checked_at_utc": "2026-09-11T12:47:11.281474+00:00",
+  "candidate_source": "/home/pranav/possibleos/artifacts/blog_followups_2026_09_11/candidates.json",
+  "candidate_source_audit_timestamp_utc": "2026-09-11T12:43:12Z",
+  "candidate_count": 60,
+  "coverage": {
+    "since_imap_date": "2026-01-01",
+    "folders": [
+      "INBOX",
+      "Drafts",
+      "Templates",
+      "Snoozed",
+      "Sent",
+      "Spam",
+      "Trash",
+      "Notification",
+      "Newsletter",
+      "Archive"
+    ],
+    "folder_message_counts": {
+      "INBOX": 235,
+      "Drafts": 7,
+      "Templates": 0,
+      "Snoozed": 0,
+      "Sent": 537,
+      "Spam": 2,
+      "Trash": 0,
+      "Notification": 38,
+      "Newsletter": 77,
+      "Archive": 0
+    },
+    "folder_errors": {},
+    "mode": "IMAP readonly=True; BODY.PEEK header scan; BODY.PEEK full body only for matched inbound/bounce classification"
+  },
+  "classification": {
+    "clear": "No matching inbound reply/bounce/opt-out/automatic reply and no newer Sent item after recorded latest outbound was found in scanned coverage.",
+    "hold": "At least one matching mailbox exception or explicit scheduled exclusion was found."
+  },
+  "explicit_scheduled_exclusions": {
+    "emails": [
+      "ardy@pirnialawgroup.com",
+      "bryan@rodeolawfirm.com",
+      "nicole@lahmanilaw.com",
+      "nkuvara@18004injury.com",
+      "vanfrish@frishlawgroup.com"
+    ],
+    "domains": [
+      "18004injury.com",
+      "frishlawgroup.com",
+      "kuvaralawfirm.com",
+      "lahmanilaw.com",
+      "pirnialawgroup.com",
+      "pirniapersonalinjury.com",
+      "plg.law",
+      "rodeolawfirm.com"
+    ],
+    "canonical_firm_ids": [
+      "260dfcec-738b-4483-a884-c07ff04f5547",
+      "487d8cbf-2cfa-41b6-883e-500e2bc8d033",
+      "505d9c11-f3c9-4943-aa78-7e690ef0323b",
+      "83a7d945-6757-4dda-8548-0f214282d40a",
+      "f5c0183f-8038-4d57-ae87-6538dfb70ad8"
+    ]
+  },
+  "counts": {
+    "clear": 57,
+    "hold": 3,
+    "human_or_firm_reply": 0,
+    "automatic_reply": 0,
+    "opt_out": 0,
+    "delivery_failure": 3,
+    "newer_sent_mail": 2,
+    "explicit_scheduled_exclusion": 0
+  },
+  "results": [
+    {
+      "rank": 1,
+      "email": "farid@downtownlalaw.com",
+      "normalized_email": "farid@downtownlalaw.com",
+      "name": "Farid Yaghoubtil",
+      "firm": "Downtown L.A. Law Group",
+      "canonical_firm_id": "f2d0b677-0b15-4091-91e9-30aee5e96816",
+      "normalized_domain": "downtownlalaw.com",
+      "last_recorded_outbound_utc": "2026-06-02T16:18:08.683913+00:00",
+      "status": "hold",
+      "hold_reasons": [
+        "delivery_failure_exists",
+        "newer_sent_mail_exists"
+      ],
+      "evidence": [
+        {
+          "type": "delivery_failure",
+          "folder": "INBOX",
+          "uid": "399",
+          "date_utc": "2026-06-15T16:28:20+00:00",
+          "from": [
+            "microsoftexchange329e71ec88ae4615bbc36ab6ce41109e@downtownlalaw.com"
+          ],
+          "subject": "Undeliverable: Downtown L.A., Precise Imaging status updates",
+          "message_id": "<eeea6cb5-4849-432e-8bf1-ea152a375d7e@DS0PR15MB6260.namprd15.prod.outlook.com>",
+          "body_reviewed": true,
+          "relative_to_last_recorded_outbound": "after"
+        },
+        {
+          "type": "delivery_failure",
+          "folder": "INBOX",
+          "uid": "405",
+          "date_utc": "2026-06-19T16:08:43+00:00",
+          "from": [
+            "microsoftexchange329e71ec88ae4615bbc36ab6ce41109e@downtownlalaw.com"
+          ],
+          "subject": "Undeliverable: who owns file-status follow-up at downtown l.a.?",
+          "message_id": "<c2197b53-a18c-4e94-8b99-a85d3d09c143@MW3PR15MB4044.namprd15.prod.outlook.com>",
+          "body_reviewed": true,
+          "relative_to_last_recorded_outbound": "after"
+        },
+        {
+          "type": "recent_sent_mail",
+          "folder": "Sent",
+          "uid": "529",
+          "date_utc": "2026-06-12T16:43:44+00:00",
+          "to": [
+            "jeffrey@downtownlalaw.com"
+          ],
+          "subject": "the records chase on every file",
+          "message_id": "<19ebcb7d4e8.11aab27116975.8965247861894412712@possiblemindshq.com>",
+          "relative_to_last_recorded_outbound": "after_by_more_than_5m"
+        },
+        {
+          "type": "recent_sent_mail",
+          "folder": "Sent",
+          "uid": "550",
+          "date_utc": "2026-06-15T16:28:10+00:00",
+          "to": [
+            "salar@downtownlalaw.com"
+          ],
+          "subject": "Downtown L.A., Precise Imaging status updates",
+          "message_id": "<19ecc1ca67d.22cb08da53772.946254019525324654@possiblemindshq.com>",
+          "relative_to_last_recorded_outbound": "after_by_more_than_5m"
+        },
+        {
+          "type": "recent_sent_mail",
+          "folder": "Sent",
+          "uid": "571",
+          "date_utc": "2026-06-16T16:17:16+00:00",
+          "to": [
+            "jeffrey@downtownlalaw.com"
+          ],
+          "subject": "where files lose momentum",
+          "message_id": "<19ed1390964.3bc37be278265.2274289360258933686@possiblemindshq.com>",
+          "relative_to_last_recorded_outbound": "after_by_more_than_5m"
+        },
+        {
+          "type": "recent_sent_mail",
+          "folder": "Sent",
+          "uid": "615",
+          "date_utc": "2026-06-19T16:08:31+00:00",
+          "to": [
+            "salar@downtownlalaw.com"
+          ],
+          "subject": "who owns file-status follow-up at downtown l.a.?",
+          "message_id": "<19ee0a41866.351cb2ef31056.892239889949096440@possiblemindshq.com>",
+          "relative_to_last_recorded_outbound": "after_by_more_than_5m"
+        },
+        {
+          "type": "recent_sent_mail",
+          "folder": "Sent",
+          "uid": "635",
+          "date_utc": "2026-06-22T16:16:54+00:00",
+          "to": [
+            "jeffrey@downtownlalaw.com"
+          ],
+          "subject": "before ai helps a PI file",
+          "message_id": "<19ef01edc97.61ebbb0247652.535037681455884049@possiblemindshq.com>",
+          "relative_to_last_recorded_outbound": "after_by_more_than_5m"
+        },
+        {
+          "type": "recent_sent_mail",
+          "folder": "Sent",
+          "uid": "946",
+          "date_utc": "2026-08-24T16:05:35+00:00",
+          "to": [
+            "daniel@downtownlalaw.com"
+          ],
+          "subject": "Re: Is Lead Docket at Downtown L.A. Law Group tying marketing spend\r\n to signed cases?",
+          "message_id": "<1a0348521a7.416e536832198.7592508718325013052@possiblemindshq.com>",
+          "relative_to_last_recorded_outbound": "after_by_more_than_5m"
+        }
+      ],
+      "limitations": []
+    },
+    {
+      "rank": 2,
+      "email": "william@driverslegaldefense.com",
+      "normalized_email": "william@driverslegaldefense.com",
+      "name": "William H. Dailey",
+      "firm": "Drivers Legal Defense, P.C.",
+      "canonical_firm_id": "e54c383d-f7d9-409b-aad4-cafe80fdc986",
+      "normalized_domain": "driverslegaldefense.com",
+      "last_recorded_outbound_utc": "2026-06-02T16:18:52.162961+00:00",
+      "status": "clear",
+      "hold_reasons": [],
+      "evidence": [
+        {
+          "type": "no_matching_mailbox_exception",
+          "detail": "No matching inbound reply, bounce, opt-out, automatic reply, or newer Sent item found in scanned coverage."
+        }
+      ],
+      "limitations": []
+    },
+    {
+      "rank": 3,
+      "email": "jeff@jlffirm.com",
+      "normalized_email": "jeff@jlffirm.com",
+      "name": "Jeffrey L. Fayngor",
+      "firm": "The JLF Firm",
+      "canonical_firm_id": "f21b21ac-d952-47e0-bcdc-4e9a5254c9db",
+      "normalized_domain": "jlffirm.com",
+      "last_recorded_outbound_utc": "2026-06-02T16:19:13.737794+00:00",
+      "status": "clear",
+      "hold_reasons": [],
+      "evidence": [
+        {
+          "type": "no_matching_mailbox_exception",
+          "detail": "No matching inbound reply, bounce, opt-out, automatic reply, or newer Sent item found in scanned coverage."
+        }
+      ],
+      "limitations": []
+    },
+    {
+      "rank": 4,
+      "email": "wrp@paboojianlaw.com",
+      "normalized_email": "wrp@paboojianlaw.com",
+      "name": "Warren Paboojian",
+      "firm": "Paboojian, Inc.",
+      "canonical_firm_id": "65b65220-1332-46e9-9058-8ca721dd9d56",
+      "normalized_domain": "paboojianlaw.com",
+      "last_recorded_outbound_utc": "2026-06-02T19:02:17.42255+00:00",
+      "status": "clear",
+      "hold_reasons": [],
+      "evidence": [
+        {
+          "type": "no_matching_mailbox_exception",
+          "detail": "No matching inbound reply, bounce, opt-out, automatic reply, or newer Sent item found in scanned coverage."
+        }
+      ],
+      "limitations": []
+    },
+    {
+      "rank": 5,
+      "email": "nima@thehlawgroup.com",
+      "normalized_email": "nima@thehlawgroup.com",
+      "name": "Nima Haddadi",
+      "firm": "The H Law Group",
+      "canonical_firm_id": "88fdabd2-9ea2-43fb-a3a5-b238c1fae96b",
+      "normalized_domain": "thehfirm.com",
+      "last_recorded_outbound_utc": "2026-06-24T16:10:06.430033+00:00",
+      "status": "clear",
+      "hold_reasons": [],
+      "evidence": [
+        {
+          "type": "no_matching_mailbox_exception",
+          "detail": "No matching inbound reply, bounce, opt-out, automatic reply, or newer Sent item found in scanned coverage."
+        }
+      ],
+      "limitations": []
+    },
+    {
+      "rank": 6,
+      "email": "gary@walchlaw.com",
+      "normalized_email": "gary@walchlaw.com",
+      "name": "Gary K. Walch",
+      "firm": "Gary K. Walch, A Law Corporation",
+      "canonical_firm_id": "08b09d45-ee17-4135-9469-2efab55a9055",
+      "normalized_domain": "walchlaw.com",
+      "last_recorded_outbound_utc": "2026-06-26T16:02:17.276937+00:00",
+      "status": "clear",
+      "hold_reasons": [],
+      "evidence": [
+        {
+          "type": "no_matching_mailbox_exception",
+          "detail": "No matching inbound reply, bounce, opt-out, automatic reply, or newer Sent item found in scanned coverage."
+        }
+      ],
+      "limitations": []
+    },
+    {
+      "rank": 7,
+      "email": "bana@banalaw.com",
+      "normalized_email": "bana@banalaw.com",
+      "name": "P. Ryan Banafshe",
+      "firm": "Bana Law",
+      "canonical_firm_id": "a5828a3b-7a8c-40c3-8945-3b7a041a718a",
+      "normalized_domain": "banalaw.com",
+      "last_recorded_outbound_utc": "2026-06-26T16:05:53.177777+00:00",
+      "status": "clear",
+      "hold_reasons": [],
+      "evidence": [
+        {
+          "type": "no_matching_mailbox_exception",
+          "detail": "No matching inbound reply, bounce, opt-out, automatic reply, or newer Sent item found in scanned coverage."
+        }
+      ],
+      "limitations": []
+    },
+    {
+      "rank": 8,
+      "email": "sam@heidarilawgroup.com",
+      "normalized_email": "sam@heidarilawgroup.com",
+      "name": "Sam Ryan Heidari",
+      "firm": "Heidari Law Group",
+      "canonical_firm_id": "0e4d0b22-c8ce-499b-a26f-c1c45c252f15",
+      "normalized_domain": "heidarilawgroup.com",
+      "last_recorded_outbound_utc": "2026-06-29T16:35:43.003646+00:00",
+      "status": "clear",
+      "hold_reasons": [],
+      "evidence": [
+        {
+          "type": "no_matching_mailbox_exception",
+          "detail": "No matching inbound reply, bounce, opt-out, automatic reply, or newer Sent item found in scanned coverage."
+        }
+      ],
+      "limitations": []
+    },
+    {
+      "rank": 9,
+      "email": "oganes@kglegalgroup.com",
+      "normalized_email": "oganes@kglegalgroup.com",
+      "name": "Oganes Gegamyan",
+      "firm": "KG Legal Group",
+      "canonical_firm_id": "d78e88ec-3f65-4e54-9f0b-6594c705d424",
+      "normalized_domain": "kglegalgroup.com",
+      "last_recorded_outbound_utc": "2026-06-29T16:57:22.655004+00:00",
+      "status": "clear",
+      "hold_reasons": [],
+      "evidence": [
+        {
+          "type": "no_matching_mailbox_exception",
+          "detail": "No matching inbound reply, bounce, opt-out, automatic reply, or newer Sent item found in scanned coverage."
+        }
+      ],
+      "limitations": []
+    },
+    {
+      "rank": 10,
+      "email": "lear@centurylawgroup.com",
+      "normalized_email": "lear@centurylawgroup.com",
+      "name": "Edward O. Lear",
+      "firm": "10x Law",
+      "canonical_firm_id": "47a4183b-9333-496e-91f1-7fba01e4aace",
+      "normalized_domain": "10xlaw.com",
+      "last_recorded_outbound_utc": "2026-07-03T07:01:39.29597+00:00",
+      "status": "clear",
+      "hold_reasons": [],
+      "evidence": [
+        {
+          "type": "no_matching_mailbox_exception",
+          "detail": "No matching inbound reply, bounce, opt-out, automatic reply, or newer Sent item found in scanned coverage."
+        }
+      ],
+      "limitations": []
+    },
+    {
+      "rank": 11,
+      "email": "alon@avalonlaw.com",
+      "normalized_email": "alon@avalonlaw.com",
+      "name": "Alon Aliav",
+      "firm": "Avalon Law Firm, APC",
+      "canonical_firm_id": "f006436b-2454-4bb7-9e4d-dc7b582c41f7",
+      "normalized_domain": "avalonlaw.com",
+      "last_recorded_outbound_utc": "2026-08-12T17:05:05.705276+00:00",
+      "status": "clear",
+      "hold_reasons": [],
+      "evidence": [
+        {
+          "type": "no_matching_mailbox_exception",
+          "detail": "No matching inbound reply, bounce, opt-out, automatic reply, or newer Sent item found in scanned coverage."
+        }
+      ],
+      "limitations": []
+    },
+    {
+      "rank": 12,
+      "email": "rrex@parris.com",
+      "normalized_email": "rrex@parris.com",
+      "name": "R. Rex Parris",
+      "firm": "PARRIS",
+      "canonical_firm_id": "37f5d03d-1d36-4d8c-8eda-e9413e9a9c01",
+      "normalized_domain": "parris.com",
+      "last_recorded_outbound_utc": "2026-08-15T00:15:19.705283+00:00",
+      "status": "clear",
+      "hold_reasons": [],
+      "evidence": [
+        {
+          "type": "no_matching_mailbox_exception",
+          "detail": "No matching inbound reply, bounce, opt-out, automatic reply, or newer Sent item found in scanned coverage."
+        }
+      ],
+      "limitations": []
+    },
+    {
+      "rank": 13,
+      "email": "mark@broadwaylaw.com",
+      "normalized_email": "mark@broadwaylaw.com",
+      "name": "Mark R. Kiran, Esq.",
+      "firm": "Broadway Law",
+      "canonical_firm_id": "e0095a76-304f-42f4-950e-032dc045c232",
+      "normalized_domain": "broadwaylaw.com",
+      "last_recorded_outbound_utc": "2026-08-24T16:45:18.63827+00:00",
+      "status": "clear",
+      "hold_reasons": [],
+      "evidence": [
+        {
+          "type": "no_matching_mailbox_exception",
+          "detail": "No matching inbound reply, bounce, opt-out, automatic reply, or newer Sent item found in scanned coverage."
+        }
+      ],
+      "limitations": []
+    },
+    {
+      "rank": 14,
+      "email": "della@shakerlawgroup.com",
+      "normalized_email": "della@shakerlawgroup.com",
+      "name": "Della Shaker, Esq.",
+      "firm": "Shaker Law Group",
+      "canonical_firm_id": "edc00689-e26b-4234-ae34-cb4ad45742a2",
+      "normalized_domain": "shakerlawgroup.com",
+      "last_recorded_outbound_utc": "2026-08-24T16:55:21.010404+00:00",
+      "status": "clear",
+      "hold_reasons": [],
+      "evidence": [
+        {
+          "type": "no_matching_mailbox_exception",
+          "detail": "No matching inbound reply, bounce, opt-out, automatic reply, or newer Sent item found in scanned coverage."
+        }
+      ],
+      "limitations": []
+    },
+    {
+      "rank": 15,
+      "email": "becker@beckerlawgroup.com",
+      "normalized_email": "becker@beckerlawgroup.com",
+      "name": "Todd B. Becker",
+      "firm": "Becker Law Group",
+      "canonical_firm_id": "65c6eefc-c9a6-4432-bd8d-abaa69c53bf7",
+      "normalized_domain": "beckerlawgroup.com",
+      "last_recorded_outbound_utc": "2026-08-24T18:45:17.156233+00:00",
+      "status": "clear",
+      "hold_reasons": [],
+      "evidence": [
+        {
+          "type": "no_matching_mailbox_exception",
+          "detail": "No matching inbound reply, bounce, opt-out, automatic reply, or newer Sent item found in scanned coverage."
+        }
+      ],
+      "limitations": []
+    },
+    {
+      "rank": 16,
+      "email": "dimitri@oconnorhurt.com",
+      "normalized_email": "dimitri@oconnorhurt.com",
+      "name": "Dimitri D. Hurt, Esq.",
+      "firm": "O'Connor & Hurt",
+      "canonical_firm_id": "77e6d22c-447b-438d-bc6b-d55e146e0003",
+      "normalized_domain": "thehurtlawfirm.com",
+      "last_recorded_outbound_utc": "2026-08-25T16:05:21.092804+00:00",
+      "status": "clear",
+      "hold_reasons": [],
+      "evidence": [
+        {
+          "type": "no_matching_mailbox_exception",
+          "detail": "No matching inbound reply, bounce, opt-out, automatic reply, or newer Sent item found in scanned coverage."
+        }
+      ],
+      "limitations": []
+    },
+    {
+      "rank": 17,
+      "email": "shawn@hakakianlaw.com",
+      "normalized_email": "shawn@hakakianlaw.com",
+      "name": "Shawn Hakakian",
+      "firm": "Hakakian Law Group, PC",
+      "canonical_firm_id": "1c4c3c3a-26f7-4614-ac23-749893c41ee7",
+      "normalized_domain": "hakakianlaw.com",
+      "last_recorded_outbound_utc": "2026-08-25T16:45:31.563473+00:00",
+      "status": "clear",
+      "hold_reasons": [],
+      "evidence": [
+        {
+          "type": "no_matching_mailbox_exception",
+          "detail": "No matching inbound reply, bounce, opt-out, automatic reply, or newer Sent item found in scanned coverage."
+        }
+      ],
+      "limitations": []
+    },
+    {
+      "rank": 18,
+      "email": "gurgen@ympklaw.com",
+      "normalized_email": "gurgen@ympklaw.com",
+      "name": "Gurgen Mkrtchyan",
+      "firm": "YMPK Law Group, LLP",
+      "canonical_firm_id": "c449fd52-c812-49f3-8a79-0e422dd2f54c",
+      "normalized_domain": "ympklaw.com",
+      "last_recorded_outbound_utc": "2026-08-25T18:15:24.253399+00:00",
+      "status": "clear",
+      "hold_reasons": [],
+      "evidence": [
+        {
+          "type": "no_matching_mailbox_exception",
+          "detail": "No matching inbound reply, bounce, opt-out, automatic reply, or newer Sent item found in scanned coverage."
+        }
+      ],
+      "limitations": []
+    },
+    {
+      "rank": 19,
+      "email": "kendrick@kebradleylaw.com",
+      "normalized_email": "kendrick@kebradleylaw.com",
+      "name": "Kendrick E. Bradley",
+      "firm": "K. E. Bradley & Associates, PLLC (DBA) K. E. Bradley Law",
+      "canonical_firm_id": "48e6509b-8608-405e-99be-6ebc377e6b4e",
+      "normalized_domain": "kebradleylaw.com",
+      "last_recorded_outbound_utc": "2026-08-26T16:45:21.294229+00:00",
+      "status": "clear",
+      "hold_reasons": [],
+      "evidence": [
+        {
+          "type": "no_matching_mailbox_exception",
+          "detail": "No matching inbound reply, bounce, opt-out, automatic reply, or newer Sent item found in scanned coverage."
+        }
+      ],
+      "limitations": []
+    },
+    {
+      "rank": 20,
+      "email": "jbeahm@beahmlaw.com",
+      "normalized_email": "jbeahm@beahmlaw.com",
+      "name": "Jason Beahm",
+      "firm": "Beahm Law",
+      "canonical_firm_id": "167a6f39-78aa-4ada-a777-7f4c3e556a73",
+      "normalized_domain": "beahmlaw.com",
+      "last_recorded_outbound_utc": "2026-08-31T16:00:26.791453+00:00",
+      "status": "clear",
+      "hold_reasons": [],
+      "evidence": [
+        {
+          "type": "no_matching_mailbox_exception",
+          "detail": "No matching inbound reply, bounce, opt-out, automatic reply, or newer Sent item found in scanned coverage."
+        }
+      ],
+      "limitations": []
+    },
+    {
+      "rank": 21,
+      "email": "romel@raandassociates.com",
+      "normalized_email": "romel@raandassociates.com",
+      "name": "Romel Ambarchyan",
+      "firm": "RA & Associates, APC",
+      "canonical_firm_id": "c46019d9-4d32-4cf8-9ee8-e8c8344fd621",
+      "normalized_domain": "raandassociates.com",
+      "last_recorded_outbound_utc": "2026-08-31T16:50:26.240929+00:00",
+      "status": "clear",
+      "hold_reasons": [],
+      "evidence": [
+        {
+          "type": "no_matching_mailbox_exception",
+          "detail": "No matching inbound reply, bounce, opt-out, automatic reply, or newer Sent item found in scanned coverage."
+        }
+      ],
+      "limitations": []
+    },
+    {
+      "rank": 22,
+      "email": "efarah@farahandfarah.com",
+      "normalized_email": "efarah@farahandfarah.com",
+      "name": "Eddie Farah",
+      "firm": "Farah & Farah",
+      "canonical_firm_id": "19bddaeb-7d25-4ff8-b4fc-582402ad38ec",
+      "normalized_domain": "farahandfarah.com",
+      "last_recorded_outbound_utc": "2026-09-01T17:20:08.052018+00:00",
+      "status": "clear",
+      "hold_reasons": [],
+      "evidence": [
+        {
+          "type": "no_matching_mailbox_exception",
+          "detail": "No matching inbound reply, bounce, opt-out, automatic reply, or newer Sent item found in scanned coverage."
+        }
+      ],
+      "limitations": []
+    },
+    {
+      "rank": 23,
+      "email": "mike@mweiserlaw.com",
+      "normalized_email": "mike@mweiserlaw.com",
+      "name": "Michael Weiser",
+      "firm": "MW Law Firm",
+      "canonical_firm_id": "02d03d9f-2af9-4da0-b0b6-c0abdc34cc0c",
+      "normalized_domain": "mweiserlaw.com",
+      "last_recorded_outbound_utc": "2026-09-01T18:40:57.467263+00:00",
+      "status": "clear",
+      "hold_reasons": [],
+      "evidence": [
+        {
+          "type": "no_matching_mailbox_exception",
+          "detail": "No matching inbound reply, bounce, opt-out, automatic reply, or newer Sent item found in scanned coverage."
+        }
+      ],
+      "limitations": []
+    },
+    {
+      "rank": 24,
+      "email": "abe@accidentabe.com",
+      "normalized_email": "abe@accidentabe.com",
+      "name": "Ibrahim N. Muhtaseb",
+      "firm": "Accident Abe",
+      "canonical_firm_id": "eaba03cb-a0a2-4ab8-91f0-22dd4c488f65",
+      "normalized_domain": "accidentabe.com",
+      "last_recorded_outbound_utc": "2026-09-02T15:30:05.956615+00:00",
+      "status": "clear",
+      "hold_reasons": [],
+      "evidence": [
+        {
+          "type": "no_matching_mailbox_exception",
+          "detail": "No matching inbound reply, bounce, opt-out, automatic reply, or newer Sent item found in scanned coverage."
+        }
+      ],
+      "limitations": []
+    },
+    {
+      "rank": 25,
+      "email": "cj@cyruslegal.com",
+      "normalized_email": "cj@cyruslegal.com",
+      "name": "Cyrus Amir Jamehdor",
+      "firm": "Law Offices of Cyrus Jamehdo",
+      "canonical_firm_id": "3c3ded55-f0e1-4752-9b81-9c3a42018cde",
+      "normalized_domain": "cyruslegal.com",
+      "last_recorded_outbound_utc": "2026-09-02T17:00:15.633015+00:00",
+      "status": "clear",
+      "hold_reasons": [],
+      "evidence": [
+        {
+          "type": "no_matching_mailbox_exception",
+          "detail": "No matching inbound reply, bounce, opt-out, automatic reply, or newer Sent item found in scanned coverage."
+        }
+      ],
+      "limitations": []
+    },
+    {
+      "rank": 26,
+      "email": "kjacobson@quillarrowlaw.com",
+      "normalized_email": "kjacobson@quillarrowlaw.com",
+      "name": "Kevin Y. Jacobson, Esq.",
+      "firm": "Quill & Arrow, LLP",
+      "canonical_firm_id": "4e85db6f-217d-4212-8d1f-09d3d1993fcd",
+      "normalized_domain": "quillarrowlaw.com",
+      "last_recorded_outbound_utc": "2026-09-02T17:50:12.176974+00:00",
+      "status": "clear",
+      "hold_reasons": [],
+      "evidence": [
+        {
+          "type": "no_matching_mailbox_exception",
+          "detail": "No matching inbound reply, bounce, opt-out, automatic reply, or newer Sent item found in scanned coverage."
+        }
+      ],
+      "limitations": []
+    },
+    {
+      "rank": 27,
+      "email": "robert@moetlaw.com",
+      "normalized_email": "robert@moetlaw.com",
+      "name": "Robert Moghadam",
+      "firm": "Moet Law Group",
+      "canonical_firm_id": "ae3c0340-b1d5-40a8-8f07-93bc48af547c",
+      "normalized_domain": "moetlaw.com",
+      "last_recorded_outbound_utc": "2026-05-25T13:51:15.374522+00:00",
+      "status": "clear",
+      "hold_reasons": [],
+      "evidence": [
+        {
+          "type": "no_matching_mailbox_exception",
+          "detail": "No matching inbound reply, bounce, opt-out, automatic reply, or newer Sent item found in scanned coverage."
+        }
+      ],
+      "limitations": []
+    },
+    {
+      "rank": 28,
+      "email": "tsamuels@thesamuelslawgroup.com",
+      "normalized_email": "tsamuels@thesamuelslawgroup.com",
+      "name": "Todd Craig Samuels",
+      "firm": "Samuels Law Group",
+      "canonical_firm_id": "491613e0-adc0-471d-9bf6-4481430e546a",
+      "normalized_domain": "thesamuelslawgroup.com",
+      "last_recorded_outbound_utc": "2026-05-27T16:17:50.958037+00:00",
+      "status": "clear",
+      "hold_reasons": [],
+      "evidence": [
+        {
+          "type": "no_matching_mailbox_exception",
+          "detail": "No matching inbound reply, bounce, opt-out, automatic reply, or newer Sent item found in scanned coverage."
+        }
+      ],
+      "limitations": []
+    },
+    {
+      "rank": 29,
+      "email": "beloryan@bmsllp.com",
+      "normalized_email": "beloryan@bmsllp.com",
+      "name": "Haik Armen Beloryan",
+      "firm": "Beloryan & Manukyan LLP",
+      "canonical_firm_id": "fb9a54b8-83f3-44fa-aef8-c7547af649f4",
+      "normalized_domain": "bmsllp.com",
+      "last_recorded_outbound_utc": "2026-06-02T16:16:52.017633+00:00",
+      "status": "clear",
+      "hold_reasons": [],
+      "evidence": [
+        {
+          "type": "no_matching_mailbox_exception",
+          "detail": "No matching inbound reply, bounce, opt-out, automatic reply, or newer Sent item found in scanned coverage."
+        }
+      ],
+      "limitations": []
+    },
+    {
+      "rank": 30,
+      "email": "alex@alexhelp.com",
+      "normalized_email": "alex@alexhelp.com",
+      "name": "Alex Poberesky, Esq.",
+      "firm": "Law Offices of Alex Poberesky, P.A.",
+      "canonical_firm_id": "27ae9c5a-30e2-4436-969c-007b4f9a9699",
+      "normalized_domain": "alexhelp.com",
+      "last_recorded_outbound_utc": "2026-06-02T16:23:59.546557+00:00",
+      "status": "clear",
+      "hold_reasons": [],
+      "evidence": [
+        {
+          "type": "no_matching_mailbox_exception",
+          "detail": "No matching inbound reply, bounce, opt-out, automatic reply, or newer Sent item found in scanned coverage."
+        }
+      ],
+      "limitations": []
+    },
+    {
+      "rank": 31,
+      "email": "narimon@pishlaw.com",
+      "normalized_email": "narimon@pishlaw.com",
+      "name": "Narimon Pishnamaz",
+      "firm": "Pishnamaz Law Firm",
+      "canonical_firm_id": "da7e7991-de44-41de-b75c-9885366100b8",
+      "normalized_domain": "pishlaw.com",
+      "last_recorded_outbound_utc": "2026-06-02T19:07:55.714748+00:00",
+      "status": "clear",
+      "hold_reasons": [],
+      "evidence": [
+        {
+          "type": "no_matching_mailbox_exception",
+          "detail": "No matching inbound reply, bounce, opt-out, automatic reply, or newer Sent item found in scanned coverage."
+        }
+      ],
+      "limitations": []
+    },
+    {
+      "rank": 32,
+      "email": "aaron@nealefhima.com",
+      "normalized_email": "aaron@nealefhima.com",
+      "name": "Aaron Fhima",
+      "firm": "Neale & Fhima APC",
+      "canonical_firm_id": "54ca112d-2313-4a56-bc7c-2f6cf4323157",
+      "normalized_domain": "nealefhima.com",
+      "last_recorded_outbound_utc": "2026-06-26T16:18:50.727643+00:00",
+      "status": "hold",
+      "hold_reasons": [
+        "delivery_failure_exists",
+        "newer_sent_mail_exists"
+      ],
+      "evidence": [
+        {
+          "type": "delivery_failure",
+          "folder": "INBOX",
+          "uid": "441",
+          "date_utc": "2026-07-03T07:00:45+00:00",
+          "from": [
+            "mailer-daemon@mail.zoho.in"
+          ],
+          "subject": "Undelivered Mail Returned to Sender",
+          "message_id": "<19f26c7a3bc.7bde72c2-1195796772.-5350212742342406267@zohomail.in>",
+          "body_reviewed": true,
+          "relative_to_last_recorded_outbound": "after"
+        },
+        {
+          "type": "recent_sent_mail",
+          "folder": "Sent",
+          "uid": "807",
+          "date_utc": "2026-07-03T07:00:39+00:00",
+          "to": [
+            "chelsehollins@nealefhima.com"
+          ],
+          "subject": "best email for Aaron?",
+          "message_id": "<19f26c78b25.189e76811464.2626903184331739497@possiblemindshq.com>",
+          "relative_to_last_recorded_outbound": "after_by_more_than_5m"
+        }
+      ],
+      "limitations": []
+    },
+    {
+      "rank": 33,
+      "email": "kian@smlawca.com",
+      "normalized_email": "kian@smlawca.com",
+      "name": "Kian Mottahedeh",
+      "firm": "SM Law CA",
+      "canonical_firm_id": "bc6fa284-e5f6-4e99-92af-3e2465b297f5",
+      "normalized_domain": "smlawca.com",
+      "last_recorded_outbound_utc": "2026-06-29T17:54:17.318803+00:00",
+      "status": "clear",
+      "hold_reasons": [],
+      "evidence": [
+        {
+          "type": "no_matching_mailbox_exception",
+          "detail": "No matching inbound reply, bounce, opt-out, automatic reply, or newer Sent item found in scanned coverage."
+        }
+      ],
+      "limitations": []
+    },
+    {
+      "rank": 34,
+      "email": "wgs@sayeghlaw.com",
+      "normalized_email": "wgs@sayeghlaw.com",
+      "name": "William G. Sayegh",
+      "firm": "Sayegh Law Firm",
+      "canonical_firm_id": "6b35afff-6a77-4e2c-ad67-cd0442097237",
+      "normalized_domain": "willsayeghlaw.com",
+      "last_recorded_outbound_utc": "2026-06-29T18:01:17.961803+00:00",
+      "status": "hold",
+      "hold_reasons": [
+        "delivery_failure_exists"
+      ],
+      "evidence": [
+        {
+          "type": "delivery_failure",
+          "folder": "INBOX",
+          "uid": "416",
+          "date_utc": "2026-06-24T17:10:21+00:00",
+          "from": [
+            "mailer-daemon@mail.zoho.in"
+          ],
+          "subject": "Undelivered Mail Returned to Sender",
+          "message_id": "<19efa9c81af.6b01daf7-7587635.-61782118546699254@zohomail.in>",
+          "body_reviewed": true,
+          "relative_to_last_recorded_outbound": "before_or_same"
+        }
+      ],
+      "limitations": []
+    },
+    {
+      "rank": 35,
+      "email": "deepak@singhahluwalia.com",
+      "normalized_email": "deepak@singhahluwalia.com",
+      "name": "Deepak Ahluwalia",
+      "firm": "Singh Ahluwalia",
+      "canonical_firm_id": "51ee7c1e-dd53-4319-ba8a-f17f605b0afb",
+      "normalized_domain": "singhahluwalia.com",
+      "last_recorded_outbound_utc": "2026-07-02T16:45:27.39287+00:00",
+      "status": "clear",
+      "hold_reasons": [],
+      "evidence": [
+        {
+          "type": "no_matching_mailbox_exception",
+          "detail": "No matching inbound reply, bounce, opt-out, automatic reply, or newer Sent item found in scanned coverage."
+        }
+      ],
+      "limitations": []
+    },
+    {
+      "rank": 36,
+      "email": "gohar@hhtcorp.com",
+      "normalized_email": "gohar@hhtcorp.com",
+      "name": "Gohar Tatevossian",
+      "firm": "HHT Corp",
+      "canonical_firm_id": "109851e3-0899-4377-b901-640db286975d",
+      "normalized_domain": "hht-law.com",
+      "last_recorded_outbound_utc": "2026-07-03T07:01:29.768644+00:00",
+      "status": "clear",
+      "hold_reasons": [],
+      "evidence": [
+        {
+          "type": "no_matching_mailbox_exception",
+          "detail": "No matching inbound reply, bounce, opt-out, automatic reply, or newer Sent item found in scanned coverage."
+        }
+      ],
+      "limitations": []
+    },
+    {
+      "rank": 37,
+      "email": "amir@protectionlawgroup.com",
+      "normalized_email": "amir@protectionlawgroup.com",
+      "name": "Amir Nayebdadash",
+      "firm": "Protection Law Group, LLP",
+      "canonical_firm_id": "d11a380e-1ef6-439e-824c-e19bd07002cf",
+      "normalized_domain": "protectionlawgroup.com",
+      "last_recorded_outbound_utc": "2026-08-14T23:15:12.212485+00:00",
+      "status": "clear",
+      "hold_reasons": [],
+      "evidence": [
+        {
+          "type": "no_matching_mailbox_exception",
+          "detail": "No matching inbound reply, bounce, opt-out, automatic reply, or newer Sent item found in scanned coverage."
+        }
+      ],
+      "limitations": []
+    },
+    {
+      "rank": 38,
+      "email": "joseph.r@elitelawgroup.com",
+      "normalized_email": "joseph.r@elitelawgroup.com",
+      "name": "Joseph David Ryan",
+      "firm": "Elite Law Group LA",
+      "canonical_firm_id": "0e88a97f-8d03-48ed-bc0e-89ee44e21813",
+      "normalized_domain": "elitelawgroup.com",
+      "last_recorded_outbound_utc": "2026-08-21T16:25:25.045508+00:00",
+      "status": "clear",
+      "hold_reasons": [],
+      "evidence": [
+        {
+          "type": "no_matching_mailbox_exception",
+          "detail": "No matching inbound reply, bounce, opt-out, automatic reply, or newer Sent item found in scanned coverage."
+        }
+      ],
+      "limitations": []
+    },
+    {
+      "rank": 39,
+      "email": "acampano@campanolaw.com",
+      "normalized_email": "acampano@campanolaw.com",
+      "name": "Angelo F. Campano",
+      "firm": "Campano Law Group, APC",
+      "canonical_firm_id": "d00af024-ce27-43ef-8988-ec7fb231579d",
+      "normalized_domain": "campanolaw.com",
+      "last_recorded_outbound_utc": "2026-08-26T16:35:20.37095+00:00",
+      "status": "clear",
+      "hold_reasons": [],
+      "evidence": [
+        {
+          "type": "no_matching_mailbox_exception",
+          "detail": "No matching inbound reply, bounce, opt-out, automatic reply, or newer Sent item found in scanned coverage."
+        }
+      ],
+      "limitations": []
+    },
+    {
+      "rank": 40,
+      "email": "matt@alipour.law",
+      "normalized_email": "matt@alipour.law",
+      "name": "Matt Milad Alipour, Esq.",
+      "firm": "Alipour Law Group",
+      "canonical_firm_id": "960c2133-e36b-4316-a82e-86a712046913",
+      "normalized_domain": "alipour.law",
+      "last_recorded_outbound_utc": "2026-08-26T17:25:16.601283+00:00",
+      "status": "clear",
+      "hold_reasons": [],
+      "evidence": [
+        {
+          "type": "no_matching_mailbox_exception",
+          "detail": "No matching inbound reply, bounce, opt-out, automatic reply, or newer Sent item found in scanned coverage."
+        }
+      ],
+      "limitations": []
+    },
+    {
+      "rank": 41,
+      "email": "arnak@azaklaw.com",
+      "normalized_email": "arnak@azaklaw.com",
+      "name": "Arnak Azaryan",
+      "firm": "Azaryan Law",
+      "canonical_firm_id": "51dddb4e-5223-46bc-b9d9-1c893c0e62e6",
+      "normalized_domain": "azaklaw.com",
+      "last_recorded_outbound_utc": "2026-08-26T17:35:17.443996+00:00",
+      "status": "clear",
+      "hold_reasons": [],
+      "evidence": [
+        {
+          "type": "no_matching_mailbox_exception",
+          "detail": "No matching inbound reply, bounce, opt-out, automatic reply, or newer Sent item found in scanned coverage."
+        }
+      ],
+      "limitations": []
+    },
+    {
+      "rank": 42,
+      "email": "caroleen@ctalawfirm.com",
+      "normalized_email": "caroleen@ctalawfirm.com",
+      "name": "Caroleen Torossian Arslanian, Esq.",
+      "firm": "CTA Law, APLC",
+      "canonical_firm_id": "be0bb252-5d03-48d3-af92-a703ab1ed274",
+      "normalized_domain": "ctalawfirm.com",
+      "last_recorded_outbound_utc": "2026-08-26T17:55:18.613569+00:00",
+      "status": "clear",
+      "hold_reasons": [],
+      "evidence": [
+        {
+          "type": "no_matching_mailbox_exception",
+          "detail": "No matching inbound reply, bounce, opt-out, automatic reply, or newer Sent item found in scanned coverage."
+        }
+      ],
+      "limitations": []
+    },
+    {
+      "rank": 43,
+      "email": "george@paijuklaw.com",
+      "normalized_email": "george@paijuklaw.com",
+      "name": "George Paijuk",
+      "firm": "PAIJUKLAW, PC",
+      "canonical_firm_id": "18db5020-0750-4734-a8af-6a43cc037cd5",
+      "normalized_domain": "paijuklaw.com",
+      "last_recorded_outbound_utc": "2026-08-26T18:15:21.449167+00:00",
+      "status": "clear",
+      "hold_reasons": [],
+      "evidence": [
+        {
+          "type": "no_matching_mailbox_exception",
+          "detail": "No matching inbound reply, bounce, opt-out, automatic reply, or newer Sent item found in scanned coverage."
+        }
+      ],
+      "limitations": []
+    },
+    {
+      "rank": 44,
+      "email": "jamil@sbinjurylawyers.com",
+      "normalized_email": "jamil@sbinjurylawyers.com",
+      "name": "Jamil W. Shaaban",
+      "firm": "Shaaban Biedgoly Injury Lawyers",
+      "canonical_firm_id": "7febfc18-ac6d-4356-b40e-12c66798016b",
+      "normalized_domain": "shaabanbiedgoly.com",
+      "last_recorded_outbound_utc": "2026-08-26T18:25:24.372559+00:00",
+      "status": "clear",
+      "hold_reasons": [],
+      "evidence": [
+        {
+          "type": "no_matching_mailbox_exception",
+          "detail": "No matching inbound reply, bounce, opt-out, automatic reply, or newer Sent item found in scanned coverage."
+        }
+      ],
+      "limitations": []
+    },
+    {
+      "rank": 45,
+      "email": "brad@thehayeslawfirmapc.com",
+      "normalized_email": "brad@thehayeslawfirmapc.com",
+      "name": "'Bradley Hayes'",
+      "firm": "The Hayes Law Firm, APC",
+      "canonical_firm_id": "d8d5add2-9d40-4d5f-9cb2-f4e0651bd6c5",
+      "normalized_domain": "hayeslawfirm.law",
+      "last_recorded_outbound_utc": "2026-08-26T18:35:25.026137+00:00",
+      "status": "clear",
+      "hold_reasons": [],
+      "evidence": [
+        {
+          "type": "no_matching_mailbox_exception",
+          "detail": "No matching inbound reply, bounce, opt-out, automatic reply, or newer Sent item found in scanned coverage."
+        }
+      ],
+      "limitations": []
+    },
+    {
+      "rank": 46,
+      "email": "ara@aranajarian.com",
+      "normalized_email": "ara@aranajarian.com",
+      "name": "Ara J. Najarian",
+      "firm": "The Law Offices of Ara Najarian",
+      "canonical_firm_id": "ef5d6ecb-140b-4658-a027-c620f0ef6bb0",
+      "normalized_domain": "aranajarianlaw.com",
+      "last_recorded_outbound_utc": "2026-08-26T18:45:25.635353+00:00",
+      "status": "clear",
+      "hold_reasons": [],
+      "evidence": [
+        {
+          "type": "no_matching_mailbox_exception",
+          "detail": "No matching inbound reply, bounce, opt-out, automatic reply, or newer Sent item found in scanned coverage."
+        }
+      ],
+      "limitations": []
+    },
+    {
+      "rank": 47,
+      "email": "pedram@pedramlaw.com",
+      "normalized_email": "pedram@pedramlaw.com",
+      "name": "nima pedram",
+      "firm": "Pedram Law",
+      "canonical_firm_id": "1962a44e-ecaf-44d1-8630-f3f8103de61c",
+      "normalized_domain": "pedramlaw.com",
+      "last_recorded_outbound_utc": "2026-08-27T16:05:25.415558+00:00",
+      "status": "clear",
+      "hold_reasons": [],
+      "evidence": [
+        {
+          "type": "no_matching_mailbox_exception",
+          "detail": "No matching inbound reply, bounce, opt-out, automatic reply, or newer Sent item found in scanned coverage."
+        }
+      ],
+      "limitations": []
+    },
+    {
+      "rank": 48,
+      "email": "ssoliman@thesolimanfirm.com",
+      "normalized_email": "ssoliman@thesolimanfirm.com",
+      "name": "Steven Soliman",
+      "firm": "The Soliman Firm, PLC",
+      "canonical_firm_id": "d0aa0fb7-97cb-4cae-ae2b-238e65c33607",
+      "normalized_domain": "thesolimanfirm.com",
+      "last_recorded_outbound_utc": "2026-08-27T16:25:27.698149+00:00",
+      "status": "clear",
+      "hold_reasons": [],
+      "evidence": [
+        {
+          "type": "no_matching_mailbox_exception",
+          "detail": "No matching inbound reply, bounce, opt-out, automatic reply, or newer Sent item found in scanned coverage."
+        }
+      ],
+      "limitations": []
+    },
+    {
+      "rank": 49,
+      "email": "dgonor@shaffergonorlaw.com",
+      "normalized_email": "dgonor@shaffergonorlaw.com",
+      "name": "David Gonor",
+      "firm": "Shaffer & Gonor",
+      "canonical_firm_id": "2a1ce63d-6f37-47c7-9eb9-341bfef768c3",
+      "normalized_domain": "shaffergonorlaw.com",
+      "last_recorded_outbound_utc": "2026-08-27T16:35:28.292534+00:00",
+      "status": "clear",
+      "hold_reasons": [],
+      "evidence": [
+        {
+          "type": "no_matching_mailbox_exception",
+          "detail": "No matching inbound reply, bounce, opt-out, automatic reply, or newer Sent item found in scanned coverage."
+        }
+      ],
+      "limitations": []
+    },
+    {
+      "rank": 50,
+      "email": "alla@teninalaw.com",
+      "normalized_email": "alla@teninalaw.com",
+      "name": "Alla Tenina",
+      "firm": "Tenina Law, APC",
+      "canonical_firm_id": "7d176b75-5a12-4d43-8a6b-0bdbcb307066",
+      "normalized_domain": "teninalaw.com",
+      "last_recorded_outbound_utc": "2026-08-27T17:05:18.897681+00:00",
+      "status": "clear",
+      "hold_reasons": [],
+      "evidence": [
+        {
+          "type": "no_matching_mailbox_exception",
+          "detail": "No matching inbound reply, bounce, opt-out, automatic reply, or newer Sent item found in scanned coverage."
+        }
+      ],
+      "limitations": []
+    },
+    {
+      "rank": 51,
+      "email": "edna@ednafelix.law",
+      "normalized_email": "edna@ednafelix.law",
+      "name": "Edna Felix",
+      "firm": "Edna Felix Law",
+      "canonical_firm_id": "51928ec8-51a8-4946-85e0-7f75a6ee5241",
+      "normalized_domain": "ednafelix.law",
+      "last_recorded_outbound_utc": "2026-08-27T17:15:19.607194+00:00",
+      "status": "clear",
+      "hold_reasons": [],
+      "evidence": [
+        {
+          "type": "no_matching_mailbox_exception",
+          "detail": "No matching inbound reply, bounce, opt-out, automatic reply, or newer Sent item found in scanned coverage."
+        }
+      ],
+      "limitations": []
+    },
+    {
+      "rank": 52,
+      "email": "gil@arbelegal.com",
+      "normalized_email": "gil@arbelegal.com",
+      "name": "Gil Arbel",
+      "firm": "Law Office of Gil L. Arbel",
+      "canonical_firm_id": "a3d6a370-7e55-4e02-bf4b-8237dacdef65",
+      "normalized_domain": "arbelegal.com",
+      "last_recorded_outbound_utc": "2026-08-27T17:55:21.891699+00:00",
+      "status": "clear",
+      "hold_reasons": [],
+      "evidence": [
+        {
+          "type": "no_matching_mailbox_exception",
+          "detail": "No matching inbound reply, bounce, opt-out, automatic reply, or newer Sent item found in scanned coverage."
+        }
+      ],
+      "limitations": []
+    },
+    {
+      "rank": 53,
+      "email": "st@thetafirm.com",
+      "normalized_email": "st@thetafirm.com",
+      "name": "Soheyl Tahsildoost",
+      "firm": "Theta Law Firm, LLP",
+      "canonical_firm_id": "b78783a4-ad6e-42bc-91f3-721bedbfdc6d",
+      "normalized_domain": "thetafirm.com",
+      "last_recorded_outbound_utc": "2026-08-27T18:05:22.708103+00:00",
+      "status": "clear",
+      "hold_reasons": [],
+      "evidence": [
+        {
+          "type": "no_matching_mailbox_exception",
+          "detail": "No matching inbound reply, bounce, opt-out, automatic reply, or newer Sent item found in scanned coverage."
+        }
+      ],
+      "limitations": []
+    },
+    {
+      "rank": 54,
+      "email": "prahgozar@rahgozarlaw.com",
+      "normalized_email": "prahgozar@rahgozarlaw.com",
+      "name": "Pegah Rahgozar",
+      "firm": "Rahgozar Law Firm, PLLC",
+      "canonical_firm_id": "9695c5a1-8c71-4bff-823f-969898e22fd6",
+      "normalized_domain": "rahgozarlaw.com",
+      "last_recorded_outbound_utc": "2026-08-31T14:30:25.289371+00:00",
+      "status": "clear",
+      "hold_reasons": [],
+      "evidence": [
+        {
+          "type": "no_matching_mailbox_exception",
+          "detail": "No matching inbound reply, bounce, opt-out, automatic reply, or newer Sent item found in scanned coverage."
+        }
+      ],
+      "limitations": []
+    },
+    {
+      "rank": 55,
+      "email": "elliot@zarabilaw.com",
+      "normalized_email": "elliot@zarabilaw.com",
+      "name": "Elliot Zarabi",
+      "firm": "The Zarabi Firm APC",
+      "canonical_firm_id": "455022b6-d428-4ecc-8527-e226a7b80b97",
+      "normalized_domain": "zarabilaw.com",
+      "last_recorded_outbound_utc": "2026-08-31T14:40:26.185284+00:00",
+      "status": "clear",
+      "hold_reasons": [],
+      "evidence": [
+        {
+          "type": "no_matching_mailbox_exception",
+          "detail": "No matching inbound reply, bounce, opt-out, automatic reply, or newer Sent item found in scanned coverage."
+        }
+      ],
+      "limitations": []
+    },
+    {
+      "rank": 56,
+      "email": "kfasoro@fasorolaw.com",
+      "normalized_email": "kfasoro@fasorolaw.com",
+      "name": "Ayokunle O. 'Kunle' Fasoro",
+      "firm": "Fasoro Law",
+      "canonical_firm_id": "7200be7e-f517-4cc7-a1e5-fa65754889c5",
+      "normalized_domain": "fasorolaw.com",
+      "last_recorded_outbound_utc": "2026-08-31T15:00:33.298291+00:00",
+      "status": "clear",
+      "hold_reasons": [],
+      "evidence": [
+        {
+          "type": "no_matching_mailbox_exception",
+          "detail": "No matching inbound reply, bounce, opt-out, automatic reply, or newer Sent item found in scanned coverage."
+        }
+      ],
+      "limitations": []
+    },
+    {
+      "rank": 57,
+      "email": "richarda@ralawllp.com",
+      "normalized_email": "richarda@ralawllp.com",
+      "name": "Richard A. Apodaca",
+      "firm": "Rodriguez Apodaca Law Firm LLP",
+      "canonical_firm_id": "9a1f3c50-63a9-4196-9d08-3a5735c77535",
+      "normalized_domain": "ralawllp.com",
+      "last_recorded_outbound_utc": "2026-08-31T15:40:21.679504+00:00",
+      "status": "clear",
+      "hold_reasons": [],
+      "evidence": [
+        {
+          "type": "no_matching_mailbox_exception",
+          "detail": "No matching inbound reply, bounce, opt-out, automatic reply, or newer Sent item found in scanned coverage."
+        }
+      ],
+      "limitations": []
+    },
+    {
+      "rank": 58,
+      "email": "lesly@leslyblaw.com",
+      "normalized_email": "lesly@leslyblaw.com",
+      "name": "Lesly Benavides",
+      "firm": "Benavides Law Firm",
+      "canonical_firm_id": "19f4142d-6c74-4999-81c7-ccf530689b0a",
+      "normalized_domain": "leslyblaw.com",
+      "last_recorded_outbound_utc": "2026-09-01T17:10:06.791817+00:00",
+      "status": "clear",
+      "hold_reasons": [],
+      "evidence": [
+        {
+          "type": "no_matching_mailbox_exception",
+          "detail": "No matching inbound reply, bounce, opt-out, automatic reply, or newer Sent item found in scanned coverage."
+        }
+      ],
+      "limitations": []
+    },
+    {
+      "rank": 59,
+      "email": "barry@hinden.net",
+      "normalized_email": "barry@hinden.net",
+      "name": "Barry Hinden",
+      "firm": "Hinden & Breslavsky",
+      "canonical_firm_id": "ea8db863-46fe-490f-b2b7-41852d6280cc",
+      "normalized_domain": "hinden.net",
+      "last_recorded_outbound_utc": "2026-09-02T16:10:11.257044+00:00",
+      "status": "clear",
+      "hold_reasons": [],
+      "evidence": [
+        {
+          "type": "no_matching_mailbox_exception",
+          "detail": "No matching inbound reply, bounce, opt-out, automatic reply, or newer Sent item found in scanned coverage."
+        }
+      ],
+      "limitations": []
+    },
+    {
+      "rank": 60,
+      "email": "lewis@khashanlaw.com",
+      "normalized_email": "lewis@khashanlaw.com",
+      "name": "Lewis Khashan",
+      "firm": "Khashan Law Firm, APC",
+      "canonical_firm_id": "dd324b50-b355-49fb-bd00-0839a950dfd6",
+      "normalized_domain": "khashanlaw.com",
+      "last_recorded_outbound_utc": "2026-09-02T16:50:15.112956+00:00",
+      "status": "clear",
+      "hold_reasons": [],
+      "evidence": [
+        {
+          "type": "no_matching_mailbox_exception",
+          "detail": "No matching inbound reply, bounce, opt-out, automatic reply, or newer Sent item found in scanned coverage."
+        }
+      ],
+      "limitations": []
+    }
+  ],
+  "limitations": [
+    "IMAP SINCE uses mailbox internal dates and the scan starts 2026-01-01.",
+    "Generic-domain recipients were matched by exact address only; firm-domain aliases not present in candidates.json could be missed.",
+    "This is a mailbox exception audit only; parent eligibility logic remains responsible for DB cooldown, role, article fit, pending-action, and cross-firm alias checks."
+  ],
+  "mutation_performed": false
+}
+

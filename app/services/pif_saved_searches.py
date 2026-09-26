@@ -30,14 +30,21 @@ FIRM_TRIGGER_SEARCH_DEFAULTS = {
     "sort_by": "updated_at",
     "autorespond_window": "any",
     "website_presence": "any",
-    "research_presence": "any",
-    "staff_presence": "any",
-    "job_postings_presence": "any",
+    "research_presence": [],
+    "staff_presence": [],
+    "job_postings_presence": [],
     "behavior_presence": "any",
     "icp_presence": "any",
     "vendor_presence": "any",
     "record_origin": "any",
     "first_contact_period": "any",
+    "trigger_event_types": [],
+    "trigger_categories": [],
+    "trigger_within_days": "30",
+    "trigger_min_score": "0",
+    "trigger_min_confidence": "0",
+    "trigger_match_mode": "any",
+    "priority_sort": "priority",
     "active_only": True,
 }
 FIRM_TRIGGER_SEARCH_KEYS = {
@@ -47,6 +54,8 @@ FIRM_TRIGGER_SEARCH_KEYS = {
     "job_posting_role", "job_posting_tag", "job_posting_query", "job_posted_within_days",
     "behavior_presence", "icp_presence", "vendor_presence", "vendor", "record_origin",
     "first_contact_period", "first_contacted_from", "first_contacted_to", "active_only",
+    "trigger_event_types", "trigger_categories", "trigger_within_days", "trigger_min_score",
+    "trigger_min_confidence", "trigger_match_mode", "priority_sort",
 }
 _table_checked = False
 
@@ -91,27 +100,63 @@ def normalize_firm_trigger_search_criteria(criteria: dict[str, Any]) -> dict[str
 
     normalized: dict[str, Any] = dict(FIRM_TRIGGER_SEARCH_DEFAULTS)
     for key in (
-        "search", "icp_tier", "entity_type", "contact_email_range", "staff_count_range",
-        "autorespond_type", "vendor", "first_contacted_from", "first_contacted_to",
-        "job_posting_query", "job_posting_tag",
+        "search", "first_contacted_from", "first_contacted_to", "job_posting_query",
     ):
         value = str(criteria.get(key) or "").strip()
         if value:
             normalized[key] = value.lower() if key == "vendor" else value
 
+    allowed_count_ranges = {"0-0", "1-5", "6-10", "11-25", "26-50", "51-100", "101+"}
+    for key in ("contact_email_range", "staff_count_range"):
+        raw_values = criteria.get(key) or []
+        values = raw_values if isinstance(raw_values, list) else [raw_values]
+        cleaned = list(dict.fromkeys(str(value).strip() for value in values if str(value).strip()))
+        invalid = [value for value in cleaned if value not in allowed_count_ranges]
+        if invalid:
+            raise ValueError(f"unsupported_{key}:{','.join(invalid)}")
+        if cleaned:
+            normalized[key] = cleaned
+
+    multi_value_filters: dict[str, set[str] | None] = {
+        "icp_tier": {"A", "B", "C", "D"},
+        "entity_type": None,
+        "autorespond_type": None,
+        "research_presence": {"completed", "missing", "queued_or_running", "failed"},
+        "staff_presence": {"completed", "missing", "queued_or_running", "failed"},
+        "job_postings_presence": {"has", "none", "not_researched", "queued_or_running", "failed"},
+        "job_posting_role": {"intake", "marketing", "case_operations", "firm_operations", "technology"},
+        "job_posting_tag": None,
+        "vendor": None,
+    }
+    for key, allowed in multi_value_filters.items():
+        raw_values = criteria.get(key) or []
+        values = raw_values if isinstance(raw_values, list) else [raw_values]
+        cleaned = []
+        for raw_value in values:
+            value = str(raw_value).strip()
+            if not value or value.lower() == "any":
+                continue
+            if key != "icp_tier":
+                value = value.lower()
+            if value not in cleaned:
+                cleaned.append(value)
+        invalid = [value for value in cleaned if allowed is not None and value not in allowed]
+        if invalid:
+            raise ValueError(f"unsupported_{key}:{','.join(invalid)}")
+        if cleaned or key in FIRM_TRIGGER_SEARCH_DEFAULTS:
+            normalized[key] = cleaned
+
     enum_values = {
         "sort_by": {"updated_at", "first_contacted_precise_at", "firm_name", "conversation_count"},
         "autorespond_window": {"any", "24h", "7d", "30d", "90d", "ever", "never"},
         "website_presence": {"any", "has", "missing", "resolved", "unresolved"},
-        "research_presence": {"any", "completed", "missing", "queued_or_running", "failed"},
-        "staff_presence": {"any", "completed", "missing", "queued_or_running", "failed"},
-        "job_postings_presence": {"any", "has", "none", "not_researched", "queued_or_running", "failed"},
-        "job_posting_role": {"", "intake", "marketing", "case_operations", "firm_operations", "technology"},
         "behavior_presence": {"any", "has", "missing"},
         "icp_presence": {"any", "has", "missing"},
         "vendor_presence": {"any", "has", "missing"},
         "record_origin": {"any", "manual", "synced"},
         "first_contact_period": {"any", "last_1_month", "last_6_months", "custom"},
+        "trigger_match_mode": {"any", "all"},
+        "priority_sort": {"priority", "newest", "fit"},
     }
     for key, allowed in enum_values.items():
         value = str(criteria.get(key) or FIRM_TRIGGER_SEARCH_DEFAULTS.get(key) or "").strip()
@@ -120,13 +165,26 @@ def normalize_firm_trigger_search_criteria(criteria: dict[str, Any]) -> dict[str
         if value:
             normalized[key] = value
 
-    for key in ("recently_researched", "job_posted_within_days"):
+    for key in ("recently_researched", "job_posted_within_days", "trigger_within_days", "trigger_min_score"):
         raw = criteria.get(key)
         if raw not in (None, ""):
             value = int(raw)
-            if value < 0 or value > 3650:
+            maximum = 100 if key == "trigger_min_score" else 3650
+            if value < 0 or value > maximum:
                 raise ValueError(f"unsupported_{key}:{value}")
             normalized[key] = str(value)
+    confidence_raw = criteria.get("trigger_min_confidence")
+    if confidence_raw not in (None, ""):
+        confidence = float(confidence_raw)
+        if confidence < 0 or confidence > 1:
+            raise ValueError(f"unsupported_trigger_min_confidence:{confidence}")
+        normalized["trigger_min_confidence"] = str(confidence)
+    for key in ("trigger_event_types", "trigger_categories"):
+        values = criteria.get(key) or []
+        cleaned = list(dict.fromkeys(
+            str(value).strip().lower() for value in values if str(value).strip()
+        ))
+        normalized[key] = cleaned
     normalized["active_only"] = bool(criteria.get("active_only", True))
     return normalized
 
