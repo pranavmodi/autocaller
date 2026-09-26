@@ -108,20 +108,27 @@ def recoverable_input_interruption(state):
 
 
 def human_verification_controls(snapshot):
-    """Return the exact visible code and submit controls for a human challenge."""
+    """Return the exact eight code inputs and submit control for a human challenge."""
     controls = [control for frame in snapshot.get('frames', [])
                 for control in frame.get('controls', [])]
-    code = next((control for control in controls
-                 if (control.get('label') or '').strip().casefold() == 'security code'
-                 and control.get('tag') == 'input'
-                 and control.get('type') not in {'password', 'hidden'}), None)
+    first = next((index for index, control in enumerate(controls)
+                  if (control.get('label') or '').strip().casefold() == 'security code'
+                  and control.get('tag') == 'input'
+                  and control.get('type') not in {'password', 'hidden'}), None)
+    code = controls[first:first + 8] if first is not None else []
+    valid_code_group = (len(code) == 8 and all(
+        control.get('tag') == 'input'
+        and control.get('type') not in {'password', 'hidden'}
+        and not control.get('disabled')
+        and (index == 0 or not (control.get('label') or '').strip())
+        for index, control in enumerate(code)))
     submit = next((control for control in controls
                    if (control.get('label') or '').strip().casefold() == 'submit application'
                    and control.get('tag') in {'button', 'input'}), None)
     visible = '\n'.join(frame.get('text', '') for frame in snapshot.get('frames', []))
     established = ('A verification code was sent to ' in visible
                    and "enter the 8-character code to confirm you're a human." in visible)
-    return (code, submit) if established else (None, None)
+    return (code, submit) if established and valid_code_group else ([], None)
 
 
 def restart_blocker(row):
@@ -315,16 +322,20 @@ async def complete_human_verification(identity, request: ControlRequest):
         if hashlib.sha256(resume.read_bytes()).hexdigest() != state['resume']['sha256']:
             raise ValueError('The selected resume changed. Application stopped.')
     snapshot = await browser.observe(ROOT / run_id / 'page.png')
-    code_control, submit_control = human_verification_controls(snapshot)
-    if not code_control or not submit_control:
-        raise ValueError('The preserved page no longer shows the expected human-verification challenge.')
-    await browser.execute(BrowserAction(kind='fill', element=code_control['id'], value=code_value,
-                                        summary='Enter the human-supplied security code'), resume)
+    for index, character in enumerate(code_value):
+        code_controls, submit_control = human_verification_controls(snapshot)
+        if not code_controls or not submit_control:
+            raise ValueError('The preserved page no longer shows the expected human-verification challenge.')
+        await browser.execute(BrowserAction(kind='fill', element=code_controls[index]['id'], value=character,
+                                            summary='Enter one character of the human-supplied security code'), resume)
+        if index < len(code_value) - 1:
+            snapshot = await browser.observe(ROOT / run_id / 'page.png')
     # Re-observe because broker element handles are scoped to one observation.
     snapshot = await browser.observe(ROOT / run_id / 'page.png')
-    _, submit_control = human_verification_controls(snapshot)
-    if not submit_control:
-        raise ValueError('The verification form changed after the code was entered. Inspect the preserved page.')
+    code_controls, submit_control = human_verification_controls(snapshot)
+    if (not submit_control or submit_control.get('disabled')
+            or ''.join(control.get('value', '') for control in code_controls) != code_value):
+        raise ValueError('The verification form did not register the complete code. Inspect the preserved page.')
     row = await checkpoint(identity, expected, status='verifying',
         stage='Submitting after human verification', interaction_started=True,
         human_verification_submit_started_at=core.now().isoformat(),

@@ -210,19 +210,32 @@ async def test_human_supplied_challenge_code_is_used_once_and_never_persisted(is
         browser_transport='broker', session_available=True,
         submit_started_at='2026-09-26T14:22:34Z')
     browser = AsyncMock()
-    challenge = {'url':'https://fixture.invalid/job', 'frames':[{'text':
-        "A verification code was sent to applicant@example.com. To submit your application, enter the 8-character code to confirm you're a human.",
-        'controls':[{'id':'e1','tag':'input','type':'text','label':'Security code'},
-                    {'id':'e2','tag':'button','type':'submit','label':'Submit application'}]}]}
-    browser.observe.side_effect = [challenge, challenge]
+    values = [''] * 8
+    def challenge():
+        return {'url':'https://fixture.invalid/job', 'frames':[{'text':
+            "A verification code was sent to applicant@example.com. To submit your application, enter the 8-character code to confirm you're a human.",
+            'controls':[{'id':f'e{index + 1}','tag':'input','type':'text',
+                         'label':'Security code' if index == 0 else '', 'disabled':False,
+                         'value':value} for index, value in enumerate(values)] +
+                       [{'id':'e9','tag':'button','type':'submit','label':'Submit application',
+                         'disabled':any(not value for value in values)}]}]}
+    async def observe(*_):
+        return challenge()
+    async def execute(action, _resume):
+        if action.kind == 'fill':
+            values[int(action.element[1:]) - 1] = action.value
+    browser.observe.side_effect = observe
+    browser.execute.side_effect = execute
     service._sessions['fixture'] = browser
     completed = await service.control('fixture', service.ControlRequest(
         revision=row.revision, action='challenge', answer='Ab12Cd34', remember=False))
     assert completed['status'] == 'verifying'
     assert completed['human_verification_completed_at']
-    assert browser.execute.await_count == 2
-    fill, submit = [call.args[0] for call in browser.execute.await_args_list]
-    assert fill.kind == 'fill' and fill.value == 'Ab12Cd34'
+    assert browser.execute.await_count == 9
+    actions = [call.args[0] for call in browser.execute.await_args_list]
+    fills, submit = actions[:-1], actions[-1]
+    assert ''.join(action.value for action in fills) == 'Ab12Cd34'
+    assert all(action.kind == 'fill' and len(action.value) == 1 for action in fills)
     assert submit.kind == 'submit' and submit.value == ''
     saved = await load_run()
     assert 'Ab12Cd34' not in str(saved.state)
@@ -238,8 +251,8 @@ async def test_challenge_action_requires_exact_visible_human_verification(isolat
     browser = AsyncMock()
     browser.observe.return_value = {'url':'https://fixture.invalid/job', 'frames':[{
         'text':'ordinary application form',
-        'controls':[{'id':'e1','tag':'input','type':'text','label':'Security code'},
-                    {'id':'e2','tag':'button','type':'submit','label':'Submit application'}]}]}
+        'controls':[{'id':'e1','tag':'input','type':'text','label':'Security code','disabled':False},
+                    {'id':'e2','tag':'button','type':'submit','label':'Submit application','disabled':False}]}]}
     service._sessions['fixture'] = browser
     with pytest.raises(ValueError, match='no longer shows'):
         await service.control('fixture', service.ControlRequest(
