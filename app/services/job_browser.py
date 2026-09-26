@@ -61,7 +61,7 @@ class StartRequest(BaseModel):
 class ControlRequest(BaseModel):
     model_config = ConfigDict(extra='forbid')
     revision: int = Field(ge=1)
-    action: Literal['pause', 'resume', 'answer', 'verify', 'release', 'restart', 'reconnect', 'quit']
+    action: Literal['pause', 'resume', 'answer', 'verify', 'release', 'restart', 'reconnect', 'quit', 'challenge']
     reason: str = Field('', max_length=1000)
     question_id: str | None = None
     answer: str = Field('', max_length=8000)
@@ -105,6 +105,23 @@ def recoverable_input_interruption(state):
             and action.get('kind') in {'fill', 'check', 'select', 'upload', 'click'}
             and audit.get('allowed') is True
             and audit.get('effect') == 'input')
+
+
+def human_verification_controls(snapshot):
+    """Return the exact visible code and submit controls for a human challenge."""
+    controls = [control for frame in snapshot.get('frames', [])
+                for control in frame.get('controls', [])]
+    code = next((control for control in controls
+                 if (control.get('label') or '').strip().casefold() == 'security code'
+                 and control.get('tag') == 'input'
+                 and control.get('type') not in {'password', 'hidden'}), None)
+    submit = next((control for control in controls
+                   if (control.get('label') or '').strip().casefold() == 'submit application'
+                   and control.get('tag') in {'button', 'input'}), None)
+    visible = '\n'.join(frame.get('text', '') for frame in snapshot.get('frames', []))
+    established = ('A verification code was sent to ' in visible
+                   and "enter the 8-character code to confirm you're a human." in visible)
+    return (code, submit) if established else (None, None)
 
 
 def restart_blocker(row):
@@ -273,7 +290,71 @@ async def start(identity, request: StartRequest):
     return result
 
 
+async def complete_human_verification(identity, request: ControlRequest):
+    """Use a human-supplied code once without persisting it anywhere."""
+    code_value = request.answer.strip()
+    if len(code_value) != 8 or any(character.isspace() for character in code_value):
+        raise ValueError('Enter the complete 8-character security code.')
+    await core.ensure_tables()
+    async with core.AsyncSessionLocal() as session:
+        row = await session.get(BrowserRun, identity)
+        if not row:
+            raise KeyError(identity)
+        if row.revision != request.revision:
+            raise ValueError('The browser progressed. Refresh its status before this action.')
+        state = row.state
+        if (row.status != 'submission_uncertain' or not state.get('submit_started_at')
+                or state.get('confirmation') or state.get('human_verification_completed_at')):
+            raise ValueError('A pending human-verification challenge was not established for this application.')
+        browser = await attach_browser(row)
+        if not browser:
+            raise ValueError('The preserved application browser is unavailable.')
+        run_id = row.run_id
+        expected = row.revision
+        resume = ROOT / run_id / 'resume.pdf'
+        if hashlib.sha256(resume.read_bytes()).hexdigest() != state['resume']['sha256']:
+            raise ValueError('The selected resume changed. Application stopped.')
+    snapshot = await browser.observe(ROOT / run_id / 'page.png')
+    code_control, submit_control = human_verification_controls(snapshot)
+    if not code_control or not submit_control:
+        raise ValueError('The preserved page no longer shows the expected human-verification challenge.')
+    await browser.execute(BrowserAction(kind='fill', element=code_control['id'], value=code_value,
+                                        summary='Enter the human-supplied security code'), resume)
+    # Re-observe because broker element handles are scoped to one observation.
+    snapshot = await browser.observe(ROOT / run_id / 'page.png')
+    _, submit_control = human_verification_controls(snapshot)
+    if not submit_control:
+        raise ValueError('The verification form changed after the code was entered. Inspect the preserved page.')
+    row = await checkpoint(identity, expected, status='verifying',
+        stage='Submitting after human verification', interaction_started=True,
+        human_verification_submit_started_at=core.now().isoformat(),
+        message='The human-supplied verification code was entered. Performing the required final submission click once.',
+        kind='human_verification')
+    if not row:
+        raise ValueError('The browser progressed. Refresh its status before this action.')
+    action = BrowserAction(kind='submit', element=submit_control['id'],
+                           summary='Submit after human verification')
+    try:
+        await browser.execute(action, resume)
+    except Exception as exc:
+        await checkpoint(identity, row.revision, status='submission_uncertain',
+            stage='Human-verification submission needs review',
+            error=str(exc)[:1200] or type(exc).__name__,
+            message='The final submission click was attempted; inspect the preserved page without resubmitting.',
+            kind='error')
+        raise
+    saved = await checkpoint(identity, row.revision, status='verifying',
+        stage='Checking the employer confirmation after human verification',
+        interaction_started=False, human_verification_completed_at=core.now().isoformat(), error=None,
+        message='Human verification completed; checking the employer confirmation without resubmitting.',
+        kind='human_verification_completed')
+    _wake.set()
+    return view(saved)
+
+
 async def control(identity, request: ControlRequest):
+    if request.action == 'challenge':
+        return await complete_human_verification(identity, request)
     await core.ensure_tables()
     async with core.AsyncSessionLocal() as session:
         row = await session.get(BrowserRun, identity, with_for_update=True)

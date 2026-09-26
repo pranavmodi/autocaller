@@ -253,7 +253,7 @@ def register(app, get, post, console):
                         question_id: str = typer.Option(None, '--question-id'),
                         answer_file: Path = typer.Option(None, '--answer-file', exists=True),
                         remember: bool = typer.Option(True, '--remember/--this-application-only')):
-        """Pause/resume/restart/reconnect/quit, answer, or verify without resubmitting."""
+        """Control a run; challenge uses a human-supplied one-time code without saving it."""
         output(post(f'/api/job-agent/jobs/{identity}/browser/control', {
             'revision': revision, 'action': action, 'question_id': question_id, 'provider': provider, 'reason': reason,
             'answer': answer_file.read_text() if answer_file else '', 'remember': remember}))

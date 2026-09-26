@@ -204,6 +204,50 @@ async def test_interrupted_non_input_or_rejected_action_stays_locked(isolated_st
 
 
 @pytest.mark.asyncio
+async def test_human_supplied_challenge_code_is_used_once_and_never_persisted(isolated_store):
+    row = await seed_run(isolated_store)
+    row = await service.checkpoint('fixture', row.revision, status='submission_uncertain',
+        browser_transport='broker', session_available=True,
+        submit_started_at='2026-09-26T14:22:34Z')
+    browser = AsyncMock()
+    challenge = {'url':'https://fixture.invalid/job', 'frames':[{'text':
+        "A verification code was sent to applicant@example.com. To submit your application, enter the 8-character code to confirm you're a human.",
+        'controls':[{'id':'e1','tag':'input','type':'text','label':'Security code'},
+                    {'id':'e2','tag':'button','type':'submit','label':'Submit application'}]}]}
+    browser.observe.side_effect = [challenge, challenge]
+    service._sessions['fixture'] = browser
+    completed = await service.control('fixture', service.ControlRequest(
+        revision=row.revision, action='challenge', answer='Ab12Cd34', remember=False))
+    assert completed['status'] == 'verifying'
+    assert completed['human_verification_completed_at']
+    assert browser.execute.await_count == 2
+    fill, submit = [call.args[0] for call in browser.execute.await_args_list]
+    assert fill.kind == 'fill' and fill.value == 'Ab12Cd34'
+    assert submit.kind == 'submit' and submit.value == ''
+    saved = await load_run()
+    assert 'Ab12Cd34' not in str(saved.state)
+    assert 'Ab12Cd34' not in str((await service.get('fixture'))['events'])
+
+
+@pytest.mark.asyncio
+async def test_challenge_action_requires_exact_visible_human_verification(isolated_store):
+    row = await seed_run(isolated_store)
+    row = await service.checkpoint('fixture', row.revision, status='submission_uncertain',
+        browser_transport='broker', session_available=True,
+        submit_started_at='2026-09-26T14:22:34Z')
+    browser = AsyncMock()
+    browser.observe.return_value = {'url':'https://fixture.invalid/job', 'frames':[{
+        'text':'ordinary application form',
+        'controls':[{'id':'e1','tag':'input','type':'text','label':'Security code'},
+                    {'id':'e2','tag':'button','type':'submit','label':'Submit application'}]}]}
+    service._sessions['fixture'] = browser
+    with pytest.raises(ValueError, match='no longer shows'):
+        await service.control('fixture', service.ControlRequest(
+            revision=row.revision, action='challenge', answer='Ab12Cd34', remember=False))
+    browser.execute.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_pause_invalidates_inflight_model_decision(isolated_store):
     row = await seed_run(isolated_store)
     await service.control('fixture', service.ControlRequest(revision=row.revision, action='pause'))
