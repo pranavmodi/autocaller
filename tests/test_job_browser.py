@@ -62,6 +62,42 @@ def test_mailbox_verification_uses_newest_exact_code_and_visible_controls():
     assert redacted.choices == [f'e{i}' for i in range(8)]
 
 
+def test_missing_verification_choices_are_recovered_from_adjacent_controls():
+    snapshot = {'frames': [{'controls': [
+        {'id': 'e0', 'tag': 'input', 'type': 'text', 'disabled': False},
+        {'id': 'e1', 'tag': 'button', 'type': 'button', 'disabled': False},
+        *[{'id': f'e{i}', 'tag': 'input', 'type': 'text', 'disabled': False}
+          for i in range(2, 10)],
+        {'id': 'e10', 'tag': 'button', 'type': 'submit', 'disabled': True},
+    ]}]}
+    action = BrowserAction(kind='verification_code', value='Ab12Cd34', choices=[],
+                           element='e10', summary='Verify application')
+    recovered = service.complete_verification_action_shape(action, snapshot)
+    assert recovered.choices == [f'e{i}' for i in range(2, 10)]
+
+
+def test_verification_button_may_start_disabled_until_code_is_filled():
+    snapshot = {'frames': [{'controls': [
+        {'id': 'e0', 'tag': 'input', 'type': 'text', 'disabled': False},
+        {'id': 'e1', 'tag': 'button', 'type': 'submit', 'disabled': True},
+    ]}]}
+    result = {'items': [{'excerpt': 'Current code: Ab12Cd34'}]}
+    action = BrowserAction(kind='verification_code', value='Ab12Cd34',
+                           choices=['e0'], element='e1', summary='Verify application')
+    assert service.mailbox_verification_value(action, result, snapshot) == 'Ab12Cd34'
+
+
+def test_missing_verification_choices_are_not_guessed_across_other_controls():
+    snapshot = {'frames': [{'controls': [
+        {'id': 'e0', 'tag': 'input', 'type': 'text', 'disabled': False},
+        {'id': 'e1', 'tag': 'button', 'type': 'button', 'disabled': False},
+        {'id': 'e2', 'tag': 'button', 'type': 'submit', 'disabled': False},
+    ]}]}
+    action = BrowserAction(kind='verification_code', value='Ab12Cd34', choices=[],
+                           element='e2', summary='Verify application')
+    assert service.complete_verification_action_shape(action, snapshot).choices == []
+
+
 @pytest.mark.asyncio
 async def test_application_mail_search_falls_back_to_verified_employer_name(monkeypatch):
     search = AsyncMock(side_effect=[

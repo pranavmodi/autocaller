@@ -671,9 +671,47 @@ def mailbox_verification_value(action: BrowserAction, mailbox_result: dict, snap
                 or control.get('disabled')):
             raise ValueError('The selected one-time-code control is unavailable.')
     submit = controls.get(action.element) or {}
-    if (submit.get('tag') not in {'button', 'input'} or submit.get('disabled')):
+    # Code forms commonly keep their final control disabled until every code
+    # input is populated. complete_mailbox_verification observes the page again
+    # after filling and requires this same structural control to become enabled.
+    if submit.get('tag') not in {'button', 'input'}:
         raise ValueError('The visible verification action is unavailable.')
     return code
+
+
+def complete_verification_action_shape(action: BrowserAction, snapshot: dict) -> BrowserAction:
+    """Recover omitted code-field IDs from their structural position.
+
+    The model has already identified this as an email-code step and selected the
+    visible verification control. Some model responses omit ``choices`` even
+    though the code inputs are present in the page snapshot. Recover only when
+    the inputs form an unambiguous, contiguous group immediately before that
+    control. This is DOM bookkeeping, not a semantic guess about page wording.
+    """
+    if action.kind != 'verification_code' or action.choices:
+        return action
+    code_length = len(action.value.strip())
+    if not code_length:
+        return action
+    for frame in snapshot.get('frames', []):
+        controls = frame.get('controls', [])
+        submit_index = next((index for index, control in enumerate(controls)
+                             if control.get('id') == action.element), None)
+        if submit_index is None:
+            continue
+        adjacent = []
+        for control in reversed(controls[:submit_index]):
+            if (control.get('tag') != 'input'
+                    or control.get('type') not in {'text', 'tel', 'number'}
+                    or control.get('disabled')):
+                break
+            adjacent.append(control['id'])
+        adjacent.reverse()
+        if len(adjacent) == code_length:
+            return action.model_copy(update={'choices': adjacent})
+        if len(adjacent) == 1:
+            return action.model_copy(update={'choices': adjacent})
+    return action
 
 
 def verification_control_descriptor(snapshot: dict, element: str) -> dict:
@@ -878,6 +916,7 @@ async def step(row):
         decision, usage = await model_decision('decide', state,
             action_schema=BrowserAction.model_json_schema(), mailbox_search_result=mailbox_result)
         action = BrowserAction.model_validate(decision['action'])
+        action = complete_verification_action_shape(action, snapshot)
         if action.kind == 'email_search':
             raise ValueError('Only one mailbox search is allowed per browser step.')
         mailbox_derived = True
