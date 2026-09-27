@@ -442,9 +442,41 @@ async def test_false_confirmation_is_not_accepted(isolated_store, monkeypatch):
     service._sessions['fixture'] = fake
     monkeypatch.setattr(service, 'model_decision', AsyncMock(return_value=(
         {'action': {'kind': 'confirmed', 'summary': 'Done', 'evidence': 'Application received'}}, {})))
-    with pytest.raises(ValueError, match='confirmation evidence'):
+    with pytest.raises(ValueError, match='submission attempt'):
         await service.step(row)
     assert (await service.get('fixture'))['status'] != 'submitted'
+
+
+@pytest.mark.asyncio
+async def test_missing_confirmation_quote_is_recovered_from_visible_receipt(isolated_store, monkeypatch):
+    row = await seed_run(isolated_store)
+    row = await service.checkpoint(
+        'fixture', row.revision, submit_started_at='2026-09-27T11:00:00+00:00')
+    browser = AsyncMock()
+    browser.observe.return_value = {
+        'url': 'https://fixture.invalid/confirmation',
+        'frames': [{'text': 'Thank you for applying.\nYour application has been received.',
+                    'controls': []}],
+    }
+    service._sessions['fixture'] = browser
+
+    async def controller(mode, state, **extra):
+        if mode == 'decide':
+            return {'action': {'kind': 'confirmed', 'summary': 'Application received',
+                               'evidence': ''}}, {}
+        if mode == 'extract_confirmation':
+            return {'confirmed': True, 'exact_quote': 'Your application has been received.',
+                    'reason': 'Visible employer receipt.'}, {'model': 'extractor'}
+        if mode == 'verify_confirmation':
+            return {'confirmed': True, 'reason': 'Exact visible receipt.'}, {'model': 'verifier'}
+        raise AssertionError(mode)
+
+    monkeypatch.setattr(service, 'model_decision', controller)
+    await service.step(row)
+    result = await service.get('fixture')
+    assert result['status'] == 'submitted'
+    assert result['confirmation']['quote'] == 'Your application has been received.'
+    browser.close.assert_awaited_once()
 
 
 @pytest.mark.asyncio

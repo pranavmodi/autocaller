@@ -217,6 +217,16 @@ the exact quoted evidence genuinely establish a successful submission for the
 saved job, following a recorded submission attempt. Generic unrelated thank-you
 text, a still-active form, validation errors, or a job advertisement are insufficient.
 
+## mode: extract_confirmation
+
+Review only the supplied visible page text after a recorded submission attempt.
+Return {"confirmed": boolean, "exact_quote": string, "reason": string}.
+Set confirmed=true only when the page visibly states that this exact application
+was received, submitted, or completed. exact_quote must be one short,
+character-for-character substring copied from visible_page_text; do not
+paraphrase, combine separate passages, or add punctuation. If no receipt is
+visible, return confirmed=false and exact_quote="".
+
 ## mode: resolve_question
 
 Before asking the user `proposed_question`, check `saved_profile` semantically using

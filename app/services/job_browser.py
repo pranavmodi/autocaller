@@ -611,6 +611,7 @@ async def model_decision(mode, state, **extra):
         skill_path=SKILL, payload=payload,
         required_fields={'decide': ['action'], 'audit_action': ['allowed', 'effect', 'reason', 'recovery', 'repair_hint'],
                          'verify_confirmation': ['confirmed', 'reason'],
+                         'extract_confirmation': ['confirmed', 'exact_quote', 'reason'],
                          'resolve_question': ['answer', 'missing_question', 'citations', 'reason']}[mode],
         model='openclaw/main', lane='possibleos-interactive', allow_tools=False,
         timeout_s=90, retries=1, max_tokens=2500)
@@ -978,14 +979,25 @@ async def step(row):
         return
     if action.kind == 'confirmed':
         visible = '\n'.join(f.get('text', '') for f in snapshot['frames'])
-        if not state.get('submit_started_at') or not action.evidence.strip() or action.evidence not in visible:
-            raise ValueError('No submission attempt and exact visible confirmation evidence were established.')
-        verification, verify_usage = await model_decision('verify_confirmation', state, evidence=action.evidence)
+        if not state.get('submit_started_at'):
+            raise ValueError('No submission attempt was recorded for this application.')
+        evidence = action.evidence.strip()
+        extraction_usage = None
+        if not evidence or evidence not in visible:
+            extraction, extraction_usage = await model_decision(
+                'extract_confirmation', state, visible_page_text=visible)
+            from app.services.job_browser_ai import ConfirmationEvidence
+            extraction = ConfirmationEvidence.model_validate(extraction)
+            evidence = extraction.exact_quote.strip()
+            if not extraction.confirmed or not evidence or evidence not in visible:
+                raise ValueError('Exact visible submission confirmation evidence was not established.')
+        verification, verify_usage = await model_decision('verify_confirmation', state, evidence=evidence)
         if verification.get('confirmed') is not True:
             raise ValueError('Submission confirmation could not be verified: ' + str(verification.get('reason', '')))
         saved = await checkpoint(identity, row.revision, status='submitted', stage='Website submission confirmed',
-            confirmation={'quote': action.evidence, 'url': snapshot['url'], 'at': core.now().isoformat(),
-                          'verification': verification, 'model': verify_usage},
+            confirmation={'quote': evidence, 'url': snapshot['url'], 'at': core.now().isoformat(),
+                          'verification': verification, 'model': verify_usage,
+                          'extraction_model': extraction_usage},
             message='The employer page confirmed this application.', kind='submitted', session_available=False,
             browser_closed=True, browser_session_status='closed')
         if saved:

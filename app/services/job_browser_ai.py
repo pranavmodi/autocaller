@@ -31,6 +31,13 @@ class Confirmation(BaseModel):
     reason: str
 
 
+class ConfirmationEvidence(BaseModel):
+    model_config = ConfigDict(extra='forbid', strict=True)
+    confirmed: bool
+    exact_quote: str
+    reason: str
+
+
 class ProfileCitation(BaseModel):
     model_config = ConfigDict(extra='forbid', strict=True)
     id: str
@@ -51,6 +58,7 @@ class QuitReasons(BaseModel):
 
 
 FORMATS = {'decide': Decision, 'audit_action': ActionAudit, 'verify_confirmation': Confirmation,
+           'extract_confirmation': ConfirmationEvidence,
            'resolve_question': ProfileResolution, 'suggest_quit_reasons': QuitReasons}
 
 
