@@ -480,6 +480,27 @@ async def test_missing_confirmation_quote_is_recovered_from_visible_receipt(isol
 
 
 @pytest.mark.asyncio
+async def test_operator_can_confirm_exact_preserved_receipt_locally(isolated_store):
+    row = await seed_run(isolated_store)
+    browser = AsyncMock()
+    service._sessions['fixture'] = browser
+    quote = 'Your application has been received.'
+    row = await service.checkpoint(
+        'fixture', row.revision, status='submission_uncertain',
+        submit_started_at='2026-09-27T11:00:00+00:00',
+        current_url='https://fixture.invalid/confirmation',
+        snapshot={'url': 'https://fixture.invalid/confirmation',
+                  'frames': [{'text': f'Thank you for applying.\n{quote}', 'controls': []}]})
+    result = await service.control(
+        'fixture', service.ControlRequest(action='confirm_receipt', revision=row.revision,
+                                          answer=quote, remember=False))
+    assert result['status'] == 'submitted'
+    assert result['confirmation']['quote'] == quote
+    assert result['confirmation']['model'] is None
+    browser.close.assert_awaited_once()
+
+
+@pytest.mark.asyncio
 async def test_start_is_idempotent_and_email_status_is_unchanged(isolated_store, monkeypatch):
     await seed_run(isolated_store)
     monkeypatch.setattr(processing, 'enqueue_missing', AsyncMock())

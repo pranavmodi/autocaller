@@ -62,7 +62,8 @@ class StartRequest(BaseModel):
 class ControlRequest(BaseModel):
     model_config = ConfigDict(extra='forbid')
     revision: int = Field(ge=1)
-    action: Literal['pause', 'resume', 'answer', 'verify', 'release', 'restart', 'reconnect', 'quit', 'challenge']
+    action: Literal['pause', 'resume', 'answer', 'verify', 'confirm_receipt', 'release',
+                    'restart', 'reconnect', 'quit', 'challenge']
     reason: str = Field('', max_length=1000)
     question_id: str | None = None
     answer: str = Field('', max_length=8000)
@@ -429,7 +430,31 @@ async def control(identity, request: ControlRequest):
             raise ValueError('You quit this application. Use Restart from beginning if you decide to apply again.')
         if request.provider is not None and request.action not in {'resume', 'answer', 'verify', 'restart'}:
             raise ValueError('Choose a provider when starting, resuming, answering, or checking confirmation.')
-        if request.action == 'quit':
+        if request.action == 'confirm_receipt':
+            if row.status != 'submission_uncertain' or not state.get('submit_started_at'):
+                raise ValueError('A receipt can be confirmed only after a recorded submission attempt.')
+            quote = request.answer.strip()
+            snapshot = state.get('snapshot') or {}
+            visible = '\n'.join(frame.get('text', '') for frame in snapshot.get('frames', []))
+            if len(quote) < 8 or quote not in visible:
+                raise ValueError('The supplied receipt quote is not visible in the preserved employer page.')
+            state.update(
+                confirmation={'quote': quote, 'url': snapshot.get('url') or state.get('current_url'),
+                              'at': core.now().isoformat(),
+                              'verification': {'confirmed': True,
+                                               'reason': 'Exact visible employer receipt confirmed locally.'},
+                              'model': None},
+                stage='Website submission confirmed', error=None, question=None,
+                interaction_started=False, browser_closed=True, session_available=False,
+                browser_session_status='closed')
+            row.status = 'submitted'
+            add_event(session, row, 'The preserved employer page confirmed this application.', 'submitted')
+            try:
+                await close_browser(row)
+            except Exception as exc:
+                state['browser_cleanup_error'] = 'Submission is confirmed, but browser closure could not be verified.'
+                logger.warning('Confirmed receipt browser cleanup failed: %s', type(exc).__name__)
+        elif request.action == 'quit':
             reason = restart_blocker(row)
             if reason:
                 raise ValueError(reason)
