@@ -631,7 +631,9 @@ def redact_mailbox_followup(action: BrowserAction) -> BrowserAction:
     return action.model_copy(update={
         'summary': 'Used a transient read-only mailbox result',
         'value': '[redacted mailbox result]' if action.value else '',
-        'question': '', 'choices': [], 'evidence': '',
+        'question': '',
+        'choices': action.choices if action.kind == 'verification_code' else [],
+        'evidence': '',
     })
 
 

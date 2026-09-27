@@ -58,7 +58,8 @@ def test_mailbox_verification_uses_newest_exact_code_and_visible_controls():
     with pytest.raises(ValueError, match='newest matching email'):
         service.mailbox_verification_value(action.model_copy(update={'value': 'Old12345'}), result, snapshot)
     redacted = service.redact_mailbox_followup(action)
-    assert redacted.value == '[redacted mailbox result]' and redacted.choices == []
+    assert redacted.value == '[redacted mailbox result]'
+    assert redacted.choices == [f'e{i}' for i in range(8)]
 
 
 @pytest.mark.asyncio
