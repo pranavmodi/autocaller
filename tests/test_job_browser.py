@@ -1051,6 +1051,31 @@ async def test_verification_after_interrupted_click_cannot_fill_or_resubmit(isol
 
 
 @pytest.mark.asyncio
+async def test_verification_retry_clears_stale_failure_context(isolated_store):
+    row = await seed_run(isolated_store)
+    browser = AsyncMock()
+    service._sessions['fixture'] = browser
+    row = await service.checkpoint(
+        'fixture', row.revision, status='submission_uncertain',
+        submit_started_at='2026-09-27T10:00:00+00:00',
+        error='Please provide the code manually.',
+        failed_action={'kind': 'verification_code'},
+        failed_audit={'allowed': False}, failed_model={'id': 'decision'},
+        failed_audit_model={'id': 'audit'}, audit_feedback={'reason': 'old'},
+        audit_repair_count=2)
+    result = await service.control(
+        'fixture', service.ControlRequest(action='verify', revision=row.revision))
+    assert result['status'] == 'verifying'
+    assert result['error'] is None
+    assert result['failed_action'] is None
+    assert result['failed_audit'] is None
+    assert result['failed_model'] is None
+    assert result['failed_audit_model'] is None
+    assert result['audit_feedback'] is None
+    assert result['audit_repair_count'] == 0
+
+
+@pytest.mark.asyncio
 async def test_quit_from_question_preserves_history_without_saving_answer(isolated_store, monkeypatch):
     row = await seed_run(isolated_store)
     question={'id':'relocation','text':'Would you relocate to Czechia or Slovakia?', 'choices':[]}

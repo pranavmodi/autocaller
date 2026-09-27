@@ -506,6 +506,16 @@ async def control(identity, request: ControlRequest):
                 raise ValueError('Read-only verification needs the original browser session. Review the saved evidence or the employer portal manually.')
             row.status, state['stage'] = 'verifying', 'Checking the existing page without resubmitting'
             state['verification_only'] = True
+            # A retry must be decided from the freshly observed page and mail,
+            # not from the error/audit that caused the previous attempt to stop.
+            # The durable action/event history remains available for traceability.
+            state['error'] = None
+            state['failed_action'] = None
+            state['failed_audit'] = None
+            state['failed_model'] = None
+            state['failed_audit_model'] = None
+            state['audit_feedback'] = None
+            state['audit_repair_count'] = 0
         else:
             recovering_input = (request.action == 'resume'
                                 and row.status == 'submission_uncertain'
