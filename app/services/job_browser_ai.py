@@ -19,7 +19,7 @@ class Decision(BaseModel):
 class ActionAudit(BaseModel):
     model_config = ConfigDict(extra='forbid', strict=True)
     allowed: bool
-    effect: Literal['input', 'navigation', 'advance', 'submit', 'blocked']
+    effect: Literal['input', 'navigation', 'advance', 'read', 'submit', 'blocked']
     reason: str
     recovery: Literal['none', 'correct_form', 'stop'] = 'stop'
     repair_hint: str = ''

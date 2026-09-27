@@ -33,6 +33,14 @@ def test_click_cannot_disguise_submission_or_bypass_action_audit():
     service.validate_audit(click, {'allowed': True, 'effect': 'advance'})
 
 
+def test_mailbox_search_requires_read_audit_and_redacts_durable_query():
+    action = BrowserAction(kind='email_search', value='Fixture verification', summary='Check inbox')
+    service.validate_audit(action, {'allowed': True, 'effect': 'read'})
+    with pytest.raises(ValueError, match='different effect'):
+        service.validate_audit(action, {'allowed': True, 'effect': 'input'})
+    assert service.redact_mailbox_action(action).value == '[redacted mailbox query]'
+
+
 @pytest.mark.asyncio
 async def test_browser_rejects_unobserved_navigation_and_password_entry():
     browser = BrowserSession()
@@ -681,6 +689,49 @@ async def test_stale_control_is_rejected_before_write_ahead(isolated_store,monke
     saved=await load_run()
     assert not saved.state.get('interaction_started') and not saved.state.get('submit_started_at')
     browser.execute.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_mailbox_search_result_is_transient_before_form_action(isolated_store, monkeypatch):
+    row = await seed_run(isolated_store)
+    browser = AsyncMock()
+    browser.observe.return_value = {'url': 'https://fixture.invalid/job', 'frames': [{
+        'text': 'Fixture Employer verification code',
+        'controls': [{'id': 'e0', 'type': 'text', 'label': 'Verification code'}],
+    }]}
+    service._sessions['fixture'] = browser
+    secret = 'Ab12Cd34'
+    search = AsyncMock(return_value={
+        'query': 'Fixture verification', 'mailbox': 'INBOX', 'read_only': True,
+        'since_hours': 48, 'matched': 1,
+        'items': [{'from_email': 'verify@fixture.invalid', 'subject': 'Verification',
+                   'received_at': '2026-09-27T08:00:00+00:00', 'excerpt': f'Code: {secret}'}],
+    })
+    monkeypatch.setattr(service, 'search_zoho_inbox', search)
+
+    async def controller(mode, state, **extra):
+        if mode == 'audit_action':
+            kind = extra['proposed_action']['kind']
+            return {'allowed': True, 'effect': 'read' if kind == 'email_search' else 'input',
+                    'reason': 'Exact application verification.', 'recovery': 'none', 'repair_hint': ''}, {}
+        if 'mailbox_search_result' in extra:
+            assert secret in extra['mailbox_search_result']['items'][0]['excerpt']
+            return {'action': {'kind': 'fill', 'element': 'e0', 'value': secret,
+                               'summary': 'Enter the verification code'}}, {}
+        return {'action': {'kind': 'email_search', 'value': 'Fixture verification',
+                           'summary': 'Check for the application email'}}, {}
+
+    monkeypatch.setattr(service, 'model_decision', controller)
+    await service.step(row)
+
+    browser.execute.assert_awaited_once()
+    saved = await load_run()
+    durable = str(saved.state)
+    assert secret not in durable
+    assert 'Fixture verification' not in durable
+    assert saved.state['mailbox_search_last']['matched'] == 1
+    assert saved.state['last_action']['kind'] == 'fill'
+    assert saved.state['last_action']['value'] == '[redacted mailbox result]'
 
 @pytest.mark.asyncio
 async def test_hidden_iframe_controls_are_not_presented_as_visible(tmp_path):

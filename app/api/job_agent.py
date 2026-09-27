@@ -3,6 +3,7 @@ from fastapi import APIRouter, HTTPException, Query
 from app.services import job_agent as service
 from app.services import job_agent_processing as processing
 from app.services import job_browser
+from app.services.job_browser_mail import MailboxSearchRequest
 from app.services import job_applicant_profile as applicant_profile
 
 router = APIRouter(prefix="/api/job-agent", tags=["job-agent"])
@@ -31,6 +32,16 @@ async def profile_remove(identity: str, body: applicant_profile.ProfileArchive):
 @router.get('/browser-applications')
 async def browser_applications():
     return await job_browser.list_runs()
+
+
+@router.post('/jobs/{identity}/mailbox/search')
+async def mailbox_search(identity: str, body: MailboxSearchRequest):
+    try:
+        return await job_browser.operator_mailbox_search(identity, body)
+    except KeyError as exc:
+        raise HTTPException(404, 'Job not found') from exc
+    except (RuntimeError, TimeoutError) as exc:
+        raise HTTPException(503, 'Zoho inbox search is temporarily unavailable.') from exc
 
 
 @router.get('/jobs/{identity}/browser')

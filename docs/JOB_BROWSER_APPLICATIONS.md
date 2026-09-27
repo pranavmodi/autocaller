@@ -49,7 +49,12 @@ identity evidence and recent actions carry forward across form steps.
 
 The fixed tool set supports observed-link navigation, input, native selects,
 checkboxes, buttons, resume upload, short waits, asking questions, blocking,
-submitting, and verifying. Network requests are restricted to validated public
+submitting, verifying, and a bounded read-only Zoho INBOX search. The mailbox
+tool searches only recent messages for specific application-relevant content,
+uses non-mutating IMAP reads, and returns at most five matches. Message bodies and
+one-time codes are transient; durable events retain only the match count and time
+window. It cannot send, reply, move, delete, mark read, or inspect Sent mail.
+Every autonomous search must pass the independent action audit. Network requests are restricted to validated public
 HTTPS addresses; private addresses, downloads, service workers, and WebSockets
 are blocked. These restrictions can make some sites unsupported. No site-specific
 ATS API bypass is implemented.
@@ -219,6 +224,17 @@ services. A file lock prevents competing owners. There is no TCP/CDP endpoint,
 arbitrary JavaScript tool, or arbitrary file upload. Resume/screenshot paths are
 fixed per run. Browser-side public URL/resource/frame restrictions survive worker
 detachment, as do disabled WebSockets, downloads and service workers.
+
+Operators can run the same bounded read path without starting or advancing a
+browser application:
+
+```bash
+bin/possibleos job-agent inbox-search JOB_ID --query "Employer verification" \
+  --since-hours 48 --limit 5
+```
+
+This command returns matching excerpts to the invoking operator but does not
+persist them in browser state or modify the mailbox.
 
 Each observation has a fresh token tied to its element handles. Execution consumes
 that token once; worker action IDs and broker deduplication prevent replay after a

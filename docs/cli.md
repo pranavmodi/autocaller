@@ -130,6 +130,7 @@ the selected job by default; applications are sent only through explicit
 | `job-agent verify-sent ID` | Check the Sent copy and attachment hash; never resends. |
 | `job-agent browser-provider gateway\|openai [--model MODEL]` | Save the default website-controller provider and API model. Does not change active runs. Start/control also accept `--provider` when starting/resuming/answering/verifying. |
 | `job-agent browser-applications / browser-status ID [--after CURSOR]` | List/monitor website applications separately from email; status includes browser revision, question, screenshot availability and confirmation. Events paginate without a retention cap. |
+| `job-agent inbox-search ID --query TEXT [--since-hours 48 --limit 5]` | Read-only search of recent Zoho INBOX messages for a saved job. Returns bounded excerpts without marking mail read or persisting bodies. |
 | `job-agent browser-start ID --revision N --authorize-submit` | Authorize one website submission using the selected category PDF. N is processing_revision from show; repeated starts return the existing run. |
 | `job-agent browser-control ID --action pause\|resume\|answer\|verify\|release\|restart\|reconnect --revision N [--question-id ID --answer-file FILE]` | Control a website run using its browser revision. Answer resumes the saved form; verify is read-only after uncertainty; release closes an inactive browser. |
 | `job-agent browser-quit-reasons ID / browser-control ID --action quit --revision N [--reason TEXT]` | Suggest contextual reasons or quit a stopped pre-submit website run; never changes profile facts. |
@@ -1270,6 +1271,11 @@ submission is authorized. Poll `browser-status ID`; answer pending questions wit
 [Website application operations](JOB_BROWSER_APPLICATIONS.md) for recovery,
 installation, all states, and browser limitations. Website status is distinct from
 Zoho email status.
+
+The browser controller may request one audited, application-specific Zoho INBOX
+search in a step. It cannot modify mail or search Sent. Operators can use
+`job-agent inbox-search ID --query TEXT --since-hours 48 --limit 5`; results are
+returned to that invocation and are not stored in browser application state.
 
 ## 11. REST API (used by the CLI — agents can call directly)
 

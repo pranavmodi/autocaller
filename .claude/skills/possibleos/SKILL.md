@@ -1126,6 +1126,12 @@ saved visible confirmation and does not imply email sent. Login/CAPTCHA can bloc
 there is no remote interactive desktop. Full runbook:
 `/home/pranav/possibleos/docs/JOB_BROWSER_APPLICATIONS.md`.
 
+The browser controller has one bounded read-only Zoho INBOX search action for
+specific employer/job/verification content. It cannot send, reply, move, delete,
+mark mail read, or search Sent. Bodies and one-time codes are transient; durable
+events retain only match counts. For an explicit operator lookup use
+`job-agent inbox-search ID --query TEXT [--since-hours 48 --limit 5]`.
+
 
 Website AI transport: `job-agent browser-provider gateway|openai [--model MODEL]`
 saves defaults. `browser-start` and `browser-control` (resume/answer/verify) accept

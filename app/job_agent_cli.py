@@ -219,6 +219,14 @@ def register(app, get, post, console):
         """List website application runs separately from email applications."""
         output(get('/api/job-agent/browser-applications'))
 
+    @group.command('inbox-search')
+    def inbox_search(identity: str, query: str = typer.Option(..., '--query'),
+                     since_hours: int = typer.Option(48, '--since-hours', min=1, max=168),
+                     limit: int = typer.Option(5, '--limit', min=1, max=5)):
+        """Read-only Zoho INBOX search scoped to a saved job; does not persist bodies."""
+        output(post(f'/api/job-agent/jobs/{identity}/mailbox/search', {
+            'query': query, 'since_hours': since_hours, 'limit': limit}, timeout=60))
+
     @group.command('browser-start')
     def browser_start(identity: str, revision: int = typer.Option(...),
                       provider: str = typer.Option(None, '--provider'),

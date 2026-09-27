@@ -21,6 +21,7 @@ from app.services import job_applicant_profile as profile
 from app.services.job_agent_resumes import inspect_resume, resolve_resume
 from app.services.job_browser_tools import BrowserAction, BrowserSession
 from app.services.job_browser_client import PersistentBrowserSession
+from app.services.job_browser_mail import MailboxSearchRequest, search_zoho_inbox
 from app.services.llm_gateway import call_skill_json
 
 logger = logging.getLogger(__name__)
@@ -227,9 +228,18 @@ async def list_runs():
     await core.ensure_tables()
     async with core.AsyncSessionLocal() as session:
         rows = (await session.scalars(select(BrowserRun).order_by(BrowserRun.updated_at.desc()))).all()
-        return {'items': [dict(view(r), candidate_id=r.candidate_id,
-                               title=r.state['posting'].get('title'),
-                               firm_name=r.state['posting'].get('firm_name')) for r in rows]}
+    return {'items': [dict(view(r), candidate_id=r.candidate_id,
+                          title=r.state['posting'].get('title'),
+                          firm_name=r.state['posting'].get('firm_name')) for r in rows]}
+
+
+async def operator_mailbox_search(identity: str, request: MailboxSearchRequest):
+    """Run an explicit, non-persisted, read-only search for one saved job."""
+    await core.ensure_tables()
+    async with core.AsyncSessionLocal() as session:
+        if not await session.get(core.JobAgentCandidate, identity):
+            raise KeyError(identity)
+    return await search_zoho_inbox(request)
 
 
 async def infer_quit_reasons(state):
@@ -582,12 +592,27 @@ def validate_audit(action, audit):
         raise ValueError(str(audit.get('reason') or 'This action needs clarification.'))
     allowed_effects = {'fill': {'input'}, 'select': {'input'}, 'check': {'input'},
                       'upload': {'input'}, 'goto': {'navigation'},
+                      'email_search': {'read'},
                       # Custom comboboxes commonly expose their flyout and options
                       # as buttons. Those clicks change a form input without
                       # navigating. The independent audit must still reject submit.
                       'click': {'input', 'navigation', 'advance'}, 'submit': {'submit'}}
     if audit.get('effect') not in allowed_effects.get(action.kind, set()):
         raise ValueError('The action audit identified a different effect. Inspect the page again before proceeding.')
+
+
+def redact_mailbox_action(action: BrowserAction) -> BrowserAction:
+    """Keep mailbox queries and returned content out of durable browser state."""
+    return action.model_copy(update={'value': '[redacted mailbox query]'})
+
+
+def redact_mailbox_followup(action: BrowserAction) -> BrowserAction:
+    """Persist the action shape without mailbox-derived content or secrets."""
+    return action.model_copy(update={
+        'summary': 'Used a transient read-only mailbox result',
+        'value': '[redacted mailbox result]' if action.value else '',
+        'question': '', 'choices': [], 'evidence': '',
+    })
 
 
 async def resolve_saved_question(state, question):
@@ -667,9 +692,46 @@ async def step(row):
     state = row.state
     decision, usage = await model_decision('decide', state, action_schema=BrowserAction.model_json_schema())
     action = BrowserAction.model_validate(decision['action'])
+    mailbox_derived = False
+    if action.kind == 'email_search':
+        if state.get('mailbox_search_count', 0) >= 3:
+            raise ValueError('This application reached its three-search mailbox limit.')
+        search_audit, search_audit_usage = await model_decision(
+            'audit_action', state, proposed_action=action.model_dump())
+        from app.services.job_browser_ai import ActionAudit
+        search_audit = ActionAudit.model_validate(search_audit).model_dump()
+        validate_audit(action, search_audit)
+        request = MailboxSearchRequest(query=action.value)
+        mailbox_result = await search_zoho_inbox(request)
+        redacted_action = redact_mailbox_action(action)
+        row = await checkpoint(identity, row.revision,
+            stage='Checked the Zoho inbox without changing mailbox state',
+            last_action=redacted_action.model_dump(),
+            action_history=[*state.get('action_history', []), redacted_action.model_dump()][-40:],
+            steps=state.get('steps', 0) + 1,
+            segment_steps=state.get('segment_steps', 0) + 1,
+            mailbox_search_count=state.get('mailbox_search_count', 0) + 1,
+            mailbox_search_last={'at': core.now().isoformat(), 'matched': mailbox_result['matched'],
+                                 'since_hours': mailbox_result['since_hours']},
+            message=f"Read-only Zoho inbox search found {mailbox_result['matched']} matching message(s).",
+            kind='email_search', model=usage, audit=search_audit, audit_model=search_audit_usage)
+        if not row:
+            return
+        state = row.state
+        decision, usage = await model_decision('decide', state,
+            action_schema=BrowserAction.model_json_schema(), mailbox_search_result=mailbox_result)
+        action = BrowserAction.model_validate(decision['action'])
+        if action.kind == 'email_search':
+            raise ValueError('Only one mailbox search is allowed per browser step.')
+        mailbox_derived = True
+    durable_action = redact_mailbox_followup(action) if mailbox_derived else action
+    if mailbox_derived and action.kind in {'ask', 'confirmed'}:
+        raise ValueError('Mailbox content cannot become a durable question or submission confirmation.')
     if read_only and action.kind not in {'confirmed', 'wait', 'ask', 'blocked'}:
         raise ValueError('Submission was already attempted. Only read-only verification is allowed.')
     if action.kind == 'ask':
+        if mailbox_derived:
+            raise ValueError('Mailbox content cannot be persisted as an applicant question.')
         if read_only:
             await checkpoint(identity, row.revision, status='submission_uncertain',
                              stage='Submission needs manual verification', error=action.question or action.summary)
@@ -701,9 +763,10 @@ async def step(row):
                 message=action.question, kind='question', model=usage)
         return
     if action.kind == 'blocked':
+        blocked_message = (durable_action.summary if mailbox_derived else action.summary)
         await checkpoint(identity, row.revision,
             status='submission_uncertain' if read_only else 'blocked',
-            stage='Manual help needed', error=action.summary, message=action.summary, kind='blocked')
+            stage='Manual help needed', error=blocked_message, message=blocked_message, kind='blocked')
         return
     if action.kind == 'confirmed':
         visible = '\n'.join(f.get('text', '') for f in snapshot['frames'])
@@ -727,7 +790,9 @@ async def step(row):
         if not row:
             return
         state = row.state
-        audit, audit_usage = await model_decision('audit_action', state, proposed_action=action.model_dump())
+        audit, audit_usage = await model_decision(
+            'audit_action', state, proposed_action=durable_action.model_dump(),
+            mailbox_result_available=mailbox_derived)
         from app.services.job_browser_ai import ActionAudit
         audit = ActionAudit.model_validate(audit).model_dump()
         if not audit['allowed'] and audit['recovery'] == 'correct_form':
@@ -740,7 +805,7 @@ async def step(row):
                 stage='Form correction needs review' if exhausted else 'Correcting the form before submission',
                 error=('The agent could not correct the form after three rejected proposals. ' + audit['reason']) if exhausted else None,
                 audit_feedback={'reason': audit['reason'], 'repair_hint': audit['repair_hint'],
-                                'rejected_action': action.model_dump()},
+                                'rejected_action': durable_action.model_dump()},
                 audit_repair_count=repairs, segment_steps=state.get('segment_steps', 0) + 1,
                 audit=audit, audit_model=audit_usage, model=usage,
                 message=('Automatic correction stopped: ' if exhausted else 'Fixing form: ') + (audit['repair_hint'] or audit['reason']),
@@ -753,9 +818,9 @@ async def step(row):
             # the last successful action/audit, which made this stop misleading.
             await checkpoint(identity, row.revision, status='blocked',
                 stage='Proposed browser action did not pass its safety audit',
-                error=str(exc), failed_action=action.model_dump(), failed_audit=audit,
+                error=str(exc), failed_action=durable_action.model_dump(), failed_audit=audit,
                 failed_model=usage, failed_audit_model=audit_usage,
-                message=f'Stopped before {action.summary}: {audit.get("reason") or str(exc)}',
+                message=f'Stopped before {durable_action.summary}: {audit.get("reason") or str(exc)}',
                 kind='audit_blocked')
             return
     else:
@@ -784,8 +849,8 @@ async def step(row):
     # Write ahead of any potentially consequential click/navigation. A crash in
     # this interval is uncertain, even if the model incorrectly called it Next.
     interaction = action.kind in {'click', 'submit', 'goto', 'check', 'select'}
-    changes = {'stage': action.summary, 'last_action': action.model_dump(),
-               'action_history': [*state.get('action_history', []), action.model_dump()][-40:],
+    changes = {'stage': durable_action.summary, 'last_action': durable_action.model_dump(),
+               'action_history': [*state.get('action_history', []), durable_action.model_dump()][-40:],
                'model': usage, 'audit': audit, 'audit_model': audit_usage,
                'interaction_started': interaction,
                'steps': state.get('steps', 0) + 1,
@@ -796,7 +861,7 @@ async def step(row):
         changes['browser_action_id'] = browser.action_id
     if action.kind == 'submit':
         changes['submit_started_at'] = core.now().isoformat()
-    row = await checkpoint(identity, row.revision, message=action.summary, kind=action.kind, **changes)
+    row = await checkpoint(identity, row.revision, message=durable_action.summary, kind=action.kind, **changes)
     if not row:
         return
     await browser.execute(action, resume)
