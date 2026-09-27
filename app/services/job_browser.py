@@ -601,7 +601,7 @@ def validate_audit(action, audit):
         raise ValueError(str(audit.get('reason') or 'This action needs clarification.'))
     allowed_effects = {'fill': {'input'}, 'select': {'input'}, 'check': {'input'},
                       'upload': {'input'}, 'goto': {'navigation'},
-                      'email_search': {'read'},
+                      'email_search': {'read'}, 'verification_code': {'submit'},
                       # Custom comboboxes commonly expose their flyout and options
                       # as buttons. Those clicks change a form input without
                       # navigating. The independent audit must still reject submit.
@@ -622,6 +622,122 @@ def redact_mailbox_followup(action: BrowserAction) -> BrowserAction:
         'value': '[redacted mailbox result]' if action.value else '',
         'question': '', 'choices': [], 'evidence': '',
     })
+
+
+def mailbox_verification_value(action: BrowserAction, mailbox_result: dict, snapshot: dict) -> str:
+    """Validate a transient one-time code and its visible form controls."""
+    code = action.value.strip()
+    if not 4 <= len(code) <= 12 or any(not character.isalnum() for character in code):
+        raise ValueError('The newest matching email did not provide a complete one-time code.')
+    items = mailbox_result.get('items') or []
+    if not items or code not in (items[0].get('excerpt') or ''):
+        raise ValueError('The proposed code was not quoted by the newest matching email.')
+    controls = {control['id']: control for frame in snapshot.get('frames', [])
+                for control in frame.get('controls', [])}
+    code_ids = action.choices
+    if not code_ids or len(set(code_ids)) != len(code_ids):
+        raise ValueError('Select the visible one-time-code input control or controls in order.')
+    if len(code_ids) not in {1, len(code)}:
+        raise ValueError('The selected one-time-code controls do not match the code length.')
+    for control_id in code_ids:
+        control = controls.get(control_id) or {}
+        if (control.get('tag') != 'input' or control.get('type') in {'password', 'hidden'}
+                or control.get('disabled')):
+            raise ValueError('The selected one-time-code control is unavailable.')
+    submit = controls.get(action.element) or {}
+    if (submit.get('tag') not in {'button', 'input'} or submit.get('disabled')):
+        raise ValueError('The visible verification action is unavailable.')
+    return code
+
+
+def verification_control_descriptor(snapshot: dict, element: str) -> dict:
+    """Identify one observed control structurally without relying on page wording."""
+    for frame_index, frame in enumerate(snapshot.get('frames', [])):
+        for control_index, control in enumerate(frame.get('controls', [])):
+            if control.get('id') == element:
+                return {
+                    'frame_index': frame_index,
+                    'control_index': control_index,
+                    'tag': control.get('tag'),
+                    'type': control.get('type'),
+                    'role': control.get('role'),
+                    'label': control.get('label'),
+                    'required': control.get('required'),
+                }
+    raise ValueError('The selected email-verification control is no longer visible.')
+
+
+def resolve_verification_control(snapshot: dict, descriptor: dict) -> dict:
+    """Resolve a fresh browser element ID only when its structural identity is unchanged."""
+    try:
+        control = snapshot['frames'][descriptor['frame_index']]['controls'][descriptor['control_index']]
+    except (IndexError, KeyError, TypeError) as exc:
+        raise ValueError('The email-verification form changed while the code was being entered.') from exc
+    for field in ('tag', 'type', 'role', 'label', 'required'):
+        if control.get(field) != descriptor.get(field):
+            raise ValueError('The email-verification form changed while the code was being entered.')
+    return control
+
+
+async def complete_mailbox_verification(identity: str, row: BrowserRun,
+                                        browser, action: BrowserAction,
+                                        mailbox_result: dict, snapshot: dict):
+    """Enter a newest-message code transiently and perform its verification once."""
+    code = mailbox_verification_value(action, mailbox_result, snapshot)
+    resume = ROOT / row.run_id / 'resume.pdf'
+    field_descriptors = [verification_control_descriptor(snapshot, element)
+                         for element in action.choices]
+    submit_descriptor = verification_control_descriptor(snapshot, action.element)
+    durable_action = redact_mailbox_followup(action)
+    changes = {
+        'status': 'verifying',
+        'stage': 'Completing email verification',
+        'interaction_started': True,
+        'human_verification_submit_started_at': core.now().isoformat(),
+        'last_action': durable_action.model_dump(),
+        'action_history': [*row.state.get('action_history', []), durable_action.model_dump()][-40:],
+        'steps': row.state.get('steps', 0) + 1,
+        'segment_steps': row.state.get('segment_steps', 0) + 1,
+    }
+    if isinstance(browser, PersistentBrowserSession):
+        browser.action_id = uuid4().hex
+        changes['browser_action_id'] = browser.action_id
+    saved = await checkpoint(identity, row.revision,
+        message='Using the newest matching application email to complete the visible verification step once.',
+        kind='email_verification', **changes)
+    if not saved:
+        raise ValueError('The browser progressed. Refresh its status before this action.')
+    try:
+        values = [code] if len(field_descriptors) == 1 else list(code)
+        for descriptor, value in zip(field_descriptors, values, strict=True):
+            control = resolve_verification_control(snapshot, descriptor)
+            await browser.execute(BrowserAction(kind='fill', element=control['id'], value=value,
+                                                summary='Enter the email verification code'), resume)
+            snapshot = await browser.observe(ROOT / row.run_id / 'page.png')
+        current_fields = [resolve_verification_control(snapshot, descriptor)
+                          for descriptor in field_descriptors]
+        registered = ''.join(control.get('value', '') for control in current_fields)
+        if registered != code:
+            raise ValueError('The verification form did not register the complete one-time code.')
+        submit = resolve_verification_control(snapshot, submit_descriptor)
+        if submit.get('disabled'):
+            raise ValueError('The email verification action is still disabled after entering the code.')
+        if isinstance(browser, PersistentBrowserSession):
+            browser.action_id = uuid4().hex
+        await browser.execute(BrowserAction(kind='submit', element=submit['id'],
+                                            summary='Complete email verification'), resume)
+    except Exception as exc:
+        await checkpoint(identity, saved.revision, status='submission_uncertain',
+            stage='Email-verification submission needs review',
+            error=str(exc)[:1200] or type(exc).__name__,
+            message='The verification action was attempted; inspect the page without replaying it.',
+            kind='error')
+        raise
+    await checkpoint(identity, saved.revision, status='verifying', interaction_started=False,
+        human_verification_click_completed_at=core.now().isoformat(), error=None,
+        message='Email verification completed; checking the employer page for confirmation without resubmitting.',
+        kind='email_verification_completed')
+    _wake.set()
 
 
 async def resolve_saved_question(state, question):
@@ -702,6 +818,7 @@ async def step(row):
     decision, usage = await model_decision('decide', state, action_schema=BrowserAction.model_json_schema())
     action = BrowserAction.model_validate(decision['action'])
     mailbox_derived = False
+    mailbox_result = None
     if action.kind == 'email_search':
         if state.get('mailbox_search_count', 0) >= 3:
             raise ValueError('This application reached its three-search mailbox limit.')
@@ -736,7 +853,8 @@ async def step(row):
     durable_action = redact_mailbox_followup(action) if mailbox_derived else action
     if mailbox_derived and action.kind in {'ask', 'confirmed'}:
         raise ValueError('Mailbox content cannot become a durable question or submission confirmation.')
-    if read_only and action.kind not in {'confirmed', 'wait', 'ask', 'blocked'}:
+    if read_only and action.kind not in {'confirmed', 'wait', 'email_search',
+                                         'verification_code', 'ask', 'blocked'}:
         raise ValueError('Submission was already attempted. Only read-only verification is allowed.')
     if action.kind == 'ask':
         if mailbox_derived:
@@ -834,6 +952,11 @@ async def step(row):
             return
     else:
         audit, audit_usage = {}, {}
+    if action.kind == 'verification_code':
+        if not mailbox_derived or mailbox_result is None:
+            raise ValueError('Email verification requires a fresh, scoped Zoho inbox search in this browser step.')
+        await complete_mailbox_verification(identity, row, browser, action, mailbox_result, snapshot)
+        return
     if action.kind == 'submit':
         if not state.get('authorized_at') or state.get('submit_started_at'):
             raise ValueError('A new website submission is not authorized.')

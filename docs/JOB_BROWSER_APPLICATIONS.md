@@ -54,7 +54,15 @@ tool searches only recent messages for specific application-relevant content,
 uses non-mutating IMAP reads, and returns at most five matches. Message bodies and
 one-time codes are transient; durable events retain only the match count and time
 window. It cannot send, reply, move, delete, mark read, or inspect Sent mail.
-Every autonomous search must pass the independent action audit. Network requests are restricted to validated public
+After an initial website submission exposes an email-code challenge, the controller
+may search for current employer or ATS mail and use the code from the newest matching
+message. The worker separately proves that the proposed code appears in that message,
+checks the visible code fields and verification control, fills one field or ordered
+split fields, and activates that verification control once. The code is never saved
+in run state, events, questions, or audit payloads. This behavior is platform-neutral;
+it does not depend on a specific ATS name, page phrase, or fixed code length. Every
+autonomous search and verification action must pass the independent action audit.
+Network requests are restricted to validated public
 HTTPS addresses; private addresses, downloads, service workers, and WebSockets
 are blocked. These restrictions can make some sites unsupported. No site-specific
 ATS API bypass is implemented.

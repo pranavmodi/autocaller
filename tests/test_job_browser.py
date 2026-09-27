@@ -41,6 +41,42 @@ def test_mailbox_search_requires_read_audit_and_redacts_durable_query():
     assert service.redact_mailbox_action(action).value == '[redacted mailbox query]'
 
 
+def test_mailbox_verification_uses_newest_exact_code_and_visible_controls():
+    snapshot = {'frames': [{'controls': [
+        *[{'id': f'e{i}', 'tag': 'input', 'type': 'text', 'disabled': False}
+          for i in range(8)],
+        {'id': 'e8', 'tag': 'button', 'type': 'submit', 'disabled': False},
+    ]}]}
+    result = {'items': [
+        {'excerpt': 'Your current application verification code is Ab12Cd34.'},
+        {'excerpt': 'An earlier code was Old12345.'},
+    ]}
+    action = BrowserAction(kind='verification_code', value='Ab12Cd34',
+        choices=[f'e{i}' for i in range(8)], element='e8', summary='Verify application')
+    assert service.mailbox_verification_value(action, result, snapshot) == 'Ab12Cd34'
+    service.validate_audit(action, {'allowed': True, 'effect': 'submit'})
+    with pytest.raises(ValueError, match='newest matching email'):
+        service.mailbox_verification_value(action.model_copy(update={'value': 'Old12345'}), result, snapshot)
+    redacted = service.redact_mailbox_followup(action)
+    assert redacted.value == '[redacted mailbox result]' and redacted.choices == []
+
+
+def test_email_verification_controls_survive_new_observation_ids_only_when_structure_matches():
+    original = {'frames': [{'controls': [
+        {'id': 'e4', 'tag': 'input', 'type': 'text', 'role': None,
+         'label': 'Code', 'required': True},
+    ]}]}
+    descriptor = service.verification_control_descriptor(original, 'e4')
+    refreshed = {'frames': [{'controls': [
+        {'id': 'e9', 'tag': 'input', 'type': 'text', 'role': None,
+         'label': 'Code', 'required': True, 'value': '123456'},
+    ]}]}
+    assert service.resolve_verification_control(refreshed, descriptor)['id'] == 'e9'
+    refreshed['frames'][0]['controls'][0]['type'] = 'password'
+    with pytest.raises(ValueError, match='form changed'):
+        service.resolve_verification_control(refreshed, descriptor)
+
+
 @pytest.mark.asyncio
 async def test_browser_rejects_unobserved_navigation_and_password_entry():
     browser = BrowserSession()
@@ -734,6 +770,59 @@ async def test_mailbox_search_result_is_transient_before_form_action(isolated_st
     assert 'Fixture verification' not in durable
     assert saved.state['mailbox_search_last']['matched'] == 1
     assert saved.state['last_action']['kind'] == 'fill'
+    assert saved.state['last_action']['value'] == '[redacted mailbox result]'
+
+
+@pytest.mark.asyncio
+async def test_post_submit_email_code_is_used_once_without_persisting_it(isolated_store, monkeypatch):
+    row = await seed_run(isolated_store)
+    secret = 'A1B2C3'
+    row = await service.checkpoint('fixture', row.revision, status='submission_uncertain',
+                                   submit_started_at=core.now().isoformat())
+    empty = {'url': 'https://fixture.invalid/verify', 'frames': [{
+        'text': 'Fixture Employer email verification',
+        'controls': [
+            {'id': 'e0', 'tag': 'input', 'type': 'text', 'role': None, 'label': 'Code',
+             'required': True, 'disabled': False, 'value': ''},
+            {'id': 'e1', 'tag': 'button', 'type': 'submit', 'role': None, 'label': 'Verify',
+             'required': False, 'disabled': False, 'value': ''},
+        ],
+    }]}
+    filled = {'url': empty['url'], 'frames': [{
+        'text': empty['frames'][0]['text'],
+        'controls': [
+            {**empty['frames'][0]['controls'][0], 'id': 'e7', 'value': secret},
+            {**empty['frames'][0]['controls'][1], 'id': 'e8'},
+        ],
+    }]}
+    browser = AsyncMock()
+    browser.observe.side_effect = [empty, filled]
+    service._sessions['fixture'] = browser
+    monkeypatch.setattr(service, 'search_zoho_inbox', AsyncMock(return_value={
+        'query': 'Fixture verification', 'mailbox': 'INBOX', 'read_only': True,
+        'since_hours': 48, 'matched': 1,
+        'items': [{'from_email': 'verify@fixture.invalid', 'subject': 'Application verification',
+                   'received_at': '2026-09-27T08:00:00+00:00', 'excerpt': f'Code: {secret}'}],
+    }))
+
+    async def controller(mode, state, **extra):
+        if mode == 'audit_action':
+            effect = 'read' if extra['proposed_action']['kind'] == 'email_search' else 'submit'
+            return {'allowed': True, 'effect': effect, 'reason': 'Current application verification.',
+                    'recovery': 'none', 'repair_hint': ''}, {}
+        if 'mailbox_search_result' in extra:
+            return {'action': {'kind': 'verification_code', 'value': secret,
+                'choices': ['e0'], 'element': 'e1', 'summary': 'Verify application'}}, {}
+        return {'action': {'kind': 'email_search', 'value': 'Fixture verification',
+                           'summary': 'Check the current application email'}}, {}
+
+    monkeypatch.setattr(service, 'model_decision', controller)
+    await service.step(row)
+    assert [call.args[0].kind for call in browser.execute.await_args_list] == ['fill', 'submit']
+    saved = await load_run()
+    assert saved.status == 'verifying' and saved.state['interaction_started'] is False
+    assert secret not in str(saved.state)
+    assert saved.state['last_action']['kind'] == 'verification_code'
     assert saved.state['last_action']['value'] == '[redacted mailbox result]'
 
 @pytest.mark.asyncio
