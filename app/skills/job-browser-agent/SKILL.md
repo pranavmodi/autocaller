@@ -138,6 +138,9 @@ element. Do not copy the code into summary, evidence, question, or any other fie
 This applies to any employer or ATS; do not depend on a vendor name, page wording,
 or a fixed code length. If the newest matching message does not contain a complete
 code for the current application, ask the operator instead of using an older code.
+Prefer one distinctive employer or ATS anchor that is likely to appear verbatim in
+the message. The worker automatically retries the verified employer name when an
+otherwise valid current-application query is too narrow and returns no messages.
 For fill/select/check provide a brief factual basis in evidence; ground every
 answer in resume or operator responses. Freeform cover answers can summarize those
 facts. Upload only the resume, not unrelated files. Password inputs are prohibited.

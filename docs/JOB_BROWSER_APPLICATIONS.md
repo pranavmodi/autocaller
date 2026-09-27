@@ -52,7 +52,8 @@ checkboxes, buttons, resume upload, short waits, asking questions, blocking,
 submitting, verifying, and a bounded read-only Zoho mailbox search. The mailbox
 tool searches only recent messages in configured inbox-like folders (INBOX and
 Zoho's Notification folder by default) for specific application-relevant content,
-uses non-mutating IMAP reads, and returns at most five matches. Message bodies and
+and retries the verified employer name when the model's first query is too narrow.
+It uses non-mutating IMAP reads and returns at most five matches. Message bodies and
 one-time codes are transient; durable events retain only the match count and time
 window. It cannot send, reply, move, delete, mark read, or inspect Sent mail.
 After an initial website submission exposes an email-code challenge, the controller

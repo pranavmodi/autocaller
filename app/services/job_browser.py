@@ -624,6 +624,19 @@ def redact_mailbox_followup(action: BrowserAction) -> BrowserAction:
     })
 
 
+async def search_current_application_mail(request: MailboxSearchRequest, state: dict) -> dict:
+    """Search the proposed phrase, then the verified employer name if it was too narrow."""
+    result = await search_zoho_inbox(request)
+    firm_name = ' '.join(str(state.get('posting', {}).get('firm_name') or '').split())
+    same_query = firm_name.casefold() == request.query.casefold()
+    if result.get('matched') or len(firm_name) < 4 or same_query:
+        return result
+    fallback = await search_zoho_inbox(MailboxSearchRequest(
+        query=firm_name, since_hours=request.since_hours, limit=request.limit))
+    fallback['employer_fallback_used'] = True
+    return fallback
+
+
 def mailbox_verification_value(action: BrowserAction, mailbox_result: dict, snapshot: dict) -> str:
     """Validate a transient one-time code and its visible form controls."""
     code = action.value.strip()
@@ -828,7 +841,7 @@ async def step(row):
         search_audit = ActionAudit.model_validate(search_audit).model_dump()
         validate_audit(action, search_audit)
         request = MailboxSearchRequest(query=action.value)
-        mailbox_result = await search_zoho_inbox(request)
+        mailbox_result = await search_current_application_mail(request, state)
         redacted_action = redact_mailbox_action(action)
         row = await checkpoint(identity, row.revision,
             stage='Checked the Zoho inbox without changing mailbox state',

@@ -61,6 +61,20 @@ def test_mailbox_verification_uses_newest_exact_code_and_visible_controls():
     assert redacted.value == '[redacted mailbox result]' and redacted.choices == []
 
 
+@pytest.mark.asyncio
+async def test_application_mail_search_falls_back_to_verified_employer_name(monkeypatch):
+    search = AsyncMock(side_effect=[
+        {'matched': 0, 'items': []},
+        {'matched': 1, 'items': [{'excerpt': 'Current code'}]},
+    ])
+    monkeypatch.setattr(service, 'search_zoho_inbox', search)
+    result = await service.search_current_application_mail(
+        service.MailboxSearchRequest(query='Elite Technology Technical Sales Engineer'),
+        {'posting': {'firm_name': 'Elite Technology'}})
+    assert result['matched'] == 1 and result['employer_fallback_used'] is True
+    assert search.await_args_list[1].args[0].query == 'Elite Technology'
+
+
 def test_email_verification_controls_survive_new_observation_ids_only_when_structure_matches():
     original = {'frames': [{'controls': [
         {'id': 'e4', 'tag': 'input', 'type': 'text', 'role': None,
