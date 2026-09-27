@@ -350,7 +350,8 @@ async def complete_human_verification(identity, request: ControlRequest):
         resume = ROOT / run_id / 'resume.pdf'
         if hashlib.sha256(resume.read_bytes()).hexdigest() != state['resume']['sha256']:
             raise ValueError('The selected resume changed. Application stopped.')
-    snapshot = await browser.observe(ROOT / run_id / 'page.png')
+    screenshot_path = ROOT / run_id / 'page.png'
+    snapshot = await browser.observe(screenshot_path)
     for index, character in enumerate(code_value):
         code_controls, submit_control = human_verification_controls(snapshot)
         if not code_controls or not submit_control:
@@ -358,9 +359,9 @@ async def complete_human_verification(identity, request: ControlRequest):
         await browser.execute(BrowserAction(kind='fill', element=code_controls[index]['id'], value=character,
                                             summary='Enter one character of the human-supplied security code'), resume)
         if index < len(code_value) - 1:
-            snapshot = await browser.observe(ROOT / run_id / 'page.png')
+            snapshot = await browser.observe(screenshot_path)
     # Re-observe because broker element handles are scoped to one observation.
-    snapshot = await browser.observe(ROOT / run_id / 'page.png')
+    snapshot = await browser.observe(screenshot_path)
     code_controls, submit_control = human_verification_controls(snapshot)
     if (not submit_control or submit_control.get('disabled')
             or ''.join(control.get('value', '') for control in code_controls) != code_value):
@@ -389,12 +390,22 @@ async def complete_human_verification(identity, request: ControlRequest):
         'Invalid security code',
         'Incorrect security code',
     ))
+    code_ids = {control['id'] for control in code_controls}
+    durable_snapshot = {**snapshot, 'frames': [
+        {**frame, 'controls': [
+            {**control, 'value': ''} if control.get('id') in code_ids else control
+            for control in frame.get('controls', [])
+        ]}
+        for frame in snapshot.get('frames', [])
+    ]}
+    screenshot_path.unlink(missing_ok=True)
     saved = await checkpoint(identity, row.revision,
         status='submission_uncertain' if rejected else 'verifying',
         stage='Verification code rejected' if rejected else
               'Checking the employer confirmation after human verification',
         interaction_started=False,
         human_verification_click_completed_at=core.now().isoformat(),
+        snapshot=durable_snapshot, current_url=snapshot.get('url'), screenshot=False,
         error='Greenhouse rejected the security code. Enter the latest code from the newest email.' if rejected else None,
         message='Greenhouse rejected the security code; the application remains unsubmitted.' if rejected else
                 'The verification click completed; checking the employer confirmation without resubmitting.',
@@ -698,6 +709,7 @@ async def complete_mailbox_verification(identity: str, row: BrowserRun,
     """Enter a newest-message code transiently and perform its verification once."""
     code = mailbox_verification_value(action, mailbox_result, snapshot)
     resume = ROOT / row.run_id / 'resume.pdf'
+    screenshot_path = ROOT / row.run_id / 'page.png'
     field_descriptors = [verification_control_descriptor(snapshot, element)
                          for element in action.choices]
     submit_descriptor = verification_control_descriptor(snapshot, action.element)
@@ -726,7 +738,7 @@ async def complete_mailbox_verification(identity: str, row: BrowserRun,
             control = resolve_verification_control(snapshot, descriptor)
             await browser.execute(BrowserAction(kind='fill', element=control['id'], value=value,
                                                 summary='Enter the email verification code'), resume)
-            snapshot = await browser.observe(ROOT / row.run_id / 'page.png')
+            snapshot = await browser.observe(screenshot_path)
         current_fields = [resolve_verification_control(snapshot, descriptor)
                           for descriptor in field_descriptors]
         registered = ''.join(control.get('value', '') for control in current_fields)
@@ -740,14 +752,18 @@ async def complete_mailbox_verification(identity: str, row: BrowserRun,
         await browser.execute(BrowserAction(kind='submit', element=submit['id'],
                                             summary='Complete email verification'), resume)
     except Exception as exc:
+        screenshot_path.unlink(missing_ok=True)
         await checkpoint(identity, saved.revision, status='submission_uncertain',
             stage='Email-verification submission needs review',
+            screenshot=False,
             error=str(exc)[:1200] or type(exc).__name__,
             message='The verification action was attempted; inspect the page without replaying it.',
             kind='error')
         raise
+    screenshot_path.unlink(missing_ok=True)
     await checkpoint(identity, saved.revision, status='verifying', interaction_started=False,
         human_verification_click_completed_at=core.now().isoformat(), error=None,
+        screenshot=False,
         message='Email verification completed; checking the employer page for confirmation without resubmitting.',
         kind='email_verification_completed')
     _wake.set()

@@ -339,7 +339,9 @@ async def test_rejected_challenge_code_can_be_retried_without_claiming_submissio
     assert result['status'] == 'submission_uncertain'
     assert result['stage'] == 'Verification code rejected'
     assert 'latest code' in result['error']
-    assert 'Ab12Cd34' not in str((await load_run()).state)
+    saved = await load_run()
+    assert 'Ab12Cd34' not in str(saved.state)
+    assert service.view(saved)['can_restart'] is True
 
 
 @pytest.mark.asyncio
