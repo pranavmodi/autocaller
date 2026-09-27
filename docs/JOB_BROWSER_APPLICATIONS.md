@@ -49,8 +49,9 @@ identity evidence and recent actions carry forward across form steps.
 
 The fixed tool set supports observed-link navigation, input, native selects,
 checkboxes, buttons, resume upload, short waits, asking questions, blocking,
-submitting, verifying, and a bounded read-only Zoho INBOX search. The mailbox
-tool searches only recent messages for specific application-relevant content,
+submitting, verifying, and a bounded read-only Zoho mailbox search. The mailbox
+tool searches only recent messages in configured inbox-like folders (INBOX and
+Zoho's Notification folder by default) for specific application-relevant content,
 uses non-mutating IMAP reads, and returns at most five matches. Message bodies and
 one-time codes are transient; durable events retain only the match count and time
 window. It cannot send, reply, move, delete, mark read, or inspect Sent mail.

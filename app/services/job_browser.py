@@ -851,13 +851,14 @@ async def step(row):
             raise ValueError('Only one mailbox search is allowed per browser step.')
         mailbox_derived = True
     durable_action = redact_mailbox_followup(action) if mailbox_derived else action
-    if mailbox_derived and action.kind in {'ask', 'confirmed'}:
+    if mailbox_derived and (action.kind == 'confirmed'
+                            or (action.kind == 'ask' and mailbox_result.get('matched'))):
         raise ValueError('Mailbox content cannot become a durable question or submission confirmation.')
     if read_only and action.kind not in {'confirmed', 'wait', 'email_search',
                                          'verification_code', 'ask', 'blocked'}:
         raise ValueError('Submission was already attempted. Only read-only verification is allowed.')
     if action.kind == 'ask':
-        if mailbox_derived:
+        if mailbox_derived and mailbox_result.get('matched'):
             raise ValueError('Mailbox content cannot be persisted as an applicant question.')
         if read_only:
             await checkpoint(identity, row.revision, status='submission_uncertain',

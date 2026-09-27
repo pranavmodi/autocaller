@@ -12,7 +12,7 @@ import imaplib
 import os
 import re
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
 from email import policy
 from email.header import decode_header, make_header
@@ -321,8 +321,11 @@ async def fetch_zoho_messages(
     unseen_only: bool = True,
     since_days: int | None = 14,
     mark_seen: bool | None = None,
+    mailbox: str | None = None,
 ) -> list[ParsedInboundEmail]:
     cfg = inbound_email_config()
+    if mailbox is not None:
+        cfg = replace(cfg, mailbox=mailbox)
     raw_rows = await asyncio.to_thread(
         _fetch_from_zoho_sync,
         cfg=cfg,
