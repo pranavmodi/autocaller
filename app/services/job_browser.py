@@ -137,8 +137,14 @@ def rejected_human_verification(state):
     snapshot = state.get('snapshot') or {}
     visible = '\n'.join(frame.get('text', '') for frame in snapshot.get('frames', []))
     code_controls, submit = human_verification_controls(snapshot)
-    return (bool(code_controls) and bool(submit) and bool(submit.get('disabled'))
-            and 'Invalid security code' in visible)
+    rejected = any(message in visible for message in (
+        'Invalid security code',
+        'Incorrect security code',
+    ))
+    # Greenhouse sometimes keeps the submit control enabled after rejecting a
+    # code. The explicit rejection text is the proof that no application was
+    # accepted, so button state must not prevent a safe clean retry.
+    return bool(code_controls) and bool(submit) and rejected
 
 
 def restart_blocker(row):
@@ -379,7 +385,10 @@ async def complete_human_verification(identity, request: ControlRequest):
         raise
     snapshot = await browser.observe(ROOT / run_id / 'page.png')
     visible = '\n'.join(frame.get('text', '') for frame in snapshot.get('frames', []))
-    rejected = 'Invalid security code' in visible
+    rejected = any(message in visible for message in (
+        'Invalid security code',
+        'Incorrect security code',
+    ))
     saved = await checkpoint(identity, row.revision,
         status='submission_uncertain' if rejected else 'verifying',
         stage='Verification code rejected' if rejected else

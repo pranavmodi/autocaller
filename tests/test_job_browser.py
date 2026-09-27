@@ -251,7 +251,9 @@ async def test_human_supplied_challenge_code_is_used_once_and_never_persisted(is
 
 
 @pytest.mark.asyncio
-async def test_rejected_challenge_code_can_be_retried_without_claiming_submission(isolated_store):
+@pytest.mark.parametrize('rejection_message', ['Invalid security code', 'Incorrect security code'])
+async def test_rejected_challenge_code_can_be_retried_without_claiming_submission(
+        isolated_store, rejection_message):
     row = await seed_run(isolated_store)
     row = await service.checkpoint('fixture', row.revision, status='submission_uncertain',
         browser_transport='broker', session_available=True,
@@ -264,7 +266,7 @@ async def test_rejected_challenge_code_can_be_retried_without_claiming_submissio
         text = ("A verification code was sent to applicant@example.com. To submit your application, "
                 "enter the 8-character code to confirm you're a human.")
         if clicked:
-            text += "\nInvalid security code"
+            text += f"\n{rejection_message}"
         return {'url':'https://fixture.invalid/job', 'frames':[{'text':text,
             'controls':[{'id':f'e{index + 1}','tag':'input','type':'text',
                          'label':'Security code' if index == 0 else '', 'disabled':False,
@@ -291,16 +293,17 @@ async def test_rejected_challenge_code_can_be_retried_without_claiming_submissio
 
 
 @pytest.mark.asyncio
-async def test_explicitly_rejected_code_allows_clean_restart(isolated_store):
+@pytest.mark.parametrize('rejection_message', ['Invalid security code', 'Incorrect security code'])
+async def test_explicitly_rejected_code_allows_clean_restart(isolated_store, rejection_message):
     row = await seed_run(isolated_store)
     controls = [{'id':f'e{index + 1}','tag':'input','type':'text',
                  'label':'Security code' if index == 0 else '', 'disabled':False,
                  'value':value} for index, value in enumerate('Ab12Cd34')]
     controls.append({'id':'e9','tag':'button','type':'submit','label':'Submit application',
-                     'disabled':True})
+                     'disabled':rejection_message == 'Invalid security code'})
     snapshot = {'url':'https://fixture.invalid/job', 'frames':[{
         'text':("A verification code was sent to applicant@example.com. To submit your application, "
-                "enter the 8-character code to confirm you're a human.\nInvalid security code"),
+                f"enter the 8-character code to confirm you're a human.\n{rejection_message}"),
         'controls':controls}]}
     row = await service.checkpoint('fixture', row.revision, status='submission_uncertain',
         browser_transport='broker', session_available=True,
