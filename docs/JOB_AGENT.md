@@ -212,7 +212,10 @@ Each job detail offers:
 - **Prepare email:** research the company and role, check public pages and eligible
   Possible OS `firm_contacts`, compose and audit a concise founder-led email using
   the mapped resume, check duplicates, and save a company/role-named PDF and
-  application packet. This never authorizes sending.
+  application packet. After deterministic evidence and recipient validation,
+  TypeSafe Jev handles the normal approval judgment; rejected, uncertain, or
+  unavailable Jev results use the configured generative auditor for a detailed
+  correction. This never authorizes sending.
 - **Apply via Zoho / Send via Zoho:** explicitly authorizes one application for that
   job. Research and preparation are automatic when needed. Recruiting contacts are
   preferred; a suitable company routing contact can be used with a routing request.
@@ -366,13 +369,17 @@ The shared application modal now includes **Apply on website**, live browser
 progress, screenshots, application-specific questions, saved answers, pause and
 resume controls. Website runs have independent status and confirmation evidence;
 see [Website application architecture and operations](JOB_BROWSER_APPLICATIONS.md).
-The Applications tab lists website runs and email applications separately.
+The Applications tab shows one row per job, with website and email channel state
+inside the same row.
 
 
 Website applications support a saved OpenClaw gateway/direct OpenAI API choice in
-Settings and a per-run provider selector when starting or resuming. Decisions,
-audits and confirmation use the same selected provider. API keys remain on the
-server; provider changes never unlock uncertain submissions.
+Settings and a per-run provider selector when starting or resuming. The selected
+provider plans browser actions and handles open-ended recovery. TypeSafe Jev first
+handles supported-action audits, contextual saved-answer selection and exact
+receipt confirmation; ambiguous or adverse results retain the selected provider's
+detailed audit path. API keys remain on the server; provider changes never unlock
+uncertain submissions.
 
 ### Automatic resume selection in applications
 Website start and email prepare/apply now include category matching and one-page PDF selection as the first saved worker step. Existing valid selections and manual categories are reused. CLI commands and APIs accept unclassified jobs without an extra classification call. Opening a job does not start work. The modal shows a shared resume card with optional category controls, a website workflow with three progress stages, and an expandable email workflow. Missing resume mappings and classification failures remain actionable blockers.

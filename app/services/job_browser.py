@@ -758,6 +758,24 @@ async def checkpoint(identity, expected, *, status=None, message=None, kind='pro
 
 
 async def model_decision(mode, state, **extra):
+    # Use the small, fast Jev model for narrow semantic judgments. Generative
+    # controller calls remain the fallback for ambiguity and for tasks that need
+    # new text, detailed recovery guidance, or browser actions.
+    if mode in {'audit_action', 'verify_confirmation'}:
+        from app.services import job_browser_jev
+        try:
+            if mode == 'audit_action':
+                judgment, metadata = await job_browser_jev.audit_action(
+                    state, extra['proposed_action'],
+                    mailbox_result_available=bool(extra.get('mailbox_result_available')))
+            else:
+                judgment, metadata = await job_browser_jev.verify_confirmation(
+                    state, str(extra.get('evidence') or ''))
+            if judgment is not None:
+                return judgment, metadata
+        except Exception as exc:
+            logger.warning('Jev %s judgment unavailable; using configured controller: %s',
+                           mode, type(exc).__name__)
     current_profile = {item['id']: item for item in state.get('saved_profile', [])}
     answers = [answer for answer in state.get('answers', []) if answer.get('source') != 'profile' or
         all(c['id'] in current_profile and current_profile[c['id']]['revision'] == c.get('revision')
@@ -989,7 +1007,15 @@ async def complete_mailbox_verification(identity: str, row: BrowserRun,
 
 async def resolve_saved_question(state, question):
     from app.services.job_browser_ai import ProfileResolution
-    result, usage = await model_decision('resolve_question', state, proposed_question=question)
+    result = usage = None
+    try:
+        from app.services.job_browser_jev import resolve_profile_question
+        result, usage = await resolve_profile_question(state, question)
+    except Exception as exc:
+        logger.warning('Jev saved-answer selection unavailable; using configured controller: %s',
+                       type(exc).__name__)
+    if result is None:
+        result, usage = await model_decision('resolve_question', state, proposed_question=question)
     resolved = ProfileResolution.model_validate(result)
     sources = {item['id']: item for item in state.get('saved_profile', [])}
     for citation in resolved.citations:

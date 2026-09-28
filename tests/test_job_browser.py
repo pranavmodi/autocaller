@@ -12,7 +12,19 @@ from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 
 from app.services import job_agent as core, job_agent_processing as processing
 from app.services import job_browser as service
+from app.services import job_browser_jev
 from app.services.job_browser_tools import BrowserAction, BrowserSession
+
+
+@pytest.fixture(autouse=True)
+def no_live_browser_jev(monkeypatch):
+    """Browser workflow tests exercise their mocked controller, never live Jev."""
+    async def uncertain(*_args, **_kwargs):
+        return None, {}
+
+    monkeypatch.setattr(job_browser_jev, 'audit_action', uncertain)
+    monkeypatch.setattr(job_browser_jev, 'resolve_profile_question', uncertain)
+    monkeypatch.setattr(job_browser_jev, 'verify_confirmation', uncertain)
 
 
 def test_start_requires_explicit_submission_authorization():

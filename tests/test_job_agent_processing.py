@@ -18,6 +18,18 @@ from app.services import job_agent as core, job_agent_processing as processing
 from app.services import job_agent_mail as mail, job_agent_research as research, job_agent_resumes as resumes
 
 
+@pytest.fixture(autouse=True)
+def no_live_email_jev_audit(monkeypatch):
+    """Unit tests never use the developer machine's configured TypeSafe key."""
+    original = research.audit_application_email_with_jev
+
+    async def uncertain(*_args, **_kwargs):
+        return {'approved': False, 'decisive_approval': False, 'choice': 'unclear'}
+
+    monkeypatch.setattr(research, 'audit_application_email_with_jev', uncertain)
+    return original
+
+
 @pytest.fixture
 def verified_job_identity(monkeypatch):
     verifier = AsyncMock(return_value={
@@ -620,6 +632,72 @@ async def test_job_identity_uses_best_available_source_without_a_fixed_threshold
     )
     assert decision['probability'] == 0.22
     assert decision['selected_source_url'] == 'https://example.com/job'
+
+
+@pytest.mark.asyncio
+async def test_email_audit_uses_one_jev_choice_request(monkeypatch, no_live_email_jev_audit):
+    captured = {}
+
+    class Client:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return None
+
+        async def post(self, url, **kwargs):
+            captured['url'], captured['request'] = url, kwargs
+            return httpx.Response(200, request=httpx.Request('POST', url), json={
+                'model': 'jev-email-fixture',
+                'answers': {'email_audit': {
+                    'type': 'choice', 'choice': 'approved', 'confidence': 0.97,
+                    'probabilities': {'approved': 0.97, 'rejected': 0.02, 'unclear': 0.01},
+                }},
+                'usage': {'input_tokens': 500, 'output_tokens': 20},
+            })
+
+    monkeypatch.setattr(research.httpx, 'AsyncClient', lambda **_kwargs: Client())
+    monkeypatch.setenv('TYPESAFE_API_KEY', 'secret-test-key')
+    result = await no_live_email_jev_audit(
+        {'subject': 'Application: Engineer - Pranav Modi',
+         'body_text': 'Hello, I am applying. My resume is attached.',
+         'recipient': {'email': 'jobs@example.com', 'kind': 'recruiting'}},
+        'PRANAV MODI\nFounder, Possible Minds',
+        [{'requested_url': 'https://example.com/jobs/1', 'final_url': 'https://example.com/jobs/1',
+          'http_status': 200, 'content': 'Example is hiring an Engineer. jobs@example.com'}],
+        [], {},
+    )
+
+    assert result['approved'] is True and result['decisive_approval'] is True
+    assert result['provider'] == 'typesafe' and result['model'] == 'jev-email-fixture'
+    assert captured['url'] == research.TYPESAFE_SYSTEM_ONE_URL
+    assert set(captured['request']['json']['questions']['email_audit']['criteria']) == {
+        'approved', 'rejected', 'unclear'}
+
+
+@pytest.mark.asyncio
+async def test_email_audit_defers_unclear_result(monkeypatch, no_live_email_jev_audit):
+    class Client:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return None
+
+        async def post(self, url, **_kwargs):
+            return httpx.Response(200, request=httpx.Request('POST', url), json={
+                'model': 'jev-email-fixture',
+                'answers': {'email_audit': {
+                    'type': 'choice', 'choice': 'unclear', 'confidence': 0.92,
+                    'probabilities': {'approved': 0.03, 'rejected': 0.05, 'unclear': 0.92},
+                }},
+            })
+
+    monkeypatch.setattr(research.httpx, 'AsyncClient', lambda **_kwargs: Client())
+    monkeypatch.setenv('TYPESAFE_API_KEY', 'secret-test-key')
+    result = await no_live_email_jev_audit({}, '', [], [], {})
+    assert result['approved'] is False and result['decisive_approval'] is False
+    assert result['choice'] == 'unclear'
 
 
 @pytest.mark.asyncio

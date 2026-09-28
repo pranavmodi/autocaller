@@ -1138,8 +1138,16 @@ saves defaults. `browser-start` and `browser-control` (resume/answer/verify) acc
 `--provider gateway|openai` for the selected run. Read the latest browser revision
 before controls. Switching provider does not clear uncertain submission or permit
 resubmitting. Direct API uses server OPENAI_API_KEY, never expose its value; the
-model must support Responses structured outputs. This option only changes website
-applications, not search/email/Jev. No implicit fallback. See the website runbook.
+model must support Responses structured outputs. TypeSafe Jev handles narrow
+supported-action audits, saved-answer selection, and exact visible receipt
+verification first; the selected generative provider remains responsible for
+browser actions, open-ended text, and ambiguous or rejected audit recovery. This
+option only changes website applications, not search/email/Jev. See the website
+runbook.
+
+Email applications also use Jev to approve the complete evidence-backed packet
+after deterministic source/contact checks. The configured generative email auditor
+runs only when Jev is unavailable, uncertain, or does not approve the packet.
 
 ### Automatic application resume selection
 `job-agent prepare`, `apply`, and `browser-start` accept unclassified saved jobs. The authorized worker runs Jev for that job, reuses valid selections, and preserves manual categories before continuing. No separate `classify` command is required. Missing PDFs or matching failures stop for review. Opening a modal and searching do not classify jobs.

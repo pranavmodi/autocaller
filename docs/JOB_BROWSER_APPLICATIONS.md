@@ -40,7 +40,7 @@ calls. The current release is not a parallel model-call pool.
 
 Each run has an isolated Playwright Chromium context. The worker observes visible
 text and controls, including frames and popups. A structured OpenClaw model call
-chooses one action; an independent call audits every non-wait interaction against
+chooses one action; an independent judgment audits every non-wait interaction against
 the resume, explicit answers and exact role. Gateway mode uses native RPC on the
 interactive lane with gateway tools disabled. Direct API mode uses OpenAI Responses
 with strict structured outputs and no API tools. The model gets current element IDs,
@@ -151,8 +151,12 @@ not alter an in-flight run. Resume/answer/verify record an explicitly selected
 provider and the configured API model; ordinary CLI resume without `--provider`
 retains the run's existing provider/model. Older runs used the gateway.
 
-All three controller modes use the selected provider: next action, action audit,
-and confirmation verification. Provider switching never clears submission markers
+The selected provider generates the next browser action and handles open-ended
+recovery or text extraction. Narrow semantic judgments use TypeSafe Jev first:
+supported-action auditing, saved-answer selection, and exact receipt confirmation.
+If Jev is unavailable, uncertain, or rejects an action, the selected provider
+handles the existing detailed audit or recovery path. Jev never generates form
+answers or browser actions. Provider switching never clears submission markers
 or authorizes resubmission. API errors, incomplete responses and invalid structured
 decisions stop before browser action execution. Response/model/usage metadata are
 persisted with the same run checkpoints as gateway metadata.
@@ -167,8 +171,9 @@ bin/possibleos job-agent browser-control ID --action resume --revision BROWSER_R
 ```
 
 The default affects new website runs; per-run provider overrides apply to that
-run. Search, email preparation and Jev classification retain their own existing
-providers. API billing is separate from gateway account usage. A configured model
+run. Search and email composition retain their own existing providers; Job Agent
+classification and the narrow judgments described above use Jev. API billing is
+separate from gateway account usage. A configured model
 must support Responses structured outputs. The transport follows the
 [OpenAI structured outputs documentation](https://developers.openai.com/api/docs/guides/structured-outputs).
 

@@ -21,6 +21,7 @@ from app.services.career_search_web import fetch_page
 logger = logging.getLogger(__name__)
 TYPESAFE_SYSTEM_ONE_URL = 'https://api.typesafe.ai/v1/systemone'
 JOB_IDENTITY_QUESTION_ID = 'same_job_identity'
+EMAIL_AUDIT_OPTIONS = {'approved', 'rejected', 'unclear'}
 
 class Evidence(BaseModel):
     model_config = ConfigDict(extra='forbid')
@@ -213,6 +214,108 @@ async def verify_job_identity_with_jev(page, posting, corroborating_pages=None):
                 continue
             break
     raise RuntimeError('TypeSafe Jev job identity verification is temporarily unavailable.') from last_error
+
+
+async def audit_application_email_with_jev(packet, resume, pages, possibleos_contacts, preferences):
+    """Approve a fully assembled evidence packet with one bounded Jev choice.
+
+    Deterministic validation has already established quoted evidence, domains,
+    contact identity, and exact addresses. Jev decides whether the remaining
+    semantic claims are grounded. Anything except a confident approval falls
+    through to the existing generative auditor for a specific correction.
+    """
+    api_key = os.getenv('TYPESAFE_API_KEY', '').strip()
+    if not api_key:
+        raise RuntimeError('TYPESAFE_API_KEY is not configured for email auditing.')
+    request = {
+        'state': {
+            'packet': packet,
+            'selected_resume': str(resume or '')[:18_000],
+            'verified_pages': [{
+                'url': page.get('final_url') or page.get('requested_url'),
+                'content': str(page.get('content') or '')[:12_000],
+            } for page in pages if page.get('http_status') == 200][:8],
+            'eligible_possibleos_contacts': possibleos_contacts[:12],
+            'operator_preferences': preferences,
+        },
+        'model': os.getenv('JOB_AGENT_TYPESAFE_MODEL', 'jev-latest'),
+        'questions': {
+            'email_audit': {
+                'type': 'choice',
+                'instructions': {
+                    'task': 'Is the complete application email packet supported and safe to send?',
+                    'rules': [
+                        'Approve only when every personal achievement, skill, location, and eligibility statement is supported by the selected resume, preferences, or verified pages.',
+                        'Approve only when the employer and role match the verified evidence and the recipient is the exact eligible public or Possible OS contact in the packet.',
+                        'A routing contact must be described as routing and the email must request forwarding rather than call that person a recruiter.',
+                        'Reject invented credentials, work authorization, referrals, delivery, interviews, or unsupported employer and role claims.',
+                        'Reject privacy, security, accommodation, patient, medical-record, and legal-service addresses.',
+                        'Choose unclear when the supplied state is insufficient to audit a material claim.',
+                    ],
+                },
+                'criteria': {
+                    'approved': {'label': 'Approved', 'definition': 'Every material claim and recipient choice is supported by the supplied evidence.'},
+                    'rejected': {'label': 'Rejected', 'definition': 'At least one material claim or recipient choice conflicts with or exceeds the supplied evidence.'},
+                    'unclear': {'label': 'Unclear', 'definition': 'The available evidence is insufficient to safely approve the email.'},
+                },
+            },
+        },
+    }
+    timeout_s = float(os.getenv('JOB_AGENT_EMAIL_AUDIT_TYPESAFE_TIMEOUT_S', '30'))
+    url = os.getenv('TYPESAFE_SYSTEM_ONE_URL', TYPESAFE_SYSTEM_ONE_URL)
+    last_error = None
+    for attempt in range(2):
+        try:
+            async with httpx.AsyncClient(timeout=timeout_s, trust_env=False) as client:
+                response = await client.post(url, headers={
+                    'Authorization': f'Bearer {api_key}',
+                    'Content-Type': 'application/json',
+                }, json=request)
+            if response.status_code in {429, 500, 502, 503, 504} and attempt == 0:
+                await asyncio.sleep(0.5)
+                continue
+            response.raise_for_status()
+            payload = response.json()
+            answer = (payload.get('answers') or {}).get('email_audit')
+            model = payload.get('model')
+            if not isinstance(model, str) or not model:
+                raise ValueError('TypeSafe response is missing its model version.')
+            if not isinstance(answer, dict) or answer.get('type') != 'choice':
+                raise ValueError('TypeSafe response is missing the email audit Choice answer.')
+            choice = answer.get('choice')
+            probabilities = answer.get('probabilities')
+            confidence = answer.get('confidence')
+            if choice not in EMAIL_AUDIT_OPTIONS or not isinstance(probabilities, dict) or set(probabilities) != EMAIL_AUDIT_OPTIONS:
+                raise ValueError('TypeSafe email audit has invalid options.')
+            if (isinstance(confidence, bool) or not isinstance(confidence, (int, float))
+                    or not 0 <= confidence <= 1):
+                raise ValueError('TypeSafe email audit confidence is invalid.')
+            if (any(isinstance(value, bool) or not isinstance(value, (int, float))
+                    or not 0 <= value <= 1 for value in probabilities.values())
+                    or abs(sum(probabilities.values()) - 1) > 0.02):
+                raise ValueError('TypeSafe email audit probabilities are invalid.')
+            minimum = float(os.getenv('JOB_AGENT_EMAIL_AUDIT_JEV_MIN_CONFIDENCE', '0.75'))
+            return {
+                'approved': choice == 'approved' and confidence >= minimum,
+                'decisive_approval': choice == 'approved' and confidence >= minimum,
+                'choice': choice,
+                'confidence': float(confidence),
+                'probabilities': {key: float(value) for key, value in probabilities.items()},
+                'reason': ('Jev found every material email claim and recipient choice supported.'
+                           if choice == 'approved' else
+                           'Jev did not establish a supported application email; detailed audit required.'),
+                'provider': 'typesafe', 'model': model,
+                'usage': payload.get('usage') if isinstance(payload.get('usage'), dict) else {},
+            }
+        except json.JSONDecodeError as exc:
+            last_error = exc
+        except ValueError:
+            raise
+        except (httpx.TransportError, httpx.HTTPStatusError) as exc:
+            last_error = exc
+        if attempt == 0:
+            await asyncio.sleep(0.5)
+    raise RuntimeError('TypeSafe Jev email audit is temporarily unavailable.') from last_error
 
 
 EMAIL_PATTERN = re.compile(r"[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
@@ -555,10 +658,20 @@ async def research_application(application, ask_model, update_phase=None):
         packet.body_text += '\n\nRole: ' + verified_job_url
     if update_phase:
         await update_phase('auditing', 'Draft created; checking every claim against the resume and sources')
-    audit = await ask_model('audit_email', {'packet': packet.model_dump(), 'resume': application['resume']['text'],
+    audit_payload = {'packet': packet.model_dump(), 'resume': application['resume']['text'],
         'pages': pages, 'possibleos_contacts': possibleos_contacts,
         'possibleos_contact_error': possibleos_contact_error,
-        'preferences': application['preferences']}, ['approved', 'reason'])
+        'preferences': application['preferences']}
+    try:
+        audit = await audit_application_email_with_jev(
+            audit_payload['packet'], audit_payload['resume'], audit_payload['pages'],
+            audit_payload['possibleos_contacts'], audit_payload['preferences'])
+    except Exception as exc:
+        logger.warning('Jev email audit unavailable; using configured application auditor: %s',
+                       type(exc).__name__)
+        audit = None
+    if not audit or not audit.get('decisive_approval'):
+        audit = await ask_model('audit_email', audit_payload, ['approved', 'reason'])
     if audit['approved'] is not True:
         raise ValueError('Application needs review: ' + str(audit['reason']))
     return {'email': {'from': 'pranav@possiblemindshq.com', 'to': packet.recipient.email,
