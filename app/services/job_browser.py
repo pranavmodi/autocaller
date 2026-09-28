@@ -692,6 +692,13 @@ async def control(identity, request: ControlRequest):
             state['segment_steps'] = 0
             state['profile_reuse_signatures'] = []
             state['audit_repair_count'] = 0
+            # A deliberate operator resume starts a fresh inspection segment.
+            # Keep the durable action history, but do not let the repeat guard
+            # immediately replay the stop that ended the previous segment. The
+            # freshly observed page may now expose controls that rendered late
+            # (for example options in a custom select).
+            state['action_signature'] = None
+            state['repeat_count'] = 0
             if recovering_input:
                 state['interrupted_action_recovery'] = {
                     'at': core.now().isoformat(),

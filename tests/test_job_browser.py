@@ -305,6 +305,32 @@ async def test_interrupted_audited_input_can_resume_preserved_page(isolated_stor
 
 
 @pytest.mark.asyncio
+async def test_resume_clears_repeat_guard_for_fresh_page_inspection(isolated_store):
+    row = await seed_run(isolated_store)
+    async with core.AsyncSessionLocal() as session:
+        saved = await session.get(service.BrowserRun, row.candidate_id, with_for_update=True)
+        saved.status = 'blocked'
+        saved.state = {
+            **saved.state,
+            'error': 'The same action is repeating without page progress. Review the page before resuming.',
+            'action_signature': 'stale-signature',
+            'repeat_count': 2,
+            'segment_steps': 4,
+        }
+        saved.revision += 1
+        await session.commit()
+        revision = saved.revision
+
+    resumed = await service.control('fixture', service.ControlRequest(
+        revision=revision, action='resume'))
+
+    assert resumed['status'] == 'queued'
+    assert resumed['action_signature'] is None
+    assert resumed['repeat_count'] == 0
+    assert resumed['segment_steps'] == 0
+
+
+@pytest.mark.asyncio
 async def test_interrupted_pre_form_navigation_resumes_through_source_recovery(isolated_store):
     row = await seed_run(isolated_store)
     row = await service.checkpoint('fixture', row.revision, status='submission_uncertain',
