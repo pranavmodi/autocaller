@@ -128,6 +128,15 @@ def recoverable_source_navigation(state):
             and audit.get('effect') == 'navigation')
 
 
+def unopened_recovered_source_browser(row, state):
+    """True only when a source-recovery run has never launched its new browser."""
+    return (bool(state.get('application_source_url'))
+            and state.get('browser_transport') == 'broker'
+            and not (ROOT / row.run_id / 'browser-session.json').exists()
+            and not state.get('submit_started_at')
+            and not state.get('interaction_started'))
+
+
 def human_verification_controls(snapshot):
     """Return the exact eight code inputs and submit control for a human challenge."""
     controls = [control for frame in snapshot.get('frames', [])
@@ -287,7 +296,8 @@ async def switch_to_official_source(row, source):
         }][-10:]
         for key in ('snapshot', 'current_url', 'interaction_started', 'browser_action_id',
                     'action_signature', 'repeat_count', 'error', 'failed_action',
-                    'failed_audit', 'failed_model', 'failed_audit_model', 'session_error'):
+                    'failed_audit', 'failed_model', 'failed_audit_model', 'session_error',
+                    'browser_transport'):
             state.pop(key, None)
         state.update(
             posting=posting,
@@ -667,6 +677,17 @@ async def control(identity, request: ControlRequest):
             elif state.get('question'):
                 raise ValueError('Answer the pending question before resuming.')
             row.status, state['stage'] = 'queued', 'Resuming from the current browser page'
+            # Source recovery allocates a new run directory before its browser
+            # exists. Older workers retained the previous run's broker flag,
+            # causing attach to fail before the official URL could be opened.
+            # Absence of the broker marker proves no browser action occurred in
+            # this new run, so it is safe to let step() create that browser.
+            if unopened_recovered_source_browser(row, state):
+                state['browser_transport'] = None
+                state['browser_session_status'] = 'opening'
+                state['browser_closed'] = False
+                state['session_available'] = False
+                state['stage'] = 'Opening the verified official application page'
             state['error'] = None
             state['segment_steps'] = 0
             state['profile_reuse_signatures'] = []

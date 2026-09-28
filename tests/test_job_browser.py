@@ -46,6 +46,18 @@ def test_only_audited_pre_form_navigation_is_source_recoverable():
     assert service.recoverable_source_navigation({**state, 'audit': {'allowed': True, 'effect': 'advance'}}) is False
 
 
+def test_unopened_recovered_source_browser_requires_no_broker_marker(tmp_path, monkeypatch):
+    monkeypatch.setattr(service, 'ROOT', tmp_path)
+    row = type('Row', (), {'run_id': 'fresh'})()
+    (tmp_path / row.run_id).mkdir()
+    state = {'application_source_url': 'https://jobs.example/1',
+             'browser_transport': 'broker'}
+    assert service.unopened_recovered_source_browser(row, state) is True
+    (tmp_path / row.run_id / 'browser-session.json').write_text('{}')
+    assert service.unopened_recovered_source_browser(row, state) is False
+    assert service.unopened_recovered_source_browser(row, {**state, 'interaction_started': True}) is False
+
+
 def test_mailbox_search_requires_read_audit_and_redacts_durable_query():
     action = BrowserAction(kind='email_search', value='Fixture verification', summary='Check inbox')
     service.validate_audit(action, {'allowed': True, 'effect': 'read'})
@@ -310,6 +322,22 @@ async def test_interrupted_pre_form_navigation_resumes_through_source_recovery(i
     assert resumed['interaction_started'] is False
     assert resumed['source_recovery']['status'] == 'pending'
     assert 'official employer or ATS' in resumed['stage']
+
+
+@pytest.mark.asyncio
+async def test_verified_source_with_unopened_new_browser_resumes_by_creating_it(isolated_store):
+    row = await seed_run(isolated_store)
+    row = await service.checkpoint('fixture', row.revision, status='blocked',
+        application_source_url='https://jobs.fixture.example/roles/ai-engineer',
+        application_source={'url':'https://jobs.fixture.example/roles/ai-engineer'},
+        browser_transport='broker', browser_session_status='lost',
+        error='The original browser session is gone.')
+    assert not (isolated_store / row.run_id / 'browser-session.json').exists()
+    resumed = await service.control('fixture', service.ControlRequest(
+        revision=row.revision, action='resume'))
+    assert resumed['status'] == 'queued'
+    assert resumed['browser_transport'] is None
+    assert resumed['stage'] == 'Opening the verified official application page'
 
 
 @pytest.mark.asyncio
