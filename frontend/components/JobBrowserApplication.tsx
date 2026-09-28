@@ -156,15 +156,3 @@ export function JobBrowserApplication({ job }: { job: Candidate }) {
     </div>
   </section>;
 }
-
-export function JobBrowserApplications({ onOpen }: { onOpen: (job: Candidate) => void }) {
-  const runs = useQuery({ queryKey: ["job-agent", "browser-applications"],
-    queryFn: () => jobAgentRequest<{ items: (BrowserRun & { candidate_id: string; title: string; firm_name: string })[] }>("/browser-applications"), refetchInterval: 5000 });
-  const open = useMutation({ mutationFn: (id: string) => jobAgentRequest<Candidate>(`/jobs/${id}`), onSuccess: onOpen });
-  return <section className="mb-5 rounded-xl border border-sky-200 bg-sky-50 p-4"><h2 className="font-semibold">Website applications</h2>
-    {(runs.error || open.error) && <p role="alert" className="mt-2 text-sm text-red-800">{(runs.error || open.error)?.message}</p>}
-    {runs.isPending && <p className="mt-2 text-sm">Loading website applications…</p>}
-    {!runs.isPending && !runs.data?.items.length && <p className="mt-2 text-sm text-neutral-600">Open a job and choose Apply on website to start.</p>}
-    <div className="mt-3 space-y-2">{runs.data?.items.map(run => <button key={run.candidate_id} className="block w-full rounded-lg border border-sky-100 bg-white p-3 text-left disabled:opacity-50" disabled={open.isPending} onClick={() => open.mutate(run.candidate_id)}><p className="text-sm font-medium">{run.title} · {run.firm_name}</p><p className="mt-1 text-xs text-sky-900">{run.status.replaceAll("_", " ")} · {run.stage}</p>{run.question && <p className="mt-2 text-sm text-amber-900">{run.question.text}</p>}</button>)}</div>
-  </section>;
-}

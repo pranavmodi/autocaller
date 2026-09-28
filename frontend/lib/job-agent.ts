@@ -48,6 +48,12 @@ export type Candidate = {
   id: string; status: ReviewStatus; note: string; revision: number;
   created_at: string; updated_at: string; decision_source: string | null;
   email_status: string; form_status: string;
+  application_state?: "in_progress" | "needs_attention" | "completed" | "draft_ready" | "stopped";
+  application_updated_at?: string | null;
+  browser_application?: { status: string; stage?: string; error?: string;
+    question?: { id: string; text: string; choices: string[] } | null;
+    resume_filename?: string; attempt?: number; updated_at?: string | null;
+    confirmation?: { quote: string; url: string; at: string } | null; };
   contact?: { available: boolean; count: number; best: null | {
     contact_id: string; email: string; name: string; title: string; kind: "recruiting" | "routing"; source: string;
   } };

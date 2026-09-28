@@ -34,6 +34,36 @@ def test_category_config_requires_unique_ids():
         core.JobAgentConfig(resume_categories=[category, category])
 
 
+@pytest.mark.parametrize(('email_status', 'website_status', 'expected'), [
+    ('not_started', 'running', 'in_progress'),
+    ('sent_verified', 'waiting_for_answer', 'needs_attention'),
+    ('not_started', 'submitted', 'completed'),
+    ('ready', 'not_started', 'draft_ready'),
+    ('not_started', 'cancelled', 'stopped'),
+])
+def test_unified_application_state_prioritizes_actionable_channel(email_status, website_status, expected):
+    assert processing.unified_application_state(email_status, website_status) == expected
+
+
+def test_browser_application_view_keeps_compact_row_status():
+    row = SimpleNamespace(
+        status='waiting_for_answer', updated_at=datetime(2026, 9, 28, tzinfo=timezone.utc),
+        state={'stage': 'Waiting for your answer', 'error': None,
+               'question': {'id': 'q1', 'text': 'Choose a location', 'choices': ['Remote']},
+               'resume_filename': 'Pranav.pdf', 'attempt': 2, 'confirmation': None,
+               'snapshot': {'sensitive': 'not returned'}},
+    )
+
+    result = processing.browser_application_view(row)
+
+    assert result == {
+        'status': 'waiting_for_answer', 'stage': 'Waiting for your answer', 'error': None,
+        'question': {'id': 'q1', 'text': 'Choose a location', 'choices': ['Remote']},
+        'resume_filename': 'Pranav.pdf', 'attempt': 2, 'confirmation': None,
+        'updated_at': '2026-09-28T00:00:00+00:00',
+    }
+
+
 def test_resume_path_rejects_escape_and_non_pdf(tmp_path, monkeypatch):
     monkeypatch.setattr(resumes, 'RESUME_ROOT', tmp_path / 'library')
     (tmp_path / 'library').mkdir()

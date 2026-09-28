@@ -4,9 +4,8 @@ import { useState, useEffect } from "react";
 import { JobApplicationControls, ResumeSettings } from "@/components/JobApplicationControls";
 import { JobApplicantProfile } from "@/components/JobApplicantProfile";
 import { JobCvLibrary } from "@/components/JobCvLibrary";
-import { JobBrowserApplications } from "@/components/JobBrowserApplication";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BriefcaseBusiness, ArrowUpRight, Building2, Check, ClipboardCheck, FileText, Globe2, ListFilter, Loader2, MapPin, RefreshCw, Save, Search, Settings2, SlidersHorizontal } from "lucide-react";
+import { BriefcaseBusiness, ArrowUpRight, Building2, Check, ClipboardCheck, FileText, Globe2, ListFilter, Loader2, Mail, MapPin, RefreshCw, Save, Search, Settings2, SlidersHorizontal } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import JobSearches from "@/components/JobSearches";
 import { apiUrl } from "@/lib/api";
@@ -101,14 +100,19 @@ export default function JobAgentPage() {
   </div>;
 }
 
-const applicationStatusOrder = ["queued", "preparing", "needs_review", "ready", "queued_send", "sending", "delivery_unconfirmed", "sent_verified"];
+const applicationStatusOrder = ["in_progress", "needs_attention", "completed", "draft_ready", "stopped"];
 function applicationTone(status: string) {
-  if (status === "sent_verified") return "bg-emerald-50 text-emerald-800";
-  if (status === "ready") return "bg-sky-50 text-sky-800";
-  if (["queued", "preparing", "queued_send", "sending"].includes(status)) return "bg-violet-50 text-violet-800";
-  if (["needs_review", "delivery_unconfirmed", "failed"].includes(status)) return "bg-amber-50 text-amber-900";
-  return "bg-neutral-100 text-neutral-700";
+  if (["completed", "sent_verified", "submitted"].includes(status)) return "border-emerald-200 bg-emerald-50 text-emerald-800";
+  if (["draft_ready", "ready"].includes(status)) return "border-sky-200 bg-sky-50 text-sky-800";
+  if (["in_progress", "queued", "running", "verifying", "preparing", "queued_send", "sending"].includes(status)) return "border-violet-200 bg-violet-50 text-violet-800";
+  if (["needs_attention", "waiting_for_answer", "blocked", "submission_uncertain", "paused", "needs_review", "delivery_unconfirmed", "failed"].includes(status)) return "border-amber-200 bg-amber-50 text-amber-900";
+  return "border-neutral-200 bg-neutral-100 text-neutral-700";
 }
+
+const applicationStateLabel: Record<string, string> = {
+  in_progress: "In progress", needs_attention: "Needs attention", completed: "Application completed",
+  draft_ready: "Draft ready", stopped: "Stopped",
+};
 
 function ApplicationsPanel({ data, loading, error, search, status, order, page, onSearch, onStatus, onOrder, onPage, onOpen }: {
   data?: ApplicationsResponse; loading: boolean; error: Error | null; search: string; status: string; order: string; page: number;
@@ -116,14 +120,11 @@ function ApplicationsPanel({ data, loading, error, search, status, order, page, 
 }) {
   const counts = data?.counts || {};
   const all = Object.values(counts).reduce((sum, value) => sum + value, 0);
-  const active = ["queued", "preparing", "queued_send", "sending"].reduce((sum, key) => sum + (counts[key] || 0), 0);
-  const attention = (counts.needs_review || 0) + (counts.delivery_unconfirmed || 0) + (counts.failed || 0);
   const statuses = Array.from(new Set([...applicationStatusOrder, ...Object.keys(counts)])).filter(key => counts[key]);
   return <section role="tabpanel" id="panel-applications" aria-labelledby="tab-applications" className="space-y-4">
-    <JobBrowserApplications onOpen={onOpen} />
-    <h2 className="font-semibold">Email applications</h2>
+    <div><h2 className="font-semibold text-neutral-950">Applications</h2><p className="mt-1 text-sm text-neutral-500">One row per job, including both website and email activity.</p></div>
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-      {[{ label: "Started", value: all }, { label: "In progress", value: active }, { label: "Drafts ready", value: counts.ready || 0 }, { label: "Needs attention", value: attention }, { label: "Sent verified", value: counts.sent_verified || 0 }].map(item => <div key={item.label} className="rounded-lg border border-neutral-200 bg-white p-4"><p className="text-xs font-medium text-neutral-500">{item.label}</p><p className="mt-1 text-2xl font-semibold text-neutral-950">{item.value}</p></div>)}
+      {[{ label: "Jobs", value: all }, { label: "In progress", value: counts.in_progress || 0 }, { label: "Needs attention", value: counts.needs_attention || 0 }, { label: "Completed", value: counts.completed || 0 }, { label: "Drafts ready", value: counts.draft_ready || 0 }].map(item => <div key={item.label} className="rounded-lg border border-neutral-200 bg-white p-4"><p className="text-xs font-medium text-neutral-500">{item.label}</p><p className="mt-1 text-2xl font-semibold text-neutral-950">{item.value}</p></div>)}
     </div>
     <div className={`${panel} overflow-hidden`}>
       <div className="grid gap-3 border-b border-neutral-200 p-4 md:grid-cols-[minmax(0,1fr)_220px_220px]">
@@ -136,11 +137,22 @@ function ApplicationsPanel({ data, loading, error, search, status, order, page, 
       {!loading && !error && !data?.items.length && <div className="px-6 py-14 text-center"><ClipboardCheck className="mx-auto h-7 w-7 text-neutral-400" /><h2 className="mt-3 font-medium">No applications match</h2><p className="mt-1 text-sm text-neutral-500">Started preparations, stopped attempts, ready drafts, and sent applications appear here.</p></div>}
       <div className="divide-y divide-neutral-100">{data?.items.map(job => {
         const application = job.application || { status: "not_started" };
+        const browser = job.browser_application || { status: "not_started" };
+        const overall = job.application_state || "stopped";
+        const emailStarted = application.status !== "not_started";
+        const websiteStarted = browser.status !== "not_started";
         const sourceUrl = safeUrl(job.posting.source_url);
         const attachment = application.attachment;
         return <article key={job.id} className="p-4 hover:bg-neutral-50/70">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-            <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h2 className="break-words text-sm font-semibold text-neutral-950">{job.posting.title}</h2><span className={`rounded-full px-2 py-1 text-[11px] font-medium ${applicationTone(application.status)}`}>{readable(application.status)}</span></div><p className="mt-1 text-sm text-neutral-600">{job.posting.firm_name}</p><div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-neutral-500"><span>Attempt {application.attempt || 1}</span><span>{application.stage || readable(application.phase)}</span><span>Updated {date(job.processing_updated_at)}</span>{application.recipient?.email && <span className="font-medium text-neutral-700">{application.recipient.email}</span>}</div>{application.error && <p className="mt-2 line-clamp-2 text-xs text-amber-800">{application.error}</p>}</div>
+            <div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-3"><h2 className="break-words text-base font-semibold text-neutral-950">{job.posting.title}</h2><span className={`rounded-full border px-3 py-1.5 text-sm font-semibold ${applicationTone(overall)}`}>{applicationStateLabel[overall] || readable(overall)}</span></div><p className="mt-1 text-sm text-neutral-600">{job.posting.firm_name}</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {websiteStarted && <span className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold ${applicationTone(browser.status)}`}><Globe2 className="h-3.5 w-3.5" />Website · {readable(browser.status)}</span>}
+                {emailStarted && <span className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold ${applicationTone(application.status)}`}><Mail className="h-3.5 w-3.5" />Email · {readable(application.status)}</span>}
+              </div>
+              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-neutral-500"><span>Updated {date(job.application_updated_at)}</span>{websiteStarted && browser.stage && <span>{browser.stage}</span>}{emailStarted && application.stage && <span>{application.stage}</span>}{application.recipient?.email && <span className="font-medium text-neutral-700">{application.recipient.email}</span>}</div>
+              {(browser.question?.text || browser.error || application.error) && <p className="mt-2 line-clamp-2 text-xs text-amber-800">{browser.question?.text || browser.error || application.error}</p>}
+            </div>
             <div className="flex shrink-0 flex-wrap items-center gap-2">{sourceUrl && <a href={sourceUrl} target="_blank" rel="noopener noreferrer" className={button}>Job <ArrowUpRight className="h-4 w-4" /></a>}{attachment?.path && <a href={apiUrl(`/api/job-agent/resume?path=${encodeURIComponent(attachment.path)}`)} target="_blank" rel="noopener noreferrer" className={button}>PDF <FileText className="h-4 w-4" /></a>}<button className={primary} onClick={() => onOpen(job)}>View application</button></div>
           </div>
         </article>;

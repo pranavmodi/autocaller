@@ -58,6 +58,7 @@ class ApplicationRequest(BaseModel):
 
 
 ApplicationOrder = Literal['updated_desc', 'firm_asc', 'role_asc']
+APPLICATION_STATES = {'in_progress', 'needs_attention', 'completed', 'draft_ready', 'stopped'}
 
 
 class ClassificationDecision(BaseModel):
@@ -104,9 +105,41 @@ def processing_view(row, config):
             'form_status': 'not_tracked'}
 
 
+def browser_application_view(row):
+    """Expose the compact browser-run state needed by the unified applications list."""
+    if not row:
+        return {'status': 'not_started'}
+    state = row.state or {}
+    return {
+        'status': row.status,
+        'stage': state.get('stage'),
+        'error': state.get('error'),
+        'question': state.get('question'),
+        'resume_filename': state.get('resume_filename'),
+        'attempt': state.get('attempt'),
+        'confirmation': state.get('confirmation'),
+        'updated_at': row.updated_at.isoformat() if row.updated_at else None,
+    }
+
+
+def unified_application_state(email_status: str, website_status: str) -> str:
+    """Choose one job-level status without discarding either application channel."""
+    if email_status in {'queued', 'preparing', 'queued_send', 'sending'} or website_status in {
+            'queued', 'running', 'verifying'}:
+        return 'in_progress'
+    if email_status in {'needs_review', 'delivery_unconfirmed', 'failed'} or website_status in {
+            'waiting_for_answer', 'blocked', 'submission_uncertain', 'paused'}:
+        return 'needs_attention'
+    if email_status == 'sent_verified' or website_status == 'submitted':
+        return 'completed'
+    if email_status == 'ready':
+        return 'draft_ready'
+    return 'stopped'
+
+
 async def attach_details(session, rows):
     from app.services.job_browser import BrowserRun
-    browser_runs = {r.candidate_id: r.status for r in (await session.scalars(
+    browser_runs = {r.candidate_id: r for r in (await session.scalars(
         select(BrowserRun).where(BrowserRun.candidate_id.in_([r.id for r in rows])))).all()}
     state = await session.get(core.JobAgentState, 'default')
     config = core.saved_config(state.config) if state else core.JobAgentConfig()
@@ -135,8 +168,18 @@ async def attach_details(session, rows):
             'best': ({key: best[key] for key in ('contact_id', 'email', 'name', 'title', 'kind', 'source')}
                      if best else None),
         }
-        items.append({**serialized, **processing_view(processing.get(row.id), config),
-                      'form_status': browser_runs.get(row.id, 'not_started'), 'contact': contact_view})
+        processing_data = processing_view(processing.get(row.id), config)
+        browser_data = browser_application_view(browser_runs.get(row.id))
+        email_status = processing_data['application']['status']
+        website_status = browser_data['status']
+        updated_values = [value for value in (
+            processing_data.get('processing_updated_at'), browser_data.get('updated_at')) if value]
+        items.append({**serialized, **processing_data,
+                      'form_status': website_status,
+                      'browser_application': browser_data,
+                      'application_state': unified_application_state(email_status, website_status),
+                      'application_updated_at': max(updated_values) if updated_values else None,
+                      'contact': contact_view})
     return items
 
 
@@ -151,53 +194,54 @@ async def detail(identity):
 
 async def applications(*, search: str = '', status: str = '', page: int = 1,
                        order: ApplicationOrder = 'updated_desc') -> dict:
-    """List every job whose application workflow has been started."""
+    """List each job with any email or website application exactly once."""
     await core.ensure_tables()
+    from app.services.job_browser import BrowserRun
     search = search.strip()
     status = status.strip()
     if page < 1:
         raise ValueError('Page must be at least 1.')
-    if status and (len(status) > 32 or not re.fullmatch(r'[a-z_]+', status)):
+    if status and status not in APPLICATION_STATES:
         raise ValueError('Invalid application status.')
-    ordering = {
-        'updated_desc': (JobProcessing.updated_at.desc(),),
-        'firm_asc': (func.lower(core.JobAgentCandidate.posting['firm_name'].astext),
-                     JobProcessing.updated_at.desc()),
-        'role_asc': (func.lower(core.JobAgentCandidate.posting['title'].astext),
-                     JobProcessing.updated_at.desc()),
-    }[order]
-    base = (select(core.JobAgentCandidate, JobProcessing)
-            .join(JobProcessing, JobProcessing.candidate_id == core.JobAgentCandidate.id)
-            .where(JobProcessing.application_status != 'not_started'))
-    count_base = (select(JobProcessing.application_status, func.count())
-                  .select_from(JobProcessing)
-                  .join(core.JobAgentCandidate, core.JobAgentCandidate.id == JobProcessing.candidate_id)
-                  .where(JobProcessing.application_status != 'not_started'))
-    if search:
-        phrase = f'%{search}%'
-        search_filter = or_(
-            core.JobAgentCandidate.posting['firm_name'].astext.ilike(phrase),
-            core.JobAgentCandidate.posting['title'].astext.ilike(phrase),
-            JobProcessing.application['recipient']['email'].astext.ilike(phrase),
-        )
-        base = base.where(search_filter)
-        count_base = count_base.where(search_filter)
     async with core.AsyncSessionLocal() as session:
-        counts = dict((await session.execute(
-            count_base.group_by(JobProcessing.application_status))).all())
-        if status:
-            base = base.where(JobProcessing.application_status == status)
-        total = await session.scalar(select(func.count()).select_from(base.subquery()))
-        pairs = (await session.execute(base.order_by(*ordering, core.JobAgentCandidate.id)
-                                       .offset((page - 1) * 25).limit(25))).all()
-        rows = [candidate for candidate, _processing in pairs]
+        email_ids = set((await session.scalars(select(JobProcessing.candidate_id).where(
+            JobProcessing.application_status != 'not_started'))).all())
+        website_ids = set((await session.scalars(select(BrowserRun.candidate_id))).all())
+        candidate_ids = email_ids | website_ids
+        rows = list((await session.scalars(select(core.JobAgentCandidate).where(
+            core.JobAgentCandidate.id.in_(candidate_ids)))).all()) if candidate_ids else []
         items = await attach_details(session, rows) if rows else []
+    if search:
+        needle = search.casefold()
+        def searchable(item):
+            recipient = (item.get('application') or {}).get('recipient') or {}
+            return ' '.join(filter(None, (
+                item['posting'].get('firm_name'), item['posting'].get('title'),
+                recipient.get('email'),
+            ))).casefold()
+        items = [item for item in items if needle in searchable(item)]
+    counts = {state: sum(item['application_state'] == state for item in items)
+              for state in APPLICATION_STATES}
+    if status:
+        items = [item for item in items if item['application_state'] == status]
+    if order == 'updated_desc':
+        items.sort(key=lambda item: (item.get('application_updated_at') or '', item['id']), reverse=True)
+    elif order == 'firm_asc':
+        items.sort(key=lambda item: ((item['posting'].get('firm_name') or '').casefold(),
+                                    -(datetime.fromisoformat(item['application_updated_at']).timestamp()
+                                      if item.get('application_updated_at') else 0), item['id']))
+    else:
+        items.sort(key=lambda item: ((item['posting'].get('title') or '').casefold(),
+                                    -(datetime.fromisoformat(item['application_updated_at']).timestamp()
+                                      if item.get('application_updated_at') else 0), item['id']))
+    total = len(items)
+    items = items[(page - 1) * 25:page * 25]
     return {
         'items': items,
-        'total': int(total or 0),
+        'total': total,
         'page': page,
         'page_size': 25,
-        'total_pages': ((int(total or 0) + 24) // 25),
+        'total_pages': ((total + 24) // 25),
         'counts': counts,
     }
 
