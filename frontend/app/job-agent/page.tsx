@@ -5,7 +5,7 @@ import { JobApplicationControls, ResumeSettings } from "@/components/JobApplicat
 import { JobApplicantProfile } from "@/components/JobApplicantProfile";
 import { JobCvLibrary } from "@/components/JobCvLibrary";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BriefcaseBusiness, ArrowUpRight, Building2, Check, ClipboardCheck, FileText, Globe2, ListFilter, Loader2, Mail, MapPin, RefreshCw, Save, Search, Settings2, SlidersHorizontal } from "lucide-react";
+import { BriefcaseBusiness, ArrowUpRight, Building2, Check, ClipboardCheck, FileText, Globe2, Link2, ListFilter, Loader2, Mail, MapPin, Plus, RefreshCw, Save, Search, Settings2, SlidersHorizontal } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import JobSearches from "@/components/JobSearches";
 import { apiUrl } from "@/lib/api";
@@ -22,6 +22,7 @@ const panel = "rounded-xl border border-neutral-200 bg-white";
 const date = (value?: string | null) => value ? new Date(value).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "Not yet";
 const readable = (value?: string | null) => value ? value.replaceAll("_", " ") : "Unknown";
 function safeUrl(value: string) { try { const u = new URL(value); return ["https:", "http:"].includes(u.protocol) ? u.href : undefined; } catch { return undefined; } }
+function publicJobUrl(value: string) { const url = safeUrl(value.trim()); return url && new URL(url).hostname ? url : undefined; }
 function sourceOf(job: Candidate): JobSource { return job.posting.job_source === "external_search" || job.posting.discovery_provider === "possibleos_daily_career_search" ? "external_search" : "possibleos"; }
 function sourceLabel(job: Candidate) { return sourceOf(job) === "external_search" ? "Job Agent search" : "Possible OS"; }
 function queueQuery(status: ReviewStatus | "", search: string, page: number, order: string, category: string, source: JobSource | "", legalDegree: LegalDegreeFilter, contract: ContractFilter) {
@@ -50,6 +51,9 @@ export default function JobAgentPage() {
   const [applicationOrder, setApplicationOrder] = useState("updated_desc");
   const [applicationPage, setApplicationPage] = useState(1);
   const [notice, setNotice] = useState("");
+  const [addJobOpen, setAddJobOpen] = useState(false);
+  const [jobUrl, setJobUrl] = useState("");
+  const [importMessage, setImportMessage] = useState("");
   const overview = useQuery({ queryKey: ["job-agent", "overview"], queryFn: () => jobAgentRequest<Overview>("/overview"), refetchInterval: 15000 });
   const jobs = useQuery({ queryKey: ["job-agent", "jobs", filter, search, page, order, category, source, legalDegree, contract], queryFn: () => jobAgentRequest<{ items: Candidate[]; total: number; total_pages: number }>(`/jobs?${queueQuery(filter, search, page, order, category, source, legalDegree, contract)}`), refetchInterval: 15000 });
   const applications = useQuery({
@@ -61,6 +65,17 @@ export default function JobAgentPage() {
   const refresh = () => client.invalidateQueries({ queryKey: ["job-agent"] });
   const collect = useMutation({ mutationFn: () => jobAgentRequest<CollectionRun>("/collect", {}),
     onSuccess: () => { setNotice(`Sync queued. Progress is saved automatically; all matching listings will be processed.`); refresh(); }, onError: () => refresh() });
+  const importJob = useMutation({
+    mutationFn: () => jobAgentRequest<{ candidate?: Candidate; created?: boolean; message?: string; import?: { message?: string; new_job?: boolean } }>("/listings/import", { source_url: publicJobUrl(jobUrl) }),
+    onMutate: () => setImportMessage(""),
+    onSuccess: result => {
+      if (!result.candidate) { setImportMessage(result.message || "This link is already being verified. Try opening it again in a few minutes."); return; }
+      setAddJobOpen(false); setJobUrl(""); setTab("queue"); setPage(1); setSelected(result.candidate);
+      setNotice(result.created || result.import?.new_job ? "Job verified and added to your review queue." : "This job was already saved. I opened the existing record.");
+      refresh();
+    },
+    onError: () => refresh(),
+  });
   const data = overview.data;
   if (!data) return <div className="space-y-4"><h1 className="text-2xl font-semibold">Job agent</h1><ErrorBox error={overview.error} />{overview.isPending ? <p className="flex items-center gap-2 text-sm text-neutral-500"><Loader2 className="h-4 w-4 animate-spin" /> Loading workspace…</p> : <button className={button} onClick={() => overview.refetch()}>Try again</button>}</div>;
   const total = Object.values(data.counts).reduce((a, b) => a + b, 0);
@@ -70,6 +85,7 @@ export default function JobAgentPage() {
       <div><div className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-neutral-500"><BriefcaseBusiness className="h-4 w-4" /> Career workspace</div>
         <h1 className="text-2xl font-semibold tracking-tight">Job agent</h1><p className="mt-1 max-w-xl text-sm text-neutral-500">Your job pipeline, decisions and operating preferences in one place.</p></div>
       <div className="flex flex-wrap items-center gap-2"><span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-800">Email and website applications</span>
+        <button className={button} onClick={() => { setAddJobOpen(true); setImportMessage(""); importJob.reset(); }}><Plus className="h-4 w-4" />Add job by link</button>
         <button className={primary} disabled={collect.isPending || !data.config.collection_enabled} onClick={() => { setNotice(""); collect.mutate(); }}><RefreshCw className={`h-4 w-4 ${collect.isPending ? "animate-spin" : ""}`} />{collect.isPending ? "Queuing…" : "Sync now"}</button></div>
     </header>
     <ErrorBox error={overview.error || collect.error} />
@@ -96,6 +112,22 @@ export default function JobAgentPage() {
     {tab === "cvs" && <JobCvLibrary />}
     {tab === "profile" && <section role="tabpanel" id="panel-profile" aria-labelledby="tab-profile"><JobApplicantProfile /></section>}
     {tab === "settings" && <section role="tabpanel" id="panel-settings" aria-labelledby="tab-settings"><SettingsForm snapshot={data} onSaved={refresh} /></section>}
+    <Dialog open={addJobOpen} onOpenChange={open => { if (!importJob.isPending) setAddJobOpen(open); }}><DialogContent className="w-[94vw] max-w-xl">
+      <DialogTitle className="flex items-center gap-2"><span className="rounded-lg bg-sky-100 p-2 text-sky-800"><Link2 className="h-4 w-4" /></span>Add a job posting</DialogTitle>
+      <DialogDescription>Paste a LinkedIn job post or another public job-listing link. Job Agent verifies the employer and exact role, then adds or reuses one queue record.</DialogDescription>
+      <form className="space-y-4" onSubmit={event => { event.preventDefault(); if (publicJobUrl(jobUrl) && !importJob.isPending) importJob.mutate(); }}>
+        <label className="block text-sm font-medium text-neutral-800">Job post link<input autoFocus aria-label="Job post link" className={`${input} mt-2`} type="url" inputMode="url" placeholder="https://www.linkedin.com/jobs/view/…" value={jobUrl} disabled={importJob.isPending} onChange={event => { setJobUrl(event.target.value); setImportMessage(""); importJob.reset(); }} /></label>
+        <div className="grid grid-cols-3 gap-2 text-xs">
+          {[{ label: "Read link", complete: !!publicJobUrl(jobUrl), active: false }, { label: "Verify job", complete: false, active: importJob.isPending }, { label: "Save or reuse", complete: false, active: false }].map((step, index) => <div key={step.label} className={`rounded-lg border p-3 ${step.active ? "border-sky-300 bg-sky-50 text-sky-900" : step.complete ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-neutral-200 bg-neutral-50 text-neutral-500"}`}><span className="font-semibold">{index + 1}</span><span className="ml-2">{step.label}</span>{step.active && <Loader2 className="ml-2 inline h-3.5 w-3.5 animate-spin" />}</div>)}
+        </div>
+        {importJob.isPending && <div role="status" className="rounded-lg border border-sky-200 bg-sky-50 p-3 text-sm text-sky-900"><p className="font-medium">Verifying the job posting…</p><p className="mt-1 text-xs leading-relaxed">This can take several minutes for job boards that restrict automated access. Keep this window open; no application or email will be started.</p></div>}
+        {(!jobUrl.trim() || publicJobUrl(jobUrl)) ? null : <p className="text-sm text-red-700">Enter a complete public HTTP or HTTPS link.</p>}
+        <ErrorBox error={importJob.error} />
+        {importMessage && <p role="status" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{importMessage}</p>}
+        <p className="text-xs leading-relaxed text-neutral-500">The importer deduplicates the role, verifies its source, and may find company contact information. It does not classify the job or begin an application.</p>
+        <div className="flex justify-end gap-2"><button type="button" className={button} disabled={importJob.isPending} onClick={() => setAddJobOpen(false)}>Cancel</button><button type="submit" className={primary} disabled={!publicJobUrl(jobUrl) || importJob.isPending}>{importJob.isPending ? <><Loader2 className="h-4 w-4 animate-spin" />Verifying…</> : <><Plus className="h-4 w-4" />Add job</>}</button></div>
+      </form>
+    </DialogContent></Dialog>
     <Dialog open={!!selected} onOpenChange={open => { if (!open) setSelected(null); }}><DialogContent className="max-h-[92dvh] w-[96vw] max-w-5xl overflow-y-auto">{selected && <ReviewForm key={selected.id} job={selected} categories={data.config.resume_categories} onSaved={() => { setSelected(null); refresh(); }} />}</DialogContent></Dialog>
   </div>;
 }
