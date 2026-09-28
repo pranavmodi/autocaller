@@ -109,6 +109,25 @@ def recoverable_input_interruption(state):
             and audit.get('effect') == 'input')
 
 
+def recoverable_source_navigation(state):
+    """Identify a failed pre-form navigation that cannot have submitted a form.
+
+    The independent action audit supplies the semantic effect. The durable
+    form-input marker keeps source recovery limited to the path into the form,
+    before the agent has begun completing it.
+    """
+    action = state.get('last_action') or {}
+    audit = state.get('audit') or {}
+    return (bool(state.get('interaction_started'))
+            and not state.get('submit_started_at')
+            and not state.get('confirmation')
+            and not state.get('form_input_completed_at')
+            and not state.get('application_source_url')
+            and action.get('kind') in {'click', 'goto'}
+            and audit.get('allowed') is True
+            and audit.get('effect') == 'navigation')
+
+
 def human_verification_controls(snapshot):
     """Return the exact eight code inputs and submit control for a human challenge."""
     controls = [control for frame in snapshot.get('frames', [])
@@ -160,6 +179,8 @@ def restart_blocker(row):
         return 'A submission was attempted or confirmed. Verify it before starting another application.'
     if recoverable_input_interruption(state):
         return None
+    if recoverable_source_navigation(state):
+        return None
     if state.get('interaction_started') and not undispatched_missing_control(state):
         return 'An earlier browser interaction may have submitted the form. Verify its outcome first.'
     if row.status == 'submission_uncertain' and not undispatched_missing_control(state):
@@ -174,12 +195,15 @@ def view(row):
     state = {k: v for k, v in row.state.items() if k not in {'resume', 'posting', 'preferences', 'snapshot', 'page_evidence', 'action_history', 'saved_profile', 'profile_history', 'attempt_history'}}
     can_resume = ((row.status in {'paused', 'blocked'}
                    and not state.get('submit_started_at') and not state.get('interaction_started'))
-                  or (row.status == 'submission_uncertain' and recoverable_input_interruption(state)))
+                  or (row.status == 'submission_uncertain'
+                      and (recoverable_input_interruption(state)
+                           or recoverable_source_navigation(state))))
     return {**state, 'status': row.status, 'revision': row.revision,
             'run_id': row.run_id, 'updated_at': row.updated_at.isoformat(),
             'can_restart': restart_blocker(row) is None, 'restart_blocked_reason': restart_blocker(row),
             'can_resume': can_resume,
             'recoverable_input_interruption': recoverable_input_interruption(state),
+            'recoverable_source_navigation': recoverable_source_navigation(state),
             'can_quit': row.status != 'cancelled' and restart_blocker(row) is None}
 
 
@@ -229,6 +253,81 @@ async def close_browser(row):
     if browser:
         await browser.close()
         _sessions.pop(row.candidate_id, None)
+
+
+async def switch_to_official_source(row, source):
+    """Replace a blocked pre-form browser with the verified official job page."""
+    old_run_id = row.run_id
+    old_directory = ROOT / old_run_id
+    new_run_id = uuid4().hex
+    new_directory = ROOT / new_run_id
+    new_directory.mkdir(parents=True, mode=0o700)
+    resume = old_directory / 'resume.pdf'
+    if row.state.get('resume'):
+        if hashlib.sha256(resume.read_bytes()).hexdigest() != row.state['resume']['sha256']:
+            raise ValueError('The saved resume changed during application-page recovery.')
+        shutil.copyfile(resume, new_directory / 'resume.pdf')
+        (new_directory / 'resume.pdf').chmod(0o600)
+    await close_browser(row)
+    async with core.AsyncSessionLocal() as session:
+        current = await session.get(BrowserRun, row.candidate_id, with_for_update=True)
+        if not current or current.revision != row.revision:
+            raise ValueError('The application changed while its official page was being selected.')
+        candidate = await session.get(core.JobAgentCandidate, row.candidate_id, with_for_update=True)
+        state = dict(current.state)
+        posting = dict(state['posting'])
+        urls = list(dict.fromkeys([*(posting.get('source_urls') or []), source['url']]))
+        posting.update(application_url=source['url'], source_urls=urls)
+        history = [*state.get('source_recovery_history', []), {
+            'at': core.now().isoformat(), 'previous_run_id': old_run_id,
+            'previous_url': state.get('current_url') or posting.get('source_url'),
+            'official_url': source['url'], 'source_type': source['source_type'],
+            'match_scope': source['match_scope'], 'reason': source['reason'],
+            'confidence': source['confidence'],
+        }][-10:]
+        for key in ('snapshot', 'current_url', 'interaction_started', 'browser_action_id',
+                    'action_signature', 'repeat_count', 'error', 'failed_action',
+                    'failed_audit', 'failed_model', 'failed_audit_model', 'session_error'):
+            state.pop(key, None)
+        state.update(
+            posting=posting,
+            application_source_url=source['url'],
+            application_source={key: source[key] for key in (
+                'url', 'source_type', 'match_scope', 'reason', 'confidence',
+                'verified_at', 'evidence')},
+            source_recovery={'status': 'completed', 'verified_at': source['verified_at']},
+            source_recovery_history=history,
+            browser_closed=False,
+            browser_session_status='opening',
+            session_available=False,
+            screenshot=False,
+            stage='Official application page verified; opening its form',
+        )
+        current.run_id = new_run_id
+        current.status = 'queued'
+        current.state = state
+        current.revision += 1
+        current.updated_at = core.now()
+        if candidate:
+            candidate.posting = {**candidate.posting, 'application_url': source['url'],
+                                 'source_urls': urls}
+            candidate.updated_at = core.now()
+        message = ('Verified the exact role on an official employer or ATS page. Continuing the application there.'
+                   if source['match_scope'] == 'direct_role' else
+                   'Verified the employer-linked official jobs portal. Continuing there to locate the exact saved role.')
+        add_event(session, current, message,
+            'official_source', url=source['url'], source_type=source['source_type'],
+            match_scope=source['match_scope'], confidence=source['confidence'])
+        await session.commit()
+        return current
+
+
+async def recover_official_source(row):
+    from app.services.job_application_source import resolve_official_application_source
+    source = await resolve_official_application_source(
+        row.state['posting'], provider=row.state.get('ai_provider', 'gateway'),
+        model=row.state.get('openai_model', 'gpt-5-mini'))
+    return await switch_to_official_source(row, source)
 
 
 async def list_runs():
@@ -545,9 +644,12 @@ async def control(identity, request: ControlRequest):
             recovering_input = (request.action == 'resume'
                                 and row.status == 'submission_uncertain'
                                 and recoverable_input_interruption(state))
-            if (row.status in ACTIVE or (row.status in LOCKED and not recovering_input)
+            recovering_source = (request.action == 'resume'
+                                 and row.status == 'submission_uncertain'
+                                 and recoverable_source_navigation(state))
+            if (row.status in ACTIVE or (row.status in LOCKED and not (recovering_input or recovering_source))
                     or state.get('submit_started_at')
-                    or (state.get('interaction_started') and not recovering_input)):
+                    or (state.get('interaction_started') and not (recovering_input or recovering_source))):
                 raise ValueError('This application cannot be restarted. Check submission evidence first.')
             if request.action == 'answer':
                 question = state.get('question')
@@ -581,6 +683,18 @@ async def control(identity, request: ControlRequest):
                 add_event(session, row,
                     'Continuing after an interrupted audited input. The preserved page will be inspected before choosing another action.',
                     'input_recovered')
+            elif recovering_source:
+                state['source_recovery'] = {
+                    'status': 'pending', 'requested_at': core.now().isoformat(),
+                    'failed_url': state.get('current_url') or state['posting'].get('source_url')}
+                state['interaction_started'] = False
+                state['browser_action_id'] = None
+                state['action_signature'] = None
+                state['repeat_count'] = 0
+                state['stage'] = 'Finding the exact role on the official employer or ATS site'
+                add_event(session, row,
+                    'The listing could not open its application form. Searching for the exact official employer or ATS page.',
+                    'source_recovery_started')
         if request.action in {'resume', 'answer', 'verify', 'restart'}:
             settings = await session.get(core.JobAgentState, 'default')
             config = core.saved_config(settings.config) if settings else core.JobAgentConfig()
@@ -877,6 +991,14 @@ async def step(row):
             resume_filename=resume['filename'], stage='Resume selected; opening the application',
             message='Resume selected: ' + resume['filename'], kind='resume')
         return
+    if (state.get('source_recovery') or {}).get('status') == 'pending':
+        row = await checkpoint(identity, row.revision, status='running',
+            stage='Searching for the exact official employer or ATS application page',
+            message='Searching for the exact role on the official employer or ATS site.',
+            kind='source_recovery_search')
+        if row:
+            await recover_official_source(row)
+        return
     browser = _sessions.get(identity)
     if not browser and state.get('browser_transport') == 'broker':
         browser = await attach_browser(row)
@@ -896,7 +1018,10 @@ async def step(row):
             return
         state = row.state
         browser = PersistentBrowserSession(row.run_id)
-        await browser.open(state['posting']['source_url'])
+        start_url = (state.get('application_source_url')
+                     or state['posting'].get('application_url')
+                     or state['posting']['source_url'])
+        await browser.open(start_url)
         _sessions[identity] = browser
     screenshot = directory / 'page.png'
     snapshot = await browser.observe(screenshot)
@@ -1115,7 +1240,9 @@ async def step(row):
     if not row:
         return
     await browser.execute(action, resume)
+    input_completed = core.now().isoformat() if audit.get('effect') == 'input' else state.get('form_input_completed_at')
     await checkpoint(identity, row.revision, interaction_started=False, error=None,
+        form_input_completed_at=input_completed,
         failed_action=None, failed_audit=None, failed_model=None, failed_audit_model=None,
         audit_feedback=None, audit_repair_count=0,
         status='verifying' if action.kind == 'submit' else None)
@@ -1135,7 +1262,11 @@ async def recover():
                     state['browser_session_status'] = 'unavailable'
                     state['session_error'] = str(exc)
             uncertain = state.get('submit_started_at') or state.get('interaction_started')
-            if uncertain:
+            source_pending = (state.get('source_recovery') or {}).get('status') == 'pending'
+            if source_pending and not state.get('submit_started_at'):
+                row.status = 'queued'
+                state['stage'] = 'Continuing official application-page recovery after worker restart'
+            elif uncertain:
                 row.status = 'submission_uncertain'
                 state['stage'] = ('Browser preserved; check confirmation without resubmitting' if available else
                                   'Worker restarted after a possible submission; manual verification required')
@@ -1181,12 +1312,25 @@ async def worker():
                     async with core.AsyncSessionLocal() as session:
                         current = await session.get(BrowserRun, row.candidate_id)
                     if current and current.status in ACTIVE:
-                        uncertain = current.state.get('submit_started_at') or current.state.get('interaction_started')
-                        await checkpoint(current.candidate_id, current.revision,
-                            status='submission_uncertain' if uncertain else 'blocked',
-                            stage='Submission needs verification' if uncertain else 'Browser application stopped',
-                            error=str(exc)[:1200] or type(exc).__name__,
-                            message='Browser processing stopped; review the saved error.', kind='error')
+                        if recoverable_source_navigation(current.state):
+                            recovery = {
+                                'status': 'pending', 'requested_at': core.now().isoformat(),
+                                'failed_url': (current.state.get('current_url')
+                                               or current.state['posting'].get('source_url'))}
+                            await checkpoint(current.candidate_id, current.revision,
+                                status='queued', interaction_started=False,
+                                browser_action_id=None, source_recovery=recovery,
+                                stage='Finding the exact role on the official employer or ATS site',
+                                error=None,
+                                message='The listing did not open its form. Searching for the exact official application page.',
+                                kind='source_recovery_started')
+                        else:
+                            uncertain = current.state.get('submit_started_at') or current.state.get('interaction_started')
+                            await checkpoint(current.candidate_id, current.revision,
+                                status='submission_uncertain' if uncertain else 'blocked',
+                                stage='Submission needs verification' if uncertain else 'Browser application stopped',
+                                error=str(exc)[:1200] or type(exc).__name__,
+                                message='Browser processing stopped; review the saved error.', kind='error')
                 await asyncio.sleep(0.25)
         finally:
             for browser in list(_sessions.values()):

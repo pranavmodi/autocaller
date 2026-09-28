@@ -1152,6 +1152,12 @@ Browser clean restart: inspect `job-agent browser-status JOB_ID` for `can_restar
 
 Browser sessions live in `possibleos-browser.service`, independent of the backend.
 `job-agent browser-status ID` reports live browser_session_status and availability.
+If an audited pre-form navigation from a listing fails, `browser-status` can report
+`recoverable_source_navigation=true`. Resume that run normally. The worker searches
+for the exact role on the employer site or official ATS, verifies freshly fetched
+role/employer/application evidence, replaces the blocked browser with a new isolated
+browser on that official URL, and continues the already-authorized application.
+It must not use a generic careers page, talent pool, aggregator or nearby role.
 Use `browser-control ID --action reconnect --revision N` for stopped runs; it
 attaches without navigation or submission. Resume pre-submit work, answer pending
 questions, or verify uncertain submission read-only. Backend restart preserves new

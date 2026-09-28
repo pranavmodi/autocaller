@@ -10,6 +10,7 @@ import { jobAgentRequest, type Candidate, type JobAgentConfig } from "@/lib/job-
 type BrowserRun = {
   can_quit?: boolean; quit_reason?: string; browser_cleanup_error?: string;
   can_restart?: boolean; can_resume?: boolean; recoverable_input_interruption?: boolean;
+  recoverable_source_navigation?: boolean;
   restart_blocked_reason?: string; attempt?: number;
   profile_count?: number;
   browser_transport?: string; browser_session_status?: string; browser_closed?: boolean;
@@ -20,6 +21,8 @@ type BrowserRun = {
   question?: { id: string; text: string; choices: string[] } | null;
   answers?: { question: string; answer: string; at: string }[];
   confirmation?: { quote: string; url: string; at: string };
+  application_source?: { url: string; source_type: "employer" | "ats"; match_scope: "direct_role" | "official_jobs_portal"; reason: string; confidence: number; verified_at: string };
+  source_recovery?: { status: "pending" | "completed"; requested_at?: string; verified_at?: string };
   failed_action?: { kind: string; summary: string } | null;
   failed_audit?: { effect?: string; reason?: string } | null;
   events?: { id: number; kind: string; message: string; at: string }[];
@@ -93,6 +96,8 @@ export function JobBrowserApplication({ job }: { job: Candidate }) {
           <p className="flex items-center gap-2 text-sm font-semibold">{active && !query.isError && <Loader2 className="h-4 w-4 animate-spin" />}{submitted && <CheckCircle2 className="h-4 w-4 text-emerald-700" />}{run.stage}</p>
           <p className="mt-2 text-xs text-neutral-500">Attempt {run.attempt || 1} · {run.steps || 0} browser actions · {run.resume_filename}{run.updated_at ? ` · Updated ${new Date(run.updated_at).toLocaleTimeString()}` : ""}</p>
           <p className="mt-1 text-xs text-neutral-500">Run provider: {run.ai_provider === "openai" ? `OpenAI API · ${run.openai_model}` : "OpenClaw gateway"}</p>
+          {run.source_recovery?.status === "pending" && <p className="mt-2 text-xs text-violet-800">The original listing did not reach a form. The agent is finding and verifying the exact role on the employer site or its ATS.</p>}
+          {run.application_source && <p className="mt-2 text-xs text-emerald-800">Applying on the verified official {run.application_source.match_scope === "official_jobs_portal" ? "jobs portal" : run.application_source.source_type === "ats" ? "ATS" : "employer page"}: <a className="underline" href={run.application_source.url} target="_blank" rel="noopener noreferrer">open page</a></p>}
           {currentLink && <a href={currentLink} target="_blank" rel="noopener noreferrer" className="mt-2 block break-all text-xs underline">Current application page</a>}
           {!submitted && !cancelled && <div className={`mt-3 rounded-lg border p-3 text-xs ${run.session_available ? "border-emerald-200 bg-emerald-50 text-emerald-900" : "border-amber-200 bg-amber-50 text-amber-900"}`}>
             {run.browser_transport === "broker" ? <>
@@ -104,7 +109,7 @@ export function JobBrowserApplication({ job }: { job: Candidate }) {
         {run.error && <div role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950"><p>{run.error}</p>{run.failed_action && <p className="mt-2 text-xs"><strong>Stopped before:</strong> {run.failed_action.summary} ({run.failed_action.kind})</p>}{run.failed_audit?.reason && <p className="mt-1 text-xs"><strong>Safety audit:</strong> {run.failed_audit.reason}{run.failed_audit.effect ? ` · Audited effect: ${run.failed_audit.effect}` : ""}</p>}</div>}
         {cancelled && <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-4 text-sm text-neutral-700"><p className="font-medium">You stopped this website application.</p>{run.quit_reason && <p className="mt-2">Reason: {run.quit_reason}</p>}<p className="mt-2 text-xs">Your history and saved answers are retained. This reason applies only to this application.</p></div>}
         {run.browser_cleanup_error && <p role="alert" className="text-sm text-amber-900">{run.browser_cleanup_error}</p>}
-        {uncertain && <p className="text-sm text-amber-900">{run.recoverable_input_interruption ? "An ordinary form input was interrupted. The preserved page can be inspected and continued without replaying that action." : run.can_restart ? "The last action stopped before reaching the browser. You can restart safely with your saved answers." : "An action may have submitted the form. Automatic submission is locked. Check the saved page or employer portal before taking further action."}</p>}
+        {uncertain && <p className="text-sm text-amber-900">{run.recoverable_source_navigation ? "The job board did not reach an application form. Resume to find the exact official employer or ATS page and continue there." : run.recoverable_input_interruption ? "An ordinary form input was interrupted. The preserved page can be inspected and continued without replaying that action." : run.can_restart ? "The last action stopped before reaching the browser. You can restart safely with your saved answers." : "An action may have submitted the form. Automatic submission is locked. Check the saved page or employer portal before taking further action."}</p>}
         {waiting && run.question && <div className="space-y-3 rounded-xl border-2 border-amber-300 bg-amber-50 p-4">
           <h4 className="flex items-center gap-2 text-sm font-semibold"><MessageCircle className="h-4 w-4" />Your answer is needed</h4>
           <label className="block text-sm" htmlFor={`browser-answer-${job.id}`}>{run.question.text}</label>

@@ -33,6 +33,19 @@ def test_click_cannot_disguise_submission_or_bypass_action_audit():
     service.validate_audit(click, {'allowed': True, 'effect': 'advance'})
 
 
+def test_only_audited_pre_form_navigation_is_source_recoverable():
+    state = {
+        'interaction_started': True,
+        'last_action': {'kind': 'click', 'element': 'e13'},
+        'audit': {'allowed': True, 'effect': 'navigation'},
+    }
+    assert service.recoverable_source_navigation(state) is True
+    assert service.recoverable_source_navigation({**state, 'submit_started_at': 'now'}) is False
+    assert service.recoverable_source_navigation({**state, 'form_input_completed_at': 'now'}) is False
+    assert service.recoverable_source_navigation({**state, 'application_source_url': 'https://jobs.example/1'}) is False
+    assert service.recoverable_source_navigation({**state, 'audit': {'allowed': True, 'effect': 'advance'}}) is False
+
+
 def test_mailbox_search_requires_read_audit_and_redacts_durable_query():
     action = BrowserAction(kind='email_search', value='Fixture verification', summary='Check inbox')
     service.validate_audit(action, {'allowed': True, 'effect': 'read'})
@@ -277,6 +290,26 @@ async def test_interrupted_audited_input_can_resume_preserved_page(isolated_stor
     assert resumed['interrupted_action_recovery']['action']['kind'] == 'select'
     current = await service.get('fixture')
     assert any(event['kind'] == 'input_recovered' for event in current['events'])
+
+
+@pytest.mark.asyncio
+async def test_interrupted_pre_form_navigation_resumes_through_source_recovery(isolated_store):
+    row = await seed_run(isolated_store)
+    row = await service.checkpoint('fixture', row.revision, status='submission_uncertain',
+        interaction_started=True, browser_transport='broker', session_available=True,
+        current_url='https://board.example/jobs/1',
+        last_action={'kind':'click', 'element':'e13', 'summary':'Open application'},
+        audit={'allowed':True, 'effect':'navigation', 'reason':'Opens the application.',
+               'recovery':'none', 'repair_hint':''})
+    visible = service.view(row)
+    assert visible['can_resume'] is True
+    assert visible['recoverable_source_navigation'] is True
+    resumed = await service.control('fixture', service.ControlRequest(
+        revision=row.revision, action='resume'))
+    assert resumed['status'] == 'queued'
+    assert resumed['interaction_started'] is False
+    assert resumed['source_recovery']['status'] == 'pending'
+    assert 'official employer or ATS' in resumed['stage']
 
 
 @pytest.mark.asyncio

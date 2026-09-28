@@ -129,7 +129,7 @@ the selected job by default; applications are sent only through explicit
 | `job-agent apply ID --revision N` | Explicitly authorize one application email via Zoho CLI. |
 | `job-agent verify-sent ID` | Check the Sent copy and attachment hash; never resends. |
 | `job-agent browser-provider gateway\|openai [--model MODEL]` | Save the default website-controller provider and API model. Does not change active runs. Start/control also accept `--provider` when starting/resuming/answering/verifying. |
-| `job-agent browser-applications / browser-status ID [--after CURSOR]` | List/monitor website applications separately from email; status includes browser revision, question, screenshot availability and confirmation. Events paginate without a retention cap. |
+| `job-agent browser-applications / browser-status ID [--after CURSOR]` | List/monitor website applications separately from email; status includes browser revision, question, screenshot availability, official-source recovery and confirmation. Events paginate without a retention cap. |
 | `job-agent inbox-search ID --query TEXT [--since-hours 48 --limit 5]` | Read-only search of recent Zoho INBOX messages for a saved job. Returns bounded excerpts without marking mail read or persisting bodies. |
 | `job-agent browser-start ID --revision N --authorize-submit` | Authorize one website submission using the selected category PDF. N is processing_revision from show; repeated starts return the existing run. |
 | `job-agent browser-control ID --action pause\|resume\|answer\|verify\|release\|restart\|reconnect --revision N [--question-id ID --answer-file FILE]` | Control a website run using its browser revision. Answer resumes the saved form; verify is read-only after uncertainty; release closes an inactive browser. |
@@ -1485,6 +1485,16 @@ send without reconciling the real Sent mailbox.
 
 ### Automatic resume selection in applications
 Website start and email prepare/apply now include category matching and one-page PDF selection as the first saved worker step. Existing valid selections and manual categories are reused. CLI commands and APIs accept unclassified jobs without an extra classification call. Opening a job does not start work. The modal shows a shared resume card with optional category controls, a website workflow with three progress stages, and an expandable email workflow. Missing resume mappings and classification failures remain actionable blockers.
+
+When a job-board navigation fails before any form input, the website worker does
+not treat that audited navigation as a possible submission. It searches for the
+exact role on the employer site or official ATS, freshly fetches the candidates,
+verifies the employer, role and direct application action from quoted page
+evidence, then opens a fresh isolated browser on that verified page and continues.
+Generic careers pages, talent pools, aggregators and nearby roles are rejected.
+`browser-status` and its event stream show discovery, verification and the chosen
+official URL. Resume or retry an older eligible interrupted run with the existing
+`browser-control ID --action resume --revision N` command.
 
 ### Reusable applicant profile
 Answers to website application questions are saved automatically for contextual reuse. Manage them in the Applicant profile tab or inside the application modal. CLI: `job-agent profile`, `profile-save --file FILE`, `profile-remove ID --revision N`, `profile-import-answers`. `browser-control --action answer` defaults to remembering; `--this-application-only` limits reuse. See [JOB_APPLICANT_PROFILE.md](JOB_APPLICANT_PROFILE.md) for scope, provenance, snapshot and conflict behavior.
