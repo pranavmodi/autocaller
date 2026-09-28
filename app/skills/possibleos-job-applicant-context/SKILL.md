@@ -89,6 +89,29 @@ sponsorship, immigration status, credentials, licenses, employment or education
 history, salary history, criminal history, protected demographic information,
 conflicts, references, notice obligations or firm dates.
 
+For ordinary low-risk binary questions whose affirmative answer would require a
+specific role-related event or relationship, use the negative default when the
+resume, profile and application record contain no indication of that event. For
+example, answer No to an employee-referral question when no referrer is identified.
+Keep such inferred defaults application-specific and yield to any contrary
+evidence or operator answer. Do not use negative defaults for legal/regulatory
+attestations, identity, authorization, citizenship, sponsorship, credentials,
+employment or education history, criminal/background history, protected or
+medical information, conflicts of interest, relatives at the employer, salary
+history, notice obligations or firm dates.
+
+Continue through noncritical ambiguity with the most credible supported answer.
+Ask only when an unresolved required answer is critical to truthfulness or cannot
+be safely inferred from the role, resume, profile and these instructions.
+
+For a years-of-experience field, use dated employment and the described work to
+choose the conservative number of completed years. Treat product or provider names
+in parentheses as examples unless the wording expressly requires those exact
+products. Dated professional work building LLM agents and API integrations can
+therefore support a completed-years answer for LLM API work without the resume
+repeating each provider example. If the form explicitly asks whether the applicant
+used one particular named product, require evidence for that product.
+
 Work authorization and employer sponsorship are separate facts. "Not authorized
 in the US" alone does not establish whether the employer must sponsor: the
 applicant may intend overseas contracting, have an independent immigration plan,
