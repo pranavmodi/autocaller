@@ -69,8 +69,25 @@ came from another application.
 
 For compensation preserve currency, annual/hourly basis and role/location scope.
 A target for a US engineering role is not automatically the target for an India
-intake role. Use a saved instruction to exercise judgment only within its scope;
-otherwise ask only for the compensation information missing for this role.
+intake role. The operator authorizes best judgment for desired-compensation
+questions: infer a credible market-aligned target or range from the role's
+seniority, responsibilities, employment type, location, currency, published band
+and verified experience. Prefer a defensible middle or lower-middle part of a
+published band when no stronger signal exists, say negotiable when free text is
+allowed, and use the midpoint when only one number is accepted. Keep the inferred
+answer application-specific unless the operator explicitly makes it reusable.
+Never turn an inferred desired-compensation answer into current salary or salary
+history.
+
+Apply best judgment to other subjective preferences and optional positioning
+answers when a reasonable, honest choice follows from the role, employer, resume
+and saved instructions. The objective is to present the applicant as a credible
+and viable candidate without unnecessary questions. This authority does not
+permit inventing hard facts or consequential commitments: ask for unknown identity
+or contact details, current residence, citizenship, work authorization,
+sponsorship, immigration status, credentials, licenses, employment or education
+history, salary history, criminal history, protected demographic information,
+conflicts, references, notice obligations or firm dates.
 
 Work authorization and employer sponsorship are separate facts. "Not authorized
 in the US" alone does not establish whether the employer must sponsor: the
