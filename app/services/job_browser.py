@@ -1216,7 +1216,12 @@ def validate_audit(action, audit):
                       # Custom comboboxes commonly expose their flyout and options
                       # as buttons. Those clicks change a form input without
                       # navigating. The independent audit must still reject submit.
-                      'click': {'input', 'navigation', 'advance'}, 'submit': {'submit'}}
+                      # A click can also reveal help text, legal terms, or an
+                      # accordion without changing application data. Keep
+                      # submit excluded so an ordinary click can never be
+                      # audited as permission to submit the form.
+                      'click': {'read', 'input', 'navigation', 'advance'},
+                      'submit': {'submit'}}
     if audit.get('effect') not in allowed_effects.get(action.kind, set()):
         raise ValueError('The action audit identified a different effect. Inspect the page again before proceeding.')
 

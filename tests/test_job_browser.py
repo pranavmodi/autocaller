@@ -48,6 +48,8 @@ def test_click_cannot_disguise_submission_or_bypass_action_audit():
     # combobox values. An audited input effect is valid and is not a submit.
     service.validate_audit(click, {'allowed': True, 'effect': 'input'})
     service.validate_audit(click, {'allowed': True, 'effect': 'advance'})
+    # Expanding terms, help text, or an accordion is a safe read-only click.
+    service.validate_audit(click, {'allowed': True, 'effect': 'read'})
 
 
 def test_fast_program_accepts_only_distinct_native_input_controls():
