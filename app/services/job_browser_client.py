@@ -28,6 +28,11 @@ class PersistentBrowserSession:
                     detail = 'Browser service request failed; inspect the saved page before retrying.'
                 raise ValueError(str(detail))
             return response.json()
+        except httpx.ReadTimeout as exc:
+            raise ValueError(
+                'Browser inspection took too long. The page is still preserved; '
+                'reconnect and continue from the same form.'
+            ) from exc
         except httpx.TransportError as exc:
             raise ValueError('Cannot reach the browser service. The page may still be open. Reconnect before taking another action.') from exc
 
@@ -44,7 +49,10 @@ class PersistentBrowserSession:
         return await self.request('POST', '/open', json={'url': url})
 
     async def observe(self, screenshot: Path):
-        result = await self.request('POST', '/observe')
+        # Complex ATS pages can contain several nested frames and large
+        # accessibility trees. Observation is read-only, so allow it more time
+        # than state-changing browser actions without weakening submit safety.
+        result = await self.request('POST', '/observe', timeout=180)
         self.observation_id = result['observation_id']
         return result['snapshot']
 
