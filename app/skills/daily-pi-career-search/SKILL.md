@@ -70,6 +70,32 @@ with exactly one entry when the page identifies one specific job. Keep
 only the supplied page, do not browse, and omit the identity when the page is
 ambiguous or generic.
 
+`url_import_identity_research` is the fallback for an operator-supplied URL
+whose fetched body is an anti-bot, access-denied, or otherwise incomplete page.
+Use bounded web search for the exact supplied URL and identify the employer and
+job title only when search evidence unambiguously refers to that same vacancy.
+Keep `source_url` equal to the supplied URL or its supplied final redirect URL.
+Never substitute another vacancy, a company profile, a search result URL, or a
+generic careers page. Return an empty `identities` array when the exact vacancy
+cannot be established.
+
+`url_import_corroboration` runs only after exact job identity was established
+through research because the supplied page body was blocked or incomplete.
+Search the whole web for the quoted employer and exact job title; do not limit
+the query to the employer domain. Return up to three individual public vacancy
+pages in `corroborating_job_urls`. Each page must identify the same employer and
+role and, when evidence is available, the same requisition ID and locations.
+Prefer an employer-hosted alternate locale followed by LinkedIn or another
+established recruiting platform. Never return a search-results page, company
+profile, company-wide jobs index, generic careers page, or another vacancy.
+When the same vacancy has several regional copies, prefer a copy consistent
+with `location_preferences`. On localized LinkedIn pages, generic search-header
+text can mention an unrelated location before the actual job card. Use only the
+employer/location metadata attached to the vacancy itself; if header and job
+card conflict, do not use the generic header as geographic evidence.
+Return an empty list if the exact match is uncertain. These URLs are discovery
+hints only; the server fetches them and validates every evidence excerpt.
+
 ## URL import enrichment mode
 `url_import_enrichment` is a bounded research and synthesis step used only when
 the freshly fetched operator-supplied job page identifies the role and employer
@@ -92,6 +118,16 @@ REST endpoint, the server may supply that machine-readable response instead;
 it remains subject to the same structured identity and exact-excerpt checks. Omit the
 candidate if official identity cannot be established. `contact_urls` may include
 only official-employer pages discovered during this same bounded research pass.
+When the supplied job body is blocked or incomplete, also search for public
+copies of that exact vacancy. Put up to three URLs in
+`corroborating_job_urls` only when they identify the same employer and role and,
+when available, the same requisition ID and locations. Employer-hosted pages
+and established recruiting platforms are allowed. Do not use search-result
+pages, company job indexes, or another role. Return an empty list when no exact
+public copy is established. The server will freshly fetch these pages and check
+every quoted excerpt before the job can be stored. `contact_urls` remains
+limited to official-employer pages that may publish an application or routing
+email.
 Do not apply, contact anyone, send a message, or submit a form.
 
 ## Retry discovery mode

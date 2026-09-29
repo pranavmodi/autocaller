@@ -128,7 +128,7 @@ export function JobApplicationControls({ job, categories }: { job: Candidate; ca
   const statusRefreshFailed = detail.isError && ["queued", "preparing", "queued_send", "sending"].includes(status);
   const activelyProcessing = ["queued", "preparing", "queued_send", "sending"].includes(status) && !statusRefreshFailed;
   const locked = ["queued", "preparing", "queued_send", "sending", "sent_verified", "delivery_unconfirmed"].includes(status);
-  const resumeLocked = locked || ["queued", "running", "verifying", "waiting_for_answer", "submitted", "submission_uncertain"].includes(data.form_status || "");
+  const resumeLocked = locked || ["queued", "running", "verifying", "waiting_for_answer", "human_control", "submitted", "submission_uncertain"].includes(data.form_status || "");
   const refresh = () => client.invalidateQueries({ queryKey: ["job-agent"] });
   const action = useMutation({ mutationFn: ({ endpoint, body }: { endpoint: string; body?: unknown }) => jobAgentRequest<Candidate>(`/jobs/${job.id}/${endpoint}`, body ?? {}), onSuccess: refresh });
   const send = (mode: "prepare" | "send") => action.mutate({ endpoint: "application", body: { mode, revision: data.processing_revision } });

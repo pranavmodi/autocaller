@@ -252,6 +252,26 @@ def test_manual_profile_accepts_verified_legal_tech_but_scheduled_search_does_no
         service.validate_decision(value, pages(), today=date(2026, 9, 10))
 
 
+def test_direct_url_import_does_not_require_periodic_search_label_match():
+    value = decision()
+    value.target_role_match = True
+    value.matched_target_role = "Data and AI solution leadership"
+    profile = service.SearchProfile(
+        target_roles="AI agent engineering",
+        preferred_industries="Legal technology",
+        location_preferences="Remote from Colombia",
+    )
+
+    with pytest.raises(ValueError, match="matched target role"):
+        service.validate_decision(
+            value, pages(), today=date(2026, 9, 10), search_profile=profile,
+        )
+    service.validate_decision(
+        value, pages(), today=date(2026, 9, 10), search_profile=profile,
+        direct_import=True,
+    )
+
+
 def test_application_contact_evidence_accepts_the_same_normalized_source_url():
     value = decision(application_contacts=[{
         "email": "jobs@example.com",
@@ -666,11 +686,108 @@ async def test_direct_import_researches_official_identity_after_empty_extraction
     assert "official employer identity" in calls[1]["validation_error"]
 
 
+@pytest.mark.asyncio
+async def test_direct_import_searches_exact_url_when_fetched_job_body_is_blocked(monkeypatch):
+    enriched = {
+        "firm_name": "SoftServe",
+        "canonical_domain": "softserveinc.com",
+        "source_url": "https://career.softserveinc.com/jobs/88794",
+        "employer_evidence_url": "https://www.softserveinc.com/about-us",
+        "title": "Lead Agentic AI Consultant",
+        "contact_urls": [],
+    }
+    calls = []
+
+    async def llm(payload, *_args, **kwargs):
+        calls.append((payload, kwargs))
+        if payload["mode"] == "url_import_identity":
+            return {"identities": []}
+        if payload["mode"] == "url_import_identity_research":
+            return {"identities": [{
+                "firm_name": "SoftServe", "title": "Lead Agentic AI Consultant",
+                "source_url": "https://career.softserveinc.com/jobs/88794",
+            }]}
+        if payload["mode"] == "url_import_corroboration":
+            return {"corroborating_job_urls": [
+                "https://linkedin.com/jobs/view/123",
+            ]}
+        return {"candidates": [enriched]}
+
+    monkeypatch.setattr(service, "llm", llm)
+    monkeypatch.setattr(service, "checkpoint", AsyncMock())
+    monkeypatch.setattr(service, "invoke_openclaw_tool", AsyncMock(return_value={
+        "ok": True, "toolName": "web_search", "output": {"results": []},
+    }))
+    audit = {"errors": [], "candidate_rejections": []}
+    result = await service.recover_direct_import_candidate(
+        [],
+        source_url="https://career.softserveinc.com/jobs/88794",
+        direct_page={
+            "requested_url": "https://career.softserveinc.com/jobs/88794",
+            "final_url": "https://career.softserveinc.com/jobs/88794",
+            "http_status": 200,
+            "content": "Request unsuccessful. Incapsula incident ID: 123",
+        },
+        search_profile=None,
+        config=service.SearchConfig(),
+        audit=audit,
+        run_id="run1",
+    )
+    assert result == [service.Candidate.model_validate({
+        **enriched, "corroborating_job_urls": ["https://linkedin.com/jobs/view/123"],
+    })]
+    assert [payload["mode"] for payload, _ in calls] == [
+        "url_import_identity", "url_import_identity_research", "url_import_enrichment",
+        "url_import_corroboration",
+    ]
+    assert calls[1][1]["allow_tools"] is True
+    assert calls[3][1]["allow_tools"] is True
+
+
 def test_shared_recruiting_source_uses_exact_host_boundaries():
     assert service.shared_recruiting_source("https://co.linkedin.com/jobs/view/123")
     assert service.shared_recruiting_source("https://jobs.example.myworkdayjobs.com/job/123")
     assert not service.shared_recruiting_source("https://linkedin.com.example.org/jobs/123")
     assert not service.shared_recruiting_source("https://employer.example/jobs/123")
+
+
+def test_candidate_accepts_only_official_or_trusted_corroborating_job_pages():
+    accepted = service.Candidate(
+        firm_name="Example PI", canonical_domain="example.com",
+        source_url="https://example.com/jobs/1",
+        employer_evidence_url="https://example.com/about", title="AI Engineer",
+        corroborating_job_urls=["https://linkedin.com/jobs/view/123"],
+    )
+    assert str(accepted.corroborating_job_urls[0]).startswith("https://linkedin.com/")
+    with pytest.raises(ValueError, match="corroborating job source"):
+        service.Candidate(
+            firm_name="Example PI", canonical_domain="example.com",
+            source_url="https://example.com/jobs/1",
+            employer_evidence_url="https://example.com/about", title="AI Engineer",
+            corroborating_job_urls=["https://unrelated.example.org/jobs/1"],
+        )
+
+
+def test_direct_import_discards_only_untrusted_optional_corroboration():
+    audit = {}
+    filtered = service.filter_corroborating_job_urls({
+        "firm_name": "Perficient",
+        "canonical_domain": "perficient.com",
+        "source_url": "https://careers.perficient.com/jobs/1",
+        "employer_evidence_url": "https://perficient.com/about",
+        "title": "Data & AI Solution Lead",
+        "corroborating_job_urls": [
+            "https://co.linkedin.com/jobs/view/4469175946",
+            "https://builtin.com/job/data-ai-solution-lead/11166676",
+        ],
+    }, audit)
+
+    assert filtered["corroborating_job_urls"] == [
+        "https://co.linkedin.com/jobs/view/4469175946",
+    ]
+    assert audit["discarded_corroborating_job_urls"] == [
+        "https://builtin.com/job/data-ai-solution-lead/11166676",
+    ]
 
 
 def test_official_page_transport_fallback_is_same_origin_wordpress_api():
@@ -723,6 +840,67 @@ async def test_direct_import_recovers_blocked_official_page_with_verified_transp
         "https://example.com/wp-json/wp/v2/pages?slug=about-us&_fields=link%2Ctitle%2Ccontent",
     ]
     assert audit["official_evidence_fetch_fallbacks"][0]["transport"] == "wordpress_rest_api"
+
+
+@pytest.mark.asyncio
+async def test_direct_import_uses_same_domain_page_when_about_page_is_blocked(monkeypatch):
+    prospect = service.Candidate(
+        firm_name="Example PI",
+        canonical_domain="example.com",
+        source_url="https://linkedin.com/jobs/view/123",
+        employer_evidence_url="https://example.com/company/about-us",
+        title="AI Engineer",
+        contact_urls=["https://example.com/careers"],
+    )
+    fetched = []
+
+    async def fetch(url):
+        fetched.append(url)
+        if url != "https://example.com/careers":
+            raise RuntimeError("unverified HTTP 403")
+        return {
+            "requested_url": url,
+            "final_url": url,
+            "http_status": 200,
+            "content": "Example PI careers and company information",
+        }
+
+    monkeypatch.setattr(service, "fetch_page", fetch)
+    audit = {}
+    recovered, page = await service.fetch_direct_import_employer_page(prospect, {}, audit)
+    assert str(recovered.employer_evidence_url) == "https://example.com/careers"
+    assert page["http_status"] == 200
+    assert fetched[-1] == "https://example.com/careers"
+    assert audit["official_evidence_fetch_fallbacks"][0]["transport"] == "same_domain_public_page"
+
+
+@pytest.mark.asyncio
+async def test_direct_import_uses_official_job_subdomain_when_company_page_is_blocked(monkeypatch):
+    prospect = service.Candidate(
+        firm_name="Perficient",
+        canonical_domain="perficient.com",
+        source_url="https://careers.perficient.com/en/sites/CX_1/jobs?keyword=Data%20AI",
+        employer_evidence_url="https://www.perficient.com/about",
+        title="Data & AI Solution Lead",
+    )
+
+    async def fetch(url):
+        if url != str(prospect.source_url):
+            raise RuntimeError("HTTP 429")
+        return {
+            "requested_url": url,
+            "final_url": url,
+            "http_status": 200,
+            "content": "Perficient official careers page",
+        }
+
+    monkeypatch.setattr(service, "fetch_page", fetch)
+    audit = {}
+    recovered, page = await service.fetch_direct_import_employer_page(prospect, {}, audit)
+
+    assert str(recovered.employer_evidence_url) == str(prospect.source_url)
+    assert page["content"] == "Perficient official careers page"
+    assert audit["official_evidence_fetch_fallbacks"][0]["transport"] == "same_domain_public_page"
 
 
 def install_verifier_run(monkeypatch, responses, *, count=1):

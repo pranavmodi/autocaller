@@ -1,10 +1,11 @@
 import { apiUrl } from "@/lib/api";
 
 export type ReviewStatus = "new" | "shortlisted" | "needs_info" | "skipped";
-export type JobSource = "possibleos" | "external_search";
+export type JobSource = "possibleos" | "external_search" | "manual";
 export type JobAgentConfig = {
   browser_ai_provider: "gateway" | "openai";
   browser_openai_model: string;
+  auto_email_with_website_application: boolean;
   classification_enabled: boolean;
   classification_threshold: number;
   resume_categories: { id: string; name: string; description: string; resume_path: string }[];

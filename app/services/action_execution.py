@@ -304,6 +304,7 @@ def _update_action_draft_payload(
     subject: str,
     body: str,
     actor: str,
+    recipient: str | None = None,
     transport: str | None = None,
     in_reply_to: str | None = None,
     references: str | None = None,
@@ -325,6 +326,8 @@ def _update_action_draft_payload(
     payload["body"] = draft_body
     payload["subject_sha256"] = subject_hash
     payload["body_sha256"] = body_hash
+    if recipient is not None:
+        payload["to"] = recipient.strip().lower()
     reply_id, reference_ids = _clean_threading_fields(in_reply_to, references)
     if transport is not None:
         transport_override = transport.strip().lower() or None
@@ -1251,6 +1254,9 @@ async def set_lead_gen_action_type(
         item = await session.get(LeadGenBatchItemRow, batch_item_id)
         if not item:
             raise ValueError("batch_item_not_found")
+        recipient = str(item.contact_email or "").strip().lower()
+        if not has_usable_email(recipient):
+            raise ValueError("unusable_recipient")
         reason = dict(item.reason_json or {})
         draft = dict(reason.get("agent_draft") or {})
         action_id = str(reason.get("send_email_action_id") or draft.get("action_id") or "").strip()
@@ -1316,6 +1322,9 @@ async def save_edited_lead_gen_draft(
         item = await session.get(LeadGenBatchItemRow, batch_item_id)
         if not item:
             raise ValueError("batch_item_not_found")
+        recipient = str(item.contact_email or "").strip().lower()
+        if not has_usable_email(recipient):
+            raise ValueError("unusable_recipient")
         reason = dict(item.reason_json or {})
         draft = dict(reason.get("agent_draft") or {})
         action_id = str(reason.get("send_email_action_id") or draft.get("action_id") or "").strip()
@@ -1328,6 +1337,7 @@ async def save_edited_lead_gen_draft(
                 subject=draft_subject,
                 body=draft_body,
                 actor=actor or "operator",
+                recipient=recipient,
                 transport=transport,
                 in_reply_to=in_reply_to,
                 references=references,
@@ -1608,6 +1618,14 @@ async def create_send_approved_lead_gen_draft_action(
     if sequence_step_num:
         input_json["sequence_step_num"] = int(sequence_step_num)
     async with AsyncSessionLocal() as session:
+        item = await session.get(LeadGenBatchItemRow, batch_item_id)
+        if not item:
+            raise ValueError("batch_item_not_found")
+        recipient = str(item.contact_email or "").strip().lower()
+        if not has_usable_email(recipient):
+            raise ValueError("unusable_recipient")
+        input_json["to"] = recipient
+        input_json["approval"]["recipient"] = recipient
         await mark_experiment_scheduled_for_item(session, batch_item_id)
         action = AgentActionRow(
             id=action_id,
@@ -1649,15 +1667,13 @@ async def create_send_approved_lead_gen_draft_action(
                 message="Action scheduled for daemon execution.",
                 input_json={"scheduled_for": scheduled_for.isoformat()},
             )
-        item = await session.get(LeadGenBatchItemRow, batch_item_id)
-        if item:
-            _sync_lead_gen_scheduled_draft_fields(
-                item,
-                action=action,
-                subject=draft_subject,
-                body=draft_body,
-                actor=approved_by or requested_by or "operator",
-            )
+        _sync_lead_gen_scheduled_draft_fields(
+            item,
+            action=action,
+            subject=draft_subject,
+            body=draft_body,
+            actor=approved_by or requested_by or "operator",
+        )
         await session.commit()
         await session.refresh(action)
         result = action_to_dict(action)

@@ -1,8 +1,12 @@
 """Operator endpoints for the Job agent workspace."""
-from fastapi import APIRouter, HTTPException, Query
+from uuid import UUID
+from urllib.parse import quote
+from fastapi import APIRouter, Header, HTTPException, Query
+from fastapi.responses import FileResponse
 from app.services import job_agent as service
 from app.services import job_agent_processing as processing
 from app.services import job_browser
+from app.services import job_url_imports
 from app.services.job_browser_mail import MailboxSearchRequest
 from app.services import job_applicant_profile as applicant_profile
 
@@ -59,6 +63,41 @@ async def browser_control(identity: str, body: job_browser.ControlRequest):
     return await processing_response(job_browser.control(identity, body))
 
 
+@router.post('/jobs/{identity}/browser/handoff/start')
+async def browser_handoff_start(identity: str, body: job_browser.HandoffStartRequest):
+    return await processing_response(job_browser.start_handoff(identity, body))
+
+
+@router.get('/jobs/{identity}/browser/handoff/frame')
+async def browser_handoff_frame(
+        identity: str, x_human_control_token: str = Header(..., max_length=128)):
+    frame = await processing_response(
+        job_browser.handoff_frame(identity, x_human_control_token))
+    return FileResponse(
+        frame['path'], media_type='image/png',
+        headers={
+            'Cache-Control': 'no-store',
+            'X-Browser-Observation-Id': frame['observation_id'],
+            'X-Browser-Current-Url': quote(frame['current_url'], safe=':/?&=#%')[:1800],
+        })
+
+
+@router.post('/jobs/{identity}/browser/handoff/action')
+async def browser_handoff_action(
+        identity: str, body: job_browser.HumanBrowserActionRequest,
+        x_human_control_token: str = Header(..., max_length=128)):
+    return await processing_response(
+        job_browser.handoff_action(identity, x_human_control_token, body))
+
+
+@router.post('/jobs/{identity}/browser/handoff/finish')
+async def browser_handoff_finish(
+        identity: str, body: job_browser.HandoffFinishRequest,
+        x_human_control_token: str = Header(..., max_length=128)):
+    return await processing_response(
+        job_browser.finish_handoff(identity, x_human_control_token, body))
+
+
 @router.post('/jobs/{identity}/browser/quit-reasons')
 async def browser_quit_reasons(identity: str):
     return await processing_response(job_browser.quit_reasons(identity))
@@ -66,7 +105,6 @@ async def browser_quit_reasons(identity: str):
 
 @router.get('/jobs/{identity}/browser/screenshot')
 async def browser_screenshot(identity: str):
-    from fastapi.responses import FileResponse
     path = await processing_response(job_browser.screenshot_path(identity))
     return FileResponse(path, media_type='image/png', headers={'Cache-Control': 'no-store'})
 
@@ -145,6 +183,58 @@ async def import_listing(body: service.UrlImportRequest):
         raise HTTPException(
             503, "Could not import this job URL. No application or email was started."
         ) from exc
+
+
+@router.post("/listings/import-batch")
+async def import_listing_batch(body: job_url_imports.BatchRequest):
+    """Persist every supplied URL immediately; workers process the queue."""
+    try:
+        return await job_url_imports.enqueue(body)
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(503, "Could not queue these job URLs.") from exc
+
+
+@router.get("/listings/import-queue/{identity}")
+async def import_queue_status(identity: UUID):
+    try:
+        return await job_url_imports.detail(identity.hex)
+    except KeyError as exc:
+        raise HTTPException(404, "Queued job URL not found.") from exc
+
+
+@router.get("/listings/import-queue")
+async def import_queue_recent(limit: int = Query(50, ge=1, le=100)):
+    return await job_url_imports.recent(limit)
+
+
+@router.get("/listings/imports/{identity}")
+async def import_status(identity: UUID):
+    """Return durable live progress for a URL import started by the UI."""
+    from app.services import job_saved_searches
+    try:
+        return await job_saved_searches.run_detail(identity.hex)
+    except KeyError:
+        return {
+            "id": identity.hex,
+            "status": "starting",
+            "phase": "Starting job verification",
+            "started_at": None,
+            "completed_at": None,
+            "ai_provider": None,
+            "model": None,
+            "progress": {
+                "updated_at": None,
+                "heartbeat_at": None,
+                "last_activity_at": None,
+                "waiting_for_model": False,
+                "model_request": None,
+                "live_telemetry": True,
+            },
+            "activity": [],
+            "errors_detail": [],
+        }
 
 
 @router.post("/jobs/{identity}/review")

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { JobApplicationControls, ResumeSettings } from "@/components/JobApplicationControls";
 import { JobApplicantProfile } from "@/components/JobApplicantProfile";
 import { JobCvLibrary } from "@/components/JobCvLibrary";
@@ -15,6 +15,25 @@ const labels: Record<ReviewStatus, string> = { new: "To review", shortlisted: "S
 const tones: Record<ReviewStatus, string> = { new: "bg-sky-50 text-sky-700", shortlisted: "bg-emerald-50 text-emerald-700", needs_info: "bg-amber-50 text-amber-800", skipped: "bg-neutral-100 text-neutral-600" };
 type LegalDegreeFilter = "exclude" | "all" | "required";
 type ContractFilter = "all" | "contract" | "non_contract" | "unknown";
+type ImportActivity = { id: number; at: string; kind: string; message: string; source_url?: string };
+type ImportRun = {
+  id: string; status: string; phase?: string; started_at?: string | null; completed_at?: string | null;
+  ai_provider?: string | null; model?: string | null;
+  progress?: { updated_at?: string | null; heartbeat_at?: string | null; last_activity_at?: string | null;
+    waiting_for_model?: boolean; live_telemetry?: boolean;
+    model_request?: { mode?: string; attempt?: number; started_at?: string; timeout_seconds?: number } | null };
+  activity?: ImportActivity[];
+  errors_detail?: { phase?: string; source_url?: string; error?: string }[];
+};
+type ImportResult = { candidate?: Candidate; created?: boolean; message?: string;
+  import?: { message?: string; new_job?: boolean };
+  website_application?: { requested: boolean; started: boolean; status?: string; stage?: string; error?: string } };
+type BulkImportItem = { attemptId: string; url: string; status: "queued" | "running" | "completed" | "failed";
+  provider: "gateway" | "openai"; startsApplication: boolean;
+  message?: string; candidate?: Candidate; applicationStarted?: boolean };
+type ImportQueueDetail = { id: string; source_url: string; ai_provider: "gateway" | "openai";
+  start_website_application: boolean; status: "queued" | "running" | "completed" | "failed";
+  result?: ImportResult; error?: string | null; run?: ImportRun | null };
 const input = "w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm focus:border-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-900";
 const button = "inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm font-medium hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-50";
 const primary = "inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-neutral-900 bg-neutral-900 px-3 py-2 text-sm font-medium text-white hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-50";
@@ -23,8 +42,22 @@ const date = (value?: string | null) => value ? new Date(value).toLocaleString(u
 const readable = (value?: string | null) => value ? value.replaceAll("_", " ") : "Unknown";
 function safeUrl(value: string) { try { const u = new URL(value); return ["https:", "http:"].includes(u.protocol) ? u.href : undefined; } catch { return undefined; } }
 function publicJobUrl(value: string) { const url = safeUrl(value.trim()); return url && new URL(url).hostname ? url : undefined; }
-function sourceOf(job: Candidate): JobSource { return job.posting.job_source === "external_search" || job.posting.discovery_provider === "possibleos_daily_career_search" ? "external_search" : "possibleos"; }
-function sourceLabel(job: Candidate) { return sourceOf(job) === "external_search" ? "Job Agent search" : "Possible OS"; }
+function publicJobUrls(value: string) {
+  const parts = value.split(/\s+/).map(item => item.trim()).filter(Boolean);
+  const valid: string[] = [], invalid: string[] = [], seen = new Set<string>();
+  for (const part of parts) {
+    const url = publicJobUrl(part);
+    if (!url) { invalid.push(part); continue; }
+    const identity = url.replace(/#.*$/, "");
+    if (!seen.has(identity)) { seen.add(identity); valid.push(url); }
+  }
+  return { valid, invalid, duplicates: parts.length - valid.length - invalid.length };
+}
+function sourceOf(job: Candidate): JobSource {
+  if (job.posting.job_source === "manual") return "manual";
+  return job.posting.job_source === "external_search" || job.posting.discovery_provider === "possibleos_daily_career_search" ? "external_search" : "possibleos";
+}
+function sourceLabel(job: Candidate) { const source = sourceOf(job); return source === "manual" ? "Manual" : source === "external_search" ? "Job Agent search" : "Possible OS"; }
 function queueQuery(status: ReviewStatus | "", search: string, page: number, order: string, category: string, source: JobSource | "", legalDegree: LegalDegreeFilter, contract: ContractFilter) {
   const params = new URLSearchParams({ search, page: String(page), order, category, legal_degree: legalDegree, contract });
   if (status) params.set("status", status);
@@ -32,6 +65,92 @@ function queueQuery(status: ReviewStatus | "", search: string, page: number, ord
   return params.toString();
 }
 function ErrorBox({ error }: { error: Error | null }) { return error ? <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error.message}</div> : null; }
+
+function ImportProgress({ run, loading, refreshing, provider, startsApplication, onRefresh }: {
+  run?: ImportRun; loading: boolean; refreshing: boolean; provider: "gateway" | "openai";
+  startsApplication: boolean; onRefresh: () => void;
+}) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 1000); return () => window.clearInterval(timer); }, []);
+  const active = !run || ["starting", "queued", "running"].includes(run.status);
+  const terminal = run && !active;
+  const elapsed = run?.started_at ? Math.max(0, Math.floor(((run.completed_at ? Date.parse(run.completed_at) : now) - Date.parse(run.started_at)) / 1000)) : 0;
+  const updateAge = run?.progress?.updated_at ? Math.max(0, Math.floor((now - Date.parse(run.progress.updated_at)) / 1000)) : null;
+  const recent = [...(run?.activity || [])].reverse().slice(0, 6);
+  const requestMode: Record<string, string> = {
+    url_import: "Reading the job page",
+    url_import_identity: "Identifying the employer and role",
+    url_import_identity_research: "Searching for this exact job listing",
+    url_import_corroboration: "Finding a readable copy of the blocked job page",
+    url_import_enrichment: "Finding official employer evidence",
+    verification: "Checking the job against its sources",
+  };
+  const lastError = run?.errors_detail?.at(-1);
+  const current = run?.progress?.waiting_for_model
+    ? requestMode[run.progress.model_request?.mode || ""] || "Waiting for the AI researcher"
+    : terminal && lastError?.error ? lastError.error : run?.phase || recent[0]?.message || "Starting job verification";
+  const providerLabel = (run?.ai_provider || provider) === "openai"
+    ? `OpenAI API · ${run?.model || "gpt-5.6-luna"}` : "OpenClaw gateway";
+  const tone = ["failed", "partial", "interrupted"].includes(run?.status || "") ? "border-amber-200 bg-amber-50" : terminal ? "border-emerald-200 bg-emerald-50" : "border-sky-200 bg-white";
+  return <div className={`mt-4 rounded-xl border p-4 ${tone}`} aria-live="polite">
+    <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="min-w-0">
+        <p className="flex items-center gap-2 text-sm font-semibold text-neutral-950">{active && <Loader2 className="h-4 w-4 animate-spin text-sky-700" />}{current}</p>
+        <p className="mt-1 text-xs text-neutral-600">{providerLabel} · {elapsed ? `${Math.floor(elapsed / 60)}m ${elapsed % 60}s elapsed` : "Starting now"}</p>
+      </div>
+      <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${["failed", "partial", "interrupted"].includes(run?.status || "") ? "bg-amber-100 text-amber-900" : active ? "bg-sky-100 text-sky-800" : "bg-emerald-100 text-emerald-800"}`}>{readable(run?.status || "starting")}</span>
+    </div>
+    <div className="mt-3 grid gap-2 sm:grid-cols-3">
+      <div className="rounded-lg border border-black/5 bg-white/70 p-2.5"><p className="text-[11px] font-medium uppercase tracking-wide text-neutral-500">Now</p><p className="mt-1 text-xs text-neutral-800">{current}</p></div>
+      <div className="rounded-lg border border-black/5 bg-white/70 p-2.5"><p className="text-[11px] font-medium uppercase tracking-wide text-neutral-500">Next</p><p className="mt-1 text-xs text-neutral-800">{startsApplication ? "Save the job, select a resume, then start the website application" : "Save or reuse one job in the review queue"}</p></div>
+      <div className="rounded-lg border border-black/5 bg-white/70 p-2.5"><p className="text-[11px] font-medium uppercase tracking-wide text-neutral-500">Updates</p><p className="mt-1 text-xs text-neutral-800">{active ? "Automatic every 1.5 seconds" : "Final result saved"}{updateAge !== null ? ` · worker updated ${updateAge}s ago` : ""}</p></div>
+    </div>
+    {run?.progress?.waiting_for_model && <p className="mt-3 rounded-lg bg-sky-50 px-3 py-2 text-xs text-sky-900">The request is with the AI researcher now · attempt {run.progress.model_request?.attempt || 1}. A heartbeat updates while it waits.</p>}
+    {!!recent.length && <details open className="mt-3 rounded-lg border border-black/5 bg-white/70 p-3"><summary className="cursor-pointer text-xs font-medium text-neutral-800">Live activity ({run?.activity?.length || 0})</summary><div className="mt-3 max-h-52 space-y-3 overflow-y-auto">{recent.map(event => <div key={event.id} className="border-l-2 border-sky-200 pl-3"><time className="text-[11px] text-neutral-500">{new Date(event.at).toLocaleTimeString()}</time><p className="text-xs text-neutral-700">{event.message}</p></div>)}</div></details>}
+    {!!run?.errors_detail?.length && <details open className="mt-3 rounded-lg border border-red-200 bg-white/70 p-3"><summary className="cursor-pointer text-xs font-medium text-red-800">What stopped ({run.errors_detail.length})</summary>{run.errors_detail.map((error, index) => <p key={index} className="mt-2 break-words text-xs text-red-800">{error.phase || "Verification"}: {error.error || "Unknown error"}</p>)}</details>}
+    <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-neutral-600">{loading && <span>Connecting to the saved run…</span>}<button type="button" className="font-medium text-sky-800 underline" disabled={refreshing} onClick={onRefresh}>{refreshing ? "Refreshing…" : "Refresh now"}</button><span>No application is submitted during verification.</span></div>
+  </div>;
+}
+
+function BulkImportRow({ item, onOpen, onUpdate }: {
+  item: BulkImportItem; onOpen: (candidate: Candidate) => void;
+  onUpdate: (attemptId: string, changes: Partial<BulkImportItem>) => void;
+}) {
+  const query = useQuery({
+    queryKey: ["job-agent", "url-import", item.attemptId],
+    queryFn: () => jobAgentRequest<ImportQueueDetail>(`/listings/import-queue/${item.attemptId}`),
+    refetchInterval: value => ["completed", "failed"].includes(value.state.data?.status || "") ? false : 1500,
+  });
+  useEffect(() => {
+    const value = query.data;
+    if (!value) return;
+    const result = value.result || {};
+    const applicationError = result.website_application?.requested && !result.website_application.started
+      ? ` Job saved, but its website application could not start: ${result.website_application.error || "Open the job and try again."}` : "";
+    onUpdate(item.attemptId, {
+      status: value.status, candidate: result.candidate,
+      applicationStarted: !!result.website_application?.started,
+      message: value.status === "failed" ? value.error || "Job verification failed."
+        : value.status === "completed" ? (result.website_application?.started ? "Job saved; website application started."
+          : result.candidate ? result.created || result.import?.new_job ? "Verified and added to the review queue." : "Verified; existing saved job reused."
+          : result.message || "Processing completed.") + applicationError : undefined,
+    });
+  }, [query.data, item.attemptId, onUpdate]);
+  const active = !query.data || query.data.status === "queued" || query.data.status === "running";
+  const status = query.data?.status || item.status;
+  const candidate = query.data?.result?.candidate || item.candidate;
+  const tone = status === "failed" ? "border-red-200 bg-red-50" : status === "completed" ? "border-emerald-200 bg-emerald-50" : "border-sky-200 bg-white";
+  return <article className={`rounded-xl border p-3 ${tone}`}>
+    <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="min-w-0 flex-1"><p className="flex items-center gap-2 text-sm font-medium text-neutral-900">{active && <Loader2 className="h-4 w-4 shrink-0 animate-spin text-sky-700" />}<span className="break-all">{item.url}</span></p>
+        <p className="mt-1 text-xs text-neutral-600">{status === "queued" ? "Waiting for an import slot" : status === "running" ? query.data?.run?.phase || query.data?.run?.activity?.at(-1)?.message || "Opening and verifying this job" : item.message}</p></div>
+      <span className="rounded-full bg-white/80 px-2.5 py-1 text-xs font-medium">{readable(status)}</span>
+    </div>
+    {candidate && <button type="button" className={`${button} mt-3`} onClick={() => onOpen(candidate)}>Open saved job</button>}
+    {query.error && active && <p className="mt-2 text-xs text-amber-800">Live progress is temporarily unavailable; the import request is still tracked.</p>}
+    {status === "running" && <details className="mt-3"><summary className="cursor-pointer text-xs font-medium text-sky-900">Show live verification details</summary><ImportProgress run={query.data?.run || undefined} loading={query.isPending} refreshing={query.isFetching} provider={item.provider} startsApplication={item.startsApplication} onRefresh={() => query.refetch()} /></details>}
+  </article>;
+}
 
 export default function JobAgentPage() {
   const client = useQueryClient();
@@ -51,10 +170,38 @@ export default function JobAgentPage() {
   const [applicationOrder, setApplicationOrder] = useState("updated_desc");
   const [applicationPage, setApplicationPage] = useState(1);
   const [notice, setNotice] = useState("");
-  const [addJobOpen, setAddJobOpen] = useState(false);
   const [jobUrl, setJobUrl] = useState("");
+  const [startAfterImport, setStartAfterImport] = useState(false);
+  const [importProvider, setImportProvider] = useState<"gateway" | "openai">("gateway");
   const [importMessage, setImportMessage] = useState("");
+  const [importItems, setImportItems] = useState<BulkImportItem[]>([]);
+  const [importBusy, setImportBusy] = useState(false);
+  const updateImportItem = useCallback((attemptId: string, changes: Partial<BulkImportItem>) => {
+    setImportItems(current => {
+      if (changes.status === "completed" || changes.status === "failed") {
+        return current.filter(item => item.attemptId !== attemptId);
+      }
+      return current.map(item => item.attemptId === attemptId ? { ...item, ...changes } : item);
+    });
+  }, []);
   const overview = useQuery({ queryKey: ["job-agent", "overview"], queryFn: () => jobAgentRequest<Overview>("/overview"), refetchInterval: 15000 });
+  const recentImports = useQuery({ queryKey: ["job-agent", "url-import-queue"], queryFn: () => jobAgentRequest<{ items: ImportQueueDetail[] }>("/listings/import-queue?limit=50"), refetchInterval: 5000 });
+  useEffect(() => {
+    if (!recentImports.data) return;
+    setImportItems(current => {
+      const existing = new Map(current.map(item => [item.attemptId, item]));
+      return recentImports.data!.items
+        .filter(row => row.status === "queued" || row.status === "running")
+        .map(row => ({
+          ...existing.get(row.id),
+          attemptId: row.id, url: row.source_url, status: row.status,
+          provider: row.ai_provider, startsApplication: row.start_website_application,
+          message: row.status === "failed" ? row.error || "Job verification failed." : existing.get(row.id)?.message,
+          candidate: row.result?.candidate || existing.get(row.id)?.candidate,
+          applicationStarted: !!row.result?.website_application?.started,
+        }));
+    });
+  }, [recentImports.data]);
   const jobs = useQuery({ queryKey: ["job-agent", "jobs", filter, search, page, order, category, source, legalDegree, contract], queryFn: () => jobAgentRequest<{ items: Candidate[]; total: number; total_pages: number }>(`/jobs?${queueQuery(filter, search, page, order, category, source, legalDegree, contract)}`), refetchInterval: 15000 });
   const applications = useQuery({
     queryKey: ["job-agent", "applications", applicationSearch, applicationStatus, applicationPage, applicationOrder],
@@ -65,17 +212,33 @@ export default function JobAgentPage() {
   const refresh = () => client.invalidateQueries({ queryKey: ["job-agent"] });
   const collect = useMutation({ mutationFn: () => jobAgentRequest<CollectionRun>("/collect", {}),
     onSuccess: () => { setNotice(`Sync queued. Progress is saved automatically; all matching listings will be processed.`); refresh(); }, onError: () => refresh() });
-  const importJob = useMutation({
-    mutationFn: () => jobAgentRequest<{ candidate?: Candidate; created?: boolean; message?: string; import?: { message?: string; new_job?: boolean } }>("/listings/import", { source_url: publicJobUrl(jobUrl) }),
-    onMutate: () => setImportMessage(""),
-    onSuccess: result => {
-      if (!result.candidate) { setImportMessage(result.message || "This link is already being verified. Try opening it again in a few minutes."); return; }
-      setAddJobOpen(false); setJobUrl(""); setTab("queue"); setPage(1); setSelected(result.candidate);
-      setNotice(result.created || result.import?.new_job ? "Job verified and added to your review queue." : "This job was already saved. I opened the existing record.");
-      refresh();
-    },
-    onError: () => refresh(),
-  });
+  const runImports = async () => {
+    const parsed = publicJobUrls(jobUrl);
+    if (!parsed.valid.length || importBusy) return;
+    const provider = importProvider, startsApplication = startAfterImport;
+    setImportBusy(true); setImportMessage("");
+    if (parsed.invalid.length || parsed.duplicates) setImportMessage([
+      parsed.invalid.length ? `${parsed.invalid.length} invalid value${parsed.invalid.length === 1 ? " was" : "s were"} skipped.` : "",
+      parsed.duplicates ? `${parsed.duplicates} duplicate link${parsed.duplicates === 1 ? " was" : "s were"} collapsed.` : "",
+    ].filter(Boolean).join(" "));
+    try {
+      const queued = await jobAgentRequest<{ items: ImportQueueDetail[]; duplicates_skipped: number }>("/listings/import-batch", {
+        source_urls: parsed.valid, start_website_application: startsApplication,
+        ai_provider: provider,
+      });
+      const items: BulkImportItem[] = queued.items.map(item => ({
+        attemptId: item.id, url: item.source_url, status: item.status,
+        provider, startsApplication,
+      }));
+      setImportItems(current => [...items, ...current].slice(0, 50));
+      setJobUrl(""); setPage(1); refresh();
+      setNotice(`${items.length} job link${items.length === 1 ? " is" : "s are"} saved in the import queue. You can leave this page while they run.`);
+    } catch (cause) {
+      setImportMessage(cause instanceof Error ? cause.message : "Could not queue these job links.");
+    } finally {
+      setImportBusy(false);
+    }
+  };
   const data = overview.data;
   if (!data) return <div className="space-y-4"><h1 className="text-2xl font-semibold">Job agent</h1><ErrorBox error={overview.error} />{overview.isPending ? <p className="flex items-center gap-2 text-sm text-neutral-500"><Loader2 className="h-4 w-4 animate-spin" /> Loading workspace…</p> : <button className={button} onClick={() => overview.refetch()}>Try again</button>}</div>;
   const total = Object.values(data.counts).reduce((a, b) => a + b, 0);
@@ -85,16 +248,33 @@ export default function JobAgentPage() {
       <div><div className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-neutral-500"><BriefcaseBusiness className="h-4 w-4" /> Career workspace</div>
         <h1 className="text-2xl font-semibold tracking-tight">Job agent</h1><p className="mt-1 max-w-xl text-sm text-neutral-500">Your job pipeline, decisions and operating preferences in one place.</p></div>
       <div className="flex flex-wrap items-center gap-2"><span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-800">Email and website applications</span>
-        <button className={button} onClick={() => { setAddJobOpen(true); setImportMessage(""); importJob.reset(); }}><Plus className="h-4 w-4" />Add job by link</button>
         <button className={primary} disabled={collect.isPending || !data.config.collection_enabled} onClick={() => { setNotice(""); collect.mutate(); }}><RefreshCw className={`h-4 w-4 ${collect.isPending ? "animate-spin" : ""}`} />{collect.isPending ? "Queuing…" : "Sync now"}</button></div>
     </header>
     <ErrorBox error={overview.error || collect.error} />
     {notice && <div role="status" className="flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800"><Check className="mt-0.5 h-4 w-4 shrink-0" />{notice}</div>}
+    <section className="rounded-xl border border-sky-200 bg-sky-50/60 p-4" aria-labelledby="add-job-by-link-title">
+      <div className="flex items-start gap-3">
+        <span className="rounded-lg border border-sky-200 bg-white p-2 text-sky-700"><Link2 className="h-4 w-4" /></span>
+        <div className="min-w-0 flex-1">
+          <h2 id="add-job-by-link-title" className="text-sm font-semibold text-neutral-950">Add jobs by link</h2>
+          <p className="mt-1 text-xs leading-relaxed text-neutral-600">Paste one or more LinkedIn or public job-posting URLs, one per line. Links stay here while processing, then leave the queue automatically. Verified jobs remain available in the review queue.</p>
+          <form className="mt-3 flex flex-col gap-2 sm:flex-row" onSubmit={event => { event.preventDefault(); void runImports(); }}>
+            <label className="min-w-0 flex-1"><span className="sr-only">Job post links</span><textarea aria-label="Job post links" className={`${input} min-h-28 resize-y`} inputMode="url" placeholder={"Paste job posting links…\nhttps://company.example/jobs/role-1\nhttps://www.linkedin.com/jobs/view/123"} value={jobUrl} disabled={importBusy} onChange={event => { setJobUrl(event.target.value); setImportMessage(""); }} /></label>
+            <button type="submit" className={`${primary} self-start sm:min-w-32`} disabled={!publicJobUrls(jobUrl).valid.length || importBusy}>{importBusy ? <><Loader2 className="h-4 w-4 animate-spin" />Adding to queue…</> : <><Plus className="h-4 w-4" />Add jobs</>}</button>
+          </form>
+          <label className="mt-3 block text-sm font-medium text-neutral-800">Verification AI provider<select className={`${input} mt-2`} value={importProvider} disabled={importBusy} onChange={event => setImportProvider(event.target.value as "gateway" | "openai")}><option value="gateway">OpenClaw gateway · queued</option><option value="openai">OpenAI API · up to 3 in parallel · gpt-5.6-luna</option></select><span className="mt-1 block text-xs font-normal leading-relaxed text-neutral-500">Each link is saved immediately, so you can add more while earlier jobs are still processing. OpenAI verifies up to three distinct links concurrently. OpenClaw processes one at a time to avoid contention on its interactive lane. Website applications use their own provider setting.</span></label>
+          <label className="mt-3 flex items-start gap-2 rounded-lg border border-sky-200 bg-white/80 p-3 text-sm text-neutral-800"><input type="checkbox" className="mt-0.5 h-4 w-4 accent-sky-800" checked={startAfterImport} disabled={importBusy} onChange={event => setStartAfterImport(event.target.checked)} /><span><span className="font-medium">Start website applications after adding</span><span className="mt-1 block text-xs leading-relaxed text-neutral-500">Each verified job independently selects its best resume and starts one authorized website application. When companion email is enabled in Settings, it also starts one Zoho email workflow if a verified contact is found.</span></span></label>
+          {jobUrl.trim() && publicJobUrls(jobUrl).invalid.length > 0 && <p className="mt-2 text-xs text-red-700">{publicJobUrls(jobUrl).invalid.length} value{publicJobUrls(jobUrl).invalid.length === 1 ? " is" : "s are"} not a complete public HTTP or HTTPS link and will be skipped.</p>}
+          {importMessage && <p role="status" className="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{importMessage}</p>}
+          {!!importItems.length && <div className="mt-4 space-y-3" aria-live="polite"><div className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm font-semibold text-neutral-900">Import queue</p><p className="text-xs text-neutral-600">{importItems.length} remaining</p></div>{importItems.map(item => <BulkImportRow key={item.attemptId} item={item} onOpen={setSelected} onUpdate={updateImportItem} />)}</div>}
+        </div>
+      </div>
+    </section>
     <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">{(Object.keys(labels) as ReviewStatus[]).map(status => <button key={status} onClick={() => { setFilter(status); setPage(1); setTab("queue"); }} className={`${panel} p-4 text-left transition-colors hover:border-neutral-400`}><p className="text-xs font-medium text-neutral-500">{labels[status]}</p><p className="mt-2 text-3xl font-semibold tracking-tight">{data.counts[status]}</p></button>)}</div>
     <div className="flex gap-1 overflow-x-auto border-b border-neutral-200" role="tablist" aria-label="Job agent sections">{[{ key: "queue", label: "Review queue", icon: BriefcaseBusiness }, { key: "searches", label: "Searches", icon: Search }, { key: "applications", label: "Applications", icon: ClipboardCheck }, { key: "cvs", label: "CVs", icon: FileText }, { key: "profile", label: "Applicant profile", icon: ClipboardCheck }, { key: "settings", label: "Settings", icon: Settings2 }].map(({ key, label, icon: Icon }) => <button key={key} id={`tab-${key}`} role="tab" aria-controls={`panel-${key}`} aria-selected={tab === key} onClick={() => setTab(key)} className={`flex min-h-11 shrink-0 items-center gap-2 border-b-2 px-3 text-sm font-medium ${tab === key ? "border-neutral-900 text-neutral-900" : "border-transparent text-neutral-500 hover:text-neutral-800"}`}><Icon className="h-4 w-4" />{label}</button>)}</div>
     {tab === "queue" && <div role="tabpanel" id="panel-queue" aria-labelledby="tab-queue" className="min-w-0">
       <section className={`${panel} min-w-0 overflow-hidden`}>
-        <div className="grid gap-3 border-b border-neutral-200 p-4 sm:grid-cols-2"><select aria-label="Order jobs" className={input} value={order} onChange={e => { setOrder(e.target.value); setPage(1); }}><option value="posted_desc">Most recently posted</option><option value="contact_desc">Known contact email first</option><option value="posted_asc">Oldest posted first</option><option value="found_desc">Recently added to queue</option></select><input aria-label="Search review queue" className={input} placeholder="Search company or role…" value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} /><select aria-label="Review status" className={input} value={filter} onChange={e => { setFilter(e.target.value as ReviewStatus | ""); setPage(1); }}><option value="">All decisions</option>{Object.entries(labels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select><select aria-label="Filter by category" className={input} value={category} onChange={e => { setCategory(e.target.value); setPage(1); }}><option value="">All categories</option><option value="needs_review">Classification needs review</option>{data.config.resume_categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select><select aria-label="Filter by job source" className={input} value={source} onChange={e => { setSource(e.target.value as JobSource | ""); setPage(1); }}><option value="">All sources</option><option value="external_search">Job Agent search</option><option value="possibleos">Possible OS</option></select><select aria-label="Filter by contract status" className={input} value={contract} onChange={e => { setContract(e.target.value as ContractFilter); setPage(1); }}><option value="all">All contract types</option><option value="contract">Contract roles</option><option value="non_contract">Non-contract roles</option><option value="unknown">Contract type unknown</option></select><select aria-label="Filter by legal degree requirement" className={input} value={legalDegree} onChange={e => { setLegalDegree(e.target.value as LegalDegreeFilter); setPage(1); }}><option value="exclude">Hide legal-degree roles</option><option value="all">Show all roles</option><option value="required">Legal-degree roles only</option></select></div>
+        <div className="grid gap-3 border-b border-neutral-200 p-4 sm:grid-cols-2"><select aria-label="Order jobs" className={input} value={order} onChange={e => { setOrder(e.target.value); setPage(1); }}><option value="posted_desc">Most recently posted</option><option value="contact_desc">Known contact email first</option><option value="posted_asc">Oldest posted first</option><option value="found_desc">Recently added to queue</option></select><input aria-label="Search review queue" className={input} placeholder="Search company or role…" value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} /><select aria-label="Review status" className={input} value={filter} onChange={e => { setFilter(e.target.value as ReviewStatus | ""); setPage(1); }}><option value="">All decisions</option>{Object.entries(labels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select><select aria-label="Filter by category" className={input} value={category} onChange={e => { setCategory(e.target.value); setPage(1); }}><option value="">All categories</option><option value="needs_review">Classification needs review</option>{data.config.resume_categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select><select aria-label="Filter by job source" className={input} value={source} onChange={e => { setSource(e.target.value as JobSource | ""); setPage(1); }}><option value="">All sources</option><option value="external_search">Job Agent search</option><option value="possibleos">Possible OS</option><option value="manual">Manual</option></select><select aria-label="Filter by contract status" className={input} value={contract} onChange={e => { setContract(e.target.value as ContractFilter); setPage(1); }}><option value="all">All contract types</option><option value="contract">Contract roles</option><option value="non_contract">Non-contract roles</option><option value="unknown">Contract type unknown</option></select><select aria-label="Filter by legal degree requirement" className={input} value={legalDegree} onChange={e => { setLegalDegree(e.target.value as LegalDegreeFilter); setPage(1); }}><option value="exclude">Hide legal-degree roles</option><option value="all">Show all roles</option><option value="required">Legal-degree roles only</option></select></div>
         <ErrorBox error={jobs.error} />
         {jobs.isPending && <p className="p-6 text-sm text-neutral-500">Loading listings…</p>}
         {!jobs.isPending && !jobs.error && !jobs.data?.items.length && <div className="px-6 py-14 text-center"><ListFilter className="mx-auto mb-3 h-7 w-7 text-neutral-400" /><h2 className="font-medium">{total ? "No listings match these filters" : "Start with the jobs already found"}</h2><p className="mx-auto mt-2 max-w-sm text-sm text-neutral-500">{total ? "Change your search or review status to see more jobs." : "Import existing Possible OS listings, then shortlist roles or record what needs checking."}</p>{!total && <button className={`${button} mt-5`} onClick={() => collect.mutate()} disabled={collect.isPending || !data.config.collection_enabled}>Sync now</button>}</div>}
@@ -112,22 +292,6 @@ export default function JobAgentPage() {
     {tab === "cvs" && <JobCvLibrary />}
     {tab === "profile" && <section role="tabpanel" id="panel-profile" aria-labelledby="tab-profile"><JobApplicantProfile /></section>}
     {tab === "settings" && <section role="tabpanel" id="panel-settings" aria-labelledby="tab-settings"><SettingsForm snapshot={data} onSaved={refresh} /></section>}
-    <Dialog open={addJobOpen} onOpenChange={open => { if (!importJob.isPending) setAddJobOpen(open); }}><DialogContent className="w-[94vw] max-w-xl">
-      <DialogTitle className="flex items-center gap-2"><span className="rounded-lg bg-sky-100 p-2 text-sky-800"><Link2 className="h-4 w-4" /></span>Add a job posting</DialogTitle>
-      <DialogDescription>Paste a LinkedIn job post or another public job-listing link. Job Agent verifies the employer and exact role, then adds or reuses one queue record.</DialogDescription>
-      <form className="space-y-4" onSubmit={event => { event.preventDefault(); if (publicJobUrl(jobUrl) && !importJob.isPending) importJob.mutate(); }}>
-        <label className="block text-sm font-medium text-neutral-800">Job post link<input autoFocus aria-label="Job post link" className={`${input} mt-2`} type="url" inputMode="url" placeholder="https://www.linkedin.com/jobs/view/…" value={jobUrl} disabled={importJob.isPending} onChange={event => { setJobUrl(event.target.value); setImportMessage(""); importJob.reset(); }} /></label>
-        <div className="grid grid-cols-3 gap-2 text-xs">
-          {[{ label: "Read link", complete: !!publicJobUrl(jobUrl), active: false }, { label: "Verify job", complete: false, active: importJob.isPending }, { label: "Save or reuse", complete: false, active: false }].map((step, index) => <div key={step.label} className={`rounded-lg border p-3 ${step.active ? "border-sky-300 bg-sky-50 text-sky-900" : step.complete ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-neutral-200 bg-neutral-50 text-neutral-500"}`}><span className="font-semibold">{index + 1}</span><span className="ml-2">{step.label}</span>{step.active && <Loader2 className="ml-2 inline h-3.5 w-3.5 animate-spin" />}</div>)}
-        </div>
-        {importJob.isPending && <div role="status" className="rounded-lg border border-sky-200 bg-sky-50 p-3 text-sm text-sky-900"><p className="font-medium">Verifying the job posting…</p><p className="mt-1 text-xs leading-relaxed">This can take several minutes for job boards that restrict automated access. Keep this window open; no application or email will be started.</p></div>}
-        {(!jobUrl.trim() || publicJobUrl(jobUrl)) ? null : <p className="text-sm text-red-700">Enter a complete public HTTP or HTTPS link.</p>}
-        <ErrorBox error={importJob.error} />
-        {importMessage && <p role="status" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{importMessage}</p>}
-        <p className="text-xs leading-relaxed text-neutral-500">The importer deduplicates the role, verifies its source, and may find company contact information. It does not classify the job or begin an application.</p>
-        <div className="flex justify-end gap-2"><button type="button" className={button} disabled={importJob.isPending} onClick={() => setAddJobOpen(false)}>Cancel</button><button type="submit" className={primary} disabled={!publicJobUrl(jobUrl) || importJob.isPending}>{importJob.isPending ? <><Loader2 className="h-4 w-4 animate-spin" />Verifying…</> : <><Plus className="h-4 w-4" />Add job</>}</button></div>
-      </form>
-    </DialogContent></Dialog>
     <Dialog open={!!selected} onOpenChange={open => { if (!open) setSelected(null); }}><DialogContent className="max-h-[92dvh] w-[96vw] max-w-5xl overflow-y-auto">{selected && <ReviewForm key={selected.id} job={selected} categories={data.config.resume_categories} onSaved={() => { setSelected(null); refresh(); }} />}</DialogContent></Dialog>
   </div>;
 }
@@ -137,7 +301,7 @@ function applicationTone(status: string) {
   if (["completed", "sent_verified", "submitted"].includes(status)) return "border-emerald-200 bg-emerald-50 text-emerald-800";
   if (["draft_ready", "ready"].includes(status)) return "border-sky-200 bg-sky-50 text-sky-800";
   if (["in_progress", "queued", "running", "verifying", "preparing", "queued_send", "sending"].includes(status)) return "border-violet-200 bg-violet-50 text-violet-800";
-  if (["needs_attention", "waiting_for_answer", "blocked", "submission_uncertain", "paused", "needs_review", "delivery_unconfirmed", "failed"].includes(status)) return "border-amber-200 bg-amber-50 text-amber-900";
+  if (["needs_attention", "waiting_for_answer", "blocked", "submission_uncertain", "human_control", "paused", "needs_review", "delivery_unconfirmed", "failed"].includes(status)) return "border-amber-200 bg-amber-50 text-amber-900";
   return "border-neutral-200 bg-neutral-100 text-neutral-700";
 }
 
@@ -287,8 +451,9 @@ function SettingsForm({ snapshot, onSaved }: { snapshot: Overview; onSaved: () =
     <section className="overflow-hidden rounded-2xl border border-indigo-200 bg-indigo-50/50 shadow-sm">
       <div className="border-b border-indigo-200 bg-indigo-100/70 p-5"><p className="text-xs font-semibold uppercase tracking-wider text-indigo-700">05 · Website applications</p><h2 className="mt-1 font-semibold text-neutral-950">Browser agent AI provider</h2><p className="mt-1 text-sm text-neutral-600">Choose how the browser agent makes decisions, audits actions, and checks submission confirmation.</p></div>
       <div className="grid gap-4 p-5 sm:grid-cols-2">
+        <label className="flex items-start gap-3 rounded-xl border border-indigo-100 bg-white p-4 text-sm sm:col-span-2"><input type="checkbox" className="mt-0.5 h-4 w-4 accent-indigo-700" checked={config.auto_email_with_website_application} onChange={e => update("auto_email_with_website_application", e.target.checked)} /><span><span className="font-medium text-neutral-900">Also apply by email when a verified contact is found</span><span className="mt-1 block text-xs leading-relaxed text-neutral-500">Starting a website application also authorizes one evidence-checked Zoho email with the selected resume. If no suitable address is found, the website application continues and no email is sent. Duplicate and Zoho Sent checks remain independent.</span></span></label>
         <label className="rounded-xl border border-indigo-100 bg-white p-4 text-sm font-medium">Default provider<select aria-label="Default browser AI provider" className={`${input} mt-3`} value={config.browser_ai_provider || "gateway"} onChange={e => update("browser_ai_provider", e.target.value as JobAgentConfig["browser_ai_provider"])}><option value="gateway">OpenClaw gateway</option><option value="openai">Direct OpenAI API</option></select></label>
-        <label className="rounded-xl border border-indigo-100 bg-white p-4 text-sm font-medium">OpenAI API model<input aria-label="Browser OpenAI API model" className={`${input} mt-3`} value={config.browser_openai_model || "gpt-5-mini"} maxLength={120} onChange={e => update("browser_openai_model", e.target.value)} /><span className="mt-2 block text-xs font-normal text-neutral-500">Used only with direct API. Must support Responses structured outputs.</span></label>
+        <label className="rounded-xl border border-indigo-100 bg-white p-4 text-sm font-medium">OpenAI API model<select aria-label="Browser OpenAI API model" className={`${input} mt-3`} value={config.browser_openai_model || "gpt-5.6-luna"} onChange={e => update("browser_openai_model", e.target.value)}><option value="gpt-5.6-luna">GPT-5.6 Luna</option><option value="gpt-6-astra">GPT-6 Astra</option></select><span className="mt-2 block text-xs font-normal text-neutral-500">Luna is the faster default. Astra is available for harder forms and decisions. Used only with direct API.</span></label>
         <p className="text-xs leading-relaxed text-neutral-600 sm:col-span-2">Direct API uses the server’s OPENAI_API_KEY and incurs API charges. The key is never sent to this page. Defaults apply to new runs; use the provider selector in a paused application to switch when resuming. Search and email preparation keep their existing providers.</p>
       </div>
     </section>

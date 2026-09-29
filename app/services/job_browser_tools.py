@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
+from urllib.parse import urljoin
 
 from pydantic import BaseModel, ConfigDict, Field
 from typing import Literal
@@ -12,7 +13,7 @@ from app.services.career_search_web import public_url
 
 class BrowserAction(BaseModel):
     model_config = ConfigDict(extra='forbid')
-    kind: Literal['goto', 'fill', 'select', 'check', 'click', 'upload', 'wait',
+    kind: Literal['goto', 'fill', 'select', 'check', 'press', 'click', 'upload', 'wait',
                   'email_search', 'verification_code', 'ask', 'blocked', 'submit', 'confirmed']
     summary: str = Field(min_length=1, max_length=500)
     element: str | None = Field(None, max_length=40)
@@ -142,14 +143,73 @@ class BrowserSession:
             await handle.select_option(value=action.value)
         elif action.kind == 'check':
             await handle.set_checked(action.checked)
+        elif action.kind == 'press':
+            # Keep keyboard recovery narrow: these keys can commit or dismiss a
+            # custom combobox without granting arbitrary keyboard control.
+            if control.get('role') != 'combobox' or action.value not in {
+                    'Enter', 'ArrowDown', 'ArrowUp', 'Escape'}:
+                raise ValueError('Keyboard actions are limited to safe keys on an observed combobox.')
+            await handle.press(action.value)
         elif action.kind == 'upload':
             if control['type'] != 'file':
                 raise ValueError('Choose a file upload control for the selected resume.')
             await handle.set_input_files(str(resume))
         elif action.kind in {'click', 'submit'}:
-            await handle.click()
+            if action.kind == 'click' and control.get('tag') == 'a' and control.get('href'):
+                from playwright.async_api import TimeoutError as PlaywrightTimeoutError
+                previous_url = self.page.url
+                try:
+                    await handle.click()
+                except PlaywrightTimeoutError:
+                    # Some ATS cards place a text layer over their observed
+                    # anchor, so a physical click never reaches the link. If
+                    # navigation did not already happen, follow only the exact
+                    # public href captured in the current observation.
+                    if self.page.url != previous_url:
+                        return
+                    target = urljoin(previous_url, control['href'])
+                    await public_url(target)
+                    await self.page.goto(target, wait_until='domcontentloaded', timeout=45000)
+            else:
+                await handle.click()
         else:
             raise ValueError('This action is not a browser interaction.')
+
+    async def human_action(self, kind: str, *, x: float | None = None,
+                           y: float | None = None, value: str = '',
+                           key: str = '', delta_y: float = 0):
+        """Perform one operator-directed action in the existing page.
+
+        This deliberately accepts no selector or JavaScript. Coordinates refer
+        to the exact 1280x900 screenshot the operator was shown. Text is used
+        only for this call and is never added to a browser snapshot or event.
+        """
+        if not self.page or self.page.is_closed():
+            raise ValueError('The application browser is no longer open.')
+        if kind == 'click':
+            if x is None or y is None or not (0 <= x <= 1280 and 0 <= y <= 900):
+                raise ValueError('Click coordinates must be inside the current browser frame.')
+            await self.page.mouse.click(x, y)
+        elif kind in {'type', 'replace'}:
+            if kind == 'replace':
+                await self.page.keyboard.press('Control+A')
+            await self.page.keyboard.insert_text(value)
+        elif kind == 'press':
+            allowed = {
+                'Tab', 'Shift+Tab', 'Enter', 'Escape', 'Backspace', 'Delete',
+                'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space',
+                'Home', 'End', 'PageUp', 'PageDown',
+            }
+            if key not in allowed:
+                raise ValueError('That keyboard key is not available in human control.')
+            await self.page.keyboard.press(key)
+        elif kind == 'scroll':
+            if not -1800 <= delta_y <= 1800 or delta_y == 0:
+                raise ValueError('Scroll distance is outside the allowed range.')
+            await self.page.mouse.wheel(0, delta_y)
+        else:
+            raise ValueError('Unsupported human browser action.')
+        await self.page.wait_for_timeout(250)
 
     async def close(self):
         try:

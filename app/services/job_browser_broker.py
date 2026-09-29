@@ -72,6 +72,18 @@ class ExecuteRequest(BaseModel):
     action: BrowserAction
 
 
+class HumanActionRequest(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    action_id: str
+    observation_id: str
+    kind: str
+    x: float | None = None
+    y: float | None = None
+    value: str = Field('', max_length=8000)
+    key: str = Field('', max_length=40)
+    delta_y: float = Field(0, ge=-1800, le=1800)
+
+
 @dataclass
 class Session:
     browser: BrowserSession
@@ -187,6 +199,35 @@ def create_app(root: Path = ROOT):
                 raise
             item.operations[request.action_id]['status'] = 'completed'
             return {'status': 'completed', 'replayed': False}
+
+    @app.post('/sessions/{run_id}/human-action')
+    async def human_action(run_id: str, request: HumanActionRequest):
+        identifier(request.action_id)
+        item = existing(run_id)
+        # The fingerprint never includes typed text in durable application
+        # state; this in-memory value disappears with the browser session.
+        fingerprint = hashlib.sha256(request.model_dump_json().encode()).hexdigest()
+        async with item.lock:
+            previous = item.operations.get(request.action_id)
+            if previous:
+                if previous['fingerprint'] != fingerprint:
+                    raise HTTPException(409, 'Action identifier reused with different contents.')
+                if previous['status'] != 'completed':
+                    raise HTTPException(409, 'This action may have run. Refresh the live view before acting again.')
+                return {'status': 'completed', 'already_completed': True}
+            if not item.observation_id or request.observation_id != item.observation_id:
+                raise HTTPException(409, 'The live browser view changed. Refresh it before acting.')
+            item.operations[request.action_id] = {'fingerprint': fingerprint, 'status': 'started'}
+            item.observation_id = None
+            try:
+                await item.browser.human_action(
+                    request.kind, x=request.x, y=request.y, value=request.value,
+                    key=request.key, delta_y=request.delta_y)
+            except BaseException:
+                item.operations[request.action_id]['status'] = 'uncertain'
+                raise
+            item.operations[request.action_id]['status'] = 'completed'
+            return {'status': 'completed', 'already_completed': False}
 
     @app.delete('/sessions/{run_id}')
     async def close(run_id: str):

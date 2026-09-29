@@ -30,17 +30,23 @@ def response_schema(value):
 
 def output_type(required, mode):
     # Import lazily: the career runner calls this transport, and owns these schemas.
-    from app.services.daily_career_search import CandidateFields, Decision
+    from app.services.daily_career_search import CandidateFields, Decision, UrlImportCorroboration, UrlImportIdentity
     if required == 'config':
         from app.services.job_saved_searches import SearchSettings
         return create_model('SearchConfiguration', config=(SearchSettings, ...))
     if required == 'decisions':
         return create_model('SearchDecisions', decisions=(list[Decision], ...))
+    if required == 'identities':
+        return create_model('UrlImportIdentities', identities=(list[UrlImportIdentity], ...))
+    if required == 'corroborating_job_urls':
+        return UrlImportCorroboration
     if required != 'candidates':
         raise ValueError('Unsupported direct search output type')
     if mode == 'candidate_repair':
         candidate = create_model('RepairedCandidate', __base__=CandidateFields, candidate_id=(str, ...))
         return create_model('SearchRepairs', candidates=(list[candidate], ...))
+    if mode in {'url_import', 'url_import_enrichment'}:
+        return create_model('UrlImportCandidates', candidates=(list[CandidateFields], ...))
     return create_model('SearchDiscovery', candidates=(list[CandidateFields], ...),
                         queries_used=(list[str], ...), source_checks=(list[SourceCheck], ...))
 

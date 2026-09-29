@@ -172,6 +172,8 @@ async def lifespan(app: FastAPI):
     job_agent_processing_task = asyncio.create_task(processing_loop())
     from .services.job_browser import worker as job_browser_worker
     job_browser_task = asyncio.create_task(job_browser_worker())
+    from .services.job_url_imports import worker as job_url_import_worker
+    job_url_import_task = asyncio.create_task(job_url_import_worker())
     yield
     # Shutdown: stop the dispatcher, cancel background tasks, dispose engine
     get_dispatcher().stop()
@@ -187,6 +189,7 @@ async def lifespan(app: FastAPI):
         job_saved_search_task,
         job_agent_processing_task,
         job_browser_task,
+        job_url_import_task,
         lead_gen_daily_task,
         reconciler_task,
         *job_research_workers,
@@ -244,7 +247,8 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=["x-possible-request-id", "x-possible-trace-id"],
+    expose_headers=["x-possible-request-id", "x-possible-trace-id",
+                    "x-browser-observation-id", "x-browser-current-url"],
 )
 
 

@@ -12,6 +12,8 @@ from pydantic import ValidationError
 from app.api.job_agent import router
 from app.services import job_agent as service
 from app.services import daily_career_search as career_search
+from app.services import job_saved_searches
+from app.services import job_url_imports
 
 
 def test_identity_ignores_tracking_but_is_employer_scoped():
@@ -343,19 +345,111 @@ async def test_import_url_stores_then_opens_the_canonical_candidate(monkeypatch)
     event_handler = AsyncMock()
     monkeypatch.setattr(service, "_record_url_import_event", event_handler)
 
+    attempt_id = uuid4()
     result = await service.import_listing_url(service.UrlImportRequest(
         source_url="https://example.com/jobs/ai-engineer",
+        attempt_id=attempt_id,
     ))
 
     assert result["candidate"]["id"] == "candidate-1"
     assert result["import"]["message"].endswith("No classification, preparation or email was started.")
     open_request = open_handler.await_args.args[0]
     assert open_request.firm_id == "firm-1" and open_request.job_id == "job-1"
-    assert open_handler.await_args.kwargs == {"event_kind": None}
+    assert open_handler.await_args.kwargs == {"event_kind": None, "source_override": "manual"}
     assert [call.args[0] for call in event_handler.await_args_list] == [
         "listing_import_started", "listing_imported_from_url",
     ]
     assert event_handler.await_args_list[-1].kwargs["run_id"] == "run-1"
+    assert import_handler.await_args.kwargs["run_id"] == attempt_id.hex
+    assert event_handler.await_args_list[0].kwargs["attempt_id"] == attempt_id.hex
+
+
+@pytest.mark.asyncio
+async def test_import_status_exposes_saved_live_run(monkeypatch):
+    identity = uuid4()
+    detail = {"id": identity.hex, "status": "running", "phase": "Checking employer"}
+    handler = AsyncMock(return_value=detail)
+    monkeypatch.setattr(job_saved_searches, "run_detail", handler)
+    app = FastAPI()
+    app.include_router(router)
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url="http://test") as client:
+        response = await client.get(f"/api/job-agent/listings/imports/{identity}")
+    assert response.status_code == 200 and response.json() == detail
+    handler.assert_awaited_once_with(identity.hex)
+
+
+@pytest.mark.asyncio
+async def test_bulk_import_endpoint_persists_the_whole_queue(monkeypatch):
+    queued = {"items": [{"id": uuid4().hex, "status": "queued"}], "duplicates_skipped": 1}
+    handler = AsyncMock(return_value=queued)
+    monkeypatch.setattr(job_url_imports, "enqueue", handler)
+    app = FastAPI()
+    app.include_router(router)
+    payload = {
+        "source_urls": ["https://example.com/jobs/one", "https://example.com/jobs/two"],
+        "ai_provider": "openai", "start_website_application": True,
+    }
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url="http://test") as client:
+        response = await client.post("/api/job-agent/listings/import-batch", json=payload)
+    assert response.status_code == 200 and response.json() == queued
+    request = handler.await_args.args[0]
+    assert [str(url) for url in request.source_urls] == payload["source_urls"]
+    assert request.ai_provider == "openai" and request.start_website_application is True
+
+
+@pytest.mark.asyncio
+async def test_import_queue_status_is_read_only(monkeypatch):
+    identity = uuid4()
+    queued = {"id": identity.hex, "status": "running", "run": {"phase": "Checking employer"}}
+    handler = AsyncMock(return_value=queued)
+    monkeypatch.setattr(job_url_imports, "detail", handler)
+    app = FastAPI()
+    app.include_router(router)
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url="http://test") as client:
+        response = await client.get(f"/api/job-agent/listings/import-queue/{identity}")
+    assert response.status_code == 200 and response.json() == queued
+    handler.assert_awaited_once_with(identity.hex)
+
+
+@pytest.mark.asyncio
+async def test_import_url_can_start_one_website_application(monkeypatch):
+    config = service.JobAgentConfig()
+    monkeypatch.setattr(service, "configuration", AsyncMock(return_value={
+        "config": config.model_dump(), "revision": 1,
+    }))
+    import_handler = AsyncMock(return_value={
+        "id": "run-2", "status": "completed", "result": {
+            "verified": 1,
+            "stored": [{"firm_id": "firm-1", "job_id": "job-1", "added": 1,
+                        "source_url": "https://example.com/jobs/ai-engineer"}],
+            "decisions": [{"decision": {"title": "AI Engineer", "location": "Remote"}}],
+        },
+    })
+    monkeypatch.setattr(career_search, "import_url", import_handler)
+    monkeypatch.setattr(service, "open_stored_listing", AsyncMock(return_value={
+        "candidate": {"id": "candidate-1", "processing_revision": 7,
+                      "posting": {"firm_name": "Example"}},
+        "categories": [], "created": True,
+    }))
+    from app.services import job_browser
+    start = AsyncMock(return_value={"status": "queued", "stage": "Selecting the best resume"})
+    monkeypatch.setattr(job_browser, "start", start)
+    monkeypatch.setattr(service, "_record_url_import_event", AsyncMock())
+
+    result = await service.import_listing_url(service.UrlImportRequest(
+        source_url="https://example.com/jobs/ai-engineer",
+        start_website_application=True,
+        ai_provider="openai",
+    ))
+
+    assert result["website_application"] == {
+        "requested": True, "started": True, "status": "queued",
+        "stage": "Selecting the best resume",
+    }
+    request = start.await_args.args[1]
+    assert start.await_args.args[0] == "candidate-1"
+    assert request.revision == 7 and request.authorize_submit is True
+    assert import_handler.await_args.kwargs["ai_provider"] == "openai"
 
 
 @pytest.mark.asyncio
@@ -466,6 +560,7 @@ def test_posting_date_normalization(raw, expected):
 
 def test_posting_source_normalization_supports_existing_search_rows():
     assert service.normalize_posting({"discovery_provider": "possibleos_daily_career_search"})["job_source"] == "external_search"
+    assert service.normalize_posting({"job_source": "manual", "discovery_provider": "possibleos_daily_career_search"})["job_source"] == "manual"
     assert service.normalize_posting({})["job_source"] == "possibleos"
 
 
@@ -510,6 +605,8 @@ async def test_api_defaults_to_posting_date_and_rejects_unknown_sort(monkeypatch
         assert (await client.get("/api/job-agent/jobs?order=random")).status_code == 422
         assert (await client.get("/api/job-agent/jobs?source=external_search")).status_code == 200
         assert handler.await_args.args[-3:] == ("external_search", "exclude", "all")
+        assert (await client.get("/api/job-agent/jobs?source=manual")).status_code == 200
+        assert handler.await_args.args[-3:] == ("manual", "exclude", "all")
         assert (await client.get("/api/job-agent/jobs?source=unknown")).status_code == 422
         assert (await client.get("/api/job-agent/jobs?legal_degree=required")).status_code == 200
         assert handler.await_args.args[-2:] == ("required", "all")

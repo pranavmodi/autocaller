@@ -7,7 +7,16 @@ from app.services import job_saved_searches as saved
 from tests.test_job_saved_searches import settings, Session
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize('mode,required,tools', [('discovery','candidates',True),('verification','decisions',False),('candidate_repair','candidates',False)])
+@pytest.mark.parametrize('mode,required,tools', [
+    ('discovery','candidates',True),
+    ('verification','decisions',False),
+    ('candidate_repair','candidates',False),
+    ('url_import','candidates',False),
+    ('url_import_enrichment','candidates',True),
+    ('url_import_identity','identities',False),
+    ('url_import_identity_research','identities',True),
+    ('url_import_corroboration','corroborating_job_urls',True),
+])
 async def test_direct_transport_uses_responses_typed_output_and_only_discovery_browses(monkeypatch, mode, required, tools):
     monkeypatch.setenv('OPENAI_API_KEY','unit-test-only')
     payload={required:[]}
@@ -26,6 +35,25 @@ async def test_direct_transport_uses_responses_typed_output_and_only_discovery_b
     assert result.parsed[required]==[]
     assert result.metadata['provider']=='openai'
     assert [c.args[0]['phase'] for c in observer.await_args_list]==['started','completed']
+
+
+def test_url_import_output_contracts_match_importer_modes():
+    identity = ai.output_type('identities', 'url_import_identity')
+    assert identity.model_validate({'identities': [{
+        'firm_name': 'SoftServe', 'title': 'Agentic AI Consultant',
+        'source_url': 'https://example.com/jobs/1',
+    }]}).identities[0].title == 'Agentic AI Consultant'
+
+    corroboration = ai.output_type('corroborating_job_urls', 'url_import_corroboration')
+    assert str(corroboration.model_validate({'corroborating_job_urls': [
+        'https://linkedin.com/jobs/view/123',
+    ]}).corroborating_job_urls[0]).startswith('https://linkedin.com/')
+
+    for mode in ('url_import', 'url_import_enrichment'):
+        result_type = ai.output_type('candidates', mode)
+        parsed = result_type.model_validate({'candidates': []})
+        assert parsed.candidates == []
+        assert 'queries_used' not in result_type.model_fields
 
 @pytest.mark.asyncio
 async def test_missing_api_key_never_falls_back(monkeypatch):

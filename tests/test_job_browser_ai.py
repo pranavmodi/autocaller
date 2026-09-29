@@ -10,6 +10,7 @@ from app.services import job_agent as core, job_browser as browser, job_browser_
 
 def test_provider_config_validates_without_secret_fields():
     assert core.JobAgentConfig().browser_ai_provider == 'gateway'
+    assert core.JobAgentConfig().browser_openai_model == 'gpt-5.6-luna'
     for value in ['other', '']:
         with pytest.raises(ValidationError):
             core.JobAgentConfig(browser_ai_provider=value)
@@ -23,6 +24,15 @@ def test_missing_api_key_blocks_only_direct_provider(monkeypatch):
     assert browser.provider_settings(core.JobAgentConfig())['ai_provider'] == 'gateway'
     with pytest.raises(ValueError, match='OPENAI_API_KEY'):
         browser.provider_settings(core.JobAgentConfig(), 'openai')
+
+
+def test_browser_run_can_choose_astra_without_changing_default(monkeypatch):
+    monkeypatch.setenv('OPENAI_API_KEY', 'test-placeholder')
+    config = core.JobAgentConfig(browser_openai_model='gpt-5.6-luna')
+    assert browser.provider_settings(config, 'openai') == {
+        'ai_provider': 'openai', 'openai_model': 'gpt-5.6-luna'}
+    assert browser.provider_settings(config, 'openai', 'gpt-6-astra') == {
+        'ai_provider': 'openai', 'openai_model': 'gpt-6-astra'}
 
 
 def test_structured_schema_requires_all_fields_and_no_defaults():

@@ -128,7 +128,7 @@ def unified_application_state(email_status: str, website_status: str) -> str:
             'queued', 'running', 'verifying'}:
         return 'in_progress'
     if email_status in {'needs_review', 'delivery_unconfirmed', 'failed'} or website_status in {
-            'waiting_for_answer', 'blocked', 'submission_uncertain', 'paused'}:
+            'waiting_for_answer', 'blocked', 'submission_uncertain', 'human_control', 'paused'}:
         return 'needs_attention'
     if email_status == 'sent_verified' or website_status == 'submitted':
         return 'completed'

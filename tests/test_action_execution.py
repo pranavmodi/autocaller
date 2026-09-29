@@ -132,6 +132,7 @@ def _action(**overrides):
 def _item(**overrides):
     data = {
         "id": "item_1",
+        "contact_email": "lead@example.com",
         "reason_json": {
             "agent_draft": {"subject": "Old subject", "body": "Old body"},
             "send_email_action_id": "action_1",

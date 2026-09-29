@@ -133,6 +133,7 @@ class CandidateFields(BaseModel):
     employer_evidence_url: HttpUrl
     title: str = Field(min_length=1, max_length=300)
     contact_urls: list[HttpUrl] = Field(default_factory=list, max_length=5)
+    corroborating_job_urls: list[HttpUrl] = Field(default_factory=list, max_length=3)
 
 
 class UrlImportIdentity(BaseModel):
@@ -142,13 +143,22 @@ class UrlImportIdentity(BaseModel):
     source_url: HttpUrl
 
 
+class UrlImportCorroboration(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    corroborating_job_urls: list[HttpUrl] = Field(default_factory=list, max_length=3)
+
+
 class Candidate(CandidateFields):
     @model_validator(mode="after")
     def domain_valid(self):
         from app.services.front_sync import normalize_domain, is_consumer_domain
         domain = normalize_domain(self.canonical_domain)
         evidence_domain = normalize_domain(str(self.employer_evidence_url))
-        if not domain or domain != evidence_domain or is_consumer_domain(domain):
+        evidence_is_official = (
+            evidence_domain == domain
+            or evidence_domain.endswith("." + domain)
+        )
+        if not domain or not evidence_is_official or is_consumer_domain(domain):
             raise ValueError("official domain must match employer identity evidence")
         if any(domain == host or domain.endswith("." + host) for host in SHARED_RECRUITING_DOMAINS):
             raise ValueError("shared recruiting platform cannot be the canonical employer domain")
@@ -156,6 +166,13 @@ class Candidate(CandidateFields):
             contact_domain = normalize_domain(str(url))
             if contact_domain != domain and not contact_domain.endswith("." + domain):
                 raise ValueError("contact source must use the official employer domain")
+        for url in self.corroborating_job_urls:
+            corroborating_domain = normalize_domain(str(url))
+            if (corroborating_domain != domain
+                    and not corroborating_domain.endswith("." + domain)
+                    and not shared_recruiting_source(str(url))):
+                raise ValueError(
+                    "corroborating job source must use the employer domain or a trusted recruiting platform")
         self.canonical_domain = domain
         return self
 
@@ -165,6 +182,34 @@ def shared_recruiting_source(url: str) -> bool:
     host = (urlsplit(url).hostname or "").lower().rstrip(".")
     return any(host == domain or host.endswith("." + domain)
                for domain in SHARED_RECRUITING_DOMAINS)
+
+
+def filter_corroborating_job_urls(candidate: dict, audit: dict) -> dict:
+    """Drop optional corroboration that is outside the verified trust boundary.
+
+    One inadmissible optional search result must not invalidate an otherwise
+    usable direct-import candidate. The primary job and employer sources still
+    go through the existing fetch and structured-verification checks.
+    """
+    from app.services.front_sync import normalize_domain
+
+    value = dict(candidate)
+    canonical_domain = normalize_domain(str(value.get("canonical_domain") or ""))
+    kept, dropped = [], []
+    for raw_url in value.get("corroborating_job_urls") or []:
+        url = str(raw_url)
+        corroborating_domain = normalize_domain(url)
+        if (canonical_domain
+                and (corroborating_domain == canonical_domain
+                     or corroborating_domain.endswith("." + canonical_domain)
+                     or shared_recruiting_source(url))):
+            kept.append(url)
+        else:
+            dropped.append(url)
+    value["corroborating_job_urls"] = list(dict.fromkeys(kept))
+    if dropped:
+        audit.setdefault("discarded_corroborating_job_urls", []).extend(dropped)
+    return value
 
 
 def official_page_transport_fallbacks(url: str) -> list[str]:
@@ -188,15 +233,40 @@ async def fetch_direct_import_employer_page(
     cache: dict[str, dict],
     audit: dict,
 ) -> tuple[Candidate, dict]:
-    """Fetch official identity evidence, recovering blocked WordPress pages."""
+    """Fetch official identity evidence, trying other same-domain public pages.
+
+    A blocked About page is a transport failure, not evidence that the employer
+    identity is wrong. Every fallback remains on the candidate's already
+    validated official domain and still has to pass the structured verifier and
+    exact excerpt checks later in the pipeline.
+    """
+    from app.services.front_sync import normalize_domain
+
     employer_url = str(candidate.employer_evidence_url)
     try:
         if employer_url not in cache:
             cache[employer_url] = await fetch_page(employer_url)
-        return candidate, cache[employer_url]
+        page = cache[employer_url]
+        if page["http_status"] != 200:
+            raise ValueError(f"HTTP {page['http_status']}")
+        return candidate, page
     except Exception as original_error:
         fallback_errors = []
-        for fallback_url in official_page_transport_fallbacks(employer_url):
+        official_homepage = f"https://{candidate.canonical_domain}/"
+        source_host = normalize_domain(str(candidate.source_url))
+        source_is_official = (
+            source_host == candidate.canonical_domain
+            or source_host.endswith("." + candidate.canonical_domain)
+        )
+        fallback_urls = [
+            *official_page_transport_fallbacks(employer_url),
+            official_homepage,
+            *(str(url) for url in candidate.contact_urls),
+            *([str(candidate.source_url)] if source_is_official else []),
+        ]
+        for fallback_url in dict.fromkeys(fallback_urls):
+            if source_identity(fallback_url) == source_identity(employer_url):
+                continue
             try:
                 if fallback_url not in cache:
                     cache[fallback_url] = await fetch_page(fallback_url)
@@ -211,7 +281,10 @@ async def fetch_direct_import_employer_page(
                     "blocked_url": employer_url,
                     "blocked_error": str(original_error)[:1000],
                     "evidence_url": fallback_url,
-                    "transport": "wordpress_rest_api",
+                    "transport": (
+                        "wordpress_rest_api" if "/wp-json/" in fallback_url
+                        else "same_domain_public_page"
+                    ),
                 })
                 return replacement, page
             except Exception as exc:
@@ -543,7 +616,7 @@ async def llm(payload: dict, required: str, config: SearchConfig, audit: dict, r
     provider_label = "OpenAI API" if provider == "openai" else "OpenClaw gateway"
     attempts = 1 if payload["mode"] in {
         "verification_repair", "candidate_repair", "url_import", "url_import_identity",
-        "url_import_enrichment",
+        "url_import_enrichment", "url_import_identity_research", "url_import_corroboration",
     } else config.max_attempts
     for attempt in range(attempts):
         structured_failure = None
@@ -832,20 +905,24 @@ def validate_decision(decision: Decision, pages: list[dict], *, today: date,
         if check.evidence and not evidence_excerpt_matches(check.evidence, pages):
             raise ValueError('Search criterion evidence not found in fetched source')
     if decision.status == "active":
-        if search_profile and decision.preferred_industry_employer:
-            configured = {" ".join(label.split()).casefold() for label in preferred_industry_labels(search_profile)}
-            matched = " ".join((decision.matched_preferred_industry or "").split()).casefold()
-            if not matched or matched not in configured:
-                raise ValueError("matched preferred industry is not present in the saved search profile")
-        elif decision.matched_preferred_industry:
-            raise ValueError("matched preferred industry requires preferred_industry_employer")
-        if search_profile and decision.target_role_match:
-            configured_roles = {" ".join(label.split()).casefold() for label in target_role_labels(search_profile)}
-            matched_role = " ".join((decision.matched_target_role or "").split()).casefold()
-            if not matched_role or matched_role not in configured_roles:
-                raise ValueError("matched target role is not present in the saved search profile")
-        elif search_profile and decision.matched_target_role:
-            raise ValueError("matched target role requires target_role_match")
+        # Search-profile labels govern discovery runs. A user-supplied URL is
+        # an explicit review target, so its employer/role still need live
+        # evidence but do not need to fit the periodic search vocabulary.
+        if not direct_import:
+            if search_profile and decision.preferred_industry_employer:
+                configured = {" ".join(label.split()).casefold() for label in preferred_industry_labels(search_profile)}
+                matched = " ".join((decision.matched_preferred_industry or "").split()).casefold()
+                if not matched or matched not in configured:
+                    raise ValueError("matched preferred industry is not present in the saved search profile")
+            elif decision.matched_preferred_industry:
+                raise ValueError("matched preferred industry requires preferred_industry_employer")
+            if search_profile and decision.target_role_match:
+                configured_roles = {" ".join(label.split()).casefold() for label in target_role_labels(search_profile)}
+                matched_role = " ".join((decision.matched_target_role or "").split()).casefold()
+                if not matched_role or matched_role not in configured_roles:
+                    raise ValueError("matched target role is not present in the saved search profile")
+            elif search_profile and decision.matched_target_role:
+                raise ValueError("matched target role requires target_role_match")
         employer_matches = ((decision.preferred_industry_employer
                              or configured_legacy_legal_match(decision, search_profile))
                             if search_profile else decision.direct_pi_employer)
@@ -998,6 +1075,7 @@ async def replay_url_import_evidence(source_url: str, previous_runs: list[tuple[
                 decision = Decision.model_validate(rejection["original_decision"])
                 urls = list(dict.fromkeys([
                     str(candidate.source_url), str(candidate.employer_evidence_url),
+                    *(str(url) for url in candidate.corroborating_job_urls),
                     *(str(url) for url in candidate.contact_urls),
                 ]))
                 pages = [await fetch_page(url) for url in urls]
@@ -1199,6 +1277,7 @@ async def recover_direct_import_candidate(
     await checkpoint(run_id, audit)
 
     identity = None
+    identity_researched = False
     if isinstance(original, dict):
         try:
             identity = UrlImportIdentity.model_validate({
@@ -1219,7 +1298,25 @@ async def recover_direct_import_candidate(
            **deadline_kwargs(deadline))
         identities = identity_result.get("identities")
         if not isinstance(identities, list) or len(identities) != 1:
-            raise ValueError("The supplied page did not produce one job and employer identity")
+            # Some employer sites return an HTTP 200 anti-bot page instead of
+            # the public vacancy. Search for this exact URL rather than
+            # treating the transport response as proof that the job is absent.
+            # The downstream source-identity check still forbids substituting
+            # another role or a generic careers page.
+            identity_result = await llm({
+                "mode": "url_import_identity_research",
+                "source_url": source_url,
+                "final_url": direct_page["final_url"],
+                "job_page": direct_page,
+                "previous_identity_result": audit_value(identity_result),
+            }, "identities", config, audit, run_id,
+               lane=os.getenv("OPENCLAW_RPC_INTERACTIVE_LANE", "possibleos-interactive"),
+               allow_tools=True,
+               **deadline_kwargs(deadline))
+            identity_researched = True
+            identities = identity_result.get("identities")
+        if not isinstance(identities, list) or len(identities) != 1:
+            raise ValueError("The supplied URL could not be matched to one exact job and employer")
         identity = UrlImportIdentity.model_validate(identities[0])
 
     search_result = None
@@ -1281,6 +1378,35 @@ async def recover_direct_import_candidate(
     candidates = result.get("candidates")
     if not isinstance(candidates, list) or len(candidates) != 1:
         raise ValueError("Official employer identity research did not return exactly one candidate")
+    if identity_researched:
+        corroboration = await llm({
+            "mode": "url_import_corroboration",
+            "source_url": source_url,
+            "final_url": direct_page["final_url"],
+            "job_identity": identity.model_dump(mode="json"),
+            "location_preferences": (
+                search_profile.location_preferences if search_profile else None
+            ),
+            "instruction": (
+                "Find individual public pages for this exact vacancy across the web. "
+                "Search the quoted employer and title without restricting results to the employer domain. "
+                "When the role has regional copies, prefer a copy matching the operator's location preferences."
+            ),
+        }, "corroborating_job_urls", config, audit, run_id,
+           lane=os.getenv("OPENCLAW_RPC_INTERACTIVE_LANE", "possibleos-interactive"),
+           allow_tools=True,
+           **deadline_kwargs(deadline))
+        researched_urls = corroboration.get("corroborating_job_urls") or []
+        if researched_urls:
+            # The dedicated exact-vacancy pass is more specific than the
+            # employer-identity enrichment pass. Retain enrichment hints only
+            # when the dedicated pass found nothing.
+            candidates[0]["corroborating_job_urls"] = researched_urls
+    candidates = [
+        filter_corroborating_job_urls(candidate, audit)
+        if isinstance(candidate, dict) else candidate
+        for candidate in candidates
+    ]
     return await recover_candidates(candidates, config, audit, run_id, deadline=deadline)
 
 
@@ -1479,8 +1605,24 @@ async def execute(run_id: str, config: SearchConfig, *, seed_only: bool, audit: 
                         audit.setdefault("contact_errors", []).append({
                             "source_url": url, "error": str(exc)[:1000],
                         })
+                corroborating_pages = []
+                for corroborating_url in candidate.corroborating_job_urls:
+                    url = str(corroborating_url)
+                    try:
+                        if url not in cache:
+                            cache[url] = await fetch_page(url)
+                        if cache[url]["http_status"] == 200:
+                            corroborating_pages.append(cache[url])
+                        else:
+                            audit.setdefault("corroborating_source_errors", []).append({
+                                "source_url": url, "error": f"HTTP {cache[url]['http_status']}",
+                            })
+                    except Exception as exc:
+                        audit.setdefault("corroborating_source_errors", []).append({
+                            "source_url": url, "error": str(exc)[:1000],
+                        })
                 batch.append({**item, "candidate_id": str(index),
-                              "pages": [job_page, employer_page, *contact_pages]})
+                              "pages": [job_page, employer_page, *corroborating_pages, *contact_pages]})
             except Exception as exc:
                 audit["errors"].append({"source_url": str(candidate.source_url), "error": str(exc)[:1000]})
                 activity(audit, 'fetch_failed', f'Could not verify {candidate.title}: {str(exc)[:500]}',
@@ -1520,6 +1662,7 @@ async def execute(run_id: str, config: SearchConfig, *, seed_only: bool, audit: 
                 posting = to_posting(candidate, decision, checked_at=now_utc())
                 posting["source_urls"] = list(dict.fromkeys(filter(None, [
                     str(candidate.source_url), item["pages"][0]["final_url"], item.get("input_source_url"),
+                    *(str(url) for url in candidate.corroborating_job_urls),
                 ])))
                 prepared[index] = posting
             except Exception as exc:
@@ -1608,14 +1751,16 @@ def direct_import_lock_id(source_url: str) -> int:
     return int.from_bytes(digest, byteorder="big", signed=True)
 
 
-async def import_url(source_url: str, *, search_profile: SearchProfile | dict | None = None) -> dict:
+async def import_url(source_url: str, *, search_profile: SearchProfile | dict | None = None,
+                     ai_provider: Literal["gateway", "openai"] = "gateway",
+                     run_id: str | None = None) -> dict:
     """Verify and store one operator-supplied job URL without applying to it."""
     await public_url(source_url)
     await ensure_tables()
     profile = (SearchProfile.model_validate(search_profile) if search_profile is not None
                else await configured_job_agent_profile())
     config = await configuration()
-    run_id = uuid.uuid4().hex
+    run_id = run_id or uuid.uuid4().hex
     now = now_utc()
     day = now.astimezone(ZoneInfo(config.timezone)).date().isoformat()
     audit = {
@@ -1626,6 +1771,10 @@ async def import_url(source_url: str, *, search_profile: SearchProfile | dict | 
         "seed_only": False, "job_agent_search": True, "search_trigger": "url_import",
         "manual_search": True, "url_import": True, "source_url": source_url,
         "search_profile": profile.model_dump(mode="json"),
+        "settings_snapshot": {
+            "ai_provider": ai_provider,
+            "openai_model": "gpt-5.6-luna",
+        },
     }
     lock_id = direct_import_lock_id(source_url)
     async with async_engine.connect() as connection:
@@ -1640,6 +1789,8 @@ async def import_url(source_url: str, *, search_profile: SearchProfile | dict | 
                     id=run_id, scheduled_day=day, status="running", started_at=now, result=audit,
                 ))
                 await session.commit()
+            await publish(run_id, audit, "Opening the supplied job link", kind="started",
+                          source_url=source_url)
             try:
                 replayed = await replay_url_import_evidence(
                     source_url, await previous_url_import_runs(source_url), checked_at=now_utc(),

@@ -148,3 +148,25 @@ async def test_invalid_id_changed_resume_and_unknown_session_are_rejected(broker
             'resume_sha256': 'bad', 'action': BrowserAction(kind='submit', element='e1', summary='Submit').model_dump()})
     with pytest.raises(ValueError, match='gone'):
         await PersistentBrowserSession(uuid4().hex).attach()
+
+
+@pytest.mark.asyncio
+async def test_human_actions_use_exact_observation_and_preserve_same_page(broker):
+    client, directory, owner = await open_fixture(broker)
+    await client.observe(directory / 'page.png')
+    box = await owner.browser.page.locator('input').bounding_box()
+    assert box
+    await client.human_action(
+        observation_id=client.observation_id, action_id=uuid4().hex,
+        kind='click', x=box['x'] + 5, y=box['y'] + 5)
+    await client.observe(directory / 'page.png')
+    stale = client.observation_id
+    await client.human_action(
+        observation_id=stale, action_id=uuid4().hex,
+        kind='type', value='Entered by the operator')
+    assert await owner.browser.page.locator('input').input_value() == 'Entered by the operator'
+    with pytest.raises(ValueError, match='live browser view changed'):
+        await client.human_action(
+            observation_id=stale, action_id=uuid4().hex,
+            kind='press', key='Tab')
+    assert await owner.browser.page.evaluate('window.submits || 0') == 0

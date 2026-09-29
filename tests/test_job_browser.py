@@ -1,6 +1,8 @@
 """Browser application safety and real-browser form workflow regression tests."""
 import hashlib
 import os
+from datetime import datetime, timezone
+from types import SimpleNamespace
 from uuid import uuid4
 from unittest.mock import AsyncMock
 
@@ -13,6 +15,7 @@ from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 from app.services import job_agent as core, job_agent_processing as processing
 from app.services import job_browser as service
 from app.services import job_browser_jev
+from app.services import job_browser_tools
 from app.services.job_browser_tools import BrowserAction, BrowserSession
 
 
@@ -45,6 +48,60 @@ def test_click_cannot_disguise_submission_or_bypass_action_audit():
     service.validate_audit(click, {'allowed': True, 'effect': 'advance'})
 
 
+def test_observed_radio_check_uses_click_but_checkbox_keeps_native_check():
+    radio = BrowserAction(kind='check', element='e1', checked=True, summary='Choose Yes')
+    snapshot = {'frames': [{'controls': [
+        {'id': 'e1', 'type': 'radio'}, {'id': 'e2', 'type': 'checkbox'},
+    ]}]}
+    assert service.normalize_observed_action(radio, snapshot).kind == 'click'
+    checkbox = radio.model_copy(update={'element': 'e2'})
+    assert service.normalize_observed_action(checkbox, snapshot).kind == 'check'
+    uncheck = checkbox.model_copy(update={'checked': False})
+    assert service.normalize_observed_action(uncheck, snapshot).kind == 'check'
+
+
+@pytest.mark.asyncio
+async def test_keyboard_recovery_is_limited_to_safe_combobox_keys():
+    browser = BrowserSession()
+    handle = AsyncMock()
+    browser.snapshot = {'frames': [{'controls': [
+        {'id': 'e0', 'type': 'text', 'role': 'combobox'},
+        {'id': 'e1', 'type': 'text', 'role': None},
+    ]}]}
+    browser.elements = {'e0': handle, 'e1': handle}
+    action = BrowserAction(kind='press', element='e0', value='Enter', summary='Commit India')
+    service.validate_audit(action, {'allowed': True, 'effect': 'input'})
+    await browser.execute(action, None)
+    handle.press.assert_awaited_once_with('Enter')
+    with pytest.raises(ValueError, match='safe keys'):
+        await browser.execute(action.model_copy(update={'element': 'e1'}), None)
+    with pytest.raises(ValueError, match='safe keys'):
+        await browser.execute(action.model_copy(update={'value': 'Control+A'}), None)
+
+
+@pytest.mark.asyncio
+async def test_anchor_click_timeout_follows_observed_public_href(monkeypatch):
+    from playwright.async_api import TimeoutError as PlaywrightTimeoutError
+    browser = BrowserSession()
+    handle = AsyncMock()
+    handle.click.side_effect = PlaywrightTimeoutError('text layer intercepts pointer events')
+    browser.page = SimpleNamespace(
+        url='https://apply.example/jobs', goto=AsyncMock())
+    browser.snapshot = {'frames': [{'controls': [{
+        'id': 'e12', 'tag': 'a', 'type': '', 'role': None,
+        'href': '/jobs/exact-role', 'disabled': False,
+    }]}]}
+    browser.elements = {'e12': handle}
+    public = AsyncMock()
+    monkeypatch.setattr(job_browser_tools, 'public_url', public)
+    await browser.execute(BrowserAction(
+        kind='click', element='e12', summary='Open exact role'), None)
+    public.assert_awaited_once_with('https://apply.example/jobs/exact-role')
+    browser.page.goto.assert_awaited_once_with(
+        'https://apply.example/jobs/exact-role',
+        wait_until='domcontentloaded', timeout=45000)
+
+
 def test_only_audited_pre_form_navigation_is_source_recoverable():
     state = {
         'interaction_started': True,
@@ -56,6 +113,54 @@ def test_only_audited_pre_form_navigation_is_source_recoverable():
     assert service.recoverable_source_navigation({**state, 'form_input_completed_at': 'now'}) is False
     assert service.recoverable_source_navigation({**state, 'application_source_url': 'https://jobs.example/1'}) is False
     assert service.recoverable_source_navigation({**state, 'audit': {'allowed': True, 'effect': 'advance'}}) is False
+
+
+def test_exact_employer_validation_rejection_is_recoverable():
+    url = 'https://careers.example/jobs/1/apply'
+    state = {
+        'submit_started_at': '2026-09-28T14:07:22Z',
+        'browser_transport': 'broker',
+        'session_available': True,
+        'current_url': url,
+        'snapshot': {'url': url, 'frames': [{'text':
+            'This info is required. You need to add or modify some info before submitting your job application.'}]},
+    }
+    assert service.recoverable_validation_rejection(state) is True
+    assert service.recoverable_validation_rejection({**state, 'confirmation': {'quote': 'Thank you'}}) is False
+    assert service.recoverable_validation_rejection({**state, 'snapshot': {'url': url, 'frames': [{'text': 'Application received'}]}}) is False
+    visible = service.view(SimpleNamespace(
+        state=state, status='submission_uncertain', revision=7, run_id='fixture',
+        updated_at=datetime.now(timezone.utc)))
+    assert visible['can_resume'] is True
+    assert visible['recoverable_validation_rejection'] is True
+    assert 'snapshot' not in visible
+
+
+def test_page_proven_failed_submit_gets_one_deterministic_retry():
+    recovered_at = '2026-09-29T03:29:29+00:00'
+    url = 'https://apply.example/jobs/1/apply'
+    state = {
+        'authorized_at': '2026-09-28T18:55:35+00:00',
+        'mistaken_submission_recovery': {
+            'at': recovered_at, 'evidence_url': url,
+            'visible_submit_control': True},
+        'force_verified_submit_retry': {'recovery_at': recovered_at},
+    }
+    snapshot = {'url': url, 'frames': [{'text':
+        'Something went wrong. We are working on this, please try again later.',
+        'controls': [
+            {'id': 'e3', 'type': 'submit', 'label': 'Dismiss', 'disabled': False},
+            {'id': 'e9', 'type': 'submit', 'label': 'Submit application', 'disabled': False},
+            {'id': 'e10', 'type': 'submit', 'label': 'Cookie settings', 'disabled': False}]}]}
+    dismiss = service.verified_failed_submit_retry_action(state, snapshot)
+    assert dismiss.kind == 'click' and dismiss.element == 'e3'
+    assert service.verified_failed_submit_retry_audit(dismiss)['effect'] == 'input'
+    snapshot['frames'][0]['text'] = 'Completed application form'
+    action = service.verified_failed_submit_retry_action(state, snapshot)
+    assert action.kind == 'submit' and action.element == 'e9'
+    assert service.verified_failed_submit_retry_audit(action)['effect'] == 'submit'
+    assert service.verified_failed_submit_retry_action({
+        **state, 'mistaken_submission_retry_recovery_at': recovered_at}, snapshot) is None
 
 
 def test_unopened_recovered_source_browser_requires_no_broker_marker(tmp_path, monkeypatch):
@@ -301,8 +406,8 @@ async def test_interrupted_audited_input_can_resume_preserved_page(isolated_stor
     row = await service.checkpoint('fixture', row.revision, status='submission_uncertain',
         interaction_started=True, browser_transport='broker', session_available=True,
         error='Browser service request failed; inspect the saved page before retrying.',
-        last_action={'kind':'select', 'element':'e7', 'value':'India'},
-        audit={'allowed':True, 'effect':'input', 'reason':'Current country field.',
+        last_action={'kind':'check', 'element':'e17', 'checked':True},
+        audit={'allowed':True, 'effect':'input', 'reason':'Custom radio field.',
                'recovery':'none', 'repair_hint':''})
     visible = service.view(row)
     assert visible['can_resume'] is True
@@ -311,7 +416,8 @@ async def test_interrupted_audited_input_can_resume_preserved_page(isolated_stor
         revision=row.revision, action='resume'))
     assert resumed['status'] == 'queued'
     assert resumed['interaction_started'] is False
-    assert resumed['interrupted_action_recovery']['action']['kind'] == 'select'
+    assert resumed['interrupted_action_recovery']['action']['kind'] == 'check'
+    assert 'use a click action' in resumed['audit_feedback']
     current = await service.get('fixture')
     assert any(event['kind'] == 'input_recovered' for event in current['events'])
 
@@ -360,6 +466,29 @@ async def test_interrupted_pre_form_navigation_resumes_through_source_recovery(i
     assert resumed['interaction_started'] is False
     assert resumed['source_recovery']['status'] == 'pending'
     assert 'official employer or ATS' in resumed['stage']
+
+
+@pytest.mark.asyncio
+async def test_interrupted_navigation_inside_verified_portal_reinspects_preserved_page(isolated_store):
+    row = await seed_run(isolated_store)
+    row = await service.checkpoint('fixture', row.revision, status='submission_uncertain',
+        interaction_started=True, browser_transport='broker', session_available=True,
+        application_source_url='https://apply.example/jobs',
+        form_input_completed_at='2026-09-29T02:27:44+00:00',
+        current_url='https://apply.example/jobs',
+        last_action={'kind':'click', 'element':'e12', 'summary':'Open exact role'},
+        audit={'allowed':True, 'effect':'navigation', 'reason':'Opens the exact role.',
+               'recovery':'none', 'repair_hint':''})
+    visible = service.view(row)
+    assert visible['can_resume'] is True
+    assert visible['recoverable_navigation_interruption'] is True
+    assert visible['recoverable_source_navigation'] is False
+    resumed = await service.control('fixture', service.ControlRequest(
+        revision=row.revision, action='resume'))
+    assert resumed['status'] == 'queued'
+    assert resumed['interaction_started'] is False
+    assert resumed['stage'] == 'Inspecting the page reached by the last navigation'
+    assert resumed['navigation_interruption_recovery']['action']['element'] == 'e12'
 
 
 @pytest.mark.asyncio
@@ -685,9 +814,9 @@ async def test_resume_can_switch_provider_but_cannot_reset_submission(isolated_s
     monkeypatch.setenv('OPENAI_API_KEY','test-placeholder')
     row=await seed_run(isolated_store)
     row=await service.checkpoint('fixture',row.revision,status='blocked',ai_provider='gateway')
-    changed=await service.control('fixture',service.ControlRequest(revision=row.revision,action='resume',provider='openai'))
+    changed=await service.control('fixture',service.ControlRequest(revision=row.revision,action='resume',provider='openai',model='gpt-6-astra'))
     assert changed['ai_provider']=='openai' and changed['status']=='queued'
-    assert changed['openai_model']=='gpt-5-mini'
+    assert changed['openai_model']=='gpt-6-astra'
     row=await load_run()
     row=await service.checkpoint('fixture',row.revision,status='submission_uncertain',submit_started_at=core.now().isoformat())
     with pytest.raises(ValueError,match='cannot be restarted'):
@@ -720,6 +849,11 @@ async def test_apply_automatically_classifies_only_selected_job(isolated_store, 
         first = await service.start('selected', service.StartRequest(revision=1, authorize_submit=True))
         again = await service.start('selected', service.StartRequest(revision=1, authorize_submit=True))
         assert first['run_id'] == again['run_id'] and first['status'] == 'queued'
+        assert first['companion_email']['requested'] is True
+        email_application = (await processing.detail('selected'))['application']
+        assert email_application['status'] == 'queued'
+        assert email_application['send_requested'] is True
+        assert email_application['authorized_at']
         classifier.assert_not_called()
         async with core.AsyncSessionLocal() as session:
             row = await session.get(service.BrowserRun, 'selected')
@@ -1114,7 +1248,10 @@ async def test_nonrepairable_audit_rejection_stays_blocked(isolated_store,monkey
         if mode=='audit_action':return {'allowed':False,'effect':'blocked','reason':'Unsupported authorization claim','recovery':'stop','repair_hint':''},{}
         return {'action':{'kind':'check','element':'e0','summary':'False authorization'}},{}
     monkeypatch.setattr(service,'model_decision',controller)
-    with pytest.raises(ValueError,match='Unsupported authorization'):await service.step(row)
+    await service.step(row)
+    saved = await service.get('fixture')
+    assert saved['status'] == 'blocked'
+    assert 'Unsupported authorization' in saved['error']
     browser.execute.assert_not_awaited()
     assert not (await load_run()).state.get('audit_feedback')
 
@@ -1186,6 +1323,108 @@ async def test_reconnect_preserves_pending_question_and_lost_browser_never_reope
         await service.control('fixture', service.ControlRequest(action='reconnect', revision=lost['revision']))
     assert not broker[0].state.sessions
     assert (await service.get('fixture'))['question'] == question
+
+
+@pytest.mark.asyncio
+async def test_human_handoff_keeps_browser_and_returns_without_persisting_text(
+        isolated_store, broker):
+    from app.services.job_browser_client import PersistentBrowserSession
+    row = await seed_run(isolated_store)
+    browser = PersistentBrowserSession(row.run_id)
+    await browser.open('https://fixture.example/job')
+    row = await service.checkpoint(
+        'fixture', row.revision, status='paused', browser_transport='broker',
+        browser_closed=False, session_available=True, stage='Paused')
+    lease = await service.start_handoff(
+        'fixture', service.HandoffStartRequest(revision=row.revision))
+    token = lease.pop('handoff_token')
+    assert lease['status'] == 'human_control'
+    assert 'human_control_token_sha256' not in lease
+    frame = await service.handoff_frame('fixture', token)
+    owner = broker[0].state.sessions[row.run_id]
+    box = await owner.browser.page.locator('input').bounding_box()
+    await service.handoff_action('fixture', token, service.HumanBrowserActionRequest(
+        observation_id=frame['observation_id'], action_id=uuid4().hex,
+        kind='click', x=box['x'] + 4, y=box['y'] + 4))
+    frame = await service.handoff_frame('fixture', token)
+    secret_text = 'Transient operator text'
+    await service.handoff_action('fixture', token, service.HumanBrowserActionRequest(
+        observation_id=frame['observation_id'], action_id=uuid4().hex,
+        kind='type', value=secret_text))
+    assert await owner.browser.page.locator('input').input_value() == secret_text
+    persisted = await load_run()
+    assert secret_text not in persisted.state.__repr__()
+    finished = await service.finish_handoff(
+        'fixture', token, service.HandoffFinishRequest(
+            revision=lease['revision'], outcome='resume_agent'))
+    assert finished['status'] == 'queued'
+    assert (await browser.status())['available'] is True
+    with pytest.raises(ValueError, match='expired or was replaced'):
+        await service.handoff_frame('fixture', token)
+    service._sessions.pop('fixture', None)
+    await browser.close()
+
+
+@pytest.mark.asyncio
+async def test_human_possible_submit_returns_to_verification_only(isolated_store, broker):
+    from app.services.job_browser_client import PersistentBrowserSession
+    row = await seed_run(isolated_store)
+    browser = PersistentBrowserSession(row.run_id)
+    await browser.open('https://fixture.example/job')
+    row = await service.checkpoint(
+        'fixture', row.revision, status='paused', browser_transport='broker',
+        browser_closed=False, session_available=True,
+        current_url='about:blank')
+    lease = await service.start_handoff(
+        'fixture', service.HandoffStartRequest(revision=row.revision))
+    token = lease['handoff_token']
+    finished = await service.finish_handoff(
+        'fixture', token, service.HandoffFinishRequest(
+            revision=lease['revision'], outcome='may_have_submitted'))
+    assert finished['status'] == 'verifying'
+    assert finished['verification_only'] is True
+    assert finished['submit_started_at']
+    uncertain = await service.checkpoint(
+        'fixture', finished['revision'], status='submission_uncertain',
+        error='Confirmation did not appear.')
+    recovered = await service.control(
+        'fixture', service.ControlRequest(
+            revision=uncertain.revision, action='resume_unsubmitted', provider='gateway'))
+    assert recovered['status'] == 'queued'
+    assert recovered['verification_only'] is False
+    assert not recovered.get('submit_started_at')
+    assert not recovered.get('human_may_have_submitted_at')
+    assert recovered['mistaken_submission_recovery']['visible_submit_control'] is True
+    owner = broker[0].state.sessions[row.run_id]
+    assert await owner.browser.page.evaluate('window.submits || 0') == 0
+    service._sessions.pop('fixture', None)
+    await browser.close()
+
+
+@pytest.mark.asyncio
+async def test_human_return_recovers_recorded_submit_when_form_is_still_open(
+        isolated_store, broker):
+    from app.services.job_browser_client import PersistentBrowserSession
+    row = await seed_run(isolated_store)
+    browser = PersistentBrowserSession(row.run_id)
+    await browser.open('https://fixture.example/job')
+    row = await service.checkpoint(
+        'fixture', row.revision, status='submission_uncertain',
+        browser_transport='broker', browser_closed=False, session_available=True,
+        current_url='about:blank', submit_started_at=service.core.now().isoformat())
+    lease = await service.start_handoff(
+        'fixture', service.HandoffStartRequest(revision=row.revision))
+    token = lease['handoff_token']
+    finished = await service.finish_handoff(
+        'fixture', token, service.HandoffFinishRequest(
+            revision=lease['revision'], outcome='resume_agent'))
+    assert finished['status'] == 'queued'
+    assert finished['verification_only'] is False
+    assert not finished.get('submit_started_at')
+    assert finished['mistaken_submission_recovery']['visible_submit_control'] is True
+    assert finished['mistaken_submission_recovery']['source'] == 'human_control_return'
+    service._sessions.pop('fixture', None)
+    await browser.close()
 
 
 @pytest.mark.asyncio

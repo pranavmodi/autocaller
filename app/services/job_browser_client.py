@@ -55,6 +55,17 @@ class PersistentBrowserSession:
             'resume_sha256': hashlib.sha256(resume.read_bytes()).hexdigest(),
             'action': action.model_dump()})
 
+    async def human_action(self, *, observation_id: str, kind: str,
+                           x: float | None = None, y: float | None = None,
+                           value: str = '', key: str = '', delta_y: float = 0,
+                           action_id: str | None = None):
+        return await self.request('POST', '/human-action', json={
+            'action_id': action_id or uuid4().hex,
+            'observation_id': observation_id,
+            'kind': kind, 'x': x, 'y': y, 'value': value,
+            'key': key, 'delta_y': delta_y,
+        })
+
     async def close(self):
         await self.request('DELETE')
 

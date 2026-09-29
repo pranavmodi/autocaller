@@ -230,12 +230,13 @@ def register(app, get, post, console):
     @group.command('browser-start')
     def browser_start(identity: str, revision: int = typer.Option(...),
                       provider: str = typer.Option(None, '--provider'),
+                      model: str = typer.Option(None, '--model'),
                       authorize_submit: bool = typer.Option(False, '--authorize-submit')):
         """Authorize one website application with the selected resume."""
         if not authorize_submit:
             raise typer.BadParameter('Use --authorize-submit only when the user authorized website submission.')
         output(post(f'/api/job-agent/jobs/{identity}/browser/start',
-                    {'revision': revision, 'authorize_submit': True, 'provider': provider}))
+                    {'revision': revision, 'authorize_submit': True, 'provider': provider, 'model': model}))
 
     @group.command('browser-provider')
     def browser_provider(provider: str, model: str = typer.Option(None, '--model')):
@@ -258,13 +259,14 @@ def register(app, get, post, console):
                         revision: int = typer.Option(...),
                         reason: str = typer.Option('', '--reason', help='Optional reason for quitting this application.'),
                         provider: str = typer.Option(None, '--provider'),
+                        model: str = typer.Option(None, '--model'),
                         question_id: str = typer.Option(None, '--question-id'),
                         answer_file: Path = typer.Option(None, '--answer-file', exists=True),
                         remember: bool = typer.Option(True, '--remember/--this-application-only')):
         """Control a run; confirm_receipt validates an exact quote from the preserved page."""
         output(post(f'/api/job-agent/jobs/{identity}/browser/control', {
             'revision': revision, 'action': action, 'question_id': question_id, 'provider': provider, 'reason': reason,
-            'answer': answer_file.read_text() if answer_file else '', 'remember': remember}, timeout=180))
+            'model': model, 'answer': answer_file.read_text() if answer_file else '', 'remember': remember}, timeout=180))
 
     @group.command('browser-quit-reasons')
     def browser_quit_reasons(identity: str):

@@ -3,10 +3,13 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import hmac
 import json
 import logging
 import os
+import secrets
 import shutil
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Literal
 from uuid import uuid4
@@ -57,25 +60,50 @@ class StartRequest(BaseModel):
     revision: int = Field(ge=1)
     authorize_submit: Literal[True]
     provider: Literal['gateway', 'openai'] | None = None
+    model: str | None = Field(None, min_length=1, max_length=120, pattern=r'^\S+$')
 
 
 class ControlRequest(BaseModel):
     model_config = ConfigDict(extra='forbid')
     revision: int = Field(ge=1)
     action: Literal['pause', 'resume', 'answer', 'verify', 'confirm_receipt', 'release',
-                    'restart', 'reconnect', 'quit', 'challenge']
+                    'restart', 'reconnect', 'quit', 'challenge', 'resume_unsubmitted']
     reason: str = Field('', max_length=1000)
     question_id: str | None = None
     answer: str = Field('', max_length=8000)
     provider: Literal['gateway', 'openai'] | None = None
+    model: str | None = Field(None, min_length=1, max_length=120, pattern=r'^\S+$')
     remember: bool = True
 
 
-def provider_settings(config, provider=None):
+class HandoffStartRequest(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    revision: int = Field(ge=1)
+
+
+class HumanBrowserActionRequest(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    observation_id: str = Field(min_length=32, max_length=64)
+    action_id: str = Field(min_length=32, max_length=32)
+    kind: Literal['click', 'type', 'replace', 'press', 'scroll']
+    x: float | None = None
+    y: float | None = None
+    value: str = Field('', max_length=8000)
+    key: str = Field('', max_length=40)
+    delta_y: float = Field(0, ge=-1800, le=1800)
+
+
+class HandoffFinishRequest(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    revision: int = Field(ge=1)
+    outcome: Literal['resume_agent', 'may_have_submitted', 'keep_paused']
+
+
+def provider_settings(config, provider=None, model=None):
     selected = provider or config.browser_ai_provider
     if selected == 'openai' and not os.getenv('OPENAI_API_KEY', '').strip():
         raise ValueError('Direct OpenAI API requires OPENAI_API_KEY on the server. Choose the gateway or configure the key.')
-    return {'ai_provider': selected, 'openai_model': config.browser_openai_model}
+    return {'ai_provider': selected, 'openai_model': model or config.browser_openai_model}
 
 
 def undispatched_missing_control(state):
@@ -83,7 +111,7 @@ def undispatched_missing_control(state):
     # This is an exception identity check, not a semantic interpretation of a page.
     action = state.get('last_action') or {}
     return (state.get('error') == 'The selected control is no longer in the current page snapshot.'
-            and action.get('kind') in {'fill', 'check', 'select', 'upload', 'click'}
+            and action.get('kind') in {'fill', 'check', 'select', 'press', 'upload', 'click'}
             and bool(action.get('element'))
             and 'snapshot' in state
             and not any(c.get('id') == action['element']
@@ -104,7 +132,7 @@ def recoverable_input_interruption(state):
             and not state.get('confirmation')
             and state.get('browser_transport') == 'broker'
             and bool(state.get('session_available'))
-            and action.get('kind') in {'fill', 'check', 'select', 'upload', 'click'}
+            and action.get('kind') in {'fill', 'check', 'select', 'press', 'upload', 'click'}
             and audit.get('allowed') is True
             and audit.get('effect') == 'input')
 
@@ -126,6 +154,49 @@ def recoverable_source_navigation(state):
             and action.get('kind') in {'click', 'goto'}
             and audit.get('allowed') is True
             and audit.get('effect') == 'navigation')
+
+
+def recoverable_navigation_interruption(state):
+    """Allow a preserved browser to be re-inspected after audited navigation.
+
+    This covers navigation inside an already verified employer or ATS portal.
+    The action must have been independently audited as navigation, before any
+    form input or submit attempt, and the original broker session must still be
+    available. Earlier input may be a careers-page search or location filter,
+    so it is not treated as evidence of an application-form submission.
+    Resuming observes the resulting page; it never replays the click.
+    """
+    action = state.get('last_action') or {}
+    audit = state.get('audit') or {}
+    return (bool(state.get('interaction_started'))
+            and not state.get('submit_started_at')
+            and not state.get('confirmation')
+            and state.get('browser_transport') == 'broker'
+            and bool(state.get('session_available'))
+            and bool(state.get('application_source_url'))
+            and action.get('kind') in {'click', 'goto'}
+            and audit.get('allowed') is True
+            and audit.get('effect') == 'navigation')
+
+
+def recoverable_validation_rejection(state):
+    """Allow correction only when the employer explicitly rejected the form.
+
+    A submit click normally stays locked because its outcome may be unknown. An
+    exact employer validation message on the preserved application page proves
+    that the form was not accepted and can safely be corrected in place.
+    """
+    snapshot = state.get('snapshot') or {}
+    visible = '\n'.join(frame.get('text', '') for frame in snapshot.get('frames', []))
+    current_url = state.get('current_url') or ''
+    return (bool(state.get('submit_started_at'))
+            and not state.get('confirmation')
+            and state.get('browser_transport') == 'broker'
+            and bool(state.get('session_available'))
+            and bool(current_url)
+            and snapshot.get('url') == current_url
+            and 'You need to add or modify some info before submitting your job application.' in visible
+            and 'This info is required.' in visible)
 
 
 def unopened_recovered_source_browser(row, state):
@@ -178,11 +249,15 @@ def rejected_human_verification(state):
 
 def restart_blocker(row):
     state = row.state
+    if row.status == 'human_control':
+        return 'Return or pause human control before restarting.'
     if row.status in ACTIVE:
         return 'Pause the application before restarting.'
     if row.status == 'submitted' or state.get('confirmation'):
         return 'A submission was attempted or confirmed. Verify it before starting another application.'
     if rejected_human_verification(state):
+        return None
+    if recoverable_validation_rejection(state):
         return None
     if state.get('submit_started_at'):
         return 'A submission was attempted or confirmed. Verify it before starting another application.'
@@ -200,19 +275,27 @@ def restart_blocker(row):
 def view(row):
     if not row:
         return {'status': 'not_started', 'revision': 0}
+    full_state = row.state
     # Keep resume text / internal page context out of polling responses.
-    state = {k: v for k, v in row.state.items() if k not in {'resume', 'posting', 'preferences', 'snapshot', 'page_evidence', 'action_history', 'saved_profile', 'profile_history', 'attempt_history'}}
+    state = {k: v for k, v in full_state.items() if k not in {
+        'resume', 'posting', 'preferences', 'snapshot', 'page_evidence',
+        'action_history', 'saved_profile', 'profile_history', 'attempt_history',
+        'human_control_token_sha256'}}
     can_resume = ((row.status in {'paused', 'blocked'}
                    and not state.get('submit_started_at') and not state.get('interaction_started'))
                   or (row.status == 'submission_uncertain'
-                      and (recoverable_input_interruption(state)
-                           or recoverable_source_navigation(state))))
+                      and (recoverable_input_interruption(full_state)
+                           or recoverable_source_navigation(full_state)
+                           or recoverable_navigation_interruption(full_state)
+                           or recoverable_validation_rejection(full_state))))
     return {**state, 'status': row.status, 'revision': row.revision,
             'run_id': row.run_id, 'updated_at': row.updated_at.isoformat(),
             'can_restart': restart_blocker(row) is None, 'restart_blocked_reason': restart_blocker(row),
             'can_resume': can_resume,
-            'recoverable_input_interruption': recoverable_input_interruption(state),
-            'recoverable_source_navigation': recoverable_source_navigation(state),
+            'recoverable_input_interruption': recoverable_input_interruption(full_state),
+            'recoverable_source_navigation': recoverable_source_navigation(full_state),
+            'recoverable_navigation_interruption': recoverable_navigation_interruption(full_state),
+            'recoverable_validation_rejection': recoverable_validation_rejection(full_state),
             'can_quit': row.status != 'cancelled' and restart_blocker(row) is None}
 
 
@@ -240,6 +323,183 @@ async def get(identity, *, after: int | None = None):
                           browser_busy=status['busy'])
         except ValueError:
             result.update(session_available=False, browser_session_status='unreachable')
+    return result
+
+
+HANDOFF_TTL_MINUTES = 30
+
+
+def _handoff_hash(token: str):
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
+def _handoff_authorized(row, token: str):
+    state = row.state
+    expected = state.get('human_control_token_sha256', '')
+    expires = state.get('human_control_expires_at')
+    if row.status != 'human_control' or not expected or not expires:
+        return False
+    try:
+        still_valid = datetime.fromisoformat(expires) > datetime.now(timezone.utc)
+    except (TypeError, ValueError):
+        return False
+    return still_valid and hmac.compare_digest(expected, _handoff_hash(token))
+
+
+async def start_handoff(identity: str, request: HandoffStartRequest):
+    """Lease the preserved page to one human controller.
+
+    The raw lease token is returned once and never stored. Rotating a lease
+    invalidates a token lost during a page refresh without changing the page.
+    """
+    await core.ensure_tables()
+    async with core.AsyncSessionLocal() as session:
+        current = await session.get(BrowserRun, identity)
+        if not current:
+            raise KeyError(identity)
+        if current.revision != request.revision:
+            raise ValueError('The browser progressed. Refresh before taking control.')
+        if current.status in ACTIVE:
+            raise ValueError('Pause after the current browser action before taking control.')
+        if current.status in {'submitted', 'cancelled'}:
+            raise ValueError('This application no longer has an active form to control.')
+        if current.state.get('browser_transport') != 'broker' or current.state.get('browser_closed'):
+            raise ValueError('Human control requires the preserved application browser.')
+        await attach_browser(current)
+    token = secrets.token_urlsafe(32)
+    async with core.AsyncSessionLocal() as session:
+        row = await session.get(BrowserRun, identity, with_for_update=True)
+        if not row or row.revision != request.revision:
+            raise ValueError('The browser progressed. Refresh before taking control.')
+        state = dict(row.state)
+        expires = core.now() + timedelta(minutes=HANDOFF_TTL_MINUTES)
+        state.update(
+            human_control_token_sha256=_handoff_hash(token),
+            human_control_expires_at=expires.isoformat(),
+            human_control_started_at=core.now().isoformat(),
+            human_control_previous_status=row.status,
+            stage='You have control of the preserved application browser',
+            error=None,
+        )
+        row.status = 'human_control'
+        row.state = state
+        row.revision += 1
+        row.updated_at = core.now()
+        add_event(session, row, 'Human control started on the preserved browser page.', 'human_control_started')
+        await session.commit()
+        result = view(row)
+    return {**result, 'handoff_token': token}
+
+
+async def _authorized_handoff(identity: str, token: str):
+    await core.ensure_tables()
+    async with core.AsyncSessionLocal() as session:
+        row = await session.get(BrowserRun, identity)
+        if not row:
+            raise KeyError(identity)
+        if not _handoff_authorized(row, token):
+            raise ValueError('Human-control access expired or was replaced. Take control again to continue.')
+        return row
+
+
+async def handoff_frame(identity: str, token: str):
+    row = await _authorized_handoff(identity, token)
+    browser = await attach_browser(row)
+    path = ROOT / row.run_id / 'page.png'
+    snapshot = await browser.observe(path)
+    return {'path': path, 'observation_id': browser.observation_id,
+            'current_url': snapshot.get('url', '')}
+
+
+async def handoff_action(identity: str, token: str, request: HumanBrowserActionRequest):
+    row = await _authorized_handoff(identity, token)
+    browser = await attach_browser(row)
+    # Deliberately do not persist request.value, coordinates, or key presses.
+    await browser.human_action(
+        observation_id=request.observation_id, action_id=request.action_id,
+        kind=request.kind, x=request.x, y=request.y, value=request.value,
+        key=request.key, delta_y=request.delta_y)
+    return {'completed': True}
+
+
+async def finish_handoff(identity: str, token: str, request: HandoffFinishRequest):
+    await core.ensure_tables()
+    async with core.AsyncSessionLocal() as session:
+        row = await session.get(BrowserRun, identity, with_for_update=True)
+        if not row:
+            raise KeyError(identity)
+        if row.revision != request.revision:
+            raise ValueError('The application state changed. Refresh before returning control.')
+        if not _handoff_authorized(row, token):
+            raise ValueError('Human-control access expired or was replaced. Take control again to continue.')
+        state = dict(row.state)
+        state.pop('human_control_token_sha256', None)
+        state.pop('human_control_expires_at', None)
+        state['human_control_finished_at'] = core.now().isoformat()
+        state['question'] = None
+        state['error'] = None
+        state['action_signature'] = None
+        state['repeat_count'] = 0
+        state['segment_steps'] = 0
+        if request.outcome == 'resume_agent':
+            if state.get('submit_started_at'):
+                browser = await attach_browser(row)
+                if not browser:
+                    raise ValueError('The preserved application browser is unavailable.')
+                snapshot = await browser.observe(ROOT / row.run_id / 'page.png')
+                current_url = snapshot.get('url') or ''
+                submit_controls = [control for frame in snapshot.get('frames', [])
+                                   for control in frame.get('controls', [])
+                                   if control.get('type') == 'submit' and not control.get('disabled')]
+                if (not current_url or current_url != state.get('current_url')
+                        or not submit_controls):
+                    raise ValueError(
+                        'The preserved page does not prove that the application remains unsubmitted. '
+                        'Choose verification-only mode instead.')
+                recovered_at = core.now().isoformat()
+                state['mistaken_submission_recovery'] = {
+                    'at': recovered_at,
+                    'human_may_have_submitted_at': state.get('human_may_have_submitted_at'),
+                    'evidence_url': current_url,
+                    'visible_submit_control': True,
+                    'source': 'human_control_return',
+                }
+                for key in ('submit_started_at', 'human_may_have_submitted_at',
+                            'human_verification_submit_started_at'):
+                    state.pop(key, None)
+                state.update(snapshot=snapshot, current_url=current_url, screenshot=True,
+                             browser_action_id=None,
+                             force_verified_submit_retry={'recovery_at': recovered_at})
+            state.update(
+                stage='Agent resuming from the page you completed',
+                interaction_started=False,
+                verification_only=False,
+            )
+            row.status = 'queued'
+            message = 'Human control returned to the agent. The page will be inspected before the next action.'
+        elif request.outcome == 'may_have_submitted':
+            state.update(
+                stage='Checking whether your manual submission was accepted',
+                submit_started_at=state.get('submit_started_at') or core.now().isoformat(),
+                human_may_have_submitted_at=core.now().isoformat(),
+                interaction_started=False,
+                verification_only=True,
+            )
+            row.status = 'verifying'
+            message = 'Human control ended after a possible submission. The agent will verify only and cannot submit again.'
+        else:
+            state.update(stage='Paused after human control', interaction_started=False)
+            row.status = 'paused'
+            message = 'Human control ended. The browser remains open and the application is paused.'
+        state.pop('human_control_previous_status', None)
+        row.state = state
+        row.revision += 1
+        row.updated_at = core.now()
+        add_event(session, row, message, 'human_control_finished', outcome=request.outcome)
+        await session.commit()
+        result = view(row)
+    if row.status in ACTIVE:
+        _wake.set()
     return result
 
 
@@ -397,6 +657,30 @@ def add_event(session, row, message, kind='progress', **details):
                             detail={'kind': kind, 'message': message, **details}))
 
 
+async def request_companion_email(identity: str):
+    """Authorize the existing email workflow once for a website application.
+
+    The email processor owns recipient research, duplicate checks, Zoho send,
+    and Sent verification. This bridge only grants the same send authorization
+    already implied by the saved Job Agent preference and website-apply action.
+    """
+    from app.services import job_agent_processing as processing
+
+    last_error = None
+    for _ in range(2):
+        current = await processing.detail(identity)
+        try:
+            return await processing.request_application(
+                identity,
+                processing.ApplicationRequest(
+                    revision=current['processing_revision'], mode='send'))
+        except ValueError as exc:
+            last_error = exc
+            if 'changed' not in str(exc).casefold():
+                raise
+    raise last_error or ValueError('The email application could not be queued.')
+
+
 async def start(identity, request: StartRequest):
     from app.services import job_agent_processing as processing
     await processing.enqueue_missing()
@@ -413,7 +697,7 @@ async def start(identity, request: StartRequest):
             raise ValueError('This job changed. Refresh before starting the browser application.')
         settings = await session.get(core.JobAgentState, 'default')
         config = core.saved_config(settings.config) if settings else core.JobAgentConfig()
-        ai_settings = provider_settings(config, request.provider)
+        ai_settings = provider_settings(config, request.provider, request.model)
         classification = processing.classification_view(proc, config)
         if candidate.posting.get('status') == 'closed':
             raise ValueError('This job is marked closed.')
@@ -432,6 +716,38 @@ async def start(identity, request: StartRequest):
         add_event(session, row, 'Website application authorized. Resume selection will run automatically.', 'authorized')
         await session.commit()
         result = view(row)
+    if config.auto_email_with_website_application:
+        try:
+            email_result = await request_companion_email(identity)
+            email = email_result.get('application') or {}
+            saved = await checkpoint(
+                identity, result['revision'],
+                companion_email={
+                    'requested': True,
+                    'status': email.get('status', 'queued'),
+                    'run_id': email.get('run_id'),
+                    'requested_at': core.now().isoformat(),
+                },
+                message=('Email application authorized too. Recipient research, duplicate checks, '
+                         'Zoho sending and Sent verification run independently.'),
+                kind='companion_email_requested')
+            if saved:
+                result = view(saved)
+        except Exception as exc:
+            logger.warning('Companion email application could not be queued: %s', type(exc).__name__)
+            saved = await checkpoint(
+                identity, result['revision'],
+                companion_email={
+                    'requested': True,
+                    'status': 'queue_failed',
+                    'error': str(exc)[:500] or type(exc).__name__,
+                    'requested_at': core.now().isoformat(),
+                },
+                message=('Website application started, but its companion email could not be queued. '
+                         'No email was sent.'),
+                kind='companion_email_queue_failed')
+            if saved:
+                result = view(saved)
     _wake.set()
     return result
 
@@ -535,9 +851,12 @@ async def control(identity, request: ControlRequest):
         if row.revision != request.revision:
             raise ValueError('The browser progressed. Refresh its status before this action.')
         state = dict(row.state)
+        if row.status == 'human_control':
+            raise ValueError('Return or pause human control before using another application command.')
         if row.status == 'cancelled' and request.action not in {'restart', 'release'}:
             raise ValueError('You quit this application. Use Restart from beginning if you decide to apply again.')
-        if request.provider is not None and request.action not in {'resume', 'answer', 'verify', 'restart'}:
+        if request.provider is not None and request.action not in {
+                'resume', 'answer', 'verify', 'restart', 'resume_unsubmitted'}:
             raise ValueError('Choose a provider when starting, resuming, answering, or checking confirmation.')
         if request.action == 'confirm_receipt':
             if row.status != 'submission_uncertain' or not state.get('submit_started_at'):
@@ -563,6 +882,44 @@ async def control(identity, request: ControlRequest):
             except Exception as exc:
                 state['browser_cleanup_error'] = 'Submission is confirmed, but browser closure could not be verified.'
                 logger.warning('Confirmed receipt browser cleanup failed: %s', type(exc).__name__)
+        elif request.action == 'resume_unsubmitted':
+            if (row.status != 'submission_uncertain'
+                    or not state.get('human_may_have_submitted_at')
+                    or state.get('confirmation')):
+                raise ValueError('This recovery is only available after human control was mistakenly returned as possibly submitted.')
+            browser = await attach_browser(row)
+            if not browser:
+                raise ValueError('The preserved application browser is unavailable.')
+            snapshot = await browser.observe(ROOT / row.run_id / 'page.png')
+            current_url = snapshot.get('url') or ''
+            submit_controls = [control for frame in snapshot.get('frames', [])
+                               for control in frame.get('controls', [])
+                               if control.get('type') == 'submit' and not control.get('disabled')]
+            if (not current_url or current_url != state.get('current_url')
+                    or not submit_controls):
+                raise ValueError('The preserved page no longer proves that the unsubmitted application form is open.')
+            recovered_at = core.now().isoformat()
+            state['mistaken_submission_recovery'] = {
+                'at': recovered_at,
+                'human_may_have_submitted_at': state.get('human_may_have_submitted_at'),
+                'evidence_url': current_url,
+                'visible_submit_control': True,
+            }
+            for key in ('submit_started_at', 'human_may_have_submitted_at',
+                        'human_verification_submit_started_at'):
+                state.pop(key, None)
+            state.update(
+                snapshot=snapshot, current_url=current_url, screenshot=True,
+                verification_only=False, interaction_started=False,
+                stage='Resuming the preserved form after you confirmed it was not submitted',
+                error=None, question=None, action_signature=None, repeat_count=0,
+                segment_steps=0, browser_action_id=None,
+                force_verified_submit_retry={'recovery_at': recovered_at},
+            )
+            row.status = 'queued'
+            add_event(session, row,
+                'You confirmed that human control did not submit the form. The submission lock was cleared and the preserved form will continue.',
+                'mistaken_submission_recovered', evidence_url=current_url)
         elif request.action == 'quit':
             reason = restart_blocker(row)
             if reason:
@@ -657,9 +1014,17 @@ async def control(identity, request: ControlRequest):
             recovering_source = (request.action == 'resume'
                                  and row.status == 'submission_uncertain'
                                  and recoverable_source_navigation(state))
-            if (row.status in ACTIVE or (row.status in LOCKED and not (recovering_input or recovering_source))
-                    or state.get('submit_started_at')
-                    or (state.get('interaction_started') and not (recovering_input or recovering_source))):
+            recovering_navigation = (request.action == 'resume'
+                                     and row.status == 'submission_uncertain'
+                                     and recoverable_navigation_interruption(state))
+            recovering_validation = (request.action == 'resume'
+                                     and row.status == 'submission_uncertain'
+                                     and recoverable_validation_rejection(state))
+            recovering = (recovering_input or recovering_source
+                          or recovering_navigation or recovering_validation)
+            if (row.status in ACTIVE or (row.status in LOCKED and not recovering)
+                    or (state.get('submit_started_at') and not recovering_validation)
+                    or (state.get('interaction_started') and not recovering)):
                 raise ValueError('This application cannot be restarted. Check submission evidence first.')
             if request.action == 'answer':
                 question = state.get('question')
@@ -699,11 +1064,22 @@ async def control(identity, request: ControlRequest):
             # (for example options in a custom select).
             state['action_signature'] = None
             state['repeat_count'] = 0
+            if request.action == 'resume':
+                recovery = state.get('mistaken_submission_recovery') or {}
+                recovery_at = recovery.get('at')
+                if (recovery_at and not state.get('submit_started_at')
+                        and state.get('mistaken_submission_retry_recovery_at') != recovery_at):
+                    state['force_verified_submit_retry'] = {'recovery_at': recovery_at}
             if recovering_input:
                 state['interrupted_action_recovery'] = {
                     'at': core.now().isoformat(),
                     'action': state.get('last_action'),
                     'audit': state.get('audit')}
+                if (state.get('last_action') or {}).get('kind') == 'check':
+                    state['audit_feedback'] = (
+                        'The previous native check operation could not verify this custom radio or checkbox. '
+                        'Inspect its visible state first. If the choice is still required, use a click action '
+                        'on the same observed control instead of another check action. Do not submit here.')
                 state['interaction_started'] = False
                 state['browser_action_id'] = None
                 state['action_signature'] = None
@@ -723,12 +1099,37 @@ async def control(identity, request: ControlRequest):
                 add_event(session, row,
                     'The listing could not open its application form. Searching for the exact official employer or ATS page.',
                     'source_recovery_started')
-        if request.action in {'resume', 'answer', 'verify', 'restart'}:
+            elif recovering_navigation:
+                state['navigation_interruption_recovery'] = {
+                    'at': core.now().isoformat(),
+                    'action': state.get('last_action'),
+                    'audit': state.get('audit')}
+                state['interaction_started'] = False
+                state['browser_action_id'] = None
+                state['action_signature'] = None
+                state['repeat_count'] = 0
+                state['stage'] = 'Inspecting the page reached by the last navigation'
+                add_event(session, row,
+                    'Continuing after an interrupted navigation. The preserved page will be inspected without replaying the click.',
+                    'navigation_recovered')
+            elif recovering_validation:
+                state['validation_rejection_recovery'] = {
+                    'at': core.now().isoformat(),
+                    'submit_started_at': state.get('submit_started_at'),
+                    'message': 'Employer page explicitly rejected required fields before accepting the application.'}
+                state['submit_started_at'] = None
+                state['interaction_started'] = False
+                state['verification_only'] = False
+                state['stage'] = 'Correcting employer-identified validation errors'
+                add_event(session, row,
+                    'The employer kept the application form open and identified required fields. Correcting them before a new submit attempt.',
+                    'validation_rejection_recovered')
+        if request.action in {'resume', 'answer', 'verify', 'restart', 'resume_unsubmitted'}:
             settings = await session.get(core.JobAgentState, 'default')
             config = core.saved_config(settings.config) if settings else core.JobAgentConfig()
             selected = request.provider or state.get('ai_provider') or config.browser_ai_provider
-            chosen = provider_settings(config, selected)
-            if request.provider is None and state.get('openai_model'):
+            chosen = provider_settings(config, selected, request.model)
+            if request.model is None and request.provider is None and state.get('openai_model'):
                 chosen['openai_model'] = state['openai_model']
             if chosen != {k: state.get(k) for k in chosen}:
                 add_event(session, row, 'AI provider selected: ' + ('Direct OpenAI API' if selected == 'openai' else 'OpenClaw gateway'), 'provider', **chosen)
@@ -807,6 +1208,7 @@ def validate_audit(action, audit):
     if audit.get('allowed') is not True:
         raise ValueError(str(audit.get('reason') or 'This action needs clarification.'))
     allowed_effects = {'fill': {'input'}, 'select': {'input'}, 'check': {'input'},
+                      'press': {'input'},
                       'upload': {'input'}, 'goto': {'navigation'},
                       'email_search': {'read'}, 'verification_code': {'submit'},
                       # Custom comboboxes commonly expose their flyout and options
@@ -815,6 +1217,24 @@ def validate_audit(action, audit):
                       'click': {'input', 'navigation', 'advance'}, 'submit': {'submit'}}
     if audit.get('effect') not in allowed_effects.get(action.kind, set()):
         raise ValueError('The action audit identified a different effect. Inspect the page again before proceeding.')
+
+
+def normalize_observed_action(action, snapshot):
+    """Use click semantics for observed radio buttons.
+
+    Some ATS forms render radios as controlled custom buttons. Playwright's
+    native set_checked can click them visually while the hidden input still
+    reports its old state. Selecting an observed radio is exactly one click;
+    real checkboxes retain native checked-state handling.
+    """
+    if action.kind != 'check' or not action.checked or not action.element:
+        return action
+    control = next((control for frame in snapshot.get('frames', [])
+                    for control in frame.get('controls', [])
+                    if control.get('id') == action.element), None)
+    if not control or control.get('type') != 'radio':
+        return action
+    return action.model_copy(update={'kind': 'click'})
 
 
 def redact_mailbox_action(action: BrowserAction) -> BrowserAction:
@@ -908,6 +1328,68 @@ def complete_verification_action_shape(action: BrowserAction, snapshot: dict) ->
         if len(adjacent) == 1:
             return action.model_copy(update={'choices': adjacent})
     return action
+
+
+def verified_failed_submit_retry_action(state, snapshot):
+    """Dismiss the proven failure, then return its one deterministic submit."""
+    requested = state.get('force_verified_submit_retry') or {}
+    recovery = state.get('mistaken_submission_recovery') or {}
+    recovery_at = recovery.get('at')
+    if (not recovery_at or requested.get('recovery_at') != recovery_at
+            or state.get('submit_started_at') or state.get('confirmation')
+            or state.get('mistaken_submission_retry_recovery_at') == recovery_at):
+        return None
+    if (not recovery.get('visible_submit_control')
+            or snapshot.get('url') != recovery.get('evidence_url')):
+        raise ValueError(
+            'The preserved page no longer matches the verified failed-submission recovery.')
+    visible = '\n'.join(frame.get('text', '') for frame in snapshot.get('frames', []))
+    all_controls = [control for frame in snapshot.get('frames', [])
+                    for control in frame.get('controls', [])]
+    failure_text = 'Something went wrong. We are working on this, please try again later.'
+    dismiss = [control for control in all_controls
+               if (control.get('label') or '').strip().casefold() == 'dismiss'
+               and not control.get('disabled')]
+    if failure_text in visible and len(dismiss) == 1:
+        return BrowserAction(
+            kind='click', element=dismiss[0]['id'],
+            summary='Dismiss the employer’s visible failed-submission error before retrying.',
+            evidence=(
+                'The preserved application page visibly says the earlier attempt failed '
+                'and exposes one enabled Dismiss control.'))
+    controls = [control for frame in snapshot.get('frames', [])
+                for control in frame.get('controls', [])
+                if control.get('type') == 'submit' and not control.get('disabled')]
+    labelled_submit = [control for control in controls
+                       if (control.get('label') or '').strip().casefold() == 'submit application']
+    if len(labelled_submit) == 1:
+        controls = labelled_submit
+    if len(controls) != 1:
+        raise ValueError(
+            'The preserved page must expose exactly one identifiable final Submit control '
+            'before the failed submission can be retried.')
+    return BrowserAction(
+        kind='submit', element=controls[0]['id'],
+        summary='Retry the completed application after the preserved form proved the prior attempt failed.',
+        evidence=(
+            'The operator returned the same preserved application form as unsubmitted; '
+            'the current URL matches that recovery evidence and exactly one enabled final '
+            'Submit control remains visible.'))
+
+
+def verified_failed_submit_retry_audit(action):
+    """Fixed audit for the page-proven, timestamp-bound recovery actions."""
+    if action.kind not in {'click', 'submit'}:
+        raise ValueError('Unexpected failed-submission recovery action.')
+    return {
+        'allowed': True,
+        'effect': 'submit' if action.kind == 'submit' else 'input',
+        'reason': (
+            'The preserved page and recovery timestamp deterministically establish '
+            'this bounded failed-submission recovery action.'),
+        'recovery': 'none',
+        'repair_hint': '',
+    }
 
 
 def verification_control_descriptor(snapshot: dict, element: str) -> dict:
@@ -1099,8 +1581,15 @@ async def step(row):
     if not row:
         return
     state = row.state
-    decision, usage = await model_decision('decide', state, action_schema=BrowserAction.model_json_schema())
-    action = BrowserAction.model_validate(decision['action'])
+    action = verified_failed_submit_retry_action(state, snapshot)
+    forced_failed_submit_retry = action is not None
+    if not forced_failed_submit_retry:
+        decision, usage = await model_decision(
+            'decide', state, action_schema=BrowserAction.model_json_schema())
+        action = BrowserAction.model_validate(decision['action'])
+        action = normalize_observed_action(action, snapshot)
+    else:
+        usage = {'provider': 'deterministic_recovery', 'model': None, 'usage': {}}
     mailbox_derived = False
     mailbox_result = None
     if action.kind == 'email_search':
@@ -1214,11 +1703,16 @@ async def step(row):
         if not row:
             return
         state = row.state
-        audit, audit_usage = await model_decision(
-            'audit_action', state, proposed_action=durable_action.model_dump(),
-            mailbox_result_available=mailbox_derived)
-        from app.services.job_browser_ai import ActionAudit
-        audit = ActionAudit.model_validate(audit).model_dump()
+        if forced_failed_submit_retry:
+            audit = verified_failed_submit_retry_audit(action)
+            audit_usage = {
+                'provider': 'deterministic_recovery', 'model': None, 'usage': {}}
+        else:
+            audit, audit_usage = await model_decision(
+                'audit_action', state, proposed_action=durable_action.model_dump(),
+                mailbox_result_available=mailbox_derived)
+            from app.services.job_browser_ai import ActionAudit
+            audit = ActionAudit.model_validate(audit).model_dump()
         if not audit['allowed'] and audit['recovery'] == 'correct_form':
             if state.get('submit_started_at') or state.get('interaction_started'):
                 raise ValueError('An interaction may already have submitted. Verify before changing the form.')
@@ -1257,6 +1751,13 @@ async def step(row):
     if action.kind == 'submit':
         if not state.get('authorized_at') or state.get('submit_started_at'):
             raise ValueError('A new website submission is not authorized.')
+        recovery = state.get('mistaken_submission_recovery') or {}
+        recovery_at = recovery.get('at')
+        if (recovery_at
+                and state.get('mistaken_submission_retry_recovery_at') == recovery_at):
+            raise ValueError(
+                'The verified failed-submission retry was already attempted. '
+                'New page evidence is required before another submission.')
         async with core.AsyncSessionLocal() as session:
             candidate = await session.get(core.JobAgentCandidate, identity)
             from app.services.job_agent_processing import job_key
@@ -1290,6 +1791,10 @@ async def step(row):
         changes['browser_action_id'] = browser.action_id
     if action.kind == 'submit':
         changes['submit_started_at'] = core.now().isoformat()
+        recovery_at = (state.get('mistaken_submission_recovery') or {}).get('at')
+        if recovery_at:
+            changes['mistaken_submission_retry_recovery_at'] = recovery_at
+            changes['force_verified_submit_retry'] = None
     row = await checkpoint(identity, row.revision, message=durable_action.summary, kind=action.kind, **changes)
     if not row:
         return
@@ -1317,7 +1822,23 @@ async def recover():
                     state['session_error'] = str(exc)
             uncertain = state.get('submit_started_at') or state.get('interaction_started')
             source_pending = (state.get('source_recovery') or {}).get('status') == 'pending'
-            if source_pending and not state.get('submit_started_at'):
+            if row.status == 'human_control':
+                expires = state.get('human_control_expires_at')
+                try:
+                    expired = not expires or datetime.fromisoformat(expires) <= datetime.now(timezone.utc)
+                except (TypeError, ValueError):
+                    expired = True
+                if expired:
+                    state.pop('human_control_token_sha256', None)
+                    state.pop('human_control_expires_at', None)
+                    row.status = 'paused'
+                    state['stage'] = 'Human-control lease expired; browser preserved and paused'
+                elif available:
+                    state['stage'] = 'Human control restored after backend restart'
+                else:
+                    row.status = 'paused'
+                    state['stage'] = 'Human-control browser is unavailable; progress remains saved'
+            elif source_pending and not state.get('submit_started_at'):
                 row.status = 'queued'
                 state['stage'] = 'Continuing official application-page recovery after worker restart'
             elif uncertain:
