@@ -128,6 +128,25 @@ def test_observed_radio_check_uses_click_but_checkbox_keeps_native_check():
 
 
 @pytest.mark.asyncio
+async def test_hidden_native_checkbox_with_visible_label_uses_forced_check():
+    browser = BrowserSession()
+    handle = AsyncMock()
+    browser.snapshot = {'frames': [{'controls': [{
+        'id': 'e0', 'tag': 'input', 'type': 'checkbox',
+        'disabled': False, 'proxy_visible': True,
+    }]}]}
+    browser.elements = {'e0': handle}
+
+    await browser.execute(
+        BrowserAction(kind='check', element='e0', checked=True,
+                      summary='Agree to the terms'),
+        None,
+    )
+
+    handle.set_checked.assert_awaited_once_with(True, force=True)
+
+
+@pytest.mark.asyncio
 async def test_keyboard_recovery_is_limited_to_safe_combobox_keys():
     browser = BrowserSession()
     handle = AsyncMock()

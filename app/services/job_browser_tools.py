@@ -144,9 +144,19 @@ class BrowserSession:
                 infos = await frame.eval_on_selector_all(selector, '''els => els.map(e => {
                   const style = window.getComputedStyle(e);
                   const rect = e.getBoundingClientRect();
-                  const visible = e.type === 'file' || (
+                  const directlyVisible = (
                     style.display !== 'none' && style.visibility !== 'hidden' &&
                     Number(style.opacity || 1) !== 0 && rect.width > 0 && rect.height > 0);
+                  const proxyVisible = ['checkbox', 'radio'].includes(e.type) &&
+                    Array.from(e.labels || []).some(label => {
+                      const labelStyle = window.getComputedStyle(label);
+                      const labelRect = label.getBoundingClientRect();
+                      return labelStyle.display !== 'none' &&
+                        labelStyle.visibility !== 'hidden' &&
+                        Number(labelStyle.opacity || 1) !== 0 &&
+                        labelRect.width > 0 && labelRect.height > 0;
+                    });
+                  const visible = e.type === 'file' || directlyVisible || proxyVisible;
                   return {
                     visible,
                     tag: e.tagName.toLowerCase(), type: e.type || '', role: e.getAttribute('role'),
@@ -155,6 +165,7 @@ class BrowserSession:
                     accept: e.accept || '',
                     value: e.type === 'password' ? '[redacted]' : (e.value || '').slice(0,8000),
                     checked: !!e.checked, validation: e.validationMessage || '',
+                    proxy_visible: proxyVisible && !directlyVisible,
                     contenteditable: e.isContentEditable,
                     options: e.tagName === 'SELECT' ? Array.from(e.options).map(o => ({value:o.value,label:o.label})) : []
                   };
@@ -208,7 +219,11 @@ class BrowserSession:
         elif action.kind == 'select':
             await handle.select_option(value=action.value)
         elif action.kind == 'check':
-            await handle.set_checked(action.checked)
+            # Oracle and similar ATS pages hide a native checkbox behind a
+            # visible associated label. It is still an exact observed input,
+            # but Playwright needs a forced native check because the input's
+            # own box is intentionally transparent or zero-sized.
+            await handle.set_checked(action.checked, force=bool(control.get('proxy_visible')))
         elif action.kind == 'press':
             # Keep keyboard recovery narrow: these keys can commit or dismiss a
             # custom combobox without granting arbitrary keyboard control.
