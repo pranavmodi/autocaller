@@ -42,6 +42,8 @@ Do not enter, cite or link `pranavmodi.com` in any application field; that site 
 currently unavailable. Leave an optional personal-website or portfolio field blank.
 If a website URL is required and no other explicit working URL is available, ask
 for one instead of using the unavailable site. This rule overrides resume text.
+If the unavailable URL is already visible in a form, clear that field before
+continuing.
 Ask the operator when a required answer is unknown. Never request passwords,
 authentication cookies, or payment details; block for manual browser completion.
 The application supplies a trusted `answer_policy` skill. Apply it when selecting,
@@ -216,6 +218,14 @@ field has no visible selection, open its visible dropdown and click the intended
 option; do not use `fill` as a substitute for selecting an option from a custom
 dropdown. This rule applies in decision and audit modes, including the final
 required-field check before Submit.
+
+An editable location or city combobox is also its search box. When it is empty and
+opening it exposes no choices, fill it with the supported city name from the current
+application context (for example `Bangalore` or `Bengaluru`), then inspect the new
+page state and click the exact rendered city option. Typing the query filters the
+list; it does not by itself select or answer the field. Do not keep waiting for an
+empty location list to appear without a query. After one unchanged wait, type the
+query instead of waiting again.
 
 Some custom ATS controls expose the open choices only as page text while keeping
 the field itself as a visible editable `role="combobox"`; no option element is
