@@ -594,14 +594,14 @@ def test_legal_degree_assessment_does_not_reject_legal_adjacent_roles(title):
 
 
 @pytest.mark.asyncio
-async def test_api_defaults_to_posting_date_and_rejects_unknown_sort(monkeypatch):
+async def test_api_defaults_to_latest_activity_and_rejects_unknown_sort(monkeypatch):
     handler = AsyncMock(return_value={"items": [], "total": 0})
     monkeypatch.setattr(service, "candidates", handler)
     app = FastAPI()
     app.include_router(router)
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url="http://test") as client:
         assert (await client.get("/api/job-agent/jobs")).status_code == 200
-        handler.assert_awaited_once_with(None, "", 1, "posted_desc", "", None, "exclude", "all")
+        handler.assert_awaited_once_with(None, "", 1, "updated_desc", "", None, "exclude", "all")
         assert (await client.get("/api/job-agent/jobs?order=random")).status_code == 422
         assert (await client.get("/api/job-agent/jobs?source=external_search")).status_code == 200
         assert handler.await_args.args[-3:] == ("external_search", "exclude", "all")
@@ -724,9 +724,9 @@ async def test_durable_uncapped_collection_sorting_pause_retry_and_history(monke
         assert result["added"] == 1 and result["updated"] == 1
         assert (await service.candidates("shortlisted"))["items"][0]["posting"]["status"] == "closed"
         assert (await drain())["added"] == 0
-        assert (await service.candidates())["items"][0]["posting"]["posted_date"] == "2026-09-18"
+        assert (await service.candidates(order="posted_desc"))["items"][0]["posting"]["posted_date"] == "2026-09-18"
         pages = (await service.candidates())["total_pages"]
-        all_rows = [row for page in range(1, pages + 1) for row in (await service.candidates(page=page))["items"]]
+        all_rows = [row for page in range(1, pages + 1) for row in (await service.candidates(page=page, order="posted_desc"))["items"]]
         assert len(all_rows) == len({r["id"] for r in all_rows}) == 605
         dates = [r["posting"].get("posted_date") for r in all_rows]
         known = [d for d in dates if d]

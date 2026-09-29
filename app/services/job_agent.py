@@ -833,7 +833,7 @@ async def review(identity: str, request: ReviewUpdate):
         return serialize_candidate(row)
 
 
-JobOrder = Literal["posted_desc", "posted_asc", "found_desc", "contact_desc"]
+JobOrder = Literal["updated_desc", "posted_desc", "posted_asc", "found_desc", "contact_desc"]
 
 
 def legal_degree_required_expression():
@@ -887,7 +887,7 @@ def legal_degree_required_expression():
 
 
 async def candidates(status: ReviewStatus | None = None, search: str = "", page: int = 1,
-                     order: JobOrder = "posted_desc", category: str = "",
+                     order: JobOrder = "updated_desc", category: str = "",
                      source: JobSource | None = None,
                      legal_degree: LegalDegreeFilter = "exclude",
                      contract: ContractFilter = "all"):
@@ -968,7 +968,20 @@ async def candidates(status: ReviewStatus | None = None, search: str = "", page:
             mailbox.not_in(BLOCKED_MAILBOXES),
             suitable_role,
         ).correlate(JobAgentCandidate).scalar_subquery()
+        from app.services.job_browser import BrowserRun
+        processing_updated = select(JobProcessing.updated_at).where(
+            JobProcessing.candidate_id == JobAgentCandidate.id
+        ).correlate(JobAgentCandidate).scalar_subquery()
+        browser_updated = select(BrowserRun.updated_at).where(
+            BrowserRun.candidate_id == JobAgentCandidate.id
+        ).correlate(JobAgentCandidate).scalar_subquery()
+        latest_activity = func.greatest(
+            JobAgentCandidate.updated_at,
+            func.coalesce(processing_updated, JobAgentCandidate.updated_at),
+            func.coalesce(browser_updated, JobAgentCandidate.updated_at),
+        )
         ordering = {
+            "updated_desc": (latest_activity.desc(),),
             "posted_desc": (posted.desc().nulls_last(),),
             "posted_asc": (posted.asc().nulls_last(),),
             "found_desc": (JobAgentCandidate.created_at.desc(),),
