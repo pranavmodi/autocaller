@@ -1986,7 +1986,11 @@ async def worker():
                 try:
                     if row.state.get('segment_steps', 0) >= int(os.getenv('JOB_BROWSER_STEP_BUDGET', '60')):
                         raise ValueError('This run reached its step budget. Review progress and resume if further work is needed.')
-                    await asyncio.wait_for(step(row), timeout=240)
+                    # A preserved browser may still be running the pre-bulk
+                    # inspector until the browser service's next restart. Give
+                    # read-heavy ATS pages enough time to finish while keeping
+                    # the overall step bounded.
+                    await asyncio.wait_for(step(row), timeout=480)
                 except Exception as exc:
                     logger.warning('Browser application stopped: %s', type(exc).__name__)
                     async with core.AsyncSessionLocal() as session:

@@ -9,6 +9,8 @@ import httpx
 
 from app.services.job_browser_broker import socket_path
 
+OBSERVE_TIMEOUT_SECONDS = 420
+
 
 class PersistentBrowserSession:
     def __init__(self, run_id: str):
@@ -52,7 +54,7 @@ class PersistentBrowserSession:
         # Complex ATS pages can contain several nested frames and large
         # accessibility trees. Observation is read-only, so allow it more time
         # than state-changing browser actions without weakening submit safety.
-        result = await self.request('POST', '/observe', timeout=180)
+        result = await self.request('POST', '/observe', timeout=OBSERVE_TIMEOUT_SECONDS)
         self.observation_id = result['observation_id']
         return result['snapshot']
 
