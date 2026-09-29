@@ -55,6 +55,13 @@ class PersistentBrowserSession:
             'resume_sha256': hashlib.sha256(resume.read_bytes()).hexdigest(),
             'action': action.model_dump()})
 
+    async def execute_program(self, program, resume: Path):
+        program_id, self.action_id = self.action_id or uuid4().hex, None
+        return await self.request('POST', '/execute-program', json={
+            'program_id': program_id, 'observation_id': self.observation_id,
+            'resume_sha256': hashlib.sha256(resume.read_bytes()).hexdigest(),
+            'program': program.model_dump()})
+
     async def human_action(self, *, observation_id: str, kind: str,
                            x: float | None = None, y: float | None = None,
                            value: str = '', key: str = '', delta_y: float = 0,

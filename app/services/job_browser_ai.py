@@ -14,6 +14,10 @@ from app.services.job_browser_tools import BrowserAction
 class Decision(BaseModel):
     model_config = ConfigDict(extra='forbid', strict=True)
     action: BrowserAction
+    # The first action preserves compatibility with the existing controller.
+    # Additional actions form one bounded input-only program when every action
+    # can safely run from the same page observation.
+    additional_actions: list[BrowserAction] = Field(default_factory=list, max_length=7)
 
 
 class ActionAudit(BaseModel):

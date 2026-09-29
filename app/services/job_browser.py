@@ -22,7 +22,8 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.services import job_agent as core
 from app.services import job_applicant_profile as profile
 from app.services.job_agent_resumes import inspect_resume, resolve_resume
-from app.services.job_browser_tools import BrowserAction, BrowserSession
+from app.services.job_browser_tools import (
+    BrowserAction, BrowserProgram, BrowserSession, validate_fast_program)
 from app.services.job_browser_client import PersistentBrowserSession
 from app.services.job_browser_mail import MailboxSearchRequest, search_zoho_inbox
 from app.services.llm_gateway import call_skill_json
@@ -1237,6 +1238,104 @@ def normalize_observed_action(action, snapshot):
     return action.model_copy(update={'kind': 'click'})
 
 
+def decision_program(decision: dict, snapshot: dict):
+    """Return one ordinary action or a validated input-only fast program.
+
+    Older gateway responses only contain ``action``. Invalid optional batching
+    never blocks progress: the first action remains available through the
+    established single-action path.
+    """
+    first = BrowserAction.model_validate(decision['action'])
+    try:
+        extras = [BrowserAction.model_validate(item)
+                  for item in (decision.get('additional_actions') or [])]
+        if extras:
+            return first, validate_fast_program(
+                BrowserProgram(actions=[first, *extras]), snapshot)
+    except (ValueError, TypeError):
+        pass
+    return normalize_observed_action(first, snapshot), None
+
+
+async def execute_fast_program(identity, row, browser, program, usage, snapshot):
+    """Audit and execute several input-only actions from one observation."""
+    state = row.state
+    record = {
+        'kind': 'program',
+        'summary': f'Fill {len(program.actions)} form fields in one verified program',
+        'actions': [action.model_dump() for action in program.actions],
+    }
+    row = await checkpoint(identity, row.revision,
+        stage='Checking the proposed form program against your saved facts')
+    if not row:
+        return
+    state = row.state
+    audit, audit_usage = await model_decision(
+        'audit_action', state, proposed_action=record)
+    from app.services.job_browser_ai import ActionAudit
+    audit = ActionAudit.model_validate(audit).model_dump()
+    if not audit['allowed'] and audit['recovery'] == 'correct_form':
+        repairs = state.get('audit_repair_count', 0) + 1
+        exhausted = repairs >= 3
+        await checkpoint(identity, row.revision,
+            status='blocked' if exhausted else 'running',
+            stage='Form correction needs review' if exhausted else 'Correcting the form before execution',
+            error=('The agent could not correct the form after three rejected proposals. ' + audit['reason']) if exhausted else None,
+            audit_feedback={'reason': audit['reason'], 'repair_hint': audit['repair_hint'],
+                            'rejected_action': record},
+            audit_repair_count=repairs,
+            audit=audit, audit_model=audit_usage, model=usage,
+            message=('Automatic correction stopped: ' if exhausted else 'Fixing form: ') +
+                    (audit['repair_hint'] or audit['reason']),
+            kind='audit_repair_stopped' if exhausted else 'audit_repair')
+        return
+    if audit.get('allowed') is not True or audit.get('effect') != 'input':
+        await checkpoint(identity, row.revision, status='blocked',
+            stage='Proposed form program did not pass its safety audit',
+            error=str(audit.get('reason') or 'The program was not verified as input-only.'),
+            failed_action=record, failed_audit=audit,
+            failed_model=usage, failed_audit_model=audit_usage,
+            message='The input-only form program was stopped before execution.',
+            kind='audit_blocked')
+        return
+    resume = ROOT / row.run_id / 'resume.pdf'
+    if hashlib.sha256(resume.read_bytes()).hexdigest() != state['resume']['sha256']:
+        raise ValueError('The selected resume changed. Application stopped.')
+    signature = hashlib.sha256(json.dumps(
+        {'program': record, 'snapshot': snapshot}, sort_keys=True).encode()).hexdigest()
+    repeated = state.get('repeat_count', 0) + 1 if signature == state.get('action_signature') else 1
+    if repeated >= 3:
+        raise ValueError('The same form program is repeating without page progress. Review the page before resuming.')
+    program_id = uuid4().hex
+    if isinstance(browser, PersistentBrowserSession):
+        browser.action_id = program_id
+    started_at = core.now().isoformat()
+    row = await checkpoint(identity, row.revision,
+        stage=record['summary'], last_action=record,
+        action_history=[*state.get('action_history', []), record][-40:],
+        model=usage, audit=audit, audit_model=audit_usage,
+        batch_execution={'id': program_id, 'status': 'started',
+                         'started_at': started_at, 'action_count': len(program.actions)},
+        browser_action_id=program_id,
+        steps=state.get('steps', 0) + len(program.actions),
+        segment_steps=state.get('segment_steps', 0) + len(program.actions),
+        action_signature=signature, repeat_count=repeated,
+        message=record['summary'], kind='program')
+    if not row:
+        return
+    result = await browser.execute_program(program, resume)
+    await checkpoint(identity, row.revision,
+        batch_execution={**row.state['batch_execution'], 'status': 'completed',
+                         'completed_at': core.now().isoformat(),
+                         'operations': result.get('operations', [])},
+        form_input_completed_at=core.now().isoformat(),
+        failed_action=None, failed_audit=None, failed_model=None,
+        failed_audit_model=None, audit_feedback=None, audit_repair_count=0,
+        error=None,
+        message=f'Completed {len(program.actions)} form actions in one browser program.',
+        kind='program_completed')
+
+
 def redact_mailbox_action(action: BrowserAction) -> BrowserAction:
     """Keep mailbox queries and returned content out of durable browser state."""
     return action.model_copy(update={'value': '[redacted mailbox query]'})
@@ -1583,13 +1682,19 @@ async def step(row):
     state = row.state
     action = verified_failed_submit_retry_action(state, snapshot)
     forced_failed_submit_retry = action is not None
+    program = None
     if not forced_failed_submit_retry:
+        from app.services.job_browser_ai import Decision
         decision, usage = await model_decision(
-            'decide', state, action_schema=BrowserAction.model_json_schema())
-        action = BrowserAction.model_validate(decision['action'])
-        action = normalize_observed_action(action, snapshot)
+            'decide', state, action_schema=Decision.model_json_schema())
+        action, program = decision_program(decision, snapshot)
     else:
         usage = {'provider': 'deterministic_recovery', 'model': None, 'usage': {}}
+    if program is not None:
+        if read_only:
+            raise ValueError('Submission was already attempted. A form-input program cannot run during verification.')
+        await execute_fast_program(identity, row, browser, program, usage, snapshot)
+        return
     mailbox_derived = False
     mailbox_result = None
     if action.kind == 'email_search':

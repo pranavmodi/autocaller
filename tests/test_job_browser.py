@@ -16,7 +16,8 @@ from app.services import job_agent as core, job_agent_processing as processing
 from app.services import job_browser as service
 from app.services import job_browser_jev
 from app.services import job_browser_tools
-from app.services.job_browser_tools import BrowserAction, BrowserSession
+from app.services.job_browser_tools import (
+    BrowserAction, BrowserProgram, BrowserSession, validate_fast_program)
 
 
 @pytest.fixture(autouse=True)
@@ -46,6 +47,50 @@ def test_click_cannot_disguise_submission_or_bypass_action_audit():
     # combobox values. An audited input effect is valid and is not a submit.
     service.validate_audit(click, {'allowed': True, 'effect': 'input'})
     service.validate_audit(click, {'allowed': True, 'effect': 'advance'})
+
+
+def test_fast_program_accepts_only_distinct_native_input_controls():
+    snapshot = {'frames': [{'controls': [
+        {'id': 'e0', 'tag': 'input', 'type': 'text', 'disabled': False},
+        {'id': 'e1', 'tag': 'select', 'type': 'select-one', 'disabled': False},
+        {'id': 'e2', 'tag': 'input', 'type': 'checkbox', 'disabled': False},
+        {'id': 'e3', 'tag': 'input', 'type': 'file', 'disabled': False},
+        {'id': 'e4', 'tag': 'button', 'type': 'submit', 'disabled': False},
+        {'id': 'e5', 'tag': 'input', 'type': 'radio', 'disabled': False},
+    ]}]}
+    program = BrowserProgram(actions=[
+        BrowserAction(kind='fill', element='e0', value='Pranav', summary='First name'),
+        BrowserAction(kind='select', element='e1', value='CO', summary='Country'),
+        BrowserAction(kind='check', element='e2', checked=True, summary='Agree'),
+        BrowserAction(kind='upload', element='e3', summary='Resume'),
+    ])
+    assert validate_fast_program(program, snapshot) is program
+    for unsafe in [
+        BrowserAction(kind='submit', element='e4', summary='Submit'),
+        BrowserAction(kind='click', element='e4', summary='Continue'),
+        BrowserAction(kind='check', element='e5', summary='Radio'),
+    ]:
+        with pytest.raises(ValueError):
+            validate_fast_program(BrowserProgram(actions=[program.actions[0], unsafe]), snapshot)
+
+
+def test_decision_program_uses_safe_batch_and_falls_back_to_first_action():
+    snapshot = {'frames': [{'controls': [
+        {'id': 'e0', 'tag': 'input', 'type': 'text', 'disabled': False},
+        {'id': 'e1', 'tag': 'input', 'type': 'text', 'disabled': False},
+        {'id': 'e2', 'tag': 'button', 'type': 'submit', 'disabled': False},
+    ]}]}
+    decision = {
+        'action': {'kind': 'fill', 'element': 'e0', 'value': 'Pranav', 'summary': 'First'},
+        'additional_actions': [
+            {'kind': 'fill', 'element': 'e1', 'value': 'Modi', 'summary': 'Last'}],
+    }
+    first, program = service.decision_program(decision, snapshot)
+    assert first.element == 'e0' and [item.element for item in program.actions] == ['e0', 'e1']
+    decision['additional_actions'] = [
+        {'kind': 'submit', 'element': 'e2', 'summary': 'Submit'}]
+    first, program = service.decision_program(decision, snapshot)
+    assert first.element == 'e0' and program is None
 
 
 def test_observed_radio_check_uses_click_but_checkbox_keeps_native_check():

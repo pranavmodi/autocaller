@@ -25,6 +25,42 @@ class BrowserAction(BaseModel):
     evidence: str = Field('', max_length=3000)
 
 
+FAST_PROGRAM_KINDS = {'fill', 'select', 'check', 'upload'}
+
+
+class BrowserProgram(BaseModel):
+    """A bounded sequence of non-consequential actions from one observation."""
+    model_config = ConfigDict(extra='forbid')
+    actions: list[BrowserAction] = Field(min_length=2, max_length=8)
+
+
+def validate_fast_program(program: BrowserProgram, snapshot: dict):
+    """Reject anything that could navigate, advance, submit, or target ambiguity."""
+    controls = {control['id']: control for frame in snapshot.get('frames', [])
+                for control in frame.get('controls', [])}
+    seen = set()
+    for action in program.actions:
+        if action.kind not in FAST_PROGRAM_KINDS:
+            raise ValueError('Fast programs are limited to fill, select, check and resume upload actions.')
+        if not action.element or action.element in seen:
+            raise ValueError('Each fast-program action must target one distinct observed control.')
+        seen.add(action.element)
+        control = controls.get(action.element)
+        if not control or control.get('disabled'):
+            raise ValueError('A fast-program control is unavailable in the current observation.')
+        if control.get('type') in {'password', 'hidden', 'submit', 'button', 'image', 'reset'}:
+            raise ValueError('A fast program cannot use hidden, password, button, or submission controls.')
+        if action.kind == 'fill' and control.get('tag') not in {'input', 'textarea'} and not control.get('contenteditable'):
+            raise ValueError('Fast-program fill actions require a visible text control.')
+        if action.kind == 'select' and control.get('tag') != 'select':
+            raise ValueError('Fast-program select actions require a native select control.')
+        if action.kind == 'check' and control.get('type') != 'checkbox':
+            raise ValueError('Fast-program checks require a native checkbox. Radio and custom choices are handled individually.')
+        if action.kind == 'upload' and control.get('type') != 'file':
+            raise ValueError('Fast-program uploads are limited to the observed resume file control.')
+    return program
+
+
 class BrowserSession:
     def __init__(self):
         self.engine = self.browser = self.context = self.page = None
@@ -86,7 +122,16 @@ class BrowserSession:
                     ancestor = ancestor.parent_frame
                 if hidden:
                     continue
-                body = await frame.locator('body').inner_text(timeout=5000)
+                body_locator = frame.locator('body')
+                body = await body_locator.inner_text(timeout=5000)
+                # Playwright's ARIA snapshot is a compact representation of the
+                # browser accessibility tree. It complements the exact handles
+                # below: the model gets semantic page structure while execution
+                # remains bound to observed element IDs.
+                try:
+                    accessibility = (await body_locator.aria_snapshot(timeout=5000))[:24000]
+                except Exception:
+                    accessibility = ''
                 handles = await frame.query_selector_all(
                     'a[href],button,input,textarea,select,[role="button"],[role="combobox"],'
                     '[role="checkbox"],[role="radio"],[role="option"],[contenteditable="true"]')
@@ -102,11 +147,13 @@ class BrowserSession:
                       href: e.href || '', required: !!e.required, disabled: !!e.disabled,
                       value: e.type === 'password' ? '[redacted]' : (e.value || '').slice(0,8000),
                       checked: !!e.checked, validation: e.validationMessage || '',
+                      contenteditable: e.isContentEditable,
                       options: e.tagName === 'SELECT' ? Array.from(e.options).map(o => ({value:o.value,label:o.label})) : []
                     })''')
                     self.elements[key] = handle
                     controls.append({'id': key, **info})
-                frames.append({'url': frame.url, 'text': body[:24000], 'controls': controls})
+                frames.append({'url': frame.url, 'text': body[:24000],
+                               'accessibility': accessibility, 'controls': controls})
             except Exception:
                 frames.append({'url': frame.url, 'error': 'Frame not readable; inspect again or request help.'})
         password_fields = self.page.locator('input[type="password"]')
@@ -174,6 +221,24 @@ class BrowserSession:
                 await handle.click()
         else:
             raise ValueError('This action is not a browser interaction.')
+
+    async def execute_program(self, program: BrowserProgram, resume: Path):
+        """Execute a prevalidated input-only program against one observation.
+
+        The program deliberately cannot navigate or submit. If a site changes
+        location as a side effect, execution stops immediately and the worker
+        must observe the new page before doing anything else.
+        """
+        validate_fast_program(program, self.snapshot)
+        initial_url = self.page.url
+        completed = []
+        for index, action in enumerate(program.actions):
+            await self.execute(action, resume)
+            completed.append({'index': index, 'kind': action.kind,
+                              'element': action.element, 'status': 'completed'})
+            if self.page.url != initial_url:
+                raise ValueError('A fast form program caused navigation and stopped before any further action.')
+        return completed
 
     async def human_action(self, kind: str, *, x: float | None = None,
                            y: float | None = None, value: str = '',

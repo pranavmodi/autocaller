@@ -10,7 +10,7 @@ import uvicorn
 
 from app.services import job_browser_broker as broker_module
 from app.services.job_browser_client import PersistentBrowserSession
-from app.services.job_browser_tools import BrowserAction
+from app.services.job_browser_tools import BrowserAction, BrowserProgram
 
 
 @pytest_asyncio.fixture
@@ -72,6 +72,40 @@ async def test_worker_reconnect_keeps_form_and_open_is_idempotent(broker):
     await replacement.open('https://fixture.example/job')
     page = await replacement.observe(directory / 'page.png')
     assert page['frames'][0]['controls'][0]['value'] == 'Synthetic Applicant'
+    assert await owner.browser.page.evaluate('window.submits || 0') == 0
+
+
+@pytest.mark.asyncio
+async def test_input_program_fills_multiple_fields_without_submitting(broker):
+    client, directory, owner = await open_fixture(broker)
+    await owner.browser.page.set_content('''<form onsubmit="event.preventDefault(); window.submits=(window.submits||0)+1">
+      <label>First name<input name="first" required></label>
+      <label>Last name<input name="last" required></label>
+      <button type="submit">Submit</button></form>''')
+    snapshot = await client.observe(directory / 'page.png')
+    assert 'textbox "First name"' in snapshot['frames'][0]['accessibility']
+    program = BrowserProgram(actions=[
+        BrowserAction(kind='fill', element='e0', value='Pranav', summary='Fill name'),
+        BrowserAction(kind='fill', element='e1', value='Modi', summary='Fill surname'),
+    ])
+    program_id = uuid4().hex
+    observation_id = client.observation_id
+    client.action_id = program_id
+    result = await client.execute_program(program, directory / 'resume.pdf')
+    assert len(result['operations']) == 2
+    payload = {'program_id': program_id, 'observation_id': observation_id,
+               'resume_sha256': hashlib.sha256(b'%PDF-fixture').hexdigest(),
+               'program': program.model_dump()}
+    replay = await client.request('POST', '/execute-program', json=payload)
+    assert replay['already_completed'] is True
+    with pytest.raises(ValueError, match='different contents'):
+        await client.request('POST', '/execute-program', json={
+            **payload, 'program': BrowserProgram(actions=[
+                program.actions[0],
+                program.actions[1].model_copy(update={'value': 'Changed'}),
+            ]).model_dump()})
+    assert await owner.browser.page.locator('input[name=first]').input_value() == 'Pranav'
+    assert await owner.browser.page.locator('input[name=last]').input_value() == 'Modi'
     assert await owner.browser.page.evaluate('window.submits || 0') == 0
 
 

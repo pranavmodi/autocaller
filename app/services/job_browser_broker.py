@@ -19,7 +19,7 @@ from uuid import UUID, uuid4
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.services.job_browser_tools import BrowserAction, BrowserSession
+from app.services.job_browser_tools import BrowserAction, BrowserProgram, BrowserSession
 
 ROOT = Path(__file__).resolve().parents[2] / 'var/job-browser'
 
@@ -70,6 +70,14 @@ class ExecuteRequest(BaseModel):
     observation_id: str
     resume_sha256: str
     action: BrowserAction
+
+
+class ExecuteProgramRequest(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    program_id: str
+    observation_id: str
+    resume_sha256: str
+    program: BrowserProgram
 
 
 class HumanActionRequest(BaseModel):
@@ -199,6 +207,39 @@ def create_app(root: Path = ROOT):
                 raise
             item.operations[request.action_id]['status'] = 'completed'
             return {'status': 'completed', 'replayed': False}
+
+    @app.post('/sessions/{run_id}/execute-program')
+    async def execute_program(run_id: str, request: ExecuteProgramRequest):
+        """Execute one bounded input-only program; submission is impossible here."""
+        identifier(request.program_id)
+        item = existing(run_id)
+        fingerprint = hashlib.sha256(request.model_dump_json().encode()).hexdigest()
+        async with item.lock:
+            previous = item.operations.get(request.program_id)
+            if previous:
+                if previous['fingerprint'] != fingerprint:
+                    raise HTTPException(409, 'Program identifier reused with different contents.')
+                if previous['status'] != 'completed':
+                    raise HTTPException(409, 'This program may have partially run. Inspect the page; do not replay it.')
+                return {'status': 'completed', 'replayed': False,
+                        'already_completed': True, 'operations': previous['operations']}
+            if not item.observation_id or request.observation_id != item.observation_id:
+                raise HTTPException(409, 'The page observation changed. Inspect again before running the program.')
+            resume = directory(run_id) / 'resume.pdf'
+            if resume.is_symlink() or hashlib.sha256(resume.read_bytes()).hexdigest() != request.resume_sha256:
+                raise HTTPException(409, 'The selected resume changed.')
+            item.operations[request.program_id] = {
+                'fingerprint': fingerprint, 'status': 'started', 'operations': []}
+            item.observation_id = None
+            try:
+                operations = await item.browser.execute_program(request.program, resume)
+            except BaseException:
+                item.operations[request.program_id]['status'] = 'uncertain'
+                raise
+            item.operations[request.program_id].update(
+                status='completed', operations=operations)
+            return {'status': 'completed', 'replayed': False,
+                    'already_completed': False, 'operations': operations}
 
     @app.post('/sessions/{run_id}/human-action')
     async def human_action(run_id: str, request: HumanActionRequest):
