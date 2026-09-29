@@ -14,7 +14,8 @@ from app.services.career_search_web import public_url
 class BrowserAction(BaseModel):
     model_config = ConfigDict(extra='forbid')
     kind: Literal['goto', 'fill', 'select', 'check', 'press', 'click', 'upload', 'wait',
-                  'email_search', 'verification_code', 'ask', 'blocked', 'submit', 'confirmed']
+                  'email_search', 'verification_code', 'official_source', 'ask', 'blocked',
+                  'submit', 'confirmed']
     summary: str = Field(min_length=1, max_length=500)
     element: str | None = Field(None, max_length=40)
     value: str = Field('', max_length=8000)

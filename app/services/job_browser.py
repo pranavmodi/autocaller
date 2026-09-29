@@ -1182,8 +1182,9 @@ async def model_decision(mode, state, **extra):
     answers = [answer for answer in state.get('answers', []) if answer.get('source') != 'profile' or
         all(c['id'] in current_profile and current_profile[c['id']]['revision'] == c.get('revision')
             for c in answer.get('citations', []))]
+    resume_text = state['resume']['text'].replace('https://pranavmodi.com', '').replace('pranavmodi.com', '')
     payload = {'mode': mode, 'answer_policy': CONTEXT_SKILL.read_text(), 'job': state['posting'],
-            'resume': state['resume']['text'], 'preferences': state['preferences'],
+            'resume': resume_text, 'preferences': state['preferences'],
             'saved_profile': state.get('saved_profile', []),
             'operator_answers': answers, 'page': state.get('snapshot'),
             'earlier_pages': state.get('page_evidence', []),
@@ -1249,6 +1250,9 @@ def decision_program(decision: dict, snapshot: dict):
     try:
         extras = [BrowserAction.model_validate(item)
                   for item in (decision.get('additional_actions') or [])]
+    except (ValueError, TypeError):
+        extras = []
+    try:
         if extras:
             return first, validate_fast_program(
                 BrowserProgram(actions=[first, *extras]), snapshot)
@@ -1736,6 +1740,30 @@ async def step(row):
     if read_only and action.kind not in {'confirmed', 'wait', 'email_search',
                                          'verification_code', 'ask', 'blocked'}:
         raise ValueError('Submission was already attempted. Only read-only verification is allowed.')
+    if action.kind == 'official_source':
+        if state.get('application_source_url'):
+            await checkpoint(identity, row.revision, status='blocked',
+                stage='Official application requires manual access',
+                error=action.summary, message=action.summary, kind='blocked')
+            return
+        row = await checkpoint(identity, row.revision, status='queued',
+            source_recovery={
+                'status': 'pending',
+                'requested_at': core.now().isoformat(),
+                'failed_url': snapshot.get('url') or state['posting'].get('source_url'),
+            },
+            stage='Finding the exact role on the official employer or ATS site',
+            error=None, question=None, interaction_started=False,
+            last_action=durable_action.model_dump(),
+            action_history=[*state.get('action_history', []), durable_action.model_dump()][-40:],
+            steps=state.get('steps', 0) + 1,
+            segment_steps=state.get('segment_steps', 0) + 1,
+            model=usage,
+            message='The third-party listing requires login. Searching for the official application page.',
+            kind='source_recovery_started')
+        if row:
+            _wake.set()
+        return
     if action.kind == 'ask':
         if mailbox_derived and mailbox_result.get('matched'):
             raise ValueError('Mailbox content cannot be persisted as an applicant question.')

@@ -90,7 +90,6 @@ def test_fast_program_and_controller_allow_at_most_twelve_actions():
     assert len(validate_fast_program(program, {'frames': [{'controls': controls}]}).actions) == 12
     with pytest.raises(ValidationError):
         BrowserProgram(actions=actions)
-
     decision = Decision(action=actions[0], additional_actions=actions[1:12])
     assert len(decision.additional_actions) == 11
     with pytest.raises(ValidationError):
@@ -534,6 +533,37 @@ async def test_interrupted_pre_form_navigation_resumes_through_source_recovery(i
     assert resumed['interaction_started'] is False
     assert resumed['source_recovery']['status'] == 'pending'
     assert 'official employer or ATS' in resumed['stage']
+
+
+@pytest.mark.asyncio
+async def test_third_party_login_wall_requests_official_source_recovery(isolated_store, monkeypatch):
+    row = await seed_run(isolated_store)
+    browser = AsyncMock()
+    browser.observe.return_value = {
+        'url': 'https://social.example/jobs/123',
+        'title': 'Sign in',
+        'frames': [{'text': 'Sign in to continue your application', 'controls': []}],
+    }
+    service._sessions['fixture'] = browser
+
+    async def controller(mode, *_args, **_kwargs):
+        assert mode == 'decide'
+        return {
+            'action': {
+                'kind': 'official_source',
+                'summary': 'The third-party listing requires sign-in.',
+                'evidence': 'Sign in to continue your application',
+            },
+            'additional_actions': [],
+        }, {}
+
+    monkeypatch.setattr(service, 'model_decision', controller)
+    await service.step(row)
+    saved = await load_run('fixture')
+    assert saved.status == 'queued'
+    assert saved.state['source_recovery']['status'] == 'pending'
+    assert saved.state['source_recovery']['failed_url'] == 'https://social.example/jobs/123'
+    browser.execute.assert_not_awaited()
 
 
 @pytest.mark.asyncio

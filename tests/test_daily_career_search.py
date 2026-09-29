@@ -332,6 +332,12 @@ def test_page_extraction_keeps_ats_dates_and_application_metadata():
     assert "Engineer" in content and "createdOn" in content and '"active": true' in content
 
 
+def test_page_extraction_keeps_embedded_official_job_board_source():
+    content = extract_page(
+        '<h1>Careers</h1><iframe src="https://jobs.example.com/acme?embed=true"></iframe>')
+    assert "https://jobs.example.com/acme?embed=true" in content
+
+
 @pytest.mark.asyncio
 async def test_private_source_is_rejected():
     with pytest.raises(ValueError, match="non-public"):

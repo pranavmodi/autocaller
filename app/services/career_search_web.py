@@ -50,6 +50,12 @@ class PageText(HTMLParser):
             self.skip += 1
         elif tag == "a" and values.get("href"):
             self.links.append(values["href"])
+        elif tag == "iframe" and values.get("src"):
+            # Employer careers pages often embed their official ATS rather than
+            # linking to it with an anchor. Keep that ownership evidence so the
+            # application-source verifier can distinguish the employer's portal
+            # from an unrelated job board.
+            self.links.append(values["src"])
 
     def handle_endtag(self, tag):
         if tag in {"script", "style"}:
