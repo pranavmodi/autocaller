@@ -565,7 +565,12 @@ async def application_resume(identity, posting):
         current = row.classification.get('job_key') == job_key(posting)
         reusable = current and (row.classification.get('source') == 'operator' or
                                row.classification.get('taxonomy_key') == taxonomy_key(config))
-        if not (reusable and choice['status'] == 'classified'):
+        selection_in_progress = (
+            row.classification_status in {'pending', 'classifying'}
+            and row.classification.get('requested') is True
+            and row.classification.get('application_owned') is True
+        )
+        if not (reusable and choice['status'] == 'classified') and not selection_in_progress:
             # Preserve an explicit category even when its PDF is missing.
             if reusable and row.classification.get('source') == 'operator' and choice.get('category_id'):
                 raise ValueError('Your selected category has no usable resume. Assign a one-page PDF in Settings or choose another category.')
@@ -576,10 +581,25 @@ async def application_resume(identity, posting):
             await session.commit()
             needs_classification = True
         else:
-            needs_classification = False
+            needs_classification = selection_in_progress
     if needs_classification:
         try:
-            await asyncio.wait_for(classify_batch(identity=identity), timeout=150)
+            deadline = asyncio.get_running_loop().time() + 150
+            while True:
+                async with core.AsyncSessionLocal() as session:
+                    current = await session.get(JobProcessing, identity)
+                    status = current.classification_status if current else 'needs_review'
+                if status in {'classified', 'needs_review'}:
+                    break
+                remaining = deadline - asyncio.get_running_loop().time()
+                if remaining <= 0:
+                    raise TimeoutError
+                if status == 'pending':
+                    await asyncio.wait_for(classify_batch(identity=identity), timeout=remaining)
+                else:
+                    # The email and website workflows can arrive together. One owns
+                    # the Jev request; the other waits for its durable result.
+                    await asyncio.sleep(min(0.25, remaining))
         except (TimeoutError, asyncio.CancelledError):
             async with core.AsyncSessionLocal() as session:
                 row = await session.get(JobProcessing, identity, with_for_update=True)

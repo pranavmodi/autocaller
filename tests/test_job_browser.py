@@ -1,4 +1,5 @@
 """Browser application safety and real-browser form workflow regression tests."""
+import asyncio
 import hashlib
 import os
 from datetime import datetime, timezone
@@ -919,6 +920,49 @@ async def test_apply_automatically_classifies_only_selected_job(isolated_store, 
     # A subsequent lookup reuses the result without another model call.
     await processing.application_resume('selected', posting)
     assert classifier.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_concurrent_email_and_browser_resume_selection_share_one_classification(isolated_store, monkeypatch):
+    source = isolated_store / 'shared.pdf'
+    source.write_bytes(b'%PDF-test')
+    config = core.JobAgentConfig()
+    category = config.resume_categories[3]
+    category.resume_path = str(source)
+    posting = {'title': 'Staff Machine Learning Engineer', 'firm_name': 'Example',
+               'source_url': 'https://example.com/ml-job', 'status': 'active'}
+    async with core.AsyncSessionLocal() as session:
+        session.add(core.JobAgentState(id='default', config=config.model_dump(), revision=1))
+        session.add(core.JobAgentCandidate(id='concurrent', posting=posting))
+        session.add(processing.JobProcessing(candidate_id='concurrent', revision=1,
+            classification={}, application={}))
+        await session.commit()
+    classifier_started = asyncio.Event()
+    release_classifier = asyncio.Event()
+
+    async def classify(jobs, _categories):
+        classifier_started.set()
+        await release_classifier.wait()
+        return [processing.ClassificationDecision(candidate_id=jobs[0]['candidate_id'],
+            category_id=category.id, confidence=0.98, reason='Machine learning responsibilities match',
+            model='jev-test')]
+
+    classifier = AsyncMock(side_effect=classify)
+    monkeypatch.setattr(processing, 'classify_with_jev', classifier)
+    monkeypatch.setattr(processing, 'inspect_resume', lambda _: {'path':str(source),
+        'filename':source.name, 'sha256':hashlib.sha256(source.read_bytes()).hexdigest(),
+        'text':'Example applicant'})
+    first = asyncio.create_task(processing.application_resume('concurrent', posting))
+    await classifier_started.wait()
+    second = asyncio.create_task(processing.application_resume('concurrent', posting))
+    await asyncio.sleep(0.05)
+    release_classifier.set()
+    one, two = await asyncio.gather(first, second)
+
+    assert one['category_id'] == two['category_id'] == category.id
+    assert one['resume']['filename'] == two['resume']['filename'] == source.name
+    assert classifier.await_count == 1
+    assert (await processing.detail('concurrent'))['classification']['status'] == 'classified'
 
 
 @pytest.mark.asyncio
