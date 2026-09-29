@@ -31,7 +31,7 @@ FAST_PROGRAM_KINDS = {'fill', 'select', 'check', 'upload'}
 class BrowserProgram(BaseModel):
     """A bounded sequence of non-consequential actions from one observation."""
     model_config = ConfigDict(extra='forbid')
-    actions: list[BrowserAction] = Field(min_length=2, max_length=8)
+    actions: list[BrowserAction] = Field(min_length=2, max_length=12)
 
 
 def validate_fast_program(program: BrowserProgram, snapshot: dict):

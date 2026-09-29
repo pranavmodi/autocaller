@@ -17,7 +17,7 @@ class Decision(BaseModel):
     # The first action preserves compatibility with the existing controller.
     # Additional actions form one bounded input-only program when every action
     # can safely run from the same page observation.
-    additional_actions: list[BrowserAction] = Field(default_factory=list, max_length=7)
+    additional_actions: list[BrowserAction] = Field(default_factory=list, max_length=11)
 
 
 class ActionAudit(BaseModel):

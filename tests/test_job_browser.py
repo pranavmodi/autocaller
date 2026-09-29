@@ -75,6 +75,28 @@ def test_fast_program_accepts_only_distinct_native_input_controls():
             validate_fast_program(BrowserProgram(actions=[program.actions[0], unsafe]), snapshot)
 
 
+def test_fast_program_and_controller_allow_at_most_twelve_actions():
+    from app.services.job_browser_ai import Decision
+
+    controls = [
+        {'id': f'e{index}', 'tag': 'input', 'type': 'text', 'disabled': False}
+        for index in range(13)
+    ]
+    actions = [
+        BrowserAction(kind='fill', element=f'e{index}', value=str(index), summary=f'Field {index}')
+        for index in range(13)
+    ]
+    program = BrowserProgram(actions=actions[:12])
+    assert len(validate_fast_program(program, {'frames': [{'controls': controls}]}).actions) == 12
+    with pytest.raises(ValidationError):
+        BrowserProgram(actions=actions)
+
+    decision = Decision(action=actions[0], additional_actions=actions[1:12])
+    assert len(decision.additional_actions) == 11
+    with pytest.raises(ValidationError):
+        Decision(action=actions[0], additional_actions=actions[1:13])
+
+
 def test_decision_program_uses_safe_batch_and_falls_back_to_first_action():
     snapshot = {'frames': [{'controls': [
         {'id': 'e0', 'tag': 'input', 'type': 'text', 'disabled': False},

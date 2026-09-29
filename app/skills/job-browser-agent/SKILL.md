@@ -171,7 +171,9 @@ action_schema supplied in the input. `action` is always required.
 
 Use `additional_actions` to fill a page quickly only when two or more independent,
 visible native controls can be completed from the same snapshot. Include no more
-than seven additional actions. Every action in such a program must be `fill` on a
+than eleven additional actions, for a maximum of twelve actions including the
+required first action. Use fewer whenever page behavior or field dependencies are
+uncertain. Every action in such a program must be `fill` on a
 visible text input or textarea, `select` on a native select, `check` on a native
 checkbox, or `upload` to the observed resume file input. Each action must target a
 different element ID and be supported by the resume, saved profile or operator
