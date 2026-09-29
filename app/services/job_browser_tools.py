@@ -132,24 +132,41 @@ class BrowserSession:
                     accessibility = (await body_locator.aria_snapshot(timeout=5000))[:24000]
                 except Exception:
                     accessibility = ''
-                handles = await frame.query_selector_all(
+                selector = (
                     'a[href],button,input,textarea,select,[role="button"],[role="combobox"],'
                     '[role="checkbox"],[role="radio"],[role="option"],[contenteditable="true"]')
+                # Read every control's serializable state in one browser call.
+                # Large ATS pages can expose hundreds of controls; asking
+                # Playwright for visibility, attributes and values one element
+                # at a time makes a read-only observation take several minutes.
+                handles = await frame.query_selector_all(selector)
+                infos = await frame.eval_on_selector_all(selector, '''els => els.map(e => {
+                  const style = window.getComputedStyle(e);
+                  const rect = e.getBoundingClientRect();
+                  const visible = e.type === 'file' || (
+                    style.display !== 'none' && style.visibility !== 'hidden' &&
+                    Number(style.opacity || 1) !== 0 && rect.width > 0 && rect.height > 0);
+                  return {
+                    visible,
+                    tag: e.tagName.toLowerCase(), type: e.type || '', role: e.getAttribute('role'),
+                    label: e.getAttribute('aria-label') || Array.from(e.labels || []).map(l => l.innerText).join(' ') || e.innerText?.slice(0,300) || e.getAttribute('placeholder') || e.name || '',
+                    href: e.href || '', required: !!e.required, disabled: !!e.disabled,
+                    value: e.type === 'password' ? '[redacted]' : (e.value || '').slice(0,8000),
+                    checked: !!e.checked, validation: e.validationMessage || '',
+                    contenteditable: e.isContentEditable,
+                    options: e.tagName === 'SELECT' ? Array.from(e.options).map(o => ({value:o.value,label:o.label})) : []
+                  };
+                })''')
+                if len(handles) != len(infos):
+                    for handle in handles:
+                        await handle.dispose()
+                    raise ValueError('Page controls changed during inspection; inspect again.')
                 controls = []
-                for handle in handles:
-                    if not await handle.is_visible() and await handle.get_attribute('type') != 'file':
+                for handle, info in zip(handles, infos):
+                    if not info.pop('visible'):
                         await handle.dispose()
                         continue
                     key = f'e{len(self.elements)}'
-                    info = await handle.evaluate('''e => ({
-                      tag: e.tagName.toLowerCase(), type: e.type || '', role: e.getAttribute('role'),
-                      label: e.getAttribute('aria-label') || Array.from(e.labels || []).map(l => l.innerText).join(' ') || e.innerText?.slice(0,300) || e.getAttribute('placeholder') || e.name || '',
-                      href: e.href || '', required: !!e.required, disabled: !!e.disabled,
-                      value: e.type === 'password' ? '[redacted]' : (e.value || '').slice(0,8000),
-                      checked: !!e.checked, validation: e.validationMessage || '',
-                      contenteditable: e.isContentEditable,
-                      options: e.tagName === 'SELECT' ? Array.from(e.options).map(o => ({value:o.value,label:o.label})) : []
-                    })''')
                     self.elements[key] = handle
                     controls.append({'id': key, **info})
                 frames.append({'url': frame.url, 'text': body[:24000],
