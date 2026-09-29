@@ -124,6 +124,7 @@ async def audit_action(state: dict, proposed_action: dict,
                 "rules": [
                     "Treat truthful form input supported by the resume, saved profile, operator answers, or explicit preferences as supported.",
                     "Treat ordinary navigation, resume upload, and read-only mailbox search as supported when their target is visible and relevant.",
+                    "Treat a generated text attachment as supported only when the visible prompt requires an attachment and every claim in the response is grounded in the resume, saved profile, or operator answers.",
                     "When proposed_action is a program, require every contained action to be supported; one unsupported or unclear field makes the whole program unclear or unsupported.",
                     "Treat a submission as supported only when authorized and no unresolved contradiction is visible.",
                     "Treat invented identity, credentials, legal status, work authorization, employment facts, or unsupported biographical claims as unsupported.",

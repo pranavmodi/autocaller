@@ -110,6 +110,27 @@ async def test_input_program_fills_multiple_fields_without_submitting(broker):
 
 
 @pytest.mark.asyncio
+async def test_generated_text_response_uploads_without_replacing_resume(broker):
+    client, directory, owner = await open_fixture(broker)
+    await owner.browser.page.set_content('''<form>
+      <label>Describe a stakeholder example<input name="response" type="file" accept=".txt,text/plain"></label>
+      </form>''')
+    snapshot = await client.observe(directory / 'page.png')
+    control = snapshot['frames'][0]['controls'][0]
+    assert control['accept'] == '.txt,text/plain'
+    response = (
+        'I clarified the stakeholder decision, data inputs, constraints, and success metric; '
+        'then translated the shared need into an iterative production plan.'
+    )
+    await client.execute(BrowserAction(kind='upload_text', element=control['id'],
+        value=response, summary='Attach stakeholder response'), directory / 'resume.pdf')
+    uploaded = await owner.browser.page.locator('input[name=response]').evaluate(
+        'async e => ({name: e.files[0].name, text: await e.files[0].text()})')
+    assert uploaded == {'name': 'Pranav_Modi_Application_Response.txt', 'text': response + '\n'}
+    assert (directory / 'resume.pdf').read_bytes() == b'%PDF-fixture'
+
+
+@pytest.mark.asyncio
 async def test_stale_observation_and_duplicate_submit_never_click_twice(broker):
     client, directory, owner = await open_fixture(broker)
     await client.observe(directory / 'page.png')

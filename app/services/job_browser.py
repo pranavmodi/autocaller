@@ -1211,7 +1211,7 @@ def validate_audit(action, audit):
         raise ValueError(str(audit.get('reason') or 'This action needs clarification.'))
     allowed_effects = {'fill': {'input'}, 'select': {'input'}, 'check': {'input'},
                       'press': {'input'},
-                      'upload': {'input'}, 'goto': {'navigation'},
+                      'upload': {'input'}, 'upload_text': {'input'}, 'goto': {'navigation'},
                       'email_search': {'read'}, 'verification_code': {'submit'},
                       # Custom comboboxes commonly expose their flyout and options
                       # as buttons. Those clicks change a form input without

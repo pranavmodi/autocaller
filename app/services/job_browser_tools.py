@@ -14,8 +14,8 @@ from app.services.career_search_web import public_url
 class BrowserAction(BaseModel):
     model_config = ConfigDict(extra='forbid')
     kind: Literal['goto', 'fill', 'select', 'check', 'press', 'click', 'upload', 'wait',
-                  'email_search', 'verification_code', 'official_source', 'ask', 'blocked',
-                  'submit', 'confirmed']
+                  'upload_text', 'email_search', 'verification_code', 'official_source', 'ask',
+                  'blocked', 'submit', 'confirmed']
     summary: str = Field(min_length=1, max_length=500)
     element: str | None = Field(None, max_length=40)
     value: str = Field('', max_length=8000)
@@ -152,6 +152,7 @@ class BrowserSession:
                     tag: e.tagName.toLowerCase(), type: e.type || '', role: e.getAttribute('role'),
                     label: e.getAttribute('aria-label') || Array.from(e.labels || []).map(l => l.innerText).join(' ') || e.innerText?.slice(0,300) || e.getAttribute('placeholder') || e.name || '',
                     href: e.href || '', required: !!e.required, disabled: !!e.disabled,
+                    accept: e.accept || '',
                     value: e.type === 'password' ? '[redacted]' : (e.value || '').slice(0,8000),
                     checked: !!e.checked, validation: e.validationMessage || '',
                     contenteditable: e.isContentEditable,
@@ -219,6 +220,19 @@ class BrowserSession:
             if control['type'] != 'file':
                 raise ValueError('Choose a file upload control for the selected resume.')
             await handle.set_input_files(str(resume))
+        elif action.kind == 'upload_text':
+            if control['type'] != 'file':
+                raise ValueError('Choose the exact file upload control for this written response.')
+            accepted = (control.get('accept') or '').lower()
+            if accepted and '.txt' not in accepted and 'text/plain' not in accepted:
+                raise ValueError('This response field does not accept a plain-text attachment.')
+            response = action.value.strip()
+            if len(response) < 80:
+                raise ValueError('The generated application response is too short to upload.')
+            attachment = resume.parent / 'Pranav_Modi_Application_Response.txt'
+            attachment.write_text(response + '\n', encoding='utf-8')
+            attachment.chmod(0o600)
+            await handle.set_input_files(str(attachment))
         elif action.kind in {'click', 'submit'}:
             if action.kind == 'click' and control.get('tag') == 'a' and control.get('href'):
                 from playwright.async_api import TimeoutError as PlaywrightTimeoutError

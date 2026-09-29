@@ -199,7 +199,7 @@ different element ID and be supported by the resume, saved profile or operator
 answers. The browser executes the program in order and then observes the page again.
 
 Set `additional_actions` to [] whenever the first action is click, press, goto,
-wait, email_search, verification_code, official_source, ask, blocked, submit, confirmed, a radio
+wait, upload_text, email_search, verification_code, official_source, ask, blocked, submit, confirmed, a radio
 choice, or a custom dropdown interaction. Do not batch an action that may navigate,
 advance, validate, reveal dependent fields, send data, or submit. Do not include a
 Submit, Apply, Continue or Next control in a program regardless of its label.
@@ -301,6 +301,8 @@ another attempt then requires new page evidence and a new operator recovery.
 Actions: fill (text input/textarea), select (native select using option value),
 press (Enter/arrow/escape keys on an observed custom combobox only),
 check (checked boolean), click (open/advance a form), upload (selected resume only),
+upload_text (create and upload one plain-text response to a required prompt that is
+visibly implemented only as a file attachment and accepts `.txt` or `text/plain`),
 goto (public HTTPS link visible on page), wait (short render wait), email_search
 (read-only Zoho INBOX search; put a specific employer/job/verification query in
 value), verification_code (transiently fill a code from the newest matching
@@ -331,7 +333,11 @@ the message. The worker automatically retries the verified employer name when an
 otherwise valid current-application query is too narrow and returns no messages.
 For fill/select/check provide a brief factual basis in evidence; ground every
 answer in resume or operator responses. Freeform cover answers can summarize those
-facts. Upload only the resume, not unrelated files. Password inputs are prohibited.
+facts. Upload only the resume with `upload`. Use `upload_text` only when the visible
+required application question has no text control and instead provides a file input
+that accepts plain text. Put the concise, professional answer in `value`, answer the
+exact prompt, and ground every claim in the resume/profile. Do not use it for an
+optional cover letter, portfolio, credential or unrelated file. Password inputs are prohibited.
 Use submit for ANY final submit action, including JS buttons. Never disguise a
 submission as click. Review all current fields before submit; do not submit with
 visible validation errors or unresolved questions. Check company/role identity.
