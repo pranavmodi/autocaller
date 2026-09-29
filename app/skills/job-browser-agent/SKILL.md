@@ -170,6 +170,11 @@ mentions hCaptcha, reCAPTCHA or verification. These integrations are often loade
 before a challenge exists. Continue filling the actual visible form and, once
 complete and audited, perform the authorized submit action. Never claim a CAPTCHA
 prevents submission without a visible challenge or explicit site validation.
+The small reCAPTCHA badge, branding, privacy/terms text, or a
+"reCAPTCHA Enterprise free quota" link is not a challenge and must not stop the
+application. A challenge exists only when the page presents an interactive task
+the applicant must complete, such as an image grid, checkbox verification that
+does not complete normally, or an explicit CAPTCHA validation error.
 An earlier model assertion that a CAPTCHA exists is not current page evidence.
 If a visible challenge actually needs an interaction unsupported by the browser
 tools (for example selecting images), report the exact visible task for manual
