@@ -1987,6 +1987,10 @@ async def recover():
             elif source_pending and not state.get('submit_started_at'):
                 row.status = 'queued'
                 state['stage'] = 'Continuing official application-page recovery after worker restart'
+            elif state.get('spam_protection'):
+                row.status = 'paused'
+                state['stage'] = ('Paused — spam protection; browser preserved' if available else
+                                  'Paused — spam protection; browser unavailable')
             elif uncertain:
                 row.status = 'submission_uncertain'
                 state['stage'] = ('Browser preserved; check confirmation without resubmitting' if available else

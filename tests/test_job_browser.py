@@ -1511,6 +1511,25 @@ async def test_reconnect_preserves_pending_question_and_lost_browser_never_reope
 
 
 @pytest.mark.asyncio
+async def test_recover_preserves_spam_protection_pause_after_submit(isolated_store):
+    row = await seed_run(isolated_store)
+    row = await service.checkpoint(
+        'fixture', row.revision, status='paused',
+        submit_started_at=core.now().isoformat(),
+        spam_protection={'detected_at': core.now().isoformat(), 'evidence': 'Spam protection rejected this request'},
+        stage='Paused — spam protection',
+    )
+
+    await service.recover()
+    recovered = await service.get('fixture')
+
+    assert recovered['status'] == 'paused'
+    assert recovered['stage'] == 'Paused — spam protection; browser unavailable'
+    assert recovered['spam_protection']['evidence'] == 'Spam protection rejected this request'
+    assert recovered['can_resume'] is False
+
+
+@pytest.mark.asyncio
 async def test_human_handoff_keeps_browser_and_returns_without_persisting_text(
         isolated_store, broker):
     from app.services.job_browser_client import PersistentBrowserSession
