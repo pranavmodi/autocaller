@@ -33,6 +33,18 @@ opening the portal; the browser controller must locate and verify the exact save
 role before filling any form. A generic profile signup, talent network application,
 or careers marketing page is not an official jobs portal.
 
+Some employer-owned jobs applications render all job data with JavaScript, so a
+static fetch may contain only the employer brand and a JavaScript-shell message.
+For such a page, match_scope=official_jobs_portal is allowed when the portal host
+is the canonical employer host or its subdomain, a freshly fetched official
+employer page identifies the employer and exposes a clear browse-jobs or apply
+action, and the selected page is a jobs browser rather than only a generic talent
+signup. A literal rendered hyperlink is not required across two pages on that
+same employer-owned domain. The browser must still locate and verify the exact
+saved title, employer and location before it fills or submits any form. Do not
+extend this exception to a different-domain ATS unless the official employer page
+explicitly links to that ATS.
+
 When matched, selected_url and evidence_url must each exactly equal a supplied
 requested_url or final_url. For direct_role, quote short exact text from
 evidence_url for the role, employer and application action/form. For
