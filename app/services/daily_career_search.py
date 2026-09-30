@@ -996,7 +996,8 @@ def validate_decision(decision: Decision, pages: list[dict], *, today: date,
                 raise ValueError("application contact is not a suitable recruiting or routing contact")
 
 
-def to_posting(candidate: Candidate, decision: Decision, *, checked_at: datetime) -> dict:
+def to_posting(candidate: Candidate, decision: Decision, *, checked_at: datetime,
+               search_profile: SearchProfile | None = None) -> dict:
     payload = decision.model_dump(mode="json", exclude={"candidate_id", "application_contacts"})
     payload.update({"source_url": str(candidate.source_url), "source_name": "Verified employer / ATS",
         "employer_posted_date": payload["posted_date"], "first_seen_at": checked_at.isoformat(),
@@ -1693,7 +1694,8 @@ async def execute(run_id: str, config: SearchConfig, *, seed_only: bool, audit: 
                     and not item.get("tracked") and not direct_source_url):
                 continue
             try:
-                posting = to_posting(candidate, decision, checked_at=now_utc())
+                posting = to_posting(candidate, decision, checked_at=now_utc(),
+                                     search_profile=search_profile)
                 posting["source_urls"] = list(dict.fromkeys(filter(None, [
                     str(candidate.source_url), item["pages"][0]["final_url"], item.get("input_source_url"),
                     *(str(url) for url in candidate.corroborating_job_urls),

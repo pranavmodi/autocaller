@@ -1004,13 +1004,32 @@ async def candidates(status: ReviewStatus | None = None, search: str = "", page:
         browser_updated = select(BrowserRun.updated_at).where(
             BrowserRun.candidate_id == JobAgentCandidate.id
         ).correlate(JobAgentCandidate).scalar_subquery()
+        processing_status = select(JobProcessing.application_status).where(
+            JobProcessing.candidate_id == JobAgentCandidate.id
+        ).correlate(JobAgentCandidate).scalar_subquery()
+        browser_status = select(BrowserRun.status).where(
+            BrowserRun.candidate_id == JobAgentCandidate.id
+        ).correlate(JobAgentCandidate).scalar_subquery()
+        workflow_priority = case(
+            (or_(
+                processing_status.in_(("queued", "preparing", "queued_send", "sending")),
+                browser_status.in_(("queued", "running", "verifying", "waiting_for_answer", "human_control", "paused")),
+            ), 0),
+            (or_(
+                processing_status.in_(("needs_review", "delivery_unconfirmed")),
+                browser_status.in_(("blocked", "submission_uncertain")),
+            ), 1),
+            (processing_status == "ready", 2),
+            (or_(processing_status == "sent_verified", browser_status == "submitted"), 3),
+            else_=4,
+        )
         latest_activity = func.greatest(
             JobAgentCandidate.updated_at,
             func.coalesce(processing_updated, JobAgentCandidate.updated_at),
             func.coalesce(browser_updated, JobAgentCandidate.updated_at),
         )
         ordering = {
-            "updated_desc": (latest_activity.desc(),),
+            "updated_desc": (workflow_priority.asc(), latest_activity.desc()),
             "posted_desc": (posted.desc().nulls_last(),),
             "posted_asc": (posted.asc().nulls_last(),),
             "found_desc": (JobAgentCandidate.created_at.desc(),),
