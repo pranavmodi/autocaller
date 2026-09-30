@@ -285,6 +285,7 @@ async def fetch_direct_import_employer_page(
     candidate: Candidate,
     cache: dict[str, dict],
     audit: dict,
+    job_page: dict | None = None,
 ) -> tuple[Candidate, dict]:
     """Fetch official identity evidence, trying other same-domain public pages.
 
@@ -344,6 +345,17 @@ async def fetch_direct_import_employer_page(
                 fallback_errors.append({"source_url": fallback_url, "error": str(exc)[:1000]})
         if fallback_errors:
             audit.setdefault("official_evidence_fetch_errors", []).extend(fallback_errors)
+        if (job_page and job_page.get("http_status") == 200
+                and shared_recruiting_source(str(candidate.source_url))
+                and source_identity(job_page.get("requested_url", ""))
+                == source_identity(str(candidate.source_url))):
+            audit.setdefault("official_evidence_fetch_fallbacks", []).append({
+                "blocked_url": employer_url,
+                "blocked_error": str(original_error)[:1000],
+                "evidence_url": str(candidate.source_url),
+                "transport": "trusted_job_page_when_official_blocked",
+            })
+            return candidate, job_page
         raise original_error
 
 
@@ -1648,7 +1660,7 @@ async def execute(run_id: str, config: SearchConfig, *, seed_only: bool, audit: 
                     continue
                 if direct_source_url:
                     candidate, employer_page = await fetch_direct_import_employer_page(
-                        candidate, cache, audit,
+                        candidate, cache, audit, job_page,
                     )
                     item["candidate"] = candidate
                 else:

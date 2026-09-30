@@ -895,6 +895,36 @@ async def test_direct_import_recovers_blocked_official_page_with_verified_transp
 
 
 @pytest.mark.asyncio
+async def test_direct_import_uses_exact_trusted_job_when_all_official_pages_are_blocked(monkeypatch):
+    prospect = service.Candidate(
+        firm_name="Jalasoft",
+        canonical_domain="jalasoft.com",
+        source_url="https://linkedin.com/jobs/view/4471596936",
+        employer_evidence_url="https://jalasoft.com/about-us",
+        title="Academic Content Developer - AI Evaluations and Red-Team Engineer",
+    )
+
+    async def blocked(_url):
+        raise RuntimeError("unverified HTTP 403")
+
+    job_page = {
+        "requested_url": str(prospect.source_url),
+        "final_url": str(prospect.source_url),
+        "http_status": 200,
+        "content": "Jalasoft hiring Academic Content Developer - AI Evaluations and Red-Team Engineer. Apply.",
+    }
+    monkeypatch.setattr(service, "fetch_page", blocked)
+    audit = {}
+    recovered, page = await service.fetch_direct_import_employer_page(
+        prospect, {}, audit, job_page,
+    )
+
+    assert recovered == prospect
+    assert page == job_page
+    assert audit["official_evidence_fetch_fallbacks"][-1]["transport"] == "trusted_job_page_when_official_blocked"
+
+
+@pytest.mark.asyncio
 async def test_direct_import_uses_same_domain_page_when_about_page_is_blocked(monkeypatch):
     prospect = service.Candidate(
         firm_name="Example PI",

@@ -223,6 +223,12 @@ Keep the displayed posting organization as firm_name, explain the named-client
 relationship in reason, and verify the live role against the supplied page. Do
 not replace it with an unnamed client or claim the posting organization is the
 client's legal employer.
+For a direct import only, when the canonical employer domain was established but
+every public official identity page is transport-blocked, a freshly fetched exact
+vacancy on LinkedIn or another trusted recruiting platform may establish the
+displayed employer identity. It cannot establish a preferred-industry match or
+support an application email, and the canonical domain remains the separately
+researched official employer domain. Cite only exact text from that vacancy.
 
 ## Verification repair mode
 `verification_repair` is one bounded correction pass, only for the supplied
