@@ -775,6 +775,27 @@ async def test_direct_import_searches_exact_url_when_fetched_job_body_is_blocked
     assert calls[3][1]["allow_tools"] is True
 
 
+@pytest.mark.asyncio
+async def test_operator_job_page_preserves_blocked_url_for_exact_research(monkeypatch):
+    async def blocked(_url):
+        raise RuntimeError("unverified HTTP 403")
+
+    monkeypatch.setattr(service, "fetch_direct_job_page", blocked)
+    audit = {}
+    page = await service.fetch_operator_job_page(
+        "https://employer.example/jobs/524", audit,
+    )
+
+    assert page == {
+        "requested_url": "https://employer.example/jobs/524",
+        "final_url": "https://employer.example/jobs/524",
+        "http_status": 0,
+        "content": "",
+        "transport_error": "unverified HTTP 403",
+    }
+    assert audit["direct_source_fetch_errors"][0]["fallback"] == "exact_url_identity_research"
+
+
 def test_shared_recruiting_source_uses_exact_host_boundaries():
     assert service.shared_recruiting_source("https://co.linkedin.com/jobs/view/123")
     assert service.shared_recruiting_source("https://jobs.example.myworkdayjobs.com/job/123")

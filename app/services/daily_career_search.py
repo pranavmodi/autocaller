@@ -262,6 +262,25 @@ async def fetch_direct_job_page(url: str) -> dict:
     }
 
 
+async def fetch_operator_job_page(url: str, audit: dict) -> dict:
+    """Represent a blocked supplied URL so bounded exact-vacancy research can recover it."""
+    try:
+        return await fetch_direct_job_page(url)
+    except Exception as exc:
+        audit.setdefault("direct_source_fetch_errors", []).append({
+            "source_url": url,
+            "error": str(exc)[:1000] or type(exc).__name__,
+            "fallback": "exact_url_identity_research",
+        })
+        return {
+            "requested_url": url,
+            "final_url": url,
+            "http_status": 0,
+            "content": "",
+            "transport_error": str(exc)[:1000] or type(exc).__name__,
+        }
+
+
 async def fetch_direct_import_employer_page(
     candidate: Candidate,
     cache: dict[str, dict],
@@ -1481,14 +1500,14 @@ async def execute(run_id: str, config: SearchConfig, *, seed_only: bool, audit: 
     day_number = now.date().toordinal()
     direct_page = None
     if direct_source_url:
-        direct_page = await fetch_direct_job_page(direct_source_url)
-        if direct_page["http_status"] != 200:
-            raise ValueError(f"The supplied job URL returned HTTP {direct_page['http_status']}")
-        if shared_recruiting_source(direct_source_url) or shared_recruiting_source(direct_page["final_url"]):
+        direct_page = await fetch_operator_job_page(direct_source_url, audit)
+        if (direct_page["http_status"] != 200
+                or shared_recruiting_source(direct_source_url)
+                or shared_recruiting_source(direct_page["final_url"])):
             # A shared board can prove the role, but it can never be the
-            # canonical employer identity. Go directly to the bounded research
-            # fallback instead of paying for a raw pass that cannot satisfy the
-            # identity invariant.
+            # canonical employer identity. A blocked supplied page likewise
+            # needs the bounded exact-URL research path. Do not treat either as
+            # proof that the vacancy is absent.
             discovered = []
         else:
             result = await llm({
