@@ -86,3 +86,63 @@ async def test_resolver_accepts_only_employer_linked_official_jobs_portal(monkey
     }, provider='openai', model='fixture-model')
     assert result['url'] == portal
     assert result['match_scope'] == 'official_jobs_portal'
+
+
+@pytest.mark.asyncio
+async def test_resolver_accepts_employer_owned_app_subdomain_without_literal_link(monkeypatch):
+    portal = 'https://app.fixture.example/jobs'
+    employer = 'https://fixture.example/careers'
+    monkeypatch.setattr(source, '_model', AsyncMock(side_effect=[
+        ({'candidates': [{'url': employer, 'reason': 'Official careers page.'},
+                         {'url': portal, 'reason': 'Employer-owned jobs app.'}]}, {}),
+        ({'matched': True, 'selected_url': portal, 'evidence_url': employer,
+          'source_type': 'ats', 'match_scope': 'official_jobs_portal',
+          'exact_role_quote': '', 'exact_employer_quote': 'Fixture Employer',
+          'exact_application_quote': 'Browse Open Positions',
+          'reason': 'The employer careers page identifies its jobs flow.',
+          'confidence': 0.90}, {}),
+    ]))
+
+    async def fetch(url, attempts=1):
+        content = ('Fixture Employer Browse Open Positions'
+                   if url == employer else 'Fixture Employer jobs application')
+        return {'final_url': url, 'http_status': 200, 'content': content}
+
+    monkeypatch.setattr(source, 'fetch_page', fetch)
+    result = await source.resolve_official_application_source({
+        'firm_name': 'Fixture Employer', 'title': 'Agentic AI Engineer',
+        'website': 'fixture.example',
+        'employer_evidence_url': 'https://fixture.example/',
+        'source_url': 'https://linkedin.example/jobs/1',
+    }, provider='openai', model='fixture-model')
+    assert result['url'] == portal
+    assert result['match_scope'] == 'official_jobs_portal'
+
+
+@pytest.mark.asyncio
+async def test_resolver_still_rejects_unlinked_third_party_portal(monkeypatch):
+    portal = 'https://unlinked-ats.example/jobs'
+    employer = 'https://fixture.example/careers'
+    monkeypatch.setattr(source, '_model', AsyncMock(side_effect=[
+        ({'candidates': [{'url': employer, 'reason': 'Official careers page.'},
+                         {'url': portal, 'reason': 'Unlinked portal.'}]}, {}),
+        ({'matched': True, 'selected_url': portal, 'evidence_url': employer,
+          'source_type': 'ats', 'match_scope': 'official_jobs_portal',
+          'exact_role_quote': '', 'exact_employer_quote': 'Fixture Employer',
+          'exact_application_quote': 'Browse Open Positions',
+          'reason': 'Possible portal.', 'confidence': 0.70}, {}),
+    ]))
+
+    async def fetch(url, attempts=1):
+        content = ('Fixture Employer Browse Open Positions'
+                   if url == employer else 'Possible jobs portal')
+        return {'final_url': url, 'http_status': 200, 'content': content}
+
+    monkeypatch.setattr(source, 'fetch_page', fetch)
+    with pytest.raises(ValueError, match='did not link'):
+        await source.resolve_official_application_source({
+            'firm_name': 'Fixture Employer', 'title': 'Agentic AI Engineer',
+            'website': 'fixture.example',
+            'employer_evidence_url': 'https://fixture.example/',
+            'source_url': 'https://linkedin.example/jobs/1',
+        }, provider='openai', model='fixture-model')

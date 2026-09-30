@@ -7,6 +7,7 @@ import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
+from urllib.parse import urlsplit
 
 from openai import AsyncOpenAI, APIConnectionError, APIStatusError, APITimeoutError
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl
@@ -115,6 +116,29 @@ def _contains_quote(content: str, quote: str) -> bool:
     return bool(quote.strip()) and " ".join(quote.split()) in " ".join(content.split())
 
 
+def _hostname(value: object) -> str:
+    raw = str(value or "").strip()
+    if not raw:
+        return ""
+    parsed = urlsplit(raw if "://" in raw else f"https://{raw}")
+    return (parsed.hostname or "").lower().rstrip(".").removeprefix("www.")
+
+
+def _selected_portal_is_on_official_domain(selected_url: str, posting: dict) -> bool:
+    """Accept an employer-owned app subdomain without requiring a literal link.
+
+    A separately hosted ATS still needs an explicit link from freshly fetched
+    employer evidence. An employer-owned subdomain is already bounded by the
+    verified canonical domain and is subsequently required to expose the exact
+    saved role before the browser can fill or submit anything.
+    """
+    selected_host = _hostname(selected_url)
+    official_host = _hostname(posting.get("employer_evidence_url") or posting.get("website"))
+    return bool(official_host and selected_host
+                and (selected_host == official_host
+                     or selected_host.endswith(f".{official_host}")))
+
+
 async def resolve_official_application_source(posting: dict, *, provider: str,
                                               model: str) -> dict:
     """Return a freshly fetched, semantically verified exact-role application URL."""
@@ -168,7 +192,9 @@ async def resolve_official_application_source(posting: dict, *, provider: str,
     ]
     if verified.match_scope == "direct_role":
         quotes.insert(0, ("role", verified.exact_role_quote))
-    elif verified.selected_url not in evidence_page["content"]:
+    elif (verified.selected_url not in evidence_page["content"]
+          and not _selected_portal_is_on_official_domain(
+              verified.selected_url, posting)):
         raise ValueError("The official employer evidence page did not link to the selected jobs portal.")
     for label, quote in quotes:
         if not _contains_quote(evidence_page["content"], quote):
