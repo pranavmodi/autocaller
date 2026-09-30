@@ -1,5 +1,6 @@
 """Contract tests and opt-in isolated PostgreSQL persistence regression."""
 import os
+import json
 from datetime import datetime, timezone
 from uuid import uuid4
 from unittest.mock import AsyncMock
@@ -20,6 +21,31 @@ def test_identity_ignores_tracking_but_is_employer_scoped():
     posting = {"firm_id": "firm-a", "source_url": "https://jobs.example.com/123?source=linkedin&utm_campaign=test"}
     assert service.candidate_id(posting) == service.candidate_id({**posting, "source_url": "https://jobs.example.com/123"})
     assert service.candidate_id(posting) != service.candidate_id({**posting, "firm_id": "firm-b"})
+
+
+def test_branded_ashby_job_link_resolves_to_exact_official_posting():
+    supplied = "https://careers.masabi.com/?ashby_jid=33fa3000-8adb-4698-8403-922b66b5496f"
+    assert service.canonical_job_url(supplied) == (
+        "https://jobs.ashbyhq.com/masabi/33fa3000-8adb-4698-8403-922b66b5496f")
+    assert service.canonical_job_url("https://careers.masabi.com/") == "https://careers.masabi.com/"
+    assert service.canonical_job_url("https://careers.masabi.com/?ashby_jid=not-a-job") == (
+        "https://careers.masabi.com/?ashby_jid=not-a-job")
+
+
+@pytest.mark.asyncio
+async def test_ashby_direct_import_uses_exact_public_api_posting(monkeypatch):
+    document = {'jobs': [
+        {'id': 'other', 'title': 'Other'},
+        {'id': '33fa3000-8adb-4698-8403-922b66b5496f', 'title': 'Principal Engineer'},
+    ]}
+    handler = AsyncMock(return_value=document)
+    monkeypatch.setattr(career_search, 'fetch_json_document', handler)
+    url = 'https://jobs.ashbyhq.com/masabi/33fa3000-8adb-4698-8403-922b66b5496f'
+    page = await career_search.fetch_direct_job_page(url)
+    assert page['requested_url'] == url and page['final_url'] == url
+    assert json.loads(page['content'])['title'] == 'Principal Engineer'
+    assert handler.await_args.args[0].startswith(
+        'https://api.ashbyhq.com/posting-api/job-board/masabi?')
 
 
 def test_roles_on_shared_careers_page_remain_distinct():

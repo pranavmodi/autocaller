@@ -13,7 +13,7 @@ import re
 from uuid import UUID, uuid4
 from datetime import date, datetime, timedelta, timezone
 from typing import Literal
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, quote, urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, model_validator
 from sqlalchemy import DateTime, Integer, String, Boolean, and_, case, cast, delete, func, not_, or_, select, text
@@ -34,6 +34,23 @@ ContractFilter = Literal["all", "contract", "non_contract", "unknown"]
 
 def now():
     return datetime.now(timezone.utc)
+
+
+def canonical_job_url(value: str) -> str:
+    """Resolve branded Ashby links mechanically when they carry an exact job ID."""
+    parts = urlsplit(value)
+    job_ids = parse_qs(parts.query).get('ashby_jid') or []
+    labels = (parts.hostname or '').lower().split('.')
+    if len(job_ids) != 1 or len(labels) < 3 or labels[0] not in {'careers', 'jobs'}:
+        return value
+    try:
+        job_id = str(UUID(job_ids[0]))
+    except (ValueError, TypeError, AttributeError):
+        return value
+    slug = labels[1]
+    if not slug or any(not (character.isalnum() or character in {'-', '_'}) for character in slug):
+        return value
+    return f"https://jobs.ashbyhq.com/{quote(slug, safe='-_')}/{job_id}"
 
 
 class JobAgentConfig(BaseModel):
@@ -585,13 +602,15 @@ async def import_listing_url(request: UrlImportRequest):
     """Resolve one arbitrary public job URL into the durable Job Agent queue."""
     from app.services import daily_career_search as career_search
 
-    source_url = str(request.source_url)
+    submitted_source_url = str(request.source_url)
+    source_url = canonical_job_url(submitted_source_url)
     attempt_id = request.attempt_id.hex if request.attempt_id else uuid4().hex
     await _record_url_import_event(
         "listing_import_started",
         "Started verifying a supplied job URL",
         attempt_id=attempt_id,
         source_url=source_url,
+        submitted_source_url=submitted_source_url,
         ai_provider=request.ai_provider,
     )
     try:

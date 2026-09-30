@@ -125,3 +125,29 @@ async def fetch_page(url: str, *, attempts: int = 3) -> dict:
             if attempt + 1 < attempts:
                 await asyncio.sleep(min(30, 2 ** (attempt + 1)) + random.random())
     raise RuntimeError(f"verification fetch failed for {url}: {last_error}")
+
+
+async def fetch_json_document(url: str, *, attempts: int = 3) -> dict:
+    """Read one bounded public JSON endpoint without truncating its structure."""
+    last_error = None
+    for attempt in range(attempts):
+        try:
+            await public_url(url)
+            async with httpx.AsyncClient(timeout=25, trust_env=False,
+                                         headers={"User-Agent": "PossibleOSCareerResearch/1.0"}) as client:
+                response = await client.get(url, follow_redirects=False)
+            if response.status_code == 429 or response.status_code >= 500:
+                raise RuntimeError(f"HTTP {response.status_code}")
+            if response.status_code != 200:
+                raise RuntimeError(f"unverified HTTP {response.status_code}")
+            if len(response.content) > 2_000_000:
+                raise RuntimeError("document exceeds 2MB verification limit")
+            document = response.json()
+            if not isinstance(document, dict):
+                raise RuntimeError("public endpoint did not return a JSON object")
+            return document
+        except (httpx.HTTPError, RuntimeError, OSError, ValueError) as exc:
+            last_error = str(exc)
+            if attempt + 1 < attempts:
+                await asyncio.sleep(min(30, 2 ** (attempt + 1)) + random.random())
+    raise RuntimeError(f"verification fetch failed for {url}: {last_error}")

@@ -21,7 +21,7 @@ from sqlalchemy.dialects.postgresql import insert
 from app.db import AsyncSessionLocal, async_engine
 from app.db.models import CareerSearchRunRow, CareerSearchStateRow, FirmContactRow, PifFirmRow
 from app.services.career_job_store import PROVIDER, job_id, merge_career_postings, source_identity, same_job
-from app.services.career_search_web import fetch_page, public_url
+from app.services.career_search_web import fetch_json_document, fetch_page, public_url
 from app.services.llm_gateway import (
     LLMGatewayResponseError,
     call_skill_json,
@@ -226,6 +226,40 @@ def official_page_transport_fallbacks(url: str) -> list[str]:
     slug = path_parts[-1]
     query = urlencode({"slug": slug, "_fields": "link,title,content"}, quote_via=quote)
     return [urlunsplit(("https", parts.netloc, "/wp-json/wp/v2/pages", query, ""))]
+
+
+def ashby_job_reference(url: str) -> tuple[str, str] | None:
+    """Return the public board slug and exact UUID from an Ashby job URL."""
+    parts = urlsplit(url)
+    path = [segment for segment in parts.path.split('/') if segment]
+    if parts.scheme != 'https' or parts.hostname != 'jobs.ashbyhq.com' or len(path) < 2:
+        return None
+    try:
+        identity = str(uuid.UUID(path[1]))
+    except (ValueError, TypeError, AttributeError):
+        return None
+    return path[0], identity
+
+
+async def fetch_direct_job_page(url: str) -> dict:
+    """Prefer an exact machine-readable posting when a public ATS provides one."""
+    reference = ashby_job_reference(url)
+    if not reference:
+        return await fetch_page(url)
+    board, identity = reference
+    endpoint = f"https://api.ashbyhq.com/posting-api/job-board/{quote(board, safe='-_')}?includeCompensation=true"
+    document = await fetch_json_document(endpoint)
+    matches = [job for job in document.get('jobs', [])
+               if isinstance(job, dict) and str(job.get('id')) == identity]
+    if len(matches) != 1:
+        raise ValueError('The Ashby board does not contain this exact job.')
+    return {
+        'requested_url': url,
+        'final_url': url,
+        'http_status': 200,
+        'content': json.dumps(matches[0], ensure_ascii=False),
+        'transport_url': endpoint,
+    }
 
 
 async def fetch_direct_import_employer_page(
@@ -1431,7 +1465,7 @@ async def execute(run_id: str, config: SearchConfig, *, seed_only: bool, audit: 
     day_number = now.date().toordinal()
     direct_page = None
     if direct_source_url:
-        direct_page = await fetch_page(direct_source_url)
+        direct_page = await fetch_direct_job_page(direct_source_url)
         if direct_page["http_status"] != 200:
             raise ValueError(f"The supplied job URL returned HTTP {direct_page['http_status']}")
         if shared_recruiting_source(direct_source_url) or shared_recruiting_source(direct_page["final_url"]):
