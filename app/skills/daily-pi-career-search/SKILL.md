@@ -216,6 +216,13 @@ identity and the claimed industry from an official employer page. Keep excerpts
 short. Unknown values are null/unknown, not guessed. Explain
 conflicts in reason/geography_note. Preserve meaningful differences between a
 firm role and a group technology subsidiary; reject unnamed client employers.
+For a direct import from a public job board, the board's displayed posting
+organization may be a recruiter, staffing firm, or delivery partner while the
+description names its client. This is not a reason to discard the supplied job.
+Keep the displayed posting organization as firm_name, explain the named-client
+relationship in reason, and verify the live role against the supplied page. Do
+not replace it with an unnamed client or claim the posting organization is the
+client's legal employer.
 
 ## Verification repair mode
 `verification_repair` is one bounded correction pass, only for the supplied

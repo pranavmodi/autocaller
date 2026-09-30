@@ -16,6 +16,7 @@ type BrowserRun = {
   profile_count?: number;
   browser_transport?: string; browser_session_status?: string; browser_closed?: boolean;
   ai_provider?: "gateway" | "openai"; openai_model?: string;
+  spam_protection?: { detected_at?: string; evidence?: string };
   status: string; revision: number; stage?: string; error?: string; steps?: number;
   current_url?: string; updated_at?: string; screenshot?: boolean; session_available?: boolean;
   resume_filename?: string; submit_started_at?: string; human_may_have_submitted_at?: string; interaction_started?: boolean;
@@ -49,7 +50,7 @@ export function JobBrowserApplication({ job }: { job: Candidate }) {
     queryFn: () => jobAgentRequest<BrowserRun>(`/jobs/${job.id}/browser`),
     refetchInterval: 3000, refetchIntervalInBackground: true });
   const run = query.data;
-  const selectedProvider = provider || (run && run.status !== "not_started" ? run.ai_provider || "gateway" : settings.data?.config.browser_ai_provider || "gateway");
+  const selectedProvider = provider || (run && run.status !== "not_started" ? run.ai_provider || "openai" : settings.data?.config.browser_ai_provider || "openai");
   const selectedModel = model || (run && run.status !== "not_started" ? run.openai_model : settings.data?.config.browser_openai_model) || "gpt-5.6-luna";
   useEffect(() => { setAnswer(""); setRemember(true); }, [run?.question?.id]);
   const action = useMutation({
@@ -78,7 +79,7 @@ export function JobBrowserApplication({ job }: { job: Candidate }) {
     <header className="flex flex-wrap items-start justify-between gap-3 border-b border-sky-200 bg-gradient-to-r from-sky-100 to-indigo-50 p-5">
       <div><h3 className="flex items-center gap-2 font-semibold text-sky-950"><Globe className="h-5 w-5" />Apply on website</h3>
         <p className="mt-1 text-xs text-sky-900">The agent selects a resume, fills the employer’s form and asks you for any missing answers.</p></div>
-      {started && <span className="rounded-full border border-sky-200 bg-white px-3 py-1 text-xs font-medium">{cancelled ? "Quit by you" : run.status.replaceAll("_", " ")}</span>}
+      {started && <span className="rounded-full border border-sky-200 bg-white px-3 py-1 text-xs font-medium">{cancelled ? "Quit by you" : run.spam_protection ? "Paused · spam protection" : run.status.replaceAll("_", " ")}</span>}
     </header>
     <div className="space-y-4 p-5">
       <ol aria-label="Website application stages" className="grid grid-cols-3 gap-2 text-xs">{["Select resume", "Complete form", "Confirm submission"].map((label, index) => <li key={label} className={`flex items-center gap-2 rounded-lg border px-2 py-3 ${submitted || (index === 0 && run?.resume_filename) ? "border-emerald-200 bg-emerald-50 text-emerald-800" : active && (run?.resume_filename ? index === 1 : index === 0) ? "border-sky-300 bg-sky-100 text-sky-950" : "border-neutral-200 bg-white text-neutral-500"}`}><span className="font-semibold">{index + 1}</span>{label}</li>)}</ol>
@@ -119,7 +120,7 @@ export function JobBrowserApplication({ job }: { job: Candidate }) {
             </> : <p>{uncertain ? "The original browser is required to check confirmation. Reopening the job cannot verify a previous submission." : run.session_available ? "This older browser session is tied to the worker and will close if it restarts." : "The browser opens when processing resumes, using your saved answers."}</p>}
           </div>}
         </div>
-        {run.error && <div role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950"><p>{run.error}</p>{run.failed_action && <p className="mt-2 text-xs"><strong>Stopped before:</strong> {run.failed_action.summary} ({run.failed_action.kind})</p>}{run.failed_audit?.reason && <p className="mt-1 text-xs"><strong>Safety audit:</strong> {run.failed_audit.reason}{run.failed_audit.effect ? ` · Audited effect: ${run.failed_audit.effect}` : ""}</p>}</div>}
+        {run.error && <div role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950"><p className="font-medium">{run.spam_protection ? "Paused because the employer site detected spam protection." : run.error}</p>{run.spam_protection && <><p className="mt-2">{run.error}</p><p className="mt-2 text-xs">The agent will not retry Submit automatically. Take control of the preserved browser to complete any visible challenge, then return control to the agent.</p></>}{run.failed_action && <p className="mt-2 text-xs"><strong>Stopped before:</strong> {run.failed_action.summary} ({run.failed_action.kind})</p>}{run.failed_audit?.reason && <p className="mt-1 text-xs"><strong>Safety audit:</strong> {run.failed_audit.reason}{run.failed_audit.effect ? ` · Audited effect: ${run.failed_audit.effect}` : ""}</p>}</div>}
         {cancelled && <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-4 text-sm text-neutral-700"><p className="font-medium">You stopped this website application.</p>{run.quit_reason && <p className="mt-2">Reason: {run.quit_reason}</p>}<p className="mt-2 text-xs">Your history and saved answers are retained. This reason applies only to this application.</p></div>}
         {run.browser_cleanup_error && <p role="alert" className="text-sm text-amber-900">{run.browser_cleanup_error}</p>}
         {uncertain && <p className="text-sm text-amber-900">{run.recoverable_source_navigation ? "The job board did not reach an application form. Resume to find the exact official employer or ATS page and continue there." : run.recoverable_input_interruption ? "An ordinary form input was interrupted. The preserved page can be inspected and continued without replaying that action." : run.can_restart ? "The last action stopped before reaching the browser. You can restart safely with your saved answers." : "An action may have submitted the form. Automatic submission is locked. Check the saved page or employer portal before taking further action."}</p>}

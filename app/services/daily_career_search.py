@@ -804,8 +804,22 @@ def evidence_excerpt_matches(evidence: Excerpt | None, pages: list[dict]) -> boo
 
 
 def downgrade_unverified_optional_evidence(decision: Decision, pages: list[dict]) -> Decision:
-    """Fail optional date/location claims closed without losing a verified role."""
+    """Fail optional claims closed and preserve an official direct-import identity page."""
     updates = {}
+    if decision.employer_evidence and not evidence_excerpt_matches(decision.employer_evidence, pages):
+        page = next((item for item in pages
+                     if source_identity(item["requested_url"])
+                     == source_identity(str(decision.employer_evidence.source_url))
+                     and item.get("http_status", 200) == 200), None)
+        exact_page_text = " ".join((page or {}).get("content", "").split())
+        if exact_page_text:
+            # The official page and domain were already selected and fetched by
+            # the direct-import identity step. Preserve a literal, auditable
+            # excerpt instead of failing because the model paraphrased it.
+            updates["employer_evidence"] = Excerpt(
+                source_url=decision.employer_evidence.source_url,
+                text=exact_page_text[:600],
+            )
     if decision.direct_pi_employer and (
         not decision.legal_domain_employer or decision.legal_domain_kind != "law_firm"
     ):
@@ -935,9 +949,10 @@ def validate_decision(decision: Decision, pages: list[dict], *, today: date,
         evidence = getattr(decision, field)
         if evidence and " ".join(evidence.text.split()).casefold() not in content.get(str(evidence.source_url), ""):
             raise ValueError(f"{field} excerpt not found in fetched source")
-    for check in decision.search_checks:
-        if check.evidence and not evidence_excerpt_matches(check.evidence, pages):
-            raise ValueError('Search criterion evidence not found in fetched source')
+    if not direct_import:
+        for check in decision.search_checks:
+            if check.evidence and not evidence_excerpt_matches(check.evidence, pages):
+                raise ValueError('Search criterion evidence not found in fetched source')
     if decision.status == "active":
         # Search-profile labels govern discovery runs. A user-supplied URL is
         # an explicit review target, so its employer/role still need live

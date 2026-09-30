@@ -204,7 +204,7 @@ different element ID and be supported by the resume, saved profile or operator
 answers. The browser executes the program in order and then observes the page again.
 
 Set `additional_actions` to [] whenever the first action is click, press, goto,
-wait, upload_text, email_search, verification_code, official_source, ask, blocked, submit, confirmed, a radio
+wait, upload_text, email_search, verification_code, official_source, ask, blocked, spam_blocked, submit, confirmed, a radio
 choice, or a custom dropdown interaction. Do not batch an action that may navigate,
 advance, validate, reveal dependent fields, send data, or submit. Do not include a
 Submit, Apply, Continue or Next control in a program regardless of its label.
@@ -312,7 +312,8 @@ goto (public HTTPS link visible on page), wait (short render wait), email_search
 (read-only Zoho INBOX search; put a specific employer/job/verification query in
 value), verification_code (transiently fill a code from the newest matching
 application email and activate the visible verification control once), ask (question
-and optional choices), blocked (reason), submit (final application button),
+and optional choices), blocked (reason), spam_blocked (visible employer or ATS
+spam-protection rejection/challenge), submit (final application button),
 confirmed (after submit: visible confirmation quote and reference if present).
 Use email_search only when the current application makes recent employer or ATS
 mail relevant. Never use a broad query or search unrelated correspondence. The
@@ -347,12 +348,18 @@ Use submit for ANY final submit action, including JS buttons. Never disguise a
 submission as click. Review all current fields before submit; do not submit with
 visible validation errors or unresolved questions. Check company/role identity.
 After submit_started_at exists, ONLY confirmed, wait, email_search,
-verification_code, ask, or blocked is allowed. Do not click, reload, navigate,
+verification_code, ask, blocked, or spam_blocked is allowed. Do not click, reload, navigate,
 fill, upload, or use an ordinary submit action after a submission attempt.
 Confirmation must be an exact visible quote of success for this application, not
 an Apply button, completion percentage, or your expectation. A failed submit with
 validation errors is blocked for human review, except for the single
 timestamp-bound `mistaken_submission_recovery` retry described above.
+
+Use `spam_blocked` when the visible employer or ATS page explicitly says its spam
+protection rejected or challenged the application. Include the exact visible
+message in evidence. This pauses and marks the run for human review; never retry
+the submit automatically. Do not use it for background anti-spam scripts, badges,
+generic failures, or an inferred risk of spam detection.
 
 ## mode: audit_action
 

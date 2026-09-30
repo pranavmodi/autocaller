@@ -193,6 +193,31 @@ def test_direct_import_downgrades_only_unverified_optional_claims():
     service.validate_decision(downgraded, pages(), today=date(2026, 9, 10), direct_import=True)
 
 
+def test_direct_import_rebases_paraphrased_employer_evidence_to_official_page_text():
+    value = decision()
+    value.employer_evidence.text = "A paraphrase that does not occur on the official page"
+    downgraded = service.downgrade_unverified_optional_evidence(value, pages())
+
+    assert downgraded.employer_evidence.text.startswith("Personal injury firm")
+    service.validate_decision(
+        downgraded, pages(), today=date(2026, 9, 10), direct_import=True,
+    )
+
+
+def test_direct_import_does_not_enforce_descriptive_search_check_quotes():
+    value = decision(search_checks=[{
+        "criterion": "industry", "result": "not_met", "confidence": 0.9,
+        "reason": "The operator supplied this job directly.",
+        "evidence": {"source_url": "https://example.com/about", "text": "Paraphrased industry description"},
+    }])
+
+    service.validate_decision(
+        value, pages(), today=date(2026, 9, 10), direct_import=True,
+    )
+    with pytest.raises(ValueError, match="Search criterion evidence"):
+        service.validate_decision(value, pages(), today=date(2026, 9, 10))
+
+
 def test_application_contact_normalizes_missing_optional_labels():
     contact = service.ApplicationContact.model_validate({
         "email": "jobs@example.com", "name": None, "title": None, "kind": "recruiting",

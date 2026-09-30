@@ -55,7 +55,7 @@ def canonical_job_url(value: str) -> str:
 
 class JobAgentConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
-    browser_ai_provider: Literal['gateway', 'openai'] = 'gateway'
+    browser_ai_provider: Literal['gateway', 'openai'] = 'openai'
     browser_openai_model: str = Field('gpt-5.6-luna', min_length=1, max_length=120, pattern=r'^\S+$')
     auto_email_with_website_application: bool = True
     classification_enabled: bool = False
@@ -111,7 +111,7 @@ class UrlImportRequest(BaseModel):
     source_url: HttpUrl
     start_website_application: bool = False
     resume_path: str | None = Field(None, max_length=1000)
-    ai_provider: Literal["gateway", "openai"] = "gateway"
+    ai_provider: Literal["gateway", "openai"] = "openai"
     attempt_id: UUID | None = None
 
 

@@ -39,7 +39,7 @@ class BatchRequest(BaseModel):
     source_urls: list[HttpUrl] = Field(min_length=1, max_length=50)
     start_website_application: bool = False
     resume_path: str | None = Field(None, max_length=1000)
-    ai_provider: Literal["gateway", "openai"] = "gateway"
+    ai_provider: Literal["gateway", "openai"] = "openai"
 
 
 WAKE = asyncio.Event()

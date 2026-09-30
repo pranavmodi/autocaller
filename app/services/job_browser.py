@@ -1743,7 +1743,7 @@ async def step(row):
                             or (action.kind == 'ask' and mailbox_result.get('matched'))):
         raise ValueError('Mailbox content cannot become a durable question or submission confirmation.')
     if read_only and action.kind not in {'confirmed', 'wait', 'email_search',
-                                         'verification_code', 'ask', 'blocked'}:
+                                         'verification_code', 'ask', 'blocked', 'spam_blocked'}:
         raise ValueError('Submission was already attempted. Only read-only verification is allowed.')
     if action.kind == 'official_source':
         if state.get('application_source_url'):
@@ -1801,6 +1801,14 @@ async def step(row):
                 stage='Waiting for your answer', question={'id': uuid4().hex,
                 'text': action.question, 'choices': action.choices},
                 message=action.question, kind='question', model=usage)
+        return
+    if action.kind == 'spam_blocked':
+        blocked_message = action.summary
+        await checkpoint(identity, row.revision,
+            status='paused', stage='Paused — spam protection', error=blocked_message,
+            spam_protection={'detected_at': core.now().isoformat(),
+                             'evidence': action.evidence or blocked_message},
+            message=blocked_message, kind='spam_protection')
         return
     if action.kind == 'blocked':
         blocked_message = (durable_action.summary if mailbox_derived else action.summary)

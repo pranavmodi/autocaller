@@ -38,7 +38,7 @@ class SearchSettings(BaseModel):
     employer_urls: list[str] = Field(default_factory=list, max_length=30)
     max_candidates: int = Field(10, ge=1, le=100)
     max_sources: int = Field(6, ge=1, le=30)
-    ai_provider: Literal['gateway', 'openai'] = 'gateway'
+    ai_provider: Literal['gateway', 'openai'] = 'openai'
     openai_model: str = Field('gpt-5.6-luna', min_length=1, max_length=120, pattern=r'^\S+$')
     schedule_enabled: bool = False
     timezone: str = 'Asia/Kolkata'
@@ -69,7 +69,7 @@ class SaveSearch(BaseModel):
     config: SearchSettings
 
 class ParseSearch(BaseModel):
-    ai_provider: Literal['gateway', 'openai'] = 'gateway'
+    ai_provider: Literal['gateway', 'openai'] = 'openai'
     openai_model: str = Field('gpt-5.6-luna', min_length=1, max_length=120, pattern=r'^\S+$')
     description: str = Field(min_length=5, max_length=5000)
 
