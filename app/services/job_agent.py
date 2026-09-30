@@ -93,6 +93,7 @@ class UrlImportRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     source_url: HttpUrl
     start_website_application: bool = False
+    resume_path: str | None = Field(None, max_length=1000)
     ai_provider: Literal["gateway", "openai"] = "gateway"
     attempt_id: UUID | None = None
 
@@ -193,6 +194,8 @@ async def ensure_tables():
             from app.services.job_url_imports import JobUrlImportQueue
             for model in (JobAgentState, JobAgentCandidate, JobAgentEvent, JobAgentCollectionRun, JobAgentCollectionItem, JobProcessing, BrowserRun, BrowserEvent, ApplicantAnswer, JobUrlImportQueue):
                 await conn.run_sync(model.__table__.create, checkfirst=True)
+            await conn.execute(text("""ALTER TABLE job_agent_url_import_queue
+                ADD COLUMN IF NOT EXISTS resume_path varchar(1000)"""))
             # Early URL imports travelled through the search verifier and were
             # consequently labelled as search results. Only imports that
             # actually created the candidate are manual provenance; importing
@@ -658,7 +661,14 @@ async def import_listing_url(request: UrlImportRequest):
     }
     if request.start_website_application:
         from app.services import job_browser
+        from app.services import job_agent_processing as processing
         try:
+            if request.resume_path:
+                opened["candidate"] = await processing.choose_resume(
+                    opened["candidate"]["id"], processing.ResumeChoice(
+                        revision=opened["candidate"]["processing_revision"],
+                        resume_path=request.resume_path,
+                    ))
             browser = await job_browser.start(opened["candidate"]["id"], job_browser.StartRequest(
                 revision=opened["candidate"]["processing_revision"],
                 authorize_submit=True,

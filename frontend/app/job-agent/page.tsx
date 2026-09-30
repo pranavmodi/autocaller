@@ -31,7 +31,7 @@ type BulkImportItem = { attemptId: string; url: string; status: "queued" | "runn
   provider: "gateway" | "openai"; startsApplication: boolean;
   message?: string; candidate?: Candidate; applicationStarted?: boolean };
 type ImportQueueDetail = { id: string; source_url: string; ai_provider: "gateway" | "openai";
-  start_website_application: boolean; status: "queued" | "running" | "completed" | "failed";
+  start_website_application: boolean; resume_path?: string | null; status: "queued" | "running" | "completed" | "failed";
   result?: ImportResult; error?: string | null; run?: ImportRun | null };
 const input = "w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm focus:border-neutral-900 focus:outline-none focus:ring-1 focus:ring-neutral-900";
 const button = "inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm font-medium hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-50";
@@ -171,7 +171,7 @@ export default function JobAgentPage() {
   const [selected, setSelected] = useState<Candidate | null>(null);
   const [notice, setNotice] = useState("");
   const [jobUrl, setJobUrl] = useState("");
-  const [startAfterImport, setStartAfterImport] = useState(false);
+  const [importResumePath, setImportResumePath] = useState("");
   const [importProvider, setImportProvider] = useState<"gateway" | "openai">("gateway");
   const [importMessage, setImportMessage] = useState("");
   const [importItems, setImportItems] = useState<BulkImportItem[]>([]);
@@ -185,6 +185,7 @@ export default function JobAgentPage() {
     });
   }, []);
   const overview = useQuery({ queryKey: ["job-agent", "overview"], queryFn: () => jobAgentRequest<Overview>("/overview"), refetchInterval: 15000 });
+  const resumeLibrary = useQuery({ queryKey: ["job-agent", "resumes"], queryFn: () => jobAgentRequest<{ items: { path: string; filename: string }[] }>("/resumes"), staleTime: 30000 });
   const recentImports = useQuery({ queryKey: ["job-agent", "url-import-queue"], queryFn: () => jobAgentRequest<{ items: ImportQueueDetail[] }>("/listings/import-queue?limit=50"), refetchInterval: 5000 });
   useEffect(() => {
     if (!recentImports.data) return;
@@ -209,7 +210,7 @@ export default function JobAgentPage() {
   const runImports = async () => {
     const parsed = publicJobUrls(jobUrl);
     if (!parsed.valid.length || importBusy) return;
-    const provider = importProvider, startsApplication = startAfterImport;
+    const provider = importProvider, startsApplication = true;
     setImportBusy(true); setImportMessage("");
     if (parsed.invalid.length || parsed.duplicates) setImportMessage([
       parsed.invalid.length ? `${parsed.invalid.length} invalid value${parsed.invalid.length === 1 ? " was" : "s were"} skipped.` : "",
@@ -218,7 +219,7 @@ export default function JobAgentPage() {
     try {
       const queued = await jobAgentRequest<{ items: ImportQueueDetail[]; duplicates_skipped: number }>("/listings/import-batch", {
         source_urls: parsed.valid, start_website_application: startsApplication,
-        ai_provider: provider,
+        ai_provider: provider, resume_path: importResumePath || null,
       });
       const items: BulkImportItem[] = queued.items.map(item => ({
         attemptId: item.id, url: item.source_url, status: item.status,
@@ -226,7 +227,7 @@ export default function JobAgentPage() {
       }));
       setImportItems(current => [...items, ...current].slice(0, 50));
       setJobUrl(""); setPage(1); refresh();
-      setNotice(`${items.length} job link${items.length === 1 ? " is" : "s are"} saved in the import queue. You can leave this page while they run.`);
+      setNotice(`${items.length} job link${items.length === 1 ? " is" : "s are"} queued for verification and application. You can leave this page while they run.`);
     } catch (cause) {
       setImportMessage(cause instanceof Error ? cause.message : "Could not queue these job links.");
     } finally {
@@ -250,14 +251,18 @@ export default function JobAgentPage() {
       <div className="flex items-start gap-3">
         <span className="rounded-lg border border-sky-200 bg-white p-2 text-sky-700"><Link2 className="h-4 w-4" /></span>
         <div className="min-w-0 flex-1">
-          <h2 id="add-job-by-link-title" className="text-sm font-semibold text-neutral-950">Add jobs by link</h2>
-          <p className="mt-1 text-xs leading-relaxed text-neutral-600">Paste one or more LinkedIn or public job-posting URLs, one per line. Links stay here while processing, then leave the queue automatically. Verified jobs appear below as ready to apply.</p>
+          <h2 id="add-job-by-link-title" className="text-sm font-semibold text-neutral-950">Add jobs and start applications</h2>
+          <p className="mt-1 text-xs leading-relaxed text-neutral-600">Paste one or more LinkedIn or public job-posting URLs, one per line. One action verifies each job, saves or reuses it, selects the best resume, and starts its website application.</p>
+          <ol className="mt-3 grid gap-2 text-xs text-neutral-700 sm:grid-cols-4" aria-label="Application workflow">
+            {['Verify job', 'Save or reuse', 'Select resume', 'Start application'].map((step, index) => <li key={step} className="flex items-center gap-2 rounded-lg border border-sky-100 bg-white/70 px-2.5 py-2"><span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-sky-100 text-[11px] font-semibold text-sky-800">{index + 1}</span>{step}</li>)}
+          </ol>
           <form className="mt-3 flex flex-col gap-2 sm:flex-row" onSubmit={event => { event.preventDefault(); void runImports(); }}>
             <label className="min-w-0 flex-1"><span className="sr-only">Job post links</span><textarea aria-label="Job post links" className={`${input} min-h-28 resize-y`} inputMode="url" placeholder={"Paste job posting links…\nhttps://company.example/jobs/role-1\nhttps://www.linkedin.com/jobs/view/123"} value={jobUrl} disabled={importBusy} onChange={event => { setJobUrl(event.target.value); setImportMessage(""); }} /></label>
-            <button type="submit" className={`${primary} self-start sm:min-w-32`} disabled={!publicJobUrls(jobUrl).valid.length || importBusy}>{importBusy ? <><Loader2 className="h-4 w-4 animate-spin" />Adding to queue…</> : <><Plus className="h-4 w-4" />Add jobs</>}</button>
+            <button type="submit" className={`${primary} self-start sm:min-w-44`} disabled={!publicJobUrls(jobUrl).valid.length || importBusy}>{importBusy ? <><Loader2 className="h-4 w-4 animate-spin" />Starting…</> : <><Plus className="h-4 w-4" />Add and start</>}</button>
           </form>
           <label className="mt-3 block text-sm font-medium text-neutral-800">Verification AI provider<select className={`${input} mt-2`} value={importProvider} disabled={importBusy} onChange={event => setImportProvider(event.target.value as "gateway" | "openai")}><option value="gateway">OpenClaw gateway · queued</option><option value="openai">OpenAI API · up to 3 in parallel · gpt-5.6-luna</option></select><span className="mt-1 block text-xs font-normal leading-relaxed text-neutral-500">Each link is saved immediately, so you can add more while earlier jobs are still processing. OpenAI verifies up to three distinct links concurrently. OpenClaw processes one at a time to avoid contention on its interactive lane. Website applications use their own provider setting.</span></label>
-          <label className="mt-3 flex items-start gap-2 rounded-lg border border-sky-200 bg-white/80 p-3 text-sm text-neutral-800"><input type="checkbox" className="mt-0.5 h-4 w-4 accent-sky-800" checked={startAfterImport} disabled={importBusy} onChange={event => setStartAfterImport(event.target.checked)} /><span><span className="font-medium">Start website applications after adding</span><span className="mt-1 block text-xs leading-relaxed text-neutral-500">Each verified job independently selects its best resume and starts one authorized website application. When companion email is enabled in Settings, it also starts one Zoho email workflow if a verified contact is found.</span></span></label>
+          <label className="mt-3 block text-sm font-medium text-neutral-800">Resume for these applications<select className={`${input} mt-2`} value={importResumePath} disabled={importBusy || resumeLibrary.isPending} onChange={event => setImportResumePath(event.target.value)}><option value="">Automatic — select the best category resume</option>{resumeLibrary.data?.items.filter((file, index, items) => items.findIndex(other => other.path === file.path) === index).map(file => <option key={file.path} value={file.path}>{file.filename}</option>)}</select><span className="mt-1 block text-xs font-normal leading-relaxed text-neutral-500">Choose a PDF to pin it to every link in this batch. Automatic selection remains the default.</span></label>
+          <p className="mt-3 rounded-lg border border-sky-200 bg-white/80 p-3 text-xs leading-relaxed text-neutral-600"><span className="font-medium text-neutral-800">Runs automatically after verification.</span> Each job gets its own durable application run. When companion email is enabled in Settings, the same operation also starts one Zoho email workflow if a verified contact is found.</p>
           {jobUrl.trim() && publicJobUrls(jobUrl).invalid.length > 0 && <p className="mt-2 text-xs text-red-700">{publicJobUrls(jobUrl).invalid.length} value{publicJobUrls(jobUrl).invalid.length === 1 ? " is" : "s are"} not a complete public HTTP or HTTPS link and will be skipped.</p>}
           {importMessage && <p role="status" className="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{importMessage}</p>}
           {!!importItems.length && <div className="mt-4 space-y-3" aria-live="polite"><div className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm font-semibold text-neutral-900">Import queue</p><p className="text-xs text-neutral-600">{importItems.length} remaining</p></div>{importItems.map(item => <BulkImportRow key={item.attemptId} item={item} onOpen={setSelected} onUpdate={updateImportItem} />)}</div>}

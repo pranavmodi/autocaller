@@ -34,7 +34,7 @@ export type JobSearchSource = {
 export type Candidate = {
   processing_revision: number;
   processing_updated_at?: string | null;
-  classification?: { status: string; requested?: boolean; category_id?: string | null; category_name?: string | null; confidence?: number; reason: string; resume?: { path: string; filename: string } | null };
+  classification?: { status: string; requested?: boolean; category_id?: string | null; category_name?: string | null; confidence?: number; reason: string; resume_source?: "category" | "fixed"; resume_override_path?: string | null; resume?: { path: string; filename: string } | null };
   application?: { status: string; stage?: string; phase?: string; failed_phase?: string; retryable?: boolean;
     attempt?: number; error?: string; company_summary?: string; gaps?: string[]; send_requested?: boolean;
     started_at?: string; phase_updated_at?: string;

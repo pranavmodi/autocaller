@@ -13,6 +13,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.services import job_agent as core
 from app.services.career_job_store import source_identity
+from app.services.job_agent_resumes import inspect_resume
 
 
 class JobUrlImportQueue(core.Base):
@@ -22,6 +23,7 @@ class JobUrlImportQueue(core.Base):
     source_identity: Mapped[str] = mapped_column(String(2000), nullable=False, index=True)
     provider: Mapped[str] = mapped_column(String(16), nullable=False)
     start_website_application: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    resume_path: Mapped[str | None] = mapped_column(String(1000))
     status: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     current_run_id: Mapped[str | None] = mapped_column(String(32))
     result: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
@@ -36,6 +38,7 @@ class BatchRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     source_urls: list[HttpUrl] = Field(min_length=1, max_length=50)
     start_website_application: bool = False
+    resume_path: str | None = Field(None, max_length=1000)
     ai_provider: Literal["gateway", "openai"] = "gateway"
 
 
@@ -48,6 +51,7 @@ def view(row: JobUrlImportQueue):
         "source_url": row.source_url,
         "ai_provider": row.provider,
         "start_website_application": row.start_website_application,
+        "resume_path": row.resume_path,
         "status": row.status,
         "current_run_id": row.current_run_id,
         "result": row.result or {},
@@ -61,6 +65,8 @@ def view(row: JobUrlImportQueue):
 
 async def enqueue(request: BatchRequest):
     await core.ensure_tables()
+    selected_resume = (await asyncio.to_thread(inspect_resume, request.resume_path)
+                       if request.resume_path else None)
     unique: dict[str, str] = {}
     for supplied in request.source_urls:
         url = str(supplied)
@@ -74,6 +80,19 @@ async def enqueue(request: BatchRequest):
         rows, new_rows = [], []
         for identity, url in unique.items():
             row = active_by_identity.get(identity)
+            # A later "add and start" request must not inherit an earlier
+            # save-only queue item. Upgrade queued work in place. If the old
+            # item is already running, add a follow-up so application start is
+            # still guaranteed after its verification finishes.
+            if (row is not None and request.start_website_application
+                    and (not row.start_website_application
+                         or row.resume_path != (selected_resume or {}).get("path"))):
+                if row.status == "queued":
+                    row.start_website_application = True
+                    row.resume_path = (selected_resume or {}).get("path")
+                    row.updated_at = core.now()
+                else:
+                    row = None
             if row is None:
                 row = JobUrlImportQueue(
                     id=uuid4().hex,
@@ -81,6 +100,7 @@ async def enqueue(request: BatchRequest):
                     source_identity=identity,
                     provider=request.ai_provider,
                     start_website_application=request.start_website_application,
+                    resume_path=(selected_resume or {}).get("path"),
                     status="queued",
                     result={},
                     created_at=core.now(),
@@ -144,6 +164,7 @@ async def _process(claimed: dict):
         result = await core.import_listing_url(core.UrlImportRequest(
             source_url=claimed["source_url"],
             start_website_application=claimed["start_website_application"],
+            resume_path=claimed["resume_path"],
             ai_provider=claimed["ai_provider"],
             attempt_id=UUID(claimed["current_run_id"]),
         ))

@@ -297,6 +297,11 @@ async def choose_category(identity: str, body: processing.CategoryChoice):
     return await processing_response(processing.choose_category(identity, body))
 
 
+@router.post('/jobs/{identity}/resume')
+async def choose_resume(identity: str, body: processing.ResumeChoice):
+    return await processing_response(processing.choose_resume(identity, body))
+
+
 @router.post('/jobs/{identity}/classify')
 async def classify(identity: str):
     return await processing_response(processing.request_classification(identity))

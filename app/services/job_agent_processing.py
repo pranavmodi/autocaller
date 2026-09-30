@@ -51,6 +51,12 @@ class CategoryChoice(BaseModel):
     category_id: str | None = None
 
 
+class ResumeChoice(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    revision: int = Field(ge=0)
+    resume_path: str | None = Field(None, max_length=1000)
+
+
 class ApplicationRequest(BaseModel):
     model_config = ConfigDict(extra='forbid', strict=True)
     revision: int = Field(ge=1)
@@ -87,13 +93,16 @@ def classification_view(row, config):
         return {'status': 'pending', 'category_id': None, 'reason': 'Waiting for classification', 'resume': None}
     value = dict(row.classification)
     category = next((c for c in config.resume_categories if c.id == value.get('category_id')), None)
+    override_path = value.get('resume_override_path')
     status = row.classification_status
-    if status == 'classified' and not category:
+    if status == 'classified' and not category and not override_path:
         status = 'needs_review'
-    if status == 'classified' and category and not category.resume_path:
+    if status == 'classified' and category and not category.resume_path and not override_path:
         status = 'needs_review'
+    resume_path = override_path or (category.resume_path if category else '')
     return {**value, 'status': status, 'category_name': category.name if category else None,
-            'resume': {'path': category.resume_path, 'filename': Path(category.resume_path).name} if category and category.resume_path else None}
+            'resume_source': 'fixed' if override_path else 'category',
+            'resume': {'path': resume_path, 'filename': Path(resume_path).name} if resume_path else None}
 
 
 def processing_view(row, config):
@@ -315,6 +324,49 @@ async def choose_category(identity, request: CategoryChoice):
         row.updated_at = core.now()
         session.add(core.JobAgentEvent(kind='category_selected', message='Job category selected by operator',
             details={'candidate_id': identity, 'category_id': request.category_id}))
+        await session.commit()
+    return await detail(identity)
+
+
+async def choose_resume(identity, request: ResumeChoice):
+    """Pin one library PDF to this job without changing category defaults."""
+    await enqueue_missing()
+    resume = await asyncio.to_thread(inspect_resume, request.resume_path) if request.resume_path else None
+    from app.services.job_browser import BrowserRun
+    async with core.AsyncSessionLocal() as session:
+        row = await session.get(JobProcessing, identity, with_for_update=True)
+        if not row:
+            raise KeyError(identity)
+        if row.revision != request.revision:
+            raise ValueError('This job changed. Reload before changing its resume.')
+        if row.application_status != 'not_started' or await session.get(BrowserRun, identity):
+            raise ValueError('The resume is locked after an application starts. Restart the application before choosing another resume.')
+        candidate = await session.get(core.JobAgentCandidate, identity)
+        state = await session.get(core.JobAgentState, 'default')
+        config = core.saved_config(state.config) if state else core.JobAgentConfig()
+        classification = dict(row.classification or {})
+        category = next((c for c in config.resume_categories
+                         if c.id == classification.get('category_id')), None)
+        if resume:
+            classification.update({
+                'resume_override_path': resume['path'],
+                'reason': 'Resume fixed by you for this application.',
+                'source': 'operator',
+                'job_key': job_key(candidate.posting),
+                'taxonomy_key': taxonomy_key(config),
+            })
+            row.classification_status = 'classified'
+        else:
+            classification.pop('resume_override_path', None)
+            classification['reason'] = ('Using the resume assigned to your selected category.'
+                if category and category.resume_path else 'Automatic resume selection will run when you apply.')
+            row.classification_status = 'classified' if category and category.resume_path else 'pending'
+        row.classification = classification
+        row.revision += 1
+        row.updated_at = core.now()
+        session.add(core.JobAgentEvent(kind='application_resume_selected',
+            message='Application resume fixed by operator' if resume else 'Application resume returned to automatic selection',
+            details={'candidate_id': identity, 'resume_path': resume['path'] if resume else None}))
         await session.commit()
     return await detail(identity)
 
@@ -644,9 +696,10 @@ async def request_application(identity, request: ApplicationRequest):
         if candidate.posting.get('status') == 'closed':
             raise ValueError('This job is marked closed at its source.')
         if row.application_status == 'ready' and request.mode == 'send':
-            if classification_view(row, config)['status'] != 'classified' or not category or not category.resume_path or row.classification.get('job_key') != job_key(candidate.posting):
+            selected = classification_view(row, config)
+            if selected['status'] != 'classified' or not selected.get('resume') or row.classification.get('job_key') != job_key(candidate.posting):
                 raise ValueError('The job or resume category changed. Prepare a new draft before sending.')
-            resume = await asyncio.to_thread(inspect_resume, category.resume_path)
+            resume = await asyncio.to_thread(inspect_resume, selected['resume']['path'])
             if row.application.get('resume', {}).get('sha256') != resume['sha256']:
                 raise ValueError('The mapped resume changed. Prepare a new email before sending.')
             row.application = {**row.application, 'send_requested': True,

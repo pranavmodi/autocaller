@@ -432,13 +432,20 @@ async def test_import_url_can_start_one_website_application(monkeypatch):
         "categories": [], "created": True,
     }))
     from app.services import job_browser
+    from app.services import job_agent_processing as processing
     start = AsyncMock(return_value={"status": "queued", "stage": "Selecting the best resume"})
     monkeypatch.setattr(job_browser, "start", start)
+    choose_resume = AsyncMock(return_value={
+        "id": "candidate-1", "processing_revision": 8,
+        "posting": {"firm_name": "Example"},
+    })
+    monkeypatch.setattr(processing, "choose_resume", choose_resume)
     monkeypatch.setattr(service, "_record_url_import_event", AsyncMock())
 
     result = await service.import_listing_url(service.UrlImportRequest(
         source_url="https://example.com/jobs/ai-engineer",
         start_website_application=True,
+        resume_path="job-agent/resumes/Pranav_Modi_CV_Medellin.pdf",
         ai_provider="openai",
     ))
 
@@ -448,8 +455,28 @@ async def test_import_url_can_start_one_website_application(monkeypatch):
     }
     request = start.await_args.args[1]
     assert start.await_args.args[0] == "candidate-1"
-    assert request.revision == 7 and request.authorize_submit is True
+    assert request.revision == 8 and request.authorize_submit is True
+    resume_request = choose_resume.await_args.args[1]
+    assert choose_resume.await_args.args[0] == "candidate-1"
+    assert resume_request.revision == 7
+    assert resume_request.resume_path == "job-agent/resumes/Pranav_Modi_CV_Medellin.pdf"
     assert import_handler.await_args.kwargs["ai_provider"] == "openai"
+
+
+@pytest.mark.asyncio
+async def test_choose_resume_endpoint_pins_one_job_only(monkeypatch):
+    from app.services import job_agent_processing as processing
+    result = {"id": "candidate-1", "classification": {"resume_source": "fixed"}}
+    handler = AsyncMock(return_value=result)
+    monkeypatch.setattr(processing, "choose_resume", handler)
+    app = FastAPI()
+    app.include_router(router)
+    payload = {"revision": 4, "resume_path": "job-agent/resumes/Pranav_Modi_CV_Medellin.pdf"}
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url="http://test") as client:
+        response = await client.post("/api/job-agent/jobs/candidate-1/resume", json=payload)
+    assert response.status_code == 200 and response.json() == result
+    request = handler.await_args.args[1]
+    assert request.revision == 4 and request.resume_path == payload["resume_path"]
 
 
 @pytest.mark.asyncio
