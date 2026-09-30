@@ -675,7 +675,7 @@ async def application_resume(identity, posting):
         if row.classification.get('job_key') != job_key(posting) or job_key(candidate.posting) != job_key(posting):
             raise ValueError('The job changed during resume selection. Review it before applying.')
         resume = await asyncio.to_thread(inspect_resume, choice['resume']['path'])
-        return {'resume': resume, 'category_id': choice['category_id']}
+        return {'resume': resume, 'category_id': choice.get('category_id')}
 
 
 async def request_application(identity, request: ApplicationRequest):

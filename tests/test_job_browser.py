@@ -929,6 +929,29 @@ async def test_fresh_start_snapshots_resume_and_preserves_email_channel(isolated
 
 
 @pytest.mark.asyncio
+async def test_fixed_resume_does_not_require_a_category(isolated_store, monkeypatch):
+    source_pdf = isolated_store / 'fixed.pdf'
+    source_pdf.write_bytes(b'%PDF-fixed-fixture')
+    posting = {'firm_id': 'fixture', 'firm_name': 'Fixture Employer', 'title': 'Principal Engineer',
+               'source_url': 'https://fixture.invalid/principal', 'status': 'active'}
+    async with core.AsyncSessionLocal() as session:
+        session.add(core.JobAgentCandidate(id='fixed', posting=posting))
+        session.add(processing.JobProcessing(candidate_id='fixed', revision=2,
+            classification_status='classified', classification={
+                'source': 'operator', 'resume_override_path': str(source_pdf),
+                'job_key': processing.job_key(posting)},
+            application_status='not_started', application={}))
+        await session.commit()
+    monkeypatch.setattr(processing, 'inspect_resume', lambda _: {
+        'path': str(source_pdf), 'filename': source_pdf.name, 'text': 'Applicant experience',
+        'sha256': hashlib.sha256(source_pdf.read_bytes()).hexdigest(),
+    })
+    selected = await processing.application_resume('fixed', posting)
+    assert selected['resume']['filename'] == 'fixed.pdf'
+    assert selected['category_id'] is None
+
+
+@pytest.mark.asyncio
 async def test_resume_can_switch_provider_but_cannot_reset_submission(isolated_store, monkeypatch):
     monkeypatch.setenv('OPENAI_API_KEY','test-placeholder')
     row=await seed_run(isolated_store)
