@@ -39,12 +39,28 @@ async def test_legal_degree_jobs_share_one_jev_choice_request(monkeypatch):
     monkeypatch.setenv("TYPESAFE_API_KEY", "test-key")
     decisions = await legal_degree.classify_postings([
         {"candidate_id": "a", "title": "Compliance Director", "qualifications": ["JD required"]},
-        {"candidate_id": "b", "title": "Data Analyst", "qualifications": ["SQL"]},
+        {"candidate_id": "b", "title": "Legal Editor", "qualifications": ["Law degree preferred"]},
     ])
 
     assert [decision.status for decision in decisions] == ["required", "unclear"]
     assert set(captured["request"]["questions"]) == {"job_0", "job_1"}
     assert "preferred" in " ".join(captured["request"]["questions"]["job_0"]["instructions"]["rules"]).lower()
+
+
+@pytest.mark.asyncio
+async def test_unrelated_roles_remain_visible_without_a_model_call(monkeypatch):
+    class Client:
+        def __init__(self, **_kwargs):
+            raise AssertionError("TypeSafe should not be called without a legal-credential candidate")
+
+    monkeypatch.setattr(legal_degree.httpx, "AsyncClient", Client)
+    decisions = await legal_degree.classify_postings([
+        {"candidate_id": "a", "title": "Receptionist", "qualifications": ["Fluent Spanish"]},
+        {"candidate_id": "b", "title": "Occupational Therapist", "qualifications": ["Occupational therapy license"]},
+    ])
+
+    assert [decision.status for decision in decisions] == ["unclear", "unclear"]
+    assert all(decision.provider == "mechanical_prefilter" for decision in decisions)
 
 
 def test_legal_degree_decision_persists_model_probabilities_and_input_hash():
@@ -68,7 +84,7 @@ async def test_missing_typesafe_key_keeps_job_visible_as_unclear(monkeypatch):
     monkeypatch.delenv("TYPESAFE_API_KEY", raising=False)
 
     postings, error = await legal_degree.classify_extracted_postings([
-        {"title": "Legal Operations Manager", "description_summary": "Improve workflows"},
+        {"title": "Legal Operations Manager", "qualifications": ["JD required"]},
     ])
 
     assert error == "TYPESAFE_API_KEY is not configured."

@@ -5,6 +5,7 @@ import asyncio
 import hashlib
 import json
 import os
+import re
 from datetime import date, datetime, timedelta, timezone
 from typing import Literal
 
@@ -14,7 +15,7 @@ from sqlalchemy import select
 
 
 TYPESAFE_SYSTEM_ONE_URL = "https://api.typesafe.ai/v1/systemone"
-CLASSIFICATION_VERSION = "jev-legal-degree-v1"
+CLASSIFICATION_VERSION = "jev-legal-degree-v2"
 OPTIONS = ("required", "not_required", "unclear")
 LegalDegreeStatus = Literal["required", "not_required", "unclear"]
 
@@ -26,6 +27,15 @@ class LegalDegreeDecision(BaseModel):
     probabilities: dict[str, float]
     model: str
     usage: dict = Field(default_factory=dict)
+    provider: str = "typesafe"
+
+
+_CANDIDATE_PATTERN = re.compile(
+    r"\b(attorney|lawyer|solicitor|barrister|litigation associate|legal editor|"
+    r"j\.?\s*d\.?|juris doctor|law degree|ll\.?\s*b\.?|bar admission|"
+    r"admitted to (?:the )?bar|licensed to practice law|licensed attorney)\b",
+    re.IGNORECASE,
+)
 
 
 def _text(value, *, limit: int = 6000) -> str:
@@ -49,6 +59,11 @@ def classification_input(posting: dict) -> dict[str, str]:
 def input_sha256(posting: dict) -> str:
     value = json.dumps(classification_input(posting), ensure_ascii=True, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(value.encode()).hexdigest()
+
+
+def has_legal_credential_candidate(posting: dict) -> bool:
+    """Cheaply narrow Jev work; this signal never makes the final decision."""
+    return bool(_CANDIDATE_PATTERN.search(" ".join(classification_input(posting).values())))
 
 
 def _request(postings: list[dict]) -> dict:
@@ -80,6 +95,7 @@ def _request(postings: list[dict]) -> dict:
         "A practicing attorney, lawyer, or counsel role is required even when the qualifications omit the credential.",
         "Do not mark paralegal, legal assistant, legal operations, compliance, sales, or technology roles required unless the supplied facts make the legal credential mandatory.",
         "Do not treat preferred, optional, beneficial, or equivalent-experience language as required.",
+        "If a law degree is only one option and a non-law credential or experience also satisfies the requirement, choose not_required.",
         "Choose unclear when the relevant qualifications are absent or ambiguous.",
         "Choose exactly one option.",
     ]
@@ -138,11 +154,23 @@ def _parse(response: dict, identities: list[str]) -> list[LegalDegreeDecision]:
 async def classify_postings(postings: list[dict]) -> list[LegalDegreeDecision]:
     if not postings:
         return []
+    candidates = [(index, posting) for index, posting in enumerate(postings) if has_legal_credential_candidate(posting)]
+    decisions: list[LegalDegreeDecision | None] = [None] * len(postings)
+    for index, posting in enumerate(postings):
+        if not has_legal_credential_candidate(posting):
+            decisions[index] = LegalDegreeDecision(
+                candidate_id=str(posting.get("candidate_id") or index), status="unclear", confidence=1,
+                probabilities={"required": 0, "not_required": 0, "unclear": 1},
+                model="legal-credential-prefilter-v1", provider="mechanical_prefilter",
+            )
+    if not candidates:
+        return [decision for decision in decisions if decision is not None]
     api_key = os.getenv("TYPESAFE_API_KEY", "").strip()
     if not api_key:
         raise RuntimeError("TYPESAFE_API_KEY is not configured.")
-    identities = [str(posting.get("candidate_id") or index) for index, posting in enumerate(postings)]
-    request = _request(postings)
+    candidate_postings = [posting for _, posting in candidates]
+    identities = [str(posting.get("candidate_id") or index) for index, posting in candidates]
+    request = _request(candidate_postings)
     timeout_s = int(os.getenv("JOB_LEGAL_DEGREE_CLASSIFICATION_TIMEOUT_S", "120"))
     url = os.getenv("TYPESAFE_SYSTEM_ONE_URL", TYPESAFE_SYSTEM_ONE_URL)
     last_error = None
@@ -157,7 +185,10 @@ async def classify_postings(postings: list[dict]) -> list[LegalDegreeDecision]:
                 await asyncio.sleep(0.5 * (2 ** attempt))
                 continue
             response.raise_for_status()
-            return _parse(response.json(), identities)
+            classified = _parse(response.json(), identities)
+            for (index, _), decision in zip(candidates, classified):
+                decisions[index] = decision
+            return [decision for decision in decisions if decision is not None]
         except (httpx.TransportError, httpx.HTTPStatusError, json.JSONDecodeError) as exc:
             last_error = exc
             if attempt < 2:
@@ -172,7 +203,7 @@ def apply_decision(posting: dict, decision: LegalDegreeDecision, *, classified_a
     observed_at = classified_at or datetime.now(timezone.utc)
     result["legal_degree_requirement"] = decision.status
     result["legal_degree_classification"] = {
-        "state": "completed", "version": CLASSIFICATION_VERSION, "provider": "typesafe",
+        "state": "completed", "version": CLASSIFICATION_VERSION, "provider": decision.provider,
         "model": decision.model, "confidence": decision.confidence,
         "probabilities": decision.probabilities, "classified_at": observed_at.isoformat(),
         "input_sha256": input_sha256(posting),
