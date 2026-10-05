@@ -103,6 +103,10 @@ Law-degree roles are hidden by default in that view; use `all` to include them.
 Use `pif backfill-job-legal-degree --within-days 14` to resumably classify recent
 stored postings with batched TypeSafe Jev calls. The backfill persists its
 probabilities and model provenance; unclear jobs remain visible.
+Use `pif backfill-job-work-arrangement-conflicts` when legacy job data contains
+conflicting remote, hybrid, onsite, or negated-remote wording. Jev makes the
+final semantic choice and the result is persisted; the prefilter only limits
+which postings consume a model call.
 No automatic inbox-referral handling or portal submissions. `resumes` / `show` return
 file paths relative to `/home/pranav/resume`; use `resume-download` for a guarded
 headless copy. See `docs/JOB_AGENT.md`.

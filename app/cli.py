@@ -8954,6 +8954,15 @@ def pif_backfill_job_legal_degree(
     )))
 
 
+@pif_app.command("backfill-job-work-arrangement-conflicts")
+def pif_backfill_job_work_arrangement_conflicts(
+    batch_size: int = typer.Option(20, "--batch-size", min=1, max=50),
+):
+    """Resolve stored remote/hybrid/onsite conflicts with batched Jev judgments."""
+    from app.services.job_work_arrangement_classification import backfill_conflicts
+    console.print_json(data=asyncio.run(backfill_conflicts(batch_size=batch_size)))
+
+
 @pif_app.command("priority")
 def pif_priority_firms(
     event: List[str] = typer.Option([], "--event", help="Trigger event type; repeat to match several."),
