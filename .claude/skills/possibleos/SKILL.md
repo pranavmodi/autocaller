@@ -97,8 +97,12 @@ and routing emails are source-checked and stored once in `firm_contacts`; every 
 for that firm reuses them. `jobs --order contact_desc` puts firms with known emails
 first. It does not classify a resume category, prepare,
 email or submit. The UI's **Search now** button invokes the same command path on demand.
-Use `pif job-postings --contract contract|non_contract|unknown` for CLI parity
-with the Leads / Job listings contract filter.
+Use `pif job-postings --contract contract|non_contract|unknown --legal-degree
+exclude|all|required` for CLI parity with the Leads / Job listings filters.
+Law-degree roles are hidden by default in that view; use `all` to include them.
+Use `pif backfill-job-legal-degree --within-days 14` to resumably classify recent
+stored postings with batched TypeSafe Jev calls. The backfill persists its
+probabilities and model provenance; unclear jobs remain visible.
 No automatic inbox-referral handling or portal submissions. `resumes` / `show` return
 file paths relative to `/home/pranav/resume`; use `resume-download` for a guarded
 headless copy. See `docs/JOB_AGENT.md`.

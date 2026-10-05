@@ -455,6 +455,8 @@ async def research_recent_job_postings(
     )
     from app.services.job_contract_classification import classify_extracted_postings
     postings, contract_classification_error = await classify_extracted_postings(postings)
+    from app.services.job_legal_degree_classification import classify_extracted_postings as classify_legal_degree
+    postings, legal_degree_classification_error = await classify_legal_degree(postings)
     return {
         "has_recent_openings": bool(postings),
         "window_days": WINDOW_DAYS,
@@ -463,6 +465,7 @@ async def research_recent_job_postings(
         "researched_at": _utcnow().isoformat(),
         "postings": postings,
         "contract_classification_error": contract_classification_error,
+        "legal_degree_classification_error": legal_degree_classification_error,
     }
 
 

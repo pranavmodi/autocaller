@@ -2853,7 +2853,11 @@ const JOB_LISTING_CATEGORIES = [
 
 function JobListingsView() {
   const careerSearch = useQuery({ queryKey: ["pif", "career-search"], queryFn: getCareerSearchStatus, refetchInterval: 30_000, retry: false });
-  const [filters, setFilters] = useState<PifJobPostingsListParams>({ page: 1, page_size: 25 });
+  const [filters, setFilters] = useState<PifJobPostingsListParams>({
+    legal_degree: "exclude",
+    page: 1,
+    page_size: 25,
+  });
   const debouncedSearch = useDebouncedValue(filters.search ?? "", 250);
   const queryParams = useMemo(() => ({ ...filters, search: debouncedSearch || undefined }), [debouncedSearch, filters]);
   const query = useQuery({
@@ -2898,7 +2902,7 @@ function JobListingsView() {
         error={dailyStatsQuery.error}
       />
       <div className="rounded-lg border border-[#cbdde9] bg-[#f7fafc] p-3 shadow-sm">
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-9">
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-10">
           <InputField
             label="Search"
             value={filters.search ?? ""}
@@ -2945,6 +2949,15 @@ function JobListingsView() {
             <option value="non_contract">Non-contract</option>
             <option value="unknown">Unknown</option>
           </SelectField>
+          <SelectField
+            label="Law degree"
+            value={filters.legal_degree ?? "exclude"}
+            onChange={(value) => update("legal_degree", value as PifJobPostingsListParams["legal_degree"])}
+          >
+            <option value="exclude">Hide required</option>
+            <option value="all">Show all</option>
+            <option value="required">Required only</option>
+          </SelectField>
           <SelectField label="Posted" value={filters.posted_within_days ? String(filters.posted_within_days) : ""} onChange={(value) => update("posted_within_days", value ? Number(value) : undefined)}>
             <option value="">Any date</option>
             <option value="7">Last 7 days</option>
@@ -2965,7 +2978,7 @@ function JobListingsView() {
           <span>{query.data?.total.toLocaleString() ?? "—"} job listings</span>
           <button
             type="button"
-            onClick={() => setFilters({ page: 1, page_size: 25 })}
+            onClick={() => setFilters({ legal_degree: "exclude", page: 1, page_size: 25 })}
             className="inline-flex items-center gap-1.5 rounded-md border border-neutral-200 px-3 py-1.5 text-xs font-medium text-neutral-600 hover:bg-neutral-50"
           >
             <Filter className="h-3.5 w-3.5" />
@@ -3151,7 +3164,7 @@ function JobListingRow({ posting }: { posting: PifJobPostingResult }) {
         {posting.ats_created_at && !posting.posted_date && <div className="text-[11px] text-neutral-500">ATS created {formatDateOnly(posting.ats_created_at)}</div>}
         {posting.last_checked_at && <div className="text-[11px] text-neutral-400">Checked {formatDateOnly(posting.last_checked_at)}</div>}
       </td>
-      <td data-label="Category" className="px-3 py-3"><div className="flex flex-wrap gap-1"><JobTag value={formatLabel(posting.role_category ?? "other")} /><JobTag value={posting.contract_status === "contract" ? "Contract" : posting.contract_status === "non_contract" ? "Non-contract" : "Contract unknown"} emphasis={posting.contract_status === "contract"} />{posting.global_remote ? <JobTag value="Global remote" emphasis /> : posting.work_arrangement === "remote" ? <JobTag value="Remote" emphasis /> : null}{posting.colombia_eligibility && <JobTag value={`Colombia: ${formatLabel(posting.colombia_eligibility)}`} />}{posting.gtm_relevance && <JobTag value={`${formatLabel(posting.gtm_relevance)} GTM`} emphasis={posting.gtm_relevance === "high"} />}</div>{posting.remote_eligibility && <p className="mt-1 text-[11px] text-neutral-500">{posting.remote_eligibility}</p>}</td>
+      <td data-label="Category" className="px-3 py-3"><div className="flex flex-wrap gap-1"><JobTag value={formatLabel(posting.role_category ?? "other")} />{posting.legal_degree_requirement === "required" && <JobTag value="Law degree required" emphasis />}<JobTag value={posting.contract_status === "contract" ? "Contract" : posting.contract_status === "non_contract" ? "Non-contract" : "Contract unknown"} emphasis={posting.contract_status === "contract"} />{posting.global_remote ? <JobTag value="Global remote" emphasis /> : posting.work_arrangement === "remote" ? <JobTag value="Remote" emphasis /> : null}{posting.colombia_eligibility && <JobTag value={`Colombia: ${formatLabel(posting.colombia_eligibility)}`} />}{posting.gtm_relevance && <JobTag value={`${formatLabel(posting.gtm_relevance)} GTM`} emphasis={posting.gtm_relevance === "high"} />}</div>{posting.remote_eligibility && <p className="mt-1 text-[11px] text-neutral-500">{posting.remote_eligibility}</p>}</td>
       <td data-label="Signals" className="min-w-0 px-3 py-3"><div className="flex flex-wrap gap-1">{posting.trigger_tags.length ? posting.trigger_tags.map((tag) => <JobTag key={tag} value={formatLabel(tag)} />) : <span className="text-xs text-neutral-400">—</span>}</div></td>
       <td data-label="Technology" className="min-w-0 px-3 py-3"><div className="flex flex-wrap gap-1">{posting.technology_mentions.length ? posting.technology_mentions.map((technology) => <JobTag key={technology} value={technology} emphasis />) : <span className="text-xs text-neutral-400">—</span>}</div></td>
       <td data-label="Source" className="px-3 py-3">{posting.source_url ? <a href={posting.source_url} target="_blank" rel="noreferrer" title={posting.source_name} aria-label={`Open source for ${posting.title}`} className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-neutral-200 text-blue-600 hover:bg-blue-50"><ExternalLink className="h-3.5 w-3.5" /></a> : <span className="text-xs text-neutral-400">—</span>}</td>

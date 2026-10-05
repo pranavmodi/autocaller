@@ -8915,6 +8915,7 @@ def pif_firms(
 def pif_job_postings(
     search: str | None = typer.Option(None, "--search"),
     contract: str | None = typer.Option(None, "--contract", help="contract, non_contract, or unknown"),
+    legal_degree: str = typer.Option("exclude", "--legal-degree", help="exclude, all, or required"),
     role_category: str | None = typer.Option(None, "--category"),
     remote_scope: str | None = typer.Option(None, "--remote-scope"),
     order: str = typer.Option("posted_desc", "--order"),
@@ -8924,16 +8925,33 @@ def pif_job_postings(
     """List Leads job postings using the same filters as the web view."""
     if contract not in {None, "contract", "non_contract", "unknown"}:
         raise typer.BadParameter("--contract must be contract, non_contract, or unknown")
+    if legal_degree not in {"exclude", "all", "required"}:
+        raise typer.BadParameter("--legal-degree must be exclude, all, or required")
     console.print_json(data=_get(
         "/api/pif/job-postings",
         search=search,
         contract_status=contract,
+        legal_degree=legal_degree,
         role_category=role_category,
         remote_scope=remote_scope,
         order=order,
         page=page,
         page_size=page_size,
     ))
+
+
+@pif_app.command("backfill-job-legal-degree")
+def pif_backfill_job_legal_degree(
+    within_days: int = typer.Option(14, "--within-days", min=1, max=3650),
+    batch_size: int = typer.Option(20, "--batch-size", min=1, max=50),
+    limit: int | None = typer.Option(None, "--limit", min=1),
+    force: bool = typer.Option(False, "--force"),
+):
+    """Classify recent Leads jobs by mandatory law-degree requirement with Jev."""
+    from app.services.job_legal_degree_classification import backfill_recent_postings
+    console.print_json(data=asyncio.run(backfill_recent_postings(
+        within_days=within_days, batch_size=batch_size, limit=limit, force=force,
+    )))
 
 
 @pif_app.command("priority")

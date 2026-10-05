@@ -136,6 +136,9 @@ export interface PifJobPostingResult {
   global_remote_evidence: string[];
   global_remote_confidence: number | null;
   contract_status: "contract" | "non_contract" | "unknown";
+  legal_degree_requirement: "required" | "not_required" | "unclear" | "unknown";
+  legal_degree_reason: string | null;
+  legal_degree_evidence: string | null;
   contract_classification: {
     state: "completed" | "error";
     version: string;
@@ -157,6 +160,7 @@ export interface PifJobPostingsListParams {
   gtm_relevance?: "high" | "medium" | "low";
   remote_scope?: "remote" | "global" | "not_global";
   contract_status?: "contract" | "non_contract" | "unknown";
+  legal_degree?: "exclude" | "all" | "required";
   global_remote?: boolean;
   posted_within_days?: number;
   order?: "posted_desc" | "found_desc";
@@ -1034,6 +1038,7 @@ export function listMirroredPifJobPostings(
       gtm_relevance: params.gtm_relevance,
       remote_scope: params.remote_scope,
       contract_status: params.contract_status,
+      legal_degree: params.legal_degree,
       global_remote: params.global_remote,
       posted_within_days: params.posted_within_days,
       order: params.order,

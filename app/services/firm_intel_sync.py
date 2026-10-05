@@ -1631,6 +1631,7 @@ async def list_mirrored_pif_job_postings(
     gtm_relevance: str | None = None,
     remote_scope: str | None = None,
     contract_status: str | None = None,
+    legal_degree: str = "exclude",
     global_remote: bool | None = None,
     posted_within_days: int | None = None,
     order: str = "posted_desc",
@@ -1644,6 +1645,7 @@ async def list_mirrored_pif_job_postings(
     relevance = (gtm_relevance or "").strip().lower()
     selected_remote_scope = (remote_scope or "").strip().lower()
     selected_contract_status = (contract_status or "").strip().lower()
+    selected_legal_degree = (legal_degree or "exclude").strip().lower()
     ordering = (order or "posted_desc").strip().lower()
     if relevance and relevance not in {"high", "medium", "low"}:
         raise ValueError(f"unsupported_gtm_relevance:{relevance}")
@@ -1653,6 +1655,8 @@ async def list_mirrored_pif_job_postings(
         raise ValueError(f"unsupported_remote_scope:{selected_remote_scope}")
     if selected_contract_status and selected_contract_status not in {"contract", "non_contract", "unknown"}:
         raise ValueError(f"unsupported_contract_status:{selected_contract_status}")
+    if selected_legal_degree not in {"exclude", "all", "required"}:
+        raise ValueError(f"unsupported_legal_degree:{selected_legal_degree}")
 
     sql = """
         SELECT
@@ -1710,6 +1714,14 @@ async def list_mirrored_pif_job_postings(
     elif selected_contract_status:
         params["contract_status"] = selected_contract_status
         sql += " AND posting.value->>'contract_status' = :contract_status"
+    legal_degree_required_sql = """(
+        COALESCE(posting.value->>'legal_degree_requirement', '') = 'required'
+        OR COALESCE(posting.value->>'role_category', '') = 'attorney_legal'
+    )"""
+    if selected_legal_degree == "exclude":
+        sql += f" AND NOT {legal_degree_required_sql}"
+    elif selected_legal_degree == "required":
+        sql += f" AND {legal_degree_required_sql}"
     if posted_within_days is not None:
         cutoff = (datetime.now(timezone.utc) - timedelta(days=max(0, posted_within_days))).date().isoformat()
         params["posted_after"] = cutoff
@@ -1772,6 +1784,14 @@ async def list_mirrored_pif_job_postings(
             "global_remote_confidence": posting.get("global_remote_confidence"),
             "contract_status": posting.get("contract_status", "unknown"),
             "contract_classification": posting.get("contract_classification"),
+            "legal_degree_requirement": (
+                "required"
+                if posting.get("legal_degree_requirement") == "required"
+                or posting.get("role_category") == "attorney_legal"
+                else posting.get("legal_degree_requirement", "unclear")
+            ),
+            "legal_degree_reason": posting.get("legal_degree_reason"),
+            "legal_degree_evidence": posting.get("legal_degree_evidence"),
         })
     return {
         "items": items,

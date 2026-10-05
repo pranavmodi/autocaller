@@ -1172,6 +1172,8 @@ async def replay_url_import_evidence(source_url: str, previous_runs: list[tuple[
                 ])))
                 from app.services.job_contract_classification import classify_extracted_postings
                 classified_postings, _ = await classify_extracted_postings([posting])
+                from app.services.job_legal_degree_classification import classify_extracted_postings as classify_legal_degree
+                classified_postings, _ = await classify_legal_degree(classified_postings)
                 posting = classified_postings[0]
                 stored = await ingest(candidate, posting)
                 contacts = await ingest_application_contacts(stored["firm_id"], decision.application_contacts)
@@ -1757,11 +1759,18 @@ async def execute(run_id: str, config: SearchConfig, *, seed_only: bool, audit: 
             classified_postings, contract_error = await classify_extracted_postings(
                 [prepared[position] for position in positions]
             )
+            from app.services.job_legal_degree_classification import classify_extracted_postings as classify_legal_degree
+            classified_postings, legal_degree_error = await classify_legal_degree(classified_postings)
             prepared.update(dict(zip(positions, classified_postings)))
             if contract_error:
                 audit.setdefault("contract_classification_errors", []).append({
                     "candidate_ids": [verified_batch[position][0]["candidate_id"] for position in positions],
                     "error": contract_error,
+                })
+            if legal_degree_error:
+                audit.setdefault("legal_degree_classification_errors", []).append({
+                    "candidate_ids": [verified_batch[position][0]["candidate_id"] for position in positions],
+                    "error": legal_degree_error,
                 })
 
         for index, (item, decision) in enumerate(verified_batch):
