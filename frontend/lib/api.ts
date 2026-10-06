@@ -1623,14 +1623,24 @@ export type QuickJobLink = {
   id: number;
   company_name: string;
   job_url: string;
+  link_type: "job" | "portal";
   created_by: string;
   created_at: string | null;
 };
 
-export const listQuickJobLinks = (limit = 200) =>
-  get<{ links: QuickJobLink[]; count: number }>(`/api/quick-job-links?limit=${limit}`);
+export const listQuickJobLinks = (linkType?: "job" | "portal", limit = 200) => {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (linkType) params.set("link_type", linkType);
+  return get<{ links: QuickJobLink[]; count: number }>(
+    `/api/quick-job-links?${params.toString()}`,
+  );
+};
 
-export const createQuickJobLink = (payload: { company_name: string; job_url: string }) =>
+export const createQuickJobLink = (payload: {
+  company_name: string;
+  job_url: string;
+  link_type?: "job" | "portal";
+}) =>
   post<{ link: QuickJobLink }>("/api/quick-job-links", payload);
 
 export const deleteQuickJobLink = (linkId: number) =>

@@ -4099,24 +4099,25 @@ def sequences_list(
 
 
 # ---------------------------------------------------------------------------
-# todos — editable project backlog
+# quick-save — job opportunity and portal inbox
 # ---------------------------------------------------------------------------
 
 @quick_save_app.command("list")
 def quick_save_list(
     limit: int = typer.Option(200, "--limit", min=1, max=500),
+    link_type: str = typer.Option("", "--type", help="Filter by job or portal."),
     json_output: bool = typer.Option(False, "--json", help="Print raw JSON."),
 ):
     """List recently captured company job links."""
-    data = _get("/api/quick-job-links", limit=limit)
+    data = _get("/api/quick-job-links", limit=limit, link_type=link_type or None)
     if json_output:
         console.print_json(data=data)
         return
     rows = data.get("links") or []
     table = Table(show_header=True, header_style="bold")
     table.add_column("id", no_wrap=True)
-    table.add_column("company")
-    table.add_column("job URL")
+    table.add_column("name")
+    table.add_column("URL")
     table.add_column("saved", no_wrap=True)
     for row in rows:
         table.add_row(
@@ -4132,11 +4133,12 @@ def quick_save_list(
 def quick_save_add(
     company_name: str = typer.Argument(..., help="Company name."),
     job_url: str = typer.Argument(..., help="Public job listing URL."),
+    link_type: str = typer.Option("job", "--type", help="Save as job or portal."),
 ):
     """Save a company and job URL without starting application research."""
     console.print_json(data=_post(
         "/api/quick-job-links",
-        json_body={"company_name": company_name, "job_url": job_url},
+        json_body={"company_name": company_name, "job_url": job_url, "link_type": link_type},
     ))
 
 
@@ -4144,6 +4146,11 @@ def quick_save_add(
 def quick_save_delete(link_id: int = typer.Argument(...)):
     """Delete a captured company job link."""
     console.print_json(data=_delete(f"/api/quick-job-links/{link_id}"))
+
+
+# ---------------------------------------------------------------------------
+# todos — editable project backlog
+# ---------------------------------------------------------------------------
 
 @todos_app.command("list")
 def todos_list(

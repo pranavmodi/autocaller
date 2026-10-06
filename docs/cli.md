@@ -253,8 +253,8 @@ the selected job by default; applications are sent only through explicit
 | `todos add <title> [--area=lead-gen --status=not_started --body=... --source-url=...]` | Add a DB-backed todo. |
 | `todos update <id> [--title=... --status=done --body=... --clear-source-url]` | Edit a DB-backed todo. |
 | `todos delete <id>` | Delete a DB-backed todo. |
-| `quick-save list [--limit=200] [--json]` | List company and job links captured from the Quick Save inbox. |
-| `quick-save add <company-name> <job-url>` | Save a company and job listing without starting Job Agent research or an application. |
+| `quick-save list [--type=job\|portal] [--limit=200] [--json]` | List individual job links or reusable job portals captured from Quick Save. |
+| `quick-save add <name> <url> [--type=job\|portal]` | Save a company job listing or job portal without starting Job Agent research or an application. |
 | `quick-save delete <id>` | Delete a saved company job link. |
 | `ideas list [--json]` | List saved future product, marketing, GTM, and ops ideas. Reads rows stored in the DB-backed todo table under `area=ideas` and legacy `idea:*` areas. |
 | `ideas add "..." [--json]` | Save a simple future idea. Use `ideas add - < idea.txt` or pipe stdin for multiline text. |

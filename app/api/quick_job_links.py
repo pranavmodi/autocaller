@@ -1,6 +1,8 @@
 """Quick company and job-link capture endpoints."""
 from __future__ import annotations
 
+from typing import Literal
+
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field, HttpUrl
 
@@ -12,17 +14,22 @@ from app.services.quick_job_links import (
 
 
 router = APIRouter(prefix="/api/quick-job-links", tags=["quick-job-links"])
+LinkType = Literal["job", "portal"]
 
 
 class QuickJobLinkCreateRequest(BaseModel):
     company_name: str = Field(..., min_length=1, max_length=255)
     job_url: HttpUrl
+    link_type: LinkType = "job"
     actor: str = Field("operator", max_length=128)
 
 
 @router.get("")
-async def get_quick_job_links(limit: int = Query(200, ge=1, le=500)):
-    links = await list_quick_job_links(limit=limit)
+async def get_quick_job_links(
+    link_type: LinkType | None = None,
+    limit: int = Query(200, ge=1, le=500),
+):
+    links = await list_quick_job_links(link_type=link_type, limit=limit)
     return {"links": links, "count": len(links)}
 
 
@@ -33,6 +40,7 @@ async def post_quick_job_link(req: QuickJobLinkCreateRequest):
             "link": await create_quick_job_link(
                 company_name=req.company_name,
                 job_url=str(req.job_url),
+                link_type=req.link_type,
                 actor=req.actor,
             )
         }

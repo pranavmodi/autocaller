@@ -440,12 +440,16 @@ class QuickJobLinkRow(Base):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     company_name: Mapped[str] = mapped_column(String(255), nullable=False)
     job_url: Mapped[str] = mapped_column(String(2048), nullable=False, unique=True)
+    link_type: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="job", server_default="job",
+    )
     created_by: Mapped[str] = mapped_column(String(128), nullable=False, default="operator")
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow)
 
     __table_args__ = (
         Index("ix_quick_job_links_created_at", "created_at"),
         Index("ix_quick_job_links_company_name", "company_name"),
+        Index("ix_quick_job_links_link_type", "link_type"),
     )
 
 

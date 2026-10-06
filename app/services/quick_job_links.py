@@ -18,6 +18,7 @@ def quick_job_link_to_dict(row: QuickJobLinkRow) -> dict[str, Any]:
         "id": row.id,
         "company_name": row.company_name,
         "job_url": row.job_url,
+        "link_type": row.link_type,
         "created_by": row.created_by,
         "created_at": row.created_at.isoformat() if row.created_at else None,
     }
@@ -33,12 +34,13 @@ async def ensure_quick_job_links_table() -> None:
 
 
 async def create_quick_job_link(
-    *, company_name: str, job_url: str, actor: str = "operator",
+    *, company_name: str, job_url: str, link_type: str = "job", actor: str = "operator",
 ) -> dict[str, Any]:
     await ensure_quick_job_links_table()
     row = QuickJobLinkRow(
         company_name=company_name.strip(),
         job_url=job_url.strip(),
+        link_type=link_type,
         created_by=actor,
     )
     async with AsyncSessionLocal() as session:
@@ -52,16 +54,17 @@ async def create_quick_job_link(
         return quick_job_link_to_dict(row)
 
 
-async def list_quick_job_links(*, limit: int = 200) -> list[dict[str, Any]]:
+async def list_quick_job_links(
+    *, link_type: str | None = None, limit: int = 200,
+) -> list[dict[str, Any]]:
     await ensure_quick_job_links_table()
     async with AsyncSessionLocal() as session:
-        rows = (
-            await session.execute(
-                select(QuickJobLinkRow)
-                .order_by(QuickJobLinkRow.created_at.desc(), QuickJobLinkRow.id.desc())
-                .limit(limit)
-            )
-        ).scalars().all()
+        stmt = select(QuickJobLinkRow)
+        if link_type:
+            stmt = stmt.where(QuickJobLinkRow.link_type == link_type)
+        rows = (await session.execute(
+            stmt.order_by(QuickJobLinkRow.created_at.desc(), QuickJobLinkRow.id.desc()).limit(limit)
+        )).scalars().all()
         return [quick_job_link_to_dict(row) for row in rows]
 
 
