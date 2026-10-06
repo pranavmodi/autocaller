@@ -68,6 +68,7 @@ aiaudit_app = typer.Typer(help="AI Audit tracked links and click attribution.", 
 inbound_app = typer.Typer(help="Inbound email ingestion — Zoho IMAP reader for replies.", no_args_is_help=True)
 outreach_app = typer.Typer(help="Blog-post outreach campaigns — LLM-composed, per-recipient, tracked.", no_args_is_help=True)
 todos_app = typer.Typer(help="Editable project todo backlog.", no_args_is_help=True)
+quick_save_app = typer.Typer(help="Quick company and job-link inbox.", no_args_is_help=True)
 ideas_app = typer.Typer(help="Simple future product, marketing, and GTM idea capture.", no_args_is_help=True)
 agents_app = typer.Typer(help="Possible OS master-agent heartbeat and subagent tasks.", no_args_is_help=True)
 lead_finder_app = typer.Typer(help="Lead Finder context and one-step OpenClaw/tool debugger.", no_args_is_help=True)
@@ -113,6 +114,7 @@ app.add_typer(aiaudit_app, name="aiaudit")
 app.add_typer(inbound_app, name="inbound")
 app.add_typer(outreach_app, name="outreach")
 app.add_typer(todos_app, name="todos")
+app.add_typer(quick_save_app, name="quick-save")
 app.add_typer(ideas_app, name="ideas")
 app.add_typer(agents_app, name="agents")
 app.add_typer(lead_finder_app, name="lead-finder")
@@ -4099,6 +4101,49 @@ def sequences_list(
 # ---------------------------------------------------------------------------
 # todos — editable project backlog
 # ---------------------------------------------------------------------------
+
+@quick_save_app.command("list")
+def quick_save_list(
+    limit: int = typer.Option(200, "--limit", min=1, max=500),
+    json_output: bool = typer.Option(False, "--json", help="Print raw JSON."),
+):
+    """List recently captured company job links."""
+    data = _get("/api/quick-job-links", limit=limit)
+    if json_output:
+        console.print_json(data=data)
+        return
+    rows = data.get("links") or []
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("id", no_wrap=True)
+    table.add_column("company")
+    table.add_column("job URL")
+    table.add_column("saved", no_wrap=True)
+    for row in rows:
+        table.add_row(
+            str(row.get("id") or ""),
+            row.get("company_name") or "",
+            row.get("job_url") or "",
+            row.get("created_at") or "",
+        )
+    console.print(table)
+
+
+@quick_save_app.command("add")
+def quick_save_add(
+    company_name: str = typer.Argument(..., help="Company name."),
+    job_url: str = typer.Argument(..., help="Public job listing URL."),
+):
+    """Save a company and job URL without starting application research."""
+    console.print_json(data=_post(
+        "/api/quick-job-links",
+        json_body={"company_name": company_name, "job_url": job_url},
+    ))
+
+
+@quick_save_app.command("delete")
+def quick_save_delete(link_id: int = typer.Argument(...)):
+    """Delete a captured company job link."""
+    console.print_json(data=_delete(f"/api/quick-job-links/{link_id}"))
 
 @todos_app.command("list")
 def todos_list(

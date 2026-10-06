@@ -1619,6 +1619,23 @@ export const createKnowledgeEntry = (payload: KnowledgeEntryPayload) =>
 export const deleteKnowledgeEntry = (entryId: number) =>
   del<{ deleted: boolean; id: number }>(`/api/knowledge/${entryId}`);
 
+export type QuickJobLink = {
+  id: number;
+  company_name: string;
+  job_url: string;
+  created_by: string;
+  created_at: string | null;
+};
+
+export const listQuickJobLinks = (limit = 200) =>
+  get<{ links: QuickJobLink[]; count: number }>(`/api/quick-job-links?limit=${limit}`);
+
+export const createQuickJobLink = (payload: { company_name: string; job_url: string }) =>
+  post<{ link: QuickJobLink }>("/api/quick-job-links", payload);
+
+export const deleteQuickJobLink = (linkId: number) =>
+  del<{ deleted: boolean; id: number }>(`/api/quick-job-links/${linkId}`);
+
 // ---- Firm reviews (operator-pasted, split by source) ----
 export type FirmReviews = {
   pif_id: string;

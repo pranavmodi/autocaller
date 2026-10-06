@@ -32,6 +32,7 @@ from .engagement_campaigns import router as engagement_campaigns_router
 from .front_inbox import router as front_inbox_router
 from .call_lab import router as call_lab_router
 from .knowledge import router as knowledge_router
+from .quick_job_links import router as quick_job_links_router
 from .lead_finder import router as lead_finder_router
 from .codex_gateway import router as codex_gateway_router
 
@@ -49,6 +50,7 @@ __all__ = [
     "front_inbox_router",
     "call_lab_router",
     "knowledge_router",
+    "quick_job_links_router",
     "lead_finder_router",
     "codex_gateway_router",
 ]

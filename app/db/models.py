@@ -433,6 +433,22 @@ class KnowledgeEntryRow(Base):
     )
 
 
+class QuickJobLinkRow(Base):
+    """Company and job URL captured for later review."""
+    __tablename__ = "quick_job_links"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    company_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    job_url: Mapped[str] = mapped_column(String(2048), nullable=False, unique=True)
+    created_by: Mapped[str] = mapped_column(String(128), nullable=False, default="operator")
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=_utcnow)
+
+    __table_args__ = (
+        Index("ix_quick_job_links_created_at", "created_at"),
+        Index("ix_quick_job_links_company_name", "company_name"),
+    )
+
+
 class DataReturnedRow(Base):
     """Append-only payloads received by the public /datareturned endpoint."""
     __tablename__ = "data_returned_events"

@@ -5,9 +5,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Activity,
-  Bell,
+  BookmarkPlus,
   BrainCircuit,
-  BookOpen,
   Bot,
   BriefcaseBusiness,
   Building2,
@@ -20,7 +19,6 @@ import {
   LogOut,
   Menu,
   MessageSquare,
-  PhoneCall,
   Radar,
   Search,
   Send,
@@ -53,13 +51,10 @@ async function signOut() {
 const items = [
   { href: "/", label: "Now", icon: Activity },
   { href: "/cadence", label: "Call Lab", icon: Headset },
-  { href: "/calls", label: "Calls", icon: PhoneCall },
   { href: "/comms", label: "Comms", icon: MessageSquare },
-  { href: "/review-alerts", label: "Review Alerts", icon: Bell },
   { href: "/lead-gen", label: "Lead Gen", icon: BrainCircuit },
   { href: "/research-leads", label: "Research Leads", icon: Users },
   { href: "/lead-finder", label: "Lead Finder", icon: Search },
-  { href: "/knowledge", label: "Knowledge", icon: BookOpen },
   { href: "/click-analytics", label: "Engagement", icon: Activity },
   { href: "/data-returned", label: "Data Returned", icon: Database },
   { href: "/front", label: "Front", icon: Radar },
@@ -70,10 +65,11 @@ const items = [
   { href: "/consults", label: "Consults", icon: CalendarCheck },
   { href: "/leads", label: "Leads", icon: Building2 },
   { href: "/job-agent", label: "Job agent", icon: BriefcaseBusiness },
+  { href: "/quick-save", label: "Quick Save", icon: BookmarkPlus },
   { href: "/system", label: "Health", icon: Stethoscope },
 ];
 
-const mobilePrimaryHrefs = ["/", "/calls"];
+const mobilePrimaryHrefs = ["/", "/quick-save"];
 
 export function Nav() {
   const pathname = usePathname();
