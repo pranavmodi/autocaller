@@ -15,7 +15,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.db import Base, AsyncSessionLocal, async_engine
 from app.db.models import CareerSearchRunRow
 from app.services import daily_career_search as career
-from app.services.job_search_sources import resolved_source_urls, source_urls, validate_source_ids
+from app.services.job_search_sources import ALL_SOURCE_IDS, all_source_catalog, resolved_source_urls, source_urls
 
 log = logging.getLogger(__name__)
 WAKE = asyncio.Event()
@@ -23,6 +23,7 @@ WAKE = asyncio.Event()
 class SearchSettings(BaseModel):
     model_config = ConfigDict(extra='forbid')
     name: str = Field(min_length=1, max_length=120)
+    description: str = Field('', max_length=5000)
     target_roles: str = Field(min_length=1, max_length=2000)
     preferred_industries: str = Field(min_length=1, max_length=2000)
     industry_mode: Literal['required', 'preferred'] = 'required'
@@ -38,7 +39,7 @@ class SearchSettings(BaseModel):
     include_quick_save_portals: bool = True
     employer_urls: list[str] = Field(default_factory=list, max_length=30)
     max_candidates: int = Field(10, ge=1, le=100)
-    max_sources: int = Field(6, ge=1, le=30)
+    max_sources: int = Field(200, ge=1, le=200)
     ai_provider: Literal['gateway', 'openai'] = 'openai'
     openai_model: str = Field('gpt-5.6-luna', min_length=1, max_length=120, pattern=r'^\S+$')
     schedule_enabled: bool = False
@@ -47,7 +48,9 @@ class SearchSettings(BaseModel):
 
     @model_validator(mode='after')
     def valid(self):
-        validate_source_ids(self.source_ids)
+        self.source_ids = list(ALL_SOURCE_IDS)
+        self.include_quick_save_portals = True
+        self.max_sources = 200
         try:
             ZoneInfo(self.timezone)
             time.fromisoformat(self.local_time)
@@ -61,8 +64,6 @@ class SearchSettings(BaseModel):
         for field in ('name', 'target_roles', 'preferred_industries', 'location_preferences'):
             if not getattr(self, field).strip():
                 raise ValueError(f'{field} cannot be blank')
-        if not self.source_ids and not self.employer_urls:
-            raise ValueError('Select at least one source or employer careers URL')
         return self
 
 class SaveSearch(BaseModel):
@@ -109,8 +110,8 @@ async def ensure():
 def profile(config: SearchSettings, resolved_urls: list[str] | None = None):
     return career.SearchProfile(name=config.name, target_roles=config.target_roles,
         preferred_industries=config.preferred_industries, location_preferences=config.location_preferences,
-        prefer_overseas_employers=config.prefer_overseas_employers, source_ids=config.source_ids,
-        source_urls=[*(resolved_urls if resolved_urls is not None else source_urls(config.source_ids)), *config.employer_urls],
+        prefer_overseas_employers=config.prefer_overseas_employers, source_ids=list(ALL_SOURCE_IDS),
+        source_urls=[*(resolved_urls if resolved_urls is not None else source_urls(ALL_SOURCE_IDS)), *config.employer_urls],
         precise=True, industry_mode=config.industry_mode, location_mode=config.location_mode,
         employment_type=config.employment_type, employment_mode=config.employment_mode,
         exclusions=config.exclusions, additional_preferences=config.additional_preferences,
@@ -118,10 +119,7 @@ def profile(config: SearchSettings, resolved_urls: list[str] | None = None):
 
 
 async def resolved_profile(config: SearchSettings):
-    urls = await resolved_source_urls(
-        config.source_ids,
-        include_quick_save=config.include_quick_save_portals,
-    )
+    urls = await resolved_source_urls()
     return profile(config, urls)
 
 
@@ -279,9 +277,8 @@ async def run_detail(identity: str):
 
 async def draft(body: ParseSearch):
     from app.services.llm_gateway import call_skill_json
-    from app.services.job_search_sources import catalog_payload
     skill = Path(__file__).resolve().parents[1]/'skills/job-search-settings/SKILL.md'
-    payload = {'mode': 'settings', 'description': body.description, 'sources': catalog_payload([]),
+    payload = {'mode': 'settings', 'description': body.description, 'sources': await all_source_catalog(),
                'schema': SearchSettings.model_json_schema()}
     if body.ai_provider == 'openai':
         from app.services.job_search_ai import direct_search
@@ -293,6 +290,7 @@ async def draft(body: ParseSearch):
             required_fields=['config'], model='openclaw/main', timeout_s=90, retries=1, allow_tools=False,
             lane='possibleos-interactive', prompt_cache_key='possibleos:search-settings:v1')
     config = SearchSettings.model_validate(response.parsed['config'])
+    config.description = body.description
     config.ai_provider = body.ai_provider
     config.openai_model = body.openai_model
     config.schedule_enabled = False  # A draft never schedules itself.

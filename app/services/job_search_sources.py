@@ -18,14 +18,14 @@ class JobSearchSource(BaseModel):
     id: str
     name: str
     url: HttpUrl
-    method: Literal["public_api", "public_feed", "public_page", "web_search", "disabled"]
+    method: Literal["public_api", "public_feed", "public_page", "web_search"]
     enabled_by_default: bool = False
     note: str
     aliases: list[str] = Field(default_factory=list)
 
     @property
     def available(self) -> bool:
-        return self.method != "disabled"
+        return True
 
 
 # The user's 30-item list normalizes to 27 distinct sources. AngelList is now
@@ -36,13 +36,15 @@ SOURCE_CATALOG = (
                     method="public_feed", enabled_by_default=True,
                     note="Public RSS feed; retain Remotive attribution on discovered jobs."),
     JobSearchSource(id="toptal", name="Toptal", url="https://www.toptal.com/talent/apply",
-                    method="disabled", note="Talent marketplace and screening funnel, not a public job feed."),
+                    method="web_search", enabled_by_default=True,
+                    note="Search public indexed opportunities only; do not automate its account or screening flow."),
     JobSearchSource(id="wellfound", name="Wellfound", url="https://wellfound.com/jobs",
                     method="web_search", enabled_by_default=True,
                     note="Discover public job pages through web search; do not automate account-only flows.",
                     aliases=["AngelList"]),
     JobSearchSource(id="pangian", name="Pangian", url="https://pangian.com/",
-                    method="disabled", note="The public job service is currently unavailable/under maintenance."),
+                    method="web_search", enabled_by_default=True,
+                    note="Search public indexed pages; the direct service may be unavailable."),
     JobSearchSource(id="remote_co", name="Remote.co", url="https://remote.co/remote-jobs/",
                     method="public_page", enabled_by_default=True,
                     note="Public remote-job categories and job pages."),
@@ -54,7 +56,8 @@ SOURCE_CATALOG = (
                     note="Public remote-job pages; corrected from the stale remotees.com link.",
                     aliases=["Remotees (duplicate entry)"]),
     JobSearchSource(id="flexjobs", name="FlexJobs", url="https://www.flexjobs.com/remote-jobs",
-                    method="disabled", note="Most listing access is subscription-gated."),
+                    method="web_search", enabled_by_default=True,
+                    note="Search public indexed job pages only; do not bypass subscription access."),
     JobSearchSource(id="linkedin", name="LinkedIn Jobs", url="https://www.linkedin.com/jobs/",
                     method="web_search", enabled_by_default=True,
                     note="Use indexed public job pages only; no logged-in scraping or account automation."),
@@ -65,11 +68,14 @@ SOURCE_CATALOG = (
                     method="public_page", enabled_by_default=True,
                     note="Public curated remote-job pages."),
     JobSearchSource(id="upwork", name="Upwork", url="https://www.upwork.com/freelance-jobs/",
-                    method="disabled", note="Account-based freelance marketplace, outside the standard job-application flow."),
+                    method="web_search", enabled_by_default=True,
+                    note="Search public indexed opportunities only; do not automate account-only bidding."),
     JobSearchSource(id="freelancer", name="Freelancer", url="https://www.freelancer.com/jobs/",
-                    method="disabled", note="Bid-based freelance marketplace, outside the standard job-application flow."),
+                    method="web_search", enabled_by_default=True,
+                    note="Search public indexed opportunities only; do not automate account-only bidding."),
     JobSearchSource(id="outsourcely", name="Outsourcely", url="https://www.outsourcely.com/remote-workers",
-                    method="disabled", note="Account-based talent marketplace rather than a reliable public job feed."),
+                    method="web_search", enabled_by_default=True,
+                    note="Search public indexed opportunities only; do not automate account-only flows."),
     JobSearchSource(id="simplyhired", name="SimplyHired", url="https://www.simplyhired.com/search?q=remote",
                     method="web_search", enabled_by_default=True,
                     note="Use indexed public result/job pages and verify every role at the employer source."),
@@ -77,7 +83,8 @@ SOURCE_CATALOG = (
                     method="public_page", enabled_by_default=True,
                     note="Public Europe-focused remote-job board.", aliases=["Remote OK Europe"]),
     JobSearchSource(id="remotehabits", name="RemoteHabits", url="https://remotehabits.com/",
-                    method="disabled", note="Remote-work content/community site, not a dependable current job board."),
+                    method="web_search", enabled_by_default=True,
+                    note="Search public indexed opportunity pages; this source may return no current roles."),
     JobSearchSource(id="nodesk", name="NoDesk", url="https://nodesk.co/remote-jobs/",
                     method="public_page", enabled_by_default=True,
                     note="Public curated remote-job pages."),
@@ -88,19 +95,23 @@ SOURCE_CATALOG = (
                     method="public_page", enabled_by_default=True,
                     note="Public remote-job index."),
     JobSearchSource(id="europe_remotely", name="Europe Remotely", url="https://europeremotely.com/",
-                    method="disabled", note="Could not verify a dependable current public listing surface."),
+                    method="web_search", enabled_by_default=True,
+                    note="Search public indexed opportunity pages; verify every result at the employer source."),
     JobSearchSource(id="we_work_remotely", name="We Work Remotely", url="https://weworkremotely.com/remote-jobs.rss",
                     method="public_feed", enabled_by_default=True,
                     note="Public RSS feed; attribute and link back to the source listing."),
     JobSearchSource(id="remote_freelance", name="Remote Freelance", url="https://remotefreelance.com/",
-                    method="disabled", note="Could not verify a dependable current public listing surface."),
+                    method="web_search", enabled_by_default=True,
+                    note="Search public indexed opportunity pages; verify every result at the employer source."),
     JobSearchSource(id="stackoverflow_jobs", name="Stack Overflow Jobs", url="https://stackoverflow.jobs/",
                     method="web_search", enabled_by_default=True,
                     note="Public technology-job search powered by Indeed; verify at the employer source."),
     JobSearchSource(id="virtual_vocations", name="Virtual Vocations", url="https://www.virtualvocations.com/jobs",
-                    method="disabled", note="Listing access is substantially membership-gated."),
+                    method="web_search", enabled_by_default=True,
+                    note="Search public indexed job pages only; do not bypass membership access."),
     JobSearchSource(id="remote_ok_asia", name="Remote of Asia", url="https://remoteok.io/asia",
-                    method="disabled", note="The supplied short link resolves to a stale/unverified regional index."),
+                    method="web_search", enabled_by_default=True,
+                    note="Search public indexed opportunity pages; verify every result at the employer source."),
     JobSearchSource(id="remote_rocketship", name="Remote Rocketship", url="https://www.remoterocketship.com/",
                     method="public_page", enabled_by_default=True,
                     note="Public remote-job index with country filters."),
@@ -108,6 +119,7 @@ SOURCE_CATALOG = (
 
 SOURCES_BY_ID = {source.id: source for source in SOURCE_CATALOG}
 DEFAULT_SOURCE_IDS = [source.id for source in SOURCE_CATALOG if source.enabled_by_default]
+ALL_SOURCE_IDS = [source.id for source in SOURCE_CATALOG]
 
 
 def validate_source_ids(source_ids: list[str]) -> list[str]:
@@ -133,6 +145,15 @@ def _source_url_identity(value: str) -> str:
     return urlunsplit((parts.scheme.lower(), parts.netloc.lower(), path, parts.query, ""))
 
 
+def _source_display_name(value: str) -> str:
+    category, separator, name = value.partition(" · ")
+    if separator and category in {
+        "IMPORTANT", "VC JOB BOARD", "JOBS NEWSLETTER", "VC TALENT NETWORK", "OTHER",
+    }:
+        return name
+    return value
+
+
 async def quick_save_catalog(enabled: bool = True) -> dict:
     """Expose every saved portal as a public-web discovery source.
 
@@ -143,7 +164,7 @@ async def quick_save_catalog(enabled: bool = True) -> dict:
     rows = await list_quick_job_links(link_type="portal", limit=500)
     items = [{
         "id": f"quick_save:{row['id']}",
-        "name": row["company_name"],
+        "name": _source_display_name(row["company_name"]),
         "url": row["job_url"],
         "method": "web_search",
         "enabled_by_default": True,
@@ -162,11 +183,16 @@ async def quick_save_catalog(enabled: bool = True) -> dict:
     }
 
 
-async def resolved_source_urls(source_ids: list[str], *, include_quick_save: bool) -> list[str]:
-    """Resolve one immutable, de-duplicated URL set for a search run."""
-    urls = source_urls(source_ids)
-    if include_quick_save:
-        urls.extend(item["url"] for item in (await quick_save_catalog(True))["items"])
+async def resolved_source_urls(
+    source_ids: list[str] | None = None, *, include_quick_save: bool = True,
+) -> list[str]:
+    """Resolve the immutable, de-duplicated URL set assigned to every run.
+
+    The arguments remain for compatibility with older callers and saved rows;
+    source selection is no longer operator-configurable.
+    """
+    urls = source_urls(ALL_SOURCE_IDS)
+    urls.extend(item["url"] for item in (await quick_save_catalog(True))["items"])
     seen: set[str] = set()
     unique: list[str] = []
     for value in urls:
@@ -176,6 +202,26 @@ async def resolved_source_urls(source_ids: list[str], *, include_quick_save: boo
         seen.add(identity)
         unique.append(value)
     return unique
+
+
+async def all_source_catalog() -> dict:
+    """One read-only, de-duplicated catalog used by every search."""
+    static = catalog_payload(ALL_SOURCE_IDS)["items"]
+    quick = (await quick_save_catalog(True))["items"]
+    seen: set[str] = set()
+    items: list[dict] = []
+    for item in [*static, *quick]:
+        identity = _source_url_identity(item["url"])
+        if identity in seen:
+            continue
+        seen.add(identity)
+        items.append({**item, "enabled": True, "available": True})
+    return {
+        "items": items,
+        "enabled_count": len(items),
+        "available_count": len(items),
+        "total_count": len(items),
+    }
 
 
 def catalog_payload(enabled_ids: list[str]) -> dict:

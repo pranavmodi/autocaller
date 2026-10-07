@@ -18,7 +18,7 @@ async def test_quick_save_portals_are_exposed_as_public_search_sources(monkeypat
     assert payload["total_count"] == payload["enabled_count"] == 1
     assert payload["items"][0] == {
         "id": "quick_save:41",
-        "name": "VC JOB BOARD · Example",
+        "name": "Example",
         "url": "https://jobs.example.com/jobs",
         "method": "web_search",
         "enabled_by_default": True,
@@ -41,4 +41,6 @@ async def test_resolved_urls_include_all_quick_save_portals_without_duplicates(m
 
     urls = await sources.resolved_source_urls(["remotive"], include_quick_save=True)
 
-    assert urls == ["https://remotive.com/feed", "https://jobs.example.com/jobs"]
+    assert urls[:len(sources.ALL_SOURCE_IDS)] == sources.source_urls(sources.ALL_SOURCE_IDS)
+    assert urls[-1] == "https://jobs.example.com/jobs"
+    assert urls.count("https://remotive.com/feed") == 1

@@ -318,12 +318,13 @@ def test_application_contact_evidence_accepts_the_same_normalized_source_url():
 
 @pytest.mark.asyncio
 async def test_manual_search_skips_an_exact_job_found_in_an_earlier_run(monkeypatch):
+    assigned_sources = [f"https://board-{index}.example/jobs" for index in range(35)]
     profile = service.SearchProfile(
         target_roles="AI agent engineering",
         preferred_industries="Legal technology",
         location_preferences="Remote from Colombia",
         source_ids=["remotive", "remoteok"],
-        source_urls=["https://remotive.com/feed", "https://remoteok.com/api"],
+        source_urls=assigned_sources,
     )
     raw = candidate().model_dump(mode="json")
     calls = []
@@ -343,10 +344,11 @@ async def test_manual_search_skips_an_exact_job_found_in_an_earlier_run(monkeypa
     audit = {"new_jobs": 0, "verified": 0, "closed": 0, "rejected": 0, "candidates": 0,
              "duplicates_skipped": 0, "llm_calls": 0, "errors": [], "attempt_errors": [],
              "stored": [], "decisions": [], "usage": []}
-    await service.execute("manual", service.SearchConfig(), seed_only=False, audit=audit,
+    await service.execute("manual", service.SearchConfig(max_sources=6), seed_only=False, audit=audit,
                           search_profile=profile)
     assert len(calls) == 1
-    assert set(calls[0]["career_sources"]) == {"https://remotive.com/feed", "https://remoteok.com/api"}
+    assert calls[0]["career_sources"] == assigned_sources
+    assert calls[0]["max_sources"] == len(assigned_sources)
     assert audit["search_source_ids"] == ["remotive", "remoteok"]
     assert audit["candidates"] == 0
     assert audit["duplicates_skipped"] == 1

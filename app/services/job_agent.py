@@ -24,12 +24,10 @@ from app.db import AsyncSessionLocal, Base, async_engine
 from app.services.career_job_store import PROVIDER, source_identity
 from app.services.job_agent_resumes import ResumeCategory, default_categories, inspect_resume
 from app.services.job_search_sources import (
-    DEFAULT_SOURCE_IDS,
-    catalog_payload,
-    quick_save_catalog,
+    ALL_SOURCE_IDS,
+    all_source_catalog,
     resolved_source_urls,
     source_urls,
-    validate_source_ids,
 )
 
 
@@ -77,7 +75,7 @@ class JobAgentConfig(BaseModel):
     preferred_industries: str = Field("Legal technology, personal injury firms, healthcare operations", max_length=2000)
     location_preferences: str = Field("Remote from Bengaluru, India; planning to move to Medellín, Colombia (UTC-5). Verify country-specific eligibility.", max_length=2000)
     prefer_overseas_employers: bool = True
-    search_source_ids: list[str] = Field(default_factory=lambda: list(DEFAULT_SOURCE_IDS), max_length=30)
+    search_source_ids: list[str] = Field(default_factory=lambda: list(ALL_SOURCE_IDS), max_length=30)
     include_quick_save_portals: bool = True
     application_notes: str = Field("Founder-led, concise applications. Use verified experience. Reuse the best suitable one-page PDF resume. Do not call it 'tailored' in emails.", max_length=4000)
 
@@ -86,7 +84,8 @@ class JobAgentConfig(BaseModel):
     def unique_categories(self):
         if len({category.id for category in self.resume_categories}) != len(self.resume_categories):
             raise ValueError("Category identifiers must be unique.")
-        validate_source_ids(self.search_source_ids)
+        self.search_source_ids = list(ALL_SOURCE_IDS)
+        self.include_quick_save_portals = True
         return self
 
 
@@ -345,31 +344,21 @@ def search_profile(config: JobAgentConfig, quick_source_urls: list[str] | None =
         "preferred_industries": config.preferred_industries,
         "location_preferences": config.location_preferences,
         "prefer_overseas_employers": config.prefer_overseas_employers,
-        "source_ids": config.search_source_ids,
-        "source_urls": [*source_urls(config.search_source_ids), *(quick_source_urls or [])],
+        "source_ids": list(ALL_SOURCE_IDS),
+        "source_urls": [*source_urls(ALL_SOURCE_IDS), *(quick_source_urls or [])],
     }
 
 
 async def resolved_search_profile(config: JobAgentConfig) -> dict:
     urls = await resolved_source_urls(
-        config.search_source_ids,
-        include_quick_save=config.include_quick_save_portals,
+        ALL_SOURCE_IDS,
+        include_quick_save=True,
     )
     return {**search_profile(config), "source_urls": urls}
 
 
 async def search_sources():
-    settings = await configuration()
-    config = JobAgentConfig.model_validate(settings["config"])
-    payload = catalog_payload(config.search_source_ids)
-    quick_save = await quick_save_catalog(config.include_quick_save_portals)
-    return {
-        **payload,
-        "enabled_count": payload["enabled_count"] + quick_save["enabled_count"],
-        "available_count": payload["available_count"] + quick_save["available_count"],
-        "total_count": payload["total_count"] + quick_save["total_count"],
-        "quick_save": quick_save,
-    }
+    return await all_source_catalog()
 
 
 async def _search_and_import(profile: dict):
@@ -1101,15 +1090,7 @@ async def overview():
     except Exception:
         source, source_error = None, "Career-search status is unavailable. Review queue and settings remain available."
     config = saved_config(state.config) if state else JobAgentConfig()
-    search_source_payload = catalog_payload(config.search_source_ids)
-    quick_save_sources = await quick_save_catalog(config.include_quick_save_portals)
-    search_source_payload = {
-        **search_source_payload,
-        "enabled_count": search_source_payload["enabled_count"] + quick_save_sources["enabled_count"],
-        "available_count": search_source_payload["available_count"] + quick_save_sources["available_count"],
-        "total_count": search_source_payload["total_count"] + quick_save_sources["total_count"],
-        "quick_save": quick_save_sources,
-    }
+    search_source_payload = await all_source_catalog()
     return {"config": config.model_dump(),
             "revision": state.revision if state else 0,
             "last_collected_at": state.last_collected_at.isoformat() if state and state.last_collected_at else None,

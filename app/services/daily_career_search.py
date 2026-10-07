@@ -82,7 +82,7 @@ class SearchConfig(BaseModel):
     local_time: str = "08:00"
     max_candidates: int = Field(10, ge=1, le=100)
     max_rechecks: int = Field(8, ge=0, le=20)
-    max_sources: int = Field(6, ge=1, le=30)
+    max_sources: int = Field(200, ge=1, le=200)
     max_attempts: int = Field(3, ge=1, le=4)
     source_urls: list[HttpUrl] = Field(default_factory=lambda: [
         "https://www.ciglaw.com/", "https://jobs.jobvite.com/jacobyandmeyerscareers/jobs",
@@ -1547,9 +1547,9 @@ async def execute(run_id: str, config: SearchConfig, *, seed_only: bool, audit: 
             if not retry["career_sources"]:
                 raise ValueError("historical candidates missing; no affected employer sources for bounded rediscovery")
             result = await llm({"mode": "retry_discovery", "window_start": (now.date() - timedelta(days=search_profile.posted_within_days if search_profile else 30)).isoformat(),
-                "window_end": now.date().isoformat(), "career_sources": retry["career_sources"][:config.max_sources],
+                "window_end": now.date().isoformat(), "career_sources": retry["career_sources"],
                 "previous_errors": retry["legacy_errors"], "max_candidates": config.max_candidates - len(discovered),
-                "max_sources": config.max_sources}, "candidates", config, audit, run_id,
+                "max_sources": len(retry["career_sources"])}, "candidates", config, audit, run_id,
                 **deadline_kwargs(deadline))
             recovered = result["candidates"][:max(0, config.max_candidates - len(discovered))]
             audit["legacy_rediscovery"] = {"errors": retry["legacy_errors"], "response": audit_value(result)}
@@ -1565,8 +1565,7 @@ async def execute(run_id: str, config: SearchConfig, *, seed_only: bool, audit: 
         # The null-profile branch remains only for legacy maintenance callers.
         candidates = [] if search_profile else await tracked_candidates(config.max_rechecks)
         sources = list(search_profile.source_urls) if search_profile else list(config.source_urls)
-        offset = day_number % max(1, len(sources))
-        sources = (sources[offset:] + sources[:offset])[:config.max_sources] if sources else []
+        sources = list(dict.fromkeys(str(source) for source in sources))
         if search_profile:
             audit["search_source_ids"] = list(search_profile.source_ids)
             audit["search_sources_consulted"] = [str(source) for source in sources]
@@ -1579,7 +1578,7 @@ async def execute(run_id: str, config: SearchConfig, *, seed_only: bool, audit: 
             "window_end": now.date().isoformat(), "search_profile": search_profile.model_dump(mode="json") if search_profile else None,
             "queries": queries,
             "career_sources": [str(s) for s in sources], "max_candidates": config.max_candidates,
-            "max_sources": config.max_sources}, "candidates", config, audit, run_id,
+            "max_sources": len(sources)}, "candidates", config, audit, run_id,
             **deadline_kwargs(deadline))
         if not isinstance(result["candidates"], list):
             raise ValueError("discovery candidates must be an array")

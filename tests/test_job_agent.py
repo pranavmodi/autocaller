@@ -88,9 +88,7 @@ def test_rejects_unsafe_source_links(url):
 
 @pytest.mark.parametrize("changes", [{"import_limit": 501}, {"posted_within_days": 0},
                                     {"remote_scope": "us"}, {"auto_send": True},
-                                    {"collection_enabled": "false"},
-                                    {"search_source_ids": ["flexjobs"]},
-                                    {"search_source_ids": ["unknown-board"]}])
+                                    {"collection_enabled": "false"}])
 def test_configuration_rejects_invalid_or_unimplemented_controls(changes):
     with pytest.raises(ValidationError):
         service.JobAgentConfig(**changes)
@@ -225,25 +223,23 @@ async def test_daily_search_loads_the_saved_job_agent_profile(monkeypatch):
     assert str(profile.source_urls[-1]) == "https://quick.example/jobs"
 
 
-def test_job_agent_search_profile_resolves_only_enabled_catalog_sources():
+def test_job_agent_search_profile_always_uses_the_full_catalog():
     config = service.JobAgentConfig(search_source_ids=["remotive", "remoteok"])
     profile = career_search.SearchProfile.model_validate(service.search_profile(config))
-    assert profile.source_ids == ["remotive", "remoteok"]
-    assert [str(url) for url in profile.source_urls] == [
-        "https://remotive.com/feed", "https://remoteok.com/api",
-    ]
+    assert profile.source_ids == service.ALL_SOURCE_IDS
+    assert [str(url) for url in profile.source_urls] == service.source_urls(service.ALL_SOURCE_IDS)
 
 
 @pytest.mark.asyncio
-async def test_sources_endpoint_marks_enabled_and_unavailable_sources(monkeypatch):
+async def test_sources_endpoint_returns_one_read_only_catalog(monkeypatch):
     config = service.JobAgentConfig(search_source_ids=["remotive"])
     monkeypatch.setattr(service, "configuration", AsyncMock(return_value={
         "config": config.model_dump(), "revision": 2,
     }))
-    monkeypatch.setattr(service, "quick_save_catalog", AsyncMock(return_value={
+    monkeypatch.setattr(service, "all_source_catalog", AsyncMock(return_value={
         "items": [{"id": "quick_save:1", "name": "VC board", "url": "https://vc.example/jobs",
                    "method": "web_search", "available": True, "enabled": True}],
-        "enabled": True, "enabled_count": 1, "available_count": 1, "total_count": 1,
+        "enabled_count": 1, "available_count": 1, "total_count": 1,
     }))
     app = FastAPI()
     app.include_router(router)
@@ -251,10 +247,8 @@ async def test_sources_endpoint_marks_enabled_and_unavailable_sources(monkeypatc
         response = await client.get("/api/job-agent/sources")
     assert response.status_code == 200
     payload = response.json()
-    assert payload["enabled_count"] == 2
-    assert payload["quick_save"]["total_count"] == 1
-    assert next(item for item in payload["items"] if item["id"] == "remotive")["enabled"] is True
-    assert next(item for item in payload["items"] if item["id"] == "flexjobs")["available"] is False
+    assert payload["enabled_count"] == 1
+    assert payload["items"][0]["name"] == "VC board"
 
 
 def test_search_contacts_require_published_employer_domain_and_suitable_purpose():
