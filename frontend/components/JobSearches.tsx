@@ -45,7 +45,6 @@ export default function JobSearches({ overview, onOpen }: { overview: Overview; 
   const client = useQueryClient();
   const [edit, setEdit] = useState<Saved | null>(null);
   const [runId, setRunId] = useState("");
-  const [autoSelect, setAutoSelect] = useState(true);
   useEffect(() => { const saved = new URLSearchParams(window.location.search).get('run'); if (saved) setRunId(saved); }, []);
   useEffect(() => {
     if (!runId) return;
@@ -57,12 +56,6 @@ export default function JobSearches({ overview, onOpen }: { overview: Overview; 
   const [error, setError] = useState("");
   const [inferenceChanged, setInferenceChanged] = useState(false);
   const searches = useQuery({ queryKey: ["job-agent", "searches"], queryFn: () => request<{ items: Saved[] }>("/searches") });
-  const runs = useQuery({ queryKey: ["job-agent", "search-runs", "latest"], queryFn: () => request<{ items: Run[]; total_pages: number; total: number }>("/search-runs?page=1"), refetchInterval: 5000 });
-  useEffect(() => {
-    if (runId || !autoSelect || new URLSearchParams(window.location.search).has('run') || !runs.data?.items.length) return;
-    const latest = runs.data.items.find(r => r.status === 'running') || runs.data.items[0];
-    setRunId(latest.id);
-  }, [runs.data, runId, autoSelect]);
   const detail = useQuery({ queryKey: ["job-agent", "search-run", runId], queryFn: () => request<Detail>(`/search-runs/${runId}`), enabled: !!runId, refetchInterval: query => ['running', 'queued'].includes(query.state.data?.status || '') ? 2000 : 10000 });
   const refresh = () => client.invalidateQueries({ queryKey: ["job-agent"] });
   async function act(key: string, fn: () => Promise<void>) { setBusy(key); setError(""); try { await fn(); } catch (e) { setError(e instanceof Error ? e.message : "Something went wrong. Try again."); } finally { setBusy(""); } }
@@ -94,7 +87,7 @@ export default function JobSearches({ overview, onOpen }: { overview: Overview; 
   const current = detail.data;
   return <section role="tabpanel" id="panel-searches" aria-labelledby="tab-searches" className="space-y-5">
     <div className="rounded-2xl bg-slate-900 p-6 text-white"><div className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-xs font-medium uppercase tracking-widest text-sky-300">Discovery workspace</p><h2 className="mt-2 text-xl font-semibold">Focused searches. Traceable results.</h2><p className="mt-2 max-w-2xl text-sm text-slate-300">Save separate searches for different career paths. Every run keeps its settings, findings and explanations. Searching never submits an application.</p></div><button className={button + " text-slate-900"} onClick={() => { setInferenceChanged(false); setEdit(fresh()); setRunId(""); }}><Plus size={16} />New search</button></div></div>
-    {(error || searches.error || runs.error || detail.error) && <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">{error || String(searches.error || runs.error || detail.error)}<button className="ml-3 underline" onClick={() => { setError(""); refresh(); }}>Refresh</button></div>}
+    {(error || searches.error || detail.error) && <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">{error || String(searches.error || detail.error)}<button className="ml-3 underline" onClick={() => { setError(""); refresh(); }}>Refresh</button></div>}
     {edit && <form className="space-y-5 rounded-2xl border border-sky-200 bg-sky-50/50 p-5" onSubmit={e => { e.preventDefault(); act("save", saveSearch); }}>
       <div className="flex items-center justify-between"><h3 className="font-semibold">{edit.id ? "Edit search" : "Create search"}</h3><button type="button" className={button} onClick={() => setEdit(null)}>Cancel</button></div>
       <div className="rounded-xl border border-slate-200 bg-white p-4"><div className="grid gap-4 sm:grid-cols-2"><label className={label}>Search AI provider<select className={input} value={edit.config.ai_provider || 'openai'} onChange={e => update('ai_provider', e.target.value as Config['ai_provider'])}><option value="openai">OpenAI API</option><option value="gateway">OpenClaw gateway</option></select></label>{edit.config.ai_provider === 'openai' && <label className={label}>OpenAI search model<input required className={input} value={edit.config.openai_model || 'gpt-5.6-luna'} onChange={e => update('openai_model', e.target.value)} /></label>}</div><p className="mt-3 text-xs text-slate-500">{edit.config.ai_provider === 'openai' ? 'Uses the server API key and API billing, with OpenAI web search. No gateway fallback.' : 'Uses the OpenClaw research agent and its web tools.'} Applies to this search’s settings assistant and future manual or scheduled runs. Existing runs retain their provider. Application providers are configured separately.</p></div>
@@ -120,7 +113,7 @@ export default function JobSearches({ overview, onOpen }: { overview: Overview; 
       <div className="rounded-xl border border-indigo-100 bg-indigo-50 p-4"><label className="flex items-center gap-2 text-sm font-medium"><input type="checkbox" checked={edit.config.schedule_enabled} onChange={e => update("schedule_enabled", e.target.checked)} /><Clock size={16} />Run daily</label>{edit.config.schedule_enabled && <div className="mt-3 grid gap-3 sm:grid-cols-2"><label className={label}>Time<input type="time" required className={input} value={edit.config.local_time} onChange={e => update("local_time", e.target.value)} /></label><label className={label}>Timezone<input required className={input} value={edit.config.timezone} onChange={e => update("timezone", e.target.value)} placeholder="Asia/Kolkata" /></label></div>}<p className="mt-2 text-xs text-slate-500">The scheduler checks every five minutes. Queued searches run one at a time.</p></div>
       <button className={primary} disabled={!!busy || edit.config.description.trim().length < 5}>{busy === "save" ? "Understanding and saving…" : "Save search"}</button>
     </form>}
-    {runId && <div className="rounded-2xl border border-sky-200 bg-white p-5"><button className="mb-3 flex items-center gap-1 text-xs text-slate-500" onClick={() => { setRunId(''); setAutoSelect(false); const u = new URL(window.location.href); u.searchParams.delete('run'); window.history.replaceState(null, '', u); }}><ChevronLeft size={14} />Close run details</button>{detail.isPending && <p>Loading results…</p>}{current && <>
+    {runId && <div className="rounded-2xl border border-sky-200 bg-white p-5"><button className="mb-3 flex items-center gap-1 text-xs text-slate-500" onClick={() => { setRunId(''); const u = new URL(window.location.href); u.searchParams.delete('run'); window.history.replaceState(null, '', u); }}><ChevronLeft size={14} />Close run details</button>{detail.isPending && <p>Loading results…</p>}{current && <>
       <div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="text-lg font-semibold">{current.name}</h3><p className="mt-1 text-xs text-slate-500">{date(current.started_at)}{current.completed_at && ` → ${date(current.completed_at)}`}</p></div><Badge value={current.status} /></div>
       <LiveRunProgress run={current} refreshing={detail.isFetching} lastRefresh={detail.dataUpdatedAt} onRefresh={() => detail.refetch()} />
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><h4 className="font-semibold">Jobs found in this run ({current.results.length})</h4><span className="text-xs text-slate-500">{current.new_jobs} new · {current.duplicates} already in queue</span></div>
