@@ -12,6 +12,7 @@ const inter = Inter({ subsets: ["latin"] });
 export const metadata: Metadata = {
   title: "Possible OS — Possible Minds",
   description: "Operating system for AI-led growth and operations",
+  robots: { index: false, follow: false },
 };
 
 export const viewport: Viewport = {
