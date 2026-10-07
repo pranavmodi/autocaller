@@ -18,6 +18,7 @@ export type JobAgentConfig = {
   location_preferences: string;
   prefer_overseas_employers: boolean;
   search_source_ids: string[];
+  include_quick_save_portals: boolean;
   application_notes: string;
 };
 export type JobSearchSource = {
@@ -30,6 +31,7 @@ export type JobSearchSource = {
   aliases: string[];
   available: boolean;
   enabled: boolean;
+  origin?: "quick_save";
 };
 export type Candidate = {
   processing_revision: number;
@@ -83,7 +85,8 @@ export type Overview = {
   collection: CollectionRun | null; sync_interval_seconds: number;
   config: JobAgentConfig; revision: number; mode: string; execution_connected: boolean;
   last_collected_at: string | null; counts: Record<ReviewStatus, number>;
-  search_sources: { items: JobSearchSource[]; enabled_count: number; available_count: number; total_count: number };
+  search_sources: { items: JobSearchSource[]; enabled_count: number; available_count: number; total_count: number;
+    quick_save: { items: JobSearchSource[]; enabled: boolean; enabled_count: number; available_count: number; total_count: number } };
   source_error: string | null;
   source: null | {
     config: { enabled: boolean; timezone: string; local_time: string; max_sources: number };

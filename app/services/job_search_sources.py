@@ -6,8 +6,11 @@ Every discovered role still goes through the existing employer/job verifier.
 from __future__ import annotations
 
 from typing import Literal
+from urllib.parse import urlsplit, urlunsplit
 
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl
+
+from app.services.quick_job_links import list_quick_job_links
 
 
 class JobSearchSource(BaseModel):
@@ -121,6 +124,58 @@ def validate_source_ids(source_ids: list[str]) -> list[str]:
 
 def source_urls(source_ids: list[str]) -> list[str]:
     return [str(SOURCES_BY_ID[source_id].url) for source_id in validate_source_ids(source_ids)]
+
+
+def _source_url_identity(value: str) -> str:
+    """Collapse harmless URL spelling differences without guessing redirects."""
+    parts = urlsplit(value.strip())
+    path = parts.path.rstrip("/") or "/"
+    return urlunsplit((parts.scheme.lower(), parts.netloc.lower(), path, parts.query, ""))
+
+
+async def quick_save_catalog(enabled: bool = True) -> dict:
+    """Expose every saved portal as a public-web discovery source.
+
+    Quick Save already validates public HTTP(S) URLs. A saved portal may be a
+    board, newsletter archive, fellowship, or talent network, so the searcher
+    uses indexed public pages rather than assuming a feed or automating login.
+    """
+    rows = await list_quick_job_links(link_type="portal", limit=500)
+    items = [{
+        "id": f"quick_save:{row['id']}",
+        "name": row["company_name"],
+        "url": row["job_url"],
+        "method": "web_search",
+        "enabled_by_default": True,
+        "note": "Saved in Quick Save; search public pages without signing in.",
+        "aliases": [],
+        "available": True,
+        "enabled": enabled,
+        "origin": "quick_save",
+    } for row in rows]
+    return {
+        "items": items,
+        "enabled": enabled,
+        "enabled_count": len(items) if enabled else 0,
+        "available_count": len(items),
+        "total_count": len(items),
+    }
+
+
+async def resolved_source_urls(source_ids: list[str], *, include_quick_save: bool) -> list[str]:
+    """Resolve one immutable, de-duplicated URL set for a search run."""
+    urls = source_urls(source_ids)
+    if include_quick_save:
+        urls.extend(item["url"] for item in (await quick_save_catalog(True))["items"])
+    seen: set[str] = set()
+    unique: list[str] = []
+    for value in urls:
+        identity = _source_url_identity(value)
+        if identity in seen:
+            continue
+        seen.add(identity)
+        unique.append(value)
+    return unique
 
 
 def catalog_payload(enabled_ids: list[str]) -> dict:

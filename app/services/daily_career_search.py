@@ -107,7 +107,7 @@ class SearchProfile(BaseModel):
     location_preferences: str = Field(min_length=1, max_length=2000)
     prefer_overseas_employers: bool = True
     source_ids: list[str] = Field(default_factory=list, max_length=30)
-    source_urls: list[HttpUrl] = Field(default_factory=list, max_length=60)
+    source_urls: list[HttpUrl] = Field(default_factory=list, max_length=200)
     precise: bool = False
     industry_mode: Literal['required', 'preferred'] = 'required'
     location_mode: Literal['required', 'preferred'] = 'preferred'
@@ -468,7 +468,7 @@ async def configured_job_agent_profile() -> SearchProfile:
     from app.services import job_agent
     settings = await job_agent.configuration()
     config = job_agent.JobAgentConfig.model_validate(settings["config"])
-    return SearchProfile.model_validate(job_agent.search_profile(config))
+    return SearchProfile.model_validate(await job_agent.resolved_search_profile(config))
 
 
 def configured_legacy_legal_match(decision: Decision, profile: SearchProfile) -> bool:

@@ -102,6 +102,7 @@ async def test_run_snapshot_is_saved_before_dispatch_and_repeat_click_returns_sa
     session=Session(row)
     monkeypatch.setattr(saved,'ensure',AsyncMock())
     monkeypatch.setattr(saved,'AsyncSessionLocal',lambda:session)
+    monkeypatch.setattr(saved,'resolved_profile',AsyncMock(return_value=saved.profile(settings())))
     result=await saved.enqueue('s')
     assert result['status']=='queued'
     run=session.added[0]

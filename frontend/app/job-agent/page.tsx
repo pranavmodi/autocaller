@@ -390,6 +390,10 @@ function SettingsForm({ snapshot, onSaved }: { snapshot: Overview; onSaved: () =
               <span className="min-w-0 text-sm"><span className="flex flex-wrap items-center gap-2"><span className="font-medium">{source.name}</span><span className="rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-neutral-600">{readable(source.method)}</span></span><span className="mt-1 block text-xs leading-relaxed text-neutral-500">{source.note}</span>{source.aliases.length > 0 && <span className="mt-1 block text-[11px] text-neutral-400">Also listed as {source.aliases.join(", ")}</span>}</span>
             </label>)}
           </div>
+          <div className="mt-4 rounded-xl border border-violet-200 bg-violet-50 p-4">
+            <label className="flex items-start gap-3 text-sm"><input type="checkbox" className="mt-0.5 h-4 w-4 accent-violet-700" checked={config.include_quick_save_portals} onChange={e => update("include_quick_save_portals", e.target.checked)} /><span><span className="font-medium text-neutral-900">Use all {snapshot.search_sources.quick_save.total_count} Quick Save sources</span><span className="mt-1 block text-xs leading-relaxed text-neutral-600">Makes saved VC boards, newsletter archives, fellowships and talent networks available to new daily and on-demand searches. Sources rotate within each search’s processing budget.</span></span></label>
+            <details className="mt-3"><summary className="cursor-pointer text-xs font-medium text-violet-800">View included sources</summary><div className="mt-2 grid max-h-64 gap-1 overflow-auto sm:grid-cols-2">{snapshot.search_sources.quick_save.items.map(source => <a key={source.id} href={source.url} target="_blank" rel="noreferrer" className="truncate text-xs text-sky-700 underline">{source.name}</a>)}</div></details>
+          </div>
         </div>
       </div>
     </section>

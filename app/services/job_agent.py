@@ -23,7 +23,14 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.db import AsyncSessionLocal, Base, async_engine
 from app.services.career_job_store import PROVIDER, source_identity
 from app.services.job_agent_resumes import ResumeCategory, default_categories, inspect_resume
-from app.services.job_search_sources import DEFAULT_SOURCE_IDS, catalog_payload, source_urls, validate_source_ids
+from app.services.job_search_sources import (
+    DEFAULT_SOURCE_IDS,
+    catalog_payload,
+    quick_save_catalog,
+    resolved_source_urls,
+    source_urls,
+    validate_source_ids,
+)
 
 
 ReviewStatus = Literal["new", "shortlisted", "needs_info", "skipped"]
@@ -71,6 +78,7 @@ class JobAgentConfig(BaseModel):
     location_preferences: str = Field("Remote from Bengaluru, India; planning to move to Medellín, Colombia (UTC-5). Verify country-specific eligibility.", max_length=2000)
     prefer_overseas_employers: bool = True
     search_source_ids: list[str] = Field(default_factory=lambda: list(DEFAULT_SOURCE_IDS), max_length=30)
+    include_quick_save_portals: bool = True
     application_notes: str = Field("Founder-led, concise applications. Use verified experience. Reuse the best suitable one-page PDF resume. Do not call it 'tailored' in emails.", max_length=4000)
 
 
@@ -329,7 +337,7 @@ async def collect(*, automatic=False):
         return serialize_run(run)
 
 
-def search_profile(config: JobAgentConfig) -> dict:
+def search_profile(config: JobAgentConfig, quick_source_urls: list[str] | None = None) -> dict:
     """Only operator search intent; application notes and resume data stay out."""
     return {
         "name": "Job Agent target-job search",
@@ -338,14 +346,30 @@ def search_profile(config: JobAgentConfig) -> dict:
         "location_preferences": config.location_preferences,
         "prefer_overseas_employers": config.prefer_overseas_employers,
         "source_ids": config.search_source_ids,
-        "source_urls": source_urls(config.search_source_ids),
+        "source_urls": [*source_urls(config.search_source_ids), *(quick_source_urls or [])],
     }
+
+
+async def resolved_search_profile(config: JobAgentConfig) -> dict:
+    urls = await resolved_source_urls(
+        config.search_source_ids,
+        include_quick_save=config.include_quick_save_portals,
+    )
+    return {**search_profile(config), "source_urls": urls}
 
 
 async def search_sources():
     settings = await configuration()
     config = JobAgentConfig.model_validate(settings["config"])
-    return catalog_payload(config.search_source_ids)
+    payload = catalog_payload(config.search_source_ids)
+    quick_save = await quick_save_catalog(config.include_quick_save_portals)
+    return {
+        **payload,
+        "enabled_count": payload["enabled_count"] + quick_save["enabled_count"],
+        "available_count": payload["available_count"] + quick_save["available_count"],
+        "total_count": payload["total_count"] + quick_save["total_count"],
+        "quick_save": quick_save,
+    }
 
 
 async def _search_and_import(profile: dict):
@@ -1076,7 +1100,17 @@ async def overview():
         source_error = None
     except Exception:
         source, source_error = None, "Career-search status is unavailable. Review queue and settings remain available."
-    return {"config": saved_config(state.config).model_dump() if state else JobAgentConfig().model_dump(),
+    config = saved_config(state.config) if state else JobAgentConfig()
+    search_source_payload = catalog_payload(config.search_source_ids)
+    quick_save_sources = await quick_save_catalog(config.include_quick_save_portals)
+    search_source_payload = {
+        **search_source_payload,
+        "enabled_count": search_source_payload["enabled_count"] + quick_save_sources["enabled_count"],
+        "available_count": search_source_payload["available_count"] + quick_save_sources["available_count"],
+        "total_count": search_source_payload["total_count"] + quick_save_sources["total_count"],
+        "quick_save": quick_save_sources,
+    }
+    return {"config": config.model_dump(),
             "revision": state.revision if state else 0,
             "last_collected_at": state.last_collected_at.isoformat() if state and state.last_collected_at else None,
             "counts": {s: counts.get(s, 0) for s in ("new", "shortlisted", "needs_info", "skipped")},
@@ -1084,4 +1118,4 @@ async def overview():
             "processing_counts": processing_counts,
             "collection": serialize_run(run), "sync_interval_seconds": SYNC_INTERVAL_SECONDS,
             "source": source, "source_error": source_error,
-            "search_sources": catalog_payload(saved_config(state.config).search_source_ids) if state else catalog_payload(JobAgentConfig().search_source_ids)}
+            "search_sources": search_source_payload}

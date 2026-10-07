@@ -15,7 +15,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.db import Base, AsyncSessionLocal, async_engine
 from app.db.models import CareerSearchRunRow
 from app.services import daily_career_search as career
-from app.services.job_search_sources import source_urls, validate_source_ids
+from app.services.job_search_sources import resolved_source_urls, source_urls, validate_source_ids
 
 log = logging.getLogger(__name__)
 WAKE = asyncio.Event()
@@ -35,6 +35,7 @@ class SearchSettings(BaseModel):
     prefer_overseas_employers: bool = True
     posted_within_days: int = Field(30, ge=1, le=365)
     source_ids: list[str] = Field(default_factory=list, max_length=30)
+    include_quick_save_portals: bool = True
     employer_urls: list[str] = Field(default_factory=list, max_length=30)
     max_candidates: int = Field(10, ge=1, le=100)
     max_sources: int = Field(6, ge=1, le=30)
@@ -96,6 +97,7 @@ async def ensure():
     initial = SearchSettings(name='Broad career search', target_roles=config['target_roles'],
         preferred_industries=config['preferred_industries'], location_preferences=config['location_preferences'],
         prefer_overseas_employers=config['prefer_overseas_employers'], source_ids=config['search_source_ids'],
+        include_quick_save_portals=config.get('include_quick_save_portals', True),
         max_candidates=schedule.max_candidates, max_sources=schedule.max_sources,
         schedule_enabled=schedule.enabled, timezone=schedule.timezone, local_time=schedule.local_time)
     async with AsyncSessionLocal() as session:
@@ -104,15 +106,23 @@ async def ensure():
         await session.commit()
 
 
-def profile(config: SearchSettings):
+def profile(config: SearchSettings, resolved_urls: list[str] | None = None):
     return career.SearchProfile(name=config.name, target_roles=config.target_roles,
         preferred_industries=config.preferred_industries, location_preferences=config.location_preferences,
         prefer_overseas_employers=config.prefer_overseas_employers, source_ids=config.source_ids,
-        source_urls=[*source_urls(config.source_ids), *config.employer_urls],
+        source_urls=[*(resolved_urls if resolved_urls is not None else source_urls(config.source_ids)), *config.employer_urls],
         precise=True, industry_mode=config.industry_mode, location_mode=config.location_mode,
         employment_type=config.employment_type, employment_mode=config.employment_mode,
         exclusions=config.exclusions, additional_preferences=config.additional_preferences,
         posted_within_days=config.posted_within_days)
+
+
+async def resolved_profile(config: SearchSettings):
+    urls = await resolved_source_urls(
+        config.source_ids,
+        include_quick_save=config.include_quick_save_portals,
+    )
+    return profile(config, urls)
 
 
 def view(row):
@@ -165,8 +175,9 @@ async def enqueue(identity: str, trigger='manual', scheduled_day: str | None = N
             if done: return {'status': 'not_due'}
         settings = SearchSettings.model_validate(row.config)
         run_id = uuid4().hex
+        resolved = await resolved_profile(settings)
         payload = {'saved_search_id': identity, 'saved_search_revision': row.revision,
-            'settings_snapshot': settings.model_dump(), 'search_profile': profile(settings).model_dump(mode='json'),
+            'settings_snapshot': settings.model_dump(), 'search_profile': resolved.model_dump(mode='json'),
             'search_trigger': trigger, 'job_agent_search': True, 'manual_search': trigger == 'manual',
             'phase': 'queued', 'results': [], 'errors': []}
         career.activity(payload, 'queued', 'Search queued; waiting for the research worker.')

@@ -213,12 +213,16 @@ async def test_daily_search_loads_the_saved_job_agent_profile(monkeypatch):
     monkeypatch.setattr(service, "configuration", AsyncMock(return_value={
         "config": config.model_dump(), "revision": 7,
     }))
+    monkeypatch.setattr(service, "resolved_source_urls", AsyncMock(return_value=[
+        *service.source_urls(config.search_source_ids), "https://quick.example/jobs",
+    ]))
     profile = await career_search.configured_job_agent_profile()
     assert career_search.target_role_labels(profile) == ["AI agents", "entry-level paralegal"]
     assert career_search.preferred_industry_labels(profile) == ["Legal technology", "medical imaging"]
     assert profile.location_preferences == "Remote from Colombia"
     assert profile.source_ids == config.search_source_ids
     assert str(profile.source_urls[0]).startswith("https://")
+    assert str(profile.source_urls[-1]) == "https://quick.example/jobs"
 
 
 def test_job_agent_search_profile_resolves_only_enabled_catalog_sources():
@@ -236,13 +240,19 @@ async def test_sources_endpoint_marks_enabled_and_unavailable_sources(monkeypatc
     monkeypatch.setattr(service, "configuration", AsyncMock(return_value={
         "config": config.model_dump(), "revision": 2,
     }))
+    monkeypatch.setattr(service, "quick_save_catalog", AsyncMock(return_value={
+        "items": [{"id": "quick_save:1", "name": "VC board", "url": "https://vc.example/jobs",
+                   "method": "web_search", "available": True, "enabled": True}],
+        "enabled": True, "enabled_count": 1, "available_count": 1, "total_count": 1,
+    }))
     app = FastAPI()
     app.include_router(router)
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url="http://test") as client:
         response = await client.get("/api/job-agent/sources")
     assert response.status_code == 200
     payload = response.json()
-    assert payload["enabled_count"] == 1
+    assert payload["enabled_count"] == 2
+    assert payload["quick_save"]["total_count"] == 1
     assert next(item for item in payload["items"] if item["id"] == "remotive")["enabled"] is True
     assert next(item for item in payload["items"] if item["id"] == "flexjobs")["available"] is False
 
