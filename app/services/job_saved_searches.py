@@ -35,7 +35,7 @@ class SearchSettings(BaseModel):
     additional_preferences: str = Field('', max_length=2000)
     prefer_overseas_employers: bool = True
     posted_within_days: int = Field(30, ge=1, le=365)
-    source_ids: list[str] = Field(default_factory=list, max_length=30)
+    source_ids: list[str] = Field(default_factory=list, max_length=100)
     include_quick_save_portals: bool = True
     employer_urls: list[str] = Field(default_factory=list, max_length=30)
     max_candidates: int = Field(10, ge=1, le=100)

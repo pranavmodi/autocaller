@@ -79,14 +79,15 @@ in `firm_contacts`, so every role attached to that firm reuses the same contacts
 Existing eligible Possible OS contacts are exposed the same way. Searching never
 classifies, prepares, sends, or submits an application.
 
-Settings also contains a curated job-board source catalog derived from the operator's
-remote-job list. The catalog normalizes duplicates (AngelList into Wellfound,
+Settings contains a read-only, always-on job-source catalog derived from the operator's
+remote-job lists. The catalog normalizes duplicates (AngelList into Wellfound,
 duplicate Remotees and Remote in Europe entries), corrects stale links and labels
-each source as public API, public feed, public page, indexed-web discovery, or
-unavailable. Account-only marketplaces, subscription-gated boards and sources whose
-current listing surface cannot be verified remain visible but disabled with a reason.
-LinkedIn and Wellfound are searched through public indexed pages; Possible OS does
-not sign in or automate an account. Each current run records every catalog source.
+each source as public API, public feed, public page or indexed-web discovery.
+Turing and comparable remote-talent networks are included through their public role,
+job or candidate pages. Possible OS may discover a specific vacancy there, but it
+does not sign in, create or modify a talent profile, take an assessment, bid, bypass
+paid access or treat a generic network-registration page as a job. LinkedIn and
+Wellfound follow the same public-page rule. Each current run records every catalog source.
 Sources with public structured interfaces are paginated directly, and supported ATS
 boards learned from verified jobs are synchronized independently. The remaining
 sources are supplied to indexed-web discovery. A board result is only a discovery

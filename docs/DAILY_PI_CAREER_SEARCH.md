@@ -36,6 +36,9 @@ Control India jobs schedule. Nothing sends email or submits applications.
 - Each current run records the full source catalog. Public JSON sources and learned
   employer ATS boards are paginated directly; sources without adapters remain inputs
   to indexed-web discovery. It can discover employers absent from the firm directory.
+- Turing and comparable vetted-talent networks are searched only through public job,
+  role and candidate pages. Account creation, profile matching, assessments, bidding,
+  paid access and login-only vacancy lists stay outside automated discovery.
 - The candidate limit bounds expensive source verification and queue writes rather
   than direct-source pagination. Employer ATS boards learned from verified roles join
   the durable board registry for later synchronization.

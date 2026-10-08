@@ -5,6 +5,18 @@ import pytest
 from app.services import job_search_sources as sources
 
 
+def test_remote_talent_networks_are_in_the_always_on_catalog():
+    expected = {
+        "turing", "andela", "arc", "braintrust", "g2i", "proxify",
+        "gunio", "ateam", "contra", "crossover",
+    }
+
+    assert expected <= set(sources.ALL_SOURCE_IDS)
+    assert all(sources.SOURCES_BY_ID[source_id].enabled_by_default for source_id in expected)
+    assert len(sources.ALL_SOURCE_IDS) == len(set(sources.ALL_SOURCE_IDS))
+    assert len(sources.source_urls(sources.ALL_SOURCE_IDS)) == len(sources.ALL_SOURCE_IDS)
+
+
 @pytest.mark.asyncio
 async def test_quick_save_portals_are_exposed_as_public_search_sources(monkeypatch):
     monkeypatch.setattr(sources, "list_quick_job_links", AsyncMock(return_value=[{

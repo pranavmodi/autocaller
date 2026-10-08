@@ -106,7 +106,7 @@ class SearchProfile(BaseModel):
     preferred_industries: str = Field(min_length=1, max_length=2000)
     location_preferences: str = Field(min_length=1, max_length=2000)
     prefer_overseas_employers: bool = True
-    source_ids: list[str] = Field(default_factory=list, max_length=30)
+    source_ids: list[str] = Field(default_factory=list, max_length=100)
     source_urls: list[HttpUrl] = Field(default_factory=list, max_length=200)
     precise: bool = False
     industry_mode: Literal['required', 'preferred'] = 'required'

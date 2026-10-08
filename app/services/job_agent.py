@@ -75,7 +75,7 @@ class JobAgentConfig(BaseModel):
     preferred_industries: str = Field("Legal technology, personal injury firms, healthcare operations", max_length=2000)
     location_preferences: str = Field("Remote from Bengaluru, India; planning to move to Medellín, Colombia (UTC-5). Verify country-specific eligibility.", max_length=2000)
     prefer_overseas_employers: bool = True
-    search_source_ids: list[str] = Field(default_factory=lambda: list(ALL_SOURCE_IDS), max_length=30)
+    search_source_ids: list[str] = Field(default_factory=lambda: list(ALL_SOURCE_IDS), max_length=100)
     include_quick_save_portals: bool = True
     application_notes: str = Field("Founder-led, concise applications. Use verified experience. Reuse the best suitable one-page PDF resume. Do not call it 'tailored' in emails.", max_length=4000)
 
