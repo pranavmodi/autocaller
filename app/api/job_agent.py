@@ -359,6 +359,15 @@ async def search_run_coverage(identity: str):
     from app.services.job_search_source_adapters import coverage
     return await coverage(identity)
 
+
+@router.get('/search-runs/{identity}/listings')
+async def search_run_listings(identity: str, view: str = 'all', search: str = '',
+                              source_key: str = '', page: int = Query(1, ge=1),
+                              page_size: int = Query(50, ge=1, le=100)):
+    from app.services.job_search_screening import inspect
+    return await processing_response(inspect(identity, view=view, search=search,
+                                              source_key=source_key, page=page, page_size=page_size))
+
 @router.get('/source-boards')
 async def source_boards_list():
     from app.services.job_search_source_adapters import list_boards

@@ -52,6 +52,17 @@ def register(app, get, post, console):
         """Inspect per-source adapter, fallback, pagination and error coverage for one run."""
         output(get(f'/api/job-agent/search-runs/{identity}/coverage'))
 
+    @group.command("search-listings")
+    def search_listings(identity: str, view: str = typer.Option("all", "--view"),
+                        search: str = typer.Option("", "--search"),
+                        source_key: str = typer.Option("", "--source-key"),
+                        page: int = typer.Option(1, min=1),
+                        page_size: int = typer.Option(50, min=1, max=100)):
+        """Inspect collected listings and their saved Jev screening judgments."""
+        output(get(f'/api/job-agent/search-runs/{identity}/listings', view=view,
+                   search=search or None, source_key=source_key or None,
+                   page=page, page_size=page_size))
+
     @group.command("source-boards")
     def source_boards():
         """List known employer ATS boards and their last complete synchronization."""

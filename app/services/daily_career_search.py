@@ -1572,6 +1572,7 @@ async def execute(run_id: str, config: SearchConfig, *, seed_only: bool, audit: 
             audit["search_source_ids"] = list(search_profile.source_ids)
             audit["search_sources_consulted"] = [str(source) for source in sources]
             from app.services.job_search_relevance import rank_source_listings
+            from app.services.job_search_screening import persist_collected
             from app.services.job_search_source_adapters import (
                 collect_structured_sources,
                 finalize_web_coverage,
@@ -1584,8 +1585,10 @@ async def execute(run_id: str, config: SearchConfig, *, seed_only: bool, audit: 
             await publish(run_id, audit, "Synchronizing structured job sources and known employer boards",
                           kind="source_sync", sources=catalog.get("total_count", 0))
             collected, source_summary = await collect_structured_sources(run_id, search_profile, catalog)
+            await persist_collected(run_id, collected)
             selected, relevance = await rank_source_listings(
                 collected, search_profile, max_selected=max(config.max_candidates * 5, config.max_candidates),
+                run_id=run_id,
             )
             await record_shortlist_counts(run_id, selected)
             audit["source_adapter_summary"] = source_summary

@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from app.services import job_search_relevance as relevance
+from app.services import job_search_screening as screening
 from app.services import job_search_source_adapters as adapters
 
 
@@ -105,6 +106,15 @@ def test_jev_relevance_preserves_probabilities_and_input_hash():
     assert len(judgment["input_sha256"]) == 64
 
 
+def test_screening_listing_key_is_stable_within_a_run_identity():
+    first = screening.listing_key("https://jobs.example.com/role/123/")
+    assert first == screening.listing_key("https://JOBS.EXAMPLE.COM/role/123")
+    assert first != screening.listing_key("https://jobs.example.com/role/456")
+    constraint = next(item for item in screening.JobSearchListingSnapshot.__table__.constraints
+                      if item.name == "uq_job_search_snapshot_run_listing")
+    assert [column.name for column in constraint.columns] == ["run_id", "listing_key"]
+
+
 @pytest.mark.asyncio
 async def test_relevance_ranking_keeps_possible_items_for_research(monkeypatch):
     rows = [listing("a", "Strong"), listing("b", "Unclear"), listing("c", "Unrelated")]
@@ -121,6 +131,36 @@ async def test_relevance_ranking_keeps_possible_items_for_research(monkeypatch):
     assert metadata == {"state": "completed", "version": relevance.CLASSIFICATION_VERSION,
                         "model": "jev-test", "checked": 3, "eligible": 2, "selected": 2,
                         "failed_batches": 0, "errors": [], "threshold": .35}
+
+
+@pytest.mark.asyncio
+async def test_relevance_persists_each_judgment_and_selected_state(monkeypatch):
+    rows = [listing("a", "Strong"), listing("b", "Unrelated")]
+    async def classify(batch, current_profile):
+        return relevance._parse({"model": "jev-test", "answers": {
+            "job_0": choice("match", .8, .15, .05),
+            "job_1": choice("unrelated", .05, .1, .85),
+        }}, batch, current_profile)
+    persist = AsyncMock()
+    selected_state = AsyncMock()
+    monkeypatch.setattr(relevance, "_classify_batch", classify)
+    monkeypatch.setattr(relevance, "persist_judgments", persist)
+    monkeypatch.setattr(relevance, "mark_selected", selected_state)
+    selected, _ = await relevance.rank_source_listings(rows, profile(), max_selected=5, run_id="run-1")
+    persist.assert_awaited_once_with("run-1", rows)
+    selected_state.assert_awaited_once_with("run-1", selected)
+
+
+@pytest.mark.asyncio
+async def test_relevance_persists_failed_batch_for_inspection(monkeypatch):
+    rows = [listing("a", "Strong")]
+    persist_error = AsyncMock()
+    monkeypatch.setattr(relevance, "_classify_batch", AsyncMock(side_effect=RuntimeError("offline")))
+    monkeypatch.setattr(relevance, "persist_errors", persist_error)
+    monkeypatch.setattr(relevance, "mark_selected", AsyncMock())
+    selected, metadata = await relevance.rank_source_listings(rows, profile(), max_selected=5, run_id="run-1")
+    assert selected == [] and metadata["state"] == "error"
+    persist_error.assert_awaited_once_with("run-1", rows, "offline")
 
 
 @pytest.mark.asyncio

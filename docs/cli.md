@@ -1563,6 +1563,7 @@ and it does not cancel an independent email application or change job review.
 | `job-agent search-runs [--search-id ID] [--page N]` | Paginated complete history |
 | `job-agent search-results RUN_ID` | Snapshot, sources, per-job outcomes, queue links and errors |
 | `job-agent search-coverage RUN_ID` | Per-source adapter status, pages/listings checked, shortlist counts, failures and closure reconciliation |
+| `job-agent search-listings RUN_ID [--view all\|selected\|match\|possible\|unrelated\|pending\|error] [--search TEXT] [--source-key KEY] [--page N] [--page-size N]` | Every normalized structured listing collected for the run, including its saved Jev judgment, probabilities, selected state and screening error |
 | `job-agent source-boards` | Learned employer ATS boards and their last successful synchronization state |
 | `job-agent source-boards-discover` | Register supported ATS boards from already verified employer jobs |
 
@@ -1579,6 +1580,12 @@ errors, model wait/attempt, last worker update) and ordered timestamped `activit
 `search-runs` includes the same found/error counts as detail results, including
 unverified discoveries and fetch failures. Poll these read-only commands; they do
 not resume or rerun the search. Browser deep link: `/job-agent?tab=searches&run=RUN_ID`.
+
+`search-listings RUN_ID` is the candidate-level audit behind the run UI. The unique
+key is `(run_id, canonical_listing_url)`, so retrying or replaying the same run
+updates its row rather than creating another. A later run intentionally stores a
+new snapshot for comparison over time. Canonical Job Agent ingestion continues to
+deduplicate the actual queue job across all runs.
 
 Every current run creates a coverage row for every catalog source. Public JSON
 sources and learned employer ATS boards are paginated directly; the other sources

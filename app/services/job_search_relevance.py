@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 import httpx
 
 from app.services.job_search_source_adapters import SourceListing
+from app.services.job_search_screening import mark_selected, persist_errors, persist_judgments
 
 
 TYPESAFE_SYSTEM_ONE_URL = "https://api.typesafe.ai/v1/systemone"
@@ -161,7 +162,7 @@ async def _classify_batch(listings: list[SourceListing], profile: object) -> lis
 
 
 async def rank_source_listings(listings: list[SourceListing], profile: object,
-                               *, max_selected: int) -> tuple[list[SourceListing], dict]:
+                               *, max_selected: int, run_id: str | None = None) -> tuple[list[SourceListing], dict]:
     """Judge every normalized listing, then retain a high-recall ranked shortlist."""
     if not listings:
         return [], {"state": "completed", "version": CLASSIFICATION_VERSION, "checked": 0, "selected": 0}
@@ -173,8 +174,16 @@ async def rank_source_listings(listings: list[SourceListing], profile: object,
         async def classify(batch: list[SourceListing]):
             async with semaphore:
                 try:
-                    return await _classify_batch(batch, profile), None
+                    rows = await _classify_batch(batch, profile)
+                    if run_id:
+                        await persist_judgments(run_id, rows)
+                    return rows, None
                 except Exception as exc:
+                    if run_id:
+                        try:
+                            await persist_errors(run_id, batch, str(exc))
+                        except Exception:
+                            pass
                     return [], str(exc)[:1000]
 
         outcomes = await asyncio.gather(*(
@@ -194,6 +203,8 @@ async def rank_source_listings(listings: list[SourceListing], profile: object,
             item.published_at or "",
         ), reverse=True)
         selected = eligible[:max_selected]
+        if run_id:
+            await mark_selected(run_id, selected)
         return selected, {
             "state": "partial" if errors else "completed", "version": CLASSIFICATION_VERSION,
             "model": classified[0].relevance["model"] if classified else None,

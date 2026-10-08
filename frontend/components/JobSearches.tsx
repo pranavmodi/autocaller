@@ -33,6 +33,14 @@ type CoverageItem = { id: string; source_key: string; name: string; url: string;
   details: { researcher_report?: string }; error?: string; updated_at: string };
 type Coverage = { run_id: string; total: number; statuses: Record<string, number>; listings_seen: number;
   candidates_emitted: number; closed: number; items: CoverageItem[] };
+type ScreeningItem = { id: string; source_key: string; provider: string; native_id: string; job_url: string;
+  title: string; employer_name: string; location: string; employment_type: string; description: string;
+  published_at?: string; status: string; choice?: string; selected: boolean; error?: string; updated_at: string;
+  judgment: { model?: string; confidence?: number; probabilities?: Record<string, number>;
+    input_sha256?: string; classified_at?: string } };
+type ScreeningPage = { run_id: string; summary: { total: number; classified: number; selected: number;
+  pending: number; errors: number; choices: Record<string, number> }; items: ScreeningItem[]; total: number;
+  page: number; page_size: number; total_pages: number; view: string };
 type Detail = Run & { activity?: Activity[]; settings: Record<string, unknown>; results: Result[]; queries: string[]; sources: string[];
   source_checks: { url: string; status: string; reason: string }[];
   coverage?: Coverage; errors_detail: { source_url?: string; phase?: string; error?: string }[]; legacy: boolean };
@@ -122,6 +130,7 @@ export default function JobSearches({ overview, onOpen }: { overview: Overview; 
       <div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="text-lg font-semibold">{current.name}</h3><p className="mt-1 text-xs text-slate-500">{date(current.started_at)}{current.completed_at && ` → ${date(current.completed_at)}`}</p></div><Badge value={current.status} /></div>
       <LiveRunProgress run={current} refreshing={detail.isFetching} lastRefresh={detail.dataUpdatedAt} onRefresh={() => detail.refetch()} />
       {current.coverage && <SourceCoverage value={current.coverage} active={['running','queued'].includes(current.status)} />}
+      <ScreeningAudit runId={current.id} active={['running','queued'].includes(current.status)} />
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><h4 className="font-semibold">Jobs found in this run ({current.results.length})</h4><span className="text-xs text-slate-500">{current.new_jobs} new · {current.duplicates} already in queue</span></div>
       <details className="mb-4 rounded-lg border p-3"><summary className="cursor-pointer text-sm font-medium">Settings and sources used for this run</summary><p className="my-2 text-xs text-slate-500">This snapshot does not change when you edit the saved search.</p><pre className="max-h-80 overflow-auto whitespace-pre-wrap break-words rounded bg-slate-50 p-3 text-xs">{JSON.stringify(current.settings, null, 2)}</pre><h4 className="mt-3 text-sm font-medium">Queries</h4><ul className="list-inside list-disc text-xs text-slate-600">{current.queries.map((q,i) => <li key={i}>{q}</li>)}</ul><h4 className="mt-3 text-sm font-medium">Sources assigned</h4>{current.sources.map((s,i) => <p className="break-all text-xs" key={i}><a href={url(s)} target="_blank" rel="noreferrer" className="text-sky-700 underline">{s}</a></p>)}<h4 className="mt-3 text-sm font-medium">Source checks reported by the researcher</h4>{!current.source_checks.length && <p className="text-xs text-slate-500">No source-check report was saved. Assigned sources alone do not prove they were searched.</p>}{current.source_checks.map((s,i) => <p className="mt-1 break-words text-xs" key={i}>{s.url} · {s.status} · {s.reason}</p>)}</details>
       {current.legacy && <p className="mb-4 text-xs text-amber-800">Earlier run: showing recorded decisions. Detailed requirement checks and queue links were not recorded at the time.</p>}
@@ -133,6 +142,34 @@ export default function JobSearches({ overview, onOpen }: { overview: Overview; 
     {!edit && <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{searches.isPending && <p className="text-sm text-slate-500">Loading saved searches…</p>}{searches.data?.items.map(search => <article key={search.id} className="flex flex-col rounded-xl border border-slate-200 bg-white p-5"><div className="flex items-start justify-between gap-2"><h3 className="font-semibold">{search.config.name}</h3><button aria-label={`Edit ${search.config.name}`} className="rounded p-1 text-slate-500 hover:bg-slate-100" onClick={() => beginEdit(search)}><Settings2 size={18} /></button></div><p className="mt-3 line-clamp-5 text-sm text-slate-600">{describe(search.config)}</p><p className="my-4 text-xs text-slate-600">{search.config.ai_provider === 'openai' ? `OpenAI API · ${search.config.openai_model}` : 'OpenClaw gateway'}</p><p className="mb-4 text-xs text-indigo-700">{search.config.schedule_enabled ? `Daily · ${search.config.local_time} ${search.config.timezone}` : 'Manual runs only'}</p><button className={`${primary} mt-auto`} disabled={!!busy} onClick={() => act(search.id, async () => { const r = await request<{ id: string }>(`/searches/${search.id}/run`, {}); setRunId(r.id); setFilter('all'); refresh(); })}><Play size={14} />{busy === search.id ? 'Queuing…' : 'Run now'}</button></article>)}</div>}
 
   </section>;
+}
+
+function ScreeningAudit({ runId, active }: { runId: string; active: boolean }) {
+  const [view, setView] = useState("all");
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  useEffect(() => { setView("all"); setSearch(""); setPage(1); }, [runId]);
+  const query = useQuery({
+    queryKey: ["job-agent", "search-run", runId, "listings", view, search, page],
+    queryFn: () => request<ScreeningPage>(`/search-runs/${runId}/listings?view=${encodeURIComponent(view)}&search=${encodeURIComponent(search)}&page=${page}&page_size=25`),
+    enabled: !!runId,
+    refetchInterval: active ? 2000 : false,
+  });
+  const value = query.data;
+  const summary = value?.summary;
+  return <details className="mb-4 rounded-xl border border-violet-200 bg-violet-50/40 p-4">
+    <summary className="cursor-pointer list-none"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-sm font-semibold text-violet-950">Candidate screening audit</p><p className="mt-1 text-xs text-violet-800">Every normalized structured listing and its saved Jev judgment for this run.</p></div>{summary && <div className="flex flex-wrap gap-2"><Badge value={`${summary.total} collected`} /><Badge value={`${summary.classified} classified`} /><Badge value={`${summary.selected} selected`} />{!!summary.errors && <Badge value={`${summary.errors} errors`} />}</div>}</div></summary>
+    <p className="mt-3 text-xs text-slate-600">Running the same run again updates these rows. A later run keeps a separate historical snapshot; the main jobs queue still deduplicates the underlying job.</p>
+    <div className="mt-4 flex flex-wrap gap-2"><select aria-label="Screening result" className={input} value={view} onChange={event => { setView(event.target.value); setPage(1); }}><option value="all">All candidates</option><option value="selected">Selected for research</option><option value="match">Match</option><option value="possible">Possible</option><option value="unrelated">Unrelated</option><option value="pending">Awaiting judgment</option><option value="error">Screening errors</option></select><input aria-label="Search screened candidates" className={input} value={search} onChange={event => { setSearch(event.target.value); setPage(1); }} placeholder="Search role or employer…" /></div>
+    {query.isPending && <p className="mt-4 text-sm text-slate-500">Loading collected candidates…</p>}
+    {query.error && <p role="alert" className="mt-4 text-sm text-rose-700">Could not load the screening audit: {String(query.error)}</p>}
+    {value && !summary?.total && <p className="mt-4 text-sm text-slate-500">{active ? "Structured listings will appear after source collection begins." : "No listing snapshots were saved. This run may predate candidate-level audit storage."}</p>}
+    {!!value?.items.length && <div className="mt-4 max-h-[36rem] space-y-3 overflow-y-auto pr-1">{value.items.map(item => {
+      const probabilities = item.judgment?.probabilities || {};
+      return <article key={item.id} className="rounded-lg border border-slate-200 bg-white p-3"><div className="flex flex-wrap items-start justify-between gap-2"><div><a href={url(item.job_url)} target="_blank" rel="noreferrer" className="text-sm font-medium text-sky-700 underline">{item.title}</a><p className="mt-1 text-xs text-slate-600">{item.employer_name || "Employer unknown"}{item.location ? ` · ${item.location}` : ""}</p></div><div className="flex gap-2">{item.selected && <Badge value="selected" />}<Badge value={item.choice || item.status} /></div></div><p className="mt-2 text-xs text-slate-500">{item.source_key} · {readable(item.provider)}{item.published_at ? ` · ${item.published_at}` : ""}</p>{item.description && <p className="mt-2 line-clamp-3 text-xs text-slate-700">{item.description}</p>}{Object.keys(probabilities).length > 0 && <p className="mt-2 text-xs text-violet-800">Probabilities: {Object.entries(probabilities).map(([name, probability]) => `${name} ${Math.round(Number(probability) * 100)}%`).join(" · ")}{typeof item.judgment.confidence === "number" ? ` · confidence ${Math.round(item.judgment.confidence * 100)}%` : ""}</p>}{item.judgment?.model && <p className="mt-1 break-all text-[11px] text-slate-500">{item.judgment.model}{item.judgment.input_sha256 ? ` · input ${item.judgment.input_sha256.slice(0, 12)}…` : ""}</p>}{item.error && <p className="mt-2 text-xs text-rose-700">{item.error}</p>}</article>;
+    })}</div>}
+    {value && value.total_pages > 1 && <div className="mt-4 flex items-center justify-between text-xs text-slate-600"><span>Page {value.page} of {value.total_pages} · {value.total} results</span><div className="flex gap-2"><button className={button} disabled={value.page <= 1} onClick={() => setPage(old => Math.max(1, old - 1))}>Previous</button><button className={button} disabled={value.page >= value.total_pages} onClick={() => setPage(old => old + 1)}>Next</button></div></div>}
+  </details>;
 }
 
 function SourceCoverage({ value, active }: { value: Coverage; active: boolean }) {

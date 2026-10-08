@@ -94,6 +94,10 @@ lead: employer identity, active status, role fit and geography still require fre
 source evidence. `job-agent sources` exposes the catalog to headless operators;
 `job-agent search-coverage RUN_ID` distinguishes completed, failed and web-research
 coverage and reports how many listings were actually examined.
+Every normalized structured listing is also stored in a candidate-level audit for
+that run before Jev screening. The audit retains the typed choice, probability
+distribution, confidence, model, input hash, selected state and screening error,
+and is available in the run UI or through `job-agent search-listings RUN_ID`.
 
 The daily timer invokes this same Job Agent search profile. There is no separate
 PI-only discovery path: scheduled and **Search now** runs use the same configured
@@ -106,6 +110,12 @@ ATS provider plus requisition ID, and the queue upserts stable candidate IDs. Ti
 alone do not merge jobs. The UI reports verified, new, duplicate-skipped and error
 counts, shows the latest scheduled or operator run, and continues to poll while a
 run is active.
+
+Within one run, the candidate audit upserts by canonical listing URL, so a resumed
+or replayed collection does not create duplicate inspection rows. Each later run
+keeps its own snapshot for historical comparison. Those historical snapshots do
+not create duplicate jobs because queue ingestion retains its existing canonical
+source and employer-scoped ATS identities.
 
 If the backend restarts during a manual search, startup reconciliation uses the
 career-search advisory lock to prove that no worker remains, marks the run

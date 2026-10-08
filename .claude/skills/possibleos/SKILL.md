@@ -1217,6 +1217,9 @@ returns editable `config` JSON without saving/running. Save that config object w
 `job-agent search-save --file FILE` (edit: `--id ID --revision N`), then
 `job-agent search-run ID`. Poll `job-agent search-results RUN_ID`; list all history
 with `job-agent search-runs [--search-id ID] [--page N]`. Queued is not completed.
+Use `job-agent search-listings RUN_ID` to inspect every normalized structured
+listing, including Jev choice/probabilities, selected state and screening errors;
+filter with `--view`, `--search`, `--source-key`, `--page` and `--page-size`.
 Required mismatches are excluded, unsupported requirements uncertain, preferences
 rank. Rediscovered jobs link existing application records. A source assigned to a
 run is not proof it was searched. Snapshots preserve each run's settings. Schedules
@@ -1230,6 +1233,10 @@ a timestamped `activity` timeline. Discovery findings are visible before validat
 a particular website was inspected. Share `/job-agent?tab=searches&run=RUN_ID` to
 open that run's live status and results. Earlier runs cannot acquire historical
 telemetry that was never recorded.
+
+Candidate audit idempotency is scoped to a run: `(run_id, canonical listing URL)`
+is unique and replaying that run updates its row. A later run intentionally retains
+a separate snapshot, while canonical queue ingestion still reuses the same job.
 
 For current runs, inspect `job-agent search-coverage RUN_ID` for each source's
 actual adapter status, pages/listings examined, Jev shortlist count, error and
