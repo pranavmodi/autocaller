@@ -94,6 +94,29 @@ def _request(listings: list[SourceListing], profile: object) -> dict:
     }
 
 
+def _request_batches(listings: list[SourceListing], profile: object, *, max_items: int,
+                     max_request_chars: int) -> list[list[SourceListing]]:
+    """Bound requests by both item count and serialized size.
+
+    Description length varies widely, so an item-only limit can exceed Jev's
+    token budget even when the number of questions appears reasonable.
+    """
+    batches: list[list[SourceListing]] = []
+    current: list[SourceListing] = []
+    for listing in listings:
+        trial = [*current, listing]
+        serialized_size = len(json.dumps(_request(trial, profile), ensure_ascii=True,
+                                         separators=(",", ":")))
+        if current and (len(trial) > max_items or serialized_size > max_request_chars):
+            batches.append(current)
+            current = [listing]
+        else:
+            current = trial
+    if current:
+        batches.append(current)
+    return batches
+
+
 def _parse(response: dict, listings: list[SourceListing], profile: object) -> list[SourceListing]:
     answers = response.get("answers") if isinstance(response, dict) else None
     model = response.get("model") if isinstance(response, dict) else None
@@ -149,6 +172,12 @@ async def _classify_batch(listings: list[SourceListing], profile: object) -> lis
                     delay = 0
                 await asyncio.sleep(min(60, max(delay, 2 * (2**attempt))))
                 continue
+            if response.is_error:
+                try:
+                    body = json.dumps(response.json(), ensure_ascii=True)[:500]
+                except (json.JSONDecodeError, ValueError):
+                    body = response.text[:500]
+                raise RuntimeError(f"TypeSafe Jev returned HTTP {response.status_code}: {body}")
             response.raise_for_status()
             return _parse(response.json(), listings, profile)
         except (httpx.TransportError, httpx.HTTPStatusError, json.JSONDecodeError, ValueError) as exc:
@@ -167,7 +196,9 @@ async def rank_source_listings(listings: list[SourceListing], profile: object,
     if not listings:
         return [], {"state": "completed", "version": CLASSIFICATION_VERSION, "checked": 0, "selected": 0}
     try:
-        batch_size = int(os.getenv("JOB_SEARCH_RELEVANCE_BATCH_SIZE", "80"))
+        batch_size = max(1, int(os.getenv("JOB_SEARCH_RELEVANCE_BATCH_SIZE", "80")))
+        max_request_chars = max(20_000, int(os.getenv(
+            "JOB_SEARCH_RELEVANCE_MAX_REQUEST_CHARS", "80000")))
         concurrency = max(1, int(os.getenv("JOB_SEARCH_RELEVANCE_CONCURRENCY", "1")))
         semaphore = asyncio.Semaphore(concurrency)
 
@@ -186,10 +217,9 @@ async def rank_source_listings(listings: list[SourceListing], profile: object,
                             pass
                     return [], str(exc)[:1000]
 
-        outcomes = await asyncio.gather(*(
-            classify(listings[start:start + batch_size])
-            for start in range(0, len(listings), batch_size)
-        ))
+        batches = _request_batches(listings, profile, max_items=batch_size,
+                                   max_request_chars=max_request_chars)
+        outcomes = await asyncio.gather(*(classify(batch) for batch in batches))
         classified = [item for rows, _error in outcomes for item in rows]
         errors = [error for _rows, error in outcomes if error]
         if not classified:

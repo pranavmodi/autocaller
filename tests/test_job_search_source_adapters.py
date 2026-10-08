@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+import json
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -113,6 +114,17 @@ def test_screening_listing_key_is_stable_within_a_run_identity():
     constraint = next(item for item in screening.JobSearchListingSnapshot.__table__.constraints
                       if item.name == "uq_job_search_snapshot_run_listing")
     assert [column.name for column in constraint.columns] == ["run_id", "listing_key"]
+
+
+def test_jev_request_batches_preserve_all_jobs_under_payload_budget():
+    rows = [listing(str(index), f"AI Engineer {index}") for index in range(7)]
+    for row in rows:
+        row.description = "agentic AI systems and workflow automation " * 200
+    batches = relevance._request_batches(rows, profile(), max_items=80, max_request_chars=20_000)
+    assert [item.native_id for batch in batches for item in batch] == [item.native_id for item in rows]
+    assert len(batches) > 1
+    assert all(len(json.dumps(relevance._request(batch, profile()), separators=(",", ":"))) <= 20_000
+               for batch in batches)
 
 
 @pytest.mark.asyncio
