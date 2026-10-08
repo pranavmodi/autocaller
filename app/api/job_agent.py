@@ -353,3 +353,18 @@ async def search_runs(search_id: str | None = None, page: int = Query(1, ge=1)):
 @router.get('/search-runs/{identity}')
 async def search_run(identity: str):
     return await processing_response(saved_searches.run_detail(identity))
+
+@router.get('/search-runs/{identity}/coverage')
+async def search_run_coverage(identity: str):
+    from app.services.job_search_source_adapters import coverage
+    return await coverage(identity)
+
+@router.get('/source-boards')
+async def source_boards_list():
+    from app.services.job_search_source_adapters import list_boards
+    return await list_boards()
+
+@router.post('/source-boards/discover')
+async def source_boards_discover():
+    from app.services.job_search_source_adapters import discover_existing_boards
+    return await processing_response(discover_existing_boards())

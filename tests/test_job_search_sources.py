@@ -34,7 +34,7 @@ async def test_quick_save_portals_are_exposed_as_public_search_sources(monkeypat
 async def test_resolved_urls_include_all_quick_save_portals_without_duplicates(monkeypatch):
     monkeypatch.setattr(sources, "quick_save_catalog", AsyncMock(return_value={
         "items": [
-            {"url": "https://remotive.com/feed/"},
+            {"url": "https://remotive.com/api/remote-jobs/"},
             {"url": "https://jobs.example.com/jobs"},
         ],
     }))
@@ -43,4 +43,4 @@ async def test_resolved_urls_include_all_quick_save_portals_without_duplicates(m
 
     assert urls[:len(sources.ALL_SOURCE_IDS)] == sources.source_urls(sources.ALL_SOURCE_IDS)
     assert urls[-1] == "https://jobs.example.com/jobs"
-    assert urls.count("https://remotive.com/feed") == 1
+    assert urls.count("https://remotive.com/api/remote-jobs") == 1

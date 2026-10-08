@@ -1566,26 +1566,90 @@ async def execute(run_id: str, config: SearchConfig, *, seed_only: bool, audit: 
         candidates = [] if search_profile else await tracked_candidates(config.max_rechecks)
         sources = list(search_profile.source_urls) if search_profile else list(config.source_urls)
         sources = list(dict.fromkeys(str(source) for source in sources))
+        structured_candidates = []
+        structured_listings = []
         if search_profile:
             audit["search_source_ids"] = list(search_profile.source_ids)
             audit["search_sources_consulted"] = [str(source) for source in sources]
+            from app.services.job_search_relevance import rank_source_listings
+            from app.services.job_search_source_adapters import (
+                collect_structured_sources,
+                finalize_web_coverage,
+                record_shortlist_counts,
+            )
+            from app.services.job_search_sources import all_source_catalog
+            catalog = await all_source_catalog()
+            audit["source_coverage_enabled"] = True
+            await checkpoint(run_id, audit)
+            await publish(run_id, audit, "Synchronizing structured job sources and known employer boards",
+                          kind="source_sync", sources=catalog.get("total_count", 0))
+            collected, source_summary = await collect_structured_sources(run_id, search_profile, catalog)
+            selected, relevance = await rank_source_listings(
+                collected, search_profile, max_selected=max(config.max_candidates * 5, config.max_candidates),
+            )
+            await record_shortlist_counts(run_id, selected)
+            audit["source_adapter_summary"] = source_summary
+            audit["source_relevance"] = relevance
+            if source_summary.get("errors"):
+                audit.setdefault("source_adapter_errors", []).extend(source_summary["errors"])
+                audit.setdefault("errors", []).extend(source_summary["errors"])
+            if relevance.get("state") in {"partial", "error"}:
+                relevance_error = {
+                    "phase": "source_relevance",
+                    "error": relevance.get("error") or "; ".join(relevance.get("errors") or [])
+                    or "One or more TypeSafe Jev relevance batches failed.",
+                }
+                audit.setdefault("errors", []).append(relevance_error)
+            structured_listings = [item.compact() for item in selected]
+            structured_candidates = [{
+                "firm_name": item.employer_name,
+                "canonical_domain": item.employer_domain,
+                "source_url": item.job_url,
+                "employer_evidence_url": item.employer_url,
+                "title": item.title,
+                "contact_urls": [],
+                "corroborating_job_urls": [],
+            } for item in selected if item.board_id and item.employer_name
+                and item.employer_domain and item.employer_url]
+            await publish(run_id, audit,
+                          f"Structured sources checked {len(collected)} recent listings; "
+                          f"Jev selected {len(selected)} for research",
+                          kind="source_sync_completed", listings=len(collected), selected=len(selected))
         queries = profile_queries(search_profile, day_number) if search_profile else [
             PI_QUERIES[(day_number + i) % len(PI_QUERIES)] for i in range(3)
         ]
         audit['queries'] = queries
         await publish(run_id, audit, 'Searching the web and selected job sources', sources=len(sources), queries=len(queries))
-        result = await llm({"mode": "discovery", "window_start": (now.date() - timedelta(days=search_profile.posted_within_days if search_profile else 30)).isoformat(),
-            "window_end": now.date().isoformat(), "search_profile": search_profile.model_dump(mode="json") if search_profile else None,
-            "queries": queries,
-            "career_sources": [str(s) for s in sources], "max_candidates": config.max_candidates,
-            "max_sources": len(sources)}, "candidates", config, audit, run_id,
-            **deadline_kwargs(deadline))
+        try:
+            result = await llm({"mode": "discovery", "window_start": (now.date() - timedelta(days=search_profile.posted_within_days if search_profile else 30)).isoformat(),
+                "window_end": now.date().isoformat(), "search_profile": search_profile.model_dump(mode="json") if search_profile else None,
+                "queries": queries, "structured_source_listings": structured_listings,
+                "career_sources": [str(s) for s in sources], "max_candidates": config.max_candidates,
+                "max_sources": len(sources)}, "candidates", config, audit, run_id,
+                **deadline_kwargs(deadline))
+        except Exception:
+            if search_profile:
+                await finalize_web_coverage(run_id, [])
+            raise
         if not isinstance(result["candidates"], list):
             raise ValueError("discovery candidates must be an array")
         audit['source_checks'] = [{k: str(row.get(k) or '')[:2000] for k in ('url', 'status', 'reason')}
                                   for row in (result.get('source_checks') or []) if isinstance(row, dict)]
         audit['queries_used'] = [q for q in (result.get('queries_used') or []) if isinstance(q, str)]
-        discovered = result["candidates"][:config.max_candidates]
+        if search_profile:
+            await finalize_web_coverage(run_id, audit['source_checks'])
+        combined = [*structured_candidates, *result["candidates"]]
+        seen_urls = set()
+        discovered = []
+        for item in combined:
+            url = str(item.get("source_url") or "") if isinstance(item, dict) else ""
+            identity = source_identity(url) if url else ""
+            if not identity or identity in seen_urls:
+                continue
+            seen_urls.add(identity)
+            discovered.append(item)
+            if len(discovered) >= config.max_candidates:
+                break
     audit["discovery_candidates"] = audit_value(discovered)
     await publish(run_id, audit, f'Found {len(discovered)} candidate jobs; checking employer identities',
                   kind='discovered', found=len(discovered))
@@ -1788,6 +1852,15 @@ async def execute(run_id: str, config: SearchConfig, *, seed_only: bool, audit: 
                         continue
                     await publish(run_id, audit, f'Saving {candidate.title} and checking for duplicates', source_url=str(candidate.source_url))
                     stored = await ingest(candidate, posting)
+                    try:
+                        from app.services.job_search_source_adapters import register_candidate_board
+                        board = await register_candidate_board(candidate, stored["firm_id"])
+                        if board:
+                            stored["employer_board"] = board
+                    except Exception as exc:
+                        audit.setdefault("board_registry_errors", []).append({
+                            "source_url": str(candidate.source_url), "error": str(exc)[:1000],
+                        })
                     contact_counts = await ingest_application_contacts(stored["firm_id"], decision.application_contacts)
                     stored["contacts"] = contact_counts
                     if search_profile and search_profile.precise:

@@ -33,10 +33,12 @@ Control India jobs schedule. Nothing sends email or submits applications.
 - Default schedule: **08:00 America/Bogota, 13:00 UTC**, disabled until enabled.
 - The staged systemd timer checks every five minutes. The CLI checks the durable
   timezone/time configuration, so changing time does not require editing units.
-- One discovery call searches three rotating query variants and up to six known
-  sources. It can discover employers absent from the firm directory.
-- Defaults: at most 10 discovered candidates and 8 oldest-checked tracked jobs.
-  Employer sources learned from verified roles join the bounded rotating list.
+- Each current run records the full source catalog. Public JSON sources and learned
+  employer ATS boards are paginated directly; sources without adapters remain inputs
+  to indexed-web discovery. It can discover employers absent from the firm directory.
+- The candidate limit bounds expensive source verification and queue writes rather
+  than direct-source pagination. Employer ATS boards learned from verified roles join
+  the durable board registry for later synchronization.
 - Fetch specific jobs and employer identity pages over public HTTPS, with a
   2MB limit, redirect checks, request timeouts, retry/backoff, and per-run cache.
 - Verify up to three related candidates per structured OpenClaw/main call.
@@ -228,8 +230,10 @@ implementer has not changed the attorney prompt version).
 
 ## Limits
 
-Coverage is budgeted, not exhaustive: tracked rows rotate when more than eight
-are present; known sources rotate when more than six are configured. No 4,510
+Coverage is measured, not assumed. Every catalog source receives a durable status,
+but blocked pages, timeouts and sources without public structured interfaces can
+still remain incomplete. Direct adapters paginate public endpoints and known ATS
+boards; indexed-web discovery is not a substitute for a first-party feed. No 4,510
 firm daily crawl. LLM source interpretation can still be wrong despite exact
 excerpt checks. Browser-only or access-blocked ATS pages require later retries
 or a future provider adapter; unverified listings are not silently imported.

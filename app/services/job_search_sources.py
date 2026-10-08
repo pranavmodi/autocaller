@@ -32,9 +32,12 @@ class JobSearchSource(BaseModel):
 # Wellfound; Remotees and Remote OK Europe were duplicated in the supplied list.
 # Obvious link errors are corrected here rather than persisted as broken input.
 SOURCE_CATALOG = (
-    JobSearchSource(id="remotive", name="Remotive", url="https://remotive.com/feed",
-                    method="public_feed", enabled_by_default=True,
-                    note="Public RSS feed; retain Remotive attribution on discovered jobs."),
+    JobSearchSource(id="remotive", name="Remotive", url="https://remotive.com/api/remote-jobs",
+                    method="public_api", enabled_by_default=True,
+                    note="Free public JSON API; results are delayed and require Remotive attribution."),
+    JobSearchSource(id="himalayas", name="Himalayas", url="https://himalayas.app/jobs/api",
+                    method="public_api", enabled_by_default=True,
+                    note="Free public JSON API with typed filters; credit and link back to Himalayas."),
     JobSearchSource(id="toptal", name="Toptal", url="https://www.toptal.com/talent/apply",
                     method="web_search", enabled_by_default=True,
                     note="Search public indexed opportunities only; do not automate its account or screening flow."),

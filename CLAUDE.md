@@ -137,6 +137,25 @@ A reasonable heuristic: if someone three months from now had only the CLI and `d
   identifiers, protocol constants, hashes, schema checks, exact allowlists, and
   delimiters. Regex/string checks may be performance prefilters, but must not make
   the final semantic accept/reject decision.
+- **Prefer TypeSafe Jev for bounded System One judgments.** Use Jev before a
+  generative LLM when the complete decision state can be supplied directly and
+  the output is a typed `choice`, `noul` (yes/no probability), or ordered
+  `score`. Good fits include classification, routing, semantic equivalence,
+  relevance ranking/reranking, selecting among known values, confidence-gated
+  verification, and evaluating many independent items in one batched request.
+  Preserve the returned model version, every option probability, confidence,
+  input/version hash, and decision time so the judgment can be audited and
+  reused. Define an explicit no-match/unknown path, calibrate thresholds against
+  the consequences, and route uncertain high-impact results to review or a
+  stronger evidence-synthesis model. Batch independent questions over shared
+  state where practical; this is faster and cheaper than separate calls. Do not
+  use Jev to browse the web, generate prose, synthesize evidence across documents
+  it was not given, or invent missing values. Use a structured-output reasoning
+  LLM for those tasks. Code remains responsible for exact identifiers, schemas,
+  permissions, pagination, deduplication, retries, thresholds, and execution. If
+  Jev is unavailable, record that failure and use the workflow's explicit
+  fallback; never silently replace its semantic judgment with a regex or
+  substring heuristic.
 - **Judge every completed call.** `app/services/judge.py` runs a background loop; new outcome types need to be added to its rubric.
 - **Record the rendered prompt on every call log** (`prompt_text` + `prompt_version` + `tools_snapshot`). Post-hoc debugging depends on this.
 - **Commit discipline**: descriptive commit message, Co-Authored-By Claude on every commit.

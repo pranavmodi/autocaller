@@ -152,12 +152,18 @@ async def test_history_includes_failed_findings_without_changing_audit(monkeypat
 async def test_rediscovered_job_is_rechecked_and_links_same_canonical_record(monkeypatch):
     from tests.test_daily_career_search import candidate, decision as old_decision, pages
     from app.services import job_agent, job_contract_classification
+    from app.services import job_search_relevance, job_search_source_adapters, job_search_sources
     prospect = candidate()
     d = old_decision()
     d.posted_date = None
     audit = {'new_jobs':0,'verified':0,'closed':0,'rejected':0,'candidates':0,'duplicates_skipped':0,
              'llm_calls':0,'errors':[],'stored':[],'decisions':[],'usage':[]}
     monkeypatch.setattr(career,'llm',AsyncMock(return_value={'candidates':[prospect.model_dump(mode='json')]}))
+    monkeypatch.setattr(job_search_source_adapters,'collect_structured_sources',AsyncMock(return_value=([],{'targets':0,'listings_seen':0,'errors':[]})))
+    monkeypatch.setattr(job_search_source_adapters,'record_shortlist_counts',AsyncMock())
+    monkeypatch.setattr(job_search_source_adapters,'finalize_web_coverage',AsyncMock())
+    monkeypatch.setattr(job_search_relevance,'rank_source_listings',AsyncMock(return_value=([],{'state':'completed','checked':0,'selected':0})))
+    monkeypatch.setattr(job_search_sources,'all_source_catalog',AsyncMock(return_value={'items':[],'total_count':0}))
     monkeypatch.setattr(career,'known_source_identities',AsyncMock(return_value={career.source_identity(str(prospect.source_url))}))
     monkeypatch.setattr(career,'checkpoint',AsyncMock())
     monkeypatch.setattr(career,'fetch_page',AsyncMock(side_effect=lambda url: {'requested_url':url,'final_url':url,'http_status':200,'content':'public evidence'}))
@@ -212,11 +218,17 @@ def test_unverified_discoveries_are_visible_while_run_is_active():
 @pytest.mark.asyncio
 async def test_discovery_is_checkpointed_before_slow_identity_repair(monkeypatch):
     from tests.test_daily_career_search import candidate
+    from app.services import job_search_relevance, job_search_source_adapters, job_search_sources
     snapshots=[]
     async def checkpoint(_id,audit,*args): snapshots.append(copy.deepcopy(audit))
     monkeypatch.setattr(career,'checkpoint',checkpoint)
     raw=candidate().model_dump(mode='json')
     monkeypatch.setattr(career,'llm',AsyncMock(return_value={'candidates':[raw]}))
+    monkeypatch.setattr(job_search_source_adapters,'collect_structured_sources',AsyncMock(return_value=([],{'targets':0,'listings_seen':0,'errors':[]})))
+    monkeypatch.setattr(job_search_source_adapters,'record_shortlist_counts',AsyncMock())
+    monkeypatch.setattr(job_search_source_adapters,'finalize_web_coverage',AsyncMock())
+    monkeypatch.setattr(job_search_relevance,'rank_source_listings',AsyncMock(return_value=([],{'state':'completed','checked':0,'selected':0})))
+    monkeypatch.setattr(job_search_sources,'all_source_catalog',AsyncMock(return_value={'items':[],'total_count':0}))
     async def recover(*args,**kwargs):
         assert snapshots[-1]['discovery_candidates']==[raw]
         assert snapshots[-1]['activity'][-1]['kind']=='discovered'

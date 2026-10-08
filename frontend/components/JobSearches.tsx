@@ -28,9 +28,14 @@ type Result = { candidate: { firm_name?: string; title?: string; source_url?: st
   outcome: string; reason: string; already_known?: boolean; contract_status?: string;
   contacts?: { verified: number }; decision?: { location?: string; posted_date?: string; work_arrangement?: string;
     search_checks?: { criterion: string; result: string; reason: string; confidence: number; evidence?: { source_url: string; text: string } }[] } };
+type CoverageItem = { id: string; source_key: string; name: string; url: string; adapter_type: string; status: string;
+  pages_checked: number; listings_seen: number; candidates_emitted: number; closed_count: number; retry_count: number;
+  details: { researcher_report?: string }; error?: string; updated_at: string };
+type Coverage = { run_id: string; total: number; statuses: Record<string, number>; listings_seen: number;
+  candidates_emitted: number; closed: number; items: CoverageItem[] };
 type Detail = Run & { activity?: Activity[]; settings: Record<string, unknown>; results: Result[]; queries: string[]; sources: string[];
   source_checks: { url: string; status: string; reason: string }[];
-  errors_detail: { source_url?: string; phase?: string; error?: string }[]; legacy: boolean };
+  coverage?: Coverage; errors_detail: { source_url?: string; phase?: string; error?: string }[]; legacy: boolean };
 const input = "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-100";
 const button = "inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium hover:bg-slate-50 disabled:opacity-50";
 const primary = `${button} !border-slate-900 !bg-slate-900 !text-white hover:!bg-slate-800`;
@@ -116,6 +121,7 @@ export default function JobSearches({ overview, onOpen }: { overview: Overview; 
     {runId && <div className="rounded-2xl border border-sky-200 bg-white p-5"><button className="mb-3 flex items-center gap-1 text-xs text-slate-500" onClick={() => { setRunId(''); const u = new URL(window.location.href); u.searchParams.delete('run'); window.history.replaceState(null, '', u); }}><ChevronLeft size={14} />Close run details</button>{detail.isPending && <p>Loading results…</p>}{current && <>
       <div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="text-lg font-semibold">{current.name}</h3><p className="mt-1 text-xs text-slate-500">{date(current.started_at)}{current.completed_at && ` → ${date(current.completed_at)}`}</p></div><Badge value={current.status} /></div>
       <LiveRunProgress run={current} refreshing={detail.isFetching} lastRefresh={detail.dataUpdatedAt} onRefresh={() => detail.refetch()} />
+      {current.coverage && <SourceCoverage value={current.coverage} active={['running','queued'].includes(current.status)} />}
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><h4 className="font-semibold">Jobs found in this run ({current.results.length})</h4><span className="text-xs text-slate-500">{current.new_jobs} new · {current.duplicates} already in queue</span></div>
       <details className="mb-4 rounded-lg border p-3"><summary className="cursor-pointer text-sm font-medium">Settings and sources used for this run</summary><p className="my-2 text-xs text-slate-500">This snapshot does not change when you edit the saved search.</p><pre className="max-h-80 overflow-auto whitespace-pre-wrap break-words rounded bg-slate-50 p-3 text-xs">{JSON.stringify(current.settings, null, 2)}</pre><h4 className="mt-3 text-sm font-medium">Queries</h4><ul className="list-inside list-disc text-xs text-slate-600">{current.queries.map((q,i) => <li key={i}>{q}</li>)}</ul><h4 className="mt-3 text-sm font-medium">Sources assigned</h4>{current.sources.map((s,i) => <p className="break-all text-xs" key={i}><a href={url(s)} target="_blank" rel="noreferrer" className="text-sky-700 underline">{s}</a></p>)}<h4 className="mt-3 text-sm font-medium">Source checks reported by the researcher</h4>{!current.source_checks.length && <p className="text-xs text-slate-500">No source-check report was saved. Assigned sources alone do not prove they were searched.</p>}{current.source_checks.map((s,i) => <p className="mt-1 break-words text-xs" key={i}>{s.url} · {s.status} · {s.reason}</p>)}</details>
       {current.legacy && <p className="mb-4 text-xs text-amber-800">Earlier run: showing recorded decisions. Detailed requirement checks and queue links were not recorded at the time.</p>}
@@ -127,6 +133,17 @@ export default function JobSearches({ overview, onOpen }: { overview: Overview; 
     {!edit && <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{searches.isPending && <p className="text-sm text-slate-500">Loading saved searches…</p>}{searches.data?.items.map(search => <article key={search.id} className="flex flex-col rounded-xl border border-slate-200 bg-white p-5"><div className="flex items-start justify-between gap-2"><h3 className="font-semibold">{search.config.name}</h3><button aria-label={`Edit ${search.config.name}`} className="rounded p-1 text-slate-500 hover:bg-slate-100" onClick={() => beginEdit(search)}><Settings2 size={18} /></button></div><p className="mt-3 line-clamp-5 text-sm text-slate-600">{describe(search.config)}</p><p className="my-4 text-xs text-slate-600">{search.config.ai_provider === 'openai' ? `OpenAI API · ${search.config.openai_model}` : 'OpenClaw gateway'}</p><p className="mb-4 text-xs text-indigo-700">{search.config.schedule_enabled ? `Daily · ${search.config.local_time} ${search.config.timezone}` : 'Manual runs only'}</p><button className={`${primary} mt-auto`} disabled={!!busy} onClick={() => act(search.id, async () => { const r = await request<{ id: string }>(`/searches/${search.id}/run`, {}); setRunId(r.id); setFilter('all'); refresh(); })}><Play size={14} />{busy === search.id ? 'Queuing…' : 'Run now'}</button></article>)}</div>}
 
   </section>;
+}
+
+function SourceCoverage({ value, active }: { value: Coverage; active: boolean }) {
+  const resolved = (value.statuses.completed || 0) + (value.statuses.unavailable || 0) +
+    (value.statuses.not_checked || 0) + (value.statuses.failed || 0);
+  const problems = (value.statuses.failed || 0) + (value.statuses.not_checked || 0);
+  return <details open={active || problems > 0} className="mb-4 rounded-xl border border-indigo-100 bg-indigo-50/40 p-4">
+    <summary className="cursor-pointer list-none"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-sm font-semibold text-indigo-950">Source coverage</p><p className="mt-1 text-xs text-indigo-800">{resolved} of {value.total} sources resolved · {value.listings_seen} structured listings examined · {value.candidates_emitted} shortlisted</p></div><div className="flex flex-wrap gap-2"><Badge value={`${value.statuses.completed || 0} completed`} />{!!(value.statuses.running || value.statuses.pending) && <Badge value={`${(value.statuses.running || 0) + (value.statuses.pending || 0)} in progress`} />}{!!problems && <Badge value={`${problems} need attention`} />}</div></div></summary>
+    <p className="mt-3 text-xs text-slate-600">Structured adapters report actual API pages and listings. Web-search rows are marked complete only when the researcher reports inspecting that source.</p>
+    <div className="mt-3 max-h-96 space-y-2 overflow-y-auto">{value.items.map(item => <div key={item.id} className="rounded-lg border border-slate-200 bg-white p-3"><div className="flex flex-wrap items-start justify-between gap-2"><div><a href={url(item.url)} target="_blank" rel="noreferrer" className="text-sm font-medium text-sky-700 underline">{item.name}</a><p className="mt-1 text-[11px] uppercase tracking-wide text-slate-500">{readable(item.adapter_type)}</p></div><Badge value={item.status} /></div><p className="mt-2 text-xs text-slate-600">{item.pages_checked} pages · {item.listings_seen} listings · {item.candidates_emitted} shortlisted{item.closed_count ? ` · ${item.closed_count} closed` : ''}</p>{item.details?.researcher_report && <p className="mt-2 text-xs text-slate-500">{item.details.researcher_report}</p>}{item.error && <p className="mt-2 text-xs text-rose-700">{item.error}</p>}</div>)}</div>
+  </details>;
 }
 
 

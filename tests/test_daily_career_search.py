@@ -318,6 +318,8 @@ def test_application_contact_evidence_accepts_the_same_normalized_source_url():
 
 @pytest.mark.asyncio
 async def test_manual_search_skips_an_exact_job_found_in_an_earlier_run(monkeypatch):
+    from app.services import job_search_relevance, job_search_source_adapters, job_search_sources
+
     assigned_sources = [f"https://board-{index}.example/jobs" for index in range(35)]
     profile = service.SearchProfile(
         target_roles="AI agent engineering",
@@ -341,6 +343,17 @@ async def test_manual_search_skips_an_exact_job_found_in_an_earlier_run(monkeypa
     monkeypatch.setattr(service, "known_source_identities", known)
     monkeypatch.setattr(service, "checkpoint", checkpoint)
     monkeypatch.setattr(service, "fetch_page", no_fetch)
+    monkeypatch.setattr(job_search_sources, "all_source_catalog", AsyncMock(return_value={
+        "items": [], "total_count": 0,
+    }))
+    monkeypatch.setattr(job_search_source_adapters, "collect_structured_sources", AsyncMock(return_value=([], {
+        "targets": 0, "listings_seen": 0, "errors": [],
+    })))
+    monkeypatch.setattr(job_search_source_adapters, "record_shortlist_counts", AsyncMock())
+    monkeypatch.setattr(job_search_source_adapters, "finalize_web_coverage", AsyncMock())
+    monkeypatch.setattr(job_search_relevance, "rank_source_listings", AsyncMock(return_value=([], {
+        "model": "test", "classifications": [],
+    })))
     audit = {"new_jobs": 0, "verified": 0, "closed": 0, "rejected": 0, "candidates": 0,
              "duplicates_skipped": 0, "llm_calls": 0, "errors": [], "attempt_errors": [],
              "stored": [], "decisions": [], "usage": []}

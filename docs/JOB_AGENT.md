@@ -86,11 +86,14 @@ each source as public API, public feed, public page, indexed-web discovery, or
 unavailable. Account-only marketplaces, subscription-gated boards and sources whose
 current listing surface cannot be verified remain visible but disabled with a reason.
 LinkedIn and Wellfound are searched through public indexed pages; Possible OS does
-not sign in or automate an account. Enabled sources rotate through the daily and
-on-demand source budget, alongside the configured industry/role queries. A board is
-only a discovery lead: employer identity, active status, role fit and geography still
-require fresh source evidence. `job-agent sources` exposes the same catalog to
-headless operators.
+not sign in or automate an account. Each current run records every catalog source.
+Sources with public structured interfaces are paginated directly, and supported ATS
+boards learned from verified jobs are synchronized independently. The remaining
+sources are supplied to indexed-web discovery. A board result is only a discovery
+lead: employer identity, active status, role fit and geography still require fresh
+source evidence. `job-agent sources` exposes the catalog to headless operators;
+`job-agent search-coverage RUN_ID` distinguishes completed, failed and web-research
+coverage and reports how many listings were actually examined.
 
 The daily timer invokes this same Job Agent search profile. There is no separate
 PI-only discovery path: scheduled and **Search now** runs use the same configured
@@ -435,14 +438,25 @@ in your queue**. Canonical employer-scoped URL/requisition deduplication remains
 unchanged; the same candidate/application record is linked. Excluded new jobs
 are retained in run history without entering the application queue. Search never
 classifies resumes, prepares emails, contacts employers or submits applications.
-Current processing budgets are explicitly editable: 1–100 candidates and 1–30
-sources per run, with a 30-minute execution budget. Those are not exhaustive-search
-claims. Source selection rotates by day.
+The configured candidate limit bounds expensive final verification and queue writes;
+it does not truncate direct source pagination. The run still has a 30-minute execution
+budget, so timeout and access failures remain visible as partial coverage rather than
+an exhaustive-search claim. TypeSafe Jev ranks normalized direct-source listings in
+batches using typed match probabilities before the bounded final verifier. It does
+not browse, establish employer identity, or replace source-backed verification.
 
 Storage: `job_agent_saved_searches` holds revisioned configuration;
 `career_search_runs` holds queued/running/completed/partial/failed/interrupted runs,
 settings snapshots, and per-job observations linked to canonical candidate IDs.
 `g2060926a001` is the additive migration; startup also creates the table if absent.
+
+`job_search_source_runs` stores one durable coverage record per source/run, including
+adapter status, pages and listings examined, shortlist count, error and closure count.
+`job_search_employer_boards` stores learned Ashby, Greenhouse, Lever and Workable
+boards plus their provider cursor. A successful later snapshot may close jobs that
+disappeared from the same verified board; a failed fetch never closes them. Use
+`job-agent source-boards-discover` to seed this registry mechanically from existing
+verified jobs and `job-agent source-boards` to audit it.
 
 ### Live run observability
 Searches opens the active/latest run automatically and keeps the selected run in

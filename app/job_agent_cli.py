@@ -47,6 +47,21 @@ def register(app, get, post, console):
         """Inspect snapshot, queries, sources, per-job outcomes and errors."""
         output(get(f'/api/job-agent/search-runs/{identity}'))
 
+    @group.command("search-coverage")
+    def search_coverage(identity: str):
+        """Inspect per-source adapter, fallback, pagination and error coverage for one run."""
+        output(get(f'/api/job-agent/search-runs/{identity}/coverage'))
+
+    @group.command("source-boards")
+    def source_boards():
+        """List known employer ATS boards and their last complete synchronization."""
+        output(get('/api/job-agent/source-boards'))
+
+    @group.command("source-boards-discover")
+    def source_boards_discover():
+        """Idempotently discover ATS tenants from already verified stored job URLs."""
+        output(post('/api/job-agent/source-boards/discover', {}, timeout=900))
+
     @group.command("status")
     def status():
         output(get("/api/job-agent/overview"))

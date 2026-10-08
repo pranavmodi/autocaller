@@ -85,6 +85,7 @@ async def test_provider_snapshot_survives_later_settings_edits(monkeypatch):
     session=Session(row)
     monkeypatch.setattr(saved,'ensure',AsyncMock())
     monkeypatch.setattr(saved,'AsyncSessionLocal',lambda:session)
+    monkeypatch.setattr(saved,'resolved_profile',AsyncMock(return_value=saved.profile(settings())))
     await saved.enqueue('s')
     row.config['ai_provider']='gateway'
     run=session.added[0]
@@ -95,6 +96,7 @@ async def test_provider_snapshot_survives_later_settings_edits(monkeypatch):
 async def test_settings_assistant_keeps_selected_provider(monkeypatch):
     direct=AsyncMock(return_value=SimpleNamespace(parsed={'config':settings().model_dump()}))
     monkeypatch.setattr(ai,'direct_search',direct)
+    monkeypatch.setattr(saved,'all_source_catalog',AsyncMock(return_value={'items':[],'total_count':0}))
     result=await saved.draft(saved.ParseSearch(description='Legal AI jobs',ai_provider='openai',openai_model='custom'))
     assert result['config']['ai_provider']=='openai'
     assert result['config']['openai_model']=='custom'

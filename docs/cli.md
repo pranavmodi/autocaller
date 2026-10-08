@@ -1562,6 +1562,9 @@ and it does not cancel an independent email application or change job review.
 | `job-agent search-run ID` | Queue once and return durable run ID |
 | `job-agent search-runs [--search-id ID] [--page N]` | Paginated complete history |
 | `job-agent search-results RUN_ID` | Snapshot, sources, per-job outcomes, queue links and errors |
+| `job-agent search-coverage RUN_ID` | Per-source adapter status, pages/listings checked, shortlist counts, failures and closure reconciliation |
+| `job-agent source-boards` | Learned employer ATS boards and their last successful synchronization state |
+| `job-agent source-boards-discover` | Register supported ATS boards from already verified employer jobs |
 
 Recipe: draft settings, review the returned `config` object and save that object
 as a JSON file; `search-save` it, then `search-run ID`. Poll `search-results RUN_ID`.
@@ -1576,6 +1579,15 @@ errors, model wait/attempt, last worker update) and ordered timestamped `activit
 `search-runs` includes the same found/error counts as detail results, including
 unverified discoveries and fetch failures. Poll these read-only commands; they do
 not resume or rerun the search. Browser deep link: `/job-agent?tab=searches&run=RUN_ID`.
+
+Every current run creates a coverage row for every catalog source. Public JSON
+sources and learned employer ATS boards are paginated directly; the other sources
+continue through indexed-web discovery. Direct listings are normalized,
+deduplicated mechanically and ranked in batches by TypeSafe Jev before the existing
+source verifier runs. `search-coverage` distinguishes assigned sources from sources
+that actually completed and reports listings examined. Supported ATS cursors also
+reconcile jobs that disappear from a previously successful board snapshot as closed.
+A single source failure remains visible without discarding other results.
 
 Choose a search transport in the saved config: `ai_provider: "gateway"` (default)
 or `"openai"`, with `openai_model` (default `gpt-5.6-luna`). Save with the same

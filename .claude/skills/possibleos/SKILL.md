@@ -1231,6 +1231,16 @@ a particular website was inspected. Share `/job-agent?tab=searches&run=RUN_ID` t
 open that run's live status and results. Earlier runs cannot acquire historical
 telemetry that was never recorded.
 
+For current runs, inspect `job-agent search-coverage RUN_ID` for each source's
+actual adapter status, pages/listings examined, Jev shortlist count, error and
+closure count. `job-agent source-boards` lists learned employer ATS boards. Use
+`job-agent source-boards-discover` to register supported Ashby, Greenhouse, Lever
+and Workable boards from existing verified jobs; it does not search or apply.
+Direct public APIs and employer boards paginate independently, while sources
+without a structured adapter remain indexed-web discovery inputs. TypeSafe Jev
+performs the batched typed relevance judgment; the verifier still owns employer
+and job evidence.
+
 Search transport: set saved config `ai_provider` to `gateway` (default) or `openai`,
 and `openai_model` (default `gpt-5.6-luna`), then `search-save`. Settings drafting
 also supports `search-draft "intent" --provider openai --model gpt-5.6-luna`.
