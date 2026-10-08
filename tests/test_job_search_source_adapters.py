@@ -46,6 +46,26 @@ async def test_remoteok_adapter_preserves_recent_transport_facts(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_himalayas_stops_after_first_fully_out_of_window_page(monkeypatch):
+    recent = datetime.now(timezone.utc).isoformat()
+    old = (datetime.now(timezone.utc) - timedelta(days=60)).isoformat()
+    page_one = [{"guid": f"https://himalayas.app/jobs/{index}", "title": f"Recent {index}",
+                 "companyName": "Acme", "pubDate": recent} for index in range(20)]
+    page_two = [{"guid": f"https://himalayas.app/jobs/old-{index}", "title": f"Old {index}",
+                 "companyName": "Acme", "pubDate": old} for index in range(20)]
+    fetch = AsyncMock(side_effect=[{"jobs": page_one, "totalCount": 1000},
+                                   {"jobs": page_two, "totalCount": 1000}])
+    monkeypatch.setattr(adapters, "_fetch_json", fetch)
+    result = await adapters._collect_himalayas(
+        target("himalayas"), datetime.now(timezone.utc) - timedelta(days=14),
+        profile(target_roles="AI Engineer"),
+    )
+    assert result.pages_checked == 2
+    assert len(result.listings) == 20
+    assert fetch.await_count == 2
+
+
+@pytest.mark.asyncio
 async def test_lever_adapter_follows_pagination_until_exhausted(monkeypatch):
     rows = [{"id": str(index), "text": f"Role {index}", "hostedUrl": f"https://jobs.lever.co/acme/{index}",
              "descriptionPlain": "Build systems", "categories": {"location": "Remote"}}

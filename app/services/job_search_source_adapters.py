@@ -311,8 +311,15 @@ async def _collect_himalayas(target: SourceTarget, cutoff: datetime, profile: An
             if not isinstance(rows, list):
                 raise RuntimeError("Himalayas did not return a jobs array")
             pages_checked += 1
+            published_dates = []
             for raw in rows:
-                if not isinstance(raw, dict) or not _within_window(raw.get("pubDate") or raw.get("publishedAt"), cutoff):
+                if not isinstance(raw, dict):
+                    continue
+                published_value = raw.get("pubDate") or raw.get("publishedAt")
+                published = _published_datetime(published_value)
+                if published:
+                    published_dates.append(published)
+                if not _within_window(published_value, cutoff):
                     continue
                 item = _listing(target, raw, native_id=raw.get("guid") or raw.get("id"),
                                 job_url=raw.get("applicationLink") or raw.get("guid"), title=raw.get("title"),
@@ -325,7 +332,11 @@ async def _collect_himalayas(target: SourceTarget, cutoff: datetime, profile: An
             # Himalayas currently returns 20 rows per page. Count all rows
             # consumed so a short final page cannot distort the page offset.
             consumed = (page - 1) * 20 + len(rows)
-            if not rows or not isinstance(total, int) or consumed >= total:
+            # Results are requested newest first. Once an entire dated page is
+            # older than the configured window, later pages cannot contribute.
+            outside_window = bool(rows) and len(published_dates) == len(rows) and all(
+                published < cutoff for published in published_dates)
+            if outside_window or not rows or not isinstance(total, int) or consumed >= total:
                 break
             page += 1
     return AdapterResult(listings=listings, pages_checked=pages_checked,
