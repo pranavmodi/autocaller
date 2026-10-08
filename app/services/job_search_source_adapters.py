@@ -196,7 +196,7 @@ def _within_window(value: Any, cutoff: datetime) -> bool:
     return parsed is None or parsed >= cutoff
 
 
-async def _fetch_json(url: str, *, max_bytes: int = 12_000_000, attempts: int = 3) -> Any:
+async def _fetch_json(url: str, *, max_bytes: int = 12_000_000, attempts: int = 5) -> Any:
     last_error: Exception | None = None
     for attempt in range(attempts):
         try:
@@ -206,7 +206,16 @@ async def _fetch_json(url: str, *, max_bytes: int = 12_000_000, attempts: int = 
             ) as client:
                 response = await client.get(url, follow_redirects=False)
             if response.status_code in RETRYABLE_STATUS:
-                raise RuntimeError(f"HTTP {response.status_code}")
+                last_error = RuntimeError(f"HTTP {response.status_code}")
+                if attempt + 1 < attempts:
+                    retry_after = response.headers.get("retry-after", "")
+                    try:
+                        delay = float(retry_after)
+                    except ValueError:
+                        delay = 0
+                    await asyncio.sleep(min(60, max(delay, 2 * (2**attempt))))
+                    continue
+                raise last_error
             if response.status_code != 200:
                 raise RuntimeError(f"HTTP {response.status_code}")
             if len(response.content) > max_bytes:
@@ -215,7 +224,7 @@ async def _fetch_json(url: str, *, max_bytes: int = 12_000_000, attempts: int = 
         except (httpx.HTTPError, json.JSONDecodeError, RuntimeError, OSError, ValueError) as exc:
             last_error = exc
             if attempt + 1 < attempts:
-                await asyncio.sleep(0.5 * (2**attempt))
+                await asyncio.sleep(min(60, 2 * (2**attempt)))
     raise RuntimeError(str(last_error) or "source fetch failed") from last_error
 
 

@@ -133,24 +133,31 @@ async def _classify_batch(listings: list[SourceListing], profile: object) -> lis
     timeout_s = int(os.getenv("JOB_SEARCH_RELEVANCE_TIMEOUT_S", "120"))
     url = os.getenv("TYPESAFE_SYSTEM_ONE_URL", TYPESAFE_SYSTEM_ONE_URL)
     last_error: Exception | None = None
-    for attempt in range(3):
+    attempts = max(1, int(os.getenv("JOB_SEARCH_RELEVANCE_ATTEMPTS", "5")))
+    for attempt in range(attempts):
         try:
             async with httpx.AsyncClient(timeout=timeout_s, trust_env=False) as client:
                 response = await client.post(url, headers={
                     "Authorization": f"Bearer {api_key}", "Content-Type": "application/json",
                 }, json=request)
-            if response.status_code in {429, 500, 502, 503, 504} and attempt < 2:
-                await asyncio.sleep(0.5 * (2**attempt))
+            if response.status_code in {429, 500, 502, 503, 504} and attempt + 1 < attempts:
+                retry_after = response.headers.get("retry-after", "")
+                try:
+                    delay = float(retry_after)
+                except ValueError:
+                    delay = 0
+                await asyncio.sleep(min(60, max(delay, 2 * (2**attempt))))
                 continue
             response.raise_for_status()
             return _parse(response.json(), listings, profile)
         except (httpx.TransportError, httpx.HTTPStatusError, json.JSONDecodeError, ValueError) as exc:
             last_error = exc
-            if attempt < 2:
-                await asyncio.sleep(0.5 * (2**attempt))
+            if attempt + 1 < attempts:
+                await asyncio.sleep(min(60, 2 * (2**attempt)))
                 continue
             break
-    raise RuntimeError("TypeSafe Jev source-relevance classification failed.") from last_error
+    detail = str(last_error)[:500] if last_error else "unknown error"
+    raise RuntimeError(f"TypeSafe Jev source-relevance classification failed: {detail}") from last_error
 
 
 async def rank_source_listings(listings: list[SourceListing], profile: object,
@@ -159,8 +166,8 @@ async def rank_source_listings(listings: list[SourceListing], profile: object,
     if not listings:
         return [], {"state": "completed", "version": CLASSIFICATION_VERSION, "checked": 0, "selected": 0}
     try:
-        batch_size = int(os.getenv("JOB_SEARCH_RELEVANCE_BATCH_SIZE", "40"))
-        concurrency = max(1, int(os.getenv("JOB_SEARCH_RELEVANCE_CONCURRENCY", "4")))
+        batch_size = int(os.getenv("JOB_SEARCH_RELEVANCE_BATCH_SIZE", "80"))
+        concurrency = max(1, int(os.getenv("JOB_SEARCH_RELEVANCE_CONCURRENCY", "1")))
         semaphore = asyncio.Semaphore(concurrency)
 
         async def classify(batch: list[SourceListing]):

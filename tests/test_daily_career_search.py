@@ -11,7 +11,7 @@ from typer.testing import CliRunner
 from app import cli
 from app.services import daily_career_search as service
 from app.services.career_job_store import PROVIDER, merge_career_postings, preserve_career_postings, same_job
-from app.services.career_search_web import extract_page, public_url
+from app.services.career_search_web import extract_page, public_url, safe_redirect_target
 from app.services.pif_job_posting_research import _research_data_with_status, classify_job_posting, _finish_task
 from app.services.firm_intel_sync import _preserve_local_job_research
 
@@ -382,6 +382,20 @@ def test_page_extraction_keeps_embedded_official_job_board_source():
 async def test_private_source_is_rejected():
     with pytest.raises(ValueError, match="non-public"):
         await public_url("https://127.0.0.1/jobs")
+
+
+def test_same_site_http_redirect_is_upgraded_without_plaintext_fetch():
+    assert safe_redirect_target("https://vida.com", "http://www.vida.com/") == "https://www.vida.com/"
+    assert safe_redirect_target("https://www.example.com/jobs", "http://example.com/careers") == (
+        "https://example.com/careers"
+    )
+
+
+def test_cross_site_or_nonstandard_http_redirect_stays_blockable():
+    assert safe_redirect_target("https://example.com", "http://example.net/") == "http://example.net/"
+    assert safe_redirect_target("https://example.com", "http://example.com:8080/") == (
+        "http://example.com:8080/"
+    )
 
 
 @pytest.mark.asyncio

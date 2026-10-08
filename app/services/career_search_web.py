@@ -7,7 +7,7 @@ import json
 import random
 import socket
 from html.parser import HTMLParser
-from urllib.parse import urljoin, urlsplit
+from urllib.parse import urljoin, urlsplit, urlunsplit
 
 import httpx
 
@@ -30,6 +30,32 @@ async def public_url(url: str) -> str:
     if not addresses or any(not ipaddress.ip_address(item[4][0]).is_global for item in addresses):
         raise ValueError("non-public source address rejected")
     return url
+
+
+def safe_redirect_target(current: str, location: str) -> str:
+    """Upgrade only an HTTPS site's same-domain HTTP redirect back to HTTPS.
+
+    Some public sites redirect their HTTPS apex to an HTTP www URL and rely on
+    HSTS or another redirect to restore HTTPS. Never make that plaintext request:
+    rewrite exact/www-equivalent hosts to HTTPS, then let ``public_url`` validate
+    the rewritten destination normally. Cross-domain and nonstandard-port HTTP
+    redirects remain unchanged and are rejected on the next loop iteration.
+    """
+    target = urljoin(current, location)
+    source = urlsplit(current)
+    destination = urlsplit(target)
+    if source.scheme != "https" or destination.scheme != "http":
+        return target
+    source_host = (source.hostname or "").lower().removeprefix("www.")
+    destination_host = (destination.hostname or "").lower().removeprefix("www.")
+    try:
+        destination_port = destination.port
+    except ValueError:
+        return target
+    if not source_host or source_host != destination_host or destination_port not in (None, 80):
+        return target
+    host = destination.hostname or ""
+    return urlunsplit(("https", host, destination.path, destination.query, destination.fragment))
 
 
 class PageText(HTMLParser):
@@ -106,7 +132,7 @@ async def fetch_page(url: str, *, attempts: int = 3) -> dict:
                     await public_url(current)
                     async with client.stream("GET", current) as response:
                         if response.status_code in {301, 302, 303, 307, 308}:
-                            current = urljoin(current, response.headers["location"])
+                            current = safe_redirect_target(current, response.headers["location"])
                             continue
                         if response.status_code == 429 or response.status_code >= 500:
                             raise RuntimeError(f"HTTP {response.status_code}")
