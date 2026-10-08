@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime, timedelta, timezone
 import json
 from types import SimpleNamespace
@@ -63,6 +64,35 @@ async def test_himalayas_stops_after_first_fully_out_of_window_page(monkeypatch)
     assert result.pages_checked == 2
     assert len(result.listings) == 20
     assert fetch.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_structured_collection_records_source_timeout_and_continues(monkeypatch):
+    slow_target = target("slow")
+    monkeypatch.setattr(adapters, "DIRECT_SOURCE_IDS", {"slow"})
+    monkeypatch.setattr(adapters, "initialize_coverage", AsyncMock())
+    monkeypatch.setattr(adapters, "_catalog_target", lambda _item: slow_target)
+    monkeypatch.setattr(adapters, "_board_targets", AsyncMock(return_value=[]))
+    monkeypatch.setattr(adapters, "_start_source", AsyncMock())
+    finish = AsyncMock()
+    monkeypatch.setattr(adapters, "_finish_source", finish)
+
+    async def collector(*_args):
+        await asyncio.sleep(1)
+
+    async def timeout(awaitable, **_kwargs):
+        awaitable.close()
+        raise asyncio.TimeoutError
+
+    monkeypatch.setitem(adapters.COLLECTORS, "slow", collector)
+    monkeypatch.setattr(adapters.asyncio, "wait_for", timeout)
+    rows, summary = await adapters.collect_structured_sources(
+        "run-1", profile(), {"items": [{"id": "slow"}]})
+    assert rows == []
+    assert summary["errors"][0]["phase"] == "source_adapter"
+    assert "per-source timeout" in summary["errors"][0]["error"]
+    assert finish.await_args.args[2] is None
+    assert "per-source timeout" in str(finish.await_args.args[3])
 
 
 @pytest.mark.asyncio

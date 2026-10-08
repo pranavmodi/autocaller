@@ -592,14 +592,24 @@ async def collect_structured_sources(run_id: str, profile: Any, catalog: dict) -
     targets.extend(await _board_targets())
     cutoff = now_utc() - timedelta(days=profile.posted_within_days)
     semaphore = asyncio.Semaphore(int(os.getenv("JOB_SEARCH_ADAPTER_CONCURRENCY", "4")))
+    source_timeout_s = max(30, int(os.getenv("JOB_SEARCH_ADAPTER_TIMEOUT_S", "180")))
 
     async def collect(target: SourceTarget):
         async with semaphore:
             await _start_source(run_id, target)
             try:
-                result = await COLLECTORS[target.provider](target, cutoff, profile)
+                result = await asyncio.wait_for(
+                    COLLECTORS[target.provider](target, cutoff, profile),
+                    timeout=source_timeout_s,
+                )
                 await _finish_source(run_id, target, result, None)
                 return result.listings, None
+            except asyncio.TimeoutError:
+                exc = RuntimeError(
+                    f"Source collection exceeded the {source_timeout_s}s per-source timeout")
+                await _finish_source(run_id, target, None, exc)
+                return [], {"source_key": target.source_key, "source_url": target.source_url,
+                            "phase": "source_adapter", "error": str(exc)}
             except Exception as exc:
                 await _finish_source(run_id, target, None, exc)
                 return [], {"source_key": target.source_key, "source_url": target.source_url,
