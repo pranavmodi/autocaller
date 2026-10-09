@@ -43,6 +43,8 @@ export type Candidate = {
     authorized_at?: string | null; send_started_at?: string; prepared_at?: string; sent_at?: string;
     duplicate_checked_at?: string; verification_checked_at?: string; verification_next_at?: string | null;
     verification_rechecks?: number;
+    manual_applied_at?: string; manual_application_method?: "website" | "email" | "other";
+    manual_application_source?: "operator";
     recipient?: { email: string; name: string; reason: string; evidence: {
       source_url: string; text: string; source_type?: "public_page" | "possibleos_contact";
       contact_id?: string | null; source_name?: string | null; observed_at?: string | null;

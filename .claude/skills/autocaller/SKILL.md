@@ -38,6 +38,11 @@ selected resume and application stage. Use `classify ID` to retry classification
 has been started, including stopped research, ready drafts, queued or uncertain
 sends, and Sent-verified messages. Filter with `--status` or `--search`; listing is
 read-only.
+If the operator applied outside Possible OS, use `job-agent mark-applied ID
+--revision N [--method website|email|other]`. This records the operator's statement
+without inventing portal, email-delivery, or ATS evidence and prevents another
+automatic application. Use the same command with `--undo` to restore the prior
+draft or stopped state.
 `category ID --category KEY --revision N` manually overrides it. `prepare ID
 --revision N` researches and composes WITHOUT sending. `apply ID --revision N`
 explicitly authorizes one application via the official Zoho CLI. `verify-sent ID`

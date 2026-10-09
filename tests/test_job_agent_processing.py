@@ -50,11 +50,19 @@ def test_category_config_requires_unique_ids():
     ('not_started', 'running', 'in_progress'),
     ('sent_verified', 'waiting_for_answer', 'needs_attention'),
     ('not_started', 'submitted', 'completed'),
+    ('manually_applied', 'not_started', 'completed'),
     ('ready', 'not_started', 'draft_ready'),
     ('not_started', 'cancelled', 'stopped'),
 ])
 def test_unified_application_state_prioritizes_actionable_channel(email_status, website_status, expected):
     assert processing.unified_application_state(email_status, website_status) == expected
+
+
+def test_manual_application_request_is_explicit_and_typed():
+    request = processing.ManualApplicationRequest(revision=2, applied=True, method='website')
+    assert request.model_dump() == {'revision': 2, 'applied': True, 'method': 'website'}
+    with pytest.raises(ValidationError):
+        processing.ManualApplicationRequest(revision=2, applied=True, method='portal')
 
 
 def test_browser_application_view_keeps_compact_row_status():
@@ -1062,6 +1070,18 @@ async def test_classification_override_and_prepare_send_intent(monkeypatch, tmp_
                     'source_url': 'https://example.com/jobs/' + identity, 'description_summary': title}, status='new', note='Preserved', revision=1))
             await session.commit()
         await processing.enqueue_missing()
+        admin_initial = await processing.detail('admin')
+        marked = await processing.set_manual_application('admin', processing.ManualApplicationRequest(
+            revision=admin_initial['processing_revision'], applied=True, method='other'))
+        assert marked['application']['status'] == 'manually_applied'
+        assert marked['application']['manual_applied_at']
+        assert marked['application_state'] == 'completed'
+        repeated_manual = await processing.request_application('admin', processing.ApplicationRequest(
+            revision=marked['processing_revision'], mode='send'))
+        assert repeated_manual['application']['status'] == 'manually_applied'
+        unmarked = await processing.set_manual_application('admin', processing.ManualApplicationRequest(
+            revision=marked['processing_revision'], applied=False, method='other'))
+        assert unmarked['application']['status'] == 'not_started'
         async def model(mode, payload, fields):
             return {'decisions': [{'candidate_id': job['candidate_id'], 'category_id': 'ai_automation' if job['candidate_id'] != 'admin' else None,
                 'confidence': 0.95 if job['candidate_id'] == 'engineer' else 0.5, 'reason': 'Description-based match', 'tags': []} for job in payload['jobs']]}

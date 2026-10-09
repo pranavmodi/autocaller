@@ -289,9 +289,12 @@ async def test_discovery_ledger_filters_by_run_and_keeps_all_provenance(monkeypa
     class Result:
         def all(self): return rows
     class DiscoverySession:
+        calls = 0
         async def __aenter__(self): return self
         async def __aexit__(self, *args): pass
-        async def scalars(self, *args): return Result()
+        async def scalars(self, *args):
+            DiscoverySession.calls += 1
+            return Result() if DiscoverySession.calls == 1 else SimpleNamespace(all=lambda: [])
 
     monkeypatch.setattr(saved, 'ensure', AsyncMock())
     monkeypatch.setattr(saved, 'AsyncSessionLocal', DiscoverySession)

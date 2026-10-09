@@ -45,6 +45,7 @@ function applicationStatus(application: NonNullable<Candidate["application"]>) {
   if (status === "sending") return { title: "Send in progress", detail: "A Zoho send has started. Do not retry or send another copy while verification is pending.", tone: "sky" };
   if (status === "delivery_unconfirmed") return { title: "Send attempted — confirming Sent copy", detail: "Zoho accepted the send or returned an ambiguous result. The agent checks Sent automatically and will not resend the email.", tone: "amber" };
   if (status === "sent_verified") return { title: "Sent copy verified", detail: "The email and exact PDF were found in Zoho Sent. Recipient delivery and portal submission are not confirmed.", tone: "emerald" };
+  if (status === "manually_applied") return { title: "Marked as applied", detail: "You recorded this application manually. No website or email delivery evidence was inferred.", tone: "emerald" };
   return { title: "Application not started", detail: "Choose a draft or send action. The agent selects a resume, researches the company and prepares your email.", tone: "neutral" };
 }
 
@@ -128,7 +129,7 @@ export function JobApplicationControls({ job, categories }: { job: Candidate; ca
   const status = application?.status || "not_started";
   const statusRefreshFailed = detail.isError && ["queued", "preparing", "queued_send", "sending"].includes(status);
   const activelyProcessing = ["queued", "preparing", "queued_send", "sending"].includes(status) && !statusRefreshFailed;
-  const locked = ["queued", "preparing", "queued_send", "sending", "sent_verified", "delivery_unconfirmed"].includes(status);
+  const locked = ["queued", "preparing", "queued_send", "sending", "sent_verified", "delivery_unconfirmed", "manually_applied"].includes(status);
   const resumeLocked = locked || ["queued", "running", "paused", "blocked", "verifying", "waiting_for_answer", "human_control", "submitted", "submission_uncertain"].includes(data.form_status || "");
   const refresh = () => client.invalidateQueries({ queryKey: ["job-agent"] });
   const action = useMutation({ mutationFn: ({ endpoint, body }: { endpoint: string; body?: unknown }) => jobAgentRequest<Candidate>(`/jobs/${job.id}/${endpoint}`, body ?? {}), onSuccess: refresh });
@@ -145,6 +146,9 @@ export function JobApplicationControls({ job, categories }: { job: Candidate; ca
   const retryLabel = application?.failed_phase === "researching" ? "Retry source research" : "Retry preparation";
   const jobUrl = safeUrl(data.posting.source_url);
   const updateTime = timestamp(data.processing_updated_at);
+  const manuallyApplied = !!application?.manual_applied_at;
+  const canMarkApplied = !manuallyApplied && ["not_started", "failed", "needs_review", "ready"].includes(status)
+    && ["not_started", "cancelled", "not_tracked"].includes(data.form_status || "not_started");
   const statusTone = summary.tone === "emerald" ? "border-emerald-200 bg-emerald-50 text-emerald-900" : summary.tone === "amber" ? "border-amber-200 bg-amber-50 text-amber-950" : summary.tone === "sky" ? "border-sky-200 bg-sky-50 text-sky-950" : "border-neutral-200 bg-white text-neutral-900";
   return <div className="space-y-5">
     <section aria-label="Application resume" className="overflow-hidden rounded-2xl border border-violet-200 bg-violet-50/50 shadow-sm">
@@ -167,8 +171,9 @@ export function JobApplicationControls({ job, categories }: { job: Candidate; ca
     </section>
     {(action.error || detail.error) && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-red-900"><p className="text-sm font-semibold">The request could not be completed</p><p className="mt-1 text-sm">{(action.error || detail.error)?.message}</p>{detail.error && <button className={`${button} mt-3`} onClick={() => detail.refetch()}><RotateCcw className="h-4 w-4" />Reload status</button>}</div>}
     {jobUrl && <a href={jobUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-xs font-medium text-neutral-600 hover:text-neutral-900">View original job listing <ExternalLink className="h-3.5 w-3.5" /></a>}
-    <JobBrowserApplication job={data} />
-    <details className="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm" open={status !== "not_started"}>
+    {(manuallyApplied || canMarkApplied) && <section aria-label="Manual application status" className={`rounded-xl border p-4 ${manuallyApplied ? "border-emerald-200 bg-emerald-50" : "border-neutral-200 bg-neutral-50"}`}><div className="flex flex-wrap items-center justify-between gap-3"><div><p className={`text-sm font-semibold ${manuallyApplied ? "text-emerald-900" : "text-neutral-900"}`}>{manuallyApplied ? "You marked this job as applied" : "Already applied outside Job Agent?"}</p><p className={`mt-1 text-xs ${manuallyApplied ? "text-emerald-800" : "text-neutral-600"}`}>{manuallyApplied ? `Recorded ${timestamp(application?.manual_applied_at)}${application?.manual_application_method && application.manual_application_method !== "other" ? ` · ${readable(application.manual_application_method)}` : ""}. This is your record, not inferred submission evidence.` : "Record it here to prevent Job Agent from submitting another application."}</p></div><button className={manuallyApplied ? button : primary} disabled={action.isPending} onClick={() => action.mutate({ endpoint: "manual-application", body: { revision: data.processing_revision, applied: !manuallyApplied, method: "other" } })}>{action.isPending ? "Saving…" : manuallyApplied ? "Undo applied mark" : "Mark as applied"}</button></div></section>}
+    {!manuallyApplied && <JobBrowserApplication job={data} />}
+    {!manuallyApplied && <details className="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm" open={status !== "not_started"}>
       <summary className="cursor-pointer bg-neutral-50 p-5"><span className="inline-flex items-center gap-2 font-semibold text-neutral-900"><Mail className="h-5 w-5 text-neutral-600" />Apply by email</span><span className="mt-1 block text-xs text-neutral-500">Find a recruiting contact, prepare your email and send through Zoho.</span>{status !== "not_started" && <span className="mt-2 inline-block rounded-full border border-neutral-200 bg-white px-2.5 py-1 text-xs font-medium">{summary.title}</span>}</summary>
       <section aria-label="Email application" className="space-y-4 p-5">
     <div className="border-t border-neutral-200 pt-4">
@@ -188,5 +193,5 @@ export function JobApplicationControls({ job, categories }: { job: Candidate; ca
     {!locked && status !== "needs_review" && <p className="text-xs leading-relaxed text-neutral-500">Prepare draft researches and composes without sending. Prepare and send via Zoho authorizes one email after all checks pass.</p>}
     {status === "needs_review" && application?.retryable === false && <p className="text-xs leading-relaxed text-amber-800">This issue needs manual review. Retrying is disabled because it could create a duplicate application.</p>}
     {job.posting.status === "closed" && <p className="text-xs text-amber-800">Application actions are disabled because the source marks this job closed.</p>}
-  </section></details></div>;
+  </section></details>}</div>;
 }

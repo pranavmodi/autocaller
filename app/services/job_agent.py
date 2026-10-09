@@ -1033,7 +1033,8 @@ async def candidates(status: ReviewStatus | None = None, search: str = "", page:
                 browser_status.in_(("blocked", "submission_uncertain")),
             ), 1),
             (processing_status == "ready", 2),
-            (or_(processing_status == "sent_verified", browser_status == "submitted"), 3),
+            (or_(processing_status.in_(("sent_verified", "manually_applied")),
+                 browser_status == "submitted"), 3),
             else_=4,
         )
         latest_activity = func.greatest(

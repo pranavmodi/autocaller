@@ -312,6 +312,11 @@ async def application(identity: str, body: processing.ApplicationRequest):
     return await processing_response(processing.request_application(identity, body))
 
 
+@router.post('/jobs/{identity}/manual-application')
+async def manual_application(identity: str, body: processing.ManualApplicationRequest):
+    return await processing_response(processing.set_manual_application(identity, body))
+
+
 @router.post('/jobs/{identity}/verify-sent')
 async def verify_sent(identity: str):
     return await processing_response(processing.verify_application(identity))

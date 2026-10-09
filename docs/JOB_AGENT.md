@@ -451,6 +451,12 @@ time. Repeated discoveries are grouped by the canonical source URL and, once a j
 has entered the queue, its canonical candidate ID. Filters can narrow the view by
 saved search, exact run, outcome, title, employer or location. This view creates no second job
 store and does not change the canonical application queue.
+This ledger is the default Searches view. **Saved searches** remains available from
+the workspace toggle, while a `run=RUN_ID` deep link opens that run directly.
+Saved jobs can be marked **Applied** from the ledger or job modal. This creates an
+operator-declared application record with its timestamp; it does not claim website
+confirmation, email delivery or ATS evidence. The mark prevents a second automatic
+application and can be undone to restore the previous draft/stopped state.
 
 Rediscovered jobs are verified again and appear in this run, labelled **Already
 in your queue**. Canonical employer-scoped URL/requisition deduplication remains

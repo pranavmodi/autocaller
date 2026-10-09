@@ -1565,6 +1565,7 @@ and it does not cancel an independent email application or change job review.
 | `job-agent search-results RUN_ID` | Snapshot, sources, per-job outcomes, queue links and errors |
 | `job-agent search-coverage RUN_ID` | Per-source adapter status, pages/listings checked, shortlist counts, failures and closure reconciliation |
 | `job-agent search-listings RUN_ID [--view all\|selected\|match\|possible\|unrelated\|pending\|error] [--search TEXT] [--source-key KEY] [--page N] [--page-size N]` | Every normalized structured listing collected for the run, including its saved Jev judgment, probabilities, selected state and screening error |
+| `job-agent mark-applied JOB_ID --revision N [--method website\|email\|other] [--undo]` | Record or remove an operator-declared application without claiming delivery evidence |
 | `job-agent source-boards` | Learned employer ATS boards and their last successful synchronization state |
 | `job-agent source-boards-discover` | Register supported ATS boards from already verified employer jobs |
 

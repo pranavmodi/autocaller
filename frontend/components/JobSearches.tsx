@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Play, Settings2, Clock, Loader2, ArrowUpRight, ChevronLeft, Tags } from "lucide-react";
+import { Plus, Play, Settings2, Clock, Loader2, ArrowUpRight, ChevronLeft, Tags, CheckCircle2 } from "lucide-react";
 import { jobAgentRequest as request, type Candidate, type Overview } from "@/lib/job-agent";
 
 type Mode = "required" | "preferred";
@@ -47,7 +47,8 @@ type DiscoveryOccurrence = { candidate_id?: string; job_url?: string; title: str
   found_at: string; run_started_at: string };
 type DiscoveryJob = { id: string; candidate_id?: string; job_url?: string; title: string; employer_name: string;
   location: string; posted_date?: string; source: string; latest_outcome: string; latest_reason: string;
-  saved_to_queue: boolean; first_found_at: string; latest_found_at: string; discoveries: DiscoveryOccurrence[] };
+  saved_to_queue: boolean; first_found_at: string; latest_found_at: string; discoveries: DiscoveryOccurrence[];
+  application_status?: string; manually_applied_at?: string | null };
 type DiscoveryPage = { items: DiscoveryJob[]; total: number; occurrences: number; page: number;
   page_size: number; total_pages: number; filters: {
     searches: { id: string; name: string }[];
@@ -70,7 +71,7 @@ export default function JobSearches({ overview, onOpen }: { overview: Overview; 
   const client = useQueryClient();
   const [edit, setEdit] = useState<Saved | null>(null);
   const [runId, setRunId] = useState("");
-  const [workspace, setWorkspace] = useState<"searches" | "discoveries">("searches");
+  const [workspace, setWorkspace] = useState<"searches" | "discoveries">("discoveries");
   useEffect(() => { const saved = new URLSearchParams(window.location.search).get('run'); if (saved) { setRunId(saved); setWorkspace("searches"); } }, []);
   useEffect(() => {
     if (!runId) return;
@@ -160,12 +161,14 @@ export default function JobSearches({ overview, onOpen }: { overview: Overview; 
 
 function DiscoveryLedger({ onOpen, onOpenRun }: { onOpen: (job: Candidate) => void;
   onOpenRun: (identity: string) => void }) {
+  const client = useQueryClient();
   const [term, setTerm] = useState("");
   const [searchId, setSearchId] = useState("");
   const [runId, setRunId] = useState("");
   const [outcome, setOutcome] = useState("");
   const [page, setPage] = useState(1);
   const [error, setError] = useState("");
+  const [marking, setMarking] = useState("");
   const query = useQuery({
     queryKey: ["job-agent", "search-discoveries", term, searchId, runId, outcome, page],
     queryFn: () => request<DiscoveryPage>(`/search-discoveries?search=${encodeURIComponent(term)}&search_id=${encodeURIComponent(searchId)}&run_id=${encodeURIComponent(runId)}&outcome=${encodeURIComponent(outcome)}&page=${page}&page_size=25`),
@@ -176,6 +179,18 @@ function DiscoveryLedger({ onOpen, onOpenRun }: { onOpen: (job: Candidate) => vo
     try { onOpen(await request<Candidate>(`/jobs/${identity}`)); }
     catch (e) { setError(e instanceof Error ? e.message : "Could not open the saved job."); }
   }
+  async function markApplied(item: DiscoveryJob) {
+    if (!item.candidate_id) return;
+    setMarking(item.id); setError("");
+    try {
+      const job = await request<Candidate>(`/jobs/${item.candidate_id}`);
+      await request<Candidate>(`/jobs/${item.candidate_id}/manual-application`, {
+        revision: job.processing_revision, applied: !item.manually_applied_at, method: "other",
+      });
+      await client.invalidateQueries({ queryKey: ["job-agent"] });
+    } catch (e) { setError(e instanceof Error ? e.message : "Could not update the application status."); }
+    finally { setMarking(""); }
+  }
   const value = query.data;
   return <section className="rounded-2xl border border-violet-200 bg-white p-5">
     <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-xs font-medium uppercase tracking-widest text-violet-600">Discovery history</p><h3 className="mt-1 text-lg font-semibold">Jobs found across every search run</h3><p className="mt-1 text-sm text-slate-600">One row per job. The tags retain every search and run that found it, including excluded, failed and repeated discoveries.</p></div>{value && <div className="text-right"><p className="text-2xl font-semibold">{value.total}</p><p className="text-xs text-slate-500">unique jobs · {value.occurrences} findings</p></div>}</div>
@@ -185,7 +200,7 @@ function DiscoveryLedger({ onOpen, onOpenRun }: { onOpen: (job: Candidate) => vo
     {value && !value.items.length && <p className="py-8 text-center text-sm text-slate-500">No discovered jobs match these filters.</p>}
     <div className="mt-4 space-y-3">{value?.items.map(item => <article key={item.id} className="rounded-xl border border-slate-200 p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div>{item.job_url ? <a className="font-semibold text-sky-700 underline" href={url(item.job_url)} target="_blank" rel="noreferrer">{item.title}</a> : <h4 className="font-semibold">{item.title}</h4>}<p className="mt-1 text-sm text-slate-600">{item.employer_name}{item.location ? ` · ${item.location}` : ""}</p><p className="mt-1 text-xs text-slate-500">{item.source} · first found {date(item.first_found_at)} · latest {date(item.latest_found_at)}</p></div><div className="flex flex-wrap gap-2"><Badge value={item.latest_outcome} />{item.saved_to_queue && <Badge value="saved to jobs" />}</div></div>{item.latest_reason && <p className="mt-3 text-sm text-slate-700">{item.latest_reason}</p>}
       <div className="mt-3 flex flex-wrap gap-2" aria-label="Discovery provenance">{item.discoveries.map(discovery => <button key={`${discovery.run_id}-${discovery.found_at}`} className="rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-left text-xs text-violet-950 hover:bg-violet-100" title={`Open full run ${discovery.run_id}`} onClick={() => onOpenRun(discovery.run_id)}><span className="font-semibold">{discovery.search_name}</span><span className="ml-1 text-violet-700">· {discovery.run_id.slice(0, 8)}</span><br/><span>{date(discovery.found_at)} · {readable(discovery.trigger)} · {readable(discovery.outcome)}</span></button>)}</div>
-      {item.candidate_id && <button className={`${button} mt-3`} onClick={() => openCandidate(item.candidate_id!)}>Open saved job</button>}
+      {item.candidate_id && <div className="mt-3 flex flex-wrap gap-2"><button className={button} onClick={() => openCandidate(item.candidate_id!)}>Open saved job</button>{(["not_started","failed","needs_review","ready","manually_applied"].includes(item.application_status || "not_started")) && <button className={item.manually_applied_at ? button : primary} disabled={marking === item.id} onClick={() => markApplied(item)}>{marking === item.id ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}{marking === item.id ? "Saving…" : item.manually_applied_at ? "Undo applied mark" : "Mark as applied"}</button>}</div>}
     </article>)}</div>
     {value && value.total_pages > 1 && <div className="mt-4 flex items-center justify-between text-xs text-slate-600"><span>Page {value.page} of {value.total_pages} · {value.total} jobs</span><div className="flex gap-2"><button className={button} disabled={value.page <= 1} onClick={() => setPage(old => Math.max(1, old - 1))}>Previous</button><button className={button} disabled={value.page >= value.total_pages} onClick={() => setPage(old => old + 1)}>Next</button></div></div>}
   </section>;

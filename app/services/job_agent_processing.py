@@ -63,6 +63,13 @@ class ApplicationRequest(BaseModel):
     mode: Literal['prepare', 'send'] = 'prepare'
 
 
+class ManualApplicationRequest(BaseModel):
+    model_config = ConfigDict(extra='forbid', strict=True)
+    revision: int = Field(ge=1)
+    applied: bool
+    method: Literal['website', 'email', 'other'] = 'other'
+
+
 ApplicationOrder = Literal['updated_desc', 'firm_asc', 'role_asc']
 APPLICATION_STATES = {'in_progress', 'needs_attention', 'completed', 'draft_ready', 'stopped'}
 
@@ -131,7 +138,8 @@ def browser_application_view(row):
     }
 
 
-def unified_application_state(email_status: str, website_status: str) -> str:
+def unified_application_state(email_status: str, website_status: str,
+                              manually_applied: bool = False) -> str:
     """Choose one job-level status without discarding either application channel."""
     if email_status in {'queued', 'preparing', 'queued_send', 'sending'} or website_status in {
             'queued', 'running', 'verifying'}:
@@ -139,7 +147,7 @@ def unified_application_state(email_status: str, website_status: str) -> str:
     if email_status in {'needs_review', 'delivery_unconfirmed', 'failed'} or website_status in {
             'waiting_for_answer', 'blocked', 'submission_uncertain', 'human_control', 'paused'}:
         return 'needs_attention'
-    if email_status == 'sent_verified' or website_status == 'submitted':
+    if manually_applied or email_status in {'sent_verified', 'manually_applied'} or website_status == 'submitted':
         return 'completed'
     if email_status == 'ready':
         return 'draft_ready'
@@ -181,12 +189,14 @@ async def attach_details(session, rows):
         browser_data = browser_application_view(browser_runs.get(row.id))
         email_status = processing_data['application']['status']
         website_status = browser_data['status']
+        manually_applied = bool(processing_data['application'].get('manual_applied_at'))
         updated_values = [value for value in (
             processing_data.get('processing_updated_at'), browser_data.get('updated_at')) if value]
         items.append({**serialized, **processing_data,
                       'form_status': website_status,
                       'browser_application': browser_data,
-                      'application_state': unified_application_state(email_status, website_status),
+                      'application_state': unified_application_state(
+                          email_status, website_status, manually_applied),
                       'application_updated_at': max(updated_values) if updated_values else None,
                       'contact': contact_view})
     return items
@@ -307,7 +317,8 @@ async def choose_category(identity, request: CategoryChoice):
             raise KeyError(identity)
         if row.revision != request.revision:
             raise ValueError('This job changed. Reload before changing its category.')
-        if row.application_status in {'queued', 'preparing', 'queued_send', 'sending', 'sent_verified', 'delivery_unconfirmed'}:
+        if row.application_status in {'queued', 'preparing', 'queued_send', 'sending', 'sent_verified',
+                                      'delivery_unconfirmed', 'manually_applied'}:
             raise ValueError('The application is in progress or already sent. Its category is locked.')
         state = await session.get(core.JobAgentState, 'default')
         config = core.saved_config(state.config) if state else core.JobAgentConfig()
@@ -685,7 +696,9 @@ async def request_application(identity, request: ApplicationRequest):
         if not row:
             raise KeyError(identity)
         # Repeated clicks never create a second send.
-        if row.application_status in {'queued', 'preparing', 'queued_send', 'sending', 'sent_verified', 'delivery_unconfirmed'}:
+        if row.application.get('manual_applied_at') or row.application_status in {
+                'queued', 'preparing', 'queued_send', 'sending', 'sent_verified',
+                'delivery_unconfirmed', 'manually_applied'}:
             return await detail(identity)
         if row.revision != request.revision:
             raise ValueError('This job changed. Reload before applying.')
@@ -720,6 +733,87 @@ async def request_application(identity, request: ApplicationRequest):
             details={'candidate_id': identity, 'mode': request.mode, 'category_id': category.id if category else None}))
         await session.commit()
     _wakeup.set()
+    return await detail(identity)
+
+
+async def set_manual_application(identity: str, request: ManualApplicationRequest):
+    """Record or remove an operator-declared application without inventing transport evidence."""
+    await enqueue_missing()
+    from app.services.job_browser import ACTIVE, BrowserRun
+    async with core.AsyncSessionLocal() as session:
+        row = await session.get(JobProcessing, identity, with_for_update=True)
+        candidate = await session.get(core.JobAgentCandidate, identity)
+        if not row or not candidate:
+            raise KeyError(identity)
+        if row.revision != request.revision:
+            raise ValueError('This job changed. Reload before updating its application status.')
+        application = dict(row.application or {})
+        if request.applied:
+            if application.get('manual_applied_at'):
+                await session.commit()
+                return await detail(identity)
+            browser = await session.get(BrowserRun, identity)
+            if browser and browser.status in {*ACTIVE, 'waiting_for_answer', 'human_control', 'paused',
+                                               'blocked', 'submission_uncertain'}:
+                raise ValueError('Pause and quit the active website application before marking this job as applied.')
+            if row.application_status not in {'not_started', 'failed', 'needs_review', 'ready'}:
+                if row.application_status in {'sent_verified'} or (browser and browser.status == 'submitted'):
+                    await session.commit()
+                    return await detail(identity)
+                raise ValueError('Finish or stop the active email application before marking this job as applied.')
+            applied_at = core.now().isoformat()
+            application.update({
+                'manual_applied_at': applied_at,
+                'manual_application_method': request.method,
+                'manual_application_source': 'operator',
+                'manual_previous_status': row.application_status,
+                'manual_previous_phase': application.get('phase'),
+                'manual_previous_stage': application.get('stage'),
+                'manual_previous_retryable': application.get('retryable'),
+                'manual_had_retryable': 'retryable' in application,
+                'phase': 'manually_applied',
+                'stage': 'Marked as applied by you',
+                'retryable': False,
+            })
+            row.application_status = 'manually_applied'
+            event_kind = 'application_marked_applied'
+            event_message = 'Job marked as applied by operator'
+        else:
+            if not application.get('manual_applied_at'):
+                await session.commit()
+                return await detail(identity)
+            previous = str(application.get('manual_previous_status') or 'not_started')
+            if previous not in {'not_started', 'failed', 'needs_review', 'ready'}:
+                previous = 'not_started'
+            previous_phase = application.get('manual_previous_phase')
+            previous_stage = application.get('manual_previous_stage')
+            previous_retryable = application.get('manual_previous_retryable')
+            had_retryable = application.get('manual_had_retryable') is True
+            for key in ('manual_applied_at', 'manual_application_method', 'manual_application_source',
+                        'manual_previous_status', 'manual_previous_phase', 'manual_previous_stage',
+                        'manual_previous_retryable', 'manual_had_retryable'):
+                application.pop(key, None)
+            if previous_phase is None:
+                application.pop('phase', None)
+            else:
+                application['phase'] = previous_phase
+            if previous_stage is None:
+                application.pop('stage', None)
+            else:
+                application['stage'] = previous_stage
+            if had_retryable:
+                application['retryable'] = previous_retryable
+            else:
+                application.pop('retryable', None)
+            row.application_status = previous
+            event_kind = 'application_mark_removed'
+            event_message = 'Manual applied mark removed by operator'
+        row.application = application
+        row.revision += 1
+        row.updated_at = core.now()
+        session.add(core.JobAgentEvent(kind=event_kind, message=event_message,
+            details={'candidate_id': identity, 'method': request.method}))
+        await session.commit()
     return await detail(identity)
 
 

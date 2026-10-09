@@ -444,8 +444,21 @@ async def discoveries(*, search: str = '', search_id: str = '', outcome: str = '
                  or term in (item['location'] or '').casefold()]
     total = len(items)
     start = (page - 1) * page_size
+    page_items = items[start:start + page_size]
+    candidate_ids = [item['candidate_id'] for item in page_items if item['candidate_id']]
+    if candidate_ids:
+        from app.services.job_agent_processing import JobProcessing
+        async with AsyncSessionLocal() as session:
+            processing_rows = (await session.scalars(select(JobProcessing).where(
+                JobProcessing.candidate_id.in_(candidate_ids)))).all()
+        processing_by_candidate = {row.candidate_id: row for row in processing_rows}
+        for item in page_items:
+            processing = processing_by_candidate.get(item['candidate_id'])
+            application = dict(processing.application or {}) if processing else {}
+            item['application_status'] = processing.application_status if processing else 'not_started'
+            item['manually_applied_at'] = application.get('manual_applied_at')
     return {
-        'items': items[start:start + page_size],
+        'items': page_items,
         'total': total,
         'occurrences': sum(len(item['discoveries']) for item in items),
         'page': page,

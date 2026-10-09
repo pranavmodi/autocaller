@@ -696,6 +696,8 @@ async def start(identity, request: StartRequest):
         proc = await session.get(processing.JobProcessing, identity, with_for_update=True)
         if not proc or proc.revision != request.revision:
             raise ValueError('This job changed. Refresh before starting the browser application.')
+        if proc.application.get('manual_applied_at') or proc.application_status == 'manually_applied':
+            raise ValueError('This job is already marked as applied. Remove that mark before starting another application.')
         settings = await session.get(core.JobAgentState, 'default')
         config = core.saved_config(settings.config) if settings else core.JobAgentConfig()
         ai_settings = provider_settings(config, request.provider, request.model)

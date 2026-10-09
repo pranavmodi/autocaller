@@ -227,6 +227,14 @@ def register(app, get, post, console):
         """Authorize this job's application email through Zoho CLI."""
         output(post(f"/api/job-agent/jobs/{identity}/application", {"mode": "send", "revision": revision}))
 
+    @group.command("mark-applied")
+    def mark_applied(identity: str, revision: int = typer.Option(..., min=1),
+                     method: str = typer.Option("other", "--method"),
+                     undo: bool = typer.Option(False, "--undo")):
+        """Record or remove an operator-declared application without claiming delivery evidence."""
+        output(post(f"/api/job-agent/jobs/{identity}/manual-application",
+                    {"revision": revision, "applied": not undo, "method": method}))
+
     @group.command("verify-sent")
     def verify_sent(identity: str):
         """Check Zoho Sent and PDF hash; never resends a message."""
