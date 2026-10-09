@@ -45,12 +45,13 @@ def register(app, get, post, console):
     @group.command("search-discoveries")
     def search_discoveries(search: str = typer.Option('', '--search'),
                            search_id: str = typer.Option('', '--search-id'),
+                           run_id: str = typer.Option('', '--run-id'),
                            outcome: str = typer.Option('', '--outcome'),
                            page: int = typer.Option(1, min=1),
                            page_size: int = typer.Option(25, min=1, max=100)):
         """List jobs found across all searches and runs with discovery provenance."""
         output(get('/api/job-agent/search-discoveries', search=search or None,
-                   search_id=search_id or None, outcome=outcome or None,
+                   search_id=search_id or None, run_id=run_id or None, outcome=outcome or None,
                    page=page, page_size=page_size))
 
     @group.command("search-results")

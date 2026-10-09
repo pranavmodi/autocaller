@@ -401,7 +401,7 @@ def _group_discoveries(occurrences: list[dict]) -> list[dict]:
 
 
 async def discoveries(*, search: str = '', search_id: str = '', outcome: str = '',
-                      page: int = 1, page_size: int = 25) -> dict:
+                      run_id: str = '', page: int = 1, page_size: int = 25) -> dict:
     """Read every final discovery across every saved-search run.
 
     This is a projection over immutable run history. It does not create another
@@ -415,10 +415,25 @@ async def discoveries(*, search: str = '', search_id: str = '', outcome: str = '
     async with AsyncSessionLocal() as session:
         rows = (await session.scalars(select(CareerSearchRunRow)
             .order_by(CareerSearchRunRow.started_at.desc()))).all()
-    items = _group_discoveries(_discovery_occurrences(list(rows)))
+    all_occurrences = _discovery_occurrences(list(rows))
+    search_options = {}
+    run_options = {}
+    for occurrence in all_occurrences:
+        if occurrence['search_id']:
+            search_options[occurrence['search_id']] = {
+                'id': occurrence['search_id'], 'name': occurrence['search_name']}
+        run_options[occurrence['run_id']] = {
+            'id': occurrence['run_id'], 'search_id': occurrence['search_id'],
+            'search_name': occurrence['search_name'], 'status': occurrence['run_status'],
+            'trigger': occurrence['trigger'], 'started_at': occurrence['run_started_at'],
+        }
+    items = _group_discoveries(all_occurrences)
     if search_id:
         items = [item for item in items if any(
             discovery['search_id'] == search_id for discovery in item['discoveries'])]
+    if run_id:
+        items = [item for item in items if any(
+            discovery['run_id'] == run_id for discovery in item['discoveries'])]
     if outcome:
         items = [item for item in items if any(
             discovery['outcome'] == outcome for discovery in item['discoveries'])]
@@ -436,6 +451,10 @@ async def discoveries(*, search: str = '', search_id: str = '', outcome: str = '
         'page': page,
         'page_size': page_size,
         'total_pages': max(1, (total + page_size - 1) // page_size),
+        'filters': {
+            'searches': sorted(search_options.values(), key=lambda item: item['name'].casefold()),
+            'runs': sorted(run_options.values(), key=lambda item: item['started_at'], reverse=True),
+        },
     }
 
 async def draft(body: ParseSearch):

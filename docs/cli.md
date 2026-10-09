@@ -1561,7 +1561,7 @@ and it does not cancel an independent email application or change job review.
 | `job-agent search-save --id ID --revision N --file config.json` | Edit targeting or schedule with conflict protection |
 | `job-agent search-run ID` | Queue once and return durable run ID |
 | `job-agent search-runs [--search-id ID] [--page N]` | Paginated complete history |
-| `job-agent search-discoveries [--search TEXT] [--search-id ID] [--outcome OUTCOME] [--page N] [--page-size N]` | Deduplicated jobs found across every run, with search/run/time provenance tags |
+| `job-agent search-discoveries [--search TEXT] [--search-id ID] [--run-id ID] [--outcome OUTCOME] [--page N] [--page-size N]` | Deduplicated jobs found across every run, with search/run/time provenance tags |
 | `job-agent search-results RUN_ID` | Snapshot, sources, per-job outcomes, queue links and errors |
 | `job-agent search-coverage RUN_ID` | Per-source adapter status, pages/listings checked, shortlist counts, failures and closure reconciliation |
 | `job-agent search-listings RUN_ID [--view all\|selected\|match\|possible\|unrelated\|pending\|error] [--search TEXT] [--source-key KEY] [--page N] [--page-size N]` | Every normalized structured listing collected for the run, including its saved Jev judgment, probabilities, selected state and screening error |

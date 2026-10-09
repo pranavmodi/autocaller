@@ -278,6 +278,31 @@ def test_discovery_ledger_excludes_manual_url_import_runs():
 
 
 @pytest.mark.asyncio
+async def test_discovery_ledger_filters_by_run_and_keeps_all_provenance(monkeypatch):
+    rows = [SimpleNamespace(id=f'run-{index}', status='completed',
+        started_at=datetime(2026, 10, index, tzinfo=timezone.utc), result={
+            'saved_search_id':f'search-{index}', 'search_profile':{'name':f'Search {index}'},
+            'results':[{'candidate':{'source_url':f'https://example.com/jobs/{index}',
+                'title':'Engineer','firm_name':'Example'}, 'candidate_id':'same-candidate',
+                'outcome':'match','reason':'Match'}]}) for index in (1, 2)]
+
+    class Result:
+        def all(self): return rows
+    class DiscoverySession:
+        async def __aenter__(self): return self
+        async def __aexit__(self, *args): pass
+        async def scalars(self, *args): return Result()
+
+    monkeypatch.setattr(saved, 'ensure', AsyncMock())
+    monkeypatch.setattr(saved, 'AsyncSessionLocal', DiscoverySession)
+    value = await saved.discoveries(run_id='run-1')
+    assert value['total'] == 1
+    assert len(value['items'][0]['discoveries']) == 2
+    assert {item['id'] for item in value['filters']['runs']} == {'run-1', 'run-2'}
+    assert {item['id'] for item in value['filters']['searches']} == {'search-1', 'search-2'}
+
+
+@pytest.mark.asyncio
 async def test_discovery_is_checkpointed_before_slow_identity_repair(monkeypatch):
     from tests.test_daily_career_search import candidate
     from app.services import job_search_relevance, job_search_source_adapters, job_search_sources

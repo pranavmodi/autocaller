@@ -449,7 +449,7 @@ It shows one row per canonical job and keeps a provenance tag for every search/r
 that found it, including the search name, run ID, trigger, outcome and discovery
 time. Repeated discoveries are grouped by the canonical source URL and, once a job
 has entered the queue, its canonical candidate ID. Filters can narrow the view by
-saved search, outcome, title, employer or location. This view creates no second job
+saved search, exact run, outcome, title, employer or location. This view creates no second job
 store and does not change the canonical application queue.
 
 Rediscovered jobs are verified again and appear in this run, labelled **Already

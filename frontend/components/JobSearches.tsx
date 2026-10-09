@@ -49,7 +49,10 @@ type DiscoveryJob = { id: string; candidate_id?: string; job_url?: string; title
   location: string; posted_date?: string; source: string; latest_outcome: string; latest_reason: string;
   saved_to_queue: boolean; first_found_at: string; latest_found_at: string; discoveries: DiscoveryOccurrence[] };
 type DiscoveryPage = { items: DiscoveryJob[]; total: number; occurrences: number; page: number;
-  page_size: number; total_pages: number };
+  page_size: number; total_pages: number; filters: {
+    searches: { id: string; name: string }[];
+    runs: { id: string; search_id?: string; search_name: string; status: string; trigger: string; started_at: string }[];
+  } };
 type Detail = Run & { activity?: Activity[]; settings: Record<string, unknown>; results: Result[]; queries: string[]; sources: string[];
   source_checks: { url: string; status: string; reason: string }[];
   coverage?: Coverage; errors_detail: { source_url?: string; phase?: string; error?: string }[]; legacy: boolean };
@@ -111,7 +114,7 @@ export default function JobSearches({ overview, onOpen }: { overview: Overview; 
   return <section role="tabpanel" id="panel-searches" aria-labelledby="tab-searches" className="space-y-5">
     <div className="rounded-2xl bg-slate-900 p-6 text-white"><div className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-xs font-medium uppercase tracking-widest text-sky-300">Discovery workspace</p><h2 className="mt-2 text-xl font-semibold">Focused searches. Traceable results.</h2><p className="mt-2 max-w-2xl text-sm text-slate-300">Save separate searches for different career paths. Every run keeps its settings, findings and explanations. Searching never submits an application.</p></div><div className="flex flex-wrap gap-2"><button className={button + " text-slate-900"} onClick={() => { setWorkspace(workspace === "discoveries" ? "searches" : "discoveries"); setEdit(null); setRunId(""); }}><Tags size={16} />{workspace === "discoveries" ? "Saved searches" : "All discovered jobs"}</button><button className={button + " text-slate-900"} onClick={() => { setWorkspace("searches"); setInferenceChanged(false); setEdit(fresh()); setRunId(""); }}><Plus size={16} />New search</button></div></div></div>
     {(error || searches.error || detail.error) && <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">{error || String(searches.error || detail.error)}<button className="ml-3 underline" onClick={() => { setError(""); refresh(); }}>Refresh</button></div>}
-    {workspace === "discoveries" && !edit && !runId && <DiscoveryLedger searches={searches.data?.items || []} onOpen={onOpen} onOpenRun={identity => { setWorkspace("searches"); setRunId(identity); }} />}
+    {workspace === "discoveries" && !edit && !runId && <DiscoveryLedger onOpen={onOpen} onOpenRun={identity => { setWorkspace("searches"); setRunId(identity); }} />}
     {workspace === "searches" && edit && <form className="space-y-5 rounded-2xl border border-sky-200 bg-sky-50/50 p-5" onSubmit={e => { e.preventDefault(); act("save", saveSearch); }}>
       <div className="flex items-center justify-between"><h3 className="font-semibold">{edit.id ? "Edit search" : "Create search"}</h3><button type="button" className={button} onClick={() => setEdit(null)}>Cancel</button></div>
       <div className="rounded-xl border border-slate-200 bg-white p-4"><div className="grid gap-4 sm:grid-cols-2"><label className={label}>Search AI provider<select className={input} value={edit.config.ai_provider || 'openai'} onChange={e => update('ai_provider', e.target.value as Config['ai_provider'])}><option value="openai">OpenAI API</option><option value="gateway">OpenClaw gateway</option></select></label>{edit.config.ai_provider === 'openai' && <label className={label}>OpenAI search model<input required className={input} value={edit.config.openai_model || 'gpt-5.6-luna'} onChange={e => update('openai_model', e.target.value)} /></label>}</div><p className="mt-3 text-xs text-slate-500">{edit.config.ai_provider === 'openai' ? 'Uses the server API key and API billing, with OpenAI web search. No gateway fallback.' : 'Uses the OpenClaw research agent and its web tools.'} Applies to this search’s settings assistant and future manual or scheduled runs. Existing runs retain their provider. Application providers are configured separately.</p></div>
@@ -155,16 +158,17 @@ export default function JobSearches({ overview, onOpen }: { overview: Overview; 
   </section>;
 }
 
-function DiscoveryLedger({ searches, onOpen, onOpenRun }: { searches: Saved[]; onOpen: (job: Candidate) => void;
+function DiscoveryLedger({ onOpen, onOpenRun }: { onOpen: (job: Candidate) => void;
   onOpenRun: (identity: string) => void }) {
   const [term, setTerm] = useState("");
   const [searchId, setSearchId] = useState("");
+  const [runId, setRunId] = useState("");
   const [outcome, setOutcome] = useState("");
   const [page, setPage] = useState(1);
   const [error, setError] = useState("");
   const query = useQuery({
-    queryKey: ["job-agent", "search-discoveries", term, searchId, outcome, page],
-    queryFn: () => request<DiscoveryPage>(`/search-discoveries?search=${encodeURIComponent(term)}&search_id=${encodeURIComponent(searchId)}&outcome=${encodeURIComponent(outcome)}&page=${page}&page_size=25`),
+    queryKey: ["job-agent", "search-discoveries", term, searchId, runId, outcome, page],
+    queryFn: () => request<DiscoveryPage>(`/search-discoveries?search=${encodeURIComponent(term)}&search_id=${encodeURIComponent(searchId)}&run_id=${encodeURIComponent(runId)}&outcome=${encodeURIComponent(outcome)}&page=${page}&page_size=25`),
     refetchInterval: 10000,
   });
   async function openCandidate(identity: string) {
@@ -175,7 +179,7 @@ function DiscoveryLedger({ searches, onOpen, onOpenRun }: { searches: Saved[]; o
   const value = query.data;
   return <section className="rounded-2xl border border-violet-200 bg-white p-5">
     <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-xs font-medium uppercase tracking-widest text-violet-600">Discovery history</p><h3 className="mt-1 text-lg font-semibold">Jobs found across every search run</h3><p className="mt-1 text-sm text-slate-600">One row per job. The tags retain every search and run that found it, including excluded, failed and repeated discoveries.</p></div>{value && <div className="text-right"><p className="text-2xl font-semibold">{value.total}</p><p className="text-xs text-slate-500">unique jobs · {value.occurrences} findings</p></div>}</div>
-    <div className="mt-4 grid gap-2 md:grid-cols-3"><input className={input} aria-label="Search discovered jobs" placeholder="Search role, employer or location…" value={term} onChange={event => { setTerm(event.target.value); setPage(1); }} /><select className={input} aria-label="Filter discoveries by saved search" value={searchId} onChange={event => { setSearchId(event.target.value); setPage(1); }}><option value="">All searches</option>{searches.map(item => <option key={item.id} value={item.id}>{item.config.name}</option>)}</select><select className={input} aria-label="Filter discoveries by outcome" value={outcome} onChange={event => { setOutcome(event.target.value); setPage(1); }}><option value="">All outcomes</option>{["match","uncertain","excluded","error","pending","legacy"].map(item => <option key={item} value={item}>{readable(item)}</option>)}</select></div>
+    <div className="mt-4 grid gap-2 md:grid-cols-2 xl:grid-cols-4"><input className={input} aria-label="Search discovered jobs" placeholder="Search role, employer or location…" value={term} onChange={event => { setTerm(event.target.value); setPage(1); }} /><select className={input} aria-label="Filter discoveries by saved search" value={searchId} onChange={event => { setSearchId(event.target.value); setRunId(""); setPage(1); }}><option value="">All searches</option>{value?.filters.searches.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select><select className={input} aria-label="Filter discoveries by run" value={runId} onChange={event => { setRunId(event.target.value); setPage(1); }}><option value="">All runs</option>{value?.filters.runs.filter(item => !searchId || item.search_id === searchId).map(item => <option key={item.id} value={item.id}>{item.search_name} · {date(item.started_at)} · {item.id.slice(0, 8)}</option>)}</select><select className={input} aria-label="Filter discoveries by outcome" value={outcome} onChange={event => { setOutcome(event.target.value); setPage(1); }}><option value="">All outcomes</option>{["match","uncertain","excluded","error","pending","legacy"].map(item => <option key={item} value={item}>{readable(item)}</option>)}</select></div>
     {(query.error || error) && <p role="alert" className="mt-4 rounded-lg bg-rose-50 p-3 text-sm text-rose-800">{error || String(query.error)}</p>}
     {query.isPending && <p className="py-8 text-center text-sm text-slate-500">Loading discovery history…</p>}
     {value && !value.items.length && <p className="py-8 text-center text-sm text-slate-500">No discovered jobs match these filters.</p>}
