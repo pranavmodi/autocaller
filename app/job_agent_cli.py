@@ -42,6 +42,17 @@ def register(app, get, post, console):
     def search_runs(search_id: str = typer.Option('', '--search-id'), page: int = typer.Option(1, min=1)):
         output(get('/api/job-agent/search-runs', search_id=search_id or None, page=page))
 
+    @group.command("search-discoveries")
+    def search_discoveries(search: str = typer.Option('', '--search'),
+                           search_id: str = typer.Option('', '--search-id'),
+                           outcome: str = typer.Option('', '--outcome'),
+                           page: int = typer.Option(1, min=1),
+                           page_size: int = typer.Option(25, min=1, max=100)):
+        """List jobs found across all searches and runs with discovery provenance."""
+        output(get('/api/job-agent/search-discoveries', search=search or None,
+                   search_id=search_id or None, outcome=outcome or None,
+                   page=page, page_size=page_size))
+
     @group.command("search-results")
     def search_results(identity: str):
         """Inspect snapshot, queries, sources, per-job outcomes and errors."""

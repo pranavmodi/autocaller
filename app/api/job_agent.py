@@ -350,6 +350,15 @@ async def searches_run(identity: str):
 async def search_runs(search_id: str | None = None, page: int = Query(1, ge=1)):
     return await saved_searches.runs(search_id, page)
 
+
+@router.get('/search-discoveries')
+async def search_discoveries(search: str = '', search_id: str = '', outcome: str = '',
+                             page: int = Query(1, ge=1),
+                             page_size: int = Query(25, ge=1, le=100)):
+    return await processing_response(saved_searches.discoveries(
+        search=search, search_id=search_id, outcome=outcome,
+        page=page, page_size=page_size))
+
 @router.get('/search-runs/{identity}')
 async def search_run(identity: str):
     return await processing_response(saved_searches.run_detail(identity))

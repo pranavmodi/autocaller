@@ -215,6 +215,68 @@ def test_unverified_discoveries_are_visible_while_run_is_active():
     assert not result[0].get('candidate_id')
 
 
+def test_discovery_ledger_groups_repeat_findings_and_keeps_run_tags():
+    first = SimpleNamespace(id='run-old', status='completed',
+        started_at=datetime(2026, 10, 1, 8, tzinfo=timezone.utc), result={
+            'saved_search_id':'legal-ai', 'search_trigger':'scheduled',
+            'search_profile':{'name':'Legal AI'},
+            'activity':[{'kind':'discovered','at':'2026-10-01T08:02:00+00:00'}],
+            'results':[{'candidate':{'source_url':'https://example.com/jobs/1?utm_source=a',
+                'title':'Agent Engineer','firm_name':'Example'}, 'candidate_id':'candidate-1',
+                'outcome':'match','reason':'Matched'}]})
+    second = SimpleNamespace(id='run-new', status='completed',
+        started_at=datetime(2026, 10, 2, 8, tzinfo=timezone.utc), result={
+            'saved_search_id':'health-ai', 'search_trigger':'manual',
+            'search_profile':{'name':'Health AI'},
+            'activity':[{'kind':'discovered','at':'2026-10-02T08:03:00+00:00'}],
+            'results':[{'candidate':{'source_url':'https://careers.example.com/roles/agent',
+                'title':'Agent Engineer','firm_name':'Example'}, 'candidate_id':'candidate-1',
+                'outcome':'uncertain','reason':'Location unclear'}]})
+    groups = saved._group_discoveries(saved._discovery_occurrences([first, second]))
+    assert len(groups) == 1
+    assert groups[0]['candidate_id'] == 'candidate-1'
+    assert groups[0]['first_found_at'] == '2026-10-01T08:02:00+00:00'
+    assert groups[0]['latest_found_at'] == '2026-10-02T08:03:00+00:00'
+    assert [(item['search_name'], item['run_id']) for item in groups[0]['discoveries']] == [
+        ('Health AI', 'run-new'), ('Legal AI', 'run-old')]
+
+
+def test_discovery_ledger_does_not_merge_distinct_same_title_jobs():
+    row = SimpleNamespace(id='run', status='completed',
+        started_at=datetime(2026, 10, 1, tzinfo=timezone.utc), result={
+            'search_profile':{'name':'Broad'},
+            'results':[
+                {'candidate':{'source_url':'https://example.com/jobs/1','title':'Engineer','firm_name':'Example'},
+                 'outcome':'match','reason':'One'},
+                {'candidate':{'source_url':'https://example.com/jobs/2','title':'Engineer','firm_name':'Example'},
+                 'outcome':'match','reason':'Two'},
+            ]})
+    groups = saved._group_discoveries(saved._discovery_occurrences([row]))
+    assert len(groups) == 2
+
+
+def test_discovery_ledger_groups_tracking_variants_before_queueing():
+    rows = [SimpleNamespace(id=f'run-{index}', status='completed',
+        started_at=datetime(2026, 10, index, tzinfo=timezone.utc), result={
+            'search_profile':{'name':f'Search {index}'},
+            'results':[{'candidate':{'source_url':url, 'title':'Engineer','firm_name':'Example'},
+                        'outcome':'match','reason':'Match'}]})
+        for index, url in [(1, 'https://example.com/jobs/1?utm_source=one'),
+                           (2, 'https://example.com/jobs/1?utm_source=two')]]
+    groups = saved._group_discoveries(saved._discovery_occurrences(rows))
+    assert len(groups) == 1
+    assert len(groups[0]['discoveries']) == 2
+
+
+def test_discovery_ledger_excludes_manual_url_import_runs():
+    row = SimpleNamespace(id='import-run', status='completed',
+        started_at=datetime(2026, 10, 1, tzinfo=timezone.utc), result={
+            'search_trigger':'url_import', 'search_profile':{'name':'Job URL import'},
+            'results':[{'candidate':{'source_url':'https://example.com/jobs/1',
+                'title':'Engineer','firm_name':'Example'}, 'outcome':'legacy','reason':'Imported'}]})
+    assert saved._discovery_occurrences([row]) == []
+
+
 @pytest.mark.asyncio
 async def test_discovery_is_checkpointed_before_slow_identity_repair(monkeypatch):
     from tests.test_daily_career_search import candidate

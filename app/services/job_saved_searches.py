@@ -1,10 +1,12 @@
 """Saved search intent, durable run queue, and immutable run observations."""
 from __future__ import annotations
 import asyncio
+import hashlib
 import logging
 from datetime import datetime, time, timedelta, timezone
 from pathlib import Path
 from typing import Literal
+from urllib.parse import urlsplit
 from uuid import uuid4
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -16,6 +18,7 @@ from app.db import Base, AsyncSessionLocal, async_engine
 from app.db.models import CareerSearchRunRow
 from app.services import daily_career_search as career
 from app.services.job_search_sources import ALL_SOURCE_IDS, all_source_catalog, resolved_source_urls, source_urls
+from app.services.career_job_store import source_identity
 
 log = logging.getLogger(__name__)
 WAKE = asyncio.Event()
@@ -282,6 +285,158 @@ async def run_detail(identity: str):
                               'listings_seen': 0, 'candidates_emitted': 0,
                               'closed': 0, 'items': []}
     return detail
+
+
+def _discovery_time(row: CareerSearchRunRow, audit: dict) -> str:
+    events = [event.get('at') for event in audit.get('activity', [])
+              if isinstance(event, dict) and event.get('kind') == 'discovered' and event.get('at')]
+    return str(events[-1] if events else row.started_at.isoformat())
+
+
+def _discovery_occurrences(rows: list[CareerSearchRunRow]) -> list[dict]:
+    occurrences = []
+    for row in rows:
+        audit = row.result or {}
+        if audit.get('search_trigger') == 'url_import':
+            continue
+        row_search_id = str(audit.get('saved_search_id') or '')
+        name = (audit.get('search_profile') or {}).get('name') or 'Earlier career search'
+        found_at = _discovery_time(row, audit)
+        for result in run_results(audit, row.status):
+            candidate = result.get('candidate') or {}
+            if not isinstance(candidate, dict):
+                continue
+            job_url = str(candidate.get('source_url') or '')
+            title = str(candidate.get('title') or '').strip()
+            employer = str(candidate.get('firm_name') or '').strip()
+            if not job_url and not title:
+                continue
+            decision = result.get('decision') or {}
+            host = urlsplit(job_url).netloc.lower().removeprefix('www.') if job_url else ''
+            candidate_id = str(result.get('candidate_id') or '')
+            aliases = []
+            if candidate_id:
+                aliases.append(f'candidate:{candidate_id}')
+            if job_url:
+                aliases.append(f'url:{source_identity(job_url)}')
+            if not candidate_id and not job_url and (title or employer):
+                aliases.append(f'text:{employer.casefold()}|{title.casefold()}')
+            occurrences.append({
+                'aliases': aliases,
+                'candidate_id': candidate_id or None,
+                'job_url': job_url or None,
+                'title': title or 'Unresolved job',
+                'employer_name': employer or 'Employer unknown',
+                'location': str(decision.get('location') or ''),
+                'posted_date': decision.get('posted_date'),
+                'source': host or 'unknown source',
+                'outcome': str(result.get('outcome') or 'unknown'),
+                'reason': str(result.get('reason') or ''),
+                'saved_to_queue': bool(candidate_id),
+                'search_id': row_search_id or None,
+                'search_name': str(name),
+                'run_id': row.id,
+                'run_status': row.status,
+                'trigger': str(audit.get('search_trigger') or 'legacy'),
+                'found_at': found_at,
+                'run_started_at': row.started_at.isoformat(),
+            })
+    return occurrences
+
+
+def _group_discoveries(occurrences: list[dict]) -> list[dict]:
+    """Group the same job while retaining every run-level discovery tag."""
+    groups: list[dict] = []
+    alias_to_group: dict[str, int] = {}
+    for occurrence in sorted(occurrences, key=lambda item: item['found_at']):
+        matched = sorted({alias_to_group[alias] for alias in occurrence['aliases']
+                          if alias in alias_to_group})
+        if matched:
+            target = matched[0]
+            group = groups[target]
+            for other in reversed(matched[1:]):
+                if other == target or not groups[other]:
+                    continue
+                group['discoveries'].extend(groups[other]['discoveries'])
+                for alias in groups[other]['aliases']:
+                    alias_to_group[alias] = target
+                    group['aliases'].add(alias)
+                groups[other] = {}
+        else:
+            target = len(groups)
+            group = {'aliases': set(), 'discoveries': []}
+            groups.append(group)
+        for alias in occurrence['aliases']:
+            alias_to_group[alias] = target
+            group['aliases'].add(alias)
+        public_occurrence = {key: value for key, value in occurrence.items() if key != 'aliases'}
+        group['discoveries'].append(public_occurrence)
+
+    output = []
+    for group in groups:
+        if not group:
+            continue
+        discoveries = sorted(group['discoveries'], key=lambda item: item['found_at'], reverse=True)
+        latest = discoveries[0]
+        candidate_id = next((item['candidate_id'] for item in discoveries if item['candidate_id']), None)
+        job_url = next((item['job_url'] for item in discoveries if item['job_url']), None)
+        identity = candidate_id or job_url or '|'.join(sorted(group['aliases']))
+        output.append({
+            'id': hashlib.sha256(str(identity).encode()).hexdigest()[:24],
+            'candidate_id': candidate_id,
+            'job_url': job_url,
+            'title': latest['title'],
+            'employer_name': latest['employer_name'],
+            'location': latest['location'],
+            'posted_date': latest['posted_date'],
+            'source': latest['source'],
+            'latest_outcome': latest['outcome'],
+            'latest_reason': latest['reason'],
+            'saved_to_queue': any(item['saved_to_queue'] for item in discoveries),
+            'first_found_at': discoveries[-1]['found_at'],
+            'latest_found_at': latest['found_at'],
+            'discoveries': discoveries,
+        })
+    return sorted(output, key=lambda item: item['latest_found_at'], reverse=True)
+
+
+async def discoveries(*, search: str = '', search_id: str = '', outcome: str = '',
+                      page: int = 1, page_size: int = 25) -> dict:
+    """Read every final discovery across every saved-search run.
+
+    This is a projection over immutable run history. It does not create another
+    job store, and one job may retain several run/search discovery tags.
+    """
+    await ensure()
+    page = max(1, page)
+    page_size = max(1, min(100, page_size))
+    if outcome not in {'', 'match', 'uncertain', 'excluded', 'error', 'pending', 'legacy'}:
+        raise ValueError('outcome must be match, uncertain, excluded, error, pending or legacy')
+    async with AsyncSessionLocal() as session:
+        rows = (await session.scalars(select(CareerSearchRunRow)
+            .order_by(CareerSearchRunRow.started_at.desc()))).all()
+    items = _group_discoveries(_discovery_occurrences(list(rows)))
+    if search_id:
+        items = [item for item in items if any(
+            discovery['search_id'] == search_id for discovery in item['discoveries'])]
+    if outcome:
+        items = [item for item in items if any(
+            discovery['outcome'] == outcome for discovery in item['discoveries'])]
+    term = search.strip().casefold()
+    if term:
+        items = [item for item in items if term in item['title'].casefold()
+                 or term in item['employer_name'].casefold()
+                 or term in (item['location'] or '').casefold()]
+    total = len(items)
+    start = (page - 1) * page_size
+    return {
+        'items': items[start:start + page_size],
+        'total': total,
+        'occurrences': sum(len(item['discoveries']) for item in items),
+        'page': page,
+        'page_size': page_size,
+        'total_pages': max(1, (total + page_size - 1) // page_size),
+    }
 
 async def draft(body: ParseSearch):
     from app.services.llm_gateway import call_skill_json
