@@ -4105,7 +4105,7 @@ def sequences_list(
 @quick_save_app.command("list")
 def quick_save_list(
     limit: int = typer.Option(200, "--limit", min=1, max=500),
-    link_type: str = typer.Option("", "--type", help="Filter by job or portal."),
+    link_type: str = typer.Option("", "--type", help="Filter by job, portal or contact."),
     json_output: bool = typer.Option(False, "--json", help="Print raw JSON."),
 ):
     """List recently captured company job links."""
@@ -4132,8 +4132,8 @@ def quick_save_list(
 @quick_save_app.command("add")
 def quick_save_add(
     company_name: str = typer.Argument(..., help="Company name."),
-    job_url: str = typer.Argument(..., help="Public job listing URL."),
-    link_type: str = typer.Option("job", "--type", help="Save as job or portal."),
+    job_url: str = typer.Argument(..., help="Public URL or email address for --type contact."),
+    link_type: str = typer.Option("job", "--type", help="Save as job, portal or contact."),
 ):
     """Save a company and job URL without starting application research."""
     console.print_json(data=_post(

@@ -253,8 +253,8 @@ the selected job by default; applications are sent only through explicit
 | `todos add <title> [--area=lead-gen --status=not_started --body=... --source-url=...]` | Add a DB-backed todo. |
 | `todos update <id> [--title=... --status=done --body=... --clear-source-url]` | Edit a DB-backed todo. |
 | `todos delete <id>` | Delete a DB-backed todo. |
-| `quick-save list [--type=job\|portal] [--limit=200] [--json]` | List individual job links or reusable job portals captured from Quick Save. |
-| `quick-save add <name> <url> [--type=job\|portal]` | Save a company job listing or job portal without starting Job Agent research or an application. |
+| `quick-save list [--type=job\|portal\|contact] [--limit=200] [--json]` | List individual job links or reusable job portals captured from Quick Save. |
+| `quick-save add <name> <url-or-email> [--type=job\|portal\|contact]` | Save a company job listing or job portal without starting Job Agent research or an application. |
 | `quick-save delete <id>` | Delete a saved company job link. |
 | `ideas list [--json]` | List saved future product, marketing, GTM, and ops ideas. Reads rows stored in the DB-backed todo table under `area=ideas` and legacy `idea:*` areas. |
 | `ideas add "..." [--json]` | Save a simple future idea. Use `ideas add - < idea.txt` or pipe stdin for multiline text. |
@@ -1611,3 +1611,5 @@ Each queued run snapshots its provider/model; editing affects future runs only.
 Run list/detail expose `ai_provider` and `model`. This does not change application
 providers. The redundant queue sidebar was removed (UI-only); sync and search CLI
 commands remain available.
+
+Quick Save contacts: `bin/possibleos quick-save add "Saudi contacts · unverified" "careers@example.com" --type contact` stores a single email address as an unverified contact. `quick-save list --type contact --json` reads them. Saving never sends or promotes contacts into verified recruiting recipients. Job search sources use only `portal` records.

@@ -304,3 +304,6 @@ controls and run monitoring; Settings retains preferences and collection control
 Each search editor has an OpenClaw gateway / OpenAI API selector and editable API
 model. Cards and run views show the provider, including the immutable provider used
 by historical runs. Settings drafting follows the editor's chosen provider.
+
+### Quick Save email contacts
+The Email contacts section stores unverified operator-supplied addresses alongside the existing job links and portals. The form accepts one email address; records retain the contact label and a mailto destination. Opening it composes in the user email app; saving sends nothing. Contact records are excluded from the portal-only search-source catalog.

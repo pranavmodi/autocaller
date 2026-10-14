@@ -4,7 +4,7 @@ from __future__ import annotations
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel, Field, HttpUrl
+from pydantic import BaseModel, Field, HttpUrl, TypeAdapter, model_validator
 
 from app.services.quick_job_links import (
     create_quick_job_link,
@@ -14,14 +14,32 @@ from app.services.quick_job_links import (
 
 
 router = APIRouter(prefix="/api/quick-job-links", tags=["quick-job-links"])
-LinkType = Literal["job", "portal"]
+LinkType = Literal["job", "portal", "contact"]
 
 
 class QuickJobLinkCreateRequest(BaseModel):
     company_name: str = Field(..., min_length=1, max_length=255)
-    job_url: HttpUrl
+    job_url: str = Field(min_length=1, max_length=2048)
     link_type: LinkType = "job"
     actor: str = Field("operator", max_length=128)
+
+    @model_validator(mode="after")
+    def validate_destination(self):
+        self.company_name = self.company_name.strip()
+        if not self.company_name:
+            raise ValueError("A name is required")
+        if self.link_type == "contact":
+            address = self.job_url.strip().removeprefix("mailto:")
+            # Capture a single unverified address, never mailto headers or recipients.
+            if (address.count("@") != 1 or any(c.isspace() or ord(c) < 32 for c in address)
+                    or any(c in address for c in "?&#%,;<>:/\\")
+                    or not all(address.split("@"))):
+                raise ValueError("Enter one email address without mail headers")
+            local, domain = address.split("@")
+            self.job_url = f"mailto:{local}@{domain.lower()}"
+        else:
+            self.job_url = str(TypeAdapter(HttpUrl).validate_python(self.job_url))
+        return self
 
 
 @router.get("")

@@ -98,3 +98,42 @@ def test_delete_quick_job_link_reports_missing_row(monkeypatch):
         asyncio.run(quick_job_links_api.remove_quick_job_link(404))
 
     assert exc_info.value.status_code == 404
+
+
+def test_contact_accepts_single_unverified_address_and_preserves_spelling():
+    req = quick_job_links_api.QuickJobLinkCreateRequest(
+        company_name="Saudi contacts · unverified", job_url="Hr@alesayi_motors.com", link_type="contact")
+    assert req.job_url == "mailto:Hr@alesayi_motors.com"
+    assert quick_job_links_api.QuickJobLinkCreateRequest(
+        company_name="Contact", job_url="mailto:CV@Arabianfal.com", link_type="contact"
+    ).job_url == "mailto:CV@arabianfal.com"
+
+
+@pytest.mark.parametrize('destination', [
+    'javascript:alert(1)', 'https://example.com', 'a@b.com?bcc=other@example.com',
+    'a@b.com%0Abcc:other@example.com', 'a\n@b.com', 'a@b.com,other@example.com',
+    '@example.com', 'a@',
+])
+def test_contact_rejects_headers_multiple_recipients_and_non_email_urls(destination):
+    with pytest.raises(ValidationError):
+        quick_job_links_api.QuickJobLinkCreateRequest(
+            company_name="Contact", job_url=destination, link_type="contact")
+
+
+def test_portal_does_not_accept_contact_scheme():
+    with pytest.raises(ValidationError):
+        quick_job_links_api.QuickJobLinkCreateRequest(
+            company_name="Portal", job_url="mailto:careers@example.com", link_type="portal")
+
+
+def test_contact_is_saved_without_changing_type(monkeypatch):
+    captured = {}
+    async def create(**kwargs):
+        captured.update(kwargs)
+        return {"id": 9, **kwargs}
+    monkeypatch.setattr(quick_job_links_api, "create_quick_job_link", create)
+    asyncio.run(quick_job_links_api.post_quick_job_link(
+        quick_job_links_api.QuickJobLinkCreateRequest(
+            company_name="Contact", job_url="careers@example.com", link_type="contact")))
+    assert captured['link_type'] == 'contact'
+    assert captured['job_url'] == 'mailto:careers@example.com'

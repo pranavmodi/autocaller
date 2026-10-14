@@ -9,6 +9,7 @@ import {
   ExternalLink,
   Globe2,
   Loader2,
+  Mail,
   Save,
   Trash2,
 } from "lucide-react";
@@ -20,12 +21,22 @@ import {
   type QuickJobLink,
 } from "@/lib/api";
 
-type LinkType = "job" | "portal";
+type LinkType = "job" | "portal" | "contact";
 
 const fieldClass =
   "w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-900 outline-none transition focus:border-neutral-400 focus:ring-2 focus:ring-neutral-100";
 
 const sectionCopy = {
+  contact: {
+    title: "Email contacts",
+    description: "Saved as provided · unverified · saving does not send email",
+    nameLabel: "Contact label",
+    namePlaceholder: "Company or recruiting contact",
+    urlLabel: "Email address",
+    urlPlaceholder: "careers@example.com",
+    empty: "No email contacts saved yet.",
+    icon: Mail,
+  },
   job: {
     title: "Job links",
     description: "Individual roles to review or apply for later",
@@ -58,19 +69,25 @@ export default function QuickSavePage() {
     queryFn: () => listQuickJobLinks("portal"),
   });
 
+  const contacts = useQuery({
+    queryKey: ["quick-job-links", "contact"],
+    queryFn: () => listQuickJobLinks("contact"),
+  });
+
   return (
     <div className="mx-auto max-w-5xl space-y-8">
       <header className="flex items-center gap-3 border-b border-neutral-200 pb-4">
         <BookmarkPlus className="h-5 w-5 text-emerald-700" />
         <div>
           <h1 className="text-lg font-semibold text-neutral-950">Quick Save</h1>
-          <p className="text-xs text-neutral-500">Keep job opportunities and useful portals in one place</p>
+          <p className="text-xs text-neutral-500">Keep job opportunities, email contacts and useful portals in one place</p>
         </div>
         <span className="ml-auto text-xs tabular-nums text-neutral-400">
-          {(jobs.data?.count ?? 0) + (portals.data?.count ?? 0)} saved
+          {(jobs.data?.count ?? 0) + (portals.data?.count ?? 0) + (contacts.data?.count ?? 0)} saved
         </span>
       </header>
 
+      <SaveSection linkType="contact" links={contacts.data?.links} loading={contacts.isLoading} failed={contacts.isError} />
       <SaveSection linkType="job" links={jobs.data?.links} loading={jobs.isLoading} failed={jobs.isError} />
       <SaveSection linkType="portal" links={portals.data?.links} loading={portals.isLoading} failed={portals.isError} />
     </div>
@@ -144,7 +161,7 @@ function SaveSection({
           {copy.urlLabel}
           <input
             required
-            type="url"
+            type={linkType === "contact" ? "text" : "url"}
             value={url}
             onChange={(event) => setUrl(event.target.value)}
             placeholder={copy.urlPlaceholder}
@@ -163,7 +180,7 @@ function SaveSection({
           <p className="text-xs text-red-600 sm:col-span-3">
             {save.error.message.includes("job_link_already_saved")
               ? "That link is already saved."
-              : "Could not save this link."}
+              : "Could not save this entry. Check the address or URL."}
           </p>
         )}
       </form>
@@ -204,9 +221,10 @@ function SavedLinkRow({
   deleting: boolean;
   onDelete: () => void;
 }) {
+  const isContact = link.link_type === "contact";
   let host = link.job_url;
   try {
-    host = new URL(link.job_url).hostname.replace(/^www\./, "");
+    host = isContact ? link.job_url.slice("mailto:".length) : new URL(link.job_url).hostname.replace(/^www\./, "");
   } catch {
     // The API validates URLs; retain the full value if legacy data is malformed.
   }
@@ -226,11 +244,11 @@ function SavedLinkRow({
         href={link.job_url}
         target="_blank"
         rel="noreferrer"
-        title="Open saved link"
-        aria-label={`Open saved link for ${link.company_name}`}
+        title={isContact ? "Open in your email app" : "Open saved link"}
+        aria-label={`${isContact ? "Compose email" : "Open saved link"} for ${link.company_name}`}
         className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-neutral-200 text-neutral-600 hover:bg-neutral-50 hover:text-neutral-950"
       >
-        <ExternalLink className="h-4 w-4" />
+        {isContact ? <Mail className="h-4 w-4" /> : <ExternalLink className="h-4 w-4" />}
       </a>
       <button
         type="button"

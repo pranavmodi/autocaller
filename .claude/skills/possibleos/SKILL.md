@@ -1261,3 +1261,5 @@ verification/repair use supplied evidence. No automatic provider fallback. Each
 run keeps its original provider snapshot; editing only affects future runs.
 `search-runs` and `search-results` report the provider/model. Application providers
 are separate. Queue sidebar removal is UI-only; collection/sync still operate.
+
+Quick Save supports email contacts through `quick-save add LABEL EMAIL --type contact` and `quick-save list --type contact --json`. These are unverified operator-provided addresses, separate from job-search portals and verified employer contacts. Saving never sends email.
