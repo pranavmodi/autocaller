@@ -132,7 +132,7 @@ async def lifespan(app: FastAPI):
         logger.info("Requeued %s interrupted job-opening research tasks", recovered_job_tasks)
     job_research_workers = [
         asyncio.create_task(job_posting_research_loop())
-        for _ in range(max(1, int(os.getenv("PIF_JOB_RESEARCH_WORKERS", "2"))))
+        for _ in range(max(0, int(os.getenv("PIF_JOB_RESEARCH_WORKERS", "2"))))
     ]
     from .services.firm_review_research import (
         firm_review_research_loop,
@@ -143,7 +143,7 @@ async def lifespan(app: FastAPI):
         logger.info("Requeued %s interrupted public-review research tasks", recovered_review_tasks)
     review_research_workers = [
         asyncio.create_task(firm_review_research_loop())
-        for _ in range(max(1, int(os.getenv("FIRM_REVIEW_RESEARCH_WORKERS", "1"))))
+        for _ in range(max(0, int(os.getenv("FIRM_REVIEW_RESEARCH_WORKERS", "1"))))
     ]
     from .services.review_alerts import review_alert_loop
     review_alert_task = asyncio.create_task(review_alert_loop())
@@ -156,7 +156,7 @@ async def lifespan(app: FastAPI):
         logger.info("Requeued %s interrupted local firm enrichment tasks", recovered_enrichment_tasks)
     local_enrichment_workers = [
         asyncio.create_task(local_enrichment_loop())
-        for _ in range(max(1, int(os.getenv("PIF_LOCAL_ENRICHMENT_WORKERS", "2"))))
+        for _ in range(max(0, int(os.getenv("PIF_LOCAL_ENRICHMENT_WORKERS", "2"))))
     ]
     from .services.nightly_sync import nightly_sync_loop
     nightly_sync_task = asyncio.create_task(nightly_sync_loop())
