@@ -1,0 +1,2822 @@
+[
+  {
+    "id": "action_4f5b8b2d844247c88df64eb4",
+    "action_type": "send_approved_lead_gen_draft",
+    "status": "approved",
+    "scheduled_for": "2026-10-07T15:30:00+00:00",
+    "input_json": {
+      "to": "william@hstonelaw.com",
+      "body": "Hi William,\n\nMy earlier note focused on tracking leads through to signed cases. A small place to start would be checking whether the original lead source stays attached as a matter moves between systems, before adding another report.\n\nAt Hillstone, is getting reliable source data or getting a clear report the harder part?\n\nI'd appreciate your perspective when you have a moment.\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+      "subject": "Re: Is Lead Docket at Hillstone Law, PC tying marketing spend to signed cases?",
+      "approval": {
+        "recipient": "william@hstonelaw.com",
+        "references": "<0100019ff8900bb3-f560ffb0-bef3-431a-b06f-ab7c646bb237-000000@email.amazonses.com>",
+        "approved_at": "2026-10-07T13:55:43.652315+00:00",
+        "approved_by": "codex",
+        "body_sha256": "1d849c5e1f09c696bcebef073305d62cd885b72f23514ef272b1fb8b37b753f4",
+        "in_reply_to": "<0100019ff8900bb3-f560ffb0-bef3-431a-b06f-ab7c646bb237-000000@email.amazonses.com>",
+        "subject_sha256": "4542cfe0ffd444ae58fa51ce024936af7f4c21599ec61902d0a94c01e57edeb8"
+      },
+      "transport": "resend",
+      "references": "<0100019ff8900bb3-f560ffb0-bef3-431a-b06f-ab7c646bb237-000000@email.amazonses.com>",
+      "skill_path": null,
+      "body_sha256": "1d849c5e1f09c696bcebef073305d62cd885b72f23514ef272b1fb8b37b753f4",
+      "in_reply_to": "<0100019ff8900bb3-f560ffb0-bef3-431a-b06f-ab7c646bb237-000000@email.amazonses.com>",
+      "skill_sha256": null,
+      "batch_item_id": "3666cdcee2f94da69fc1f07e372b272b",
+      "brief_version": null,
+      "subject_sha256": "4542cfe0ffd444ae58fa51ce024936af7f4c21599ec61902d0a94c01e57edeb8",
+      "composer_variant_key": null,
+      "lead_gen_action_type": "follow_up",
+      "phi_egress_guard_cache": {},
+      "composer_experiment_key": null
+    },
+    "policy_result_json": {
+      "checks": [
+        {
+          "name": "status_allows_execution",
+          "detail": "approved",
+          "passed": true
+        },
+        {
+          "name": "human_approval_present",
+          "detail": "codex",
+          "passed": true
+        },
+        {
+          "name": "subject_present",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "body_present",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "subject_hash_matches_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "body_hash_matches_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "in_reply_to_matches_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "references_match_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "lead_gen_transport_available",
+          "detail": "zoho_api 0/0 configured=True; resend 0/50 configured=True",
+          "passed": true
+        },
+        {
+          "name": "no_patient_data_in_outreach",
+          "detail": "llm_guard_disabled",
+          "passed": true
+        },
+        {
+          "name": "batch_item_exists",
+          "detail": "3666cdcee2f94da69fc1f07e372b272b",
+          "passed": true
+        },
+        {
+          "name": "batch_item_not_already_started",
+          "detail": "approved",
+          "passed": true
+        },
+        {
+          "name": "contact_email_present",
+          "detail": "william@hstonelaw.com",
+          "passed": true
+        },
+        {
+          "name": "no_prior_successful_action_for_item",
+          "detail": "",
+          "passed": true
+        }
+      ],
+      "reason": "allowed",
+      "allowed": true,
+      "risk_level": "high",
+      "action_type": "send_approved_lead_gen_draft",
+      "contact_email": "william@hstonelaw.com",
+      "requires_human_approval": true
+    },
+    "execution_result_json": {},
+    "error": null,
+    "item_id": "3666cdcee2f94da69fc1f07e372b272b",
+    "contact_email": "william@hstonelaw.com",
+    "contact_name": "William Percy",
+    "contact_title": "Partner",
+    "firm_name": "Hillstone Law, PC",
+    "pif_id": "97fe3545-f559-47c4-b4a3-71d6de732140",
+    "approval_status": "approved",
+    "reason_json": {
+      "actor": "codex",
+      "source": "operator-curated",
+      "action_type": "follow_up",
+      "agent_draft": {
+        "body": "Hi William,\n\nMy earlier note focused on tracking leads through to signed cases. A small place to start would be checking whether the original lead source stays attached as a matter moves between systems, before adding another report.\n\nAt Hillstone, is getting reliable source data or getting a clear report the harder part?\n\nI'd appreciate your perspective when you have a moment.\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+        "subject": "Re: Is Lead Docket at Hillstone Law, PC tying marketing spend to signed cases?",
+        "action_id": "action_4f5b8b2d844247c88df64eb4",
+        "action_type": "send_approved_lead_gen_draft",
+        "action_status": "approved",
+        "operator_edited": true,
+        "scheduled_for_pt": "2026-10-07 08:30 PDT",
+        "scheduled_for_utc": "2026-10-07 15:30:00 UTC",
+        "operator_edited_at": "2026-10-07T13:55:43.677439+00:00",
+        "operator_edited_by": "codex"
+      },
+      "next_operator_action": "scheduled_send_queued",
+      "send_email_action_id": "action_4f5b8b2d844247c88df64eb4"
+    }
+  },
+  {
+    "id": "action_ebb9051730844f8f9e50bc69",
+    "action_type": "send_approved_lead_gen_draft",
+    "status": "approved",
+    "scheduled_for": "2026-10-07T15:40:00+00:00",
+    "input_json": {
+      "to": "jonathan@gaslamplaw.com",
+      "body": "Hi Jonathan,\n\nI wanted to make my earlier Lead Docket question more practical. Rather than rebuilding reporting, I'd start with one lead source and check whether your team can trace it through to a retained matter without a spreadsheet.\n\nIs that already straightforward at Gaslamp, or does someone still have to piece it together?\n\nI'd appreciate your perspective when you have a moment.\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+      "subject": "Re: Is Lead Docket at Gaslamp Law Group tying marketing spend to signed cases?",
+      "approval": {
+        "recipient": "jonathan@gaslamplaw.com",
+        "references": "<0100019ff88b7666-827c7431-bef8-4d03-8b72-b3f44ea2b8c6-000000@email.amazonses.com>",
+        "approved_at": "2026-10-07T13:59:04.594680+00:00",
+        "approved_by": "codex",
+        "body_sha256": "f3329602611826d2338e7333a2881615761305f21a004512b8cede89ccb9c4ee",
+        "in_reply_to": "<0100019ff88b7666-827c7431-bef8-4d03-8b72-b3f44ea2b8c6-000000@email.amazonses.com>",
+        "subject_sha256": "a6d77bd1b351059f0f38a20cf17a801431a990eca41067407ef431e47b710664"
+      },
+      "transport": "resend",
+      "references": "<0100019ff88b7666-827c7431-bef8-4d03-8b72-b3f44ea2b8c6-000000@email.amazonses.com>",
+      "skill_path": null,
+      "body_sha256": "f3329602611826d2338e7333a2881615761305f21a004512b8cede89ccb9c4ee",
+      "in_reply_to": "<0100019ff88b7666-827c7431-bef8-4d03-8b72-b3f44ea2b8c6-000000@email.amazonses.com>",
+      "skill_sha256": null,
+      "batch_item_id": "a0b9f6a3633b4854964b27872dccf8fa",
+      "brief_version": null,
+      "subject_sha256": "a6d77bd1b351059f0f38a20cf17a801431a990eca41067407ef431e47b710664",
+      "composer_variant_key": null,
+      "lead_gen_action_type": "follow_up",
+      "phi_egress_guard_cache": {},
+      "composer_experiment_key": null
+    },
+    "policy_result_json": {
+      "checks": [
+        {
+          "name": "status_allows_execution",
+          "detail": "approved",
+          "passed": true
+        },
+        {
+          "name": "human_approval_present",
+          "detail": "codex",
+          "passed": true
+        },
+        {
+          "name": "subject_present",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "body_present",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "subject_hash_matches_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "body_hash_matches_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "in_reply_to_matches_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "references_match_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "lead_gen_transport_available",
+          "detail": "zoho_api 0/0 configured=True; resend 0/50 configured=True",
+          "passed": true
+        },
+        {
+          "name": "no_patient_data_in_outreach",
+          "detail": "llm_guard_disabled",
+          "passed": true
+        },
+        {
+          "name": "batch_item_exists",
+          "detail": "a0b9f6a3633b4854964b27872dccf8fa",
+          "passed": true
+        },
+        {
+          "name": "batch_item_not_already_started",
+          "detail": "approved",
+          "passed": true
+        },
+        {
+          "name": "contact_email_present",
+          "detail": "jonathan@gaslamplaw.com",
+          "passed": true
+        },
+        {
+          "name": "no_prior_successful_action_for_item",
+          "detail": "",
+          "passed": true
+        }
+      ],
+      "reason": "allowed",
+      "allowed": true,
+      "risk_level": "high",
+      "action_type": "send_approved_lead_gen_draft",
+      "contact_email": "jonathan@gaslamplaw.com",
+      "requires_human_approval": true
+    },
+    "execution_result_json": {},
+    "error": null,
+    "item_id": "a0b9f6a3633b4854964b27872dccf8fa",
+    "contact_email": "jonathan@gaslamplaw.com",
+    "contact_name": "Jonathan Rashtian",
+    "contact_title": "Managing Attorney",
+    "firm_name": "Gaslamp Law Group",
+    "pif_id": "0f06ec32-2031-422f-a59c-179d1a6c5bca",
+    "approval_status": "approved",
+    "reason_json": {
+      "actor": "codex",
+      "source": "operator-curated",
+      "action_type": "follow_up",
+      "agent_draft": {
+        "body": "Hi Jonathan,\n\nI wanted to make my earlier Lead Docket question more practical. Rather than rebuilding reporting, I'd start with one lead source and check whether your team can trace it through to a retained matter without a spreadsheet.\n\nIs that already straightforward at Gaslamp, or does someone still have to piece it together?\n\nI'd appreciate your perspective when you have a moment.\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+        "subject": "Re: Is Lead Docket at Gaslamp Law Group tying marketing spend to signed cases?",
+        "action_id": "action_ebb9051730844f8f9e50bc69",
+        "action_type": "send_approved_lead_gen_draft",
+        "action_status": "approved",
+        "operator_edited": true,
+        "scheduled_for_pt": "2026-10-07 08:40 PDT",
+        "scheduled_for_utc": "2026-10-07 15:40:00 UTC",
+        "operator_edited_at": "2026-10-07T13:59:04.610878+00:00",
+        "operator_edited_by": "codex"
+      },
+      "next_operator_action": "scheduled_send_queued",
+      "send_email_action_id": "action_ebb9051730844f8f9e50bc69"
+    }
+  },
+  {
+    "id": "action_3fae2f9375a3400abb8de019",
+    "action_type": "send_approved_lead_gen_draft",
+    "status": "approved",
+    "scheduled_for": "2026-10-07T15:50:00+00:00",
+    "input_json": {
+      "to": "david@dclawgroup.com",
+      "body": "Hi David,\n\nOn my earlier question about lead attribution, the useful outcome would be less time reconciling intake and case data, not another dashboard to maintain.\n\nAt DC Law Group, is the bigger challenge connecting the records or trusting that the numbers are complete?\n\nI'd appreciate your perspective when you have a moment.\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+      "subject": "Re: Is Lead Docket at DC Law Group, PC tying marketing spend to signed cases?",
+      "approval": {
+        "recipient": "david@dclawgroup.com",
+        "references": "<0100019ff8791b01-7df0f4b8-89eb-4c66-8192-97fdc1a7e8e0-000000@email.amazonses.com>",
+        "approved_at": "2026-10-07T13:59:08.269934+00:00",
+        "approved_by": "codex",
+        "body_sha256": "683e0206ece249c9222bc9bd2bd17ebeab1dbebebd91b636b10284be0526049f",
+        "in_reply_to": "<0100019ff8791b01-7df0f4b8-89eb-4c66-8192-97fdc1a7e8e0-000000@email.amazonses.com>",
+        "subject_sha256": "ff204ad4a84b02e2ca0127b90860f3df7e6eb68da0bb7341e88d4b579b457391"
+      },
+      "transport": "resend",
+      "references": "<0100019ff8791b01-7df0f4b8-89eb-4c66-8192-97fdc1a7e8e0-000000@email.amazonses.com>",
+      "skill_path": null,
+      "body_sha256": "683e0206ece249c9222bc9bd2bd17ebeab1dbebebd91b636b10284be0526049f",
+      "in_reply_to": "<0100019ff8791b01-7df0f4b8-89eb-4c66-8192-97fdc1a7e8e0-000000@email.amazonses.com>",
+      "skill_sha256": null,
+      "batch_item_id": "e859381ff74247d58370d38f54dd648f",
+      "brief_version": null,
+      "subject_sha256": "ff204ad4a84b02e2ca0127b90860f3df7e6eb68da0bb7341e88d4b579b457391",
+      "composer_variant_key": null,
+      "lead_gen_action_type": "follow_up",
+      "phi_egress_guard_cache": {},
+      "composer_experiment_key": null
+    },
+    "policy_result_json": {
+      "checks": [
+        {
+          "name": "status_allows_execution",
+          "detail": "approved",
+          "passed": true
+        },
+        {
+          "name": "human_approval_present",
+          "detail": "codex",
+          "passed": true
+        },
+        {
+          "name": "subject_present",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "body_present",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "subject_hash_matches_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "body_hash_matches_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "in_reply_to_matches_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "references_match_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "lead_gen_transport_available",
+          "detail": "zoho_api 0/0 configured=True; resend 0/50 configured=True",
+          "passed": true
+        },
+        {
+          "name": "no_patient_data_in_outreach",
+          "detail": "llm_guard_disabled",
+          "passed": true
+        },
+        {
+          "name": "batch_item_exists",
+          "detail": "e859381ff74247d58370d38f54dd648f",
+          "passed": true
+        },
+        {
+          "name": "batch_item_not_already_started",
+          "detail": "approved",
+          "passed": true
+        },
+        {
+          "name": "contact_email_present",
+          "detail": "david@dclawgroup.com",
+          "passed": true
+        },
+        {
+          "name": "no_prior_successful_action_for_item",
+          "detail": "",
+          "passed": true
+        }
+      ],
+      "reason": "allowed",
+      "allowed": true,
+      "risk_level": "high",
+      "action_type": "send_approved_lead_gen_draft",
+      "contact_email": "david@dclawgroup.com",
+      "requires_human_approval": true
+    },
+    "execution_result_json": {},
+    "error": null,
+    "item_id": "e859381ff74247d58370d38f54dd648f",
+    "contact_email": "david@dclawgroup.com",
+    "contact_name": "David Cohan, Esq.",
+    "contact_title": "Managing Attorney",
+    "firm_name": "DC Law Group, PC",
+    "pif_id": "ea17c1d1-d3df-4bd1-bf47-1e0173bef857",
+    "approval_status": "approved",
+    "reason_json": {
+      "actor": "codex",
+      "source": "operator-curated",
+      "action_type": "follow_up",
+      "agent_draft": {
+        "body": "Hi David,\n\nOn my earlier question about lead attribution, the useful outcome would be less time reconciling intake and case data, not another dashboard to maintain.\n\nAt DC Law Group, is the bigger challenge connecting the records or trusting that the numbers are complete?\n\nI'd appreciate your perspective when you have a moment.\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+        "subject": "Re: Is Lead Docket at DC Law Group, PC tying marketing spend to signed cases?",
+        "action_id": "action_3fae2f9375a3400abb8de019",
+        "action_type": "send_approved_lead_gen_draft",
+        "action_status": "approved",
+        "operator_edited": true,
+        "scheduled_for_pt": "2026-10-07 08:50 PDT",
+        "scheduled_for_utc": "2026-10-07 15:50:00 UTC",
+        "operator_edited_at": "2026-10-07T13:59:08.279081+00:00",
+        "operator_edited_by": "codex"
+      },
+      "next_operator_action": "scheduled_send_queued",
+      "send_email_action_id": "action_3fae2f9375a3400abb8de019"
+    }
+  },
+  {
+    "id": "action_7b6f220b4d1e434eabda97db",
+    "action_type": "send_approved_lead_gen_draft",
+    "status": "approved",
+    "scheduled_for": "2026-10-07T16:00:00+00:00",
+    "input_json": {
+      "to": "daniel@theinjurypartners.com",
+      "body": "Hi Daniel,\n\nA more focused thought on my earlier note: start with the handoff from a retained lead to an open matter and check what staff have to enter twice. That would give us a concrete workflow to improve.\n\nIs duplicate entry a nuisance at The Injury Partners, or is that handoff already working well?\n\nI'd appreciate your perspective when you have a moment.\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+      "subject": "Re: Is Lead Docket at The Injury Partners tying marketing spend to signed cases?",
+      "approval": {
+        "recipient": "daniel@theinjurypartners.com",
+        "references": "<0100019ff8545f72-fde2d8f9-aea0-45e3-90a5-e7bd1b669dca-000000@email.amazonses.com>",
+        "approved_at": "2026-10-07T13:59:11.953955+00:00",
+        "approved_by": "codex",
+        "body_sha256": "eaf1274021c422c79acd0d8c07c772af2875d6b90cad4c49fc5aad9f21796933",
+        "in_reply_to": "<0100019ff8545f72-fde2d8f9-aea0-45e3-90a5-e7bd1b669dca-000000@email.amazonses.com>",
+        "subject_sha256": "9a2231bbac6f1ebc5ae5667846f5e4da8baf77ca2187fcf75c42da93df12ca76"
+      },
+      "transport": "resend",
+      "references": "<0100019ff8545f72-fde2d8f9-aea0-45e3-90a5-e7bd1b669dca-000000@email.amazonses.com>",
+      "skill_path": null,
+      "body_sha256": "eaf1274021c422c79acd0d8c07c772af2875d6b90cad4c49fc5aad9f21796933",
+      "in_reply_to": "<0100019ff8545f72-fde2d8f9-aea0-45e3-90a5-e7bd1b669dca-000000@email.amazonses.com>",
+      "skill_sha256": null,
+      "batch_item_id": "71713bc3336149168416e674c2f59855",
+      "brief_version": null,
+      "subject_sha256": "9a2231bbac6f1ebc5ae5667846f5e4da8baf77ca2187fcf75c42da93df12ca76",
+      "composer_variant_key": null,
+      "lead_gen_action_type": "follow_up",
+      "phi_egress_guard_cache": {},
+      "composer_experiment_key": null
+    },
+    "policy_result_json": {
+      "checks": [
+        {
+          "name": "status_allows_execution",
+          "detail": "approved",
+          "passed": true
+        },
+        {
+          "name": "human_approval_present",
+          "detail": "codex",
+          "passed": true
+        },
+        {
+          "name": "subject_present",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "body_present",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "subject_hash_matches_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "body_hash_matches_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "in_reply_to_matches_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "references_match_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "lead_gen_transport_available",
+          "detail": "zoho_api 0/0 configured=True; resend 0/50 configured=True",
+          "passed": true
+        },
+        {
+          "name": "no_patient_data_in_outreach",
+          "detail": "llm_guard_disabled",
+          "passed": true
+        },
+        {
+          "name": "batch_item_exists",
+          "detail": "71713bc3336149168416e674c2f59855",
+          "passed": true
+        },
+        {
+          "name": "batch_item_not_already_started",
+          "detail": "approved",
+          "passed": true
+        },
+        {
+          "name": "contact_email_present",
+          "detail": "daniel@theinjurypartners.com",
+          "passed": true
+        },
+        {
+          "name": "no_prior_successful_action_for_item",
+          "detail": "",
+          "passed": true
+        }
+      ],
+      "reason": "allowed",
+      "allowed": true,
+      "risk_level": "high",
+      "action_type": "send_approved_lead_gen_draft",
+      "contact_email": "daniel@theinjurypartners.com",
+      "requires_human_approval": true
+    },
+    "execution_result_json": {},
+    "error": null,
+    "item_id": "71713bc3336149168416e674c2f59855",
+    "contact_email": "daniel@theinjurypartners.com",
+    "contact_name": "Daniel Sabet",
+    "contact_title": "Founder & Managing Partner",
+    "firm_name": "The Injury Partners",
+    "pif_id": "a91398f3-b898-49ef-9b6f-cd98d25828b1",
+    "approval_status": "approved",
+    "reason_json": {
+      "actor": "codex",
+      "source": "operator-curated",
+      "action_type": "follow_up",
+      "agent_draft": {
+        "body": "Hi Daniel,\n\nA more focused thought on my earlier note: start with the handoff from a retained lead to an open matter and check what staff have to enter twice. That would give us a concrete workflow to improve.\n\nIs duplicate entry a nuisance at The Injury Partners, or is that handoff already working well?\n\nI'd appreciate your perspective when you have a moment.\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+        "subject": "Re: Is Lead Docket at The Injury Partners tying marketing spend to signed cases?",
+        "action_id": "action_7b6f220b4d1e434eabda97db",
+        "action_type": "send_approved_lead_gen_draft",
+        "action_status": "approved",
+        "operator_edited": true,
+        "scheduled_for_pt": "2026-10-07 09:00 PDT",
+        "scheduled_for_utc": "2026-10-07 16:00:00 UTC",
+        "operator_edited_at": "2026-10-07T13:59:11.962842+00:00",
+        "operator_edited_by": "codex"
+      },
+      "next_operator_action": "scheduled_send_queued",
+      "send_email_action_id": "action_7b6f220b4d1e434eabda97db"
+    }
+  },
+  {
+    "id": "action_149f2fc572074bd4974a316e",
+    "action_type": "send_approved_lead_gen_draft",
+    "status": "approved",
+    "scheduled_for": "2026-10-07T16:10:00+00:00",
+    "input_json": {
+      "to": "jon@theinjurylawfirm.com",
+      "body": "Hi Jon,\n\nMy earlier note asked about lead-source reporting. The first thing I'd check is whether the source and intake notes survive the move into the matter record without staff fixing them afterward.\n\nIs that handoff smooth for your team, or does it still need manual cleanup?\n\nI'd appreciate your perspective when you have a moment.\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+      "subject": "Re: Is Lead Docket at The Injury Law Firm, LLP tying marketing spend to signed cases?",
+      "approval": {
+        "recipient": "jon@theinjurylawfirm.com",
+        "references": "<0100019ff84fc9e3-9daf23e9-9609-4a5e-9b10-8fa69ee359d0-000000@email.amazonses.com>",
+        "approved_at": "2026-10-07T13:59:15.488081+00:00",
+        "approved_by": "codex",
+        "body_sha256": "6064efb4fedbcccb30f5744fcc67cfe29acb5b7371dc4fe3cecd1c728b487eaf",
+        "in_reply_to": "<0100019ff84fc9e3-9daf23e9-9609-4a5e-9b10-8fa69ee359d0-000000@email.amazonses.com>",
+        "subject_sha256": "d333ab2b21a916306283592a0ec8baa544fe97d5107603e2a153c217415f2112"
+      },
+      "transport": "resend",
+      "references": "<0100019ff84fc9e3-9daf23e9-9609-4a5e-9b10-8fa69ee359d0-000000@email.amazonses.com>",
+      "skill_path": null,
+      "body_sha256": "6064efb4fedbcccb30f5744fcc67cfe29acb5b7371dc4fe3cecd1c728b487eaf",
+      "in_reply_to": "<0100019ff84fc9e3-9daf23e9-9609-4a5e-9b10-8fa69ee359d0-000000@email.amazonses.com>",
+      "skill_sha256": null,
+      "batch_item_id": "95c62595b5d943e4a025c6f9a975f3b1",
+      "brief_version": null,
+      "subject_sha256": "d333ab2b21a916306283592a0ec8baa544fe97d5107603e2a153c217415f2112",
+      "composer_variant_key": null,
+      "lead_gen_action_type": "follow_up",
+      "phi_egress_guard_cache": {},
+      "composer_experiment_key": null
+    },
+    "policy_result_json": {
+      "checks": [
+        {
+          "name": "status_allows_execution",
+          "detail": "approved",
+          "passed": true
+        },
+        {
+          "name": "human_approval_present",
+          "detail": "codex",
+          "passed": true
+        },
+        {
+          "name": "subject_present",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "body_present",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "subject_hash_matches_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "body_hash_matches_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "in_reply_to_matches_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "references_match_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "lead_gen_transport_available",
+          "detail": "zoho_api 0/0 configured=True; resend 0/50 configured=True",
+          "passed": true
+        },
+        {
+          "name": "no_patient_data_in_outreach",
+          "detail": "llm_guard_disabled",
+          "passed": true
+        },
+        {
+          "name": "batch_item_exists",
+          "detail": "95c62595b5d943e4a025c6f9a975f3b1",
+          "passed": true
+        },
+        {
+          "name": "batch_item_not_already_started",
+          "detail": "approved",
+          "passed": true
+        },
+        {
+          "name": "contact_email_present",
+          "detail": "jon@theinjurylawfirm.com",
+          "passed": true
+        },
+        {
+          "name": "no_prior_successful_action_for_item",
+          "detail": "",
+          "passed": true
+        }
+      ],
+      "reason": "allowed",
+      "allowed": true,
+      "risk_level": "high",
+      "action_type": "send_approved_lead_gen_draft",
+      "contact_email": "jon@theinjurylawfirm.com",
+      "requires_human_approval": true
+    },
+    "execution_result_json": {},
+    "error": null,
+    "item_id": "95c62595b5d943e4a025c6f9a975f3b1",
+    "contact_email": "jon@theinjurylawfirm.com",
+    "contact_name": "Jon Sargsyan",
+    "contact_title": "Founding Partner (Founding Attorney)",
+    "firm_name": "The Injury Law Firm, LLP",
+    "pif_id": "03382ee5-71f5-4ceb-9cbc-dc07deea3045",
+    "approval_status": "approved",
+    "reason_json": {
+      "actor": "codex",
+      "source": "operator-curated",
+      "action_type": "follow_up",
+      "agent_draft": {
+        "body": "Hi Jon,\n\nMy earlier note asked about lead-source reporting. The first thing I'd check is whether the source and intake notes survive the move into the matter record without staff fixing them afterward.\n\nIs that handoff smooth for your team, or does it still need manual cleanup?\n\nI'd appreciate your perspective when you have a moment.\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+        "subject": "Re: Is Lead Docket at The Injury Law Firm, LLP tying marketing spend to signed cases?",
+        "action_id": "action_149f2fc572074bd4974a316e",
+        "action_type": "send_approved_lead_gen_draft",
+        "action_status": "approved",
+        "operator_edited": true,
+        "scheduled_for_pt": "2026-10-07 09:10 PDT",
+        "scheduled_for_utc": "2026-10-07 16:10:00 UTC",
+        "operator_edited_at": "2026-10-07T13:59:15.497555+00:00",
+        "operator_edited_by": "codex"
+      },
+      "next_operator_action": "scheduled_send_queued",
+      "send_email_action_id": "action_149f2fc572074bd4974a316e"
+    }
+  },
+  {
+    "id": "action_fbeecd5285874af88b3a0809",
+    "action_type": "send_approved_lead_gen_draft",
+    "status": "approved",
+    "scheduled_for": "2026-10-07T16:20:00+00:00",
+    "input_json": {
+      "to": "mbraun@mbraunlaw.com",
+      "body": "Hi Michael,\n\nThe document-workflow example I sent raised a more practical question for your firm: getting the right records together before drafting may matter as much as drafting faster. I'd start by identifying what your team has to chase or recheck.\n\nWhich takes more effort today, collecting the records or reviewing what comes back?\n\nI'd appreciate your perspective when you have a moment.\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+      "subject": "Re: Precise imaging - quick question",
+      "approval": {
+        "recipient": "mbraun@mbraunlaw.com",
+        "references": "<010001a0253fb85e-6ee5df0f-751b-4542-85d8-483bb4dba6ec-000000@email.amazonses.com>",
+        "approved_at": "2026-10-07T13:59:19.085361+00:00",
+        "approved_by": "codex",
+        "body_sha256": "f66f5dd0bc4588e229848a746fb74538264b256578586e66a1668ae74d5abdc3",
+        "in_reply_to": "<010001a0253fb85e-6ee5df0f-751b-4542-85d8-483bb4dba6ec-000000@email.amazonses.com>",
+        "subject_sha256": "33c4a9f4cdf693fef572bdb035992fdd54bba1ba6646132ab20f775703e2b3a1"
+      },
+      "transport": "resend",
+      "references": "<010001a0253fb85e-6ee5df0f-751b-4542-85d8-483bb4dba6ec-000000@email.amazonses.com>",
+      "skill_path": null,
+      "body_sha256": "f66f5dd0bc4588e229848a746fb74538264b256578586e66a1668ae74d5abdc3",
+      "in_reply_to": "<010001a0253fb85e-6ee5df0f-751b-4542-85d8-483bb4dba6ec-000000@email.amazonses.com>",
+      "skill_sha256": null,
+      "batch_item_id": "b6a4477b143c4ca9a06fde99bee9fe9e",
+      "brief_version": null,
+      "subject_sha256": "33c4a9f4cdf693fef572bdb035992fdd54bba1ba6646132ab20f775703e2b3a1",
+      "composer_variant_key": null,
+      "lead_gen_action_type": "follow_up",
+      "phi_egress_guard_cache": {},
+      "composer_experiment_key": null
+    },
+    "policy_result_json": {
+      "checks": [
+        {
+          "name": "status_allows_execution",
+          "detail": "approved",
+          "passed": true
+        },
+        {
+          "name": "human_approval_present",
+          "detail": "codex",
+          "passed": true
+        },
+        {
+          "name": "subject_present",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "body_present",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "subject_hash_matches_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "body_hash_matches_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "in_reply_to_matches_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "references_match_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "lead_gen_transport_available",
+          "detail": "zoho_api 0/0 configured=True; resend 0/50 configured=True",
+          "passed": true
+        },
+        {
+          "name": "no_patient_data_in_outreach",
+          "detail": "llm_guard_disabled",
+          "passed": true
+        },
+        {
+          "name": "batch_item_exists",
+          "detail": "b6a4477b143c4ca9a06fde99bee9fe9e",
+          "passed": true
+        },
+        {
+          "name": "batch_item_not_already_started",
+          "detail": "approved",
+          "passed": true
+        },
+        {
+          "name": "contact_email_present",
+          "detail": "mbraun@mbraunlaw.com",
+          "passed": true
+        },
+        {
+          "name": "no_prior_successful_action_for_item",
+          "detail": "",
+          "passed": true
+        }
+      ],
+      "reason": "allowed",
+      "allowed": true,
+      "risk_level": "high",
+      "action_type": "send_approved_lead_gen_draft",
+      "contact_email": "mbraun@mbraunlaw.com",
+      "requires_human_approval": true
+    },
+    "execution_result_json": {},
+    "error": null,
+    "item_id": "b6a4477b143c4ca9a06fde99bee9fe9e",
+    "contact_email": "mbraun@mbraunlaw.com",
+    "contact_name": "Michael Braun",
+    "contact_title": "Founder",
+    "firm_name": "Law Office of Michael S. Braun",
+    "pif_id": "0897b21d-54e1-4949-8d97-34c879a12ef9",
+    "approval_status": "approved",
+    "reason_json": {
+      "actor": "codex",
+      "source": "operator-curated",
+      "action_type": "follow_up",
+      "agent_draft": {
+        "body": "Hi Michael,\n\nThe document-workflow example I sent raised a more practical question for your firm: getting the right records together before drafting may matter as much as drafting faster. I'd start by identifying what your team has to chase or recheck.\n\nWhich takes more effort today, collecting the records or reviewing what comes back?\n\nI'd appreciate your perspective when you have a moment.\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+        "subject": "Re: Precise imaging - quick question",
+        "action_id": "action_fbeecd5285874af88b3a0809",
+        "action_type": "send_approved_lead_gen_draft",
+        "action_status": "approved",
+        "operator_edited": true,
+        "scheduled_for_pt": "2026-10-07 09:20 PDT",
+        "scheduled_for_utc": "2026-10-07 16:20:00 UTC",
+        "operator_edited_at": "2026-10-07T13:59:19.094896+00:00",
+        "operator_edited_by": "codex"
+      },
+      "next_operator_action": "scheduled_send_queued",
+      "send_email_action_id": "action_fbeecd5285874af88b3a0809"
+    }
+  },
+  {
+    "id": "action_a857c63f03d34476a7d65be1",
+    "action_type": "send_approved_lead_gen_draft",
+    "status": "approved",
+    "scheduled_for": "2026-10-07T16:30:00+00:00",
+    "input_json": {
+      "to": "erick@noviklawgroup.com",
+      "body": "Hi Erick,\n\nPicking up the records question from my earlier note, I'd look at the work between receiving a provider update and having a usable case file. Filing the message is one step; knowing what is still missing is another.\n\nAt Novik, is chasing missing records or keeping their status current the bigger time drain?\n\nI'd appreciate your perspective when you have a moment.\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+      "subject": "Re: Precise imaging - quick question",
+      "approval": {
+        "recipient": "erick@noviklawgroup.com",
+        "references": "<010001a022e33a62-6170d3e2-fc3d-4871-b7e8-c75cbd244ef8-000000@email.amazonses.com>",
+        "approved_at": "2026-10-07T13:59:23.478074+00:00",
+        "approved_by": "codex",
+        "body_sha256": "6b1e0b26bafbec6519e9cb4023f65c6f0a0d6c6cd4c23313b0f3cab8e226b2ca",
+        "in_reply_to": "<010001a022e33a62-6170d3e2-fc3d-4871-b7e8-c75cbd244ef8-000000@email.amazonses.com>",
+        "subject_sha256": "33c4a9f4cdf693fef572bdb035992fdd54bba1ba6646132ab20f775703e2b3a1"
+      },
+      "transport": "resend",
+      "references": "<010001a022e33a62-6170d3e2-fc3d-4871-b7e8-c75cbd244ef8-000000@email.amazonses.com>",
+      "skill_path": null,
+      "body_sha256": "6b1e0b26bafbec6519e9cb4023f65c6f0a0d6c6cd4c23313b0f3cab8e226b2ca",
+      "in_reply_to": "<010001a022e33a62-6170d3e2-fc3d-4871-b7e8-c75cbd244ef8-000000@email.amazonses.com>",
+      "skill_sha256": null,
+      "batch_item_id": "7823b7117aea47bfa124443213228832",
+      "brief_version": null,
+      "subject_sha256": "33c4a9f4cdf693fef572bdb035992fdd54bba1ba6646132ab20f775703e2b3a1",
+      "composer_variant_key": null,
+      "lead_gen_action_type": "follow_up",
+      "phi_egress_guard_cache": {},
+      "composer_experiment_key": null
+    },
+    "policy_result_json": {
+      "checks": [
+        {
+          "name": "status_allows_execution",
+          "detail": "approved",
+          "passed": true
+        },
+        {
+          "name": "human_approval_present",
+          "detail": "codex",
+          "passed": true
+        },
+        {
+          "name": "subject_present",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "body_present",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "subject_hash_matches_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "body_hash_matches_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "in_reply_to_matches_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "references_match_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "lead_gen_transport_available",
+          "detail": "zoho_api 0/0 configured=True; resend 0/50 configured=True",
+          "passed": true
+        },
+        {
+          "name": "no_patient_data_in_outreach",
+          "detail": "llm_guard_disabled",
+          "passed": true
+        },
+        {
+          "name": "batch_item_exists",
+          "detail": "7823b7117aea47bfa124443213228832",
+          "passed": true
+        },
+        {
+          "name": "batch_item_not_already_started",
+          "detail": "approved",
+          "passed": true
+        },
+        {
+          "name": "contact_email_present",
+          "detail": "erick@noviklawgroup.com",
+          "passed": true
+        },
+        {
+          "name": "no_prior_successful_action_for_item",
+          "detail": "",
+          "passed": true
+        }
+      ],
+      "reason": "allowed",
+      "allowed": true,
+      "risk_level": "high",
+      "action_type": "send_approved_lead_gen_draft",
+      "contact_email": "erick@noviklawgroup.com",
+      "requires_human_approval": true
+    },
+    "execution_result_json": {},
+    "error": null,
+    "item_id": "7823b7117aea47bfa124443213228832",
+    "contact_email": "erick@noviklawgroup.com",
+    "contact_name": "Erick Novik",
+    "contact_title": "Managing Partner",
+    "firm_name": "Novik Law Group",
+    "pif_id": "99ef988d-3b17-4b28-a210-b2e49d800140",
+    "approval_status": "approved",
+    "reason_json": {
+      "actor": "codex",
+      "source": "operator-curated",
+      "action_type": "follow_up",
+      "agent_draft": {
+        "body": "Hi Erick,\n\nPicking up the records question from my earlier note, I'd look at the work between receiving a provider update and having a usable case file. Filing the message is one step; knowing what is still missing is another.\n\nAt Novik, is chasing missing records or keeping their status current the bigger time drain?\n\nI'd appreciate your perspective when you have a moment.\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+        "subject": "Re: Precise imaging - quick question",
+        "action_id": "action_a857c63f03d34476a7d65be1",
+        "action_type": "send_approved_lead_gen_draft",
+        "action_status": "approved",
+        "operator_edited": true,
+        "scheduled_for_pt": "2026-10-07 09:30 PDT",
+        "scheduled_for_utc": "2026-10-07 16:30:00 UTC",
+        "operator_edited_at": "2026-10-07T13:59:23.490016+00:00",
+        "operator_edited_by": "codex"
+      },
+      "next_operator_action": "scheduled_send_queued",
+      "send_email_action_id": "action_a857c63f03d34476a7d65be1"
+    }
+  },
+  {
+    "id": "action_7788124928bb47479dabb110",
+    "action_type": "send_approved_lead_gen_draft",
+    "status": "approved",
+    "scheduled_for": "2026-10-07T16:40:00+00:00",
+    "input_json": {
+      "to": "alex@abdoulinlaw.com",
+      "body": "Hi Alexander,\n\nYour experience on both sides of a claim made me think more about the document-workflow example I sent. Faster drafting only helps if the underlying medical information is complete and easy to check.\n\nFor your team, is finding missing information or reconciling conflicting records the more frustrating part?\n\nI'd appreciate your perspective when you have a moment.\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+      "subject": "Re: Precise imaging - quick question",
+      "approval": {
+        "recipient": "alex@abdoulinlaw.com",
+        "references": "<1a020628b72.71bc218f21223.6872151042876528244@possiblemindshq.com>",
+        "approved_at": "2026-10-07T13:59:26.943127+00:00",
+        "approved_by": "codex",
+        "body_sha256": "369e0d41aac4c70bf5428273b0dfd92b4d51c13a3f64d4a1ffc6420bcac2ddd5",
+        "in_reply_to": "<1a020628b72.71bc218f21223.6872151042876528244@possiblemindshq.com>",
+        "subject_sha256": "33c4a9f4cdf693fef572bdb035992fdd54bba1ba6646132ab20f775703e2b3a1"
+      },
+      "transport": "resend",
+      "references": "<1a020628b72.71bc218f21223.6872151042876528244@possiblemindshq.com>",
+      "skill_path": null,
+      "body_sha256": "369e0d41aac4c70bf5428273b0dfd92b4d51c13a3f64d4a1ffc6420bcac2ddd5",
+      "in_reply_to": "<1a020628b72.71bc218f21223.6872151042876528244@possiblemindshq.com>",
+      "skill_sha256": null,
+      "batch_item_id": "96693518114e4692bfe697ef29cc8858",
+      "brief_version": null,
+      "subject_sha256": "33c4a9f4cdf693fef572bdb035992fdd54bba1ba6646132ab20f775703e2b3a1",
+      "composer_variant_key": null,
+      "lead_gen_action_type": "follow_up",
+      "phi_egress_guard_cache": {},
+      "composer_experiment_key": null
+    },
+    "policy_result_json": {
+      "checks": [
+        {
+          "name": "status_allows_execution",
+          "detail": "approved",
+          "passed": true
+        },
+        {
+          "name": "human_approval_present",
+          "detail": "codex",
+          "passed": true
+        },
+        {
+          "name": "subject_present",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "body_present",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "subject_hash_matches_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "body_hash_matches_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "in_reply_to_matches_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "references_match_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "lead_gen_transport_available",
+          "detail": "zoho_api 0/0 configured=True; resend 0/50 configured=True",
+          "passed": true
+        },
+        {
+          "name": "no_patient_data_in_outreach",
+          "detail": "llm_guard_disabled",
+          "passed": true
+        },
+        {
+          "name": "batch_item_exists",
+          "detail": "96693518114e4692bfe697ef29cc8858",
+          "passed": true
+        },
+        {
+          "name": "batch_item_not_already_started",
+          "detail": "approved",
+          "passed": true
+        },
+        {
+          "name": "contact_email_present",
+          "detail": "alex@abdoulinlaw.com",
+          "passed": true
+        },
+        {
+          "name": "no_prior_successful_action_for_item",
+          "detail": "",
+          "passed": true
+        }
+      ],
+      "reason": "allowed",
+      "allowed": true,
+      "risk_level": "high",
+      "action_type": "send_approved_lead_gen_draft",
+      "contact_email": "alex@abdoulinlaw.com",
+      "requires_human_approval": true
+    },
+    "execution_result_json": {},
+    "error": null,
+    "item_id": "96693518114e4692bfe697ef29cc8858",
+    "contact_email": "alex@abdoulinlaw.com",
+    "contact_name": "Alexander Abdoulin",
+    "contact_title": "Managing Attorney",
+    "firm_name": "Abdoulin Law Inc",
+    "pif_id": "51035ce4-d8df-4e5f-8217-5dcebd863a5c",
+    "approval_status": "approved",
+    "reason_json": {
+      "actor": "codex",
+      "source": "operator-curated",
+      "action_type": "follow_up",
+      "agent_draft": {
+        "body": "Hi Alexander,\n\nYour experience on both sides of a claim made me think more about the document-workflow example I sent. Faster drafting only helps if the underlying medical information is complete and easy to check.\n\nFor your team, is finding missing information or reconciling conflicting records the more frustrating part?\n\nI'd appreciate your perspective when you have a moment.\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+        "subject": "Re: Precise imaging - quick question",
+        "action_id": "action_7788124928bb47479dabb110",
+        "action_type": "send_approved_lead_gen_draft",
+        "action_status": "approved",
+        "operator_edited": true,
+        "scheduled_for_pt": "2026-10-07 09:40 PDT",
+        "scheduled_for_utc": "2026-10-07 16:40:00 UTC",
+        "operator_edited_at": "2026-10-07T13:59:26.948583+00:00",
+        "operator_edited_by": "codex"
+      },
+      "next_operator_action": "scheduled_send_queued",
+      "send_email_action_id": "action_7788124928bb47479dabb110"
+    }
+  },
+  {
+    "id": "action_99a39027c91f4065a430e41f",
+    "action_type": "send_approved_lead_gen_draft",
+    "status": "approved",
+    "scheduled_for": "2026-10-07T16:50:00+00:00",
+    "input_json": {
+      "to": "mrizzo@rizzolawportland.com",
+      "body": "Hi Matthew,\n\nI sent a document-workflow example earlier, but I don't want to assume drafting is the main bottleneck. It could be the requests and reminders needed before anyone has a complete file to work with.\n\nDoes your team spend more time chasing records or preparing documents from them?\n\nI'd appreciate your perspective when you have a moment.\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+      "subject": "Re: Precise imaging - quick question",
+      "approval": {
+        "recipient": "mrizzo@rizzolawportland.com",
+        "references": "<1a0206728f6.6503988f20992.448443114834405942@possiblemindshq.com>",
+        "approved_at": "2026-10-07T13:59:30.673101+00:00",
+        "approved_by": "codex",
+        "body_sha256": "345abba1531149b5bdfc62406977da491fbd08e4bebabd1f06d6e88239b7519c",
+        "in_reply_to": "<1a0206728f6.6503988f20992.448443114834405942@possiblemindshq.com>",
+        "subject_sha256": "33c4a9f4cdf693fef572bdb035992fdd54bba1ba6646132ab20f775703e2b3a1"
+      },
+      "transport": "resend",
+      "references": "<1a0206728f6.6503988f20992.448443114834405942@possiblemindshq.com>",
+      "skill_path": null,
+      "body_sha256": "345abba1531149b5bdfc62406977da491fbd08e4bebabd1f06d6e88239b7519c",
+      "in_reply_to": "<1a0206728f6.6503988f20992.448443114834405942@possiblemindshq.com>",
+      "skill_sha256": null,
+      "batch_item_id": "835ae25660714d188b3eb5bebc4df780",
+      "brief_version": null,
+      "subject_sha256": "33c4a9f4cdf693fef572bdb035992fdd54bba1ba6646132ab20f775703e2b3a1",
+      "composer_variant_key": null,
+      "lead_gen_action_type": "follow_up",
+      "phi_egress_guard_cache": {},
+      "composer_experiment_key": null
+    },
+    "policy_result_json": {
+      "checks": [
+        {
+          "name": "status_allows_execution",
+          "detail": "approved",
+          "passed": true
+        },
+        {
+          "name": "human_approval_present",
+          "detail": "codex",
+          "passed": true
+        },
+        {
+          "name": "subject_present",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "body_present",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "subject_hash_matches_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "body_hash_matches_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "in_reply_to_matches_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "references_match_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "lead_gen_transport_available",
+          "detail": "zoho_api 0/0 configured=True; resend 0/50 configured=True",
+          "passed": true
+        },
+        {
+          "name": "no_patient_data_in_outreach",
+          "detail": "llm_guard_disabled",
+          "passed": true
+        },
+        {
+          "name": "batch_item_exists",
+          "detail": "835ae25660714d188b3eb5bebc4df780",
+          "passed": true
+        },
+        {
+          "name": "batch_item_not_already_started",
+          "detail": "approved",
+          "passed": true
+        },
+        {
+          "name": "contact_email_present",
+          "detail": "mrizzo@rizzolawportland.com",
+          "passed": true
+        },
+        {
+          "name": "no_prior_successful_action_for_item",
+          "detail": "",
+          "passed": true
+        }
+      ],
+      "reason": "allowed",
+      "allowed": true,
+      "risk_level": "high",
+      "action_type": "send_approved_lead_gen_draft",
+      "contact_email": "mrizzo@rizzolawportland.com",
+      "requires_human_approval": true
+    },
+    "execution_result_json": {},
+    "error": null,
+    "item_id": "835ae25660714d188b3eb5bebc4df780",
+    "contact_email": "mrizzo@rizzolawportland.com",
+    "contact_name": "Matthew Rizzo",
+    "contact_title": "Founder & Attorney",
+    "firm_name": "Law Office of Matthew Rizzo",
+    "pif_id": "f54451b3-73e1-4ee5-9bc4-a05c091d7eca",
+    "approval_status": "approved",
+    "reason_json": {
+      "actor": "codex",
+      "source": "operator-curated",
+      "action_type": "follow_up",
+      "agent_draft": {
+        "body": "Hi Matthew,\n\nI sent a document-workflow example earlier, but I don't want to assume drafting is the main bottleneck. It could be the requests and reminders needed before anyone has a complete file to work with.\n\nDoes your team spend more time chasing records or preparing documents from them?\n\nI'd appreciate your perspective when you have a moment.\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+        "subject": "Re: Precise imaging - quick question",
+        "action_id": "action_99a39027c91f4065a430e41f",
+        "action_type": "send_approved_lead_gen_draft",
+        "action_status": "approved",
+        "operator_edited": true,
+        "scheduled_for_pt": "2026-10-07 09:50 PDT",
+        "scheduled_for_utc": "2026-10-07 16:50:00 UTC",
+        "operator_edited_at": "2026-10-07T13:59:30.683024+00:00",
+        "operator_edited_by": "codex"
+      },
+      "next_operator_action": "scheduled_send_queued",
+      "send_email_action_id": "action_99a39027c91f4065a430e41f"
+    }
+  },
+  {
+    "id": "action_529da4957b804dc198c8fb31",
+    "action_type": "send_approved_lead_gen_draft",
+    "status": "approved",
+    "scheduled_for": "2026-10-07T17:00:00+00:00",
+    "input_json": {
+      "to": "ab@bekhloyanlaw.com",
+      "body": "Hi Avedis,\n\nMy earlier emails covered intake and document workflows. A useful first step would be choosing one recurring task and measuring staff time, including the checking and corrections afterward.\n\nAt Bekhloyan Law, would you start with intake handoffs or assembling records for review?\n\nI'd appreciate your perspective when you have a moment.\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+      "subject": "Re: where AI could compound at Bekhloyan Law, APC",
+      "approval": {
+        "recipient": "ab@bekhloyanlaw.com",
+        "references": "<0100019ffd31b506-add84068-e1f0-435e-b637-63485da134b0-000000@email.amazonses.com>",
+        "approved_at": "2026-10-07T13:59:33.823220+00:00",
+        "approved_by": "codex",
+        "body_sha256": "d1a4334d64c7e2c27b1693c2b8c23b550a42b5152a8312615096d24e4a079fe0",
+        "in_reply_to": "<0100019ffd31b506-add84068-e1f0-435e-b637-63485da134b0-000000@email.amazonses.com>",
+        "subject_sha256": "de236bc3da9eab73dbc823aa8f2e4dc905ab3e2848c2e88e7109b5599f9418d8"
+      },
+      "transport": "resend",
+      "references": "<0100019ffd31b506-add84068-e1f0-435e-b637-63485da134b0-000000@email.amazonses.com>",
+      "skill_path": null,
+      "body_sha256": "d1a4334d64c7e2c27b1693c2b8c23b550a42b5152a8312615096d24e4a079fe0",
+      "in_reply_to": "<0100019ffd31b506-add84068-e1f0-435e-b637-63485da134b0-000000@email.amazonses.com>",
+      "skill_sha256": null,
+      "batch_item_id": "863315d5ed56443ab2de5e70fabadc47",
+      "brief_version": null,
+      "subject_sha256": "de236bc3da9eab73dbc823aa8f2e4dc905ab3e2848c2e88e7109b5599f9418d8",
+      "composer_variant_key": null,
+      "lead_gen_action_type": "follow_up",
+      "phi_egress_guard_cache": {},
+      "composer_experiment_key": null
+    },
+    "policy_result_json": {
+      "checks": [
+        {
+          "name": "status_allows_execution",
+          "detail": "approved",
+          "passed": true
+        },
+        {
+          "name": "human_approval_present",
+          "detail": "codex",
+          "passed": true
+        },
+        {
+          "name": "subject_present",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "body_present",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "subject_hash_matches_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "body_hash_matches_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "in_reply_to_matches_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "references_match_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "lead_gen_transport_available",
+          "detail": "zoho_api 0/0 configured=True; resend 0/50 configured=True",
+          "passed": true
+        },
+        {
+          "name": "no_patient_data_in_outreach",
+          "detail": "llm_guard_disabled",
+          "passed": true
+        },
+        {
+          "name": "batch_item_exists",
+          "detail": "863315d5ed56443ab2de5e70fabadc47",
+          "passed": true
+        },
+        {
+          "name": "batch_item_not_already_started",
+          "detail": "approved",
+          "passed": true
+        },
+        {
+          "name": "contact_email_present",
+          "detail": "ab@bekhloyanlaw.com",
+          "passed": true
+        },
+        {
+          "name": "no_prior_successful_action_for_item",
+          "detail": "",
+          "passed": true
+        }
+      ],
+      "reason": "allowed",
+      "allowed": true,
+      "risk_level": "high",
+      "action_type": "send_approved_lead_gen_draft",
+      "contact_email": "ab@bekhloyanlaw.com",
+      "requires_human_approval": true
+    },
+    "execution_result_json": {},
+    "error": null,
+    "item_id": "863315d5ed56443ab2de5e70fabadc47",
+    "contact_email": "ab@bekhloyanlaw.com",
+    "contact_name": "Avedis H. Bekhloyan",
+    "contact_title": "Founder & Lead Attorney",
+    "firm_name": "Bekhloyan Law, APC",
+    "pif_id": "8fb27d14-61cf-4ca2-b816-5612de9ead4c",
+    "approval_status": "approved",
+    "reason_json": {
+      "actor": "codex",
+      "source": "operator-curated",
+      "action_type": "follow_up",
+      "agent_draft": {
+        "body": "Hi Avedis,\n\nMy earlier emails covered intake and document workflows. A useful first step would be choosing one recurring task and measuring staff time, including the checking and corrections afterward.\n\nAt Bekhloyan Law, would you start with intake handoffs or assembling records for review?\n\nI'd appreciate your perspective when you have a moment.\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+        "subject": "Re: where AI could compound at Bekhloyan Law, APC",
+        "action_id": "action_529da4957b804dc198c8fb31",
+        "action_type": "send_approved_lead_gen_draft",
+        "action_status": "approved",
+        "operator_edited": true,
+        "scheduled_for_pt": "2026-10-07 10:00 PDT",
+        "scheduled_for_utc": "2026-10-07 17:00:00 UTC",
+        "operator_edited_at": "2026-10-07T13:59:33.830258+00:00",
+        "operator_edited_by": "codex"
+      },
+      "next_operator_action": "scheduled_send_queued",
+      "send_email_action_id": "action_529da4957b804dc198c8fb31"
+    }
+  },
+  {
+    "id": "action_4379a22a5c794b3ba5434538",
+    "action_type": "send_approved_lead_gen_draft",
+    "status": "approved",
+    "scheduled_for": "2026-10-07T17:10:00+00:00",
+    "input_json": {
+      "to": "meylin@malfarolaw.com",
+      "body": "Hi Meylin,\n\nThe workflow example I sent was about producing documents faster. For a founder, I think the more useful test is whether it reduces the work that still lands back on your desk.\n\nWould cleaner intake summaries or better-organized records make the bigger difference for you?\n\nI'd appreciate your perspective when you have a moment.\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+      "subject": "Re: where AI could compound at Law Office of Meylin P. Alfaro",
+      "approval": {
+        "recipient": "meylin@malfarolaw.com",
+        "references": "<0100019ffd23f139-128342c2-309a-4920-b6fc-f497fc0c192a-000000@email.amazonses.com>",
+        "approved_at": "2026-10-07T13:59:37.119357+00:00",
+        "approved_by": "codex",
+        "body_sha256": "b5d6c6fff38522c084ad50dd54135a44ea1b7d38ad26b5243b6e641c532df00e",
+        "in_reply_to": "<0100019ffd23f139-128342c2-309a-4920-b6fc-f497fc0c192a-000000@email.amazonses.com>",
+        "subject_sha256": "6fcce08d772e2b2814ad9f97842304de2156a5cfcfd5ad5ad78add4a6e5d10f1"
+      },
+      "transport": "resend",
+      "references": "<0100019ffd23f139-128342c2-309a-4920-b6fc-f497fc0c192a-000000@email.amazonses.com>",
+      "skill_path": null,
+      "body_sha256": "b5d6c6fff38522c084ad50dd54135a44ea1b7d38ad26b5243b6e641c532df00e",
+      "in_reply_to": "<0100019ffd23f139-128342c2-309a-4920-b6fc-f497fc0c192a-000000@email.amazonses.com>",
+      "skill_sha256": null,
+      "batch_item_id": "03e06ef6f82242dfa544615acd20b485",
+      "brief_version": null,
+      "subject_sha256": "6fcce08d772e2b2814ad9f97842304de2156a5cfcfd5ad5ad78add4a6e5d10f1",
+      "composer_variant_key": null,
+      "lead_gen_action_type": "follow_up",
+      "phi_egress_guard_cache": {},
+      "composer_experiment_key": null
+    },
+    "policy_result_json": {
+      "checks": [
+        {
+          "name": "status_allows_execution",
+          "detail": "approved",
+          "passed": true
+        },
+        {
+          "name": "human_approval_present",
+          "detail": "codex",
+          "passed": true
+        },
+        {
+          "name": "subject_present",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "body_present",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "subject_hash_matches_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "body_hash_matches_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "in_reply_to_matches_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "references_match_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "lead_gen_transport_available",
+          "detail": "zoho_api 0/0 configured=True; resend 0/50 configured=True",
+          "passed": true
+        },
+        {
+          "name": "no_patient_data_in_outreach",
+          "detail": "llm_guard_disabled",
+          "passed": true
+        },
+        {
+          "name": "batch_item_exists",
+          "detail": "03e06ef6f82242dfa544615acd20b485",
+          "passed": true
+        },
+        {
+          "name": "batch_item_not_already_started",
+          "detail": "approved",
+          "passed": true
+        },
+        {
+          "name": "contact_email_present",
+          "detail": "meylin@malfarolaw.com",
+          "passed": true
+        },
+        {
+          "name": "no_prior_successful_action_for_item",
+          "detail": "",
+          "passed": true
+        }
+      ],
+      "reason": "allowed",
+      "allowed": true,
+      "risk_level": "high",
+      "action_type": "send_approved_lead_gen_draft",
+      "contact_email": "meylin@malfarolaw.com",
+      "requires_human_approval": true
+    },
+    "execution_result_json": {},
+    "error": null,
+    "item_id": "03e06ef6f82242dfa544615acd20b485",
+    "contact_email": "meylin@malfarolaw.com",
+    "contact_name": "Meylin P. Alfaro",
+    "contact_title": "Founder and Attorney",
+    "firm_name": "Law Office of Meylin P. Alfaro",
+    "pif_id": "1c2ac491-9512-408e-82a2-276205298313",
+    "approval_status": "approved",
+    "reason_json": {
+      "actor": "codex",
+      "source": "operator-curated",
+      "action_type": "follow_up",
+      "agent_draft": {
+        "body": "Hi Meylin,\n\nThe workflow example I sent was about producing documents faster. For a founder, I think the more useful test is whether it reduces the work that still lands back on your desk.\n\nWould cleaner intake summaries or better-organized records make the bigger difference for you?\n\nI'd appreciate your perspective when you have a moment.\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+        "subject": "Re: where AI could compound at Law Office of Meylin P. Alfaro",
+        "action_id": "action_4379a22a5c794b3ba5434538",
+        "action_type": "send_approved_lead_gen_draft",
+        "action_status": "approved",
+        "operator_edited": true,
+        "scheduled_for_pt": "2026-10-07 10:10 PDT",
+        "scheduled_for_utc": "2026-10-07 17:10:00 UTC",
+        "operator_edited_at": "2026-10-07T13:59:37.132829+00:00",
+        "operator_edited_by": "codex"
+      },
+      "next_operator_action": "scheduled_send_queued",
+      "send_email_action_id": "action_4379a22a5c794b3ba5434538"
+    }
+  },
+  {
+    "id": "action_c3eabf083ad1485586faf126",
+    "action_type": "send_approved_lead_gen_draft",
+    "status": "approved",
+    "scheduled_for": "2026-10-07T17:20:00+00:00",
+    "input_json": {
+      "to": "ara@aranajarian.com",
+      "body": "Hi Ara,\n\nA simpler way to approach my earlier automation note would be to pick one recurring task that interrupts case work, then see whether it can be prepared for review without adding more checking.\n\nWould intake paperwork or records follow-up be the more useful place to start at your firm?\n\nI'd appreciate your perspective when you have a moment.\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+      "subject": "Re: where AI could compound at The Law Offices of Ara Najarian",
+      "approval": {
+        "recipient": "ara@aranajarian.com",
+        "references": "<0100019ffd2d1ee5-44a0d055-4f4e-4067-8be0-e50c33e119b4-000000@email.amazonses.com>",
+        "approved_at": "2026-10-07T13:59:41.179150+00:00",
+        "approved_by": "codex",
+        "body_sha256": "d889a66c64afdc15cc4f6962da548e9ee3a9b358ea6246a219a7e2354afde9aa",
+        "in_reply_to": "<0100019ffd2d1ee5-44a0d055-4f4e-4067-8be0-e50c33e119b4-000000@email.amazonses.com>",
+        "subject_sha256": "21992a25830f78188fd128c78fd9d1f1d579f1c591d51eb799357b638b1171e3"
+      },
+      "transport": "resend",
+      "references": "<0100019ffd2d1ee5-44a0d055-4f4e-4067-8be0-e50c33e119b4-000000@email.amazonses.com>",
+      "skill_path": null,
+      "body_sha256": "d889a66c64afdc15cc4f6962da548e9ee3a9b358ea6246a219a7e2354afde9aa",
+      "in_reply_to": "<0100019ffd2d1ee5-44a0d055-4f4e-4067-8be0-e50c33e119b4-000000@email.amazonses.com>",
+      "skill_sha256": null,
+      "batch_item_id": "fc77477cc2f6485a99259df9700bbdef",
+      "brief_version": null,
+      "subject_sha256": "21992a25830f78188fd128c78fd9d1f1d579f1c591d51eb799357b638b1171e3",
+      "composer_variant_key": null,
+      "lead_gen_action_type": "follow_up",
+      "phi_egress_guard_cache": {},
+      "composer_experiment_key": null
+    },
+    "policy_result_json": {
+      "checks": [
+        {
+          "name": "status_allows_execution",
+          "detail": "approved",
+          "passed": true
+        },
+        {
+          "name": "human_approval_present",
+          "detail": "codex",
+          "passed": true
+        },
+        {
+          "name": "subject_present",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "body_present",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "subject_hash_matches_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "body_hash_matches_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "in_reply_to_matches_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "references_match_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "lead_gen_transport_available",
+          "detail": "zoho_api 0/0 configured=True; resend 0/50 configured=True",
+          "passed": true
+        },
+        {
+          "name": "no_patient_data_in_outreach",
+          "detail": "llm_guard_disabled",
+          "passed": true
+        },
+        {
+          "name": "batch_item_exists",
+          "detail": "fc77477cc2f6485a99259df9700bbdef",
+          "passed": true
+        },
+        {
+          "name": "batch_item_not_already_started",
+          "detail": "approved",
+          "passed": true
+        },
+        {
+          "name": "contact_email_present",
+          "detail": "ara@aranajarian.com",
+          "passed": true
+        },
+        {
+          "name": "no_prior_successful_action_for_item",
+          "detail": "",
+          "passed": true
+        }
+      ],
+      "reason": "allowed",
+      "allowed": true,
+      "risk_level": "high",
+      "action_type": "send_approved_lead_gen_draft",
+      "contact_email": "ara@aranajarian.com",
+      "requires_human_approval": true
+    },
+    "execution_result_json": {},
+    "error": null,
+    "item_id": "fc77477cc2f6485a99259df9700bbdef",
+    "contact_email": "ara@aranajarian.com",
+    "contact_name": "Ara J. Najarian",
+    "contact_title": "Founder / Attorney",
+    "firm_name": "The Law Offices of Ara Najarian",
+    "pif_id": "ef5d6ecb-140b-4658-a027-c620f0ef6bb0",
+    "approval_status": "approved",
+    "reason_json": {
+      "actor": "codex",
+      "source": "operator-curated",
+      "action_type": "follow_up",
+      "agent_draft": {
+        "body": "Hi Ara,\n\nA simpler way to approach my earlier automation note would be to pick one recurring task that interrupts case work, then see whether it can be prepared for review without adding more checking.\n\nWould intake paperwork or records follow-up be the more useful place to start at your firm?\n\nI'd appreciate your perspective when you have a moment.\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+        "subject": "Re: where AI could compound at The Law Offices of Ara Najarian",
+        "action_id": "action_c3eabf083ad1485586faf126",
+        "action_type": "send_approved_lead_gen_draft",
+        "action_status": "approved",
+        "operator_edited": true,
+        "scheduled_for_pt": "2026-10-07 10:20 PDT",
+        "scheduled_for_utc": "2026-10-07 17:20:00 UTC",
+        "operator_edited_at": "2026-10-07T13:59:41.196082+00:00",
+        "operator_edited_by": "codex"
+      },
+      "next_operator_action": "scheduled_send_queued",
+      "send_email_action_id": "action_c3eabf083ad1485586faf126"
+    }
+  },
+  {
+    "id": "action_00c796a2eaa540e7986bd3db",
+    "action_type": "send_approved_lead_gen_draft",
+    "status": "approved",
+    "scheduled_for": "2026-10-07T17:30:00+00:00",
+    "input_json": {
+      "to": "pedram@pedramlaw.com",
+      "body": "Hi Nima,\n\nFollowing the document-workflow example I sent, I'd start with the preparation around a document rather than the writing itself: gathering records, identifying gaps, and making the source material easy to review.\n\nAt Pedram Law, is gathering that material or checking its completeness the bigger burden?\n\nI'd appreciate your perspective when you have a moment.\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+      "subject": "Re: where AI could compound at Pedram Law",
+      "approval": {
+        "recipient": "pedram@pedramlaw.com",
+        "references": "<0100019ffd03cffb-034d51c7-1cb9-48ca-9d68-312988537363-000000@email.amazonses.com>",
+        "approved_at": "2026-10-07T13:59:45.241221+00:00",
+        "approved_by": "codex",
+        "body_sha256": "88cbdbb0b6915912dc45c8e5b7db79b9ec5cf9c3255639d14b6f6284fc257e36",
+        "in_reply_to": "<0100019ffd03cffb-034d51c7-1cb9-48ca-9d68-312988537363-000000@email.amazonses.com>",
+        "subject_sha256": "e8ea39a2218ea534a92a8d49a53fc5e81fb5205818d6e18741d095897b4e36a9"
+      },
+      "transport": "resend",
+      "references": "<0100019ffd03cffb-034d51c7-1cb9-48ca-9d68-312988537363-000000@email.amazonses.com>",
+      "skill_path": null,
+      "body_sha256": "88cbdbb0b6915912dc45c8e5b7db79b9ec5cf9c3255639d14b6f6284fc257e36",
+      "in_reply_to": "<0100019ffd03cffb-034d51c7-1cb9-48ca-9d68-312988537363-000000@email.amazonses.com>",
+      "skill_sha256": null,
+      "batch_item_id": "7a5f93ad891c489ca7d11a1636e3597e",
+      "brief_version": null,
+      "subject_sha256": "e8ea39a2218ea534a92a8d49a53fc5e81fb5205818d6e18741d095897b4e36a9",
+      "composer_variant_key": null,
+      "lead_gen_action_type": "follow_up",
+      "phi_egress_guard_cache": {},
+      "composer_experiment_key": null
+    },
+    "policy_result_json": {
+      "checks": [
+        {
+          "name": "status_allows_execution",
+          "detail": "approved",
+          "passed": true
+        },
+        {
+          "name": "human_approval_present",
+          "detail": "codex",
+          "passed": true
+        },
+        {
+          "name": "subject_present",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "body_present",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "subject_hash_matches_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "body_hash_matches_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "in_reply_to_matches_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "references_match_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "lead_gen_transport_available",
+          "detail": "zoho_api 0/0 configured=True; resend 0/50 configured=True",
+          "passed": true
+        },
+        {
+          "name": "no_patient_data_in_outreach",
+          "detail": "llm_guard_disabled",
+          "passed": true
+        },
+        {
+          "name": "batch_item_exists",
+          "detail": "7a5f93ad891c489ca7d11a1636e3597e",
+          "passed": true
+        },
+        {
+          "name": "batch_item_not_already_started",
+          "detail": "approved",
+          "passed": true
+        },
+        {
+          "name": "contact_email_present",
+          "detail": "pedram@pedramlaw.com",
+          "passed": true
+        },
+        {
+          "name": "no_prior_successful_action_for_item",
+          "detail": "",
+          "passed": true
+        }
+      ],
+      "reason": "allowed",
+      "allowed": true,
+      "risk_level": "high",
+      "action_type": "send_approved_lead_gen_draft",
+      "contact_email": "pedram@pedramlaw.com",
+      "requires_human_approval": true
+    },
+    "execution_result_json": {},
+    "error": null,
+    "item_id": "7a5f93ad891c489ca7d11a1636e3597e",
+    "contact_email": "pedram@pedramlaw.com",
+    "contact_name": "nima pedram",
+    "contact_title": "Founding Partner; Senior Attorney",
+    "firm_name": "Pedram Law",
+    "pif_id": "1962a44e-ecaf-44d1-8630-f3f8103de61c",
+    "approval_status": "approved",
+    "reason_json": {
+      "actor": "codex",
+      "source": "operator-curated",
+      "action_type": "follow_up",
+      "agent_draft": {
+        "body": "Hi Nima,\n\nFollowing the document-workflow example I sent, I'd start with the preparation around a document rather than the writing itself: gathering records, identifying gaps, and making the source material easy to review.\n\nAt Pedram Law, is gathering that material or checking its completeness the bigger burden?\n\nI'd appreciate your perspective when you have a moment.\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+        "subject": "Re: where AI could compound at Pedram Law",
+        "action_id": "action_00c796a2eaa540e7986bd3db",
+        "action_type": "send_approved_lead_gen_draft",
+        "action_status": "approved",
+        "operator_edited": true,
+        "scheduled_for_pt": "2026-10-07 10:30 PDT",
+        "scheduled_for_utc": "2026-10-07 17:30:00 UTC",
+        "operator_edited_at": "2026-10-07T13:59:45.258222+00:00",
+        "operator_edited_by": "codex"
+      },
+      "next_operator_action": "scheduled_send_queued",
+      "send_email_action_id": "action_00c796a2eaa540e7986bd3db"
+    }
+  },
+  {
+    "id": "action_7a0f90e95a83443bb37577c7",
+    "action_type": "send_approved_lead_gen_draft",
+    "status": "approved",
+    "scheduled_for": "2026-10-07T17:40:00+00:00",
+    "input_json": {
+      "to": "dgonor@shaffergonorlaw.com",
+      "body": "Hi David,\n\nMy earlier note covered reusable document workflows. One practical test would be whether a consistent review packet saves your team time without changing how you exercise legal judgment.\n\nAt Shaffer & Gonor, is preparing that packet or checking it for missing information the more repetitive task?\n\nI'd appreciate your perspective when you have a moment.\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+      "subject": "Re: where AI could compound at Shaffer & Gonor",
+      "approval": {
+        "recipient": "dgonor@shaffergonorlaw.com",
+        "references": "<0100019ffce84a7d-b6387d4b-4d10-4869-a879-ce37dece4bfc-000000@email.amazonses.com>",
+        "approved_at": "2026-10-07T13:59:48.773331+00:00",
+        "approved_by": "codex",
+        "body_sha256": "38af170c2b01a78e99fda45fb82204475459c5dc4afc18766c121ccc3709ef33",
+        "in_reply_to": "<0100019ffce84a7d-b6387d4b-4d10-4869-a879-ce37dece4bfc-000000@email.amazonses.com>",
+        "subject_sha256": "5c9bbc428ec285606792de8eff08308ea53f07880ef5510a54c1ea798cbc06ec"
+      },
+      "transport": "resend",
+      "references": "<0100019ffce84a7d-b6387d4b-4d10-4869-a879-ce37dece4bfc-000000@email.amazonses.com>",
+      "skill_path": null,
+      "body_sha256": "38af170c2b01a78e99fda45fb82204475459c5dc4afc18766c121ccc3709ef33",
+      "in_reply_to": "<0100019ffce84a7d-b6387d4b-4d10-4869-a879-ce37dece4bfc-000000@email.amazonses.com>",
+      "skill_sha256": null,
+      "batch_item_id": "61410341455f406381b4fde3cb234e3d",
+      "brief_version": null,
+      "subject_sha256": "5c9bbc428ec285606792de8eff08308ea53f07880ef5510a54c1ea798cbc06ec",
+      "composer_variant_key": null,
+      "lead_gen_action_type": "follow_up",
+      "phi_egress_guard_cache": {},
+      "composer_experiment_key": null
+    },
+    "policy_result_json": {
+      "checks": [
+        {
+          "name": "status_allows_execution",
+          "detail": "approved",
+          "passed": true
+        },
+        {
+          "name": "human_approval_present",
+          "detail": "codex",
+          "passed": true
+        },
+        {
+          "name": "subject_present",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "body_present",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "subject_hash_matches_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "body_hash_matches_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "in_reply_to_matches_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "references_match_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "lead_gen_transport_available",
+          "detail": "zoho_api 0/0 configured=True; resend 0/50 configured=True",
+          "passed": true
+        },
+        {
+          "name": "no_patient_data_in_outreach",
+          "detail": "llm_guard_disabled",
+          "passed": true
+        },
+        {
+          "name": "batch_item_exists",
+          "detail": "61410341455f406381b4fde3cb234e3d",
+          "passed": true
+        },
+        {
+          "name": "batch_item_not_already_started",
+          "detail": "approved",
+          "passed": true
+        },
+        {
+          "name": "contact_email_present",
+          "detail": "dgonor@shaffergonorlaw.com",
+          "passed": true
+        },
+        {
+          "name": "no_prior_successful_action_for_item",
+          "detail": "",
+          "passed": true
+        }
+      ],
+      "reason": "allowed",
+      "allowed": true,
+      "risk_level": "high",
+      "action_type": "send_approved_lead_gen_draft",
+      "contact_email": "dgonor@shaffergonorlaw.com",
+      "requires_human_approval": true
+    },
+    "execution_result_json": {},
+    "error": null,
+    "item_id": "61410341455f406381b4fde3cb234e3d",
+    "contact_email": "dgonor@shaffergonorlaw.com",
+    "contact_name": "David Gonor",
+    "contact_title": "Founding Partner",
+    "firm_name": "Shaffer & Gonor",
+    "pif_id": "2a1ce63d-6f37-47c7-9eb9-341bfef768c3",
+    "approval_status": "approved",
+    "reason_json": {
+      "actor": "codex",
+      "source": "operator-curated",
+      "action_type": "follow_up",
+      "agent_draft": {
+        "body": "Hi David,\n\nMy earlier note covered reusable document workflows. One practical test would be whether a consistent review packet saves your team time without changing how you exercise legal judgment.\n\nAt Shaffer & Gonor, is preparing that packet or checking it for missing information the more repetitive task?\n\nI'd appreciate your perspective when you have a moment.\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+        "subject": "Re: where AI could compound at Shaffer & Gonor",
+        "action_id": "action_7a0f90e95a83443bb37577c7",
+        "action_type": "send_approved_lead_gen_draft",
+        "action_status": "approved",
+        "operator_edited": true,
+        "scheduled_for_pt": "2026-10-07 10:40 PDT",
+        "scheduled_for_utc": "2026-10-07 17:40:00 UTC",
+        "operator_edited_at": "2026-10-07T13:59:48.785770+00:00",
+        "operator_edited_by": "codex"
+      },
+      "next_operator_action": "scheduled_send_queued",
+      "send_email_action_id": "action_7a0f90e95a83443bb37577c7"
+    }
+  },
+  {
+    "id": "action_6879dcfa96b2458fac751a73",
+    "action_type": "send_approved_lead_gen_draft",
+    "status": "approved",
+    "scheduled_for": "2026-10-07T17:50:00+00:00",
+    "input_json": {
+      "to": "andrew@a2zlegal.com",
+      "body": "Hi Andrew,\n\nI wrote earlier about intake and document work. The useful goal would be fewer repeated steps for your team, not asking them to learn another tool before seeing a benefit.\n\nAt A2Z Legal, would reducing duplicate intake entry or records follow-up save more time?\n\nI'd appreciate your perspective when you have a moment.\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+      "subject": "Re: where AI could compound at A2Z Legal",
+      "approval": {
+        "recipient": "andrew@a2zlegal.com",
+        "references": "<0100019ffcc82ee3-62cc73e3-dd2a-4b01-be60-5e40338a4fe2-000000@email.amazonses.com>",
+        "approved_at": "2026-10-07T13:59:52.052272+00:00",
+        "approved_by": "codex",
+        "body_sha256": "1683a4e6e67a9ba5f505b523516f7745412335166ef5d05a52ab7586831b5d82",
+        "in_reply_to": "<0100019ffcc82ee3-62cc73e3-dd2a-4b01-be60-5e40338a4fe2-000000@email.amazonses.com>",
+        "subject_sha256": "5c5124a84a692a8b1f6ba9ce3aac589621432587f68601f6fb7b87c60dd43eeb"
+      },
+      "transport": "resend",
+      "references": "<0100019ffcc82ee3-62cc73e3-dd2a-4b01-be60-5e40338a4fe2-000000@email.amazonses.com>",
+      "skill_path": null,
+      "body_sha256": "1683a4e6e67a9ba5f505b523516f7745412335166ef5d05a52ab7586831b5d82",
+      "in_reply_to": "<0100019ffcc82ee3-62cc73e3-dd2a-4b01-be60-5e40338a4fe2-000000@email.amazonses.com>",
+      "skill_sha256": null,
+      "batch_item_id": "efee6aac8fce4cd2b56d204436afe59d",
+      "brief_version": null,
+      "subject_sha256": "5c5124a84a692a8b1f6ba9ce3aac589621432587f68601f6fb7b87c60dd43eeb",
+      "composer_variant_key": null,
+      "lead_gen_action_type": "follow_up",
+      "phi_egress_guard_cache": {},
+      "composer_experiment_key": null
+    },
+    "policy_result_json": {
+      "checks": [
+        {
+          "name": "status_allows_execution",
+          "detail": "approved",
+          "passed": true
+        },
+        {
+          "name": "human_approval_present",
+          "detail": "codex",
+          "passed": true
+        },
+        {
+          "name": "subject_present",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "body_present",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "subject_hash_matches_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "body_hash_matches_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "in_reply_to_matches_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "references_match_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "lead_gen_transport_available",
+          "detail": "zoho_api 0/0 configured=True; resend 0/50 configured=True",
+          "passed": true
+        },
+        {
+          "name": "no_patient_data_in_outreach",
+          "detail": "llm_guard_disabled",
+          "passed": true
+        },
+        {
+          "name": "batch_item_exists",
+          "detail": "efee6aac8fce4cd2b56d204436afe59d",
+          "passed": true
+        },
+        {
+          "name": "batch_item_not_already_started",
+          "detail": "approved",
+          "passed": true
+        },
+        {
+          "name": "contact_email_present",
+          "detail": "andrew@a2zlegal.com",
+          "passed": true
+        },
+        {
+          "name": "no_prior_successful_action_for_item",
+          "detail": "",
+          "passed": true
+        }
+      ],
+      "reason": "allowed",
+      "allowed": true,
+      "risk_level": "high",
+      "action_type": "send_approved_lead_gen_draft",
+      "contact_email": "andrew@a2zlegal.com",
+      "requires_human_approval": true
+    },
+    "execution_result_json": {},
+    "error": null,
+    "item_id": "efee6aac8fce4cd2b56d204436afe59d",
+    "contact_email": "andrew@a2zlegal.com",
+    "contact_name": "Andrew Zeytuntsyan",
+    "contact_title": "Founder; Founding Partner, Law Offices of Andrew Zeytuntsyan (A2Z Legal)",
+    "firm_name": "A2Z Legal",
+    "pif_id": "adbdbb0c-1d07-4158-a1eb-d2ca7363c5bd",
+    "approval_status": "approved",
+    "reason_json": {
+      "actor": "codex",
+      "source": "operator-curated",
+      "action_type": "follow_up",
+      "agent_draft": {
+        "body": "Hi Andrew,\n\nI wrote earlier about intake and document work. The useful goal would be fewer repeated steps for your team, not asking them to learn another tool before seeing a benefit.\n\nAt A2Z Legal, would reducing duplicate intake entry or records follow-up save more time?\n\nI'd appreciate your perspective when you have a moment.\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+        "subject": "Re: where AI could compound at A2Z Legal",
+        "action_id": "action_6879dcfa96b2458fac751a73",
+        "action_type": "send_approved_lead_gen_draft",
+        "action_status": "approved",
+        "operator_edited": true,
+        "scheduled_for_pt": "2026-10-07 10:50 PDT",
+        "scheduled_for_utc": "2026-10-07 17:50:00 UTC",
+        "operator_edited_at": "2026-10-07T13:59:52.058828+00:00",
+        "operator_edited_by": "codex"
+      },
+      "next_operator_action": "scheduled_send_queued",
+      "send_email_action_id": "action_6879dcfa96b2458fac751a73"
+    }
+  },
+  {
+    "id": "action_ee4a8435af534077b2d8b164",
+    "action_type": "send_approved_lead_gen_draft",
+    "status": "approved",
+    "scheduled_for": "2026-10-07T18:00:00+00:00",
+    "input_json": {
+      "to": "jessica@elkingamboa.com",
+      "body": "Hi Jessica,\n\nThe document example I sent got me thinking about the handoff before drafting starts. A clear list of missing records and who is following up could be a smaller, more useful starting point.\n\nAt Elkin Gamboa, is tracking what's missing or getting it back from providers the harder part?\n\nI'd appreciate your perspective when you have a moment.\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+      "subject": "Re: where AI could compound at Elkin Gamboa LLP",
+      "approval": {
+        "recipient": "jessica@elkingamboa.com",
+        "references": "<0100019ffc9f52bd-ec2e28d1-621a-43fa-a815-2faac725f986-000000@email.amazonses.com>",
+        "approved_at": "2026-10-07T13:59:54.983384+00:00",
+        "approved_by": "codex",
+        "body_sha256": "c6bc4e91823f3fbcea7babd5fa6039571e8e3c76dc4c446b4b2950d18db6fa4e",
+        "in_reply_to": "<0100019ffc9f52bd-ec2e28d1-621a-43fa-a815-2faac725f986-000000@email.amazonses.com>",
+        "subject_sha256": "1cf9715f21161a1ae866cd65e7608be8410cf92d1d5a14b0b1162f56893bd9a6"
+      },
+      "transport": "resend",
+      "references": "<0100019ffc9f52bd-ec2e28d1-621a-43fa-a815-2faac725f986-000000@email.amazonses.com>",
+      "skill_path": null,
+      "body_sha256": "c6bc4e91823f3fbcea7babd5fa6039571e8e3c76dc4c446b4b2950d18db6fa4e",
+      "in_reply_to": "<0100019ffc9f52bd-ec2e28d1-621a-43fa-a815-2faac725f986-000000@email.amazonses.com>",
+      "skill_sha256": null,
+      "batch_item_id": "f9369fb9d8624e3489613a4840716f8e",
+      "brief_version": null,
+      "subject_sha256": "1cf9715f21161a1ae866cd65e7608be8410cf92d1d5a14b0b1162f56893bd9a6",
+      "composer_variant_key": null,
+      "lead_gen_action_type": "follow_up",
+      "phi_egress_guard_cache": {},
+      "composer_experiment_key": null
+    },
+    "policy_result_json": {
+      "checks": [
+        {
+          "name": "status_allows_execution",
+          "detail": "approved",
+          "passed": true
+        },
+        {
+          "name": "human_approval_present",
+          "detail": "codex",
+          "passed": true
+        },
+        {
+          "name": "subject_present",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "body_present",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "subject_hash_matches_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "body_hash_matches_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "in_reply_to_matches_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "references_match_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "lead_gen_transport_available",
+          "detail": "zoho_api 0/0 configured=True; resend 0/50 configured=True",
+          "passed": true
+        },
+        {
+          "name": "no_patient_data_in_outreach",
+          "detail": "llm_guard_disabled",
+          "passed": true
+        },
+        {
+          "name": "batch_item_exists",
+          "detail": "f9369fb9d8624e3489613a4840716f8e",
+          "passed": true
+        },
+        {
+          "name": "batch_item_not_already_started",
+          "detail": "approved",
+          "passed": true
+        },
+        {
+          "name": "contact_email_present",
+          "detail": "jessica@elkingamboa.com",
+          "passed": true
+        },
+        {
+          "name": "no_prior_successful_action_for_item",
+          "detail": "",
+          "passed": true
+        }
+      ],
+      "reason": "allowed",
+      "allowed": true,
+      "risk_level": "high",
+      "action_type": "send_approved_lead_gen_draft",
+      "contact_email": "jessica@elkingamboa.com",
+      "requires_human_approval": true
+    },
+    "execution_result_json": {},
+    "error": null,
+    "item_id": "f9369fb9d8624e3489613a4840716f8e",
+    "contact_email": "jessica@elkingamboa.com",
+    "contact_name": "Jessica Gamboa",
+    "contact_title": "Founding Partner",
+    "firm_name": "Elkin Gamboa LLP",
+    "pif_id": "723be878-cf1e-4609-8a5d-2e67089d0d62",
+    "approval_status": "approved",
+    "reason_json": {
+      "actor": "codex",
+      "source": "operator-curated",
+      "action_type": "follow_up",
+      "agent_draft": {
+        "body": "Hi Jessica,\n\nThe document example I sent got me thinking about the handoff before drafting starts. A clear list of missing records and who is following up could be a smaller, more useful starting point.\n\nAt Elkin Gamboa, is tracking what's missing or getting it back from providers the harder part?\n\nI'd appreciate your perspective when you have a moment.\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+        "subject": "Re: where AI could compound at Elkin Gamboa LLP",
+        "action_id": "action_ee4a8435af534077b2d8b164",
+        "action_type": "send_approved_lead_gen_draft",
+        "action_status": "approved",
+        "operator_edited": true,
+        "scheduled_for_pt": "2026-10-07 11:00 PDT",
+        "scheduled_for_utc": "2026-10-07 18:00:00 UTC",
+        "operator_edited_at": "2026-10-07T13:59:54.990586+00:00",
+        "operator_edited_by": "codex"
+      },
+      "next_operator_action": "scheduled_send_queued",
+      "send_email_action_id": "action_ee4a8435af534077b2d8b164"
+    }
+  },
+  {
+    "id": "action_f448cb587b9e4bc8a1f2a75f",
+    "action_type": "send_approved_lead_gen_draft",
+    "status": "approved",
+    "scheduled_for": "2026-10-07T18:10:00+00:00",
+    "input_json": {
+      "to": "gil@arbelegal.com",
+      "body": "Hi Gil,\n\nTo narrow my earlier automation question, I'd look for work your team prepares repeatedly but that still needs your final review. The goal would be less preparation on your side, without handing over the decision.\n\nWould intake summaries or organized document packets be more useful to you?\n\nI'd appreciate your perspective when you have a moment.\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+      "subject": "Re: where AI could compound at Law Office of Gil L. Arbel",
+      "approval": {
+        "recipient": "gil@arbelegal.com",
+        "references": "<0100019ffc83aab0-f6a7e51c-a996-4428-98f0-d5657e115088-000000@email.amazonses.com>",
+        "approved_at": "2026-10-07T13:59:58.243631+00:00",
+        "approved_by": "codex",
+        "body_sha256": "4e53decdac15c93e6d5eeda6ad722ba22a989df8ce24606ce9b8f56c900b6385",
+        "in_reply_to": "<0100019ffc83aab0-f6a7e51c-a996-4428-98f0-d5657e115088-000000@email.amazonses.com>",
+        "subject_sha256": "373a7562a8c23610095e605a314597bbbf6d8830d3ed17f9f6dfd659b965e26b"
+      },
+      "transport": "resend",
+      "references": "<0100019ffc83aab0-f6a7e51c-a996-4428-98f0-d5657e115088-000000@email.amazonses.com>",
+      "skill_path": null,
+      "body_sha256": "4e53decdac15c93e6d5eeda6ad722ba22a989df8ce24606ce9b8f56c900b6385",
+      "in_reply_to": "<0100019ffc83aab0-f6a7e51c-a996-4428-98f0-d5657e115088-000000@email.amazonses.com>",
+      "skill_sha256": null,
+      "batch_item_id": "d1707d8e800146368dc1541a8435c288",
+      "brief_version": null,
+      "subject_sha256": "373a7562a8c23610095e605a314597bbbf6d8830d3ed17f9f6dfd659b965e26b",
+      "composer_variant_key": null,
+      "lead_gen_action_type": "follow_up",
+      "phi_egress_guard_cache": {},
+      "composer_experiment_key": null
+    },
+    "policy_result_json": {
+      "checks": [
+        {
+          "name": "status_allows_execution",
+          "detail": "approved",
+          "passed": true
+        },
+        {
+          "name": "human_approval_present",
+          "detail": "codex",
+          "passed": true
+        },
+        {
+          "name": "subject_present",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "body_present",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "subject_hash_matches_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "body_hash_matches_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "in_reply_to_matches_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "references_match_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "lead_gen_transport_available",
+          "detail": "zoho_api 0/0 configured=True; resend 0/50 configured=True",
+          "passed": true
+        },
+        {
+          "name": "no_patient_data_in_outreach",
+          "detail": "llm_guard_disabled",
+          "passed": true
+        },
+        {
+          "name": "batch_item_exists",
+          "detail": "d1707d8e800146368dc1541a8435c288",
+          "passed": true
+        },
+        {
+          "name": "batch_item_not_already_started",
+          "detail": "approved",
+          "passed": true
+        },
+        {
+          "name": "contact_email_present",
+          "detail": "gil@arbelegal.com",
+          "passed": true
+        },
+        {
+          "name": "no_prior_successful_action_for_item",
+          "detail": "",
+          "passed": true
+        }
+      ],
+      "reason": "allowed",
+      "allowed": true,
+      "risk_level": "high",
+      "action_type": "send_approved_lead_gen_draft",
+      "contact_email": "gil@arbelegal.com",
+      "requires_human_approval": true
+    },
+    "execution_result_json": {},
+    "error": null,
+    "item_id": "d1707d8e800146368dc1541a8435c288",
+    "contact_email": "gil@arbelegal.com",
+    "contact_name": "Gil Arbel",
+    "contact_title": "Founder & Owner; Supervising Attorney",
+    "firm_name": "Law Office of Gil L. Arbel",
+    "pif_id": "a3d6a370-7e55-4e02-bf4b-8237dacdef65",
+    "approval_status": "approved",
+    "reason_json": {
+      "actor": "codex",
+      "source": "operator-curated",
+      "action_type": "follow_up",
+      "agent_draft": {
+        "body": "Hi Gil,\n\nTo narrow my earlier automation question, I'd look for work your team prepares repeatedly but that still needs your final review. The goal would be less preparation on your side, without handing over the decision.\n\nWould intake summaries or organized document packets be more useful to you?\n\nI'd appreciate your perspective when you have a moment.\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+        "subject": "Re: where AI could compound at Law Office of Gil L. Arbel",
+        "action_id": "action_f448cb587b9e4bc8a1f2a75f",
+        "action_type": "send_approved_lead_gen_draft",
+        "action_status": "approved",
+        "operator_edited": true,
+        "scheduled_for_pt": "2026-10-07 11:10 PDT",
+        "scheduled_for_utc": "2026-10-07 18:10:00 UTC",
+        "operator_edited_at": "2026-10-07T13:59:58.258048+00:00",
+        "operator_edited_by": "codex"
+      },
+      "next_operator_action": "scheduled_send_queued",
+      "send_email_action_id": "action_f448cb587b9e4bc8a1f2a75f"
+    }
+  },
+  {
+    "id": "action_d1478ccf9ea14fc6806069c5",
+    "action_type": "send_approved_lead_gen_draft",
+    "status": "approved",
+    "scheduled_for": "2026-10-07T18:20:00+00:00",
+    "input_json": {
+      "to": "st@thetafirm.com",
+      "body": "Hi Soheyl,\n\nMy earlier example focused on document output. I'd judge a similar workflow by the time saved after review and corrections, rather than how quickly it produces a first draft.\n\nAt Theta, is assembling the source material or correcting draft documents the bigger time cost?\n\nI'd appreciate your perspective when you have a moment.\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+      "subject": "Re: where AI could compound at Theta Law Firm, LLP",
+      "approval": {
+        "recipient": "st@thetafirm.com",
+        "references": "<0100019ffc7a7e9b-94af93c0-7e88-4554-9e26-96619f197e42-000000@email.amazonses.com>",
+        "approved_at": "2026-10-07T14:00:04.201433+00:00",
+        "approved_by": "codex",
+        "body_sha256": "81172b29e981112c537399ef5c8783a916f623832d0c8aee8ceb82ec264394b6",
+        "in_reply_to": "<0100019ffc7a7e9b-94af93c0-7e88-4554-9e26-96619f197e42-000000@email.amazonses.com>",
+        "subject_sha256": "84fc921297a1f73aa0c0c094a33a2b0d1c05b1de55aa0e1c9ef7d8b0321d0c32"
+      },
+      "transport": "resend",
+      "references": "<0100019ffc7a7e9b-94af93c0-7e88-4554-9e26-96619f197e42-000000@email.amazonses.com>",
+      "skill_path": null,
+      "body_sha256": "81172b29e981112c537399ef5c8783a916f623832d0c8aee8ceb82ec264394b6",
+      "in_reply_to": "<0100019ffc7a7e9b-94af93c0-7e88-4554-9e26-96619f197e42-000000@email.amazonses.com>",
+      "skill_sha256": null,
+      "batch_item_id": "437d2ee0c39142b8b7ab14a6ceb51b62",
+      "brief_version": null,
+      "subject_sha256": "84fc921297a1f73aa0c0c094a33a2b0d1c05b1de55aa0e1c9ef7d8b0321d0c32",
+      "composer_variant_key": null,
+      "lead_gen_action_type": "follow_up",
+      "phi_egress_guard_cache": {},
+      "composer_experiment_key": null
+    },
+    "policy_result_json": {
+      "checks": [
+        {
+          "name": "status_allows_execution",
+          "detail": "approved",
+          "passed": true
+        },
+        {
+          "name": "human_approval_present",
+          "detail": "codex",
+          "passed": true
+        },
+        {
+          "name": "subject_present",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "body_present",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "subject_hash_matches_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "body_hash_matches_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "in_reply_to_matches_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "references_match_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "lead_gen_transport_available",
+          "detail": "zoho_api 0/0 configured=True; resend 0/50 configured=True",
+          "passed": true
+        },
+        {
+          "name": "no_patient_data_in_outreach",
+          "detail": "llm_guard_disabled",
+          "passed": true
+        },
+        {
+          "name": "batch_item_exists",
+          "detail": "437d2ee0c39142b8b7ab14a6ceb51b62",
+          "passed": true
+        },
+        {
+          "name": "batch_item_not_already_started",
+          "detail": "approved",
+          "passed": true
+        },
+        {
+          "name": "contact_email_present",
+          "detail": "st@thetafirm.com",
+          "passed": true
+        },
+        {
+          "name": "no_prior_successful_action_for_item",
+          "detail": "",
+          "passed": true
+        }
+      ],
+      "reason": "allowed",
+      "allowed": true,
+      "risk_level": "high",
+      "action_type": "send_approved_lead_gen_draft",
+      "contact_email": "st@thetafirm.com",
+      "requires_human_approval": true
+    },
+    "execution_result_json": {},
+    "error": null,
+    "item_id": "437d2ee0c39142b8b7ab14a6ceb51b62",
+    "contact_email": "st@thetafirm.com",
+    "contact_name": "Soheyl Tahsildoost",
+    "contact_title": "Founding Partner",
+    "firm_name": "Theta Law Firm, LLP",
+    "pif_id": "b78783a4-ad6e-42bc-91f3-721bedbfdc6d",
+    "approval_status": "approved",
+    "reason_json": {
+      "actor": "codex",
+      "source": "operator-curated",
+      "action_type": "follow_up",
+      "agent_draft": {
+        "body": "Hi Soheyl,\n\nMy earlier example focused on document output. I'd judge a similar workflow by the time saved after review and corrections, rather than how quickly it produces a first draft.\n\nAt Theta, is assembling the source material or correcting draft documents the bigger time cost?\n\nI'd appreciate your perspective when you have a moment.\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+        "subject": "Re: where AI could compound at Theta Law Firm, LLP",
+        "action_id": "action_d1478ccf9ea14fc6806069c5",
+        "action_type": "send_approved_lead_gen_draft",
+        "action_status": "approved",
+        "operator_edited": true,
+        "scheduled_for_pt": "2026-10-07 11:20 PDT",
+        "scheduled_for_utc": "2026-10-07 18:20:00 UTC",
+        "operator_edited_at": "2026-10-07T14:00:04.247644+00:00",
+        "operator_edited_by": "codex"
+      },
+      "next_operator_action": "scheduled_send_queued",
+      "send_email_action_id": "action_d1478ccf9ea14fc6806069c5"
+    }
+  },
+  {
+    "id": "action_3e2984d026f74067b797dc44",
+    "action_type": "send_approved_lead_gen_draft",
+    "status": "approved",
+    "scheduled_for": "2026-10-07T18:30:00+00:00",
+    "input_json": {
+      "to": "prahgozar@rahgozarlaw.com",
+      "body": "Hi Pegah,\n\nThe intake example I sent showed how information can carry through into a matter, documents, and tasks. The practical benefit would be avoiding repeated entry while keeping someone responsible for checking the result.\n\nAt Rahgozar Law, does more time go into entering the same details or checking the handoff afterward?\n\nI'd appreciate your perspective when you have a moment.\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+      "subject": "Re: where AI could compound at Rahgozar Law Firm, PLLC",
+      "approval": {
+        "recipient": "prahgozar@rahgozarlaw.com",
+        "references": "<0100019ffd1f582e-ad59e61b-7aba-4e31-b78d-69c277fa7abe-000000@email.amazonses.com>",
+        "approved_at": "2026-10-07T14:00:09.428580+00:00",
+        "approved_by": "codex",
+        "body_sha256": "e509d55fa1c05502e7ca9ee10675e4c3b4af13a167d8b09673ae846cc3f23ea3",
+        "in_reply_to": "<0100019ffd1f582e-ad59e61b-7aba-4e31-b78d-69c277fa7abe-000000@email.amazonses.com>",
+        "subject_sha256": "fe0e767254729ae880d4aa2c6ced6d758d31aa6523300c2aa1a6ef6ad34d9511"
+      },
+      "transport": "resend",
+      "references": "<0100019ffd1f582e-ad59e61b-7aba-4e31-b78d-69c277fa7abe-000000@email.amazonses.com>",
+      "skill_path": null,
+      "body_sha256": "e509d55fa1c05502e7ca9ee10675e4c3b4af13a167d8b09673ae846cc3f23ea3",
+      "in_reply_to": "<0100019ffd1f582e-ad59e61b-7aba-4e31-b78d-69c277fa7abe-000000@email.amazonses.com>",
+      "skill_sha256": null,
+      "batch_item_id": "5eb27c712ebb494a9c14618b6963263e",
+      "brief_version": null,
+      "subject_sha256": "fe0e767254729ae880d4aa2c6ced6d758d31aa6523300c2aa1a6ef6ad34d9511",
+      "composer_variant_key": null,
+      "lead_gen_action_type": "follow_up",
+      "phi_egress_guard_cache": {},
+      "composer_experiment_key": null
+    },
+    "policy_result_json": {
+      "checks": [
+        {
+          "name": "status_allows_execution",
+          "detail": "approved",
+          "passed": true
+        },
+        {
+          "name": "human_approval_present",
+          "detail": "codex",
+          "passed": true
+        },
+        {
+          "name": "subject_present",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "body_present",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "subject_hash_matches_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "body_hash_matches_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "in_reply_to_matches_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "references_match_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "lead_gen_transport_available",
+          "detail": "zoho_api 0/0 configured=True; resend 0/50 configured=True",
+          "passed": true
+        },
+        {
+          "name": "no_patient_data_in_outreach",
+          "detail": "llm_guard_disabled",
+          "passed": true
+        },
+        {
+          "name": "batch_item_exists",
+          "detail": "5eb27c712ebb494a9c14618b6963263e",
+          "passed": true
+        },
+        {
+          "name": "batch_item_not_already_started",
+          "detail": "approved",
+          "passed": true
+        },
+        {
+          "name": "contact_email_present",
+          "detail": "prahgozar@rahgozarlaw.com",
+          "passed": true
+        },
+        {
+          "name": "no_prior_successful_action_for_item",
+          "detail": "",
+          "passed": true
+        }
+      ],
+      "reason": "allowed",
+      "allowed": true,
+      "risk_level": "high",
+      "action_type": "send_approved_lead_gen_draft",
+      "contact_email": "prahgozar@rahgozarlaw.com",
+      "requires_human_approval": true
+    },
+    "execution_result_json": {},
+    "error": null,
+    "item_id": "5eb27c712ebb494a9c14618b6963263e",
+    "contact_email": "prahgozar@rahgozarlaw.com",
+    "contact_name": "Pegah Rahgozar",
+    "contact_title": "Founding Partner",
+    "firm_name": "Rahgozar Law Firm, PLLC",
+    "pif_id": "9695c5a1-8c71-4bff-823f-969898e22fd6",
+    "approval_status": "approved",
+    "reason_json": {
+      "actor": "codex",
+      "source": "operator-curated",
+      "action_type": "follow_up",
+      "agent_draft": {
+        "body": "Hi Pegah,\n\nThe intake example I sent showed how information can carry through into a matter, documents, and tasks. The practical benefit would be avoiding repeated entry while keeping someone responsible for checking the result.\n\nAt Rahgozar Law, does more time go into entering the same details or checking the handoff afterward?\n\nI'd appreciate your perspective when you have a moment.\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+        "subject": "Re: where AI could compound at Rahgozar Law Firm, PLLC",
+        "action_id": "action_3e2984d026f74067b797dc44",
+        "action_type": "send_approved_lead_gen_draft",
+        "action_status": "approved",
+        "operator_edited": true,
+        "scheduled_for_pt": "2026-10-07 11:30 PDT",
+        "scheduled_for_utc": "2026-10-07 18:30:00 UTC",
+        "operator_edited_at": "2026-10-07T14:00:09.454433+00:00",
+        "operator_edited_by": "codex"
+      },
+      "next_operator_action": "scheduled_send_queued",
+      "send_email_action_id": "action_3e2984d026f74067b797dc44"
+    }
+  },
+  {
+    "id": "action_d91af1c4d4a44075a54d1327",
+    "action_type": "send_approved_lead_gen_draft",
+    "status": "approved",
+    "scheduled_for": "2026-10-07T18:40:00+00:00",
+    "input_json": {
+      "to": "parag@lawpla.com",
+      "body": "Hi Parag,\n\nA more focused takeaway from the intake example I sent: one structured intake summary could feed the matter record and task list, with your team checking it once rather than entering it repeatedly.\n\nIs repeated data entry a meaningful frustration at your firm, or is the bigger issue making sure the next step gets done?\n\nI'd appreciate your perspective when you have a moment.\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+      "subject": "Re: where AI could compound at Law Offices of Parag L. Amin, P.C.",
+      "approval": {
+        "recipient": "parag@lawpla.com",
+        "references": "<0100019ffcd15bbb-40dac553-4647-447f-bf10-2c15b2700471-000000@email.amazonses.com>",
+        "approved_at": "2026-10-07T14:00:14.349718+00:00",
+        "approved_by": "codex",
+        "body_sha256": "a8fa582da2f810a615fe3ed511e24330557aad3ef33d8817ef2bf7511b8cae27",
+        "in_reply_to": "<0100019ffcd15bbb-40dac553-4647-447f-bf10-2c15b2700471-000000@email.amazonses.com>",
+        "subject_sha256": "9de72d150b98cddb040636284e0b789e9e7f1e57fb6f7904733879aa3e9cf6fd"
+      },
+      "transport": "resend",
+      "references": "<0100019ffcd15bbb-40dac553-4647-447f-bf10-2c15b2700471-000000@email.amazonses.com>",
+      "skill_path": null,
+      "body_sha256": "a8fa582da2f810a615fe3ed511e24330557aad3ef33d8817ef2bf7511b8cae27",
+      "in_reply_to": "<0100019ffcd15bbb-40dac553-4647-447f-bf10-2c15b2700471-000000@email.amazonses.com>",
+      "skill_sha256": null,
+      "batch_item_id": "b643e5cf10f14d14bbb1fefd235bad16",
+      "brief_version": null,
+      "subject_sha256": "9de72d150b98cddb040636284e0b789e9e7f1e57fb6f7904733879aa3e9cf6fd",
+      "composer_variant_key": null,
+      "lead_gen_action_type": "follow_up",
+      "phi_egress_guard_cache": {},
+      "composer_experiment_key": null
+    },
+    "policy_result_json": {
+      "checks": [
+        {
+          "name": "status_allows_execution",
+          "detail": "approved",
+          "passed": true
+        },
+        {
+          "name": "human_approval_present",
+          "detail": "codex",
+          "passed": true
+        },
+        {
+          "name": "subject_present",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "body_present",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "subject_hash_matches_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "body_hash_matches_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "in_reply_to_matches_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "references_match_approval",
+          "detail": "",
+          "passed": true
+        },
+        {
+          "name": "lead_gen_transport_available",
+          "detail": "zoho_api 0/0 configured=True; resend 0/50 configured=True",
+          "passed": true
+        },
+        {
+          "name": "no_patient_data_in_outreach",
+          "detail": "llm_guard_disabled",
+          "passed": true
+        },
+        {
+          "name": "batch_item_exists",
+          "detail": "b643e5cf10f14d14bbb1fefd235bad16",
+          "passed": true
+        },
+        {
+          "name": "batch_item_not_already_started",
+          "detail": "approved",
+          "passed": true
+        },
+        {
+          "name": "contact_email_present",
+          "detail": "parag@lawpla.com",
+          "passed": true
+        },
+        {
+          "name": "no_prior_successful_action_for_item",
+          "detail": "",
+          "passed": true
+        }
+      ],
+      "reason": "allowed",
+      "allowed": true,
+      "risk_level": "high",
+      "action_type": "send_approved_lead_gen_draft",
+      "contact_email": "parag@lawpla.com",
+      "requires_human_approval": true
+    },
+    "execution_result_json": {},
+    "error": null,
+    "item_id": "b643e5cf10f14d14bbb1fefd235bad16",
+    "contact_email": "parag@lawpla.com",
+    "contact_name": "Parag L. Amin",
+    "contact_title": "Principal (Founder)",
+    "firm_name": "Law Offices of Parag L. Amin, P.C.",
+    "pif_id": "25751569-a1c8-4365-af08-b46d1a3be102",
+    "approval_status": "approved",
+    "reason_json": {
+      "actor": "codex",
+      "source": "operator-curated",
+      "action_type": "follow_up",
+      "agent_draft": {
+        "body": "Hi Parag,\n\nA more focused takeaway from the intake example I sent: one structured intake summary could feed the matter record and task list, with your team checking it once rather than entering it repeatedly.\n\nIs repeated data entry a meaningful frustration at your firm, or is the bigger issue making sure the next step gets done?\n\nI'd appreciate your perspective when you have a moment.\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+        "subject": "Re: where AI could compound at Law Offices of Parag L. Amin, P.C.",
+        "action_id": "action_d91af1c4d4a44075a54d1327",
+        "action_type": "send_approved_lead_gen_draft",
+        "action_status": "approved",
+        "operator_edited": true,
+        "scheduled_for_pt": "2026-10-07 11:40 PDT",
+        "scheduled_for_utc": "2026-10-07 18:40:00 UTC",
+        "operator_edited_at": "2026-10-07T14:00:14.372206+00:00",
+        "operator_edited_by": "codex"
+      },
+      "next_operator_action": "scheduled_send_queued",
+      "send_email_action_id": "action_d91af1c4d4a44075a54d1327"
+    }
+  }
+]

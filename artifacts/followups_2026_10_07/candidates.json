@@ -1,0 +1,2567 @@
+[
+  {
+    "contact_id": "d4eb89a0d8d849f4b794f2b4326b1c0c",
+    "pif_id": "97fe3545-f559-47c4-b4a3-71d6de732140",
+    "firm_name": "Hillstone Law, PC",
+    "contact_name": "William Percy",
+    "contact_title": "Partner",
+    "email": "william@hstonelaw.com",
+    "source_action": "action_b356a638412c4bd6a7da28fc",
+    "input_json": {
+      "body": "Hi William,\n\nJust following up on my earlier note. From the partner seat, do you have a clean view of which lead sources become retained Filevine matters, or does your team still reconcile Lead Docket with the case data?\n\nThat system-to-system handoff is similar to the workflow challenge we solved behind Precise's automated status replies.\n\nWould you have 15 minutes to compare notes? I'd genuinely appreciate your perspective.\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+      "subject": "Re: Is Lead Docket at Hillstone Law, PC tying marketing spend to signed cases?",
+      "approval": {
+        "references": "<0100019ff8900bb3-f560ffb0-bef3-431a-b06f-ab7c646bb237-000000@email.amazonses.com>",
+        "approved_at": "2026-08-25T15:14:13.596139+00:00",
+        "approved_by": "codex",
+        "body_sha256": "77c6f566421c913da2e8c7032b5c30cc415550f27b3f6c3e5cd7ec933b32dd09",
+        "in_reply_to": "<0100019ff8900bb3-f560ffb0-bef3-431a-b06f-ab7c646bb237-000000@email.amazonses.com>",
+        "subject_sha256": "4542cfe0ffd444ae58fa51ce024936af7f4c21599ec61902d0a94c01e57edeb8"
+      },
+      "transport": "resend",
+      "references": "<0100019ff8900bb3-f560ffb0-bef3-431a-b06f-ab7c646bb237-000000@email.amazonses.com>",
+      "skill_path": null,
+      "body_sha256": "77c6f566421c913da2e8c7032b5c30cc415550f27b3f6c3e5cd7ec933b32dd09",
+      "in_reply_to": "<0100019ff8900bb3-f560ffb0-bef3-431a-b06f-ab7c646bb237-000000@email.amazonses.com>",
+      "sequence_id": "1bea8df2f63946e888345fa1ce901b7f",
+      "skill_sha256": null,
+      "batch_item_id": "431e46f3d3a54092b3fead7bad616212",
+      "brief_version": null,
+      "subject_sha256": "4542cfe0ffd444ae58fa51ce024936af7f4c21599ec61902d0a94c01e57edeb8",
+      "sequence_step_num": 2,
+      "composer_variant_key": null,
+      "lead_gen_action_type": "follow_up",
+      "phi_egress_guard_cache": {},
+      "composer_experiment_key": null
+    },
+    "last_sent": "2026-08-25T18:00:23.033217+00:00",
+    "touches": 2,
+    "touches30": 0,
+    "history": [
+      {
+        "id": "b59ea932f6b141a280b16e318c6a63e6",
+        "subject": "Is Lead Docket at Hillstone Law, PC tying marketing spend to signed cases?",
+        "body": "Hi William,\n\nMany firms can see where leads originate in Lead Docket but lose that attribution once a matter becomes a signed case in Filevine.\n\nI'm Pranav, founder of Possible Minds. You may have seen Precise Imaging's AI autoresponses. We built the system behind them, and it now processes roughly 600 emails a day. We build practical AI systems for the PI ecosystem, shaped by real-world operating insights shared by leaders like Chris Dreyer and Yani Smith.\n\nCould your team be getting more from ",
+        "sent_at": "2026-08-13T00:40:17.323765+00:00",
+        "status": "delivered",
+        "provider_id": "00267f69-ce14-4f3f-8db3-a73db7e9587d"
+      },
+      {
+        "id": "e4ef6bc2e4034c509d836e6e1e17ed66",
+        "subject": "Re: Is Lead Docket at Hillstone Law, PC tying marketing spend to signed cases?",
+        "body": "Hi William,\n\nJust following up on my earlier note. From the partner seat, do you have a clean view of which lead sources become retained Filevine matters, or does your team still reconcile Lead Docket with the case data?\n\nThat system-to-system handoff is similar to the workflow challenge we solved behind Precise's automated status replies.\n\nWould you have 15 minutes to compare notes? I'd genuinely appreciate your perspective.\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+        "sent_at": "2026-08-25T18:00:23.033217+00:00",
+        "status": "sent",
+        "provider_id": "2e34cd62-227c-4be8-9868-5eb021bf9409"
+      }
+    ]
+  },
+  {
+    "contact_id": "fc_4cb9fc0a4d6744b383ecf1bd",
+    "pif_id": "0f06ec32-2031-422f-a59c-179d1a6c5bca",
+    "firm_name": "Gaslamp Law Group",
+    "contact_name": "Jonathan Rashtian",
+    "contact_title": "Managing Attorney",
+    "email": "jonathan@gaslamplaw.com",
+    "source_action": "action_4de39f40bdf44f5e95091fa5",
+    "input_json": {
+      "body": "Hi Jonathan,\n\nFollowing up on my earlier question. As Gaslamp Law Group's managing attorney, can you see the path from original lead source to retained Filevine matter without your team reconciling Lead Docket and case data manually?\n\nThat cross-system handoff is the kind of operational gap we worked through when building Precise's automated status replies.\n\nWould you have 15 minutes to compare notes? I'd genuinely appreciate your perspective.\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+      "subject": "Re: Is Lead Docket at Gaslamp Law Group tying marketing spend to signed cases?",
+      "approval": {
+        "references": "<0100019ff88b7666-827c7431-bef8-4d03-8b72-b3f44ea2b8c6-000000@email.amazonses.com>",
+        "approved_at": "2026-08-25T15:14:15.730313+00:00",
+        "approved_by": "codex",
+        "body_sha256": "83f5758c69945d0d0e8d56b04e4dc977fce86cbb8365087bdfac8b78fdf3587e",
+        "in_reply_to": "<0100019ff88b7666-827c7431-bef8-4d03-8b72-b3f44ea2b8c6-000000@email.amazonses.com>",
+        "subject_sha256": "a6d77bd1b351059f0f38a20cf17a801431a990eca41067407ef431e47b710664"
+      },
+      "transport": "resend",
+      "references": "<0100019ff88b7666-827c7431-bef8-4d03-8b72-b3f44ea2b8c6-000000@email.amazonses.com>",
+      "skill_path": null,
+      "body_sha256": "83f5758c69945d0d0e8d56b04e4dc977fce86cbb8365087bdfac8b78fdf3587e",
+      "in_reply_to": "<0100019ff88b7666-827c7431-bef8-4d03-8b72-b3f44ea2b8c6-000000@email.amazonses.com>",
+      "sequence_id": "ac5d7f654f3e495d855d0337f402c122",
+      "skill_sha256": null,
+      "batch_item_id": "6aee5f63455c4e7eb2d91d932b7be303",
+      "brief_version": null,
+      "subject_sha256": "a6d77bd1b351059f0f38a20cf17a801431a990eca41067407ef431e47b710664",
+      "sequence_step_num": 2,
+      "composer_variant_key": null,
+      "lead_gen_action_type": "follow_up",
+      "phi_egress_guard_cache": {},
+      "composer_experiment_key": null
+    },
+    "last_sent": "2026-08-25T18:05:23.449297+00:00",
+    "touches": 2,
+    "touches30": 0,
+    "history": [
+      {
+        "id": "c84ac2908fbf4e9f90ec4f12ab3ea72d",
+        "subject": "Is Lead Docket at Gaslamp Law Group tying marketing spend to signed cases?",
+        "body": "Hi Jonathan,\n\nMany firms can see where leads originate in Lead Docket but lose that attribution once a matter becomes a signed case in Filevine.\n\nI'm Pranav, founder of Possible Minds. You may have seen Precise Imaging's AI autoresponses. We built the system behind them, and it now processes roughly 600 emails a day. We build practical AI systems for the PI ecosystem, shaped by real-world operating insights shared by leaders like Chris Dreyer and Yani Smith.\n\nCould your team be getting more from",
+        "sent_at": "2026-08-13T00:35:16.940543+00:00",
+        "status": "delivered",
+        "provider_id": "a4402bd1-7493-4856-bba0-4a6cae3219d8"
+      },
+      {
+        "id": "6b1c17d6f6cb4561b28ec74327e0b2e5",
+        "subject": "Re: Is Lead Docket at Gaslamp Law Group tying marketing spend to signed cases?",
+        "body": "Hi Jonathan,\n\nFollowing up on my earlier question. As Gaslamp Law Group's managing attorney, can you see the path from original lead source to retained Filevine matter without your team reconciling Lead Docket and case data manually?\n\nThat cross-system handoff is the kind of operational gap we worked through when building Precise's automated status replies.\n\nWould you have 15 minutes to compare notes? I'd genuinely appreciate your perspective.\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+        "sent_at": "2026-08-25T18:05:23.449297+00:00",
+        "status": "delivered",
+        "provider_id": "5439505b-0432-469c-ab8d-223f39678203"
+      }
+    ]
+  },
+  {
+    "contact_id": "9984c8e41c99435cab124b746cf0177b",
+    "pif_id": "ea17c1d1-d3df-4bd1-bf47-1e0173bef857",
+    "firm_name": "DC Law Group, PC",
+    "contact_name": "David Cohan, Esq.",
+    "contact_title": "Managing Attorney",
+    "email": "david@dclawgroup.com",
+    "source_action": "action_01f2f98c94c74d70b51dbe37",
+    "input_json": {
+      "body": "Hi David,\n\nJust following up on my earlier note. From the managing attorney seat, can you see which marketing sources become retained Filevine matters from one place, or does your team still reconcile Lead Docket and case data manually?\n\nThat system handoff is what interested me, since we solved a similar visibility problem behind Precise's automated status replies.\n\nWould you have 15 minutes to compare notes? I'd genuinely appreciate your perspective.\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+      "subject": "Re: Is Lead Docket at DC Law Group, PC tying marketing spend to signed cases?",
+      "approval": {
+        "references": "<0100019ff8791b01-7df0f4b8-89eb-4c66-8192-97fdc1a7e8e0-000000@email.amazonses.com>",
+        "approved_at": "2026-08-25T15:14:18.805564+00:00",
+        "approved_by": "codex",
+        "body_sha256": "21548ea254259cacbddbf348c6b3c0108e4eae1a5be6d9344c796d5493a32228",
+        "in_reply_to": "<0100019ff8791b01-7df0f4b8-89eb-4c66-8192-97fdc1a7e8e0-000000@email.amazonses.com>",
+        "subject_sha256": "ff204ad4a84b02e2ca0127b90860f3df7e6eb68da0bb7341e88d4b579b457391"
+      },
+      "transport": "resend",
+      "references": "<0100019ff8791b01-7df0f4b8-89eb-4c66-8192-97fdc1a7e8e0-000000@email.amazonses.com>",
+      "skill_path": null,
+      "body_sha256": "21548ea254259cacbddbf348c6b3c0108e4eae1a5be6d9344c796d5493a32228",
+      "in_reply_to": "<0100019ff8791b01-7df0f4b8-89eb-4c66-8192-97fdc1a7e8e0-000000@email.amazonses.com>",
+      "sequence_id": "975e05b53175485b965e3071e666601b",
+      "skill_sha256": null,
+      "batch_item_id": "a5a80c14792b456da125453db8906c24",
+      "brief_version": null,
+      "subject_sha256": "ff204ad4a84b02e2ca0127b90860f3df7e6eb68da0bb7341e88d4b579b457391",
+      "sequence_step_num": 2,
+      "composer_variant_key": null,
+      "lead_gen_action_type": "follow_up",
+      "phi_egress_guard_cache": {},
+      "composer_experiment_key": null
+    },
+    "last_sent": "2026-08-25T18:10:23.832782+00:00",
+    "touches": 2,
+    "touches30": 0,
+    "history": [
+      {
+        "id": "1efbd006bb2140bb9981a24c5850bbd1",
+        "subject": "Is Lead Docket at DC Law Group, PC tying marketing spend to signed cases?",
+        "body": "Hi David,\n\nMany firms can see where leads originate in Lead Docket but lose that attribution once a matter becomes a signed case in Filevine.\n\nI'm Pranav, founder of Possible Minds. You may have seen Precise Imaging's AI autoresponses. We built the system behind them, and it now processes roughly 600 emails a day. We build practical AI systems for the PI ecosystem, shaped by real-world operating insights shared by leaders like Chris Dreyer and Yani Smith.\n\nCould your team be getting more from Le",
+        "sent_at": "2026-08-13T00:15:13.859371+00:00",
+        "status": "delivered",
+        "provider_id": "7f7779de-aa08-481c-a1c0-63467a89c9c0"
+      },
+      {
+        "id": "235828c5f3f24cc292ebf383b8d140bb",
+        "subject": "Re: Is Lead Docket at DC Law Group, PC tying marketing spend to signed cases?",
+        "body": "Hi David,\n\nJust following up on my earlier note. From the managing attorney seat, can you see which marketing sources become retained Filevine matters from one place, or does your team still reconcile Lead Docket and case data manually?\n\nThat system handoff is what interested me, since we solved a similar visibility problem behind Precise's automated status replies.\n\nWould you have 15 minutes to compare notes? I'd genuinely appreciate your perspective.\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+        "sent_at": "2026-08-25T18:10:23.832782+00:00",
+        "status": "delivered",
+        "provider_id": "6801b5d8-dd88-415a-9c92-20421f4aebfb"
+      }
+    ]
+  },
+  {
+    "contact_id": "ef0e60cde4734537b72ff55312a60e14",
+    "pif_id": "a91398f3-b898-49ef-9b6f-cd98d25828b1",
+    "firm_name": "The Injury Partners",
+    "contact_name": "Daniel Sabet",
+    "contact_title": "Founder & Managing Partner",
+    "email": "daniel@theinjurypartners.com",
+    "source_action": "action_faddc12f275f43679ea3fd24",
+    "input_json": {
+      "body": "Hi Daniel,\n\nJust following up on my earlier note. From the founder and managing partner seat, can you see which marketing sources become retained Filevine matters, or does your team still have to reconcile Lead Docket with the case data?\n\nThat cross-system visibility problem is what caught my attention, since we worked through a similar handoff behind Precise's automated status replies.\n\nWould you have 15 minutes to compare notes? I'd genuinely appreciate your perspective.\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+      "subject": "Re: Is Lead Docket at The Injury Partners tying marketing spend to signed cases?",
+      "approval": {
+        "references": "<0100019ff8545f72-fde2d8f9-aea0-45e3-90a5-e7bd1b669dca-000000@email.amazonses.com>",
+        "approved_at": "2026-08-25T15:14:23.791239+00:00",
+        "approved_by": "codex",
+        "body_sha256": "4bfe79d815f0bc7b9da8663f23d3ea8b28c9b92afb5787d5e745cac8080c4d85",
+        "in_reply_to": "<0100019ff8545f72-fde2d8f9-aea0-45e3-90a5-e7bd1b669dca-000000@email.amazonses.com>",
+        "subject_sha256": "9a2231bbac6f1ebc5ae5667846f5e4da8baf77ca2187fcf75c42da93df12ca76"
+      },
+      "transport": "resend",
+      "references": "<0100019ff8545f72-fde2d8f9-aea0-45e3-90a5-e7bd1b669dca-000000@email.amazonses.com>",
+      "skill_path": null,
+      "body_sha256": "4bfe79d815f0bc7b9da8663f23d3ea8b28c9b92afb5787d5e745cac8080c4d85",
+      "in_reply_to": "<0100019ff8545f72-fde2d8f9-aea0-45e3-90a5-e7bd1b669dca-000000@email.amazonses.com>",
+      "sequence_id": "bb4e6805b5364b87ab7a2b3065545b8a",
+      "skill_sha256": null,
+      "batch_item_id": "02396796ca554670886ddbc8fd12dc35",
+      "brief_version": null,
+      "subject_sha256": "9a2231bbac6f1ebc5ae5667846f5e4da8baf77ca2187fcf75c42da93df12ca76",
+      "sequence_step_num": 2,
+      "composer_variant_key": null,
+      "lead_gen_action_type": "follow_up",
+      "phi_egress_guard_cache": {},
+      "composer_experiment_key": null
+    },
+    "last_sent": "2026-08-25T18:20:24.654465+00:00",
+    "touches": 2,
+    "touches30": 0,
+    "history": [
+      {
+        "id": "a08c4d475d1f486db29295d90f32fca4",
+        "subject": "Is Lead Docket at The Injury Partners tying marketing spend to signed cases?",
+        "body": "Hi Daniel,\n\nMany firms can see where leads originate in Lead Docket but lose that attribution once a matter becomes a signed case in Filevine.\n\nI'm Pranav, founder of Possible Minds. You may have seen Precise Imaging's AI autoresponses. We built the system behind them, and it now processes roughly 600 emails a day. We build practical AI systems for the PI ecosystem, shaped by real-world operating insights shared by leaders like Chris Dreyer and Yani Smith.\n\nCould your team be getting more from L",
+        "sent_at": "2026-08-12T23:35:06.619547+00:00",
+        "status": "delivered",
+        "provider_id": "db712952-a514-4b2d-891c-3637e7a9021d"
+      },
+      {
+        "id": "c7adf0f05a9c47258a43b381bc0c0477",
+        "subject": "Re: Is Lead Docket at The Injury Partners tying marketing spend to signed cases?",
+        "body": "Hi Daniel,\n\nJust following up on my earlier note. From the founder and managing partner seat, can you see which marketing sources become retained Filevine matters, or does your team still have to reconcile Lead Docket with the case data?\n\nThat cross-system visibility problem is what caught my attention, since we worked through a similar handoff behind Precise's automated status replies.\n\nWould you have 15 minutes to compare notes? I'd genuinely appreciate your perspective.\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+        "sent_at": "2026-08-25T18:20:24.654465+00:00",
+        "status": "delivered",
+        "provider_id": "ba831978-0843-4988-8b11-65831bdf401b"
+      }
+    ]
+  },
+  {
+    "contact_id": "53e855bb84f14106a0b656cd37e55258",
+    "pif_id": "03382ee5-71f5-4ceb-9cbc-dc07deea3045",
+    "firm_name": "The Injury Law Firm, LLP",
+    "contact_name": "Jon Sargsyan",
+    "contact_title": "Founding Partner (Founding Attorney)",
+    "email": "jon@theinjurylawfirm.com",
+    "source_action": "action_69296d005e6e4ec0972755c3",
+    "input_json": {
+      "body": "Hi Jon,\n\nFollowing up on my earlier question. As a founding partner, can you see the path from original lead source to retained Filevine matter without someone reconciling Lead Docket and case data manually?\n\nThat kind of handoff is where we found useful automation opportunities while building Precise's status-response system.\n\nWould you have 15 minutes to compare notes? I'd genuinely appreciate your perspective.\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+      "subject": "Re: Is Lead Docket at The Injury Law Firm, LLP tying marketing spend to signed cases?",
+      "approval": {
+        "references": "<0100019ff84fc9e3-9daf23e9-9609-4a5e-9b10-8fa69ee359d0-000000@email.amazonses.com>",
+        "approved_at": "2026-08-25T15:14:26.149174+00:00",
+        "approved_by": "codex",
+        "body_sha256": "2c5faf993bb0b6bd98447de9e3084bd06772abe927cab0f0616c8c09f20c4087",
+        "in_reply_to": "<0100019ff84fc9e3-9daf23e9-9609-4a5e-9b10-8fa69ee359d0-000000@email.amazonses.com>",
+        "subject_sha256": "d333ab2b21a916306283592a0ec8baa544fe97d5107603e2a153c217415f2112"
+      },
+      "transport": "resend",
+      "references": "<0100019ff84fc9e3-9daf23e9-9609-4a5e-9b10-8fa69ee359d0-000000@email.amazonses.com>",
+      "skill_path": null,
+      "body_sha256": "2c5faf993bb0b6bd98447de9e3084bd06772abe927cab0f0616c8c09f20c4087",
+      "in_reply_to": "<0100019ff84fc9e3-9daf23e9-9609-4a5e-9b10-8fa69ee359d0-000000@email.amazonses.com>",
+      "sequence_id": "e5dfdd5cc48f4d61a8db8047f8953acf",
+      "skill_sha256": null,
+      "batch_item_id": "9756a9aa02c64af08ef2fa9afae23d7e",
+      "brief_version": null,
+      "subject_sha256": "d333ab2b21a916306283592a0ec8baa544fe97d5107603e2a153c217415f2112",
+      "sequence_step_num": 2,
+      "composer_variant_key": null,
+      "lead_gen_action_type": "follow_up",
+      "phi_egress_guard_cache": {},
+      "composer_experiment_key": null
+    },
+    "last_sent": "2026-08-25T18:25:25.022385+00:00",
+    "touches": 2,
+    "touches30": 0,
+    "history": [
+      {
+        "id": "949fb1d089ee49b6bff74b77b2616b7a",
+        "subject": "Is Lead Docket at The Injury Law Firm, LLP tying marketing spend to signed cases?",
+        "body": "Hi Jon,\n\nMany firms can see where leads originate in Lead Docket but lose that attribution once a matter becomes a signed case in Filevine.\n\nI'm Pranav, founder of Possible Minds. You may have seen Precise Imaging's AI autoresponses. We built the system behind them, and it now processes roughly 600 emails a day. We build practical AI systems for the PI ecosystem, shaped by real-world operating insights shared by leaders like Chris Dreyer and Yani Smith.\n\nCould your team be getting more from Lead",
+        "sent_at": "2026-08-12T23:30:06.127874+00:00",
+        "status": "delivered",
+        "provider_id": "89eacc07-6d52-46dc-bbf4-621d09daa51b"
+      },
+      {
+        "id": "5cf5c7f5e19747d4beae8a95cbd712a8",
+        "subject": "Re: Is Lead Docket at The Injury Law Firm, LLP tying marketing spend to signed cases?",
+        "body": "Hi Jon,\n\nFollowing up on my earlier question. As a founding partner, can you see the path from original lead source to retained Filevine matter without someone reconciling Lead Docket and case data manually?\n\nThat kind of handoff is where we found useful automation opportunities while building Precise's status-response system.\n\nWould you have 15 minutes to compare notes? I'd genuinely appreciate your perspective.\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+        "sent_at": "2026-08-25T18:25:25.022385+00:00",
+        "status": "delivered",
+        "provider_id": "cbee49ba-ed6f-4d55-8d63-6bb4f277968a"
+      }
+    ]
+  },
+  {
+    "contact_id": "eca9ed89ab414b6e90fff12119979201",
+    "pif_id": "0897b21d-54e1-4949-8d97-34c879a12ef9",
+    "firm_name": "Law Office of Michael S. Braun",
+    "contact_name": "Michael Braun",
+    "contact_title": "Founder",
+    "email": "mbraun@mbraunlaw.com",
+    "source_action": "action_173954a9acd24193aecd9af1",
+    "input_json": {
+      "body": "Hi Michael,\n\nThought you might find this useful. I wrote up how a small PI firm turned recurring work into reusable AI workflows. Its assistants went from roughly 5 to 7 review-ready documents a day to 12 to 15, while medical records stayed in a protected workflow and every consequential output still came back to the lawyer.\n\nhttps://getpossibleminds.com/t/LoLBRBvV5A\n\nIf you could remove one recurring document bottleneck at your firm, which would you start with?\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+      "subject": "Re: Precise imaging - quick question",
+      "approval": {
+        "references": "<010001a0253fb85e-6ee5df0f-751b-4542-85d8-483bb4dba6ec-000000@email.amazonses.com>",
+        "approved_at": "2026-08-26T05:56:43.561647+00:00",
+        "approved_by": "codex",
+        "body_sha256": "b9e73c8b8841881a64544c40d53cb766ae7b9cdae7dfa7bf5aefeea158a8f91d",
+        "in_reply_to": "<010001a0253fb85e-6ee5df0f-751b-4542-85d8-483bb4dba6ec-000000@email.amazonses.com>",
+        "subject_sha256": "33c4a9f4cdf693fef572bdb035992fdd54bba1ba6646132ab20f775703e2b3a1"
+      },
+      "transport": "resend",
+      "references": "<010001a0253fb85e-6ee5df0f-751b-4542-85d8-483bb4dba6ec-000000@email.amazonses.com>",
+      "skill_path": null,
+      "body_sha256": "b9e73c8b8841881a64544c40d53cb766ae7b9cdae7dfa7bf5aefeea158a8f91d",
+      "in_reply_to": "<010001a0253fb85e-6ee5df0f-751b-4542-85d8-483bb4dba6ec-000000@email.amazonses.com>",
+      "sequence_id": "2dddfbe782404fed93e3b927d74cb29c",
+      "skill_sha256": null,
+      "batch_item_id": "2b6bf50ea8e64ba889c9106750ccafa1",
+      "brief_version": null,
+      "subject_sha256": "33c4a9f4cdf693fef572bdb035992fdd54bba1ba6646132ab20f775703e2b3a1",
+      "sequence_step_num": 2,
+      "composer_variant_key": null,
+      "lead_gen_action_type": "follow_up",
+      "phi_egress_guard_cache": {},
+      "composer_experiment_key": null
+    },
+    "last_sent": "2026-08-26T16:05:18.527946+00:00",
+    "touches": 2,
+    "touches30": 0,
+    "history": [
+      {
+        "id": "63265374cf2c4e89943b49f916b30195",
+        "subject": "Precise imaging - quick question",
+        "body": "Hi Michael,\n\nHaving handled claims from both the insurance and plaintiff sides, you’ve seen how much timely medical documentation can affect a case. I noticed your firm uses Thryv on the client-facing side, and I’m curious whether it connects with the rest of your case workflow or if your team still has to route updates manually.\n\nYou may have seen the immediate status-update responses from Precise Imaging. I’m the founder of Possible Minds, the firm that built that system. It processes more than 600 emails daily and saves their team many hours of manual work.\n\nWould you have 15 minutes to share your experience? I’d genuinely appreciate your perspective. This isn’t a sales pitch.\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+        "sent_at": "2026-08-21T16:55:27.861629+00:00",
+        "status": "delivered",
+        "provider_id": "261e9206-b8f4-464e-a336-13182569887d"
+      },
+      {
+        "id": "e9c80d25040d4ebf81ee6b944b557f8f",
+        "subject": "Re: Precise imaging - quick question",
+        "body": "Hi Michael,\n\nThought you might find this useful. I wrote up how a small PI firm turned recurring work into reusable AI workflows. Its assistants went from roughly 5 to 7 review-ready documents a day to 12 to 15, while medical records stayed in a protected workflow and every consequential output still came back to the lawyer.\n\nhttps://getpossibleminds.com/t/LoLBRBvV5A\n\nIf you could remove one recurring document bottleneck at your firm, which would you start with?\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+        "sent_at": "2026-08-26T16:05:18.527946+00:00",
+        "status": "delivered",
+        "provider_id": "187b3e1f-02d4-4cd1-9f36-a7c7b9a6c028"
+      }
+    ]
+  },
+  {
+    "contact_id": "fc_e7dab9f14ed14d51b47754cf",
+    "pif_id": "99ef988d-3b17-4b28-a210-b2e49d800140",
+    "firm_name": "Novik Law Group",
+    "contact_name": "Erick Novik",
+    "contact_title": "Managing Partner",
+    "email": "erick@noviklawgroup.com",
+    "source_action": "action_22b13fcb2ae54797a4078422",
+    "input_json": {
+      "body": "Hi Erick,\n\nThought you might find this useful. I wrote up how a small PI firm turned recurring work into reusable AI workflows. Its assistants went from roughly 5 to 7 review-ready documents a day to 12 to 15, while medical records stayed in a protected workflow and every consequential output still came back to the lawyer.\n\nhttps://getpossibleminds.com/t/FAC26X9f2w\n\nIf you could remove one recurring document bottleneck at Novik Law Group, which would you start with?\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+      "subject": "Re: Precise imaging - quick question",
+      "approval": {
+        "references": "<010001a022e33a62-6170d3e2-fc3d-4871-b7e8-c75cbd244ef8-000000@email.amazonses.com>",
+        "approved_at": "2026-08-26T05:56:46.071576+00:00",
+        "approved_by": "codex",
+        "body_sha256": "3c2937dc855d6709780244e6cd6af98bf0903f2da346731a406cabb8472e3162",
+        "in_reply_to": "<010001a022e33a62-6170d3e2-fc3d-4871-b7e8-c75cbd244ef8-000000@email.amazonses.com>",
+        "subject_sha256": "33c4a9f4cdf693fef572bdb035992fdd54bba1ba6646132ab20f775703e2b3a1"
+      },
+      "transport": "resend",
+      "references": "<010001a022e33a62-6170d3e2-fc3d-4871-b7e8-c75cbd244ef8-000000@email.amazonses.com>",
+      "skill_path": null,
+      "body_sha256": "3c2937dc855d6709780244e6cd6af98bf0903f2da346731a406cabb8472e3162",
+      "in_reply_to": "<010001a022e33a62-6170d3e2-fc3d-4871-b7e8-c75cbd244ef8-000000@email.amazonses.com>",
+      "sequence_id": "98e62867262d47dfbd2a859a3fdb3c89",
+      "skill_sha256": null,
+      "batch_item_id": "a652392fb1034450bc188916de75a649",
+      "brief_version": null,
+      "subject_sha256": "33c4a9f4cdf693fef572bdb035992fdd54bba1ba6646132ab20f775703e2b3a1",
+      "sequence_step_num": 2,
+      "composer_variant_key": null,
+      "lead_gen_action_type": "follow_up",
+      "phi_egress_guard_cache": {},
+      "composer_experiment_key": null
+    },
+    "last_sent": "2026-08-26T16:15:19.221988+00:00",
+    "touches": 2,
+    "touches30": 0,
+    "history": [
+      {
+        "id": "758086c3070e42feb48470ce614f8cdd",
+        "subject": "Precise imaging - quick question",
+        "body": "Hi Erick,\n\nAs founder and principal attorney at Novik Law Group, you’re close to both the client experience and the day-to-day mechanics of a PI claim. I’m curious whether imaging-status updates from Precise are landing in CasePeer without extra staff follow-up, or if someone still has to reconcile the latest update with the right matter.\n\nYour team may have seen that Precise’s imaging-status replies are automated-we built that system for them. I’m speaking with a few firms about where those handoffs still create friction.\n\nWould you have 15 minutes to compare notes? I’d genuinely appreciate your perspective-not a pitch.\n\n- Pranav\nFounder, Possible Minds\nhttps://getpossibleminds.com\nFree 30-min consult: getpossibleminds.com/consult",
+        "sent_at": "2026-08-21T05:55:11.818122+00:00",
+        "status": "delivered",
+        "provider_id": "d3e1bdbf-2405-471a-8203-37bdd5aae3ac"
+      },
+      {
+        "id": "502360011c6f43e19e64c3a30ea3b7ea",
+        "subject": "Re: Precise imaging - quick question",
+        "body": "Hi Erick,\n\nThought you might find this useful. I wrote up how a small PI firm turned recurring work into reusable AI workflows. Its assistants went from roughly 5 to 7 review-ready documents a day to 12 to 15, while medical records stayed in a protected workflow and every consequential output still came back to the lawyer.\n\nhttps://getpossibleminds.com/t/FAC26X9f2w\n\nIf you could remove one recurring document bottleneck at Novik Law Group, which would you start with?\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+        "sent_at": "2026-08-26T16:15:19.221988+00:00",
+        "status": "delivered",
+        "provider_id": "8c410045-0012-413d-a108-b0e8414c1479"
+      }
+    ]
+  },
+  {
+    "contact_id": "dcb92b66bfff40c7a819589cc3fbddf9",
+    "pif_id": "51035ce4-d8df-4e5f-8217-5dcebd863a5c",
+    "firm_name": "Abdoulin Law Inc",
+    "contact_name": "Alexander Abdoulin",
+    "contact_title": "Managing Attorney",
+    "email": "alex@abdoulinlaw.com",
+    "source_action": "action_e1887de118504dfc89366b27",
+    "input_json": {
+      "body": "Hi Alexander,\n\nThought you might find this useful. I wrote up how a small PI firm turned recurring work into reusable AI workflows. Its assistants went from roughly 5 to 7 review-ready documents a day to 12 to 15, while medical records stayed in a protected workflow and every consequential output still came back to the lawyer.\n\nhttps://getpossibleminds.com/t/WyQroLkLXg\n\nIf you could remove one recurring document bottleneck at Abdoulin Law, which would you start with?\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+      "subject": "Re: Precise imaging - quick question",
+      "approval": {
+        "references": "<1a020628b72.71bc218f21223.6872151042876528244@possiblemindshq.com>",
+        "approved_at": "2026-08-26T05:56:47.966748+00:00",
+        "approved_by": "codex",
+        "body_sha256": "215a89dfad9e338bccf9da761cdf9e9030962f2aec49b40c7ceab49cfbd323ea",
+        "in_reply_to": "<1a020628b72.71bc218f21223.6872151042876528244@possiblemindshq.com>",
+        "subject_sha256": "33c4a9f4cdf693fef572bdb035992fdd54bba1ba6646132ab20f775703e2b3a1"
+      },
+      "transport": "resend",
+      "references": "<1a020628b72.71bc218f21223.6872151042876528244@possiblemindshq.com>",
+      "skill_path": null,
+      "body_sha256": "215a89dfad9e338bccf9da761cdf9e9030962f2aec49b40c7ceab49cfbd323ea",
+      "in_reply_to": "<1a020628b72.71bc218f21223.6872151042876528244@possiblemindshq.com>",
+      "sequence_id": "c95f6f2a15cb4ceea06c719d02cc24e0",
+      "skill_sha256": null,
+      "batch_item_id": "1eadb3782fe043aabf38e3b586a0fe4d",
+      "brief_version": null,
+      "subject_sha256": "33c4a9f4cdf693fef572bdb035992fdd54bba1ba6646132ab20f775703e2b3a1",
+      "sequence_step_num": 2,
+      "composer_variant_key": null,
+      "lead_gen_action_type": "follow_up",
+      "phi_egress_guard_cache": {},
+      "composer_experiment_key": null
+    },
+    "last_sent": "2026-08-26T16:25:19.735878+00:00",
+    "touches": 2,
+    "touches30": 0,
+    "history": [
+      {
+        "id": "32411be932514bd59cdb71844853434e",
+        "subject": "Precise imaging - quick question",
+        "body": "Hi Alexander,\n\nHaving represented both the defense side and injured workers, you've seen the same claim from two very different seats-which must make weak documentation especially easy to spot :)\n\nYour team may have noticed that Precise's imaging-status replies are now automated-we built that system for them. I'm curious how your experience on both sides shapes the medical information and documentation you want available while a claim is moving forward.\n\nWould you have 15 minutes to compare notes? I'd genuinely appreciate your perspective-not a pitch.\n\n- Pranav\nFounder, Possible Minds\nhttps://getpossibleminds.com\nFree 30-min consult: getpossibleminds.com/consult",
+        "sent_at": "2026-08-20T18:15:24.703133+00:00",
+        "status": "sent",
+        "provider_id": "1787249724506130100"
+      },
+      {
+        "id": "fce82356ddd44c03b4973b2388d6271b",
+        "subject": "Re: Precise imaging - quick question",
+        "body": "Hi Alexander,\n\nThought you might find this useful. I wrote up how a small PI firm turned recurring work into reusable AI workflows. Its assistants went from roughly 5 to 7 review-ready documents a day to 12 to 15, while medical records stayed in a protected workflow and every consequential output still came back to the lawyer.\n\nhttps://getpossibleminds.com/t/WyQroLkLXg\n\nIf you could remove one recurring document bottleneck at Abdoulin Law, which would you start with?\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+        "sent_at": "2026-08-26T16:25:19.735878+00:00",
+        "status": "delivered",
+        "provider_id": "ec7aa3ee-37a6-4379-aba8-e30e45952db0"
+      }
+    ]
+  },
+  {
+    "contact_id": "74574f41d4d048babcc64c8fc05eeac1",
+    "pif_id": "f54451b3-73e1-4ee5-9bc4-a05c091d7eca",
+    "firm_name": "Law Office of Matthew Rizzo",
+    "contact_name": "Matthew Rizzo",
+    "contact_title": "Founder & Attorney",
+    "email": "mrizzo@rizzolawportland.com",
+    "source_action": "action_9beb9e181f4b4908b6d49733",
+    "input_json": {
+      "body": "Hi Matthew,\n\nThought you might find this useful. I wrote up how a small PI firm turned recurring work into reusable AI workflows. Its assistants went from roughly 5 to 7 review-ready documents a day to 12 to 15, while medical records stayed in a protected workflow and every consequential output still came back to the lawyer.\n\nhttps://getpossibleminds.com/t/_Ba6ssF45w\n\nIf you could remove one recurring document bottleneck at your firm, which would you start with?\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+      "subject": "Re: Precise imaging - quick question",
+      "approval": {
+        "references": "<1a0206728f6.6503988f20992.448443114834405942@possiblemindshq.com>",
+        "approved_at": "2026-08-26T05:56:54.220431+00:00",
+        "approved_by": "codex",
+        "body_sha256": "cf30fab02317f3e7db632f6b71f018a8e6cdb3863ebb5c6141e8e5b7236583f2",
+        "in_reply_to": "<1a0206728f6.6503988f20992.448443114834405942@possiblemindshq.com>",
+        "subject_sha256": "33c4a9f4cdf693fef572bdb035992fdd54bba1ba6646132ab20f775703e2b3a1"
+      },
+      "transport": "resend",
+      "references": "<1a0206728f6.6503988f20992.448443114834405942@possiblemindshq.com>",
+      "skill_path": null,
+      "body_sha256": "cf30fab02317f3e7db632f6b71f018a8e6cdb3863ebb5c6141e8e5b7236583f2",
+      "in_reply_to": "<1a0206728f6.6503988f20992.448443114834405942@possiblemindshq.com>",
+      "sequence_id": "2e7fef252c474398b6c466ddbe71b2a9",
+      "skill_sha256": null,
+      "batch_item_id": "858b6e2211f044f4853a393635032b64",
+      "brief_version": null,
+      "subject_sha256": "33c4a9f4cdf693fef572bdb035992fdd54bba1ba6646132ab20f775703e2b3a1",
+      "sequence_step_num": 2,
+      "composer_variant_key": null,
+      "lead_gen_action_type": "follow_up",
+      "phi_egress_guard_cache": {},
+      "composer_experiment_key": null
+    },
+    "last_sent": "2026-08-26T16:55:21.974141+00:00",
+    "touches": 2,
+    "touches30": 0,
+    "history": [
+      {
+        "id": "de984ebb4cd347ef8160d6afab2152eb",
+        "subject": "Precise imaging - quick question",
+        "body": "Hi Matthew,\n\nPranav from Possible Minds. We're the team behind the automated email replies your firm has seen from Precise Imaging-the status updates on imaging requests come from a system we built for them.\n\nI've been talking to PI firm owners who work with Precise, mostly to learn what eats the most staff time on the intake and records side.\n\nMind if I ask a few questions about how that runs at your firm? Genuinely just listening, not a pitch.\n\n- Pranav\nFounder, Possible Minds\nhttps://getpossibleminds.com\nFree 30-min consult: getpossibleminds.com/consult",
+        "sent_at": "2026-08-20T18:20:27.285697+00:00",
+        "status": "sent",
+        "provider_id": "1787250027094130200"
+      },
+      {
+        "id": "f01b2cb45f9b4093986fa9edae879de7",
+        "subject": "Re: Precise imaging - quick question",
+        "body": "Hi Matthew,\n\nThought you might find this useful. I wrote up how a small PI firm turned recurring work into reusable AI workflows. Its assistants went from roughly 5 to 7 review-ready documents a day to 12 to 15, while medical records stayed in a protected workflow and every consequential output still came back to the lawyer.\n\nhttps://getpossibleminds.com/t/_Ba6ssF45w\n\nIf you could remove one recurring document bottleneck at your firm, which would you start with?\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+        "sent_at": "2026-08-26T16:55:21.974141+00:00",
+        "status": "delivered",
+        "provider_id": "7b033d3c-85ac-41a5-a193-c0b4a749c50c"
+      }
+    ]
+  },
+  {
+    "contact_id": "163982325da14849bf45dd0fe6ca1139",
+    "pif_id": "8fb27d14-61cf-4ca2-b816-5612de9ead4c",
+    "firm_name": "Bekhloyan Law, APC",
+    "contact_name": "Avedis H. Bekhloyan",
+    "contact_title": "Founder & Lead Attorney",
+    "email": "ab@bekhloyanlaw.com",
+    "source_action": "action_762a72c600bb4da191207060",
+    "input_json": {
+      "body": "Hi Avedis,\n\nThought you might find this useful. I wrote up how a small PI firm turned recurring work into reusable AI workflows. Its assistants went from roughly 5 to 7 review-ready documents a day to 12 to 15, while medical records stayed in a protected workflow and every consequential output still came back to the lawyer.\n\nhttps://getpossibleminds.com/t/0VnVN1WE_Q\n\nIf you could remove one recurring document bottleneck at Bekhloyan Law, which would you start with?\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+      "subject": "Re: where AI could compound at Bekhloyan Law, APC",
+      "approval": {
+        "references": "<0100019ffd31b506-add84068-e1f0-435e-b637-63485da134b0-000000@email.amazonses.com>",
+        "approved_at": "2026-08-26T05:57:07.811021+00:00",
+        "approved_by": "codex",
+        "body_sha256": "32db181073e857f48dba4e74589d3d232992b27947bd97c38d43970e0fead06b",
+        "in_reply_to": "<0100019ffd31b506-add84068-e1f0-435e-b637-63485da134b0-000000@email.amazonses.com>",
+        "subject_sha256": "de236bc3da9eab73dbc823aa8f2e4dc905ab3e2848c2e88e7109b5599f9418d8"
+      },
+      "transport": "resend",
+      "references": "<0100019ffd31b506-add84068-e1f0-435e-b637-63485da134b0-000000@email.amazonses.com>",
+      "skill_path": null,
+      "body_sha256": "32db181073e857f48dba4e74589d3d232992b27947bd97c38d43970e0fead06b",
+      "in_reply_to": "<0100019ffd31b506-add84068-e1f0-435e-b637-63485da134b0-000000@email.amazonses.com>",
+      "sequence_id": "8aeb6553e7ee4fceb42e18d8f6fda7a6",
+      "skill_sha256": null,
+      "batch_item_id": "0e2b6324d75c4fd1b8060a42114d3215",
+      "brief_version": null,
+      "subject_sha256": "de236bc3da9eab73dbc823aa8f2e4dc905ab3e2848c2e88e7109b5599f9418d8",
+      "sequence_step_num": 2,
+      "composer_variant_key": null,
+      "lead_gen_action_type": "follow_up",
+      "phi_egress_guard_cache": {},
+      "composer_experiment_key": null
+    },
+    "last_sent": "2026-08-26T17:45:18.064383+00:00",
+    "touches": 2,
+    "touches30": 0,
+    "history": [
+      {
+        "id": "66977c3fc89847b48e884db9d3ddf03b",
+        "subject": "where AI could compound at Bekhloyan Law, APC",
+        "body": "Hi Avedis,\n\nCompetitors can buy the same AI tools. They cannot buy the operating knowledge your firm gains by starting earlier.\n\nWe learned this building Precise Imaging's AI system, now handling roughly 600 emails a day.\n\nFor many PI firms, intake is a strong place to focus. I outlined a practical 30-day approach here:\n\nhttps://getpossibleminds.com/t/6myn8a0z2Q\n\nWould you focus on intake at Bekhloyan Law, APC, or another workflow?\n\nRegards,\nPranav Modi\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+        "sent_at": "2026-08-13T22:15:20.806539+00:00",
+        "status": "delivered",
+        "provider_id": "00c9afe4-8585-4e26-aa6e-371d12d6fd8f"
+      },
+      {
+        "id": "41026955f68940528a1a4f7bf72baeb9",
+        "subject": "Re: where AI could compound at Bekhloyan Law, APC",
+        "body": "Hi Avedis,\n\nThought you might find this useful. I wrote up how a small PI firm turned recurring work into reusable AI workflows. Its assistants went from roughly 5 to 7 review-ready documents a day to 12 to 15, while medical records stayed in a protected workflow and every consequential output still came back to the lawyer.\n\nhttps://getpossibleminds.com/t/0VnVN1WE_Q\n\nIf you could remove one recurring document bottleneck at Bekhloyan Law, which would you start with?\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+        "sent_at": "2026-08-26T17:45:18.064383+00:00",
+        "status": "delivered",
+        "provider_id": "40f5d648-0d74-491c-8594-3bcfb3e15116"
+      }
+    ]
+  },
+  {
+    "contact_id": "580c78d58a5c4542bc5e54379beeae12",
+    "pif_id": "1c2ac491-9512-408e-82a2-276205298313",
+    "firm_name": "Law Office of Meylin P. Alfaro",
+    "contact_name": "Meylin P. Alfaro",
+    "contact_title": "Founder and Attorney",
+    "email": "meylin@malfarolaw.com",
+    "source_action": "action_c8bfc1350d914ed3a8b2f966",
+    "input_json": {
+      "body": "Hi Meylin,\n\nThought you might find this useful. I wrote up how a small PI firm turned recurring work into reusable AI workflows. Its assistants went from roughly 5 to 7 review-ready documents a day to 12 to 15, while medical records stayed in a protected workflow and every consequential output still came back to the lawyer.\n\nhttps://getpossibleminds.com/t/3pFQLh4EHA\n\nIf you could remove one recurring document bottleneck at your firm, which would you start with?\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+      "subject": "Re: where AI could compound at Law Office of Meylin P. Alfaro",
+      "approval": {
+        "references": "<0100019ffd23f139-128342c2-309a-4920-b6fc-f497fc0c192a-000000@email.amazonses.com>",
+        "approved_at": "2026-08-26T05:57:11.683865+00:00",
+        "approved_by": "codex",
+        "body_sha256": "20ca6716bbd26f9cb0f65042708e6fc8eaea784c08b7af6ae443ccf54c318b17",
+        "in_reply_to": "<0100019ffd23f139-128342c2-309a-4920-b6fc-f497fc0c192a-000000@email.amazonses.com>",
+        "subject_sha256": "6fcce08d772e2b2814ad9f97842304de2156a5cfcfd5ad5ad78add4a6e5d10f1"
+      },
+      "transport": "resend",
+      "references": "<0100019ffd23f139-128342c2-309a-4920-b6fc-f497fc0c192a-000000@email.amazonses.com>",
+      "skill_path": null,
+      "body_sha256": "20ca6716bbd26f9cb0f65042708e6fc8eaea784c08b7af6ae443ccf54c318b17",
+      "in_reply_to": "<0100019ffd23f139-128342c2-309a-4920-b6fc-f497fc0c192a-000000@email.amazonses.com>",
+      "sequence_id": "7e4b7a4097aa4b119f95efbcf0208a1b",
+      "skill_sha256": null,
+      "batch_item_id": "2d7bcc86034f4f358b1dc5cd39102385",
+      "brief_version": null,
+      "subject_sha256": "6fcce08d772e2b2814ad9f97842304de2156a5cfcfd5ad5ad78add4a6e5d10f1",
+      "sequence_step_num": 2,
+      "composer_variant_key": null,
+      "lead_gen_action_type": "follow_up",
+      "phi_egress_guard_cache": {},
+      "composer_experiment_key": null
+    },
+    "last_sent": "2026-08-26T18:05:19.105116+00:00",
+    "touches": 2,
+    "touches30": 0,
+    "history": [
+      {
+        "id": "3599c496a99b42e895048f7d1255d554",
+        "subject": "where AI could compound at Law Office of Meylin P. Alfaro",
+        "body": "Hi Meylin,\n\nCompetitors can buy the same AI tools. They cannot buy the operating knowledge your firm gains by starting earlier.\n\nWe learned this building Precise Imaging's AI system, now handling roughly 600 emails a day.\n\nFor many PI firms, intake is a strong place to focus. I outlined a practical 30-day approach here:\n\nhttps://getpossibleminds.com/t/f2vHSdSbOw\n\nWould you focus on intake at Law Office of Meylin P. Alfaro, or another workflow?\n\nRegards,\nPranav Modi\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+        "sent_at": "2026-08-13T22:00:18.675746+00:00",
+        "status": "delivered",
+        "provider_id": "a52f28b0-d031-45d2-8933-ce1a0f728d4e"
+      },
+      {
+        "id": "7c43266963bf430886a232422df98a5c",
+        "subject": "Re: where AI could compound at Law Office of Meylin P. Alfaro",
+        "body": "Hi Meylin,\n\nThought you might find this useful. I wrote up how a small PI firm turned recurring work into reusable AI workflows. Its assistants went from roughly 5 to 7 review-ready documents a day to 12 to 15, while medical records stayed in a protected workflow and every consequential output still came back to the lawyer.\n\nhttps://getpossibleminds.com/t/3pFQLh4EHA\n\nIf you could remove one recurring document bottleneck at your firm, which would you start with?\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+        "sent_at": "2026-08-26T18:05:19.105116+00:00",
+        "status": "delivered",
+        "provider_id": "ffe1b513-8040-4fb3-a2bf-f504a8a97668"
+      }
+    ]
+  },
+  {
+    "contact_id": "3e9bd45ecedc47a3b5d7fbd588634c2d",
+    "pif_id": "ef5d6ecb-140b-4658-a027-c620f0ef6bb0",
+    "firm_name": "The Law Offices of Ara Najarian",
+    "contact_name": "Ara J. Najarian",
+    "contact_title": "Founder / Attorney",
+    "email": "ara@aranajarian.com",
+    "source_action": "action_88cce0640c844a60a57f6588",
+    "input_json": {
+      "body": "Hi Ara,\n\nThought you might find this useful. I wrote up how a small PI firm turned recurring work into reusable AI workflows. Its assistants went from roughly 5 to 7 review-ready documents a day to 12 to 15, while medical records stayed in a protected workflow and every consequential output still came back to the lawyer.\n\nhttps://getpossibleminds.com/t/1S4rEoTSzQ\n\nIf you could remove one recurring document bottleneck at your firm, which would you start with?\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+      "subject": "Re: where AI could compound at The Law Offices of Ara Najarian",
+      "approval": {
+        "references": "<0100019ffd2d1ee5-44a0d055-4f4e-4067-8be0-e50c33e119b4-000000@email.amazonses.com>",
+        "approved_at": "2026-08-26T05:57:20.943669+00:00",
+        "approved_by": "codex",
+        "body_sha256": "e3f0d951b11bbbf865e9c1c903a5601b609788e95b5eb4ff8e572b4ba321907f",
+        "in_reply_to": "<0100019ffd2d1ee5-44a0d055-4f4e-4067-8be0-e50c33e119b4-000000@email.amazonses.com>",
+        "subject_sha256": "21992a25830f78188fd128c78fd9d1f1d579f1c591d51eb799357b638b1171e3"
+      },
+      "transport": "resend",
+      "references": "<0100019ffd2d1ee5-44a0d055-4f4e-4067-8be0-e50c33e119b4-000000@email.amazonses.com>",
+      "skill_path": null,
+      "body_sha256": "e3f0d951b11bbbf865e9c1c903a5601b609788e95b5eb4ff8e572b4ba321907f",
+      "in_reply_to": "<0100019ffd2d1ee5-44a0d055-4f4e-4067-8be0-e50c33e119b4-000000@email.amazonses.com>",
+      "sequence_id": "d930322c081f4e42a40d4fd70a84341c",
+      "skill_sha256": null,
+      "batch_item_id": "eea4a80f45974fd9ad5797b530ad07e7",
+      "brief_version": null,
+      "subject_sha256": "21992a25830f78188fd128c78fd9d1f1d579f1c591d51eb799357b638b1171e3",
+      "sequence_step_num": 2,
+      "composer_variant_key": null,
+      "lead_gen_action_type": "follow_up",
+      "phi_egress_guard_cache": {},
+      "composer_experiment_key": null
+    },
+    "last_sent": "2026-08-26T18:45:25.635353+00:00",
+    "touches": 2,
+    "touches30": 0,
+    "history": [
+      {
+        "id": "ca0d5d10cbb542e4992e606ab7e34acd",
+        "subject": "where AI could compound at The Law Offices of Ara Najarian",
+        "body": "Hi Ara,\n\nCompetitors can buy the same AI tools. They cannot buy the operating knowledge your firm gains by starting earlier.\n\nWe learned this building Precise Imaging's AI system, now handling roughly 600 emails a day.\n\nFor many PI firms, intake is a strong place to focus. I outlined a practical 30-day approach here:\n\nhttps://getpossibleminds.com/t/xKES94XL-w\n\nWould you focus on intake at The Law Offices of Ara Najarian, or another workflow?\n\nRegards,\nPranav Modi\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+        "sent_at": "2026-08-13T22:10:20.134952+00:00",
+        "status": "delivered",
+        "provider_id": "34145a38-18f2-4d0b-8095-18647a699f48"
+      },
+      {
+        "id": "33822159a57644ef92f57fa8d68642fe",
+        "subject": "Re: where AI could compound at The Law Offices of Ara Najarian",
+        "body": "Hi Ara,\n\nThought you might find this useful. I wrote up how a small PI firm turned recurring work into reusable AI workflows. Its assistants went from roughly 5 to 7 review-ready documents a day to 12 to 15, while medical records stayed in a protected workflow and every consequential output still came back to the lawyer.\n\nhttps://getpossibleminds.com/t/1S4rEoTSzQ\n\nIf you could remove one recurring document bottleneck at your firm, which would you start with?\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+        "sent_at": "2026-08-26T18:45:25.635353+00:00",
+        "status": "delivered",
+        "provider_id": "dddeb50c-188f-40bf-bb63-7a05121f6488"
+      }
+    ]
+  },
+  {
+    "contact_id": "fc_37cbbb9874524debb36b4a7c",
+    "pif_id": "cb722d48-d0bc-4b51-9e15-9c5048bfa0cb",
+    "firm_name": "Gold Coast Law, APC",
+    "contact_name": "daniel@goldcoastlaw.com",
+    "contact_title": "Attorney, Gold Coast Law, APC",
+    "email": "daniel@goldcoastlaw.com",
+    "source_action": "action_65d45ad0cc3f4a1dbd4d75ba",
+    "input_json": {
+      "body": "Hi Daniel,\n\nThought you might find this useful. I wrote up how a small PI firm turned recurring work into reusable AI workflows. Its assistants went from roughly 5 to 7 review-ready documents a day to 12 to 15, while medical records stayed in a protected workflow and every consequential output still came back to the lawyer.\n\nhttps://getpossibleminds.com/t/jqdVSYK1bw\n\nIf you could remove one recurring document bottleneck at Gold Coast Law, which would you start with?\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+      "subject": "Re: Precise imaging - quick question",
+      "approval": {
+        "references": "<1a020792f31.153b601c21094.3714132680805791208@possiblemindshq.com>",
+        "approved_at": "2026-08-26T05:57:22.850385+00:00",
+        "approved_by": "codex",
+        "body_sha256": "f98f899b7dba7d61af5280f900cea1591ba52cc4ba9d4526dca5bed6aa86db1e",
+        "in_reply_to": "<1a020792f31.153b601c21094.3714132680805791208@possiblemindshq.com>",
+        "subject_sha256": "33c4a9f4cdf693fef572bdb035992fdd54bba1ba6646132ab20f775703e2b3a1"
+      },
+      "transport": "resend",
+      "references": "<1a020792f31.153b601c21094.3714132680805791208@possiblemindshq.com>",
+      "skill_path": null,
+      "body_sha256": "f98f899b7dba7d61af5280f900cea1591ba52cc4ba9d4526dca5bed6aa86db1e",
+      "in_reply_to": "<1a020792f31.153b601c21094.3714132680805791208@possiblemindshq.com>",
+      "sequence_id": "4ccfbe48671c4da78aa3149d574ad52e",
+      "skill_sha256": null,
+      "batch_item_id": "a0f17834136a43539322a4acbd0baf8b",
+      "brief_version": null,
+      "subject_sha256": "33c4a9f4cdf693fef572bdb035992fdd54bba1ba6646132ab20f775703e2b3a1",
+      "sequence_step_num": 2,
+      "composer_variant_key": null,
+      "lead_gen_action_type": "follow_up",
+      "phi_egress_guard_cache": {},
+      "composer_experiment_key": null
+    },
+    "last_sent": "2026-08-26T18:55:26.183404+00:00",
+    "touches": 2,
+    "touches30": 0,
+    "history": [
+      {
+        "id": "18e381a229144d99b7db0c9c88c06572",
+        "subject": "Precise imaging - quick question",
+        "body": "Hi Daniel,\n\nPranav from Possible Minds. We're the team behind the automated email replies your firm has seen from Precise Imaging-the status updates on imaging requests come from a system we built for them.\n\nI've been talking to PI firm owners who work with Precise, mostly to learn what eats the most staff time on the intake and records side.\n\nMind if I ask a few questions about how that runs at Gold Coast Law? Genuinely just listening, not a pitch.\n\n- Pranav\nFounder, Possible Minds\nhttps://getpossibleminds.com\nFree 30-min consult: getpossibleminds.com/consult",
+        "sent_at": "2026-08-20T18:40:08.475408+00:00",
+        "status": "sent",
+        "provider_id": "1787251208236108000"
+      },
+      {
+        "id": "0da201cc9a4245deb47cf842c97bf1c9",
+        "subject": "Re: Precise imaging - quick question",
+        "body": "Hi Daniel,\n\nThought you might find this useful. I wrote up how a small PI firm turned recurring work into reusable AI workflows. Its assistants went from roughly 5 to 7 review-ready documents a day to 12 to 15, while medical records stayed in a protected workflow and every consequential output still came back to the lawyer.\n\nhttps://getpossibleminds.com/t/jqdVSYK1bw\n\nIf you could remove one recurring document bottleneck at Gold Coast Law, which would you start with?\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+        "sent_at": "2026-08-26T18:55:26.183404+00:00",
+        "status": "delivered",
+        "provider_id": "25782da7-30e1-4335-8463-28df01a9c97d"
+      }
+    ]
+  },
+  {
+    "contact_id": "6e6db2c8331b4bdf91d92cce1d8f52e4",
+    "pif_id": "9a9a041b-cd6e-4335-8650-9c3a95a872ca",
+    "firm_name": "The Obiz Law Office, PC",
+    "contact_name": "Franklin U. Obi",
+    "contact_title": "Founder & Principal Attorney",
+    "email": "info@theobizlawoffice.com",
+    "source_action": "action_9485a5daf83b409799b823ad",
+    "input_json": {
+      "body": "Hi Franklin,\n\nThought you might find this useful. I wrote up how a small PI firm turned recurring work into reusable AI workflows. Its assistants went from roughly 5 to 7 review-ready documents a day to 12 to 15, while medical records stayed in a protected workflow and every consequential output still came back to the lawyer.\n\nhttps://getpossibleminds.com/t/H8WTwonu7g\n\nIf you could remove one recurring document bottleneck at The Obiz Law Office, which would you start with?\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+      "subject": "Re: Precise imaging - quick question",
+      "approval": {
+        "references": "<1a0207490f4.16b40efe20931.111044214216861387@possiblemindshq.com>",
+        "approved_at": "2026-08-26T05:57:24.810851+00:00",
+        "approved_by": "codex",
+        "body_sha256": "e5341b550583e43a61e9a8e1f74bfd7d86662096faaf5e8060db8813a412860b",
+        "in_reply_to": "<1a0207490f4.16b40efe20931.111044214216861387@possiblemindshq.com>",
+        "subject_sha256": "33c4a9f4cdf693fef572bdb035992fdd54bba1ba6646132ab20f775703e2b3a1"
+      },
+      "transport": "resend",
+      "references": "<1a0207490f4.16b40efe20931.111044214216861387@possiblemindshq.com>",
+      "skill_path": null,
+      "body_sha256": "e5341b550583e43a61e9a8e1f74bfd7d86662096faaf5e8060db8813a412860b",
+      "in_reply_to": "<1a0207490f4.16b40efe20931.111044214216861387@possiblemindshq.com>",
+      "sequence_id": "fc0574ba2451453d9694aeb2a5e1000b",
+      "skill_sha256": null,
+      "batch_item_id": "e5f994f9d79144fdadd37c40e18099a9",
+      "brief_version": null,
+      "subject_sha256": "33c4a9f4cdf693fef572bdb035992fdd54bba1ba6646132ab20f775703e2b3a1",
+      "sequence_step_num": 2,
+      "composer_variant_key": null,
+      "lead_gen_action_type": "follow_up",
+      "phi_egress_guard_cache": {},
+      "composer_experiment_key": null
+    },
+    "last_sent": "2026-08-26T19:05:26.796331+00:00",
+    "touches": 2,
+    "touches30": 0,
+    "history": [
+      {
+        "id": "000eb30490b84f1d856cc50b8b485a62",
+        "subject": "Precise imaging - quick question",
+        "body": "Hi Franklin,\n\nPranav from Possible Minds. We're the team behind the automated email replies your firm has seen from Precise Imaging-the status updates on imaging requests come from a system we built for them.\n\nI've been talking to PI firm owners who work with Precise, mostly to learn what eats the most staff time on the intake and records side.\n\nMind if I ask a few questions about how that runs at The Obiz Law Office? Genuinely just listening, not a pitch.\n\n- Pranav\nFounder, Possible Minds\nhttps://getpossibleminds.com\nFree 30-min consult: getpossibleminds.com/consult",
+        "sent_at": "2026-08-20T18:35:05.780537+00:00",
+        "status": "sent",
+        "provider_id": "1787250905620119300"
+      },
+      {
+        "id": "51d0e0033b92444cb6db89ca58e4ab2a",
+        "subject": "Re: Precise imaging - quick question",
+        "body": "Hi Franklin,\n\nThought you might find this useful. I wrote up how a small PI firm turned recurring work into reusable AI workflows. Its assistants went from roughly 5 to 7 review-ready documents a day to 12 to 15, while medical records stayed in a protected workflow and every consequential output still came back to the lawyer.\n\nhttps://getpossibleminds.com/t/H8WTwonu7g\n\nIf you could remove one recurring document bottleneck at The Obiz Law Office, which would you start with?\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+        "sent_at": "2026-08-26T19:05:26.796331+00:00",
+        "status": "delivered",
+        "provider_id": "c0f47f4f-50e8-499c-b1d2-4047fd88cea5"
+      }
+    ]
+  },
+  {
+    "contact_id": "3f9d400254604496a845f8a0ef99d291",
+    "pif_id": "ced15e69-c56f-4981-8897-a3262e38cd09",
+    "firm_name": "Willford Law Corp",
+    "contact_name": "Thomas M. Willford",
+    "contact_title": "Trial Attorney / Owner",
+    "email": "info@willfordlawcorp.com",
+    "source_action": "action_43d8748be5e349f69e9c9152",
+    "input_json": {
+      "body": "Hi Thomas,\n\nThought you might find this useful. I wrote up how a small PI firm turned recurring work into reusable AI workflows. Its assistants went from roughly 5 to 7 review-ready documents a day to 12 to 15, while medical records stayed in a protected workflow and every consequential output still came back to the lawyer.\n\nhttps://getpossibleminds.com/t/dwvkr3bTdg\n\nIf you could remove one recurring document bottleneck at Willford Law Corp, which would you start with?\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+      "subject": "Re: Precise imaging - quick question",
+      "approval": {
+        "references": "<1a020594da3.397dc4dc21123.3672074513548279793@possiblemindshq.com>",
+        "approved_at": "2026-08-26T05:57:26.581321+00:00",
+        "approved_by": "codex",
+        "body_sha256": "f156370b9839f86348730ca0c81b53444b9553a86b6332c65b9000f193fa3cff",
+        "in_reply_to": "<1a020594da3.397dc4dc21123.3672074513548279793@possiblemindshq.com>",
+        "subject_sha256": "33c4a9f4cdf693fef572bdb035992fdd54bba1ba6646132ab20f775703e2b3a1"
+      },
+      "transport": "resend",
+      "references": "<1a020594da3.397dc4dc21123.3672074513548279793@possiblemindshq.com>",
+      "skill_path": null,
+      "body_sha256": "f156370b9839f86348730ca0c81b53444b9553a86b6332c65b9000f193fa3cff",
+      "in_reply_to": "<1a020594da3.397dc4dc21123.3672074513548279793@possiblemindshq.com>",
+      "sequence_id": "f87f2769b6674a3eabf0e7fbd87d2fa4",
+      "skill_sha256": null,
+      "batch_item_id": "284e4a238c2a45da8c7d48a50691554a",
+      "brief_version": null,
+      "subject_sha256": "33c4a9f4cdf693fef572bdb035992fdd54bba1ba6646132ab20f775703e2b3a1",
+      "sequence_step_num": 2,
+      "composer_variant_key": null,
+      "lead_gen_action_type": "follow_up",
+      "phi_egress_guard_cache": {},
+      "composer_experiment_key": null
+    },
+    "last_sent": "2026-08-26T19:15:27.398078+00:00",
+    "touches": 2,
+    "touches30": 0,
+    "history": [
+      {
+        "id": "1fac55a6e1494ce2b542a47ab812aadf",
+        "subject": "Precise imaging - quick question",
+        "body": "Hi Thomas,\n\nAfter 30 years in litigation and some significant brain-injury and accident recoveries, you've probably seen every version of the medical-records chase by now :)\n\nYour team may have noticed that Precise's imaging-status replies are now automated-we built that system for them. I'm curious whether those updates now reach the right Clio matters cleanly, or whether staff still have to follow up and move information around manually.\n\nWould you have 15 minutes to compare notes on what still takes the most staff time? I'd genuinely appreciate your perspective-not a pitch.\n\n- Pranav\nFounder, Possible Minds\nhttps://getpossibleminds.com\nFree 30-min consult: getpossibleminds.com/consult",
+        "sent_at": "2026-08-20T18:05:19.019717+00:00",
+        "status": "sent",
+        "provider_id": "1787249118856130100"
+      },
+      {
+        "id": "ba291ea75e2742a7a0dd8ba113b3031d",
+        "subject": "Re: Precise imaging - quick question",
+        "body": "Hi Thomas,\n\nThought you might find this useful. I wrote up how a small PI firm turned recurring work into reusable AI workflows. Its assistants went from roughly 5 to 7 review-ready documents a day to 12 to 15, while medical records stayed in a protected workflow and every consequential output still came back to the lawyer.\n\nhttps://getpossibleminds.com/t/dwvkr3bTdg\n\nIf you could remove one recurring document bottleneck at Willford Law Corp, which would you start with?\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+        "sent_at": "2026-08-26T19:15:27.398078+00:00",
+        "status": "delivered",
+        "provider_id": "275e0e04-b355-4b5f-80b4-61ffd26782dd"
+      }
+    ]
+  },
+  {
+    "contact_id": "fc_d61e5c5a48a34feebe9ed386",
+    "pif_id": "1962a44e-ecaf-44d1-8630-f3f8103de61c",
+    "firm_name": "Pedram Law",
+    "contact_name": "nima pedram",
+    "contact_title": "Founding Partner; Senior Attorney",
+    "email": "pedram@pedramlaw.com",
+    "source_action": "action_783801d4f9c84156becd583e",
+    "input_json": {
+      "body": "Hi Nima,\n\nThought you might find this useful. I wrote up how a small PI firm turned recurring work into reusable AI workflows. Its assistants went from roughly 5 to 7 review-ready documents a day to 12 to 15, while medical records stayed in a protected workflow and every consequential output still came back to the lawyer.\n\nhttps://getpossibleminds.com/t/2WO3Pswtqw\n\nIf you could remove one recurring document bottleneck at Pedram Law, which would you start with?\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+      "subject": "Re: where AI could compound at Pedram Law",
+      "approval": {
+        "references": "<0100019ffd03cffb-034d51c7-1cb9-48ca-9d68-312988537363-000000@email.amazonses.com>",
+        "approved_at": "2026-08-27T09:22:13.265054+00:00",
+        "approved_by": "codex",
+        "body_sha256": "a54637c83877f0c937992f36936a14c35dfcdaf547ab8892e16808bbf120c29d",
+        "in_reply_to": "<0100019ffd03cffb-034d51c7-1cb9-48ca-9d68-312988537363-000000@email.amazonses.com>",
+        "subject_sha256": "e8ea39a2218ea534a92a8d49a53fc5e81fb5205818d6e18741d095897b4e36a9"
+      },
+      "transport": "resend",
+      "references": "<0100019ffd03cffb-034d51c7-1cb9-48ca-9d68-312988537363-000000@email.amazonses.com>",
+      "skill_path": null,
+      "body_sha256": "a54637c83877f0c937992f36936a14c35dfcdaf547ab8892e16808bbf120c29d",
+      "in_reply_to": "<0100019ffd03cffb-034d51c7-1cb9-48ca-9d68-312988537363-000000@email.amazonses.com>",
+      "sequence_id": "6983d5e191da41edbf5687c927ddbf2b",
+      "skill_sha256": null,
+      "batch_item_id": "71bbe58f5cb0434b8787f72a39db8be0",
+      "brief_version": null,
+      "subject_sha256": "e8ea39a2218ea534a92a8d49a53fc5e81fb5205818d6e18741d095897b4e36a9",
+      "sequence_step_num": 2,
+      "composer_variant_key": null,
+      "lead_gen_action_type": "follow_up",
+      "phi_egress_guard_cache": {},
+      "composer_experiment_key": null
+    },
+    "last_sent": "2026-08-27T16:05:25.415558+00:00",
+    "touches": 2,
+    "touches30": 0,
+    "history": [
+      {
+        "id": "f11766d04c1d44e9a676ab15b1f5e3c2",
+        "subject": "where AI could compound at Pedram Law",
+        "body": "Hi Nima,\n\nCompetitors can buy the same AI tools. They cannot buy the operating knowledge your firm gains by starting earlier.\n\nWe learned this building Precise Imaging's AI system, now handling roughly 600 emails a day.\n\nFor many PI firms, intake is a strong place to focus. I outlined a practical 30-day approach here:\n\nhttps://getpossibleminds.com/t/opmJmKSgVQ\n\nWould you focus on intake at Pedram Law, or another workflow?\n\nRegards,\nPranav Modi\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+        "sent_at": "2026-08-13T21:25:13.060301+00:00",
+        "status": "delivered",
+        "provider_id": "3c17526b-1ac5-41be-805b-e5844cdba072"
+      },
+      {
+        "id": "966e35f807c14694956fb1399b18c217",
+        "subject": "Re: where AI could compound at Pedram Law",
+        "body": "Hi Nima,\n\nThought you might find this useful. I wrote up how a small PI firm turned recurring work into reusable AI workflows. Its assistants went from roughly 5 to 7 review-ready documents a day to 12 to 15, while medical records stayed in a protected workflow and every consequential output still came back to the lawyer.\n\nhttps://getpossibleminds.com/t/2WO3Pswtqw\n\nIf you could remove one recurring document bottleneck at Pedram Law, which would you start with?\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+        "sent_at": "2026-08-27T16:05:25.415558+00:00",
+        "status": "sent",
+        "provider_id": "12580fb1-a49d-4e2b-89d7-7588655a07cc"
+      }
+    ]
+  },
+  {
+    "contact_id": "fc_de17bd0d92b54aa394abb0d7",
+    "pif_id": "2a1ce63d-6f37-47c7-9eb9-341bfef768c3",
+    "firm_name": "Shaffer & Gonor",
+    "contact_name": "David Gonor",
+    "contact_title": "Founding Partner",
+    "email": "dgonor@shaffergonorlaw.com",
+    "source_action": "action_2948d9b61a2b48f8a8e86b59",
+    "input_json": {
+      "body": "Hi David,\n\nThought you might find this useful. I wrote up how a small PI firm turned recurring work into reusable AI workflows. Its assistants went from roughly 5 to 7 review-ready documents a day to 12 to 15, while medical records stayed in a protected workflow and every consequential output still came back to the lawyer.\n\nhttps://getpossibleminds.com/t/mvTRzes4zw\n\nIf you could remove one recurring document bottleneck at Shaffer & Gonor, which would you start with?\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+      "subject": "Re: where AI could compound at Shaffer & Gonor",
+      "approval": {
+        "references": "<0100019ffce84a7d-b6387d4b-4d10-4869-a879-ce37dece4bfc-000000@email.amazonses.com>",
+        "approved_at": "2026-08-27T09:22:20.511635+00:00",
+        "approved_by": "codex",
+        "body_sha256": "fd4cc66022bbfb8458c5393040a67defbd737d4896b37fc340cc2d5997f23b30",
+        "in_reply_to": "<0100019ffce84a7d-b6387d4b-4d10-4869-a879-ce37dece4bfc-000000@email.amazonses.com>",
+        "subject_sha256": "5c9bbc428ec285606792de8eff08308ea53f07880ef5510a54c1ea798cbc06ec"
+      },
+      "transport": "resend",
+      "references": "<0100019ffce84a7d-b6387d4b-4d10-4869-a879-ce37dece4bfc-000000@email.amazonses.com>",
+      "skill_path": null,
+      "body_sha256": "fd4cc66022bbfb8458c5393040a67defbd737d4896b37fc340cc2d5997f23b30",
+      "in_reply_to": "<0100019ffce84a7d-b6387d4b-4d10-4869-a879-ce37dece4bfc-000000@email.amazonses.com>",
+      "sequence_id": "8057549f1cab465681b065cd91cfa3ad",
+      "skill_sha256": null,
+      "batch_item_id": "a70cb2d15246422bb26a35c23f21d5e9",
+      "brief_version": null,
+      "subject_sha256": "5c9bbc428ec285606792de8eff08308ea53f07880ef5510a54c1ea798cbc06ec",
+      "sequence_step_num": 2,
+      "composer_variant_key": null,
+      "lead_gen_action_type": "follow_up",
+      "phi_egress_guard_cache": {},
+      "composer_experiment_key": null
+    },
+    "last_sent": "2026-08-27T16:35:28.292534+00:00",
+    "touches": 2,
+    "touches30": 0,
+    "history": [
+      {
+        "id": "987492bb9eae4dd59e94b17ea8aa00c4",
+        "subject": "where AI could compound at Shaffer & Gonor",
+        "body": "Hi David,\n\nCompetitors can buy the same AI tools. They cannot buy the operating knowledge your firm gains by starting earlier.\n\nWe learned this building Precise Imaging's AI system, now handling roughly 600 emails a day.\n\nFor many PI firms, intake is a strong place to focus. I outlined a practical 30-day approach here:\n\nhttps://getpossibleminds.com/t/dhyaru9RWg\n\nWould you focus on intake at Shaffer & Gonor, or another workflow?\n\nRegards,\nPranav Modi\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+        "sent_at": "2026-08-13T20:55:09.334561+00:00",
+        "status": "delivered",
+        "provider_id": "7997f67f-d7fc-4066-9076-aaf82c5c50a3"
+      },
+      {
+        "id": "dcda115976c1494e83939765312617bd",
+        "subject": "Re: where AI could compound at Shaffer & Gonor",
+        "body": "Hi David,\n\nThought you might find this useful. I wrote up how a small PI firm turned recurring work into reusable AI workflows. Its assistants went from roughly 5 to 7 review-ready documents a day to 12 to 15, while medical records stayed in a protected workflow and every consequential output still came back to the lawyer.\n\nhttps://getpossibleminds.com/t/mvTRzes4zw\n\nIf you could remove one recurring document bottleneck at Shaffer & Gonor, which would you start with?\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+        "sent_at": "2026-08-27T16:35:28.292534+00:00",
+        "status": "delivered",
+        "provider_id": "a8adb70f-38a7-44c4-9b12-f6dd94881ccd"
+      }
+    ]
+  },
+  {
+    "contact_id": "fc_ff747b78ab734342afddab86",
+    "pif_id": "adbdbb0c-1d07-4158-a1eb-d2ca7363c5bd",
+    "firm_name": "A2Z Legal",
+    "contact_name": "Andrew Zeytuntsyan",
+    "contact_title": "Founder; Founding Partner, Law Offices of Andrew Zeytuntsyan (A2Z Legal)",
+    "email": "andrew@a2zlegal.com",
+    "source_action": "action_aa026a837f274e4f853445fb",
+    "input_json": {
+      "body": "Hi Andrew,\n\nThought you might find this useful. I wrote up how a small PI firm turned recurring work into reusable AI workflows. Its assistants went from roughly 5 to 7 review-ready documents a day to 12 to 15, while medical records stayed in a protected workflow and every consequential output still came back to the lawyer.\n\nhttps://getpossibleminds.com/t/lAFHaokmAA\n\nIf you could remove one recurring document bottleneck at A2Z Legal, which would you start with?\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+      "subject": "Re: where AI could compound at A2Z Legal",
+      "approval": {
+        "references": "<0100019ffcc82ee3-62cc73e3-dd2a-4b01-be60-5e40338a4fe2-000000@email.amazonses.com>",
+        "approved_at": "2026-08-27T09:22:25.899046+00:00",
+        "approved_by": "codex",
+        "body_sha256": "dc49c1e3ddae0c2493574e01fe2393a70f5de72f0955c5a2661bed5f269904cd",
+        "in_reply_to": "<0100019ffcc82ee3-62cc73e3-dd2a-4b01-be60-5e40338a4fe2-000000@email.amazonses.com>",
+        "subject_sha256": "5c5124a84a692a8b1f6ba9ce3aac589621432587f68601f6fb7b87c60dd43eeb"
+      },
+      "transport": "resend",
+      "references": "<0100019ffcc82ee3-62cc73e3-dd2a-4b01-be60-5e40338a4fe2-000000@email.amazonses.com>",
+      "skill_path": null,
+      "body_sha256": "dc49c1e3ddae0c2493574e01fe2393a70f5de72f0955c5a2661bed5f269904cd",
+      "in_reply_to": "<0100019ffcc82ee3-62cc73e3-dd2a-4b01-be60-5e40338a4fe2-000000@email.amazonses.com>",
+      "sequence_id": "b5a851dc7ce4466fbb8f8efc3c54a461",
+      "skill_sha256": null,
+      "batch_item_id": "4ac82189cb2e4bd3b5991f596613d3bf",
+      "brief_version": null,
+      "subject_sha256": "5c5124a84a692a8b1f6ba9ce3aac589621432587f68601f6fb7b87c60dd43eeb",
+      "sequence_step_num": 2,
+      "composer_variant_key": null,
+      "lead_gen_action_type": "follow_up",
+      "phi_egress_guard_cache": {},
+      "composer_experiment_key": null
+    },
+    "last_sent": "2026-08-27T16:55:18.404018+00:00",
+    "touches": 2,
+    "touches30": 0,
+    "history": [
+      {
+        "id": "dbddb43c1e6641939956c111cc3f68e9",
+        "subject": "where AI could compound at A2Z Legal",
+        "body": "Hi Andrew,\n\nCompetitors can buy the same AI tools. They cannot buy the operating knowledge your firm gains by starting earlier.\n\nWe learned this building Precise Imaging's AI system, now handling roughly 600 emails a day.\n\nFor many PI firms, intake is a strong place to focus. I outlined a practical 30-day approach here:\n\nhttps://getpossibleminds.com/t/ak55l1xTwQ\n\nWould you focus on intake at A2Z Legal, or another workflow?\n\nRegards,\nPranav Modi\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+        "sent_at": "2026-08-13T20:20:05.202323+00:00",
+        "status": "delivered",
+        "provider_id": "c4e1b7e7-ad54-4055-9f7b-68efec7c0e73"
+      },
+      {
+        "id": "752c2279eca44605aa08ea204746d46e",
+        "subject": "Re: where AI could compound at A2Z Legal",
+        "body": "Hi Andrew,\n\nThought you might find this useful. I wrote up how a small PI firm turned recurring work into reusable AI workflows. Its assistants went from roughly 5 to 7 review-ready documents a day to 12 to 15, while medical records stayed in a protected workflow and every consequential output still came back to the lawyer.\n\nhttps://getpossibleminds.com/t/lAFHaokmAA\n\nIf you could remove one recurring document bottleneck at A2Z Legal, which would you start with?\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+        "sent_at": "2026-08-27T16:55:18.404018+00:00",
+        "status": "delivered",
+        "provider_id": "ad28b1d9-ec7a-452f-ae22-f892b85c121c"
+      }
+    ]
+  },
+  {
+    "contact_id": "97e96ac8ffd047709155b6b49f3cb2df",
+    "pif_id": "723be878-cf1e-4609-8a5d-2e67089d0d62",
+    "firm_name": "Elkin Gamboa LLP",
+    "contact_name": "Jessica Gamboa",
+    "contact_title": "Founding Partner",
+    "email": "jessica@elkingamboa.com",
+    "source_action": "action_36e68be1e2cf4cdb9409004b",
+    "input_json": {
+      "body": "Hi Jessica,\n\nThought you might find this useful. I wrote up how a small PI firm turned recurring work into reusable AI workflows. Its assistants went from roughly 5 to 7 review-ready documents a day to 12 to 15, while medical records stayed in a protected workflow and every consequential output still came back to the lawyer.\n\nhttps://getpossibleminds.com/t/SEf5nSXgSg\n\nIf you could remove one recurring document bottleneck at Elkin Gamboa, which would you start with?\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+      "subject": "Re: where AI could compound at Elkin Gamboa LLP",
+      "approval": {
+        "references": "<0100019ffc9f52bd-ec2e28d1-621a-43fa-a815-2faac725f986-000000@email.amazonses.com>",
+        "approved_at": "2026-08-27T09:22:39.251530+00:00",
+        "approved_by": "codex",
+        "body_sha256": "fc7df18ee2af28a01b495a235578990c078b775f6ef0bf80e663b163b0fe217d",
+        "in_reply_to": "<0100019ffc9f52bd-ec2e28d1-621a-43fa-a815-2faac725f986-000000@email.amazonses.com>",
+        "subject_sha256": "1cf9715f21161a1ae866cd65e7608be8410cf92d1d5a14b0b1162f56893bd9a6"
+      },
+      "transport": "resend",
+      "references": "<0100019ffc9f52bd-ec2e28d1-621a-43fa-a815-2faac725f986-000000@email.amazonses.com>",
+      "skill_path": null,
+      "body_sha256": "fc7df18ee2af28a01b495a235578990c078b775f6ef0bf80e663b163b0fe217d",
+      "in_reply_to": "<0100019ffc9f52bd-ec2e28d1-621a-43fa-a815-2faac725f986-000000@email.amazonses.com>",
+      "sequence_id": "dbd944a134fb4fbebe5f8f67adf87dfc",
+      "skill_sha256": null,
+      "batch_item_id": "14b13a2dd8da4b2aa4b2e3abbed85cd2",
+      "brief_version": null,
+      "subject_sha256": "1cf9715f21161a1ae866cd65e7608be8410cf92d1d5a14b0b1162f56893bd9a6",
+      "sequence_step_num": 2,
+      "composer_variant_key": null,
+      "lead_gen_action_type": "follow_up",
+      "phi_egress_guard_cache": {},
+      "composer_experiment_key": null
+    },
+    "last_sent": "2026-08-27T17:45:21.278619+00:00",
+    "touches": 2,
+    "touches30": 0,
+    "history": [
+      {
+        "id": "578f62f59e3c4942b7cd90c89f028035",
+        "subject": "where AI could compound at Elkin Gamboa LLP",
+        "body": "Hi Jessica,\n\nCompetitors can buy the same AI tools. They cannot buy the operating knowledge your firm gains by starting earlier.\n\nWe learned this building Precise Imaging's AI system, now handling roughly 600 emails a day.\n\nFor many PI firms, intake is a strong place to focus. I outlined a practical 30-day approach here:\n\nhttps://getpossibleminds.com/t/w5omhlsiNA\n\nWould you focus on intake at Elkin Gamboa LLP, or another workflow?\n\nRegards,\nPranav Modi\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+        "sent_at": "2026-08-13T19:35:27.411991+00:00",
+        "status": "delivered",
+        "provider_id": "112aeb90-efbb-42ab-836d-802162e8d694"
+      },
+      {
+        "id": "88a6a9ad7d594c07a9cce2b19e2d534f",
+        "subject": "Re: where AI could compound at Elkin Gamboa LLP",
+        "body": "Hi Jessica,\n\nThought you might find this useful. I wrote up how a small PI firm turned recurring work into reusable AI workflows. Its assistants went from roughly 5 to 7 review-ready documents a day to 12 to 15, while medical records stayed in a protected workflow and every consequential output still came back to the lawyer.\n\nhttps://getpossibleminds.com/t/SEf5nSXgSg\n\nIf you could remove one recurring document bottleneck at Elkin Gamboa, which would you start with?\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+        "sent_at": "2026-08-27T17:45:21.278619+00:00",
+        "status": "delivered",
+        "provider_id": "a61fea55-6ac7-4c9f-a938-92b28e4fceda"
+      }
+    ]
+  },
+  {
+    "contact_id": "fc_5d1819f8e9e846bba737cc97",
+    "pif_id": "a3d6a370-7e55-4e02-bf4b-8237dacdef65",
+    "firm_name": "Law Office of Gil L. Arbel",
+    "contact_name": "Gil Arbel",
+    "contact_title": "Founder & Owner; Supervising Attorney",
+    "email": "gil@arbelegal.com",
+    "source_action": "action_cf9b7c4e35ef405898c9f5f8",
+    "input_json": {
+      "body": "Hi Gil,\n\nThought you might find this useful. I wrote up how a small PI firm turned recurring work into reusable AI workflows. Its assistants went from roughly 5 to 7 review-ready documents a day to 12 to 15, while medical records stayed in a protected workflow and every consequential output still came back to the lawyer.\n\nhttps://getpossibleminds.com/t/ECTc3DWAyw\n\nIf you could remove one recurring document bottleneck at your firm, which would you start with?\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+      "subject": "Re: where AI could compound at Law Office of Gil L. Arbel",
+      "approval": {
+        "references": "<0100019ffc83aab0-f6a7e51c-a996-4428-98f0-d5657e115088-000000@email.amazonses.com>",
+        "approved_at": "2026-08-27T09:22:42.005110+00:00",
+        "approved_by": "codex",
+        "body_sha256": "0c91f26273b89bfa28b31fd8d9cb75ad175a93afad0393411c63f895f7f20285",
+        "in_reply_to": "<0100019ffc83aab0-f6a7e51c-a996-4428-98f0-d5657e115088-000000@email.amazonses.com>",
+        "subject_sha256": "373a7562a8c23610095e605a314597bbbf6d8830d3ed17f9f6dfd659b965e26b"
+      },
+      "transport": "resend",
+      "references": "<0100019ffc83aab0-f6a7e51c-a996-4428-98f0-d5657e115088-000000@email.amazonses.com>",
+      "skill_path": null,
+      "body_sha256": "0c91f26273b89bfa28b31fd8d9cb75ad175a93afad0393411c63f895f7f20285",
+      "in_reply_to": "<0100019ffc83aab0-f6a7e51c-a996-4428-98f0-d5657e115088-000000@email.amazonses.com>",
+      "sequence_id": "11d94b921d794dcea4c7387b5e21cfa8",
+      "skill_sha256": null,
+      "batch_item_id": "7437ccf9041d42ba9cc843f96f12e144",
+      "brief_version": null,
+      "subject_sha256": "373a7562a8c23610095e605a314597bbbf6d8830d3ed17f9f6dfd659b965e26b",
+      "sequence_step_num": 2,
+      "composer_variant_key": null,
+      "lead_gen_action_type": "follow_up",
+      "phi_egress_guard_cache": {},
+      "composer_experiment_key": null
+    },
+    "last_sent": "2026-08-27T17:55:21.891699+00:00",
+    "touches": 2,
+    "touches30": 0,
+    "history": [
+      {
+        "id": "198ce0dc5ef54754a3a9959c16df28eb",
+        "subject": "where AI could compound at Law Office of Gil L. Arbel",
+        "body": "Hi Gil,\n\nCompetitors can buy the same AI tools. They cannot buy the operating knowledge your firm gains by starting earlier.\n\nWe learned this building Precise Imaging's AI system, now handling roughly 600 emails a day.\n\nFor many PI firms, intake is a strong place to focus. I outlined a practical 30-day approach here:\n\nhttps://getpossibleminds.com/t/hoOIzVDQCw\n\nWould you focus on intake at Law Office of Gil L. Arbel, or another workflow?\n\nRegards,\nPranav Modi\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+        "sent_at": "2026-08-13T19:05:14.935389+00:00",
+        "status": "delivered",
+        "provider_id": "9c8687e4-3763-43f4-b6dc-4294ec4dec60"
+      },
+      {
+        "id": "18851bd6959e4a359b7fbcfb27ef2c80",
+        "subject": "Re: where AI could compound at Law Office of Gil L. Arbel",
+        "body": "Hi Gil,\n\nThought you might find this useful. I wrote up how a small PI firm turned recurring work into reusable AI workflows. Its assistants went from roughly 5 to 7 review-ready documents a day to 12 to 15, while medical records stayed in a protected workflow and every consequential output still came back to the lawyer.\n\nhttps://getpossibleminds.com/t/ECTc3DWAyw\n\nIf you could remove one recurring document bottleneck at your firm, which would you start with?\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+        "sent_at": "2026-08-27T17:55:21.891699+00:00",
+        "status": "delivered",
+        "provider_id": "ec3ed428-fea0-4b74-9adc-fe2e313d4a2f"
+      }
+    ]
+  },
+  {
+    "contact_id": "d7f1449900a540b894edaa42d2488069",
+    "pif_id": "b78783a4-ad6e-42bc-91f3-721bedbfdc6d",
+    "firm_name": "Theta Law Firm, LLP",
+    "contact_name": "Soheyl Tahsildoost",
+    "contact_title": "Founding Partner",
+    "email": "st@thetafirm.com",
+    "source_action": "action_92a415518c88444784d0a0b1",
+    "input_json": {
+      "body": "Hi Soheyl,\n\nThought you might find this useful. I wrote up how a small PI firm turned recurring work into reusable AI workflows. Its assistants went from roughly 5 to 7 review-ready documents a day to 12 to 15, while medical records stayed in a protected workflow and every consequential output still came back to the lawyer.\n\nhttps://getpossibleminds.com/t/08m-ixIACA\n\nIf you could remove one recurring document bottleneck at Theta Law Firm, which would you start with?\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+      "subject": "Re: where AI could compound at Theta Law Firm, LLP",
+      "approval": {
+        "references": "<0100019ffc7a7e9b-94af93c0-7e88-4554-9e26-96619f197e42-000000@email.amazonses.com>",
+        "approved_at": "2026-08-27T09:22:44.773052+00:00",
+        "approved_by": "codex",
+        "body_sha256": "e766a0c94bf202d537ef866d58862c4212ba13ddf98cab51855d0bc3ba36ab0b",
+        "in_reply_to": "<0100019ffc7a7e9b-94af93c0-7e88-4554-9e26-96619f197e42-000000@email.amazonses.com>",
+        "subject_sha256": "84fc921297a1f73aa0c0c094a33a2b0d1c05b1de55aa0e1c9ef7d8b0321d0c32"
+      },
+      "transport": "resend",
+      "references": "<0100019ffc7a7e9b-94af93c0-7e88-4554-9e26-96619f197e42-000000@email.amazonses.com>",
+      "skill_path": null,
+      "body_sha256": "e766a0c94bf202d537ef866d58862c4212ba13ddf98cab51855d0bc3ba36ab0b",
+      "in_reply_to": "<0100019ffc7a7e9b-94af93c0-7e88-4554-9e26-96619f197e42-000000@email.amazonses.com>",
+      "sequence_id": "34837e4f4df645028edb0edcc5bead79",
+      "skill_sha256": null,
+      "batch_item_id": "70f2895eb3334952bd1a211ae49419a9",
+      "brief_version": null,
+      "subject_sha256": "84fc921297a1f73aa0c0c094a33a2b0d1c05b1de55aa0e1c9ef7d8b0321d0c32",
+      "sequence_step_num": 2,
+      "composer_variant_key": null,
+      "lead_gen_action_type": "follow_up",
+      "phi_egress_guard_cache": {},
+      "composer_experiment_key": null
+    },
+    "last_sent": "2026-08-27T18:05:22.708103+00:00",
+    "touches": 2,
+    "touches30": 0,
+    "history": [
+      {
+        "id": "f2ed5c683de44098a541a81b6730c614",
+        "subject": "where AI could compound at Theta Law Firm, LLP",
+        "body": "Hi Soheyl,\n\nCompetitors can buy the same AI tools. They cannot buy the operating knowledge your firm gains by starting earlier.\n\nWe learned this building Precise Imaging's AI system, now handling roughly 600 emails a day.\n\nFor many PI firms, intake is a strong place to focus. I outlined a practical 30-day approach here:\n\nhttps://getpossibleminds.com/t/Hqhx4UoGwg\n\nWould you focus on intake at Theta Law Firm, LLP, or another workflow?\n\nRegards,\nPranav Modi\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+        "sent_at": "2026-08-13T18:55:13.60581+00:00",
+        "status": "delivered",
+        "provider_id": "30ed0640-b739-46ad-b3ba-99de08a1e0d4"
+      },
+      {
+        "id": "06fa76e166354db8af1d3833c0532b8d",
+        "subject": "Re: where AI could compound at Theta Law Firm, LLP",
+        "body": "Hi Soheyl,\n\nThought you might find this useful. I wrote up how a small PI firm turned recurring work into reusable AI workflows. Its assistants went from roughly 5 to 7 review-ready documents a day to 12 to 15, while medical records stayed in a protected workflow and every consequential output still came back to the lawyer.\n\nhttps://getpossibleminds.com/t/08m-ixIACA\n\nIf you could remove one recurring document bottleneck at Theta Law Firm, which would you start with?\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+        "sent_at": "2026-08-27T18:05:22.708103+00:00",
+        "status": "delivered",
+        "provider_id": "110d20ff-eb14-42c5-8b5c-9d4d4bf3f738"
+      }
+    ]
+  },
+  {
+    "contact_id": "077e369939a54b4a8ddf3e8c65b1ec07",
+    "pif_id": "9695c5a1-8c71-4bff-823f-969898e22fd6",
+    "firm_name": "Rahgozar Law Firm, PLLC",
+    "contact_name": "Pegah Rahgozar",
+    "contact_title": "Founding Partner",
+    "email": "prahgozar@rahgozarlaw.com",
+    "source_action": "action_8d1f6ec10c764e67974f24cb",
+    "input_json": {
+      "body": "Hi Pegah,\n\nThought this might be useful alongside my earlier note about where AI could compound at your firm.\n\nI wrote up how a solo PI lawyer used Claude and Clio to turn dictated intake facts into a structured matter, document packet, and task list, while keeping the lawyer in control of the consequential work:\n\nhttps://getpossibleminds.com/t/T40lvabtqw\n\nDifferent systems, but the same operational question: where can the handoff be automated without losing control? Which part feels most relevant at Rahgozar Law Firm?\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+      "subject": "Re: where AI could compound at Rahgozar Law Firm, PLLC",
+      "approval": {
+        "references": "<0100019ffd1f582e-ad59e61b-7aba-4e31-b78d-69c277fa7abe-000000@email.amazonses.com>",
+        "approved_at": "2026-08-31T08:49:59.813364+00:00",
+        "approved_by": "codex",
+        "body_sha256": "d4966ccb79fcb427aaf62d262f86f1dc7ba0ecc6a201a4f818c24ea8d97ad149",
+        "in_reply_to": "<0100019ffd1f582e-ad59e61b-7aba-4e31-b78d-69c277fa7abe-000000@email.amazonses.com>",
+        "subject_sha256": "fe0e767254729ae880d4aa2c6ced6d758d31aa6523300c2aa1a6ef6ad34d9511"
+      },
+      "transport": "resend",
+      "references": "<0100019ffd1f582e-ad59e61b-7aba-4e31-b78d-69c277fa7abe-000000@email.amazonses.com>",
+      "skill_path": null,
+      "body_sha256": "d4966ccb79fcb427aaf62d262f86f1dc7ba0ecc6a201a4f818c24ea8d97ad149",
+      "in_reply_to": "<0100019ffd1f582e-ad59e61b-7aba-4e31-b78d-69c277fa7abe-000000@email.amazonses.com>",
+      "skill_sha256": null,
+      "batch_item_id": "2a276811e31443b6b7822b19c1a17738",
+      "brief_version": null,
+      "subject_sha256": "fe0e767254729ae880d4aa2c6ced6d758d31aa6523300c2aa1a6ef6ad34d9511",
+      "composer_variant_key": null,
+      "lead_gen_action_type": "follow_up",
+      "phi_egress_guard_cache": {},
+      "composer_experiment_key": null
+    },
+    "last_sent": "2026-08-31T14:30:25.289371+00:00",
+    "touches": 2,
+    "touches30": 0,
+    "history": [
+      {
+        "id": "f409316666f24d01a6329ce5129eb7e3",
+        "subject": "where AI could compound at Rahgozar Law Firm, PLLC",
+        "body": "Hi Pegah,\n\nCompetitors can buy the same AI tools. They cannot buy the operating knowledge your firm gains by starting earlier.\n\nWe learned this building Precise Imaging's AI system, now handling roughly 600 emails a day.\n\nFor many PI firms, intake is a strong place to focus. I outlined a practical 30-day approach here:\n\nhttps://getpossibleminds.com/t/SSFABonJXQ\n\nWould you focus on intake at Rahgozar Law Firm, PLLC, or another workflow?\n\nRegards,\nPranav Modi\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+        "sent_at": "2026-08-13T21:55:17.418831+00:00",
+        "status": "delivered",
+        "provider_id": "22108871-319f-443e-a01f-1ace5bd11fe7"
+      },
+      {
+        "id": "1080ae4731de4a9a9597195c01904a3e",
+        "subject": "Re: where AI could compound at Rahgozar Law Firm, PLLC",
+        "body": "Hi Pegah,\n\nThought this might be useful alongside my earlier note about where AI could compound at your firm.\n\nI wrote up how a solo PI lawyer used Claude and Clio to turn dictated intake facts into a structured matter, document packet, and task list, while keeping the lawyer in control of the consequential work:\n\nhttps://getpossibleminds.com/t/T40lvabtqw\n\nDifferent systems, but the same operational question: where can the handoff be automated without losing control? Which part feels most relevant at Rahgozar Law Firm?\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+        "sent_at": "2026-08-31T14:30:25.289371+00:00",
+        "status": "delivered",
+        "provider_id": "1bb5b7d7-e4bb-4b26-915a-43e56dc0678f"
+      }
+    ]
+  },
+  {
+    "contact_id": "ac9ef0fcd588439dacbcb944c28a8a06",
+    "pif_id": "25751569-a1c8-4365-af08-b46d1a3be102",
+    "firm_name": "Law Offices of Parag L. Amin, P.C.",
+    "contact_name": "Parag L. Amin",
+    "contact_title": "Principal (Founder)",
+    "email": "parag@lawpla.com",
+    "source_action": "action_0c5fbcc8cf0b425a95efd488",
+    "input_json": {
+      "body": "Hi Parag,\n\nThought this might be useful alongside my earlier note about where AI could compound at your firm.\n\nI wrote up how a solo PI lawyer used Claude and Clio to turn dictated intake facts into a structured matter, document packet, and task list, while keeping the lawyer in control of the consequential work:\n\nhttps://getpossibleminds.com/t/Q6KfReYMxA\n\nDifferent systems, but the same operational question: where can the handoff be automated without losing control? Which part feels most relevant at your firm?\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+      "subject": "Re: where AI could compound at Law Offices of Parag L. Amin, P.C.",
+      "approval": {
+        "references": "<0100019ffcd15bbb-40dac553-4647-447f-bf10-2c15b2700471-000000@email.amazonses.com>",
+        "approved_at": "2026-08-31T08:52:00.523754+00:00",
+        "approved_by": "codex",
+        "body_sha256": "17b46c900470c900d9cec75fbd6594bb11733d6002ef9c625746a4ac64c891d3",
+        "in_reply_to": "<0100019ffcd15bbb-40dac553-4647-447f-bf10-2c15b2700471-000000@email.amazonses.com>",
+        "subject_sha256": "9de72d150b98cddb040636284e0b789e9e7f1e57fb6f7904733879aa3e9cf6fd"
+      },
+      "transport": "resend",
+      "references": "<0100019ffcd15bbb-40dac553-4647-447f-bf10-2c15b2700471-000000@email.amazonses.com>",
+      "skill_path": null,
+      "body_sha256": "17b46c900470c900d9cec75fbd6594bb11733d6002ef9c625746a4ac64c891d3",
+      "in_reply_to": "<0100019ffcd15bbb-40dac553-4647-447f-bf10-2c15b2700471-000000@email.amazonses.com>",
+      "skill_sha256": null,
+      "batch_item_id": "97fb6096bd0847d08ec06ca5727a142f",
+      "brief_version": null,
+      "subject_sha256": "9de72d150b98cddb040636284e0b789e9e7f1e57fb6f7904733879aa3e9cf6fd",
+      "composer_variant_key": null,
+      "lead_gen_action_type": "follow_up",
+      "phi_egress_guard_cache": {},
+      "composer_experiment_key": null
+    },
+    "last_sent": "2026-08-31T15:30:33.169835+00:00",
+    "touches": 2,
+    "touches30": 0,
+    "history": [
+      {
+        "id": "5e8694c150b84431a653be98491edf87",
+        "subject": "where AI could compound at Law Offices of Parag L. Amin, P.C.",
+        "body": "Hi Parag,\n\nCompetitors can buy the same AI tools. They cannot buy the operating knowledge your firm gains by starting earlier.\n\nWe learned this building Precise Imaging's AI system, now handling roughly 600 emails a day.\n\nFor many PI firms, intake is a strong place to focus. I outlined a practical 30-day approach here:\n\nhttps://getpossibleminds.com/t/BR-A-R45jw\n\nWould you focus on intake at Law Offices of Parag L. Amin, P.C., or another workflow?\n\nRegards,\nPranav Modi\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+        "sent_at": "2026-08-13T20:30:06.415995+00:00",
+        "status": "delivered",
+        "provider_id": "1845572e-20c0-4837-9ab6-7500322dfd2a"
+      },
+      {
+        "id": "79686ea6c43d450ab998c30cbe09b52a",
+        "subject": "Re: where AI could compound at Law Offices of Parag L. Amin, P.C.",
+        "body": "Hi Parag,\n\nThought this might be useful alongside my earlier note about where AI could compound at your firm.\n\nI wrote up how a solo PI lawyer used Claude and Clio to turn dictated intake facts into a structured matter, document packet, and task list, while keeping the lawyer in control of the consequential work:\n\nhttps://getpossibleminds.com/t/Q6KfReYMxA\n\nDifferent systems, but the same operational question: where can the handoff be automated without losing control? Which part feels most relevant at your firm?\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+        "sent_at": "2026-08-31T15:30:33.169835+00:00",
+        "status": "delivered",
+        "provider_id": "82a669dc-95f4-472d-9fd7-f14c09e2d5ba"
+      }
+    ]
+  },
+  {
+    "contact_id": "cbd800f8b711444e94f542260817b2d1",
+    "pif_id": "0325a3d2-4ddd-46cc-b4da-1629004c597d",
+    "firm_name": "Albright, Yee, & Schmit",
+    "contact_name": "Clifton W. Albright, Sr.",
+    "contact_title": "Founding Partner; President",
+    "email": "clifton.albright@ayslaw.com",
+    "source_action": "action_8087c986b3aa408da5822b2f",
+    "input_json": {
+      "body": "Hi Clifton,\n\nThought this might be useful alongside my earlier note about where AI could compound at your firm.\n\nI wrote up how a solo PI lawyer used Claude and Clio to turn dictated intake facts into a structured matter, document packet, and task list, while keeping the lawyer in control of the consequential work:\n\nhttps://getpossibleminds.com/t/8hCBTksEtQ\n\nDifferent systems, but the same operational question: where can the handoff be automated without losing control? Which part feels most relevant at Albright, Yee, & Schmit?\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+      "subject": "Re: where AI could compound at Albright, Yee, & Schmit",
+      "approval": {
+        "references": "<0100019ffc962700-df64b9af-8894-421a-8031-509287520428-000000@email.amazonses.com>",
+        "approved_at": "2026-08-31T08:54:26.957390+00:00",
+        "approved_by": "codex",
+        "body_sha256": "241b1bc534d1e954044994a56862f8e27876fd089a2068520d012d4262cdcf19",
+        "in_reply_to": "<0100019ffc962700-df64b9af-8894-421a-8031-509287520428-000000@email.amazonses.com>",
+        "subject_sha256": "93c83278e145cd9514f4a0b92ba8407ad320036b1bf934606029fd413db64557"
+      },
+      "transport": "resend",
+      "references": "<0100019ffc962700-df64b9af-8894-421a-8031-509287520428-000000@email.amazonses.com>",
+      "skill_path": null,
+      "body_sha256": "241b1bc534d1e954044994a56862f8e27876fd089a2068520d012d4262cdcf19",
+      "in_reply_to": "<0100019ffc962700-df64b9af-8894-421a-8031-509287520428-000000@email.amazonses.com>",
+      "skill_sha256": null,
+      "batch_item_id": "7df65d32bc9347069d7a658124cf905d",
+      "brief_version": null,
+      "subject_sha256": "93c83278e145cd9514f4a0b92ba8407ad320036b1bf934606029fd413db64557",
+      "composer_variant_key": null,
+      "lead_gen_action_type": "follow_up",
+      "phi_egress_guard_cache": {},
+      "composer_experiment_key": null
+    },
+    "last_sent": "2026-08-31T16:30:23.59975+00:00",
+    "touches": 2,
+    "touches30": 0,
+    "history": [
+      {
+        "id": "510f69691a6647afa42169608d7af722",
+        "subject": "where AI could compound at Albright, Yee, & Schmit",
+        "body": "Hi Clifton,\n\nCompetitors can buy the same AI tools. They cannot buy the operating knowledge your firm gains by starting earlier.\n\nWe learned this building Precise Imaging's AI system, now handling roughly 600 emails a day.\n\nFor many PI firms, intake is a strong place to focus. I outlined a practical 30-day approach here:\n\nhttps://getpossibleminds.com/t/SMHV0c-PBg\n\nWould you focus on intake at Albright, Yee, & Schmit, or another workflow?\n\nRegards,\nPranav Modi\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+        "sent_at": "2026-08-13T19:25:26.352861+00:00",
+        "status": "delivered",
+        "provider_id": "28070a73-2529-45e7-a9d0-638f539b6415"
+      },
+      {
+        "id": "2a36806c2b054d8faeb751217f0fdad1",
+        "subject": "Re: where AI could compound at Albright, Yee, & Schmit",
+        "body": "Hi Clifton,\n\nThought this might be useful alongside my earlier note about where AI could compound at your firm.\n\nI wrote up how a solo PI lawyer used Claude and Clio to turn dictated intake facts into a structured matter, document packet, and task list, while keeping the lawyer in control of the consequential work:\n\nhttps://getpossibleminds.com/t/8hCBTksEtQ\n\nDifferent systems, but the same operational question: where can the handoff be automated without losing control? Which part feels most relevant at Albright, Yee, & Schmit?\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+        "sent_at": "2026-08-31T16:30:23.59975+00:00",
+        "status": "delivered",
+        "provider_id": "fd58005c-ad1d-4dce-8955-85dbebe3f9bf"
+      }
+    ]
+  },
+  {
+    "contact_id": "ed2b8b3ded5248fb86142381be1259f8",
+    "pif_id": "f21f5a29-6f96-4183-91c0-4241aebe101c",
+    "firm_name": "Nabi Law Group",
+    "contact_name": "Ana Nabizadeh",
+    "contact_title": "Esq.",
+    "email": "anan@nabilaw.com",
+    "source_action": "action_17928aecf9cf4a67b6b85eee",
+    "input_json": {
+      "body": "Hi Ana,\\n\\nJust circling back on my note about Needles at Nabi Law Group. If a system change is not on the radar, no problem. If it is, I would be glad to compare notes on which matter data and workflows are most important to preserve.\\n\\nWould a short conversation be useful?\\n\\nRegards,\\nPranav Modi\\nFounder, Possible Minds\\nhttps://getpossibleminds.com",
+      "subject": "Re: Nabi Law Group + Needles migration",
+      "approval": {
+        "references": "<010001a00164ec94-5f599c24-a6e7-4d60-90dc-c82345a4f364-000000@email.amazonses.com>",
+        "approved_at": "2026-09-08T10:11:19.074177+00:00",
+        "approved_by": "codex",
+        "body_sha256": "61ab506e3807ea2a31f15c81876f014a21729b405cf8cfb3432f38097e8e63ce",
+        "in_reply_to": "<010001a00164ec94-5f599c24-a6e7-4d60-90dc-c82345a4f364-000000@email.amazonses.com>",
+        "subject_sha256": "69a6c6e6262f0bbc942b68adaf2c9028d91e64864f628bf97bf96fc6ae65723a"
+      },
+      "transport": "resend",
+      "references": "<010001a00164ec94-5f599c24-a6e7-4d60-90dc-c82345a4f364-000000@email.amazonses.com>",
+      "skill_path": null,
+      "body_sha256": "61ab506e3807ea2a31f15c81876f014a21729b405cf8cfb3432f38097e8e63ce",
+      "in_reply_to": "<010001a00164ec94-5f599c24-a6e7-4d60-90dc-c82345a4f364-000000@email.amazonses.com>",
+      "skill_sha256": null,
+      "batch_item_id": "736b658d90f94caeba01fc32ab57f25f",
+      "brief_version": null,
+      "subject_sha256": "69a6c6e6262f0bbc942b68adaf2c9028d91e64864f628bf97bf96fc6ae65723a",
+      "composer_variant_key": null,
+      "lead_gen_action_type": "follow_up",
+      "phi_egress_guard_cache": {},
+      "composer_experiment_key": null
+    },
+    "last_sent": "2026-09-08T16:00:22.0431+00:00",
+    "touches": 2,
+    "touches30": 1,
+    "history": [
+      {
+        "id": "3e6738e7c0b84d18ae3904703e67e824",
+        "subject": "Re: Nabi Law Group + Needles migration",
+        "body": "Hi Ana,\\n\\nJust circling back on my note about Needles at Nabi Law Group. If a system change is not on the radar, no problem. If it is, I would be glad to compare notes on which matter data and workflows are most important to preserve.\\n\\nWould a short conversation be useful?\\n\\nRegards,\\nPranav Modi\\nFounder, Possible Minds\\nhttps://getpossibleminds.com",
+        "sent_at": "2026-09-08T16:00:22.0431+00:00",
+        "status": "delivered",
+        "provider_id": "473c05d8-4bf3-4a8d-96f9-a581c446549b"
+      },
+      {
+        "id": "ff12d241c8ea4fd990662f4210f2daa1",
+        "subject": "Nabi Law Group + Needles migration",
+        "body": "Hi Ana,\n\nNabi Law Group came up in our research on firms using Needles. We help PI firms map and validate matters, documents, notes, tasks, calendars, and custom workflows before moving systems.\n\nWe bring the same operational discipline we use at Precise Imaging, where our AI system now handles roughly 600 emails a day.\n\nI put together our Needles migration approach here:\n\nhttps://getpossibleminds.com/t/kFqGFZjWrA\n\nIs modernization something Nabi Law Group is considering, or is the current setup working well?\n\nRegards,\nPranav Modi\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+        "sent_at": "2026-08-14T17:49:46.358308+00:00",
+        "status": "delivered",
+        "provider_id": "ce774294-d953-4916-bdc2-d87dff1dbe0d"
+      }
+    ]
+  },
+  {
+    "contact_id": "fc_48cc9fe902be4d998e50c21a",
+    "pif_id": "f21f5a29-6f96-4183-91c0-4241aebe101c",
+    "firm_name": "Nabi Law Group",
+    "contact_name": "Iman Nabizadeh",
+    "contact_title": "Esq.",
+    "email": "inabizadeh@nabilaw.com",
+    "source_action": "action_8b6ac453c5ef49c5ae56a7c1",
+    "input_json": {
+      "body": "Hi Iman,\\n\\nJust following up on my note about Needles at Nabi Law Group. The difficult part of these moves is usually preserving custom fields and workflow meaning, not just exporting records.\\n\\nIs that something your team is thinking about this year?\\n\\nRegards,\\nPranav Modi\\nFounder, Possible Minds\\nhttps://getpossibleminds.com",
+      "subject": "Re: Nabi Law Group + Needles migration",
+      "approval": {
+        "references": "<010001a00184142d-e5aeaed5-cb10-4857-868c-753476dc97db-000000@email.amazonses.com>",
+        "approved_at": "2026-09-08T10:11:18.925880+00:00",
+        "approved_by": "codex",
+        "body_sha256": "90cd7792599b0654cb65ba502cb75208c6fa9f54b1b36274a8479895fd16262c",
+        "in_reply_to": "<010001a00184142d-e5aeaed5-cb10-4857-868c-753476dc97db-000000@email.amazonses.com>",
+        "subject_sha256": "69a6c6e6262f0bbc942b68adaf2c9028d91e64864f628bf97bf96fc6ae65723a"
+      },
+      "transport": "resend",
+      "references": "<010001a00184142d-e5aeaed5-cb10-4857-868c-753476dc97db-000000@email.amazonses.com>",
+      "skill_path": null,
+      "body_sha256": "90cd7792599b0654cb65ba502cb75208c6fa9f54b1b36274a8479895fd16262c",
+      "in_reply_to": "<010001a00184142d-e5aeaed5-cb10-4857-868c-753476dc97db-000000@email.amazonses.com>",
+      "skill_sha256": null,
+      "batch_item_id": "d2e235da9d004735a40e311ec30c0525",
+      "brief_version": null,
+      "subject_sha256": "69a6c6e6262f0bbc942b68adaf2c9028d91e64864f628bf97bf96fc6ae65723a",
+      "composer_variant_key": null,
+      "lead_gen_action_type": "follow_up",
+      "phi_egress_guard_cache": {},
+      "composer_experiment_key": null
+    },
+    "last_sent": "2026-09-08T16:45:25.031743+00:00",
+    "touches": 2,
+    "touches30": 1,
+    "history": [
+      {
+        "id": "4936facc65f44e1c8731ae9ba10bba94",
+        "subject": "Re: Nabi Law Group + Needles migration",
+        "body": "Hi Iman,\\n\\nJust following up on my note about Needles at Nabi Law Group. The difficult part of these moves is usually preserving custom fields and workflow meaning, not just exporting records.\\n\\nIs that something your team is thinking about this year?\\n\\nRegards,\\nPranav Modi\\nFounder, Possible Minds\\nhttps://getpossibleminds.com",
+        "sent_at": "2026-09-08T16:45:25.031743+00:00",
+        "status": "delivered",
+        "provider_id": "50fa36c0-8c2b-41c7-b6e4-3b3b6e159405"
+      },
+      {
+        "id": "788c939dbc954d98a90ff978778ea574",
+        "subject": "Nabi Law Group + Needles migration",
+        "body": "Hi Iman,\n\nNabi Law Group came up in our research on firms using Needles. We help PI firms plan migrations around the details that are easiest to lose: custom fields, workflow meaning, matter history, documents, notes, and tasks.\n\nWe bring the same operational discipline we use at Precise Imaging, where our AI system now handles roughly 600 emails a day.\n\nHere is the Needles migration approach we use:\n\nhttps://getpossibleminds.com/t/ZS-HTTrmYw\n\nIs a system change on the horizon at Nabi Law Group?\n\nRegards,\nPranav Modi\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+        "sent_at": "2026-08-14T18:23:47.98383+00:00",
+        "status": "delivered",
+        "provider_id": "fb9b6b6a-43f4-423f-aa3f-699719c7e9e0"
+      }
+    ]
+  },
+  {
+    "contact_id": "2316ab1c09d5433abaf6b420a77d43e5",
+    "pif_id": "867aa202-3027-4d2d-9ca2-c0213fbe1979",
+    "firm_name": "Jose Jordan & Associates, APLC",
+    "contact_name": "Anastasia Jordan, Esq.",
+    "contact_title": "Founding Partner – Immigration Division",
+    "email": "ajordan@josejordan.com",
+    "source_action": "action_c39770937f9341779b4abb2d",
+    "input_json": {
+      "body": "Hi Anastasia,\n\nI wanted to circle back on my earlier note. I just published a short guide on why small PI firms should map where information lives before connecting AI to it. The practical takeaway is simple: AI is only as reliable as the records it can find and trust.\n\nAs Founding Partner - Immigration Division at Jose Jordan & Associates, APLC, I'm curious whether Filevine gives your team one authoritative home for imaging updates, records, and case notes, or whether some still sit across inboxes and vendor portals.\n\nHere is the guide: https://getpossibleminds.com/t/H5YIqkEMpA\n\nWould you have 15 minutes to compare notes? I'd genuinely appreciate your perspective.\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+      "subject": "Is Lead Docket at Jose Jordan & Associates, APLC tying marketing spend to signed cases?",
+      "approval": {
+        "references": "<0100019ff8225cfb-9fd75160-11c4-450e-b156-36cdfb694c85-000000@email.amazonses.com>",
+        "approved_at": "2026-09-08T18:57:11.725255+00:00",
+        "approved_by": "codex",
+        "body_sha256": "c4df2c0c6b05d7a5c4d89b93a63a4c6cd4e7b645e27ddf403659c44eaed2c5a1",
+        "in_reply_to": "<0100019ff8225cfb-9fd75160-11c4-450e-b156-36cdfb694c85-000000@email.amazonses.com>",
+        "subject_sha256": "55198c2deeffa4fbf51b7854db45b3e0b666a90b0625f9cb19762b3976abc8e8"
+      },
+      "transport": "resend",
+      "references": "<0100019ff8225cfb-9fd75160-11c4-450e-b156-36cdfb694c85-000000@email.amazonses.com>",
+      "skill_path": null,
+      "body_sha256": "c4df2c0c6b05d7a5c4d89b93a63a4c6cd4e7b645e27ddf403659c44eaed2c5a1",
+      "in_reply_to": "<0100019ff8225cfb-9fd75160-11c4-450e-b156-36cdfb694c85-000000@email.amazonses.com>",
+      "skill_sha256": null,
+      "batch_item_id": "770f0232cbc2490898d0078e64c6907b",
+      "brief_version": null,
+      "subject_sha256": "55198c2deeffa4fbf51b7854db45b3e0b666a90b0625f9cb19762b3976abc8e8",
+      "composer_variant_key": null,
+      "lead_gen_action_type": "follow_up",
+      "phi_egress_guard_cache": {},
+      "composer_experiment_key": null
+    },
+    "last_sent": "2026-09-08T20:35:23.346904+00:00",
+    "touches": 2,
+    "touches30": 1,
+    "history": [
+      {
+        "id": "93d89072468147caa59024e8d9efc589",
+        "subject": "Is Lead Docket at Jose Jordan & Associates, APLC tying marketing spend to signed cases?",
+        "body": "Hi Anastasia,\n\nI wanted to circle back on my earlier note. I just published a short guide on why small PI firms should map where information lives before connecting AI to it. The practical takeaway is simple: AI is only as reliable as the records it can find and trust.\n\nAs Founding Partner - Immigration Division at Jose Jordan & Associates, APLC, I'm curious whether Filevine gives your team one authoritative home for imaging updates, records, and case notes, or whether some still sit across inboxes and vendor portals.\n\nHere is the guide: https://getpossibleminds.com/t/H5YIqkEMpA\n\nWould you have 15 minutes to compare notes? I'd genuinely appreciate your perspective.\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+        "sent_at": "2026-09-08T20:35:23.346904+00:00",
+        "status": "delivered",
+        "provider_id": "f3542552-fd48-4c68-adb5-1933870e4bd3"
+      },
+      {
+        "id": "2c17864e42614848ba1292e30bea1c35",
+        "subject": "Is Lead Docket at Jose Jordan & Associates, APLC tying marketing spend to signed cases?",
+        "body": "Hi Anastasia,\n\nMany firms can see where leads originate in Lead Docket but lose that attribution once a matter becomes a signed case in Filevine.\n\nI'm Pranav, founder of Possible Minds. You may have seen Precise Imaging's AI autoresponses. We built the system behind them, and it now processes roughly 600 emails a day. We build practical AI systems for the PI ecosystem, shaped by real-world operating insights shared by leaders like Chris Dreyer and Yani Smith.\n\nCould your team be getting more fro",
+        "sent_at": "2026-08-12T22:40:29.175092+00:00",
+        "status": "delivered",
+        "provider_id": "6c98b086-9fcd-4bc3-8d3c-5c686bfdc08d"
+      }
+    ]
+  },
+  {
+    "contact_id": "44620fb447274b3688c983e1f40e5725",
+    "pif_id": "fa61b6d8-1563-4199-99fa-d125225cfce2",
+    "firm_name": "TRIDENT LEGAL, LLP",
+    "contact_name": "Aslan Petrosyan, Esq.",
+    "contact_title": "Partner; Founding Partner",
+    "email": "aslan.petrosyan@petrosyanlawpc.com",
+    "source_action": "action_526af694ff2946c98130923d",
+    "input_json": {
+      "body": "Hi Aslan,\n\nI wanted to circle back on my earlier note. I just published a short guide on why small PI firms should map where information lives before connecting AI to it. The practical takeaway is simple: AI is only as reliable as the records it can find and trust.\n\nAs Partner; Founding Partner at TRIDENT LEGAL, LLP, I'm curious whether your team has one authoritative home for imaging updates, records, and case notes, or whether some still sit across inboxes and matter systems.\n\nHere is the guide: https://getpossibleminds.com/t/XM7JrgHbqA\n\nWould you have 15 minutes to compare notes? I'd genuinely appreciate your perspective.\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+      "subject": "where AI could compound at TRIDENT LEGAL, LLP",
+      "approval": {
+        "references": "<0100019ffd364b42-19b11524-695e-4360-8df8-eda8641a8694-000000@email.amazonses.com>",
+        "approved_at": "2026-09-08T18:57:45.453800+00:00",
+        "approved_by": "codex",
+        "body_sha256": "ff1b9fc7489737ccf6c505cfda8f1f19f428da71b76b6c2030312088a4714abb",
+        "in_reply_to": "<0100019ffd364b42-19b11524-695e-4360-8df8-eda8641a8694-000000@email.amazonses.com>",
+        "subject_sha256": "33b740a06bca763e26c4a353645ac989e6d62ca41d67ac5c4baf68376d4a76b8"
+      },
+      "transport": "resend",
+      "references": "<0100019ffd364b42-19b11524-695e-4360-8df8-eda8641a8694-000000@email.amazonses.com>",
+      "skill_path": null,
+      "body_sha256": "ff1b9fc7489737ccf6c505cfda8f1f19f428da71b76b6c2030312088a4714abb",
+      "in_reply_to": "<0100019ffd364b42-19b11524-695e-4360-8df8-eda8641a8694-000000@email.amazonses.com>",
+      "skill_sha256": null,
+      "batch_item_id": "c2eb644a4bb249fe8580c5c6cefae5ec",
+      "brief_version": null,
+      "subject_sha256": "33b740a06bca763e26c4a353645ac989e6d62ca41d67ac5c4baf68376d4a76b8",
+      "composer_variant_key": null,
+      "lead_gen_action_type": "follow_up",
+      "phi_egress_guard_cache": {},
+      "composer_experiment_key": null
+    },
+    "last_sent": "2026-09-08T20:50:28.398376+00:00",
+    "touches": 2,
+    "touches30": 1,
+    "history": [
+      {
+        "id": "db8c8e9b858f428eb33ce806e5de82ab",
+        "subject": "where AI could compound at TRIDENT LEGAL, LLP",
+        "body": "Hi Aslan,\n\nI wanted to circle back on my earlier note. I just published a short guide on why small PI firms should map where information lives before connecting AI to it. The practical takeaway is simple: AI is only as reliable as the records it can find and trust.\n\nAs Partner; Founding Partner at TRIDENT LEGAL, LLP, I'm curious whether your team has one authoritative home for imaging updates, records, and case notes, or whether some still sit across inboxes and matter systems.\n\nHere is the guide: https://getpossibleminds.com/t/XM7JrgHbqA\n\nWould you have 15 minutes to compare notes? I'd genuinely appreciate your perspective.\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+        "sent_at": "2026-09-08T20:50:28.398376+00:00",
+        "status": "delivered",
+        "provider_id": "2e980242-6418-4e7b-888b-b80bac23f007"
+      },
+      {
+        "id": "8465df4b74cc47ed83b117379c8520fc",
+        "subject": "where AI could compound at TRIDENT LEGAL, LLP",
+        "body": "Hi Aslan,\n\nCompetitors can buy the same AI tools. They cannot buy the operating knowledge your firm gains by starting earlier.\n\nWe learned this building Precise Imaging's AI system, now handling roughly 600 emails a day.\n\nFor many PI firms, intake is a strong place to focus. I outlined a practical 30-day approach here:\n\nhttps://getpossibleminds.com/t/_LirP-_1uw\n\nWould you focus on intake at TRIDENT LEGAL, LLP, or another workflow?\n\nRegards,\nPranav Modi\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+        "sent_at": "2026-08-13T22:20:21.411172+00:00",
+        "status": "delivered",
+        "provider_id": "1cb9512b-b9e9-4ceb-bcbd-d1133251cf54"
+      }
+    ]
+  },
+  {
+    "contact_id": "fc_a10d5ee58e67489da0734006",
+    "pif_id": "75329cdf-1ea6-46b6-8750-6ba76e20916d",
+    "firm_name": "SED Law Group",
+    "contact_name": "Lillian Sedaghat, Esq.",
+    "contact_title": "Managing Partner & Founder",
+    "email": "lillian@sedlawgroup.com",
+    "source_action": "action_ab5a459977d24418913ef413",
+    "input_json": {
+      "body": "Hi Lillian,\n\nI wanted to circle back on my earlier note. I just published a short guide on why small PI firms should map where information lives before connecting AI to it. The practical takeaway is simple: AI is only as reliable as the records it can find and trust.\n\nAs Managing Partner & Founder at SED Law Group, I'm curious whether Filevine gives your team one authoritative home for imaging updates, records, and case notes, or whether some still sit across inboxes and vendor portals.\n\nHere is the guide: https://getpossibleminds.com/t/GmCCDA7FqQ\n\nWould you have 15 minutes to compare notes? I'd genuinely appreciate your perspective.\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+      "subject": "Is Lead Docket at SED Law Group tying marketing spend to signed cases?",
+      "approval": {
+        "references": "<0100019ff83d6e78-898b78fe-d404-4c9f-b7f5-fcfce5184ba7-000000@email.amazonses.com>",
+        "approved_at": "2026-09-08T19:00:23.068063+00:00",
+        "approved_by": "codex",
+        "body_sha256": "11ac954ad9ef1c474c7d193ee0a2115f127fca17c87f4569062cbae1670e7c2f",
+        "in_reply_to": "<0100019ff83d6e78-898b78fe-d404-4c9f-b7f5-fcfce5184ba7-000000@email.amazonses.com>",
+        "subject_sha256": "ab38649ec8a4844def031e57ceee60ecdc014dbda12b61a686aba94798fe3482"
+      },
+      "transport": "resend",
+      "references": "<0100019ff83d6e78-898b78fe-d404-4c9f-b7f5-fcfce5184ba7-000000@email.amazonses.com>",
+      "skill_path": null,
+      "body_sha256": "11ac954ad9ef1c474c7d193ee0a2115f127fca17c87f4569062cbae1670e7c2f",
+      "in_reply_to": "<0100019ff83d6e78-898b78fe-d404-4c9f-b7f5-fcfce5184ba7-000000@email.amazonses.com>",
+      "skill_sha256": null,
+      "batch_item_id": "fe1302a0e7f2444eaeaaa75bd82eb098",
+      "brief_version": null,
+      "subject_sha256": "ab38649ec8a4844def031e57ceee60ecdc014dbda12b61a686aba94798fe3482",
+      "composer_variant_key": null,
+      "lead_gen_action_type": "follow_up",
+      "phi_egress_guard_cache": {},
+      "composer_experiment_key": null
+    },
+    "last_sent": "2026-09-08T22:05:14.319792+00:00",
+    "touches": 2,
+    "touches30": 1,
+    "history": [
+      {
+        "id": "653353b3610f48b58814e03e9e0e5f53",
+        "subject": "Is Lead Docket at SED Law Group tying marketing spend to signed cases?",
+        "body": "Hi Lillian,\n\nI wanted to circle back on my earlier note. I just published a short guide on why small PI firms should map where information lives before connecting AI to it. The practical takeaway is simple: AI is only as reliable as the records it can find and trust.\n\nAs Managing Partner & Founder at SED Law Group, I'm curious whether Filevine gives your team one authoritative home for imaging updates, records, and case notes, or whether some still sit across inboxes and vendor portals.\n\nHere is the guide: https://getpossibleminds.com/t/GmCCDA7FqQ\n\nWould you have 15 minutes to compare notes? I'd genuinely appreciate your perspective.\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+        "sent_at": "2026-09-08T22:05:14.319792+00:00",
+        "status": "delivered",
+        "provider_id": "a3e58ecf-39bd-4a41-8e75-b8d582936e46"
+      },
+      {
+        "id": "df5ea800d18448428c1346f037c559bc",
+        "subject": "Is Lead Docket at SED Law Group tying marketing spend to signed cases?",
+        "body": "Hi Lillian,\n\nMany firms can see where leads originate in Lead Docket but lose that attribution once a matter becomes a signed case in Filevine.\n\nI'm Pranav, founder of Possible Minds. You may have seen Precise Imaging's AI autoresponses. We built the system behind them, and it now processes roughly 600 emails a day. We build practical AI systems for the PI ecosystem, shaped by real-world operating insights shared by leaders like Chris Dreyer and Yani Smith.\n\nCould your team be getting more from ",
+        "sent_at": "2026-08-12T23:10:02.611279+00:00",
+        "status": "delivered",
+        "provider_id": "07586735-d6fb-47b7-b0c9-27c03d9c6ae1"
+      }
+    ]
+  },
+  {
+    "contact_id": "eea36463877f42d2b98b14e5613da28b",
+    "pif_id": "88fdabd2-9ea2-43fb-a3a5-b238c1fae96b",
+    "firm_name": "The H Law Group",
+    "contact_name": "Nima Haddadi",
+    "contact_title": "Founder",
+    "email": "nima@thehlawgroup.com",
+    "source_action": "action_6cad781f32004b959c21341a",
+    "input_json": {
+      "body": "Hi Nima,\n\nFollowing up on the AI-readiness note I sent. I put together a guide to seven practical AI workflows for PI firms, including intake preparation, document assembly, records organization and case monitoring. The common thread is cutting the time people spend copying, searching for or chasing information, while keeping review with the team.\n\nhttps://getpossibleminds.com/t/NRy0ZnSAHg\n\nWhich recurring task would be most useful to make easier at The H Law Group?\n\nBest,\nPranav\nFounder, Possible Minds",
+      "subject": "Precise Imaging and AI readiness",
+      "approval": {
+        "references": "<19efa6556e3.749c122d21759.1616152948937040099@possiblemindshq.com>",
+        "approved_at": "2026-09-11T13:08:05.654825+00:00",
+        "approved_by": "codex",
+        "body_sha256": "c847823be0c41b3c361ed4d9d3473329c11932f291348207ef54283f8eda7e04",
+        "in_reply_to": "<19efa6556e3.749c122d21759.1616152948937040099@possiblemindshq.com>",
+        "subject_sha256": "1bfd08c9c819b53d9904113521c090e9bd7e7349cab193f305866d4d8670ead1"
+      },
+      "transport": "resend",
+      "references": "<19efa6556e3.749c122d21759.1616152948937040099@possiblemindshq.com>",
+      "skill_path": null,
+      "body_sha256": "c847823be0c41b3c361ed4d9d3473329c11932f291348207ef54283f8eda7e04",
+      "in_reply_to": "<19efa6556e3.749c122d21759.1616152948937040099@possiblemindshq.com>",
+      "skill_sha256": null,
+      "batch_item_id": "00058764d84940bf9dcee28e3972e1ce",
+      "brief_version": null,
+      "subject_sha256": "1bfd08c9c819b53d9904113521c090e9bd7e7349cab193f305866d4d8670ead1",
+      "composer_variant_key": null,
+      "lead_gen_action_type": "follow_up",
+      "phi_egress_guard_cache": {},
+      "composer_experiment_key": null
+    },
+    "last_sent": "2026-09-11T17:00:29.855286+00:00",
+    "touches": 2,
+    "touches30": 1,
+    "history": [
+      {
+        "id": "f814a4793b86471f9fde9bde1c31eccd",
+        "subject": "Precise Imaging and AI readiness",
+        "body": "Hi Nima,\n\nPranav from Possible Minds. If The H Law Group refers clients to Precise Imaging, you've seen the automated status replies they send: we built that system.\nMost firms that buy AI never see results because they weren't set up to benefit. So I built a short AI-readiness audit for PI firms, a handful of questions that score where your firm stands and what's blocking value.\n\nHere it is - about 10 minutes: https://aiaudit.getpossibleminds.com/a/RhUJAn-m\n\n-- Pranav\nFounder, Possible Minds\nBo",
+        "sent_at": "2026-06-24T16:10:06.430033+00:00",
+        "status": "sent",
+        "provider_id": "1782317406205119300"
+      },
+      {
+        "id": "246f91121eac4247b0173c21e9632145",
+        "subject": "Precise Imaging and AI readiness",
+        "body": "Hi Nima,\n\nFollowing up on the AI-readiness note I sent. I put together a guide to seven practical AI workflows for PI firms, including intake preparation, document assembly, records organization and case monitoring. The common thread is cutting the time people spend copying, searching for or chasing information, while keeping review with the team.\n\nhttps://getpossibleminds.com/t/NRy0ZnSAHg\n\nWhich recurring task would be most useful to make easier at The H Law Group?\n\nBest,\nPranav\nFounder, Possible Minds",
+        "sent_at": "2026-09-11T17:00:29.855286+00:00",
+        "status": "delivered",
+        "provider_id": "2e0c3f7e-d8c1-4263-b9af-2f09ae899b09"
+      }
+    ]
+  },
+  {
+    "contact_id": "5bff7731694b43bb8ebe96bb02b62159",
+    "pif_id": "08b09d45-ee17-4135-9469-2efab55a9055",
+    "firm_name": "Gary K. Walch, A Law Corporation",
+    "contact_name": "Gary K. Walch",
+    "contact_title": "Founder & Senior Attorney",
+    "email": "gary@walchlaw.com",
+    "source_action": "action_724eb6ba6cf847f08e9dcb33",
+    "input_json": {
+      "body": "Hi Gary,\n\nFollowing up on the AI-readiness audit. This piece starts with a simple exercise: follow one real inquiry through the firm and note where someone copies information, waits for a handoff or checks a second system. That can reveal work to remove before building automation, and gives the team a concrete way to measure time saved.\n\nhttps://getpossibleminds.com/t/J9NsDkieNw\n\nWhere does your team spend more avoidable effort: entering the same facts again or chasing the next step?\n\nBest,\nPranav\nFounder, Possible Minds",
+      "subject": "walch law's ai readiness",
+      "approval": {
+        "references": "<19f04aae408.560aa6d552600.5645410020255855832@possiblemindshq.com>",
+        "approved_at": "2026-09-11T13:08:08.375420+00:00",
+        "approved_by": "codex",
+        "body_sha256": "22e9547199f28c20ac560272810c11e43c62fac291b81013c78d5ee72f477f46",
+        "in_reply_to": "<19f04aae408.560aa6d552600.5645410020255855832@possiblemindshq.com>",
+        "subject_sha256": "801b82f1d795865c47bf899476b1c29e4c1cff518308c51e8d6afd9402d3920b"
+      },
+      "transport": "resend",
+      "references": "<19f04aae408.560aa6d552600.5645410020255855832@possiblemindshq.com>",
+      "skill_path": null,
+      "body_sha256": "22e9547199f28c20ac560272810c11e43c62fac291b81013c78d5ee72f477f46",
+      "in_reply_to": "<19f04aae408.560aa6d552600.5645410020255855832@possiblemindshq.com>",
+      "skill_sha256": null,
+      "batch_item_id": "dffd98f3e8524495872373ac20b81e82",
+      "brief_version": null,
+      "subject_sha256": "801b82f1d795865c47bf899476b1c29e4c1cff518308c51e8d6afd9402d3920b",
+      "composer_variant_key": null,
+      "lead_gen_action_type": "follow_up",
+      "phi_egress_guard_cache": {},
+      "composer_experiment_key": null
+    },
+    "last_sent": "2026-09-11T17:10:02.044051+00:00",
+    "touches": 2,
+    "touches30": 1,
+    "history": [
+      {
+        "id": "358dd56a8b454633939f281fdc05ee08",
+        "subject": "walch law's ai readiness",
+        "body": "Hi Gary,\n\nMost firms that buy AI never see results because they weren't set up to benefit.\nSo I built a short AI-readiness audit for PI firms - a handful of questions that score where your firm stands and what's blocking value.\n\nHere it is - about 10 minutes: https://aiaudit.getpossibleminds.com/a/H6Va_NMq\n\n-- Pranav\nFounder, Possible Minds\nBook a consult: https://aiaudit.getpossibleminds.com/c/tU46AnWo",
+        "sent_at": "2026-06-26T16:02:17.276937+00:00",
+        "status": "sent",
+        "provider_id": "1782489736614130200"
+      },
+      {
+        "id": "2968f7626f20494f9818688d39cdb271",
+        "subject": "walch law's ai readiness",
+        "body": "Hi Gary,\n\nFollowing up on the AI-readiness audit. This piece starts with a simple exercise: follow one real inquiry through the firm and note where someone copies information, waits for a handoff or checks a second system. That can reveal work to remove before building automation, and gives the team a concrete way to measure time saved.\n\nhttps://getpossibleminds.com/t/J9NsDkieNw\n\nWhere does your team spend more avoidable effort: entering the same facts again or chasing the next step?\n\nBest,\nPranav\nFounder, Possible Minds",
+        "sent_at": "2026-09-11T17:10:02.044051+00:00",
+        "status": "delivered",
+        "provider_id": "ae70da62-15f1-452a-8c9f-1d7755593f92"
+      }
+    ]
+  },
+  {
+    "contact_id": "d4e0f8af7f0f46be84977adf04960d75",
+    "pif_id": "a5828a3b-7a8c-40c3-8945-3b7a041a718a",
+    "firm_name": "Bana Law",
+    "contact_name": "P. Ryan Banafshe",
+    "contact_title": "Founder & Managing Attorney",
+    "email": "bana@banalaw.com",
+    "source_action": "action_042822a294b9446e8fa05283",
+    "input_json": {
+      "body": "Hi Ryan,\n\nFollowing up on the AI-readiness audit. I wrote up how a small PI firm uses Claude to prepare scheduling packets, medical summaries and demand materials for lawyer review. In the lawyer's walkthrough, a first scheduling packet took about ten minutes; he then checked the deadlines and adjusted the documents. It is a useful example of reducing assembly work while keeping review in place.\n\nhttps://getpossibleminds.com/t/8ROau16aYg\n\nWould document preparation or medical-record summaries be more useful to improve first at Bana Law?\n\nBest,\nPranav\nFounder, Possible Minds",
+      "subject": "ai readiness at bana law",
+      "approval": {
+        "references": "<19f04ae31ac.34e66a29288678.5051230179090542218@possiblemindshq.com>",
+        "approved_at": "2026-09-11T13:08:11.057178+00:00",
+        "approved_by": "codex",
+        "body_sha256": "aec314d946b46c0572807630ab51235a5a54abd7b2dc400ab45778a7064cc160",
+        "in_reply_to": "<19f04ae31ac.34e66a29288678.5051230179090542218@possiblemindshq.com>",
+        "subject_sha256": "958b8da807ff663a1954bbcae6d3e7317037c6c788bf5957af33694d3c5b1767"
+      },
+      "transport": "resend",
+      "references": "<19f04ae31ac.34e66a29288678.5051230179090542218@possiblemindshq.com>",
+      "skill_path": null,
+      "body_sha256": "aec314d946b46c0572807630ab51235a5a54abd7b2dc400ab45778a7064cc160",
+      "in_reply_to": "<19f04ae31ac.34e66a29288678.5051230179090542218@possiblemindshq.com>",
+      "skill_sha256": null,
+      "batch_item_id": "984d6c1996c74000b55e9e651497c87b",
+      "brief_version": null,
+      "subject_sha256": "958b8da807ff663a1954bbcae6d3e7317037c6c788bf5957af33694d3c5b1767",
+      "composer_variant_key": null,
+      "lead_gen_action_type": "follow_up",
+      "phi_egress_guard_cache": {},
+      "composer_experiment_key": null
+    },
+    "last_sent": "2026-09-11T17:20:03.263285+00:00",
+    "touches": 2,
+    "touches30": 1,
+    "history": [
+      {
+        "id": "e5e123b0a94945f7a95ca79d2aa419e0",
+        "subject": "ai readiness at bana law",
+        "body": "Hi P.,\n\nMost firms that buy AI never see results because they weren't set up to benefit. So I built a short AI-readiness audit for PI firms: a handful of questions that score where Bana Law stands and what's blocking value.\n\nHere it is - about 10 minutes: https://aiaudit.getpossibleminds.com/a/IjBQbnAi\n\n-- Pranav\nFounder, Possible Minds\nBook a consult: https://aiaudit.getpossibleminds.com/c/neCDJmfN",
+        "sent_at": "2026-06-26T16:05:53.177777+00:00",
+        "status": "sent",
+        "provider_id": "1782489952957108000"
+      },
+      {
+        "id": "62d74710239f4d51882cdde3237668f8",
+        "subject": "ai readiness at bana law",
+        "body": "Hi Ryan,\n\nFollowing up on the AI-readiness audit. I wrote up how a small PI firm uses Claude to prepare scheduling packets, medical summaries and demand materials for lawyer review. In the lawyer's walkthrough, a first scheduling packet took about ten minutes; he then checked the deadlines and adjusted the documents. It is a useful example of reducing assembly work while keeping review in place.\n\nhttps://getpossibleminds.com/t/8ROau16aYg\n\nWould document preparation or medical-record summaries be more useful to improve first at Bana Law?\n\nBest,\nPranav\nFounder, Possible Minds",
+        "sent_at": "2026-09-11T17:20:03.263285+00:00",
+        "status": "delivered",
+        "provider_id": "54ba85b7-335a-4b8a-bf46-7c38f71dce0b"
+      }
+    ]
+  },
+  {
+    "contact_id": "3a4fd50d0b2645f69c7ee057ffe7a0aa",
+    "pif_id": "19bddaeb-7d25-4ff8-b4fc-582402ad38ec",
+    "firm_name": "Farah & Farah",
+    "contact_name": "Eddie Farah",
+    "contact_title": "Founding Partner & Personal Injury Lawyer",
+    "email": "efarah@farahandfarah.com",
+    "source_action": "action_af4813dfafb34fef8ecd6f08",
+    "input_json": {
+      "body": "Hi Eddie,\n\nMy earlier note focused on client trust and communication. I wrote a short article on why AI alone won't make those processes reliable.\n\nFaster responses help, but someone still needs to own the next step and know when a lawyer should get involved. At Possible Minds, we're looking at those team responsibilities alongside the technology.\n\nhttps://getpossibleminds.com/t/NVEVq8yuQA\n\nAt Farah & Farah, would choosing the AI or making a consistent process across the team be the bigger challenge? I'd appreciate a quick take.\n\nBest,\nPranav\nFounder, Possible Minds",
+      "subject": "Re: What 7,383 PI reviews revealed",
+      "approval": {
+        "references": "<010001a05dfc42d9-3a84e2f8-cd75-4f0b-b5c4-5c06bc1157ea-000000@email.amazonses.com>",
+        "approved_at": "2026-09-15T10:40:52.496267+00:00",
+        "approved_by": "codex",
+        "body_sha256": "8712931118a8012591302b6054c1d7d717918bcdc66c20be1ed20b2dac2ee010",
+        "in_reply_to": "<010001a05dfc42d9-3a84e2f8-cd75-4f0b-b5c4-5c06bc1157ea-000000@email.amazonses.com>",
+        "subject_sha256": "6ba5a69ed89726b89c72ded596db6a534c8db9b1113ea802299cb6df4a121525"
+      },
+      "transport": "resend",
+      "references": "<010001a05dfc42d9-3a84e2f8-cd75-4f0b-b5c4-5c06bc1157ea-000000@email.amazonses.com>",
+      "skill_path": null,
+      "body_sha256": "8712931118a8012591302b6054c1d7d717918bcdc66c20be1ed20b2dac2ee010",
+      "in_reply_to": "<010001a05dfc42d9-3a84e2f8-cd75-4f0b-b5c4-5c06bc1157ea-000000@email.amazonses.com>",
+      "skill_sha256": null,
+      "batch_item_id": "3770bda3626a418289d49278876f302a",
+      "brief_version": null,
+      "subject_sha256": "6ba5a69ed89726b89c72ded596db6a534c8db9b1113ea802299cb6df4a121525",
+      "composer_variant_key": null,
+      "lead_gen_action_type": "follow_up",
+      "phi_egress_guard_cache": {},
+      "composer_experiment_key": null
+    },
+    "last_sent": "2026-09-15T16:40:10.450671+00:00",
+    "touches": 2,
+    "touches30": 1,
+    "history": [
+      {
+        "id": "bf8e9d30b510486cbd17a9e988cf5f10",
+        "subject": "Re: What 7,383 PI reviews revealed",
+        "body": "Hi Eddie,\n\nMy earlier note focused on client trust and communication. I wrote a short article on why AI alone won't make those processes reliable.\n\nFaster responses help, but someone still needs to own the next step and know when a lawyer should get involved. At Possible Minds, we're looking at those team responsibilities alongside the technology.\n\nhttps://getpossibleminds.com/t/NVEVq8yuQA\n\nAt Farah & Farah, would choosing the AI or making a consistent process across the team be the bigger challenge? I'd appreciate a quick take.\n\nBest,\nPranav\nFounder, Possible Minds",
+        "sent_at": "2026-09-15T16:40:10.450671+00:00",
+        "status": "delivered",
+        "provider_id": "8cbeef74-ef05-4d9b-8c29-cfd1483fc1e2"
+      },
+      {
+        "id": "959430f8b7ce49ecbc83aa2a800f7592",
+        "subject": "What 7,383 PI reviews revealed",
+        "body": "Hi Eddie,\n\nFarah & Farah has been serving injured clients since 1979, so you have seen client expectations change across generations.\n\nI analyzed 7,383 PI-firm reviews and found that silence, limited access, and unclear case movement were strongly associated with broken client trust. This section summarizes the complaints: https://getpossibleminds.com/t/_xTV8EF1dg\n\nWhich of those three is hardest for a large firm to eliminate consistently?\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+        "sent_at": "2026-09-01T17:20:08.052018+00:00",
+        "status": "delivered",
+        "provider_id": "f83dec4e-a697-41b6-abbb-8fb4b0963742"
+      }
+    ]
+  },
+  {
+    "contact_id": "7d6f3d3b25624ee38582c7f9124b013d",
+    "pif_id": "02d03d9f-2af9-4da0-b0b6-c0abdc34cc0c",
+    "firm_name": "MW Law Firm",
+    "contact_name": "Michael Weiser",
+    "contact_title": "Founder and Attorney",
+    "email": "mike@mweiserlaw.com",
+    "source_action": "action_913e68fcec2e4c6eae3cb2fb",
+    "input_json": {
+      "body": "Hi Michael,\n\nFollowing my note about keeping the client experience personal at MW Law, I wanted to share a short article on AI adoption.\n\nIts main point is that buying AI is easier than changing how a team works. Clear ownership, shared information, and human review matter as much as the tool. That's shaping our work with PI firms at Possible Minds.\n\nhttps://getpossibleminds.com/t/6QMTTn-_pA\n\nFor MW Law, which seems harder: finding the right tool or fitting it into the team's existing routines? I'd value your perspective.\n\nBest,\nPranav\nFounder, Possible Minds",
+      "subject": "Re: A client-trust question for MW Law",
+      "approval": {
+        "references": "<010001a05e4640c9-a351a33a-b855-436d-a5eb-d9849f603c40-000000@email.amazonses.com>",
+        "approved_at": "2026-09-15T10:40:56.272961+00:00",
+        "approved_by": "codex",
+        "body_sha256": "4b6fd137beb19d35f0e6b8c7ccdd926fe3cb64a61dfeefcc923812aed73ee4d3",
+        "in_reply_to": "<010001a05e4640c9-a351a33a-b855-436d-a5eb-d9849f603c40-000000@email.amazonses.com>",
+        "subject_sha256": "d641e42ddc76d1517bd7bd684705379e1bda63f4abac3bd88e4ad46de51e2dd7"
+      },
+      "transport": "resend",
+      "references": "<010001a05e4640c9-a351a33a-b855-436d-a5eb-d9849f603c40-000000@email.amazonses.com>",
+      "skill_path": null,
+      "body_sha256": "4b6fd137beb19d35f0e6b8c7ccdd926fe3cb64a61dfeefcc923812aed73ee4d3",
+      "in_reply_to": "<010001a05e4640c9-a351a33a-b855-436d-a5eb-d9849f603c40-000000@email.amazonses.com>",
+      "skill_sha256": null,
+      "batch_item_id": "9381e180aaa04bdaa7b8f2bd4a266620",
+      "brief_version": null,
+      "subject_sha256": "d641e42ddc76d1517bd7bd684705379e1bda63f4abac3bd88e4ad46de51e2dd7",
+      "composer_variant_key": null,
+      "lead_gen_action_type": "follow_up",
+      "phi_egress_guard_cache": {},
+      "composer_experiment_key": null
+    },
+    "last_sent": "2026-09-15T16:50:15.335855+00:00",
+    "touches": 2,
+    "touches30": 1,
+    "history": [
+      {
+        "id": "94db120c317b4917ab5734fa67b8217b",
+        "subject": "Re: A client-trust question for MW Law",
+        "body": "Hi Michael,\n\nFollowing my note about keeping the client experience personal at MW Law, I wanted to share a short article on AI adoption.\n\nIts main point is that buying AI is easier than changing how a team works. Clear ownership, shared information, and human review matter as much as the tool. That's shaping our work with PI firms at Possible Minds.\n\nhttps://getpossibleminds.com/t/6QMTTn-_pA\n\nFor MW Law, which seems harder: finding the right tool or fitting it into the team's existing routines? I'd value your perspective.\n\nBest,\nPranav\nFounder, Possible Minds",
+        "sent_at": "2026-09-15T16:50:15.335855+00:00",
+        "status": "sent",
+        "provider_id": "6cd5858a-c9ff-4f5c-8e9c-be696c7b5d4b"
+      },
+      {
+        "id": "79a9c825583f4534946ed7270e4ca525",
+        "subject": "A client-trust question for MW Law",
+        "body": "Hi Michael,\n\nSince founding MW Law in 2015, you have had to keep the experience personal while building repeatable ways to move cases forward.\n\nI analyzed 7,383 PI-firm reviews and found that silence, limited access, and unclear case movement were strongly associated with broken client trust. The complaint patterns are here: https://getpossibleminds.com/t/5DvtcgDUkg\n\nWhich of those three is hardest to prevent consistently?\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+        "sent_at": "2026-09-01T18:40:57.467263+00:00",
+        "status": "delivered",
+        "provider_id": "c53093cf-5e7f-431b-b9a2-ed9e3e117f4c"
+      }
+    ]
+  },
+  {
+    "contact_id": "d809ab4d40e449d9abd18c4a4813932d",
+    "pif_id": "eaba03cb-a0a2-4ab8-91f0-22dd4c488f65",
+    "firm_name": "Accident Abe",
+    "contact_name": "Ibrahim N. Muhtaseb",
+    "contact_title": "Founder & Principal Attorney",
+    "email": "abe@accidentabe.com",
+    "source_action": "action_c3462db80859479d8e40c002",
+    "input_json": {
+      "body": "Hi Ibrahim,\n\nMy earlier note focused on callbacks and client communication. This article looks at why adding AI doesn't automatically make either more reliable.\n\nThe technology can respond quickly, but the team still needs a clear owner for follow-up and a point where a lawyer takes over. That's shaping how we approach AI adoption at Possible Minds.\n\nhttps://getpossibleminds.com/t/8PWxqftDEg\n\nAt Accident Abe, would the bigger challenge be choosing the technology or defining how people work around it? I'd appreciate even a one-line take.\n\nBest,\nPranav\nFounder, Possible Minds",
+      "subject": "Re: jelassi rahma submitted a Google review about Accident Abe",
+      "approval": {
+        "references": "<010001a062bddee5-256a68ce-0a16-49fb-9629-3684049c719f-000000@email.amazonses.com>",
+        "approved_at": "2026-09-15T10:40:59.689433+00:00",
+        "approved_by": "codex",
+        "body_sha256": "cf808c325afdf4139ffc11e5c006836a312acbb81dc0236a9070feb76d739d2d",
+        "in_reply_to": "<010001a062bddee5-256a68ce-0a16-49fb-9629-3684049c719f-000000@email.amazonses.com>",
+        "subject_sha256": "7870814227d1c7c2040d921dbe7a8ed445e97381b86d0d3e73e91fbe50be7b07"
+      },
+      "transport": "resend",
+      "references": "<010001a062bddee5-256a68ce-0a16-49fb-9629-3684049c719f-000000@email.amazonses.com>",
+      "skill_path": null,
+      "body_sha256": "cf808c325afdf4139ffc11e5c006836a312acbb81dc0236a9070feb76d739d2d",
+      "in_reply_to": "<010001a062bddee5-256a68ce-0a16-49fb-9629-3684049c719f-000000@email.amazonses.com>",
+      "skill_sha256": null,
+      "batch_item_id": "23ad6f0f33f14405b7ea5a2fc085eebb",
+      "brief_version": null,
+      "subject_sha256": "7870814227d1c7c2040d921dbe7a8ed445e97381b86d0d3e73e91fbe50be7b07",
+      "composer_variant_key": null,
+      "lead_gen_action_type": "follow_up",
+      "phi_egress_guard_cache": {},
+      "composer_experiment_key": null
+    },
+    "last_sent": "2026-09-15T17:00:19.527789+00:00",
+    "touches": 2,
+    "touches30": 1,
+    "history": [
+      {
+        "id": "d022cc1f5cf542559142502596c28008",
+        "subject": "Re: jelassi rahma submitted a Google review about Accident Abe",
+        "body": "Hi Ibrahim,\n\nMy earlier note focused on callbacks and client communication. This article looks at why adding AI doesn't automatically make either more reliable.\n\nThe technology can respond quickly, but the team still needs a clear owner for follow-up and a point where a lawyer takes over. That's shaping how we approach AI adoption at Possible Minds.\n\nhttps://getpossibleminds.com/t/8PWxqftDEg\n\nAt Accident Abe, would the bigger challenge be choosing the technology or defining how people work around it? I'd appreciate even a one-line take.\n\nBest,\nPranav\nFounder, Possible Minds",
+        "sent_at": "2026-09-15T17:00:19.527789+00:00",
+        "status": "sent",
+        "provider_id": "d0678390-3946-47ae-9de7-91306032e785"
+      },
+      {
+        "id": "2b89569b71784a9084e13add1be3cb1e",
+        "subject": "jelassi rahma submitted a Google review about Accident Abe",
+        "body": "Hi Ibrahim,\n\nIn a Google review from February 11, 2026, jelassi rahma wrote, \"He then assigned his case manager, Sarah, but communication was very poor. She rarely responded, and the attorney himself was always busy.\"\n\nA review like this can make prospective clients question whether their own calls will be returned. We built a system for Precise Imaging that processes roughly 600 emails daily and flags missed callbacks, aging inquiries, and unresolved messages.\n\nI'd be glad to walk you through what we built for Precise and learn how your team currently handles these communication workflows. You can choose a 30-minute time here:\n\nhttps://getpossibleminds.com/t/rSF9mvxmaw\n\nRegards,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+        "sent_at": "2026-09-02T15:30:05.956615+00:00",
+        "status": "delivered",
+        "provider_id": "3ebccdd8-4e66-4e72-8c78-da3c469c498a"
+      }
+    ]
+  },
+  {
+    "contact_id": "9f8dbf8e5e704526b8e252335190d7c0",
+    "pif_id": "3c3ded55-f0e1-4752-9b81-9c3a42018cde",
+    "firm_name": "Law Offices of Cyrus Jamehdo",
+    "contact_name": "Cyrus Amir Jamehdor",
+    "contact_title": "Founder",
+    "email": "cj@cyruslegal.com",
+    "source_action": "action_8860cf277be146adbe75a820",
+    "input_json": {
+      "body": "Hi Cyrus,\n\nFollowing my note about client updates, I wanted to share a short article on a broader AI question: what needs to change beyond the software?\n\nMy take is that clear responsibilities and shared ways of working matter as much as the tool. Otherwise, a faster response can still leave the next step unclear. That's guiding our work at Possible Minds.\n\nhttps://getpossibleminds.com/t/9KtFw2bMyA\n\nFor your team, which seems harder: finding useful AI or changing established routines around it? I'd appreciate a quick take.\n\nBest,\nPranav\nFounder, Possible Minds",
+      "subject": "Re: Nick J submitted a Google review about Law Offices of Cyrus Jamehdo",
+      "approval": {
+        "references": "<010001a063106e2a-85ca51c0-56c9-405d-890a-395428fec880-000000@email.amazonses.com>",
+        "approved_at": "2026-09-15T10:41:03.702062+00:00",
+        "approved_by": "codex",
+        "body_sha256": "99bb4cd6bc72f3564d759cef36d6d3892285b07c2c0471898a4430e96bdcfecf",
+        "in_reply_to": "<010001a063106e2a-85ca51c0-56c9-405d-890a-395428fec880-000000@email.amazonses.com>",
+        "subject_sha256": "e90bf579d90e5c04e3b755dd0e4dd494546b484f2e385db577c1c2c71034b42b"
+      },
+      "transport": "resend",
+      "references": "<010001a063106e2a-85ca51c0-56c9-405d-890a-395428fec880-000000@email.amazonses.com>",
+      "skill_path": null,
+      "body_sha256": "99bb4cd6bc72f3564d759cef36d6d3892285b07c2c0471898a4430e96bdcfecf",
+      "in_reply_to": "<010001a063106e2a-85ca51c0-56c9-405d-890a-395428fec880-000000@email.amazonses.com>",
+      "skill_sha256": null,
+      "batch_item_id": "2435fad2aee4499fac5171989525d2b0",
+      "brief_version": null,
+      "subject_sha256": "e90bf579d90e5c04e3b755dd0e4dd494546b484f2e385db577c1c2c71034b42b",
+      "composer_variant_key": null,
+      "lead_gen_action_type": "follow_up",
+      "phi_egress_guard_cache": {},
+      "composer_experiment_key": null
+    },
+    "last_sent": "2026-09-15T17:10:28.341536+00:00",
+    "touches": 2,
+    "touches30": 1,
+    "history": [
+      {
+        "id": "e3b5f25d2b594d43915c59b731c886d3",
+        "subject": "Re: Nick J submitted a Google review about Law Offices of Cyrus Jamehdo",
+        "body": "Hi Cyrus,\n\nFollowing my note about client updates, I wanted to share a short article on a broader AI question: what needs to change beyond the software?\n\nMy take is that clear responsibilities and shared ways of working matter as much as the tool. Otherwise, a faster response can still leave the next step unclear. That's guiding our work at Possible Minds.\n\nhttps://getpossibleminds.com/t/9KtFw2bMyA\n\nFor your team, which seems harder: finding useful AI or changing established routines around it? I'd appreciate a quick take.\n\nBest,\nPranav\nFounder, Possible Minds",
+        "sent_at": "2026-09-15T17:10:28.341536+00:00",
+        "status": "delivered",
+        "provider_id": "7aee0741-9f26-4f68-8abe-2e4f541a9e74"
+      },
+      {
+        "id": "ee3a4226249a42e783432b695d75eb03",
+        "subject": "Nick J submitted a Google review about Law Offices of Cyrus Jamehdo",
+        "body": "Hi Cyrus,\n\nIn a Google review from June 16, 2026, Nick J wrote, \"In many instances, my calls went unanswered and I had difficulty obtaining information about important matters affecting my case.\"\n\nA review like this can make prospective clients question whether their own calls will be returned. We built a system for Precise Imaging that processes roughly 600 emails daily and flags missed callbacks, aging inquiries, and unresolved messages.\n\nI'd be glad to walk you through what we built for Precise and learn how your team currently handles these communication workflows. You can choose a 30-minute time here:\n\nhttps://getpossibleminds.com/t/IA_WjhiZ7A\n\nRegards,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+        "sent_at": "2026-09-02T17:00:15.633015+00:00",
+        "status": "delivered",
+        "provider_id": "45807dc1-1f47-457d-afbe-366ba2e721be"
+      }
+    ]
+  },
+  {
+    "contact_id": "3817b131c2634101963adaf6b6eacb38",
+    "pif_id": "4e85db6f-217d-4212-8d1f-09d3d1993fcd",
+    "firm_name": "Quill & Arrow, LLP",
+    "contact_name": "Kevin Y. Jacobson, Esq.",
+    "contact_title": "Partner; Founding/Co-founder",
+    "email": "kjacobson@quillarrowlaw.com",
+    "source_action": "action_40ea3e9c6c094d2291f9ef7b",
+    "input_json": {
+      "body": "Hi Kevin,\n\nI previously wrote about keeping clients informed as their cases progress. This article explores why AI tools alone may not improve that experience.\n\nThe bigger change is often deciding who owns each step, what information they need, and when a lawyer intervenes. That's shaping how we help PI firms adopt AI at Possible Minds.\n\nhttps://getpossibleminds.com/t/-DS1JZn-aQ\n\nAs a co-founder at Quill & Arrow, would choosing the tools or changing the team's routines be the harder part? I'd value your perspective.\n\nBest,\nPranav\nFounder, Possible Minds",
+      "subject": "Re: M C submitted a Google review about Quill & Arrow",
+      "approval": {
+        "references": "<010001a0633e25f1-d8fc5956-435d-44e5-a287-7625dec2266f-000000@email.amazonses.com>",
+        "approved_at": "2026-09-15T10:41:07.524043+00:00",
+        "approved_by": "codex",
+        "body_sha256": "7e1a6e404dde1389b5a9f8c97dc98d8b3b705d6b0d413eab40ddac0037045a5a",
+        "in_reply_to": "<010001a0633e25f1-d8fc5956-435d-44e5-a287-7625dec2266f-000000@email.amazonses.com>",
+        "subject_sha256": "24a12bb215622617ea80205b793e3db6f787bd80303bb7bac0484777fa29d852"
+      },
+      "transport": "resend",
+      "references": "<010001a0633e25f1-d8fc5956-435d-44e5-a287-7625dec2266f-000000@email.amazonses.com>",
+      "skill_path": null,
+      "body_sha256": "7e1a6e404dde1389b5a9f8c97dc98d8b3b705d6b0d413eab40ddac0037045a5a",
+      "in_reply_to": "<010001a0633e25f1-d8fc5956-435d-44e5-a287-7625dec2266f-000000@email.amazonses.com>",
+      "skill_sha256": null,
+      "batch_item_id": "8096e9ad1c3049098e9238ae77c51728",
+      "brief_version": null,
+      "subject_sha256": "24a12bb215622617ea80205b793e3db6f787bd80303bb7bac0484777fa29d852",
+      "composer_variant_key": null,
+      "lead_gen_action_type": "follow_up",
+      "phi_egress_guard_cache": {},
+      "composer_experiment_key": null
+    },
+    "last_sent": "2026-09-15T17:20:33.433991+00:00",
+    "touches": 2,
+    "touches30": 1,
+    "history": [
+      {
+        "id": "b5a57e0275fa4edfbddd8d2425910b7f",
+        "subject": "Re: M C submitted a Google review about Quill & Arrow",
+        "body": "Hi Kevin,\n\nI previously wrote about keeping clients informed as their cases progress. This article explores why AI tools alone may not improve that experience.\n\nThe bigger change is often deciding who owns each step, what information they need, and when a lawyer intervenes. That's shaping how we help PI firms adopt AI at Possible Minds.\n\nhttps://getpossibleminds.com/t/-DS1JZn-aQ\n\nAs a co-founder at Quill & Arrow, would choosing the tools or changing the team's routines be the harder part? I'd value your perspective.\n\nBest,\nPranav\nFounder, Possible Minds",
+        "sent_at": "2026-09-15T17:20:33.433991+00:00",
+        "status": "delivered",
+        "provider_id": "9ac28e3e-074d-4d34-8768-ea9916788051"
+      },
+      {
+        "id": "6ebcd882da484674939157085f36080d",
+        "subject": "M C submitted a Google review about Quill & Arrow",
+        "body": "Hi Kevin,\n\nIn a Google review from July 23, 2026, M C wrote, \"I constantly reach out to Quill and Arrow inquiring information about the case and no new resolution has been set.\"\n\nA review like this can make prospective clients question whether their own calls will be returned. We built a system for Precise Imaging that processes roughly 600 emails daily and flags missed callbacks, aging inquiries, and unresolved messages.\n\nI'd be glad to walk you through what we built for Precise and learn how your team currently handles these communication workflows. You can choose a 30-minute time here:\n\nhttps://getpossibleminds.com/t/yEUVHpEPmg\n\nRegards,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+        "sent_at": "2026-09-02T17:50:12.176974+00:00",
+        "status": "delivered",
+        "provider_id": "01a0633e-2496-77a7-9eba-0a1822522ecf"
+      }
+    ]
+  },
+  {
+    "contact_id": "0d870fa68cdc4ee786014456a40ff09f",
+    "pif_id": "19f4142d-6c74-4999-81c7-ccf530689b0a",
+    "firm_name": "Benavides Law Firm",
+    "contact_name": "Lesly Benavides",
+    "contact_title": "Founder & CEO (CEO & Lawyer) - Benavides Law Firm APC",
+    "email": "lesly@leslyblaw.com",
+    "source_action": "action_861d451868714c85a4c010eb",
+    "input_json": {
+      "body": "Hi Lesly,\n\nMy earlier note asked about designing client communication as you build Benavides Law. This article looks at a related choice: adding AI to existing routines or designing the routines around it.\n\nThe main point is that clear responsibilities and shared information matter as much as the technology. That's shaping our work with PI firms at Possible Minds.\n\nhttps://getpossibleminds.com/t/KYFvl-g00Q\n\nAs founder, would you find it harder to choose the AI or decide how the team should work with it? I'd appreciate a quick take.\n\nBest,\nPranav\nFounder, Possible Minds",
+      "subject": "Re: A client-trust question",
+      "approval": {
+        "references": "<010001a05df315de-7a1fc58c-79a6-4de3-9bb4-25558b6f585a-000000@email.amazonses.com>",
+        "approved_at": "2026-09-15T10:41:36.050491+00:00",
+        "approved_by": "codex",
+        "body_sha256": "68da4a9bead993b7b22d49ac2529df8d7f5cb55ea66fa0b77bc07a9fb1f00330",
+        "in_reply_to": "<010001a05df315de-7a1fc58c-79a6-4de3-9bb4-25558b6f585a-000000@email.amazonses.com>",
+        "subject_sha256": "d1447b7e70ccd33ff62c42675e878cefb4e47ca6a7bcd6ce6a88c20c007376d7"
+      },
+      "transport": "resend",
+      "references": "<010001a05df315de-7a1fc58c-79a6-4de3-9bb4-25558b6f585a-000000@email.amazonses.com>",
+      "skill_path": null,
+      "body_sha256": "68da4a9bead993b7b22d49ac2529df8d7f5cb55ea66fa0b77bc07a9fb1f00330",
+      "in_reply_to": "<010001a05df315de-7a1fc58c-79a6-4de3-9bb4-25558b6f585a-000000@email.amazonses.com>",
+      "skill_sha256": null,
+      "batch_item_id": "81ef93421f874d3aa9f2984704e5a391",
+      "brief_version": null,
+      "subject_sha256": "d1447b7e70ccd33ff62c42675e878cefb4e47ca6a7bcd6ce6a88c20c007376d7",
+      "composer_variant_key": null,
+      "lead_gen_action_type": "follow_up",
+      "phi_egress_guard_cache": {},
+      "composer_experiment_key": null
+    },
+    "last_sent": "2026-09-15T18:40:24.938086+00:00",
+    "touches": 2,
+    "touches30": 1,
+    "history": [
+      {
+        "id": "220711929c3e4e23afb519fba38becf6",
+        "subject": "A client-trust question",
+        "body": "Hi Lesly,\n\nBuilding Benavides Law from its early stage gives you a rare chance to design the client experience before habits become fixed.\n\nI analyzed 7,383 PI-firm reviews and found that silence, limited access, and unclear case movement were strongly associated with broken client trust. The complaint patterns are here: https://getpossibleminds.com/t/NdnCoDLLVg\n\nWhich of those three would you most want to prevent by design?\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+        "sent_at": "2026-09-01T17:10:06.791817+00:00",
+        "status": "delivered",
+        "provider_id": "37213703-e5fd-4110-81e3-bb7293e842b6"
+      },
+      {
+        "id": "efd58338f03b43b8a5380e78e2914a88",
+        "subject": "Re: A client-trust question",
+        "body": "Hi Lesly,\n\nMy earlier note asked about designing client communication as you build Benavides Law. This article looks at a related choice: adding AI to existing routines or designing the routines around it.\n\nThe main point is that clear responsibilities and shared information matter as much as the technology. That's shaping our work with PI firms at Possible Minds.\n\nhttps://getpossibleminds.com/t/KYFvl-g00Q\n\nAs founder, would you find it harder to choose the AI or decide how the team should work with it? I'd appreciate a quick take.\n\nBest,\nPranav\nFounder, Possible Minds",
+        "sent_at": "2026-09-15T18:40:24.938086+00:00",
+        "status": "delivered",
+        "provider_id": "062bfd8e-2926-4299-8a18-7eb239a480df"
+      }
+    ]
+  },
+  {
+    "contact_id": "c0ed0352ef4e45f3aeb0a16442530a5b",
+    "pif_id": "0eaa168c-4f87-418d-a3c3-bd1a898fb483",
+    "firm_name": "Castillo & Montes",
+    "contact_name": "Domingo Castillo",
+    "contact_title": "Attorney at Law",
+    "email": "castillolaw2000@aol.com",
+    "source_action": "action_ce8a262484d34e50aecf6ff0",
+    "input_json": {
+      "body": "Hi Domingo,\n\nMy earlier note was about automating records follow-up and client communication. With your team working across several offices, the case-management system underneath those workflows is another part worth considering.\n\nIf you're weighing a move from A-1 Law, we can help migrate records, documents and workflows to Clio or Filevine, checking that the case history and fields your team relies on carry over properly. That creates a better foundation for connected AI workflows, rather than another disconnected tool.\n\nHere's our approach:\nhttps://getpossibleminds.com/t/1BvpmLj1IA\n\nWould a brief outline of what a move could involve be useful? I'd appreciate your thoughts.\n\nBest,\nPranav\nFounder, Possible Minds",
+      "subject": "Quick question about Precise Imaging status updates",
+      "approval": {
+        "references": "<19e838b0ea9.214cd13628299.4707045211943265619@possiblemindshq.com>",
+        "approved_at": "2026-09-18T09:28:31.770788+00:00",
+        "approved_by": "codex",
+        "body_sha256": "bdd0a86e442aa7d4618fe50b512b1758acc5e150c6d7de7fdb06976e59540290",
+        "in_reply_to": "<19e838b0ea9.214cd13628299.4707045211943265619@possiblemindshq.com>",
+        "subject_sha256": "822ed0bd45832de2d48f6bd759894511324c8c9eaa5179c2ce58bb721bc562c9"
+      },
+      "transport": "resend",
+      "references": "<19e838b0ea9.214cd13628299.4707045211943265619@possiblemindshq.com>",
+      "skill_path": null,
+      "body_sha256": "bdd0a86e442aa7d4618fe50b512b1758acc5e150c6d7de7fdb06976e59540290",
+      "in_reply_to": "<19e838b0ea9.214cd13628299.4707045211943265619@possiblemindshq.com>",
+      "skill_sha256": null,
+      "batch_item_id": "7c8e0808edc24078b00fbc4a281fe56e",
+      "brief_version": null,
+      "subject_sha256": "822ed0bd45832de2d48f6bd759894511324c8c9eaa5179c2ce58bb721bc562c9",
+      "composer_variant_key": null,
+      "lead_gen_action_type": "follow_up",
+      "phi_egress_guard_cache": {},
+      "composer_experiment_key": null
+    },
+    "last_sent": "2026-09-18T17:30:03.77256+00:00",
+    "touches": 2,
+    "touches30": 1,
+    "history": [
+      {
+        "id": "d1f4e4e7d6e242be8e97044985b9621e",
+        "subject": "Quick question about Precise Imaging status updates",
+        "body": "Hi Domingo,\n\nPranav from Possible Minds. You've probably received automated status replies from Precise Imaging: we built the system behind those autoresponders.\n\nThat email triage/autoresponder system is saving Precise 500+ staff-hours a week. We are now using the same approach for PI-firm workflows like intake, website chat, records follow-up, and phone automation.\n\nI am curious, where does your team still lose the most time today: records and imaging status updates, intake follow-up, or anoth",
+        "sent_at": "2026-06-01T14:16:29.714657+00:00",
+        "status": "sent",
+        "provider_id": "1780323389373130300"
+      },
+      {
+        "id": "67549bc466cb4f3f960bc23ac9ccbd13",
+        "subject": "Quick question about Precise Imaging status updates",
+        "body": "Hi Domingo,\n\nMy earlier note was about automating records follow-up and client communication. With your team working across several offices, the case-management system underneath those workflows is another part worth considering.\n\nIf you're weighing a move from A-1 Law, we can help migrate records, documents and workflows to Clio or Filevine, checking that the case history and fields your team relies on carry over properly. That creates a better foundation for connected AI workflows, rather than another disconnected tool.\n\nHere's our approach:\nhttps://getpossibleminds.com/t/1BvpmLj1IA\n\nWould a brief outline of what a move could involve be useful? I'd appreciate your thoughts.\n\nBest,\nPranav\nFounder, Possible Minds",
+        "sent_at": "2026-09-18T17:30:03.77256+00:00",
+        "status": "delivered",
+        "provider_id": "01a0b591-7403-754c-beaf-33230333fb61"
+      }
+    ]
+  },
+  {
+    "contact_id": "614f27e83a7c4e38a3b4ff00c7b6fd10",
+    "pif_id": "366d967c-a0e6-461d-b278-ebc060091c86",
+    "firm_name": "First Law Group",
+    "contact_name": "Dean Hakkak",
+    "contact_title": "Founder & Attorney",
+    "email": "hakkaklaw@gmail.com",
+    "source_action": "action_fcfa2029491d49eb96c6f115",
+    "input_json": {
+      "body": "Hi Dean,\n\nThought this might be useful alongside my earlier question about Lead Docket and Filevine.\n\nI wrote up how a solo PI lawyer used Claude and Clio to turn dictated intake facts into a structured matter, document packet, and task list, while keeping the lawyer in control of the consequential work:\n\nhttps://getpossibleminds.com/t/NVFI-e7PrQ\n\nDifferent systems, but the same operational question: where can the handoff be automated without losing control? I'd be curious which part feels most relevant at First Law Group.\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+      "subject": "Re: Is Lead Docket at First Law Group tying marketing spend to signed cases?",
+      "approval": {
+        "references": "<0100019ff80244cb-e6e80c24-c61a-46ee-a035-8cce3b8c9f40-000000@email.amazonses.com> <1a034ce4657.394e146531505.5062752225733274851@possiblemindshq.com>",
+        "approved_at": "2026-08-29T17:02:54.219316+00:00",
+        "approved_by": "codex",
+        "body_sha256": "9eeaf0fb15085e5334f5bd14fe8e3c2ea4e14a1820d94f654a73ea0f3e91f17a",
+        "in_reply_to": "<1a034ce4657.394e146531505.5062752225733274851@possiblemindshq.com>",
+        "subject_sha256": "2957d7f27cd37ecbdf61365e5dc1396296816918e4918553ca4b34d0acdae834"
+      },
+      "transport": "zoho_api",
+      "references": "<0100019ff80244cb-e6e80c24-c61a-46ee-a035-8cce3b8c9f40-000000@email.amazonses.com> <1a034ce4657.394e146531505.5062752225733274851@possiblemindshq.com>",
+      "skill_path": null,
+      "body_sha256": "9eeaf0fb15085e5334f5bd14fe8e3c2ea4e14a1820d94f654a73ea0f3e91f17a",
+      "in_reply_to": "<1a034ce4657.394e146531505.5062752225733274851@possiblemindshq.com>",
+      "skill_sha256": null,
+      "batch_item_id": "a9b1d44dea2e49a2bff01a4682827ec7",
+      "brief_version": null,
+      "subject_sha256": "2957d7f27cd37ecbdf61365e5dc1396296816918e4918553ca4b34d0acdae834",
+      "composer_variant_key": null,
+      "lead_gen_action_type": "follow_up",
+      "phi_egress_guard_cache": {},
+      "composer_experiment_key": null
+    },
+    "last_sent": "2026-08-31T16:05:08.217076+00:00",
+    "touches": 3,
+    "touches30": 0,
+    "history": [
+      {
+        "id": "e354ba3042f24d59b029fcc9039b661a",
+        "subject": "Is Lead Docket at First Law Group tying marketing spend to signed cases?",
+        "body": "Hi Dean,\n\nMany firms can see where leads originate in Lead Docket but lose that attribution once a matter becomes a signed case in Filevine.\n\nI'm Pranav, founder of Possible Minds. You may have seen Precise Imaging's AI autoresponses. We built the system behind them, and it now processes roughly 600 emails a day. We build practical AI systems for the PI ecosystem, shaped by real-world operating insights shared by leaders like Chris Dreyer and Yani Smith.\n\nCould your team be getting more from Lea",
+        "sent_at": "2026-08-12T22:05:25.739616+00:00",
+        "status": "delivered",
+        "provider_id": "72cbff9b-0a20-4426-ba6c-1a5a6aa606c4"
+      },
+      {
+        "id": "90353d1b7a4a44ceaba2b9f43534c440",
+        "subject": "Re: Is Lead Docket at First Law Group tying marketing spend to signed cases?",
+        "body": "Hi Dean,\n\nFollowing up on my earlier question. As First Law Group's founder, do you have a clear view of which marketing sources turn into retained Filevine matters, or does someone still have to match Lead Docket data against the case system?\n\nThat kind of handoff is where we found valuable automation opportunities while building Precise's status-response system.\n\nWould you have 15 minutes to compare notes? I'd genuinely appreciate your perspective. This isn't a pitch.\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+        "sent_at": "2026-08-24T17:25:29.71739+00:00",
+        "status": "sent",
+        "provider_id": "1787592329001119300"
+      },
+      {
+        "id": "9992244b1d794bd09f8429158a883e3b",
+        "subject": "Re: Is Lead Docket at First Law Group tying marketing spend to signed cases?",
+        "body": "Hi Dean,\n\nThought this might be useful alongside my earlier question about Lead Docket and Filevine.\n\nI wrote up how a solo PI lawyer used Claude and Clio to turn dictated intake facts into a structured matter, document packet, and task list, while keeping the lawyer in control of the consequential work:\n\nhttps://getpossibleminds.com/t/NVFI-e7PrQ\n\nDifferent systems, but the same operational question: where can the handoff be automated without losing control? I'd be curious which part feels most relevant at First Law Group.\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+        "sent_at": "2026-08-31T16:05:08.217076+00:00",
+        "status": "sent",
+        "provider_id": "1788192307719130100"
+      }
+    ]
+  },
+  {
+    "contact_id": "ff44d6b7d1034cf18cc663d17496ca62",
+    "pif_id": "0b53931d-37f0-49ca-9744-838247238ce0",
+    "firm_name": "Pyramid Legal, APC",
+    "contact_name": "Eduard Mkhitaryan",
+    "contact_title": "Co-Founder",
+    "email": "emkhitaryan@pyramidlegal.com",
+    "source_action": "action_c41a54006d434cf7a4c200d4",
+    "input_json": {
+      "body": "Hi Eduard,\n\nAs co-founder of Pyramid Legal, you have a direct view of where the client experience gets harder as a firm grows.\n\nI analyzed 7,383 PI-firm reviews and found that silence, limited access, and unclear case movement were strongly associated with broken client trust. This section has the complaint patterns: https://getpossibleminds.com/t/CyrvWCyYrw\n\nWhich of those three shows up most often in practice?\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+      "subject": "Re: Pyramid Legal's AI readiness",
+      "approval": {
+        "references": "<19f26c7809d.8883e0a81462.2714851760002352681@possiblemindshq.com>",
+        "approved_at": "2026-09-01T14:30:12.936001+00:00",
+        "approved_by": "codex",
+        "body_sha256": "e0e9d5d4630377c145911b4821d4dc76840ee4ac68e824436caf61b6abbf0e1c",
+        "in_reply_to": "<19f26c7809d.8883e0a81462.2714851760002352681@possiblemindshq.com>",
+        "subject_sha256": "b5e8a441d3786fb73fa4867726943cc6465fa38d152887cf348f4bedbac964cf"
+      },
+      "transport": null,
+      "references": "<19f26c7809d.8883e0a81462.2714851760002352681@possiblemindshq.com>",
+      "skill_path": null,
+      "body_sha256": "e0e9d5d4630377c145911b4821d4dc76840ee4ac68e824436caf61b6abbf0e1c",
+      "in_reply_to": "<19f26c7809d.8883e0a81462.2714851760002352681@possiblemindshq.com>",
+      "skill_sha256": null,
+      "batch_item_id": "9c1ad55a64ad4824b8984d62b90b13bc",
+      "brief_version": null,
+      "subject_sha256": "b5e8a441d3786fb73fa4867726943cc6465fa38d152887cf348f4bedbac964cf",
+      "composer_variant_key": null,
+      "lead_gen_action_type": "follow_up",
+      "phi_egress_guard_cache": {},
+      "composer_experiment_key": null
+    },
+    "last_sent": "2026-09-01T15:40:16.909188+00:00",
+    "touches": 3,
+    "touches30": 0,
+    "history": [
+      {
+        "id": "db47ee60215a43519b019adc04e4d5eb",
+        "subject": "ai readiness at Pyramid Legal",
+        "body": "Hi Eduard,\n\nPranav from Possible Minds. If Pyramid Legal refers clients to Precise Imaging, you've seen the automated status replies they send: we built that system.\nMost firms that buy AI never see results because they weren't set up to benefit.\nSo I built a short AI-readiness audit for PI firms, a handful of questions that score where your firm stands and what's blocking value.\n\nHere it is - about 10 minutes: https://aiaudit.getpossibleminds.com/a/KD2m2LxN\n\n-- Pranav\nFounder, Possible Minds\nBo",
+        "sent_at": "2026-06-24T16:56:35.812083+00:00",
+        "status": "sent",
+        "provider_id": "1782320195630130100"
+      },
+      {
+        "id": "f7daac4f9dd64f03a59986ddf5c0514e",
+        "subject": "Pyramid Legal's AI readiness",
+        "body": "Hi Eduard,\n\nMost firms that buy AI never see results because the firm was never set up to benefit from it.\nI put together a short AI-readiness audit for PI firms: about 14 questions that score where Pyramid Legal stands and what's blocking value.\n\nHere it is - about 10 minutes: https://aiaudit.getpossibleminds.com/a/zsMb9MVI\n\n-- Pranav\nFounder, Possible Minds\nBook a consult: https://aiaudit.getpossibleminds.com/c/_loY0_Zz",
+        "sent_at": "2026-07-03T07:00:36.939537+00:00",
+        "status": "sent",
+        "provider_id": "1783062036751130200"
+      },
+      {
+        "id": "c170b05f86f24fb8903f51a758d918a4",
+        "subject": "Re: Pyramid Legal's AI readiness",
+        "body": "Hi Eduard,\n\nAs co-founder of Pyramid Legal, you have a direct view of where the client experience gets harder as a firm grows.\n\nI analyzed 7,383 PI-firm reviews and found that silence, limited access, and unclear case movement were strongly associated with broken client trust. This section has the complaint patterns: https://getpossibleminds.com/t/CyrvWCyYrw\n\nWhich of those three shows up most often in practice?\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+        "sent_at": "2026-09-01T15:40:16.909188+00:00",
+        "status": "delivered",
+        "provider_id": "133966c1-e279-4d2b-97f6-6c1d43181373"
+      }
+    ]
+  },
+  {
+    "contact_id": "fc_c482ae1d950f4a09b7f07f1c",
+    "pif_id": "fa833c3e-82f9-464d-b83a-aa210c914de5",
+    "firm_name": "State Law Firm",
+    "contact_name": "tehrani@statelawfirm.com",
+    "contact_title": "Founder",
+    "email": "tehrani@statelawfirm.com",
+    "source_action": "action_3e5893af11af4620957f68b9",
+    "input_json": {
+      "body": "Hi Eddie,\n\nAs State Law Firm's founder, you probably see the gap between what a team knows about a matter and what the client can actually see.\n\nI analyzed 7,383 PI-firm reviews and found that silence, limited access, and unclear case movement were strongly associated with broken client trust. The complaint patterns are here: https://getpossibleminds.com/t/b1QQuS2pAA\n\nWhich of those three is hardest for a firm to prevent consistently?\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+      "subject": "Re: state law firm ai readiness",
+      "approval": {
+        "references": "<19f26c7a32b.3d5e2f481244.7774774465992810570@possiblemindshq.com>",
+        "approved_at": "2026-09-01T14:30:20.053993+00:00",
+        "approved_by": "codex",
+        "body_sha256": "12bd24d7caaee3b77d17732d30ef1f9d6c4084f82c6982b4c8b5f65c1ebb1955",
+        "in_reply_to": "<19f26c7a32b.3d5e2f481244.7774774465992810570@possiblemindshq.com>",
+        "subject_sha256": "347350f23e66737155426819c5f4d18e31c545772c3ddcf19fb7bcc26fb45574"
+      },
+      "transport": null,
+      "references": "<19f26c7a32b.3d5e2f481244.7774774465992810570@possiblemindshq.com>",
+      "skill_path": null,
+      "body_sha256": "12bd24d7caaee3b77d17732d30ef1f9d6c4084f82c6982b4c8b5f65c1ebb1955",
+      "in_reply_to": "<19f26c7a32b.3d5e2f481244.7774774465992810570@possiblemindshq.com>",
+      "skill_sha256": null,
+      "batch_item_id": "ab8e8a99ddc342fc8476c2cb86b2eb92",
+      "brief_version": null,
+      "subject_sha256": "347350f23e66737155426819c5f4d18e31c545772c3ddcf19fb7bcc26fb45574",
+      "composer_variant_key": null,
+      "lead_gen_action_type": "follow_up",
+      "phi_egress_guard_cache": {},
+      "composer_experiment_key": null
+    },
+    "last_sent": "2026-09-01T15:50:18.412176+00:00",
+    "touches": 3,
+    "touches30": 0,
+    "history": [
+      {
+        "id": "7560b4d109c64399884ef0b52033dc36",
+        "subject": "ai readiness at state law firm",
+        "body": "Hi tehrani@statelawfirm.com,\n\nMost firms that buy AI never see results because they weren't set up to benefit.\nSo I built a short AI-readiness audit for PI firms - a handful of questions that score where your firm stands and what's blocking value.\n\nHere it is - about 10 minutes: https://aiaudit.getpossibleminds.com/a/kLEkoK-S\n\n-- Pranav\nFounder, Possible Minds\nBook a consult: https://getpossibleminds.com/consult",
+        "sent_at": "2026-06-24T16:57:08.117028+00:00",
+        "status": "sent",
+        "provider_id": "1782320227931108000"
+      },
+      {
+        "id": "96b0108f6d7a4bc9a2ff16fed40f45e2",
+        "subject": "state law firm ai readiness",
+        "body": "Hi,\n\nMost firms that buy AI never see results because they were never set up to benefit from it.\nI put together a short AI-readiness audit for PI firms: about 14 questions that score where State Law Firm stands and what is likely blocking value.\n\nHere it is - about 10 minutes: https://aiaudit.getpossibleminds.com/a/BMv9BOlG\n\n-- Pranav\nFounder, Possible Minds\nBook a consult: https://aiaudit.getpossibleminds.com/c/L4sovUpY",
+        "sent_at": "2026-07-03T07:00:45.814268+00:00",
+        "status": "sent",
+        "provider_id": "1783062045596108000"
+      },
+      {
+        "id": "36c2c0b84f954a7cbf791206ace59a50",
+        "subject": "Re: state law firm ai readiness",
+        "body": "Hi Eddie,\n\nAs State Law Firm's founder, you probably see the gap between what a team knows about a matter and what the client can actually see.\n\nI analyzed 7,383 PI-firm reviews and found that silence, limited access, and unclear case movement were strongly associated with broken client trust. The complaint patterns are here: https://getpossibleminds.com/t/b1QQuS2pAA\n\nWhich of those three is hardest for a firm to prevent consistently?\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+        "sent_at": "2026-09-01T15:50:18.412176+00:00",
+        "status": "delivered",
+        "provider_id": "d0909a08-6c16-4093-9c6c-968b23246683"
+      }
+    ]
+  },
+  {
+    "contact_id": "db3570e87b1a4597920d2034317286e3",
+    "pif_id": "2bbb6558-78e8-4f7e-b34d-43ef99a8b121",
+    "firm_name": "Medler Law Firm",
+    "contact_name": "Ryan Medler",
+    "contact_title": "Partner",
+    "email": "ryan@medlerlawfirm.com",
+    "source_action": "action_dc9bf103319048e4b92e9211",
+    "input_json": {
+      "body": "Hi Ryan,\n\nWith a three-attorney team handling catastrophic-injury matters, keeping clients oriented through a long case must take real discipline.\n\nI analyzed 7,383 PI-firm reviews and found that silence, limited access, and unclear case movement were strongly associated with broken client trust. This section summarizes the complaints: https://getpossibleminds.com/t/aEZUy2iLpw\n\nWhich of those three is the toughest to solve without adding more staff work?\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+      "subject": "Re: Is Lead Docket at Medler Law Firm tying marketing spend to signed cases?",
+      "approval": {
+        "references": "<0100019ff8a6fb05-24ed03ee-daba-4e65-82a6-d0944bb43b07-000000@email.amazonses.com> <010001a044a60ac2-875ac75b-8ad5-4b17-8264-21087c772dba-000000@email.amazonses.com>",
+        "approved_at": "2026-09-01T14:30:27.795719+00:00",
+        "approved_by": "codex",
+        "body_sha256": "7fd8b1f7c04ebc2e5463017f8e8f6781e494ae6fba5bce3621138f32b73c1b07",
+        "in_reply_to": "<010001a044a60ac2-875ac75b-8ad5-4b17-8264-21087c772dba-000000@email.amazonses.com>",
+        "subject_sha256": "1f20d416b2f9aa8e2ec3132fa63b6037b6de7c373dd01bf24058bad321a48c9a"
+      },
+      "transport": null,
+      "references": "<0100019ff8a6fb05-24ed03ee-daba-4e65-82a6-d0944bb43b07-000000@email.amazonses.com> <010001a044a60ac2-875ac75b-8ad5-4b17-8264-21087c772dba-000000@email.amazonses.com>",
+      "skill_path": null,
+      "body_sha256": "7fd8b1f7c04ebc2e5463017f8e8f6781e494ae6fba5bce3621138f32b73c1b07",
+      "in_reply_to": "<010001a044a60ac2-875ac75b-8ad5-4b17-8264-21087c772dba-000000@email.amazonses.com>",
+      "skill_sha256": null,
+      "batch_item_id": "ad0b16d072494ab69c282c3c4ba462c5",
+      "brief_version": null,
+      "subject_sha256": "1f20d416b2f9aa8e2ec3132fa63b6037b6de7c373dd01bf24058bad321a48c9a",
+      "composer_variant_key": null,
+      "lead_gen_action_type": "follow_up",
+      "phi_egress_guard_cache": {},
+      "composer_experiment_key": null
+    },
+    "last_sent": "2026-09-01T16:00:27.02943+00:00",
+    "touches": 3,
+    "touches30": 0,
+    "history": [
+      {
+        "id": "c4e153fd4e35409b8cdc473b602f0af2",
+        "subject": "Is Lead Docket at Medler Law Firm tying marketing spend to signed cases?",
+        "body": "Hi Ryan,\n\nMany firms can see where leads originate in Lead Docket but lose that attribution once a matter becomes a signed case in Filevine.\n\nI'm Pranav, founder of Possible Minds. You may have seen Precise Imaging's AI autoresponses. We built the system behind them, and it now processes roughly 600 emails a day. We build practical AI systems for the PI ecosystem, shaped by real-world operating insights shared by leaders like Chris Dreyer and Yani Smith.\n\nCould your team be getting more from Lea",
+        "sent_at": "2026-08-13T01:05:20.369376+00:00",
+        "status": "delivered",
+        "provider_id": "720369d3-b90b-40a0-96ed-dfebe60a3987"
+      },
+      {
+        "id": "822f3b84c0ce41c2a163e6c7e82812f0",
+        "subject": "Re: Is Lead Docket at Medler Law Firm tying marketing spend to signed cases?",
+        "body": "Hi Ryan,\n\nThought you might find this useful. I wrote up how a small PI firm turned recurring work into reusable AI workflows. Its assistants went from roughly 5 to 7 review-ready documents a day to 12 to 15, while medical records stayed in a protected workflow and every consequential output still came back to the lawyer.\n\nhttps://getpossibleminds.com/t/k074VdTuyw\n\nIf you could remove one recurring document bottleneck at Medler Law Firm, which would you start with?\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+        "sent_at": "2026-08-27T19:15:27.263132+00:00",
+        "status": "delivered",
+        "provider_id": "bdcd05cf-aa4e-4597-b014-13c134bd654a"
+      },
+      {
+        "id": "b584050dbc7244d29d737373e3ab8d8b",
+        "subject": "Re: Is Lead Docket at Medler Law Firm tying marketing spend to signed cases?",
+        "body": "Hi Ryan,\n\nWith a three-attorney team handling catastrophic-injury matters, keeping clients oriented through a long case must take real discipline.\n\nI analyzed 7,383 PI-firm reviews and found that silence, limited access, and unclear case movement were strongly associated with broken client trust. This section summarizes the complaints: https://getpossibleminds.com/t/aEZUy2iLpw\n\nWhich of those three is the toughest to solve without adding more staff work?\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+        "sent_at": "2026-09-01T16:00:27.02943+00:00",
+        "status": "delivered",
+        "provider_id": "9951fd2c-e65d-4b0f-bc0d-03b3d7e94d71"
+      }
+    ]
+  },
+  {
+    "contact_id": "96c3b36fc8c44873846805dcbbc2a892",
+    "pif_id": "010cbc68-7f1a-48b6-b39b-226a6b59a78c",
+    "firm_name": "DUQUE & PRICE",
+    "contact_name": "Matthew R. Price, Esq.",
+    "contact_title": "Partner",
+    "email": "mprice@duquelaw.com",
+    "source_action": "action_d523f47c90dc4d208ffcdf11",
+    "input_json": {
+      "body": "Hi Matthew,\n\nDUQUE & PRICE has grown across several California markets since 2006, so consistency in the client experience is a meaningful operating challenge.\n\nI analyzed 7,383 PI-firm reviews and found that silence, limited access, and unclear case movement were strongly associated with broken client trust. The complaint section is here: https://getpossibleminds.com/t/74ML-B8-mw\n\nWhich of those three tends to be hardest to standardize across a growing team?\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+      "subject": "Re: Is Lead Docket at DUQUE & PRICE tying marketing spend to signed cases?",
+      "approval": {
+        "references": "<0100019ff87db2fd-464bb5d1-11c0-4389-93a2-bc336cb89e3c-000000@email.amazonses.com> <010001a0449ce08e-f0ac74ee-2a48-4036-939b-ec4b8119e246-000000@email.amazonses.com>",
+        "approved_at": "2026-09-01T14:31:40.037270+00:00",
+        "approved_by": "codex",
+        "body_sha256": "f4b5696e7b1b1f4409691aece5e1dc352979c79288e46bf9e29b4fcd5485741c",
+        "in_reply_to": "<010001a0449ce08e-f0ac74ee-2a48-4036-939b-ec4b8119e246-000000@email.amazonses.com>",
+        "subject_sha256": "7cce2291195c0c65ef748ee60fd58c34eeff0d1a08d3a6ea09b24536e6a5301f"
+      },
+      "transport": null,
+      "references": "<0100019ff87db2fd-464bb5d1-11c0-4389-93a2-bc336cb89e3c-000000@email.amazonses.com> <010001a0449ce08e-f0ac74ee-2a48-4036-939b-ec4b8119e246-000000@email.amazonses.com>",
+      "skill_path": null,
+      "body_sha256": "f4b5696e7b1b1f4409691aece5e1dc352979c79288e46bf9e29b4fcd5485741c",
+      "in_reply_to": "<010001a0449ce08e-f0ac74ee-2a48-4036-939b-ec4b8119e246-000000@email.amazonses.com>",
+      "skill_sha256": null,
+      "batch_item_id": "afae82b8290948d18262c9840400d39f",
+      "brief_version": null,
+      "subject_sha256": "7cce2291195c0c65ef748ee60fd58c34eeff0d1a08d3a6ea09b24536e6a5301f",
+      "composer_variant_key": null,
+      "lead_gen_action_type": "follow_up",
+      "phi_egress_guard_cache": {},
+      "composer_experiment_key": null
+    },
+    "last_sent": "2026-09-01T16:10:27.805963+00:00",
+    "touches": 3,
+    "touches30": 0,
+    "history": [
+      {
+        "id": "b871a4584e6941fdbd8a7e4011fb50d5",
+        "subject": "Is Lead Docket at DUQUE & PRICE tying marketing spend to signed cases?",
+        "body": "Hi Matthew,\n\nMany firms can see where leads originate in Lead Docket but lose that attribution once a matter becomes a signed case in Filevine.\n\nI'm Pranav, founder of Possible Minds. You may have seen Precise Imaging's AI autoresponses. We built the system behind them, and it now processes roughly 600 emails a day. We build practical AI systems for the PI ecosystem, shaped by real-world operating insights shared by leaders like Chris Dreyer and Yani Smith.\n\nCould your team be getting more from ",
+        "sent_at": "2026-08-13T00:20:14.958734+00:00",
+        "status": "delivered",
+        "provider_id": "e6ae4c69-8688-46e3-9273-b209ec58b97f"
+      },
+      {
+        "id": "595aae5c5714494f959be2d27b1c79eb",
+        "subject": "Re: Is Lead Docket at DUQUE & PRICE tying marketing spend to signed cases?",
+        "body": "Hi Matthew,\n\nThought you might find this useful. I wrote up how a small PI firm turned recurring work into reusable AI workflows. Its assistants went from roughly 5 to 7 review-ready documents a day to 12 to 15, while medical records stayed in a protected workflow and every consequential output still came back to the lawyer.\n\nhttps://getpossibleminds.com/t/5yYtR-QMjA\n\nIf you could remove one recurring document bottleneck at DUQUE & PRICE, which would you start with?\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+        "sent_at": "2026-08-27T19:05:26.670467+00:00",
+        "status": "delivered",
+        "provider_id": "8f5e1d31-c938-4699-913d-a10f36efc6a7"
+      },
+      {
+        "id": "4458d72fadd046bd9cd27ebc78f4559d",
+        "subject": "Re: Is Lead Docket at DUQUE & PRICE tying marketing spend to signed cases?",
+        "body": "Hi Matthew,\n\nDUQUE & PRICE has grown across several California markets since 2006, so consistency in the client experience is a meaningful operating challenge.\n\nI analyzed 7,383 PI-firm reviews and found that silence, limited access, and unclear case movement were strongly associated with broken client trust. The complaint section is here: https://getpossibleminds.com/t/74ML-B8-mw\n\nWhich of those three tends to be hardest to standardize across a growing team?\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+        "sent_at": "2026-09-01T16:10:27.805963+00:00",
+        "status": "delivered",
+        "provider_id": "d30996ce-777e-4250-9999-d0817f8115e4"
+      }
+    ]
+  },
+  {
+    "contact_id": "fc_b71c63f62d8d49738e5322a5",
+    "pif_id": "00d53935-09e1-4044-948a-a9e7ca9c4d77",
+    "firm_name": "Ranen Khademi PC",
+    "contact_name": "Jeff Ranen",
+    "contact_title": "Founding Partner",
+    "email": "jranen@ranenkhademi.com",
+    "source_action": "action_10070f104d394da099bd21ec",
+    "input_json": {
+      "body": "Hi Jeff,\n\nThe firm's evolution from Atticus Law Group to Ranen Khademi reflects real growth, while your work still spans serious PI and employment matters.\n\nI analyzed 7,383 PI-firm reviews and found that silence, limited access, and unclear case movement were strongly associated with broken client trust. The complaint patterns are here: https://getpossibleminds.com/t/yqkMKu-fmA\n\nWhich of those three becomes hardest to control as a firm expands?\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+      "subject": "Re: Is Lead Docket at Ranen Khademi PC tying marketing spend to signed cases?",
+      "approval": {
+        "references": "<0100019ff838d5bc-9b64a064-9fe2-4749-a489-ea247004d428-000000@email.amazonses.com> <010001a04493b6f9-34981c19-1a78-484f-90ad-568c49d02ce0-000000@email.amazonses.com>",
+        "approved_at": "2026-09-01T14:32:06.482440+00:00",
+        "approved_by": "codex",
+        "body_sha256": "097b2407add008f8134a1afd360f7e78d7f7afa3069e1f7591f66117f19b64e5",
+        "in_reply_to": "<010001a04493b6f9-34981c19-1a78-484f-90ad-568c49d02ce0-000000@email.amazonses.com>",
+        "subject_sha256": "ded6052992b88fd688674952dd3b1f900dcb09602f8ce3eb0e574149bf72ff15"
+      },
+      "transport": null,
+      "references": "<0100019ff838d5bc-9b64a064-9fe2-4749-a489-ea247004d428-000000@email.amazonses.com> <010001a04493b6f9-34981c19-1a78-484f-90ad-568c49d02ce0-000000@email.amazonses.com>",
+      "skill_path": null,
+      "body_sha256": "097b2407add008f8134a1afd360f7e78d7f7afa3069e1f7591f66117f19b64e5",
+      "in_reply_to": "<010001a04493b6f9-34981c19-1a78-484f-90ad-568c49d02ce0-000000@email.amazonses.com>",
+      "skill_sha256": null,
+      "batch_item_id": "e2bb3f5be46840d5a9d8d21f3ae439b9",
+      "brief_version": null,
+      "subject_sha256": "ded6052992b88fd688674952dd3b1f900dcb09602f8ce3eb0e574149bf72ff15",
+      "composer_variant_key": null,
+      "lead_gen_action_type": "follow_up",
+      "phi_egress_guard_cache": {},
+      "composer_experiment_key": null
+    },
+    "last_sent": "2026-09-01T16:20:28.961444+00:00",
+    "touches": 3,
+    "touches30": 0,
+    "history": [
+      {
+        "id": "85a3027eb84a4778b788d3a6fd8a4f37",
+        "subject": "Is Lead Docket at Ranen Khademi PC tying marketing spend to signed cases?",
+        "body": "Hi Jeff,\n\nMany firms can see where leads originate in Lead Docket but lose that attribution once a matter becomes a signed case in Filevine.\n\nI'm Pranav, founder of Possible Minds. You may have seen Precise Imaging's AI autoresponses. We built the system behind them, and it now processes roughly 600 emails a day. We build practical AI systems for the PI ecosystem, shaped by real-world operating insights shared by leaders like Chris Dreyer and Yani Smith.\n\nCould your team be getting more from Lea",
+        "sent_at": "2026-08-12T23:05:01.838394+00:00",
+        "status": "delivered",
+        "provider_id": "21d902f8-c267-4f0c-b644-5303bc492d7e"
+      },
+      {
+        "id": "095d2f21bac648a294e1db6b6134a865",
+        "subject": "Re: Is Lead Docket at Ranen Khademi PC tying marketing spend to signed cases?",
+        "body": "Hi Jeff,\n\nThought you might find this useful. I wrote up how a small PI firm turned recurring work into reusable AI workflows. Its assistants went from roughly 5 to 7 review-ready documents a day to 12 to 15, while medical records stayed in a protected workflow and every consequential output still came back to the lawyer.\n\nhttps://getpossibleminds.com/t/yw1TbcPPyA\n\nIf you could remove one recurring document bottleneck at Ranen Khademi, which would you start with?\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+        "sent_at": "2026-08-27T18:55:26.175145+00:00",
+        "status": "delivered",
+        "provider_id": "6e386fca-0b85-4f15-92a0-5200be40daae"
+      },
+      {
+        "id": "640378928e1547789e770cc56081c2c9",
+        "subject": "Re: Is Lead Docket at Ranen Khademi PC tying marketing spend to signed cases?",
+        "body": "Hi Jeff,\n\nThe firm's evolution from Atticus Law Group to Ranen Khademi reflects real growth, while your work still spans serious PI and employment matters.\n\nI analyzed 7,383 PI-firm reviews and found that silence, limited access, and unclear case movement were strongly associated with broken client trust. The complaint patterns are here: https://getpossibleminds.com/t/yqkMKu-fmA\n\nWhich of those three becomes hardest to control as a firm expands?\n\nBest,\nPranav\nFounder, Possible Minds\nhttps://getpossibleminds.com",
+        "sent_at": "2026-09-01T16:20:28.961444+00:00",
+        "status": "delivered",
+        "provider_id": "1b153b2a-7700-4a0b-91ee-52508998cb93"
+      }
+    ]
+  }
+]

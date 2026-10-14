@@ -1,0 +1,102 @@
+[
+  {
+    "id": "3666cdcee2f94da69fc1f07e372b272b",
+    "email": "william@hstonelaw.com",
+    "approval_status": "pending"
+  },
+  {
+    "id": "a0b9f6a3633b4854964b27872dccf8fa",
+    "email": "jonathan@gaslamplaw.com",
+    "approval_status": "pending"
+  },
+  {
+    "id": "e859381ff74247d58370d38f54dd648f",
+    "email": "david@dclawgroup.com",
+    "approval_status": "pending"
+  },
+  {
+    "id": "71713bc3336149168416e674c2f59855",
+    "email": "daniel@theinjurypartners.com",
+    "approval_status": "pending"
+  },
+  {
+    "id": "95c62595b5d943e4a025c6f9a975f3b1",
+    "email": "jon@theinjurylawfirm.com",
+    "approval_status": "pending"
+  },
+  {
+    "id": "b6a4477b143c4ca9a06fde99bee9fe9e",
+    "email": "mbraun@mbraunlaw.com",
+    "approval_status": "pending"
+  },
+  {
+    "id": "7823b7117aea47bfa124443213228832",
+    "email": "erick@noviklawgroup.com",
+    "approval_status": "pending"
+  },
+  {
+    "id": "96693518114e4692bfe697ef29cc8858",
+    "email": "alex@abdoulinlaw.com",
+    "approval_status": "pending"
+  },
+  {
+    "id": "835ae25660714d188b3eb5bebc4df780",
+    "email": "mrizzo@rizzolawportland.com",
+    "approval_status": "pending"
+  },
+  {
+    "id": "863315d5ed56443ab2de5e70fabadc47",
+    "email": "ab@bekhloyanlaw.com",
+    "approval_status": "pending"
+  },
+  {
+    "id": "03e06ef6f82242dfa544615acd20b485",
+    "email": "meylin@malfarolaw.com",
+    "approval_status": "pending"
+  },
+  {
+    "id": "fc77477cc2f6485a99259df9700bbdef",
+    "email": "ara@aranajarian.com",
+    "approval_status": "pending"
+  },
+  {
+    "id": "7a5f93ad891c489ca7d11a1636e3597e",
+    "email": "pedram@pedramlaw.com",
+    "approval_status": "pending"
+  },
+  {
+    "id": "61410341455f406381b4fde3cb234e3d",
+    "email": "dgonor@shaffergonorlaw.com",
+    "approval_status": "pending"
+  },
+  {
+    "id": "efee6aac8fce4cd2b56d204436afe59d",
+    "email": "andrew@a2zlegal.com",
+    "approval_status": "pending"
+  },
+  {
+    "id": "f9369fb9d8624e3489613a4840716f8e",
+    "email": "jessica@elkingamboa.com",
+    "approval_status": "pending"
+  },
+  {
+    "id": "d1707d8e800146368dc1541a8435c288",
+    "email": "gil@arbelegal.com",
+    "approval_status": "pending"
+  },
+  {
+    "id": "437d2ee0c39142b8b7ab14a6ceb51b62",
+    "email": "st@thetafirm.com",
+    "approval_status": "pending"
+  },
+  {
+    "id": "5eb27c712ebb494a9c14618b6963263e",
+    "email": "prahgozar@rahgozarlaw.com",
+    "approval_status": "pending"
+  },
+  {
+    "id": "b643e5cf10f14d14bbb1fefd235bad16",
+    "email": "parag@lawpla.com",
+    "approval_status": "pending"
+  }
+]

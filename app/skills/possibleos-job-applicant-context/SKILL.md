@@ -89,6 +89,13 @@ sponsorship, immigration status, credentials, licenses, employment or education
 history, salary history, criminal history, protected demographic information,
 conflicts, references, notice obligations or firm dates.
 
+For company-motivation questions, use verified employer evidence to identify the
+company's mission, then connect it to a specific and preferably uncommon part of
+the applicant's documented experience or chosen work. Keep the response concise
+and human. Express measured enthusiasm for the mission without generic praise,
+overstatement, invented personal history, or a long recap of the company. When no
+distinctive overlap is supported, give one restrained mission-aligned reason.
+
 For ordinary low-risk binary questions whose affirmative answer would require a
 specific role-related event or relationship, use the negative default when the
 resume, profile and application record contain no indication of that event. For

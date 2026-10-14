@@ -1,0 +1,249 @@
+{
+  "checked_at": "2026-10-07T13:52:03.233503+00:00",
+  "coverage": [
+    {
+      "folder": "\"INBOX\"",
+      "since": "2026-08-01",
+      "messages": 180
+    },
+    {
+      "folder": "\"Drafts\"",
+      "since": "2026-08-01",
+      "messages": 4
+    },
+    {
+      "folder": "\"Templates\"",
+      "since": "2026-08-01",
+      "messages": 0
+    },
+    {
+      "folder": "\"Snoozed\"",
+      "since": "2026-08-01",
+      "messages": 0
+    },
+    {
+      "folder": "\"Sent\"",
+      "since": "2026-08-01",
+      "messages": 151
+    },
+    {
+      "folder": "\"Spam\"",
+      "since": "2026-08-01",
+      "messages": 10
+    },
+    {
+      "folder": "\"Trash\"",
+      "since": "2026-08-01",
+      "messages": 0
+    },
+    {
+      "folder": "\"Notification\"",
+      "since": "2026-08-01",
+      "messages": 68
+    },
+    {
+      "folder": "\"Newsletter\"",
+      "since": "2026-08-01",
+      "messages": 78
+    },
+    {
+      "folder": "\"Archive\"",
+      "since": "2026-08-01",
+      "messages": 0
+    }
+  ],
+  "errors": [],
+  "matches": {
+    "william@hstonelaw.com": [],
+    "jonathan@gaslamplaw.com": [],
+    "david@dclawgroup.com": [],
+    "daniel@theinjurypartners.com": [],
+    "jon@theinjurylawfirm.com": [],
+    "mbraun@mbraunlaw.com": [],
+    "erick@noviklawgroup.com": [],
+    "alex@abdoulinlaw.com": [
+      {
+        "folder": "\"Sent\"",
+        "uid": "938",
+        "from": "pranav@possiblemindshq.com",
+        "to": "alex@abdoulinlaw.com",
+        "subject": "Precise imaging - quick question",
+        "date": "Thu, 20 Aug 2026 23:45:24 +0530",
+        "message_id": "<1a020628b72.71bc218f21223.6872151042876528244@possiblemindshq.com>",
+        "in_reply_to": "",
+        "references": "",
+        "auto_submitted": "",
+        "bounce": false,
+        "body": ""
+      }
+    ],
+    "mrizzo@rizzolawportland.com": [
+      {
+        "folder": "\"Sent\"",
+        "uid": "939",
+        "from": "pranav@possiblemindshq.com",
+        "to": "mrizzo@rizzolawportland.com",
+        "subject": "Precise imaging - quick question",
+        "date": "Thu, 20 Aug 2026 23:50:26 +0530",
+        "message_id": "<1a0206728f6.6503988f20992.448443114834405942@possiblemindshq.com>",
+        "in_reply_to": "",
+        "references": "",
+        "auto_submitted": "",
+        "bounce": false,
+        "body": ""
+      }
+    ],
+    "ab@bekhloyanlaw.com": [],
+    "meylin@malfarolaw.com": [],
+    "ara@aranajarian.com": [],
+    "daniel@goldcoastlaw.com": [
+      {
+        "folder": "\"Sent\"",
+        "uid": "943",
+        "from": "pranav@possiblemindshq.com",
+        "to": "daniel@goldcoastlaw.com",
+        "subject": "Precise imaging - quick question",
+        "date": "Fri, 21 Aug 2026 00:10:07 +0530",
+        "message_id": "<1a020792f31.153b601c21094.3714132680805791208@possiblemindshq.com>",
+        "in_reply_to": "",
+        "references": "",
+        "auto_submitted": "",
+        "bounce": false,
+        "body": ""
+      }
+    ],
+    "info@theobizlawoffice.com": [
+      {
+        "folder": "\"Sent\"",
+        "uid": "942",
+        "from": "pranav@possiblemindshq.com",
+        "to": "info@theobizlawoffice.com",
+        "subject": "Precise imaging - quick question",
+        "date": "Fri, 21 Aug 2026 00:05:05 +0530",
+        "message_id": "<1a0207490f4.16b40efe20931.111044214216861387@possiblemindshq.com>",
+        "in_reply_to": "",
+        "references": "",
+        "auto_submitted": "",
+        "bounce": false,
+        "body": ""
+      }
+    ],
+    "info@willfordlawcorp.com": [
+      {
+        "folder": "\"Sent\"",
+        "uid": "936",
+        "from": "pranav@possiblemindshq.com",
+        "to": "info@willfordlawcorp.com",
+        "subject": "Precise imaging - quick question",
+        "date": "Thu, 20 Aug 2026 23:35:18 +0530",
+        "message_id": "<1a020594da3.397dc4dc21123.3672074513548279793@possiblemindshq.com>",
+        "in_reply_to": "",
+        "references": "",
+        "auto_submitted": "",
+        "bounce": false,
+        "body": ""
+      }
+    ],
+    "pedram@pedramlaw.com": [],
+    "dgonor@shaffergonorlaw.com": [],
+    "andrew@a2zlegal.com": [],
+    "jessica@elkingamboa.com": [],
+    "gil@arbelegal.com": [],
+    "st@thetafirm.com": [],
+    "prahgozar@rahgozarlaw.com": [],
+    "parag@lawpla.com": [],
+    "clifton.albright@ayslaw.com": [],
+    "anan@nabilaw.com": [],
+    "inabizadeh@nabilaw.com": [],
+    "ajordan@josejordan.com": [],
+    "aslan.petrosyan@petrosyanlawpc.com": [],
+    "lillian@sedlawgroup.com": [],
+    "nima@thehlawgroup.com": [],
+    "gary@walchlaw.com": [],
+    "bana@banalaw.com": [],
+    "efarah@farahandfarah.com": [],
+    "mike@mweiserlaw.com": [],
+    "abe@accidentabe.com": [],
+    "cj@cyruslegal.com": [],
+    "kjacobson@quillarrowlaw.com": [],
+    "lesly@leslyblaw.com": [],
+    "castillolaw2000@aol.com": [],
+    "hakkaklaw@gmail.com": [
+      {
+        "folder": "\"INBOX\"",
+        "uid": "587",
+        "from": "Dean Hakkak <hakkaklaw@gmail.com>",
+        "to": "pranav@possiblemindshq.com",
+        "subject": "Re: Is Lead Docket at First Law Group tying marketing spend to signed cases?",
+        "date": "Thu, 03 Sep 2026 22:41:05 -0700",
+        "message_id": "<CALbfUJ-CTvCCcGrdYPzgd=zkG4tO9CxQ02kLQ_WL9he28f37ig@mail.gmail.com>",
+        "in_reply_to": "<1a058913876.1a9a340f21121.8744746154679417021@possiblemindshq.com>",
+        "references": "<0100019ff80244cb-e6e80c24-c61a-46ee-a035-8cce3b8c9f40-000000@email.amazonses.com> <1a034ce4657.394e146531505.5062752225733274851@possiblemindshq.com> <1a058913876.1a9a340f21121.8744746154679417021@possiblemindshq.com>",
+        "auto_submitted": "",
+        "bounce": false,
+        "body": "Call me at 626-893-4984.\r\n\r\n\r\nZ. Dean Hakkak\r\n\r\nOn Mon, Aug 31, 2026 at 9:05 AM <pranav@possiblemindshq.com> wrote:\r\n\r\n> Hi Dean,\r\n>\r\n> Thought this might be useful alongside my earlier question about Lead\r\n> Docket and Filevine.\r\n>\r\n> I wrote up how a solo PI lawyer used Claude and Clio to turn dictated\r\n> intake facts into a structured matter, document packet, and task list,\r\n> while keeping the lawyer in control of the consequential work:\r\n>\r\n> https://getpossibleminds.com/t/NVFI-e7PrQ\r\n>\r\n> Different systems, but the same operational question: where can the\r\n> handoff be automated without losing control? I'd be curious which part\r\n> feels most relevant at First Law Group.\r\n>\r\n> Best,\r\n> Pranav\r\n> Founder, Possible Minds\r\n> https://getpossibleminds.com\r\n>\r\n\n"
+      },
+      {
+        "folder": "\"Sent\"",
+        "uid": "954",
+        "from": "pranav@possiblemindshq.com",
+        "to": "hakkaklaw@gmail.com",
+        "subject": "Re: Is Lead Docket at First Law Group tying marketing spend to signed cases?",
+        "date": "Mon, 24 Aug 2026 22:55:28 +0530",
+        "message_id": "<1a034ce4657.394e146531505.5062752225733274851@possiblemindshq.com>",
+        "in_reply_to": "<0100019ff80244cb-e6e80c24-c61a-46ee-a035-8cce3b8c9f40-000000@email.amazonses.com>",
+        "references": "<0100019ff80244cb-e6e80c24-c61a-46ee-a035-8cce3b8c9f40-000000@email.amazonses.com>",
+        "auto_submitted": "",
+        "bounce": false,
+        "body": ""
+      },
+      {
+        "folder": "\"Sent\"",
+        "uid": "971",
+        "from": "pranav@possiblemindshq.com",
+        "to": "hakkaklaw@gmail.com",
+        "subject": "Re: Is Lead Docket at First Law Group tying marketing spend to signed cases?",
+        "date": "Mon, 31 Aug 2026 21:35:07 +0530",
+        "message_id": "<1a058913876.1a9a340f21121.8744746154679417021@possiblemindshq.com>",
+        "in_reply_to": "<1a034ce4657.394e146531505.5062752225733274851@possiblemindshq.com>",
+        "references": "<0100019ff80244cb-e6e80c24-c61a-46ee-a035-8cce3b8c9f40-000000@email.amazonses.com> <1a034ce4657.394e146531505.5062752225733274851@possiblemindshq.com>",
+        "auto_submitted": "",
+        "bounce": false,
+        "body": ""
+      },
+      {
+        "folder": "\"Sent\"",
+        "uid": "974",
+        "from": "Pranav Modi <pranav@possiblemindshq.com>",
+        "to": "Dean Hakkak <hakkaklaw@gmail.com>",
+        "subject": "Re: Is Lead Docket at First Law Group tying marketing spend to signed cases?",
+        "date": "Fri, 04 Sep 2026 11:29:12 +0530",
+        "message_id": "<1a06affed1a.807e07092198195.5564511694319219208@possiblemindshq.com>",
+        "in_reply_to": "<CALbfUJ-CTvCCcGrdYPzgd=zkG4tO9CxQ02kLQ_WL9he28f37ig@mail.gmail.com>",
+        "references": "<0100019ff80244cb-e6e80c24-c61a-46ee-a035-8cce3b8c9f40-000000@email.amazonses.com> <1a034ce4657.394e146531505.5062752225733274851@possiblemindshq.com> <1a058913876.1a9a340f21121.8744746154679417021@possiblemindshq.com> <CALbfUJ-CTvCCcGrdYPzgd=zkG4tO9CxQ02kLQ_WL9he28f37ig@mail.gmail.com>",
+        "auto_submitted": "",
+        "bounce": false,
+        "body": ""
+      },
+      {
+        "folder": "\"Sent\"",
+        "uid": "977",
+        "from": "Pranav Modi <pranav@possiblemindshq.com>",
+        "to": "Dean Hakkak <hakkaklaw@gmail.com>",
+        "subject": "Re: Is Lead Docket at First Law Group tying marketing spend to signed cases?",
+        "date": "Sun, 06 Sep 2026 11:48:12 +0530",
+        "message_id": "<1a0755e0a8c.1d0a4a0614808.5901391087055024037@possiblemindshq.com>",
+        "in_reply_to": "<CALbfUJ-CTvCCcGrdYPzgd=zkG4tO9CxQ02kLQ_WL9he28f37ig@mail.gmail.com>",
+        "references": "<0100019ff80244cb-e6e80c24-c61a-46ee-a035-8cce3b8c9f40-000000@email.amazonses.com> <1a034ce4657.394e146531505.5062752225733274851@possiblemindshq.com> <1a058913876.1a9a340f21121.8744746154679417021@possiblemindshq.com> <CALbfUJ-CTvCCcGrdYPzgd=zkG4tO9CxQ02kLQ_WL9he28f37ig@mail.gmail.com>",
+        "auto_submitted": "",
+        "bounce": false,
+        "body": ""
+      }
+    ],
+    "emkhitaryan@pyramidlegal.com": [],
+    "tehrani@statelawfirm.com": [],
+    "ryan@medlerlawfirm.com": [],
+    "mprice@duquelaw.com": [],
+    "jranen@ranenkhademi.com": []
+  }
+}

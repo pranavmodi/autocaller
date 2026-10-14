@@ -1,0 +1,64 @@
+{
+  "from": "pranav@possiblemindshq.com",
+  "to": "support@casepeer.com",
+  "subject": "RE: Integration / Sandbox Access Inquiry",
+  "body_text": "Hi CASEpeer team,\n\nI'm following up on case #01478487 and my September 15 and 22 emails. We still don't have an account to evaluate an integration, and I haven't received a human response to the access request.\n\nCould you please connect me with someone on your partnerships or integrations team? We'd appreciate a clear answer on whether a developer, sandbox, or evaluation account is available. If testing must happen through a client firm's account, please confirm the required setup and permissions.\n\nThanks for your time and help getting this to the right person.\n\nBest,\nPranav Modi\nFounder, Possible Minds",
+  "reply_to_provider_id": "1784571803868110100",
+  "case_number": "01478487",
+  "authorization": "User requested send a follow up",
+  "preflight": [
+    {
+      "folder": "INBOX",
+      "uid": "490",
+      "date": "Mon, 20 Jul 2026 18:22:19 +0000",
+      "from": "CASEpeer Support <support@casepeer.com>",
+      "to": "\"pranav@possiblemindshq.com\" <pranav@possiblemindshq.com>",
+      "subject": "RE: Integration / Sandbox Access Inquiry",
+      "provider_id": "1784571803868110100",
+      "rfc": "<1ZMnA000000000000000000000000000000000000000000000TIHKD600MS2nGUjbQ86qovmRsQEvOg@sfdc.net>",
+      "references": "<19f80c2e9bf.6c7188c241321.8497235599936179212@possiblemindshq.com>",
+      "in_reply_to": "<19f80c2e9bf.6c7188c241321.8497235599936179212@possiblemindshq.com>",
+      "body": "Hi Pranav,\r\nThank you for reaching out with your questions about integrating with CasePeer.\r\nCasePeer does not currently offer an open API. However, we do have an integration with Zapier and a Nightly Data Sync available with CasePeer Advanced. If you have suggestions for desired endpoints, you can share them with our team.\r\nHere is some additional information that may be helpful:\r\nActivate the Zapier Integration\r\n1. Navigate to the gear icon in the top right corner of your account and select Account Settings.\r\n2. Scroll down to the Integrations section and find the Zapier integration.\r\n3. Click Activate.\r\n4. A pop-up window will appear.\r\n5. Copy the API Key listed in the box and click Save.\r\n6. Note: If you fail to click Save before exiting the pop-up window, repeat the previous step to copy and save the new API Key.\r\n7. Navigate to Zapier and log in.\r\n8. Click My Apps in the left-hand side toolbar.\r\n9. Click Add Connection.\r\n10. A pop-up window will appear.\r\n11. Search and select CasePeer.\r\n12. A new window will open.\r\n13. Paste the API Key from CasePeer into the box and click Yes,"
+    },
+    {
+      "folder": "Sent",
+      "uid": "888",
+      "date": "Mon, 20 Jul 2026 23:51:25 +0530",
+      "from": "pranav@possiblemindshq.com",
+      "to": "support@casepeer.com",
+      "subject": "Integration / Sandbox Access Inquiry",
+      "provider_id": "1784571685507119300",
+      "rfc": "<19f80c2e9bf.6c7188c241321.8497235599936179212@possiblemindshq.com>",
+      "references": "",
+      "in_reply_to": "",
+      "body": "Hi CASEpeer team,\r\n\r\nI’m Pranav, founder of Possible Minds. We build intake automation and AI workflow tools for legal teams, especially around lead intake, follow-up, and operational handoffs.\r\n\r\nI’m reaching out to ask about CASEpeer integration options. We’re evaluating how our intake automation product could work with CASEpeer, and I’d love to understand the best path for testing an integration.\r\n\r\nI saw that CASEpeer may not have a fully open API, but that there may be partner integration options, Zapier, and data sync paths. A few questions:\r\n- Is there sandbox or trial access available for integration evaluation?\r\n- Is there a partner or developer route for teams building around CASEpeer?\r\n- Is there a Partner Integration API path we should explore?\r\n- What API, Zapier, or data-sync documentation should we review first?\r\n- Is support@casepeer.com the right place for this, or should I speak with someone on partnerships/integrations?\r\n\r\nHappy to provide more context on what we’re building.\r\n\r\nBest,\r\nPranav Modi\r\nFounder, Possible Minds\r\n"
+    },
+    {
+      "folder": "Sent",
+      "uid": "1012",
+      "date": "Tue, 15 Sep 2026 19:10:05 +0530",
+      "from": "pranav@possiblemindshq.com",
+      "to": "support@casepeer.com",
+      "subject": "RE: Integration / Sandbox Access Inquiry",
+      "provider_id": "1789479606140108000",
+      "rfc": "<1a0a54bd698.5919bb8024241.4876738952057194637@possiblemindshq.com>",
+      "references": "<1ZMnA000000000000000000000000000000000000000000000TIHKD600MS2nGUjbQ86qovmRsQEvOg@sfdc.net> <19f80c2e9bf.6c7188c241321.8497235599936179212@possiblemindshq.com>",
+      "in_reply_to": "<1ZMnA000000000000000000000000000000000000000000000TIHKD600MS2nGUjbQ86qovmRsQEvOg@sfdc.net>",
+      "body": "  Hi CASEpeer team,\r\n\r\nThanks for outlining the Zapier and Data Sync options. We still need an evaluation account, so we can't follow the in-account setup steps yet.\r\n\r\nCould a human agent connect us with your partnerships or integrations team? We'd like to test how our PI intake and workflow automation can work with CASEpeer. Is a sandbox, trial, or developer account available for this? If testing requires a participating client firm's account, please confirm the process and permissions needed.\r\n\r\nPlease escalate case #01478487 and let us know the next step. I appreciate your help.\r\n\r\nBest,\r\nPranav Modi\r\nFounder, Possible Minds  ---- On Mon, 20 Jul 2026 23:52:19 +0530 CASEpeer Support <support@casepeer.com> wrote ----\r\n\r\n       \r\n   \r\n    Hi Pranav,\r\n  \r\n Thank you for reaching out with your questions about integrating with CasePeer.\r\n  \r\n CasePeer does not currently offer an open API. However, we do have an integration with Zapier and a Nightly Data Sync available with CasePeer Advanced. If you have suggestions for desired endpoints, you can share them with our team.\r\n  \r\n Here is "
+    },
+    {
+      "folder": "Sent",
+      "uid": "1036",
+      "date": "Tue, 22 Sep 2026 11:31:25 +0530",
+      "from": "pranav@possiblemindshq.com",
+      "to": "support@casepeer.com",
+      "subject": "RE: Integration / Sandbox Access Inquiry",
+      "provider_id": "1790056885813119300",
+      "rfc": "<1a0c7b46bff.340e2b32109702.8032141846134755164@possiblemindshq.com>",
+      "references": "<1ZMnA000000000000000000000000000000000000000000000TIHKD600MS2nGUjbQ86qovmRsQEvOg@sfdc.net> <19f80c2e9bf.6c7188c241321.8497235599936179212@possiblemindshq.com>",
+      "in_reply_to": "<1ZMnA000000000000000000000000000000000000000000000TIHKD600MS2nGUjbQ86qovmRsQEvOg@sfdc.net>",
+      "body": "  Hi CASEpeer team,\r\n\r\nI am following up on case #01478487 and my September 15 request for an escalation. Could you confirm whether it was routed to your integrations or partnerships team, and whether a developer or evaluation account is available? If access is only available through a client law firm account, please let me know the recommended setup and permissions.\r\n\r\nThanks for your help,\r\nPranav Modi\r\nFounder, Possible Minds  ---- On Mon, 20 Jul 2026 23:52:19 +0530 CASEpeer Support <support@casepeer.com> wrote ----\r\n\r\n       \r\n   \r\n    Hi Pranav,\r\n  \r\n Thank you for reaching out with your questions about integrating with CasePeer.\r\n  \r\n CasePeer does not currently offer an open API. However, we do have an integration with Zapier and a Nightly Data Sync available with CasePeer Advanced. If you have suggestions for desired endpoints, you can share them with our team.\r\n  \r\n Here is some additional information that may be helpful:\r\n  \r\n Activate the Zapier Integration\r\n 1. Navigate to the gear icon in the top right corner of your account and select Account Settings.\r\n 2. Scroll down "
+    }
+  ],
+  "pending_actions": []
+}

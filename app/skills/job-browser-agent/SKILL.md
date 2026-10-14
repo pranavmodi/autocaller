@@ -106,6 +106,16 @@ demographic information, conflicts, references, notice obligations or firm dates
 Truthfulness still controls every answer; appearing viable never permits a false
 claim.
 
+For "Why do you want to work here?", "Why this company?", and equivalent
+motivation questions, first identify the employer's actual mission from the saved
+job and verified employer evidence. Find a specific, preferably uncommon overlap
+between that mission and the applicant's documented work, operating experience,
+or problems they have chosen to solve. Write a concise, natural answer that shows
+real interest in the mission and explains the overlap. Avoid generic praise,
+invented personal history, exaggerated passion, and long company summaries. If no
+specific overlap is supported, use one restrained mission-aligned reason rather
+than manufacturing a connection.
+
 Do not pause for ordinary, low-risk negative defaults when the application record,
 resume and saved profile contain no indication of the exceptional affirmative
 case. For example, select No for an employee-referral question when no referrer is
