@@ -383,15 +383,25 @@ def normalize_job_postings(
     for raw in raw_postings:
         if not isinstance(raw, dict):
             continue
-        try:
-            posted_date = date.fromisoformat(str(raw.get("posted_date") or ""))
-        except ValueError:
+        date_value = raw.get("posted_date")
+        posted_date = None
+        if date_value not in (None, ""):
+            try:
+                posted_date = date.fromisoformat(str(date_value))
+            except ValueError:
+                continue
+        status = str(raw.get("status") or "").strip().lower()
+        active_evidence = str(raw.get("active_evidence") or "").strip()
+        if status in {"closed", "expired", "inactive"}:
+            continue
+        # Undated discovery requires an explicit source-backed active judgment.
+        if posted_date is None and (status != "active" or not active_evidence):
             continue
         source_url = str(raw.get("source_url") or "").strip()
         title = str(raw.get("title") or "").strip()
         if not title or not source_url.lower().startswith(("http://", "https://")):
             continue
-        if not window_start <= posted_date <= window_end:
+        if posted_date is not None and not window_start <= posted_date <= window_end:
             continue
         key = (source_url.lower().rstrip("/"), title.lower())
         if key in seen:
@@ -406,7 +416,10 @@ def normalize_job_postings(
             "remote_eligibility": (
                 str(raw["remote_eligibility"]).strip() if raw.get("remote_eligibility") else None
             ),
-            "posted_date": posted_date.isoformat(),
+            "posted_date": posted_date.isoformat() if posted_date else None,
+            "recency_label": "dated" if posted_date else "date_unknown",
+            "status": "active",
+            "active_evidence": active_evidence or None,
             "description_summary": str(raw.get("description_summary") or "").strip(),
             "responsibilities": [
                 str(value).strip()

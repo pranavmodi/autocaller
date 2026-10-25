@@ -105,6 +105,10 @@ email or submit. The UI's **Search now** button invokes the same command path on
 Use `pif job-postings --contract contract|non_contract|unknown --legal-degree
 exclude|all|required` for CLI parity with the Leads / Job listings filters.
 Law-degree roles are hidden by default in that view; use `all` to include them.
+Firm job research includes source-verified active undated openings with null
+`posted_date`; the UI shows Publication unknown. Posted-date filters exclude
+them rather than treating discovery time as publication. Queuing research needs
+an active `PIF_JOB_RESEARCH_WORKERS` worker; zero pauses automatic consumption.
 Use `pif backfill-job-legal-degree --within-days 14` to resumably classify recent
 stored postings with batched TypeSafe Jev calls. The backfill persists its
 probabilities and model provenance; unclear jobs remain visible.

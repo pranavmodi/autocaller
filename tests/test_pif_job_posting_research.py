@@ -49,6 +49,48 @@ def test_normalize_job_postings_filters_dates_sources_and_duplicates():
     assert result[0]["classification_version"] == service.CLASSIFIER_VERSION
 
 
+def test_normalize_preserves_verified_undated_jobs_without_inventing_dates():
+    opening = {
+        "title": "AI Engineer",
+        "source_url": "https://example.com/jobs/ai-engineer",
+        "posted_date": None,
+        "status": "active",
+        "active_evidence": "Employer careers page lists the role with an application link.",
+    }
+    result = service.normalize_job_postings(
+        [opening, {**opening, "source_url": opening["source_url"] + "/"}],
+        window_start=date(2026, 10, 1), window_end=date(2026, 10, 30),
+    )
+    assert len(result) == 1
+    assert result[0]["posted_date"] is None
+    assert result[0]["recency_label"] == "date_unknown"
+    assert result[0]["status"] == "active"
+    assert result[0]["active_evidence"] == opening["active_evidence"]
+
+
+def test_normalize_rejects_unverified_undated_closed_invalid_and_old_jobs():
+    opening = {
+        "title": "AI Engineer", "source_url": "https://example.com/jobs/ai",
+        "status": "active", "active_evidence": "Listed by employer.",
+    }
+    rejected = [
+        {**opening, "active_evidence": None},
+        {**opening, "status": "unknown"},
+        {**opening, "status": "closed"},
+        {**opening, "posted_date": "2026-10-10", "status": "expired"},
+        {**opening, "posted_date": "yesterday"},
+        {**opening, "posted_date": "2026-09-01"},
+        {**opening, "posted_date": "2026-11-01"},
+        {**opening, "source_url": ""},
+    ]
+    assert service.normalize_job_postings(
+        rejected, window_start=date(2026, 10, 1), window_end=date(2026, 10, 30),
+    ) == []
+    assert service.normalize_job_postings(
+        [opening], window_start=date(2026, 10, 1), window_end=date(2026, 10, 30),
+    )[0]["posted_date"] is None
+
+
 def test_classify_job_posting_adds_gtm_tags_and_technology_mentions():
     posting = {
         "title": "Intake Manager",
